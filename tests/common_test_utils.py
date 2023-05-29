@@ -17,11 +17,6 @@ def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 
-def get_db_manager(output_queue, port, output_dir='output/'):
-    db = DBManager(output_dir, output_queue, port)
-    db.print = do_nothing
-    return db
-
 
 def get_total_profiles(db):
     return int(db.scard('profiles'))
