@@ -28,14 +28,6 @@ def run_slips(cmd):
     return return_code
 
 
-def create_Main_instance(input_information):
-    """returns an instance of Main() class in slips.py"""
-    main = Main(testing=True)
-    main.input_information = input_information
-    main.input_type = 'pcap'
-    main.line_type = False
-    return main
-
 @pytest.mark.parametrize(
     'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
     [

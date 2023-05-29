@@ -1,7 +1,6 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
 from slips_files.core.flows.zeek import Conn
-from ..modules.flowalerts.flowalerts import Module
-from tests.common_test_utils import do_nothing
+from tests.module_factory import ModuleFactory
 import pytest
 import binascii
 import base64
@@ -21,13 +20,7 @@ dst_profileid = f'profile_{daddr}'
 def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
 
-def create_flowalerts_instance(output_queue, database):
-    """Create an instance of flowalerts.py
-    needed by every other test in this file"""
-    flowalerts = Module(output_queue, database)
-    # override the self.print function to avoid broken pipes
-    flowalerts.print = do_nothing
-    return flowalerts
+
 
 @pytest.mark.parametrize('dur,expected_label', [
     (1400, 'benign'),
@@ -35,7 +28,7 @@ def create_flowalerts_instance(output_queue, database):
 ])
 def test_check_long_connection(database, output_queue, dur, expected_label):
     uid = get_random_uid()
-    flowalerts = create_flowalerts_instance(output_queue, database)
+    flowalerts = ModuleFactory().create_flowalerts_obj()
 
     flow = Conn(
         timestamp,
@@ -62,7 +55,7 @@ def test_check_long_connection(database, output_queue, dur, expected_label):
 
 
 def test_port_belongs_to_an_org(database, output_queue):
-    flowalerts = create_flowalerts_instance(output_queue, database)
+    flowalerts = ModuleFactory().create_flowalerts_obj()
     # store in the db that both ips have apple as a vendor
     MAC_info = {'MAC': '123', 'Vendor': 'Apple, Inc'}
     database.add_mac_addr_to_profile(profileid, MAC_info)
@@ -82,7 +75,7 @@ def test_port_belongs_to_an_org(database, output_queue):
 
 
 def test_check_unknown_port(output_queue, database):
-    flowalerts = create_flowalerts_instance(output_queue, database)
+    flowalerts = ModuleFactory().create_flowalerts_obj()
     database.set_port_info('23/udp', 'telnet')
     # now we have info 23 udp
     assert (
@@ -93,7 +86,7 @@ def test_check_unknown_port(output_queue, database):
 def test_check_if_resolution_was_made_by_different_version(
     output_queue, database
 ):
-    flowalerts = create_flowalerts_instance(output_queue, database)
+    flowalerts = ModuleFactory().create_flowalerts_obj()
     # tell the db that this ipv6 belongs to the same profileid
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     database.set_ipv6_of_profile(profileid, ipv6)
@@ -109,7 +102,7 @@ def test_check_if_resolution_was_made_by_different_version(
 
 
 def test_check_dns_arpa_scan(output_queue, database):
-    flowalerts = create_flowalerts_instance(output_queue, database)
+    flowalerts = ModuleFactory().create_flowalerts_obj()
     # make 10 different arpa scans
     for ts in arange(0, 1, 1 / 10):
         is_arpa_scan = flowalerts.check_dns_arpa_scan(
@@ -121,7 +114,7 @@ def test_check_dns_arpa_scan(output_queue, database):
 
 # check_multiple_ssh_clients is tested in test_dataset
 def test_detect_DGA(output_queue, database):
-    flowalerts = create_flowalerts_instance(output_queue, database)
+    flowalerts = ModuleFactory().create_flowalerts_obj()
     rcode_name = 'NXDOMAIN'
     # arbitrary ip to be able to call detect_DGA
     daddr = '10.0.0.1'
@@ -133,7 +126,7 @@ def test_detect_DGA(output_queue, database):
 
 
 def test_detect_young_domains(output_queue, database):
-    flowalerts = create_flowalerts_instance(output_queue, database)
+    flowalerts = ModuleFactory().create_flowalerts_obj()
     domain = 'example.com'
     # age in days
     age = 50

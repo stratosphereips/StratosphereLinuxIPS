@@ -1,22 +1,15 @@
 """Unit test for ../arp.py"""
 from ..modules.arp.arp import Module
-from tests.common_test_utils import do_nothing
+from tests.module_factory import ModuleFactory
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 
-def create_ARP_instance(output_queue, database):
-    """Create an instance of arp.py
-    needed by every other test in this file"""
-    ARP = Module(output_queue, database)
-    # override the self.print function to avoid broken pipes
-    ARP.print = do_nothing
-    return ARP
 
 
 # check_arp_scan is tested in test_dataset.py, check arp-only unit test
 def test_check_dstip_outside_localnet(output_queue, database):
-    ARP = create_ARP_instance(output_queue, database)
+    ARP = ModuleFactory().create_arp_obj()
     daddr = '1.1.1.1'
     uid = '1234'
     saddr = '192.168.1.1'
@@ -27,7 +20,7 @@ def test_check_dstip_outside_localnet(output_queue, database):
 
 
 def test_detect_unsolicited_arp(output_queue, database):
-    ARP = create_ARP_instance(output_queue, database)
+    ARP = ModuleFactory().create_arp_obj()
     uid = '1234'
     ts = '1632214645.783595'
     dst_mac = 'ff:ff:ff:ff:ff:ff'
@@ -40,7 +33,7 @@ def test_detect_unsolicited_arp(output_queue, database):
 
 
 def test_detect_MITM_ARP_attack(output_queue, database):
-    ARP = create_ARP_instance(output_queue, database)
+    ARP = ModuleFactory().create_arp_obj()
     # add this profile to the database
     stime = ts = '1636305825.755100'
     dur = '3600.0'

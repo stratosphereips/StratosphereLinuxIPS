@@ -3,6 +3,7 @@ this file needs sudoroot to run
 """
 from ..modules.blocking.blocking import Module
 from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER, do_nothing
+from tests.module_factory import ModuleFactory
 import platform
 import pytest
 import os
@@ -38,19 +39,14 @@ has_net_admin_cap = pytest.mark.skipif(
 )
 
 
-def create_blocking_instance(output_queue, database):
-    """Create an instance of blocking.py
-    needed by every other test in this file"""
-    blocking = Module(output_queue, database)
-    # override the print function to avoid broken pipes
-    blocking.print = do_nothing
-    return blocking
+
 
 @linuxOS
 @isroot
 @has_net_admin_cap
 def is_slipschain_initialized(output_queue, database) -> bool:
-    blocking = create_blocking_instance(output_queue, database)
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking = ModuleFactory().create_blocking_obj()
     output = blocking.get_cmd_output(f'{blocking.sudo} iptables -S')
     rules = [
         '-A INPUT -j slipsBlocking',
@@ -63,7 +59,7 @@ def is_slipschain_initialized(output_queue, database) -> bool:
 @isroot
 @has_net_admin_cap
 def test_initialize_chains_in_firewall(output_queue, database):
-    blocking = create_blocking_instance(output_queue, database)
+    blocking = ModuleFactory().create_blocking_obj()
     # manually set the firewall
     blocking.firewall = 'iptables'
     blocking.initialize_chains_in_firewall()
@@ -72,7 +68,7 @@ def test_initialize_chains_in_firewall(output_queue, database):
 
 # todo
 # def test_delete_slipsBlocking_chain(output_queue, database):
-#     blocking = create_blocking_instance(output_queue, database)
+#     blocking = ModuleFactory().create_blocking_obj()
 #     # first make sure they are initialized
 #     if not is_slipschain_initialized(output_queue):
 #         blocking.initialize_chains_in_firewall()
@@ -83,7 +79,7 @@ def test_initialize_chains_in_firewall(output_queue, database):
 @isroot
 @has_net_admin_cap
 def test_block_ip(output_queue, database):
-    blocking = create_blocking_instance(output_queue, database)
+    blocking = ModuleFactory().create_blocking_obj()
     blocking.initialize_chains_in_firewall()
     if not blocking.is_ip_blocked('2.2.0.0'):
         ip = '2.2.0.0'
@@ -95,7 +91,7 @@ def test_block_ip(output_queue, database):
 @isroot
 @has_net_admin_cap
 def test_unblock_ip(output_queue, database):
-    blocking = create_blocking_instance(output_queue, database)
+    blocking = ModuleFactory().create_blocking_obj()
     ip = '2.2.0.0'
     from_ = True
     to = True

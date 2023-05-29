@@ -1,14 +1,7 @@
-from ..slips_files.common.slips_utils import Utils
-
-
-def create_utils_instance():
-    """Create an instance of threatintel.py
-    needed by every other test in this file"""
-    return Utils()
-
+from tests.module_factory import ModuleFactory
 
 def test_get_hash_from_file():
-    utils = create_utils_instance()
+    utils = ModuleFactory().create_utils_obj()
     # a file that we know doesn't change
     assert (
         utils.get_hash_from_file('modules/template/__init__.py')

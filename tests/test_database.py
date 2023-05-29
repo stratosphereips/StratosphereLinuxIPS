@@ -1,6 +1,7 @@
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
 from slips_files.core.database.database_manager import DBManager
+from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing, get_db_manager
 import redis
 import os
@@ -41,6 +42,7 @@ def add_flow(db):
 # because we don't want another unit test adding the same flow before this one
 def test_add_flow(output_queue):
     database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj()
     uid = '1234'
     assert add_flow(database)
 
@@ -52,7 +54,6 @@ def test_add_flow(output_queue):
     assert flow.bytes == flow_from_db['allbytes']
     assert flow.saddr in flow_from_db['saddr']
     assert flow.state in flow_from_db['state']
-
 
 
 def test_getProfileIdFromIP(output_queue):

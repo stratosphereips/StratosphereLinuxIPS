@@ -3,8 +3,7 @@
 #### NOTE: this file should conjtain as minimum tests as possible due to the 4reqs/minute vt api quota
 #####       if more than 4 calls to _api_query in a row winn cause unit tests to fail
 
-from ..modules.virustotal.virustotal import Module
-from tests.common_test_utils import do_nothing
+from tests.module_factory import ModuleFactory
 import pytest
 import requests
 import json
@@ -67,22 +66,6 @@ valid_api_key = pytest.mark.skipif(
 )
 
 
-@pytest.fixture
-def read_configuration():
-    return
-
-
-def create_virustotal_instance(output_queue, database):
-    """Create an instance of virustotal.py
-    needed by every other test in this file"""
-    virustotal = Module(output_queue, database)
-    # override the self.print function to avoid broken pipes
-    virustotal.print = do_nothing
-    virustotal.__read_configuration = read_configuration
-    virustotal.key_file = (
-        '/media/alya/W/SLIPPS/modules/virustotal/api_key_secret'
-    )
-    return virustotal
 
 # @pytest.mark.parametrize('ip', ['8.8.8.8'])
 # def test_api_query_(output_queue, ip):
@@ -98,16 +81,16 @@ def create_virustotal_instance(output_queue, database):
 @pytest.mark.dependency(name='sufficient_quota')
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
 @valid_api_key
-def test_interpret_rsponse(output_queue, ip, database):
-    virustotal = create_virustotal_instance(output_queue, database)
+def test_interpret_rsponse(ip):
+    virustotal = ModuleFactory().create_virustotal_obj()
     response = virustotal.api_query_(ip)
     for ratio in virustotal.interpret_response(response):
         assert type(ratio) == float
 
 @pytest.mark.dependency(depends=["sufficient_quota"])
 @valid_api_key
-def test_get_domain_vt_data(output_queue, database):
-    virustotal = create_virustotal_instance(output_queue, database)
+def test_get_domain_vt_data():
+    virustotal = ModuleFactory().create_virustotal_obj()
     assert virustotal.get_domain_vt_data('google.com') is not False
 
 

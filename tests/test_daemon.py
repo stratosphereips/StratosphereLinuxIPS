@@ -3,6 +3,7 @@
 from ..slips import *
 import os
 from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER
+from tests.module_factory import ModuleFactory
 
 
 # def create_main_instance():
