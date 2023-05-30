@@ -15,11 +15,13 @@ from collections import OrderedDict
 class ProcessManager:
     def __init__(self, main):
         self.main = main
+        self.module_objects = {}
 
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
         try:
             pid = int(self.main.PIDs[module_name])
+            self.module_objects[module_name].shutdown_gracefully()
             os.kill(pid, sig)
         except (KeyError, ProcessLookupError):
             # process hasn't started yet
@@ -130,6 +132,10 @@ class ProcessManager:
         modules_to_call = self.get_modules(to_ignore)[0]
         loaded_modules = []
         for module_name in modules_to_call:
+            # delete later
+            # if module_name != 'CPU Profiler':
+            #     continue
+            # end
             if module_name in to_ignore:
                 continue
 
@@ -149,6 +155,7 @@ class ProcessManager:
             __database__.store_process_PID(
                 module_name, int(module.pid)
             )
+            self.module_objects[module_name] = module # maps name -> object
             description = modules_to_call[module_name]['description']
             self.main.print(
                 f'\t\tStarting the module {green(module_name)} '
