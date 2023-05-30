@@ -32,6 +32,7 @@ The detection techniques are:
 - High entropy DNS TXT answers 
 - Devices changing IPs
 - GRE tunnels
+- Invalid DNS answers
 The details of each detection follows.
 
 
@@ -340,3 +341,8 @@ If so, it alerts "Device changing IPs".
 
 Slips uses zeek tunnel.log to alert on GRE tunnels when found. 
 evidence of this type are just informational.
+
+## Invalid DNS resolutions
+
+Some DNS resolvers answer the DNS query to adservers with 0.0.0.0 or 127.0.0.1 as the ip of the domain to block the domain.
+Slips detects this and sets an informational evidence.

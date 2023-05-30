@@ -5,6 +5,7 @@ import ipaddress
 import sys
 import validators
 from slips_files.common.slips_utils import utils
+from dataclasses import asdict
 
 class ProfilingFlowsDatabase(object):
     def __init__(self):
@@ -509,7 +510,7 @@ class ProfilingFlowsDatabase(object):
             pass
 
     def add_tuple(
-        self, profileid, twid, tupleid, data_tuple, role, starttime, uid
+        self, profileid, twid, tupleid, data_tuple, role, flow
     ):
         """
         Add the tuple going in or out for this profile
@@ -561,8 +562,8 @@ class ProfilingFlowsDatabase(object):
                         'profileid': profileid,
                         'twid': twid,
                         'tupleid': str(tupleid),
-                        'uid': uid,
-                        'stime': starttime,
+                        'uid': flow.uid,
+                        'flow': asdict(flow)
                     }
                     to_send = json.dumps(to_send)
                     self.publish('new_letters', to_send)
@@ -585,7 +586,7 @@ class ProfilingFlowsDatabase(object):
             # Store the new data on the db
             self.r.hset(profileid_twid, direction, str(tuples))
             # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid, starttime)
+            self.markProfileTWAsModified(profileid, twid, flow.starttime)
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -1324,6 +1325,28 @@ class ProfilingFlowsDatabase(object):
                 current_twid += 1
             else:
                 return True
+    
+    def delete_dns_resolution(self , ip):
+        self.r.hdel("DNSresolution" , ip)
+
+    def should_store_resolution(self, query: str, answers: list, qtype_name: str):
+        # don't store queries ending with arpa as dns resolutions, they're reverse dns
+        # only store type A and AAAA for ipv4 and ipv6
+        if (
+                qtype_name not in ['AAAA', 'A']
+                or answers == '-'
+                or query.endswith('arpa')
+        ):
+            return False
+
+        # sometimes adservers are resolved to 0.0.0.0 or "127.0.0.1" to block the domain.
+        # don't store this as a valid dns resolution
+        if query != 'localhost':
+            for answer in answers:
+                if answer in ("127.0.0.1" , "0.0.0.0"):
+                    return False
+
+        return True
 
     def set_dns_resolution(
         self,
@@ -1343,16 +1366,8 @@ class ProfilingFlowsDatabase(object):
 
         :param srcip: ip that performed the dns query
         """
-        # don't store queries ending with arpa as dns resolutions, they're reverse dns
-        # type A: for ipv4
-        # type AAAA: for ipv6
-        if (
-            qtype_name not in ['AAAA', 'A']
-            or answers == '-'
-            or query.endswith('arpa')
-        ):
+        if not self.should_store_resolution(query, answers, qtype_name):
             return
-        # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
 
         # Also store these IPs inside the domain
         ips_to_add = []
@@ -1462,8 +1477,6 @@ class ProfilingFlowsDatabase(object):
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
             self.rcache.hset('DomainsInfo', domain, '{}')
-            # Publish that there is a new domain ready in the channel
-            self.publish('new_dns', domain)
 
     def setInfoForDomains(self, domain: str, info_to_set: dict, mode='leave'):
         """
@@ -1586,7 +1599,7 @@ class ProfilingFlowsDatabase(object):
 
         to_send = json.dumps(to_send)
         # publish a dns with its flow
-        self.publish('new_dns_flow', to_send)
+        self.publish('new_dns', to_send)
         # Check if the dns query is detected by the threat intelligence.
         self.give_threat_intelligence(
             profileid,

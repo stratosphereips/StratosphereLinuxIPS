@@ -554,19 +554,11 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 ### Logging
 
 To enable the creation of log files, there are two options:
-1. Running Slips with ```-l``` flag. 
-2. Setting ```create_log_files``` to ```yes``` in ```config/slips.conf```.
-3. Running Slips with ```verbose``` and ```debug``` flags
-4. Using errors.log and running.log
 
-#### Running Slips with -l flag.
+1. Running Slips with ```verbose``` and ```debug``` flags
+2. Using errors.log and running.log
 
-When logging is enabled, Slips will create a directory with the current date and 
-create 3 summary files for each IP/profile it encounters.
-
-Summaries created contain profile data, complete timeline outgoing actions and timeline of all traffic that involves this IP.
-
-You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```config/slips.conf```.
+#### Zeek log files 
 
 You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
 
@@ -591,7 +583,7 @@ DISCLAIMER: Once slips knows you do not want a copy of zeek log files after slip
 it deletes large log files periodically (like arp.log).
 
 
-#### Rotation
+#### Rotation of zeek logs
 
 Rotation is done in zeek files to avoid growing zeek log files and save disk space.
 
@@ -707,6 +699,7 @@ All zeek lines taken from stdin should be in json form and are treated as conn.l
 
 This feature is specifically designed to allow slips to interact with network simulators and scripts.
 
+
 ## Plug in a zeek script
 
 Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file
@@ -741,6 +734,8 @@ Zeek output is suppressed by default, so if your script has errors, Slips will f
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
 - ```-w``` or  ```--webinterface``` Start Slips web interface automatically
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.
+- ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
+
 
 ## Containing Slips resource consumption
 
@@ -759,3 +754,5 @@ command = './slips.py -f dataset/test3-mixed.binetflow -o /data/test'
 args = command.split()
 process = subprocess.run(args, stdout=subprocess.PIPE)
 ```
+
+

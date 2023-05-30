@@ -64,6 +64,7 @@ class FileEventHandler(RegexMatchingEventHandler):
                 with open(os.path.join(self.dir_to_monitor, file), 'r') as f:
                     while line := f.readline():
                         if 'termination' in line:
+                            # this is how modules tell slips to terminate
                             __database__.publish('finished_modules', 'stop_slips')
                             break
         elif 'whitelist' in filename:

@@ -10,6 +10,7 @@ telnet,23,tcp,Telnet
 telnet,23,udp,Telnet
 smtp,25,tcp,Simple Mail Transfer
 smtp,25,udp,Simple Mail Transfer
+msa,587,tcp,Simple Mail Transfer
 time,37,tcp,Time
 time,37,udp,Time
 whois,43,tcp,Whois

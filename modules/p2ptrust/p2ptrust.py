@@ -19,7 +19,6 @@ from modules.p2ptrust.utils.printer import Printer
 from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
 import threading
-import traceback
 
 
 def validate_slips_data(message_data: str) -> (str, int):
@@ -78,8 +77,9 @@ class Trust(Module, multiprocessing.Process):
         rename_sql_db_file=False,
         override_p2p=False,
     ):
-        # thi smodule is called automatically when slips starts
+        # this module is called automatically when slips starts
         multiprocessing.Process.__init__(self)
+        super().__init__(output_queue)
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
         # get the used interface
@@ -131,6 +131,17 @@ class Trust(Module, multiprocessing.Process):
         self.storage_name = 'IPsInfo'
         if rename_redis_ip_info:
             self.storage_name += str(self.port)
+        self.c1 = __database__.subscribe('report_to_peers')
+        # channel to send msgs to whenever slips needs info from other peers about an ip
+        self.c2 = __database__.subscribe(self.p2p_data_request_channel)
+        # this channel receives peers requests/updates
+        self.c3 = __database__.subscribe(self.gopy_channel)
+        self.channels = {
+            'report_to_peers': self.c1,
+            self.p2p_data_request_channel: self.c2,
+            self.gopy_channel: self.c3,
+        }
+
         # they have to be defined here because the variable name utils is already taken
         # TODO rename one of them
         self.threat_levels = {
@@ -603,80 +614,50 @@ class Trust(Module, multiprocessing.Process):
         self.trust_db.__del__()
         __database__.publish('finished_modules', self.name)
 
-    def run(self):
+    def pre_main(self):
+        utils.drop_root_privs()
+        # configure process
+        self._configure()
+        # check if it was possible to start up pigeon
+        if self.start_pigeon and self.pigeon is None:
+            self.print(
+                'Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...'
+            )
+            return 1
+
+        # create_p2p_logfile is taken from slips.conf
+        if self.create_p2p_logfile:
+            # rotates p2p.log file every 1 day
+            self.rotator_thread.start()
+
+        # should call self.update_callback
+        # self.c4 = __database__.subscribe(self.slips_update_channel)
+
+    def main(self):
+        """main loop function"""
+        if msg:= self.get_msg('report_to_peers'):
+            self.new_evidence_callback(msg)
+
+        if msg:= self.get_msg(self.p2p_data_request_channel):
+            self.data_request_callback(msg)
+
+        if msg:= self.get_msg(self.gopy_channel):
+            self.gopy_callback(msg)
+
+        ret_code = self.pigeon.poll()
+        if ret_code is not None:
+            self.print(
+                f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
+            )
+            return 1
+
         try:
-            utils.drop_root_privs()
-            # configure process
-            self._configure()
-            # check if it was possible to start up pigeon
-            if self.start_pigeon and self.pigeon is None:
-                self.print(
-                    'Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...'
-                )
-                return
+            if not self.mutliaddress_printed:
+                # give the pigeon time to put the multiaddr in the db
+                time.sleep(2)
+                multiaddr = __database__.get_multiaddr()
+                self.print(f"You Multiaddress is: {multiaddr}")
+                self.mutliaddress_printed = True
 
-            # create_p2p_logfile is taken from slips.conf
-            if self.create_p2p_logfile:
-                # rotates p2p.log file every 1 day
-                self.rotator_thread.start()
-
-            self.c1 = __database__.subscribe('report_to_peers', ignore_subscribe_messages=True)
-            # channel to send msgs to whenever slips needs info from other peers about an ip
-            self.c2 = __database__.subscribe(self.p2p_data_request_channel, ignore_subscribe_messages=True)
-            # this channel receives peers requests/updates
-            self.c3 = __database__.subscribe(self.gopy_channel, ignore_subscribe_messages=True)
-            # should call self.update_callback
-            # self.c4 = __database__.subscribe(self.slips_update_channel)
-            while True:
-
-
-                message = __database__.get_message(self.c1)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'report_to_peers'):
-                    self.new_evidence_callback(message)
-
-                message = __database__.get_message(self.c2)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, self.p2p_data_request_channel):
-                    self.data_request_callback(message)
-
-                message = __database__.get_message(self.c3)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, self.gopy_channel):
-                    self.gopy_callback(message)
-
-                ret_code = self.pigeon.poll()
-                if ret_code is not None:
-                    self.print(
-                        f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
-                    )
-                    return
-
-                try:
-                    if not self.mutliaddress_printed:
-                        # give the pigeon time to put the multiaddr in the db
-                        time.sleep(2)
-                        multiaddr = __database__.get_multiaddr()
-                        self.print(f"You Multiaddress is: {multiaddr}")
-                        self.mutliaddress_printed = True
-
-                except Exception:
-                    pass
-
-        except KeyboardInterrupt:
-            self.shutdown_gracefully()
-            return True
         except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem with P2P. line {exception_line}', 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
-            return True
+            pass

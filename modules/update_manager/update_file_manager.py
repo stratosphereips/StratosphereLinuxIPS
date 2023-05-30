@@ -105,7 +105,7 @@ class UpdateFileManager:
             with open(feeds_path, 'r') as feeds_file:
                 feeds = feeds_file.read()
         except FileNotFoundError:
-            self.print(f"Error finding {feeds_path}. Feeds won't be added to slips.")
+            self.print(f"Error finding {feeds_path}. Feed won't be added to slips.")
             return {}
 
         # this dict will contain every link and its threat_level
@@ -312,7 +312,7 @@ class UpdateFileManager:
         # Retry 3 times to get the TI file if an error occured
         for _try in range(5):
             try:
-                response = requests.get(file_to_download, timeout=10)
+                response = requests.get(file_to_download, timeout=5)
                 if response.status_code != 200:
                     error = f'An error occurred while downloading the file {file_to_download}.' \
                             f'status code: {response.status_code}. Aborting'
@@ -1498,9 +1498,6 @@ class UpdateFileManager:
 
         try:
             self.log('Checking if we need to download TI files.')
-
-            # self.update_ports_info()
-            # self.update_org_files()
 
             if self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
                 self.update_mac_db()

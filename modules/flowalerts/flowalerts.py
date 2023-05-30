@@ -33,22 +33,13 @@ class Module(Module, multiprocessing.Process):
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         __database__.start(redis_port)
+        super().__init__(outputqueue)
         # Read the configuration
         self.read_configuration()
-        # Retrieve the labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.c1 = __database__.subscribe('new_flow')
-        self.c2 = __database__.subscribe('new_ssh')
-        self.c3 = __database__.subscribe('new_notice')
-        self.c4 = __database__.subscribe('new_ssl')
-        self.c5 = __database__.subscribe('tw_closed')
-        self.c6 = __database__.subscribe('new_dns_flow')
-        self.c7 = __database__.subscribe('new_downloaded_file')
-        self.c8 = __database__.subscribe('new_smtp')
-        self.c9 = __database__.subscribe('new_software')
-        self.c10 = __database__.subscribe('new_weird')
-        self.c11 = __database__.subscribe('new_tunnel')
+        # Retrieve the labels
+        self.subscribe_to_channels()
         self.whitelist = Whitelist(outputqueue, redis_port)
         self.conn_counter = 0
         # helper contains all functions used to set evidence
@@ -95,7 +86,31 @@ class Module(Module, multiprocessing.Process):
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
-
+    def subscribe_to_channels(self):
+        self.c1 = __database__.subscribe('new_flow')
+        self.c2 = __database__.subscribe('new_ssh')
+        self.c3 = __database__.subscribe('new_notice')
+        self.c4 = __database__.subscribe('new_ssl')
+        self.c5 = __database__.subscribe('tw_closed')
+        self.c6 = __database__.subscribe('new_dns')
+        self.c7 = __database__.subscribe('new_downloaded_file')
+        self.c8 = __database__.subscribe('new_smtp')
+        self.c9 = __database__.subscribe('new_software')
+        self.c10 = __database__.subscribe('new_weird')
+        self.c11 = __database__.subscribe('new_tunnel')
+        self.channels = {
+            'new_flow': self.c1,
+            'new_ssh': self.c2,
+            'new_notice': self.c3,
+            'new_ssl': self.c4,
+            'tw_closed': self.c5,
+            'new_dns': self.c6,
+            'new_downloaded_file': self.c7,
+            'new_smtp': self.c8,
+            'new_software': self.c9,
+            'new_weird': self.c10,
+            'new_tunnel': self.c11,
+        }
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -1040,7 +1055,23 @@ class Module(Module, multiprocessing.Process):
                         uid
                     )
 
+    def check_invalid_dns_answers(self, domain, answers, daddr, profileid, twid, stime, uid):
+        # this function is used to check for certain IP answers to DNS queries being blocked 
+        # (perhaps by ad blockers) and set to the following IP values
+        invalid_answers = {"127.0.0.1" , "0.0.0.0"} # currently hardcoding blocked ips
+        if not answers:
+            return
+        
+        for answer in answers:
+            if answer in invalid_answers and domain != "localhost":
+                #blocked answer found
+                self.helper.set_evidence_invalid_dns_answer(domain, answer, daddr, profileid, twid, stime, uid)
+                # delete answer from redis cache to prevent associating this dns answer with this domain/query and
+                # avoid FP "DNS without connection" evidence
+                __database__.delete_dns_resolution(answer)
+
     def detect_DGA(self, rcode_name, query, stime, daddr, profileid, twid, uid):
+
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         alerts when 10 15 20 etc. nxdomains are found
@@ -1494,7 +1525,7 @@ class Module(Module, multiprocessing.Process):
             description = f'SSH password guessing to IP {daddr}'
             uids = self.password_guessing_cache[cache_key]
             self.helper.set_evidence_pw_guessing(
-                description, timestamp, profileid, twid, uids, conn_count, profileid.split('_')[-1], by='Slips'
+                description, timestamp, profileid, twid, uids, profileid.split('_')[-1], by='Slips'
             )
 
             #reset the counter
@@ -1727,444 +1758,386 @@ class Module(Module, multiprocessing.Process):
                     timestamp
                 )
 
-
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
         self.ssl_waiting_thread.start()
-        while True:
-            try:
-                # ---------------------------- new_flow channel
-                message = __database__.get_message(self.c1)
-                # if timewindows are not updated for a long time, Slips is stopped automatically.
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_flow'):
-                    new_flow = json.loads(message['data'])
-                    profileid = new_flow['profileid']
-                    twid = new_flow['twid']
-                    flow = new_flow['flow']
-                    flow = json.loads(flow)
-                    uid = next(iter(flow))
-                    flow_dict = json.loads(flow[uid])
-                    # Flow type is 'conn' or 'dns', etc.
-                    flow_type = flow_dict['flow_type']
-                    dur = flow_dict['dur']
-                    saddr = flow_dict['saddr']
-                    daddr = flow_dict['daddr']
-                    origstate = flow_dict['origstate']
-                    state = flow_dict['state']
-                    timestamp = new_flow['stime']
-                    sport: int = flow_dict['sport']
-                    dport: int = flow_dict.get('dport', None)
-                    proto = flow_dict.get('proto')
-                    sbytes = flow_dict.get('sbytes', 0)
-                    appproto = flow_dict.get('appproto', '')
-                    smac = flow_dict.get('smac', '')
-                    if not appproto or appproto == '-':
-                        appproto = flow_dict.get('type', '')
-                    # dmac = flow_dict.get('dmac', '')
-                    # stime = flow_dict['ts']
-                    # timestamp = new_flow['stime']
-                    # pkts = flow_dict['pkts']
-                    # allbytes = flow_dict['allbytes']
 
-                    self.check_long_connection(
-                        dur, daddr, saddr, profileid, twid, uid, timestamp
-                    )
-                    self.check_unknown_port(
-                        dport,
-                        proto.lower(),
-                        daddr,
-                        profileid,
-                        twid,
-                        uid,
-                        timestamp,
-                        state
-                    )
-                    self.check_multiple_reconnection_attempts(
-                            origstate,
-                            saddr,
-                            daddr,
-                            dport,
-                            uid,
-                            profileid,
-                            twid,
-                            timestamp
-                    )
-                    self.check_conn_to_port_0(
-                        sport,
-                        dport,
-                        proto,
-                        saddr,
-                        daddr,
-                        profileid,
-                        twid,
-                        uid,
-                        timestamp
-                    )
-                    self.check_different_localnet_usage(
-                        saddr,
-                        daddr,
-                        dport,
-                        proto,
-                        profileid,
-                        timestamp,
-                        twid,
-                        uid,
-                        what_to_check='srcip'
-                    )
-                    self.check_different_localnet_usage(
-                        saddr,
-                        daddr,
-                        dport,
-                        proto,
-                        profileid,
-                        timestamp,
-                        twid,
-                        uid,
-                        what_to_check='dstip'
-                    )
+    def main(self):
+        # if timewindows are not updated for a long time, Slips is stopped automatically.
+        if msg:= self.get_msg('new_flow'):
+            new_flow = json.loads(msg['data'])
+            profileid = new_flow['profileid']
+            twid = new_flow['twid']
+            flow = new_flow['flow']
+            flow = json.loads(flow)
+            uid = next(iter(flow))
+            flow_dict = json.loads(flow[uid])
+            # Flow type is 'conn' or 'dns', etc.
+            flow_type = flow_dict['flow_type']
+            dur = flow_dict['dur']
+            saddr = flow_dict['saddr']
+            daddr = flow_dict['daddr']
+            origstate = flow_dict['origstate']
+            state = flow_dict['state']
+            timestamp = new_flow['stime']
+            sport: int = flow_dict['sport']
+            dport: int = flow_dict.get('dport', None)
+            proto = flow_dict.get('proto')
+            sbytes = flow_dict.get('sbytes', 0)
+            appproto = flow_dict.get('appproto', '')
+            smac = flow_dict.get('smac', '')
+            if not appproto or appproto == '-':
+                appproto = flow_dict.get('type', '')
+            # dmac = flow_dict.get('dmac', '')
+            # stime = flow_dict['ts']
+            # timestamp = new_flow['stime']
+            # pkts = flow_dict['pkts']
+            # allbytes = flow_dict['allbytes']
 
-                    self.check_connection_without_dns_resolution(
-                        flow_type, appproto, daddr, twid, profileid, timestamp, uid
-                    )
+            self.check_long_connection(
+                dur, daddr, saddr, profileid, twid, uid, timestamp
+            )
+            self.check_unknown_port(
+                dport,
+                proto.lower(),
+                daddr,
+                profileid,
+                twid,
+                uid,
+                timestamp,
+                state
+            )
+            self.check_multiple_reconnection_attempts(
+                    origstate,
+                    saddr,
+                    daddr,
+                    dport,
+                    uid,
+                    profileid,
+                    twid,
+                    timestamp
+            )
+            self.check_conn_to_port_0(
+                sport,
+                dport,
+                proto,
+                saddr,
+                daddr,
+                profileid,
+                twid,
+                uid,
+                timestamp
+            )
+            self.check_different_localnet_usage(
+                saddr,
+                daddr,
+                dport,
+                proto,
+                profileid,
+                timestamp,
+                twid,
+                uid,
+                what_to_check='srcip'
+            )
+            self.check_different_localnet_usage(
+                saddr,
+                daddr,
+                dport,
+                proto,
+                profileid,
+                timestamp,
+                twid,
+                uid,
+                what_to_check='dstip'
+            )
 
-                    self.detect_connection_to_multiple_ports(
-                        saddr,
-                        daddr,
-                        proto,
-                        state,
-                        appproto,
-                        dport,
-                        timestamp,
-                        profileid,
-                        twid
-                    )
-                    self.check_data_upload(
-                        sbytes,
-                        daddr,
-                        uid,
-                        profileid,
-                        twid
-                    )
+            self.check_connection_without_dns_resolution(
+                flow_type, appproto, daddr, twid, profileid, timestamp, uid
+            )
 
-                    self.check_non_http_port_80_conns(
-                        state,
-                        daddr,
-                        dport,
-                        proto,
-                        appproto,
-                        profileid,
-                        twid,
-                        uid,
-                        timestamp
-                    )
-                    self.check_non_ssl_port_443_conns(
-                        state,
-                        daddr,
-                        dport,
-                        proto,
-                        appproto,
-                        profileid,
-                        twid,
-                        uid,
-                        timestamp
-                    )
-                    self.check_connection_to_local_ip(
-                        daddr,
-                        dport,
-                        proto,
-                        saddr,
-                        profileid,
-                        twid,
-                        uid,
-                        timestamp,
-                    )
+            self.detect_connection_to_multiple_ports(
+                saddr,
+                daddr,
+                proto,
+                state,
+                appproto,
+                dport,
+                timestamp,
+                profileid,
+                twid
+            )
+            self.check_data_upload(
+                sbytes,
+                daddr,
+                uid,
+                profileid,
+                twid
+            )
 
-                    self.check_device_changing_ips(
-                        flow_type, smac, profileid, twid, uid, timestamp
-                    )
-                    self.conn_counter += 1
+            self.check_non_http_port_80_conns(
+                state,
+                daddr,
+                dport,
+                proto,
+                appproto,
+                profileid,
+                twid,
+                uid,
+                timestamp
+            )
+            self.check_non_ssl_port_443_conns(
+                state,
+                daddr,
+                dport,
+                proto,
+                appproto,
+                profileid,
+                twid,
+                uid,
+                timestamp
+            )
+            self.check_connection_to_local_ip(
+                daddr,
+                dport,
+                proto,
+                saddr,
+                profileid,
+                twid,
+                uid,
+                timestamp,
+            )
 
+            self.check_device_changing_ips(
+                flow_type, smac, profileid, twid, uid, timestamp
+            )
+            self.conn_counter += 1
 
-                # --- Detect successful SSH connections ---
-                message = __database__.get_message(self.c2)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_ssh'):
-                    data = message['data']
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    # Get flow as a json
-                    flow = data['flow']
-                    flow = json.loads(flow)
-                    timestamp = flow['stime']
-                    uid = flow['uid']
-                    daddr = flow['daddr']
-                    # it's set to true in zeek json files, T in zeke tab files
-                    auth_success = flow['auth_success']
+        # --- Detect successful SSH connections ---
+        if msg:= self.get_msg('new_ssh'):
+            data = msg['data']
+            data = json.loads(data)
+            profileid = data['profileid']
+            twid = data['twid']
+            # Get flow as a json
+            flow = data['flow']
+            flow = json.loads(flow)
+            timestamp = flow['stime']
+            uid = flow['uid']
+            daddr = flow['daddr']
+            # it's set to true in zeek json files, T in zeke tab files
+            auth_success = flow['auth_success']
 
-                    self.check_successful_ssh(
-                        uid,
-                        timestamp,
-                        profileid,
-                        twid,
-                        auth_success
-                    )
+            self.check_successful_ssh(
+                uid,
+                timestamp,
+                profileid,
+                twid,
+                auth_success
+            )
 
-                    self.check_ssh_password_guessing(
-                        daddr,
-                        uid,
-                        timestamp,
-                        profileid,
-                        twid,
-                        auth_success
-                    )
+            self.check_ssh_password_guessing(
+                daddr,
+                uid,
+                timestamp,
+                profileid,
+                twid,
+                auth_success
+            )
+        # --- Detect alerts from Zeek: Self-signed certs,
+        # invalid certs, port-scans and address scans, and password guessing ---
+        if msg:= self.get_msg('new_notice'):
+            data = msg['data']
+            # Convert from json to dict
+            data = json.loads(data)
+            profileid = data['profileid']
+            twid = data['twid']
+            # Get flow as a json
+            flow = data['flow']
+            # Convert flow to a dict
+            flow = json.loads(flow)
+            timestamp = flow['stime']
+            uid = data['uid']
+            msg = flow['msg']
+            note = flow['note']
 
-                # --- Detect alerts from Zeek: Self-signed certs,
-                # invalid certs, port-scans and address scans, and password guessing ---
-                message = __database__.get_message(self.c3)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_notice'):
-                    data = message['data']
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    # Get flow as a json
-                    flow = data['flow']
-                    # Convert flow to a dict
-                    flow = json.loads(flow)
-                    timestamp = flow['stime']
-                    uid = data['uid']
-                    msg = flow['msg']
-                    note = flow['note']
+            # --- Detect port scans from Zeek logs ---
+            # We're looking for port scans in notice.log in the note field
+            if 'Port_Scan' in note:
+                # Vertical port scan
+                scanning_ip = flow.get('scanning_ip', '')
+                self.helper.set_evidence_vertical_portscan(
+                    msg,
+                    scanning_ip,
+                    timestamp,
+                    profileid,
+                    twid,
+                    uid,
+                )
 
-                    # --- Detect port scans from Zeek logs ---
-                    # We're looking for port scans in notice.log in the note field
-                    if 'Port_Scan' in note:
-                        # Vertical port scan
-                        scanning_ip = flow.get('scanning_ip', '')
-                        self.helper.set_evidence_vertical_portscan(
-                            msg,
-                            scanning_ip,
-                            timestamp,
-                            profileid,
-                            twid,
-                            uid,
-                        )
+            # --- Detect horizontal portscan by zeek ---
+            if 'Address_Scan' in note:
+                # Horizontal port scan
+                # scanned_port = flow.get('scanned_port', '')
+                self.helper.set_evidence_horizontal_portscan(
+                    msg,
+                    timestamp,
+                    profileid,
+                    twid,
+                    uid,
+                )
+            # --- Detect password guessing by zeek ---
+            if 'Password_Guessing' in note:
+                self.helper.set_evidence_pw_guessing(
+                    msg,
+                    timestamp,
+                    profileid,
+                    twid,
+                    uid,
+                    by='Zeek'
+                )
+        # --- Detect maliciuos JA3 TLS servers ---
+        if msg:= self.get_msg('new_ssl'):
+            # Check for self signed certificates in new_ssl channel (ssl.log)
+            data = msg['data']
+            # Convert from json to dict
+            data = json.loads(data)
+            # Get flow as a json
+            flow = data['flow']
+            # Convert flow to a dict
+            flow = json.loads(flow)
+            uid = flow['uid']
+            timestamp = flow['stime']
+            ja3 = flow.get('ja3', False)
+            ja3s = flow.get('ja3s', False)
+            issuer = flow.get('issuer', False)
+            profileid = data['profileid']
+            twid = data['twid']
+            daddr = flow['daddr']
+            saddr = profileid.split('_')[1]
+            server_name = flow.get('server_name')
 
-                    # --- Detect horizontal portscan by zeek ---
-                    if 'Address_Scan' in note:
-                        # Horizontal port scan
-                        # scanned_port = flow.get('scanned_port', '')
-                        self.helper.set_evidence_horizontal_portscan(
-                            msg,
-                            timestamp,
-                            profileid,
-                            twid,
-                            uid,
-                        )
-                    # --- Detect password guessing by zeek ---
-                    if 'Password_Guessing' in note:
-                        self.helper.set_evidence_pw_guessing(
-                            msg,
-                            timestamp,
-                            profileid,
-                            twid,
-                            uid,
-                            by='Zeek'
-                        )
+            # we'll be checking pastebin downloads of this ssl flow
+            # later
+            self.pending_ssl_flows.put(
+                (daddr, server_name, uid, timestamp, profileid, twid)
+            )
 
-                # --- Detect maliciuos JA3 TLS servers ---
-                message = __database__.get_message(self.c4)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_ssl'):
-                    # Check for self signed certificates in new_ssl channel (ssl.log)
-                    data = message['data']
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    # Get flow as a json
-                    flow = data['flow']
-                    # Convert flow to a dict
-                    flow = json.loads(flow)
-                    uid = flow['uid']
-                    timestamp = flow['stime']
-                    ja3 = flow.get('ja3', False)
-                    ja3s = flow.get('ja3s', False)
-                    issuer = flow.get('issuer', False)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    daddr = flow['daddr']
-                    saddr = profileid.split('_')[1]
-                    server_name = flow.get('server_name')
+            self.check_self_signed_certs(
+                flow['validation_status'],
+                daddr,
+                server_name,
+                profileid,
+                twid,
+                timestamp,
+                uid
+            )
 
-                    # we'll be checking pastebin downloads of this ssl flow
-                    # later
-                    self.pending_ssl_flows.put(
-                        (daddr, server_name, uid, timestamp, profileid, twid)
-                    )
+            self.detect_malicious_ja3(
+                saddr,
+                daddr,
+                ja3,
+                ja3s,
+                profileid,
+                twid,
+                uid,
+                timestamp
+            )
 
-                    self.check_self_signed_certs(
-                        flow['validation_status'],
-                        daddr,
-                        server_name,
-                        profileid,
-                        twid,
-                        timestamp,
-                        uid
-                    )
+            self.detect_incompatible_CN(
+                daddr,
+                server_name,
+                issuer,
+                profileid,
+                twid,
+                uid,
+                timestamp
+            )
 
-                    self.detect_malicious_ja3(
-                        saddr,
-                        daddr,
-                        ja3,
-                        ja3s,
-                        profileid,
-                        twid,
-                        uid,
-                        timestamp
-                    )
+        if msg:= self.get_msg('tw_closed'):
+            profileid_tw = msg['data'].split('_')
+            profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
+            self.detect_data_upload_in_twid(profileid, twid)
 
-                    self.detect_incompatible_CN(
-                        daddr,
-                        server_name,
-                        issuer,
-                        profileid,
-                        twid,
-                        uid,
-                        timestamp
-                    )
+        # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
+        if msg:= self.get_msg('new_dns'):
+            data = json.loads(msg['data'])
+            profileid = data['profileid']
+            twid = data['twid']
+            uid = data['uid']
+            daddr = data.get('daddr', False)
+            flow_data = json.loads(
+                data['flow']
+            )   # this is a dict {'uid':json flow data}
+            domain = flow_data.get('query', False)
+            answers = flow_data.get('answers', False)
+            rcode_name = flow_data.get('rcode_name', False)
+            stime = data.get('stime', False)
 
+            # only check dns without connection if we have answers(we're sure the query is resolved)
+            # sometimes we have 2 dns flows, 1 for ipv4 and 1 fo ipv6, both have the
+            # same uid, this causes FP dns without connection,
+            # so make sure we only check the uid once
+            if answers and uid not in self.connections_checked_in_dns_conn_timer_thread:
+                self.check_dns_without_connection(
+                    domain, answers, rcode_name, stime, profileid, twid, uid
+                )
 
-                message = __database__.get_message(self.c5)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+            self.check_suspicious_dns_answers(
+                domain, answers, daddr, profileid, twid, stime, uid
+            )
 
-                if utils.is_msg_intended_for(message, 'tw_closed'):
-                    profileid_tw = message['data'].split('_')
-                    profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
-                    self.detect_data_upload_in_twid(profileid, twid)
+            self.check_invalid_dns_answers(
+                domain, answers, daddr, profileid, twid, stime, uid
+            )
 
-                # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
-                message = __database__.get_message(self.c6)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
-                    data = json.loads(message['data'])
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    uid = data['uid']
-                    daddr = data.get('daddr', False)
-                    flow_data = json.loads(
-                        data['flow']
-                    )   # this is a dict {'uid':json flow data}
-                    domain = flow_data.get('query', False)
-                    answers = flow_data.get('answers', False)
-                    rcode_name = flow_data.get('rcode_name', False)
-                    stime = data.get('stime', False)
+            self.detect_DGA(
+                rcode_name, domain, stime, daddr, profileid, twid, uid
+            )
 
-                    # only check dns without connection if we have answers(we're sure the query is resolved)
-                    # sometimes we have 2 dns flows, 1 for ipv4 and 1 fo ipv6, both have the
-                    # same uid, this causes FP dns without connection,
-                    # so make sure we only check the uid once
-                    if answers and uid not in self.connections_checked_in_dns_conn_timer_thread:
-                        self.check_dns_without_connection(
-                            domain, answers, rcode_name, stime, profileid, twid, uid
-                        )
+            # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
+            self.detect_young_domains(
+                domain, stime, profileid, twid, uid
+            )
+            self.check_dns_arpa_scan(
+                domain, stime, profileid, twid, uid
+            )
 
-                    self.check_suspicious_dns_answers(
-                        domain, answers, daddr, profileid, twid, stime, uid
-                    )
-                    self.detect_DGA(
-                        rcode_name, domain, stime, daddr, profileid, twid, uid
-                    )
+        if msg:= self.get_msg('new_downloaded_file'):
+            ssl_info = json.loads(msg['data'])
+            self.check_malicious_ssl(ssl_info)
 
-                    # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
-                    self.detect_young_domains(
-                        domain, stime, profileid, twid, uid
-                    )
-                    self.check_dns_arpa_scan(
-                        domain, stime, profileid, twid, uid
-                    )
+        # --- Detect Bad SMTP logins ---
+        if msg:= self.get_msg('new_smtp'):
+            smtp_info = json.loads(msg['data'])
+            profileid = smtp_info['profileid']
+            twid = smtp_info['twid']
+            flow: dict = smtp_info['flow']
 
-                # --- Detect malicious SSL certificates ---
-                message = __database__.get_message(self.c7)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-                    ssl_info = json.loads(message['data'])
-                    self.check_malicious_ssl(ssl_info)
+            self.check_smtp_bruteforce(
+                profileid,
+                twid,
+                flow
+            )
+        # --- Detect multiple used SSH versions ---
+        if msg:= self.get_msg('new_software'):
+            msg = json.loads(msg['data'])
+            flow:dict = msg['sw_flow']
+            twid = msg['twid']
+            self.check_multiple_ssh_versions(
+                flow,
+                twid,
+                role='SSH::CLIENT'
+            )
+            self.check_multiple_ssh_versions(
+                flow,
+                twid,
+                role='SSH::SERVER'
+            )
 
-                # --- Detect Bad SMTP logins ---
-                message = __database__.get_message(self.c8)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_smtp'):
-                    smtp_info = json.loads(message['data'])
-                    profileid = smtp_info['profileid']
-                    twid = smtp_info['twid']
-                    flow: dict = smtp_info['flow']
+        if msg:=self.get_msg('new_weird'):
+            msg = json.loads(msg['data'])
+            self.check_weird_http_method(msg)
 
-                    self.check_smtp_bruteforce(
-                        profileid,
-                        twid,
-                        flow
-                    )
-
-                # --- Detect multiple used SSH versions ---
-                message = __database__.get_message(self.c9)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_software'):
-                    msg = json.loads(message['data'])
-                    flow:dict = msg['sw_flow']
-                    twid = msg['twid']
-                    self.check_multiple_ssh_versions(
-                        flow,
-                        twid,
-                        role='SSH::CLIENT'
-                    )
-                    self.check_multiple_ssh_versions(
-                        flow,
-                        twid,
-                        role='SSH::SERVER'
-                    )
-
-                message = __database__.get_message(self.c10)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'new_weird'):
-                    msg = json.loads(message['data'])
-                    self.check_weird_http_method(msg)
-
-                message = __database__.get_message(self.c11)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'new_tunnel'):
-                    msg = json.loads(message['data'])
-                    self.check_GRE_tunnel(msg)
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+        if msg:= self.get_msg('new_tunnel'):
+            msg = json.loads(msg['data'])
+            self.check_GRE_tunnel(msg)

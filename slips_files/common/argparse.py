@@ -141,11 +141,10 @@ class ArgumentParser(argparse.ArgumentParser):
             metavar='<file>',
             action='store',
             required=False,
-            help='Read and automatically recognize a Zeek dir with all logs, '
-                 'a Zeek conn.log file (TAB separated or JSON), '
-                 'a Suricata JSON file with flows, an Argus binetflow file, a PCAP file or a nfdump file. '
-                 'Also use the word "zeek" to specify read from stdin of Zeek files, '
-                 'or "suricata" to specify stdin of suricata files.',
+            help='Read a Zeek dir with all logs, '
+                 'a Zeek conn.log file (tab-separated or JSON), '
+                 'a Suricata JSON file, an Argus binetflow file, a PCAP file or a nfdump file. '
+                 'The word "zeek" is used to read from zeek lines from stdin. '
         )
         self.add_argument(
             '-i',
@@ -154,13 +153,6 @@ class ArgumentParser(argparse.ArgumentParser):
             action='store',
             required=False,
             help='Read packets from an interface.',
-        )
-        self.add_argument(
-            '-l',
-            '--createlogfiles',
-            action='store_true',
-            required=False,
-            help='Create log files with all the traffic info and detections.',
         )
         self.add_argument(
             '-F',
@@ -197,6 +189,7 @@ class ArgumentParser(argparse.ArgumentParser):
             '-o',
             '--output',
             action='store',
+            metavar='<dir>',
             required=False,
             default=self.alerts_default_path,
             help='Store alerts.json and alerts.txt in the given folder.',
@@ -212,6 +205,7 @@ class ArgumentParser(argparse.ArgumentParser):
             '-d',
             '--db',
             action='store',
+            metavar='<redis .rdb file>',
             required=False,
             help='Read an analysed file (rdb) from disk.',
         )
@@ -248,6 +242,7 @@ class ArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             '-P',
             '--port',
+            metavar='<port_number>',
             action='store',
             required=False,
             help='The redis-server port to use',
@@ -279,6 +274,14 @@ class ArgumentParser(argparse.ArgumentParser):
             action='store_true',
             required=False,
             help='Print Slips Version',
+        )
+        self.add_argument(
+            '-im',
+            '--input-module',
+            action='store',
+            metavar='<module_name>',
+            required=False,
+            help='Read flows from a module other than input process.',
         )
         try:
             self.add_argument(

@@ -43,7 +43,6 @@ class ProcessManager:
             # the queues are not there yet to send stop msgs
             for process in (
                         'ProfilerProcess',
-                        'logsProcess',
                         'OutputProcess'
 
             ):
@@ -54,9 +53,7 @@ class ProcessManager:
             stop_msg = 'stop_process'
             self.main.profilerProcessQueue.put(stop_msg)
             self.main.outputqueue.put(stop_msg)
-            if hasattr(self.main, 'logsProcessQueue'):
-                self.logsProcessQueue.put(stop_msg)
-    
+
     def get_modules(self, to_ignore):
         """
         Get modules from the 'modules' folder.
@@ -117,12 +114,21 @@ class ProcessManager:
             # last=False to move to the beginning of the dict
             plugins.move_to_end('Blocking', last=False)
 
+        # when cyst starts first, as soon as slips connects to cyst, cyst sends slips the flows,
+        # but the inputprocess didn't even start yet so the flows are lost
+        # to fix this, change the order of the CYST module(load it last)
+        if 'CYST' in plugins:
+            plugins = OrderedDict(plugins)
+            # last=False to move to the beginning of the dict
+            plugins.move_to_end('CYST', last=True)
+
         return plugins, failed_to_load_modules
 
     def load_modules(self):
         to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
         # Import all the modules
         modules_to_call = self.get_modules(to_ignore)[0]
+        loaded_modules = []
         for module_name in modules_to_call:
             if module_name in to_ignore:
                 continue
@@ -149,10 +155,12 @@ class ProcessManager:
                 f'({description}) '
                 f'[PID {green(module.pid)}]', 1, 0
                 )
+            loaded_modules.append(module_name)
         # give outputprocess time to print all the started modules
         time.sleep(0.5)
         print('-' * 27)
         self.main.print(f"Disabled Modules: {to_ignore}", 1, 0)
+        return loaded_modules
     
     def print_stopped_module(self, module):
         self.main.PIDs.pop(module, None)
