@@ -759,7 +759,6 @@ class InputProcess(multiprocessing.Process):
                 lock.release()
 
     def shutdown_gracefully(self):
-        print("input process shutdown")
         self.stop_observer()
 
         if hasattr(self, 'zeek_pid'):
