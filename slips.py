@@ -21,6 +21,7 @@ import contextlib
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from slips_files.common.cpu_profiler import CPUProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -52,6 +53,7 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
+import pdb
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -419,11 +421,11 @@ class Main:
                 or self.is_interface
         ):
             return True
+        return False
 
     def start(self):
         """Main Slips Function"""
         try:
-
             self.print_version()
             print('https://stratosphereips.org')
             print('-' * 27)
@@ -617,7 +619,6 @@ class Main:
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
             self.is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
-
             while True:
                 message = self.c1.get_message(timeout=0.01)
                 if (
@@ -626,6 +627,7 @@ class Main:
                     and message['data'] == 'stop_slips'
                 ):
                     self.proc_man.shutdown_gracefully()
+                    break
 
                 # Sleep some time to do routine checks
                 time.sleep(sleep_time)
@@ -661,13 +663,13 @@ class Main:
 
                 if self.should_run_non_stop():
                     continue
-
                 # Reaches this point if we're running Slips on a file.
                 # countdown until slips stops if no TW modifications are happening
                 if modified_ips_in_the_last_tw == 0:
                     # waited enough. stop slips
                     if intervals_to_wait == 0:
                         self.proc_man.shutdown_gracefully()
+                        break
 
                     # If there were no modified TWs in the last timewindow time,
                     # then start counting down

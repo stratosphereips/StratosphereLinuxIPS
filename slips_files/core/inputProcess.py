@@ -759,6 +759,7 @@ class InputProcess(multiprocessing.Process):
                 lock.release()
 
     def shutdown_gracefully(self):
+        print("input process shutdown")
         self.stop_observer()
 
         if hasattr(self, 'zeek_pid'):
@@ -934,8 +935,8 @@ class InputProcess(multiprocessing.Process):
 
             # keep the module idle until slips.py kills it
             # without this, the module exits but the pid will remain in memory as <defunct>
-            while True:
-                time.sleep(1)
+            # while True:
+            #     time.sleep(1)
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return False

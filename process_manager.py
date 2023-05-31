@@ -20,7 +20,7 @@ class ProcessManager:
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
         try:
-            pid = int(self.main.PIDs[module_name])
+            pid = int(self.PIDs[module_name])
             self.module_objects[module_name].shutdown_gracefully()
             os.kill(pid, sig)
         except (KeyError, ProcessLookupError):
@@ -29,11 +29,10 @@ class ProcessManager:
 
     def kill_all(self, PIDs):
         for module in PIDs:
-            if module not in self.main.PIDs:
-                # modules the are last to kill aren't always started and there in self.main.PIDs
+            if module not in self.PIDs:
+                # modules the are last to kill aren't always started and there in self.PIDs
                 # ignore them
                 continue
-
             self.kill(module)
             self.print_stopped_module(module)
 
@@ -170,10 +169,10 @@ class ProcessManager:
         return loaded_modules
     
     def print_stopped_module(self, module):
-        self.main.PIDs.pop(module, None)
+        self.PIDs.pop(module, None)
         # all text printed in green should be wrapped in the following
 
-        modules_left = len(list(self.main.PIDs.keys()))
+        modules_left = len(list(self.PIDs.keys()))
         # to vertically align them when printing
         module += ' ' * (20 - len(module))
         print(
@@ -183,7 +182,7 @@ class ProcessManager:
 
     def get_already_stopped_modules(self):
         already_stopped_modules = []
-        for module, pid in self.main.PIDs.items():
+        for module, pid in self.PIDs.items():
             try:
                 # signal 0 is used to check if the pid exists
                 os.kill(int(pid), 0)
@@ -197,7 +196,7 @@ class ProcessManager:
         # exclude the module that are already stopped from the pending modules
         pending_modules = [
             module
-            for module in list(self.main.PIDs.keys())
+            for module in list(self.PIDs.keys())
             if module not in finished_modules
         ]
         if not len(pending_modules):
@@ -265,10 +264,10 @@ class ProcessManager:
             __database__.publish_stop()
 
             # get dict of PIDs spawned by slips
-            self.main.PIDs = __database__.get_PIDs()
-
+            self.PIDs = __database__.get_PIDs()
+            print(self.PIDs)
             # we don't want to kill this process
-            self.main.PIDs.pop('slips.py', None)
+            self.PIDs.pop('slips.py', None)
 
             if self.main.mode == 'daemonized':
                 profilesLen = __database__.getProfilesLen()
@@ -286,7 +285,7 @@ class ProcessManager:
             if not self.main.args.stopdaemon:
                 #  modules_to_be_killed_last are ignored when they publish a msg in finished modules channel,
                 # we will kill them later, so we shouldn't be waiting for them to get outta the loop
-                slips_processes = len(list(self.main.PIDs.keys())) - len(modules_to_be_killed_last)
+                slips_processes = len(list(self.PIDs.keys())) - len(modules_to_be_killed_last)
 
                 try:
                     finished_modules = []
@@ -333,7 +332,7 @@ class ProcessManager:
                         # make sure we're not processing
                         # the logical flow is self.pids should be empty by now as all modules
                         # are closed, the only ones left are the ones we want to kill last
-                        modules_running = len(self.main.PIDs)
+                        modules_running = len(self.PIDs)
                         modules_that_should_be_running = len(modules_to_be_killed_last)
                         if modules_running > modules_that_should_be_running and max_loops < 2:
                             if not warning_printed and self.warn_about_pending_modules(finished_modules):
@@ -369,7 +368,7 @@ class ProcessManager:
 
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
-            self.kill_all(self.main.PIDs.copy())
+            self.kill_all(self.PIDs.copy())
             self.kill_all(modules_to_be_killed_last)
 
             # save redis database if '-s' is specified
@@ -388,7 +387,8 @@ class ProcessManager:
                 # if slips finished normally without stopping the daemon with -S
                 # then we need to delete the pidfile
                 self.main.daemon.delete_pidfile()
-
-            os._exit(-1)
+            return True
         except KeyboardInterrupt:
+            self.kill_all(self.PIDs.copy())
+            self.kill_all(modules_to_be_killed_last)
             return False
