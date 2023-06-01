@@ -1261,10 +1261,9 @@ class ProfilerProcess(Module, multiprocessing.Process):
         # store the original flow as benign in sqlite
         self.db.add_flow(
             self.flow,
-
-            json.dumps(self.raw_flow),
             self.profileid,
-            self.twid, 'benign'
+            self.twid,
+            'benign'
         )
         res = self.db.get_flow(self.flow.uid)
 
@@ -1278,8 +1277,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.flow
         )
         self.db.add_altflow(
-            self.flow.uid,
-            self.raw_flow,
+            self.flow,
             self.profileid,
             self.twid,
             'benign'
@@ -1293,8 +1291,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
         )
 
         self.db.add_altflow(
-            self.flow.uid,
-            self.raw_flow,
+            self.flow,
             self.profileid,
             self.twid,
             'benign'
@@ -1307,8 +1304,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.flow
         )
         self.db.add_altflow(
-            self.flow.uid,
-            self.raw_flow,
+            self.flow,
             self.profileid,
             self.twid,
             'benign'
@@ -1322,8 +1318,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.flow
         )
         self.db.add_altflow(
-            self.flow.uid,
-            self.raw_flow,
+            self.flow,
             self.profileid,
             self.twid,
             'benign'
@@ -1347,8 +1342,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.db.set_ftp_port(used_port)
 
         self.db.add_altflow(
-            self.flow.uid,
-            self.raw_flow,
+            self.flow,
             self.profileid,
             self.twid,
             'benign'
@@ -1365,8 +1359,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.db.publish('new_smtp', to_send)
 
         self.db.add_altflow(
-            self.flow.uid,
-            self.raw_flow,
+            self.flow,
             self.profileid,
             self.twid,
             'benign'
@@ -1386,12 +1379,11 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.store_features_going_in(rev_profileid, rev_twid)
 
     def handle_software(self):
-        profile = self.db.add_software_to_profile(self.profileid, self.flow)
+        self.db.add_software_to_profile(self.profileid, self.flow)
         self.publish_to_new_software()
 
         self.db.add_altflow(
-            self.flow.uid,
-            self.raw_flow,
+            self.flow,
             self.profileid,
             self.twid,
             'benign'
@@ -1412,9 +1404,12 @@ class ProfilerProcess(Module, multiprocessing.Process):
 
         self.publish_to_new_dhcp()
         for uid in self.flow.uids:
+            # we're modifying the copy of self.flow
+            # the goal is to store a copy of this flow for each uid in self.flow.uids
+            flow = self.flow
+            flow.uid = uid
             self.db.add_altflow(
-                uid,
-                self.raw_flow,
+                self.flow,
                 self.profileid,
                 self.twid,
                 'benign'
@@ -1547,7 +1542,6 @@ class ProfilerProcess(Module, multiprocessing.Process):
         # Add the flow with all the fields interpreted
         self.db.add_flow(
             self.flow,
-            json.dumps(self.raw_flow),
             profileid=profileid,
             twid=twid,
             label=self.label,
