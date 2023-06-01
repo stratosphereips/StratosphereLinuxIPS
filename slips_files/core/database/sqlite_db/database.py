@@ -1,7 +1,7 @@
 import os.path
 import sqlite3
 import json
-from slips_files.common.slips_utils import utils
+from dataclasses import asdict
 
 
 class SQLiteDB():
@@ -72,10 +72,10 @@ class SQLiteDB():
         return {uid: res}
 
     def add_flow(
-            self, uid: str, raw_flow: str, profileid: str, twid:str, label='benign'
+            self, flow, profileid: str, twid:str, label='benign'
             ):
 
-        parameters = (profileid, twid, uid, utils.sanitize(raw_flow), label)
+        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
         self.cursor.execute(
             'INSERT INTO flows (profileid, twid, uid, flow, label) '
             'VALUES (?, ?, ?, ?, ?);',
@@ -84,9 +84,9 @@ class SQLiteDB():
         self.conn.commit()
 
     def add_altflow(
-            self, uid: str, raw_flow: str, profileid: str, twid:str, label='benign'
+            self, flow, profileid: str, twid:str, label='benign'
             ):
-        parameters = (profileid, twid, uid, utils.sanitize(str(raw_flow)), label)
+        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
         self.cursor.execute(
             'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label) '
             'VALUES (?, ?, ?, ?, ?);',
