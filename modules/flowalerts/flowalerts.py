@@ -494,7 +494,7 @@ class Module(Module, multiprocessing.Process):
         other_ip = self.db.get_the_other_ip_version(profileid)
         if not other_ip:
             return False
-
+        other_ip = other_ip[0]
         # get the ips contacted by the other_ip
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
             f'profile_{other_ip}', twid

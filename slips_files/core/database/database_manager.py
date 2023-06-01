@@ -306,6 +306,7 @@ class DBManager:
         return self.rdb.set_flow_causing_evidence(*args, **kwargs)
 
     def get_flows_causing_evidence(self, *args, **kwargs):
+        """returns the list of uids of the flows causing evidence"""
         return self.rdb.get_flows_causing_evidence(*args, **kwargs)
 
     def setEvidence(self, *args, **kwargs):
