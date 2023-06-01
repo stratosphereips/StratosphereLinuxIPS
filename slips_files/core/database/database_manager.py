@@ -515,8 +515,10 @@ class DBManager:
         return self.sqlite.get_all_flows(*args, **kwargs)
 
     def get_all_contacted_ips_in_profileid_twid(self, *args, **kwargs):
-        #TODO mix sqlite and rdb here!?
-        return self.rdb.get_all_contacted_ips_in_profileid_twid(*args, **kwargs)
+        """
+        Get all the contacted IPs in a given profile and TW
+        """
+        return self.sqlite.get_all_contacted_ips_in_profileid_twid(*args, **kwargs)
 
     def markProfileTWAsBlocked(self, *args, **kwargs):
         return self.rdb.markProfileTWAsBlocked(*args, **kwargs)

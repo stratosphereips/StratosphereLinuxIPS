@@ -52,6 +52,24 @@ class SQLiteDB():
             return json.loads(flow)
         return False
 
+    def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) -> dict:
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return {}
+        all_flows: dict = self.get_all_flows_in_profileid_twid(profileid, twid)
+
+        if not all_flows:
+            return {}
+
+        contacted_ips = {}
+        for uid, flow in all_flows.items():
+            # get the daddr of this flow
+            daddr = flow['daddr']
+            contacted_ips[daddr] = uid
+        return contacted_ips
+
+
     def get_all_flows_in_profileid_twid(self, profileid, twid):
         condition = f'profileid = "{profileid}" AND twid = "{twid}"'
         all_flows: list = self.select('altflows', condition=condition)

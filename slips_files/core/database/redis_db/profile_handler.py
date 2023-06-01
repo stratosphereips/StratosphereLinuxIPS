@@ -734,7 +734,6 @@ class ProfileHandler():
         """
         Get all the contacted IPs in a given profile and TW
         """
-        #TODO move to dbmanager
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
