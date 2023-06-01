@@ -181,6 +181,7 @@ class Module(Module, multiprocessing.Process):
                 daddr, dur, profileid, twid, uid, timestamp, ip_state='dstip'
             )
             return True
+        return False
 
     def is_p2p(self, dport, proto, daddr):
         """
@@ -383,12 +384,10 @@ class Module(Module, multiprocessing.Process):
         For each contacted ip in this twid,
         check if the total bytes sent to this ip is >= data_exfiltration_threshold
         """
-        def get_sent_bytes(all_flows):
+        def get_sent_bytes(all_flows: dict):
             """Returns a dict of sent bytes to all ips {contacted_ip: (mbs_sent, [uids])}"""
             bytes_sent = {}
-            for flow in all_flows:
-                uid = next(iter(flow))
-                flow = flow[uid]
+            for uid, flow in all_flows.items():
                 daddr = flow['daddr']
                 sbytes: int = flow.get('sbytes', 0)
 
@@ -858,11 +857,10 @@ class Module(Module, multiprocessing.Process):
             ssh_flow_dict = json.loads(
                 original_ssh_flow[original_flow_uid]
             )
-            # size = ssh_flow_dict['allbytes']
-            size = ssh_flow_dict['orig_bytes'] + ssh_flow_dict['resp_bytes']
+            size = ssh_flow_dict['sbytes'] + ssh_flow_dict['dbytes']
             if size > self.ssh_succesful_detection_threshold:
-                daddr = ssh_flow_dict['id.orig_h']
-                saddr = ssh_flow_dict['id.resp_h']
+                daddr = ssh_flow_dict['daddr']
+                saddr = ssh_flow_dict['saddr']
                 # Set the evidence because there is no
                 # easier way to show how Slips detected
                 # the successful ssh and not Zeek
@@ -2036,7 +2034,7 @@ class Module(Module, multiprocessing.Process):
                 timestamp
             )
 
-        if msg:= self.get_msg('tw_closed'):
+        if msg := self.get_msg('tw_closed'):
             profileid_tw = msg['data'].split('_')
             profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)
