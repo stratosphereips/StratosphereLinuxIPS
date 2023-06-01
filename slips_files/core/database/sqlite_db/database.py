@@ -43,6 +43,27 @@ class SQLiteDB():
         cls.cursor.execute(query)
         cls.conn.commit()
 
+    def get_altflow_from_uid(self, profileid, twid, uid) -> dict:
+        """ Given a uid, get the alternative flow associated with it """
+        condition = f'uid = "{uid}"'
+        altflow = self.select('altflows', condition=condition)
+        if altflow:
+            flow: str = altflow[0][1]
+            return json.loads(flow)
+        return False
+
+    def get_all_flows_in_profileid_twid(self, profileid, twid):
+        condition = f'profileid = "{profileid}" AND twid = "{twid}"'
+        all_flows: list = self.select('altflows', condition=condition)
+        if not all_flows:
+            return False
+        res = {}
+        for flow in all_flows:
+            uid = flow[0]
+            flow = flow[1]
+            res[uid] = json.loads(flow)
+        return res
+
     def set_flow_label(self, uids: list, new_label: str):
         """
         sets the given new_label to each flow in the uids list
