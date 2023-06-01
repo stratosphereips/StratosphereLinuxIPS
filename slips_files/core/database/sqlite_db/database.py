@@ -64,6 +64,39 @@ class SQLiteDB():
             res[uid] = json.loads(flow)
         return res
 
+    def get_all_flows_in_profileid(self, profileid):
+        """
+        Return a list of all the flows in this profileid
+        [{'uid':flow},...]
+        """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return []
+
+        condition = f'profileid = "{profileid}"'
+        flows = self.select('flows', condition=condition)
+        all_flows = {}
+        if flows:
+            for flow in flows:
+                uid = flow[0]
+                flow: str = flow[1]
+                all_flows[uid] = json.loads(flow)
+
+        return all_flows
+
+    def get_all_flows(self):
+        """
+        Returns a list with all the flows in all profileids and twids
+        Each element in the list is a flow
+        """
+        flows = self.select('flows')
+        flow_list = []
+        if flows:
+            for flow in flows:
+                flow_list.append(json.loads(flow[1]))
+        return flow_list
+
     def set_flow_label(self, uids: list, new_label: str):
         """
         sets the given new_label to each flow in the uids list

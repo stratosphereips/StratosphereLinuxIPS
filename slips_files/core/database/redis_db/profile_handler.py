@@ -730,76 +730,21 @@ class ProfileHandler():
         )
         return True
 
-    def get_altflow_from_uid(self, profileid, twid, uid):
-        #TODO move to sqlite
-        """ Given a uid, get the alternative flow realted to it """
-        return (
-            self.r.hget(
-                profileid + self.separator + twid + self.separator + 'altflows',
-                uid,
-            )
-            if profileid
-            else False
-        )
-    def get_all_flows_in_profileid_twid(self, profileid, twid):
-        """
-        Return a list of all the flows in this profileid and twid
-        """
-        #TODO move to sqlite
-
-        if data := self.r.hgetall(
-            profileid + self.separator + twid + self.separator + 'flows'
-        ):
-            return data
-
-    def get_all_flows_in_profileid(self, profileid):
-        """
-        Return a list of all the flows in this profileid
-        [{'uid':flow},...]
-        """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return []
-        profileid_flows = []
-        # get all tws in this profile
-        for twid, time in self.getTWsfromProfile(profileid):
-            if flows := self.get_all_flows_in_profileid_twid(profileid, twid):
-                for uid, flow in list(flows.items()):
-                    profileid_flows.append({uid: json.loads(flow)})
-        return profileid_flows
-
-    def get_all_flows(self) -> list:
-        """
-        Returns a list with all the flows in all profileids and twids
-        Each element in the list is a flow
-        """
-        flows = []
-        for profileid in self.getProfiles():
-            for (twid, time) in self.getTWsfromProfile(profileid):
-                if flows_dict := self.get_all_flows_in_profileid_twid(
-                    profileid, twid
-                ):
-                    for flow in flows_dict.values():
-                        dict_flow = json.loads(flow)
-                        flows.append(dict_flow)
-        return flows
-
     def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) -> dict:
         """
         Get all the contacted IPs in a given profile and TW
         """
+        #TODO move to dbmanager
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return {}
-        all_flows = self.get_all_flows_in_profileid_twid(profileid, twid)
+        all_flows: dict = self.db.get_all_flows_in_profileid_twid(profileid, twid)
         if not all_flows:
             return {}
         contacted_ips = {}
         for uid, flow in all_flows.items():
             # get the daddr of this flow
-            flow = json.loads(flow)
             daddr = flow['daddr']
             contacted_ips[daddr] = uid
         return contacted_ips

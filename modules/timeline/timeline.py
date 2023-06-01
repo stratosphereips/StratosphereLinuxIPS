@@ -257,19 +257,19 @@ class Module(Module, multiprocessing.Process):
             # Sometimes we need to wait a little to give time to Zeek to find the related flow since they are read very fast together.
             # This should be improved algorithmically probably
             time.sleep(0.05)
-            alt_flow_json = self.db.get_altflow_from_uid(
+            alt_flow: dict = self.db.get_altflow_from_uid(
                 profileid, twid, uid
             )
 
             alt_activity = {}
             http_data = {}
-            if alt_flow_json:
-                alt_flow = json.loads(alt_flow_json)
+            if alt_flow:
+                flow_type = alt_flow['type_']
                 self.print(
-                    f"Received an altflow of type {alt_flow['type']}: {alt_flow}",
+                    f"Received an altflow of type {flow_type}: {alt_flow}",
                     3, 0
                 )
-                if 'dns' in alt_flow['type']:
+                if 'dns' in flow_type:
                     answer = alt_flow['answers']
                     if 'NXDOMAIN' in alt_flow['rcode_name']:
                         answer = 'NXDOMAIN'
@@ -281,7 +281,7 @@ class Module(Module, multiprocessing.Process):
                         'info': dns_activity,
                         'critical warning':'',
                     }
-                elif alt_flow['type'] == 'http':
+                elif flow_type == 'http':
                     http_data_all = {
                         'Request': alt_flow['method']
                         + ' http://'
@@ -300,7 +300,7 @@ class Module(Module, multiprocessing.Process):
                         if v != '' and v != '/'
                     }
                     alt_activity = {'info': http_data}
-                elif alt_flow['type'] == 'ssl':
+                elif flow_type == 'ssl':
                     if alt_flow['validation_status'] == 'ok':
                         validation = 'Yes'
                         resumed = 'False'
@@ -329,7 +329,7 @@ class Module(Module, multiprocessing.Process):
                         'dns_resolution': alt_flow['server_name']
                     }
                     alt_activity = {'info': ssl_activity}
-                elif alt_flow['type'] == 'ssh':
+                elif flow_type == 'ssh':
                     success = 'Successful' if alt_flow[
                         'auth_success'] else 'Not Successful'
                     ssh_activity = {

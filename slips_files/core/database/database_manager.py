@@ -503,18 +503,19 @@ class DBManager:
         return self.rdb.add_ips(*args, **kwargs)
 
     def get_altflow_from_uid(self, *args, **kwargs):
-        return self.rdb.get_altflow_from_uid(*args, **kwargs)
+        return self.sqlite.get_altflow_from_uid(*args, **kwargs)
 
     def get_all_flows_in_profileid_twid(self, *args, **kwargs):
-        return self.rdb.get_all_flows_in_profileid_twid(*args, **kwargs)
+        return self.sqlite.get_all_flows_in_profileid_twid(*args, **kwargs)
 
     def get_all_flows_in_profileid(self, *args, **kwargs):
-        return self.rdb.get_all_flows_in_profileid(*args, **kwargs)
+        return self.sqlite.get_all_flows_in_profileid(*args, **kwargs)
 
     def get_all_flows(self, *args, **kwargs):
-        return self.rdb.get_all_flows(*args, **kwargs)
+        return self.sqlite.get_all_flows(*args, **kwargs)
 
     def get_all_contacted_ips_in_profileid_twid(self, *args, **kwargs):
+        #TODO mix sqlite and rdb here!?
         return self.rdb.get_all_contacted_ips_in_profileid_twid(*args, **kwargs)
 
     def markProfileTWAsBlocked(self, *args, **kwargs):
@@ -725,9 +726,9 @@ class DBManager:
         """returns the raw flow as read from the log file"""
         return self.sqlite.get_flow(*args, **kwargs)
 
-    def add_flow(self, flow, raw_flow: str, profileid: str, twid:str, label='benign'):
+    def add_flow(self, flow, profileid: str, twid:str, label='benign'):
         # stores it in the db
-        self.sqlite.add_flow(flow.uid, raw_flow, profileid, twid, label=label)
+        self.sqlite.add_flow(flow, profileid, twid, label=label)
         # handles the channels and labels etc.
         return self.rdb.add_flow(
             flow,

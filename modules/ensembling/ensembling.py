@@ -33,7 +33,6 @@ class Module(Module, multiprocessing.Process):
         flows = self.db.get_all_flows_in_profileid_twid(profileid, twid)
         dstip_labels_total = {}
         for flow_uid, flow_data in flows.items():
-            flow_data = json.loads(flow_data)
             flow_module_labels = flow_data['module_labels']
             # First stage - calculate the amount of malicious and normal labels per each flow.
             # Set the final label per flow using majority voting
