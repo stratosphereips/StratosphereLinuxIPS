@@ -138,6 +138,12 @@ class SQLiteDB():
                 print(f"Error executing query ({query}): {e}")
 
 
+    def get_columns(self, table) -> list:
+        """returns a list with column names in the given table"""
+        self.cursor.execute(f"PRAGMA table_info({table})")
+        columns = self.cursor.fetchall()
+        return [column[1] for column in columns]
+
     def iterate_flows(self):
         """returns an iterator """
         # generator function to iterate over the rows

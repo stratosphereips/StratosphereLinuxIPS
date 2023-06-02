@@ -135,11 +135,14 @@ class Main:
 
         if 'csv' in export_labeled_flows_to:
             csv_output_file = os.path.join(self.args.output, 'labeled_flows.csv')
-            header = ['uid', 'flow','label','profileid', 'twid']
+            header: list = self.db.get_columns('flows')
             # Open the output file in write mode
             with open(csv_output_file, 'w', newline='') as csvfile:
                 csv_writer = csv.writer(csvfile)
-                csv_writer.writerow()
+
+                # write the header
+                csv_writer.writerow(header)
+
                 # Fetch rows one by one and write them to the file
                 for row in self.db.iterate_flows():
                     csv_writer.writerow(row)
