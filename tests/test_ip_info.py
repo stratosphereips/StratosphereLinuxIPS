@@ -7,11 +7,11 @@ import maxminddb
 
 
 # ASN unit tests
-def test_get_asn_info_from_geolite():
+def test_get_asn_info_from_geolite(mock_db):
     """
     geolite is an offline db
     """
-    ASN_info = ModuleFactory().create_asn_obj()
+    ASN_info = ModuleFactory().create_asn_obj(db=mock_db)
     # check an ip that we know is in the db
     expected_asn_info = {'asn': {'number': 'AS7018', 'org': 'ATT-INTERNET4'}}
     assert ASN_info.get_asn_info_from_geolite('108.200.116.255') == expected_asn_info
@@ -24,8 +24,8 @@ def test_cache_ip_range(mock_db):
     assert ASN_info.cache_ip_range('8.8.8.8') == {'asn': {'number': 'AS15169', 'org': 'GOOGLE, US'}}
 
 # GEOIP unit tests
-def test_get_geocountry():
-    ip_info = ModuleFactory().create_ip_info_obj()
+def test_get_geocountry(mock_db):
+    ip_info = ModuleFactory().create_ip_info_obj(db=mock_db)
 
     #open the db we'll be using for this test
     # ip_info.wait_for_dbs()
@@ -40,9 +40,9 @@ def test_get_geocountry():
         'geocountry': 'Unknown'
     }
 
-def test_get_vendor(mocker):
+def test_get_vendor(mocker, mock_db):
     # make sure the mac db is download so that wai_for_dbs doesn't wait forever :'D
-    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info = ModuleFactory().create_ip_info_obj(db=mock_db)
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
     host_name = 'FooBar-PC'
