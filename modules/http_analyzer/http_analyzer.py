@@ -10,9 +10,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Analyze HTTP flows'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         self.c1 = self.db.subscribe('new_http')
         self.channels = {
             'new_http': self.c1

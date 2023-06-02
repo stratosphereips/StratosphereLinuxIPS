@@ -11,10 +11,7 @@ class Module(Module, multiprocessing.Process):
     name = 'ARP'
     description = 'Detect arp attacks'
     authors = ['Alya Gomaa']
-
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         self.c1 = self.db.subscribe('new_arp')
         self.c2 = self.db.subscribe('tw_closed')
         self.channels = {

@@ -18,9 +18,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia, Alya Gomaa']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         # Get a separator from the database
         self.separator = self.db.get_field_separator()
         self.c1 = self.db.subscribe('give_threat_intelligence')

@@ -40,24 +40,17 @@ from re import split
 # Profiler Process
 class ProfilerProcess(Module, multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
+    name = 'Profiler'
 
-    def __init__(
-        self, inputqueue, outputqueue, verbose, debug
-    ):
-        self.name = 'Profiler'
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.inputqueue = inputqueue
+    def init(self, input_queue=None):
+        self.inputqueue = input_queue
         self.timeformat = None
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
-        self.whitelist = Whitelist(outputqueue)
+        self.whitelist = Whitelist(self.outputqueue)
         # Read the configuration
         self.read_configuration()
-        # Set the database output queue
-        self.verbose = verbose
-        self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = self.db.subscribe('reload_whitelist')

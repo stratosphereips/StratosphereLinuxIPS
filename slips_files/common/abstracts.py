@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 # common imports for all modules
 from slips_files.core.database.database_manager import DBManager
 from slips_files.common.slips_utils import utils
+from multiprocessing import Process
 import sys
 import traceback
 
@@ -10,11 +11,28 @@ class Module(ABC):
     name = ''
     description = 'Template abstract module'
     authors = ['Template abstract Author']
-    def __init__(self, outputqueue):
+    def __init__(self, outputqueue, db=None, **kwargs):
+        Process.__init__(self)
         self.outputqueue = outputqueue
-        self.db = DBManager()
+        if db == None:
+            self.db = DBManager()
+        else:
+            # in unit tests, we pass a mock of the db here
+            self.db = db
         self.control_channel = self.db.subscribe('control_module')
         self.msg_received = True
+        self.init(**kwargs)
+
+    @abstractmethod
+    def init(self, **kwargs):
+        """
+        all the code that was in the __init__ of all modules, is now in this method
+        the goal of this is to have one common __init__() for all modules, which is the one
+        in this file
+        this init will have access to all keyword args passes when initializing the module
+        """
+
+
 
     def should_stop(self) -> bool:
         """

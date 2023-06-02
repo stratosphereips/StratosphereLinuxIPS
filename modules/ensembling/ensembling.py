@@ -7,9 +7,7 @@ class Module(Module, multiprocessing.Process):
     description = 'The module to assign '
     authors = ['Kamila Babayeva, Sebastian Garcia']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         # Retrieve the labels
         self.normal_label = self.db.get_normal_label()
         self.malicious_label = self.db.get_malicious_label()

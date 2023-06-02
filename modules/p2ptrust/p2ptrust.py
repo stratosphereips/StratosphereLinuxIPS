@@ -55,9 +55,7 @@ class Trust(Module, multiprocessing.Process):
     description = 'Enables sharing detection data with other Slips instances'
     authors = ['Dita', 'Alya Gomaa']
 
-    def __init__(
-        self,
-        output_queue: multiprocessing.Queue,
+    def init(self,
         pigeon_port=6668,
         rename_with_port=False,
         output_dir='output/',
@@ -72,9 +70,6 @@ class Trust(Module, multiprocessing.Process):
         rename_sql_db_file=False,
         override_p2p=False,
     ):
-        # this module is called automatically when slips starts
-        multiprocessing.Process.__init__(self)
-        super().__init__(output_queue)
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
         # get the used interface
@@ -92,7 +87,6 @@ class Trust(Module, multiprocessing.Process):
         # create data folder
         Path(data_dir).mkdir(parents=True, exist_ok=True)
 
-        self.output_queue = output_queue
         self.port = self.get_available_port()
         self.host = self.get_local_IP()
         self.rename_with_port = rename_with_port
@@ -104,7 +98,7 @@ class Trust(Module, multiprocessing.Process):
         self.data_dir = data_dir
 
         str_port = str(self.port) if self.rename_with_port else ''
-        self.printer = Printer(output_queue, self.name + str_port)
+        self.printer = Printer(self.output_queue, self.name + str_port)
 
         self.slips_update_channel = slips_update_channel
         self.p2p_data_request_channel = p2p_data_request_channel

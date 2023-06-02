@@ -124,8 +124,8 @@ class ModuleFactory:
         return inputProcess
 
 
-    def create_ip_info_obj(self):
-        ip_info = ip_info_module.Module(self.output_queue)
+    def create_ip_info_obj(self, db=None):
+        ip_info = ip_info_module.Module(self.output_queue, db=db)
         # override the self.print function to avoid broken pipes
         ip_info.print = do_nothing
         return ip_info

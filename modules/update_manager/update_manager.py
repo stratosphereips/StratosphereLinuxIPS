@@ -13,9 +13,7 @@ class UpdateManager(Module, multiprocessing.Process):
     description = 'Update Threat Intelligence files'
     authors = ['Kamila Babayeva', 'Alya Gomaa']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         self.read_configuration()
         # Update file manager
         self.update_manager = UpdateFileManager(self.outputqueue)

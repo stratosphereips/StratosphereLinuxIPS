@@ -20,9 +20,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Export alerts to slack or STIX format'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         self.port = None
         self.c1 = self.db.subscribe('export_evidence')
         self.channels = {

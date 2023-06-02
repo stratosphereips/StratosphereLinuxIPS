@@ -37,18 +37,10 @@ class EvidenceProcess(Module, multiprocessing.Process):
     It only work on evidence for IPs that were profiled
     This should be converted into a module
     """
-
-    def __init__(
-        self,
-        inputqueue,
-        outputqueue,
-        output_dir,
-    ):
+    def init(self, input_queue=None, output_dir=None):
         self.name = 'Evidence'
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.inputqueue = inputqueue
-        self.whitelist = Whitelist(outputqueue)
+        self.inputqueue = input_queue
+        self.whitelist = Whitelist(self.outputqueue)
         self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60

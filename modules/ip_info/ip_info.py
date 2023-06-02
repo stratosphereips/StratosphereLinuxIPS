@@ -23,9 +23,8 @@ class Module(Module, multiprocessing.Process):
     description = 'Get different info about an IP/MAC address'
     authors = ['Alya Gomaa', 'Sebastian Garcia']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
+        """This will be called when initializing this module"""
         self.pending_mac_queries = multiprocessing.Queue()
         self.asn = ASN()
         self.JARM = JARM()

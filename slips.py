@@ -515,9 +515,9 @@ class Main:
 
             self.evidenceProcessQueue = Queue()
             evidence_process = EvidenceProcess(
-                self.evidenceProcessQueue,
                 self.outputqueue,
-                self.args.output,
+                input_queue = self.evidenceProcessQueue,
+                output_dir = self.args.output,
                 )
             evidence_process.start()
             self.print(
@@ -535,10 +535,8 @@ class Main:
 
             self.profilerProcessQueue = Queue()
             profiler_process = ProfilerProcess(
-                self.profilerProcessQueue,
                 self.outputqueue,
-                self.args.verbose,
-                self.args.debug,
+                input_queue=self.profilerProcessQueue,
             )
             profiler_process.start()
             self.print(

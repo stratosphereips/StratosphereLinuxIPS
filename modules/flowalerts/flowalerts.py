@@ -23,14 +23,12 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         # Read the configuration
         self.read_configuration()
         # Retrieve the labels
         self.subscribe_to_channels()
-        self.whitelist = Whitelist(outputqueue)
+        self.whitelist = Whitelist(self.outputqueue)
         self.conn_counter = 0
         # helper contains all functions used to set evidence
         self.helper = Helper()

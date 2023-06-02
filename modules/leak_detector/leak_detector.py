@@ -14,9 +14,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect leaks of data in the traffic'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         # this module is only loaded when a pcap is given get the pcap path
         try:
             self.pcap = utils.sanitize(sys.argv[sys.argv.index('-f') + 1])

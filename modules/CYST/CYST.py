@@ -11,9 +11,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Communicates with CYST simulation framework'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         self.port = None
         self.c1 = self.db.subscribe('new_alert')
         self.channels = {'new_alert': self.c1}

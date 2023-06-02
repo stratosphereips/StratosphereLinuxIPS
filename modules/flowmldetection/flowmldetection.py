@@ -27,9 +27,7 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         # Subscribe to the channel
         self.c1 = self.db.subscribe('new_flow')
         self.channels = {

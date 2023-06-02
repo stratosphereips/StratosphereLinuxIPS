@@ -16,9 +16,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         self.read_configuration()
         self.c1 = self.db.subscribe('export_evidence')
         self.channels = {
