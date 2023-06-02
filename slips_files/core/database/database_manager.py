@@ -18,7 +18,7 @@ class DBManager:
             output_dir, output_queue, redis_port = args[0], args[1], args[2]
             cls._obj = super().__new__(DBManager)
             cls.sqlite = SQLiteDB(output_dir)
-            cls.rdb = RedisDB(redis_port, output_queue)
+            cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
 
         return cls._obj
 
@@ -572,8 +572,8 @@ class DBManager:
     def has_profile(self, *args, **kwargs):
         return self.rdb.has_profile(*args, **kwargs)
 
-    def getProfilesLen(self, *args, **kwargs):
-        return self.rdb.getProfilesLen(*args, **kwargs)
+    def get_profiles_len(self, *args, **kwargs):
+        return self.rdb.get_profiles_len(*args, **kwargs)
 
     def getLastTWforProfile(self, *args, **kwargs):
         return self.rdb.getLastTWforProfile(*args, **kwargs)

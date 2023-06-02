@@ -260,7 +260,7 @@ class ProcessManager:
             self.main.PIDs.pop('slips.py', None)
 
             if self.main.mode == 'daemonized':
-                profilesLen = self.main.db.getProfilesLen()
+                profilesLen = self.main.db.get_profiles_len()
                 self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
 
             modules_to_be_killed_last: list = self.get_modules_to_be_killed_last()

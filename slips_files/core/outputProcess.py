@@ -348,7 +348,7 @@ class OutputProcess(multiprocessing.Process):
         self.last_updated_stats_time = now
         now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
-        profilesLen = self.db.getProfilesLen()
+        profilesLen = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         msg = f'Analyzed IPs: ' \
               f'{profilesLen}. ' \

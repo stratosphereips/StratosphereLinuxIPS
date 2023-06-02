@@ -28,6 +28,7 @@ flow = Conn(
 
 # this should always be the first unit test in this file
 # because we don't want another unit test adding the same flow before this one
+
 def add_flow():
     database = ModuleFactory().create_db_manager_obj(6381)
     database.add_flow(flow, '', profileid, twid, label='benign')

@@ -621,7 +621,7 @@ class Main:
                 # for other files, we prin a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
                     # How many profiles we have?
-                    profilesLen = str(self.db.getProfilesLen())
+                    profilesLen = self.db.get_profiles_len()
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
                     print(
                         f'Total analyzed IPs so '

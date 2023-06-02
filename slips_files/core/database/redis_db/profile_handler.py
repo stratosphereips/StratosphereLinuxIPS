@@ -1126,9 +1126,10 @@ class ProfileHandler():
         """Check if we have the given profile"""
         return self.r.sismember('profiles', profileid) if profileid else False
 
-    def getProfilesLen(self):
+    def get_profiles_len(self) -> int:
         """Return the amount of profiles. Redis should be faster than python to do this count"""
-        return self.r.scard('profiles')
+        profiles_n =  self.r.scard('profiles')
+        return 0 if not profiles_n else int(profiles_n)
 
     def getLastTWforProfile(self, profileid):
         """Return the last TW id and the time for the given profile id"""

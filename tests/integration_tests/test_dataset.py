@@ -52,8 +52,7 @@ def test_pcap(
     assert has_errors(output_dir) is False
 
     db = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
-    
-    profiles = get_total_profiles(db)
+    profiles = db.get_profiles_len()
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
@@ -118,7 +117,7 @@ def test_binetflow(
     assert has_errors(output_dir) is False
 
     database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
-    profiles = get_total_profiles(database)
+    profiles = database.get_profiles_len()
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
@@ -205,7 +204,7 @@ def test_zeek_dir(
     assert has_errors(output_dir) is False
 
     database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
-    profiles = get_total_profiles(database)
+    profiles = database.get_profiles_len()
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
@@ -254,7 +253,7 @@ def test_zeek_conn_log(
     assert has_errors(output_dir) is False
 
     database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
-    profiles = get_total_profiles(database)
+    profiles = database.get_profiles_len()
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
@@ -303,7 +302,7 @@ def test_suricata(
     assert has_errors(output_dir) is False
 
     database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
-    profiles = get_total_profiles(database)
+    profiles = database.get_profiles_len()
     #todo the profiles should be way more than 10, maybe 76, but it varies each run, we need to sy why
     assert profiles > 10
 
@@ -339,7 +338,7 @@ def test_nfdump(
     run_slips(command)
 
     database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
-    profiles = get_total_profiles(database)
+    profiles = database.get_profiles_len()
     assert has_errors(output_dir) is False
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips
