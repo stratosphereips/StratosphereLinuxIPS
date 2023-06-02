@@ -2,6 +2,8 @@ from slips_files.core.database.database_manager import DBManager
 from pathlib import Path
 import os
 import shutil
+import binascii
+import base64
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -16,6 +18,10 @@ if not os.path.exists(integration_tests_dir):
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
+
+
+def get_random_uid():
+    return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
 
 
 def get_total_profiles(db):

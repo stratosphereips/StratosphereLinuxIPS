@@ -130,8 +130,8 @@ class ModuleFactory:
         ip_info.print = do_nothing
         return ip_info
 
-    def create_asn_obj(self):
-        return asn.ASN()
+    def create_asn_obj(self, db=None):
+        return asn.ASN(db)
 
     def create_leak_detector_obj(self):
         # this file will be used for storing the module output

@@ -1,5 +1,8 @@
 """Unit test for modules/ip_info/ip_info.py"""
 from tests.module_factory import ModuleFactory
+from slips_files.core.database.database_manager import DBManager
+import modules.ip_info.asn_info as asn
+from unittest.mock import patch
 import maxminddb
 
 
@@ -15,8 +18,9 @@ def test_get_asn_info_from_geolite():
     # test  asn info not found in geolite
     assert ASN_info.get_asn_info_from_geolite('0.0.0.0') == {}
 
-def test_cache_ip_range():
-    ASN_info = ModuleFactory().create_asn_obj()
+def test_cache_ip_range(mock_db):
+    # Patch the database object creation before it is instantiated
+    ASN_info = ModuleFactory().create_asn_obj(db=mock_db)
     assert ASN_info.cache_ip_range('8.8.8.8') == {'asn': {'number': 'AS15169', 'org': 'GOOGLE, US'}}
 
 # GEOIP unit tests

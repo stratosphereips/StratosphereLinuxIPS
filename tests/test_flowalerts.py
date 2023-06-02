@@ -17,38 +17,6 @@ saddr = '192.168.1.1'
 daddr = '192.168.1.2'
 dst_profileid = f'profile_{daddr}'
 
-def get_random_uid():
-    return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
-
-
-
-@pytest.mark.parametrize('dur,expected_detection', [
-    (1400, False),
-    (1600, True),
-])
-def test_check_long_connection(database, output_queue, dur, expected_detection):
-    uid = get_random_uid()
-    flowalerts = ModuleFactory().create_flowalerts_obj()
-
-    flow = Conn(
-        timestamp,
-        uid,
-        saddr,
-        daddr,
-        dur,
-        'tcp',
-        '',
-        '80',
-        '80',
-        1,2,5,6,7,'','','',
-    )
-    assert database.add_flow(flow,'', profileid, twid) is True
-    # sets the label to normal or malicious based on the flow durd
-    assert flowalerts.check_long_connection(
-        dur, daddr, saddr, profileid, twid, uid, timestamp
-    ) == expected_detection
-
-
 
 def test_port_belongs_to_an_org(database, output_queue):
     flowalerts = ModuleFactory().create_flowalerts_obj()

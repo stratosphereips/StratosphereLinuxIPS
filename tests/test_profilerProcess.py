@@ -162,7 +162,7 @@ def test_add_flow_to_profile(file, type_, database):
 
     # make sure it's added
     if type_ == 'conn':
-        added_flow = database.get_flow(profileid, twid, uid)[uid]
+        added_flow = database.get_flow(profileid, '', twid, uid)[uid]
     else:
         added_flow = (
             database.get_altflow_from_uid(profileid, twid, uid) is not None

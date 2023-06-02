@@ -5,6 +5,7 @@ for example: setting up the database, input_queue, output_queue, etc..
 import pytest
 import os, sys, inspect
 from multiprocessing import Queue
+from unittest.mock import patch
 from slips_files.core.database.database_manager import DBManager
 
 
@@ -15,6 +16,13 @@ current_dir = os.path.dirname(
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
+
+
+@pytest.fixture
+def mock_db():
+    # Create a mock version of the database object
+    with patch('slips_files.core.database.database_manager.DBManager') as mock:
+        yield mock.return_value
 
 def do_nothing(*arg):
     """Used to override the print function because using the self.print causes broken pipes"""
