@@ -129,44 +129,6 @@ class Main:
         sys.exit(0)
 
 
-    def export_labeled_flows(self):
-        """
-        exports the labeled flows and altflows stored in sqlite
-        db to json or csv based on the config file
-        """
-        export_labeled_flows_to: str = self.conf.export_labeled_flows_to()
-
-        if 'csv' in export_labeled_flows_to:
-            csv_output_file = os.path.join(self.args.output, 'labeled_flows.csv')
-            header: list = self.db.get_columns('flows')
-
-            with open(csv_output_file, 'w', newline='') as csv_file:
-                csv_writer = csv.writer(csv_file)
-
-                # write the header
-                csv_writer.writerow(header)
-
-                # Fetch rows one by one and write them to the file
-                for row in self.db.iterate_flows():
-                    csv_writer.writerow(row)
-
-        if 'json' in export_labeled_flows_to:
-            json_output_file = os.path.join(self.args.output, 'labeled_flows.json')
-
-            with open(json_output_file, 'w', newline='') as json_file:
-                # Fetch rows one by one and write them to the file
-                for row in self.db.iterate_flows():
-                    json_labeled_flow = {
-                        'uid': row[0],
-                        'flow': row[1],
-                        'label': row[2],
-                        'profileid': row[3],
-                        'twid': row[4],
-                        }
-                    json.dump(json_labeled_flow, json_file)
-                    json_file.write('\n')
-
-
 
 
     def update_local_TI_files(self):

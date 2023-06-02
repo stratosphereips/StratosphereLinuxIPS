@@ -1,6 +1,7 @@
 import os.path
 import sqlite3
 import json
+import csv
 from dataclasses import asdict
 
 
@@ -136,7 +137,39 @@ class SQLiteDB():
             except sqlite3.Error as e:
                 # An error occurred during execution
                 print(f"Error executing query ({query}): {e}")
+    
+    def export_labeled_flows(self, output_dir, format):
+        if 'csv' in format:
+            print(f"@@@@@@@@@@@@@@@@ exporting to csv")
+            csv_output_file = os.path.join(output_dir, 'labeled_flows.csv')
+            header: list = self.get_columns('flows')
 
+            with open(csv_output_file, 'w', newline='') as csv_file:
+                csv_writer = csv.writer(csv_file)
+
+                # write the header
+                csv_writer.writerow(header)
+
+                # Fetch rows one by one and write them to the file
+                for row in self.iterate_flows():
+                    csv_writer.writerow(row)
+        if 'json' in format:
+            print(f"@@@@@@@@@@@@@@@@ to json")
+            json_output_file = os.path.join(output_dir, 'labeled_flows.json')
+
+            with open(json_output_file, 'w', newline='') as json_file:
+                # Fetch rows one by one and write them to the file
+                for row in self.iterate_flows():
+                    json_labeled_flow = {
+                        'uid': row[0],
+                        'flow': row[1],
+                        'label': row[2],
+                        'profileid': row[3],
+                        'twid': row[4],
+                        }
+                    json.dump(json_labeled_flow, json_file)
+                    json_file.write('\n')
+        print(f"@@@@@@@@@@@@@@@@ done")
 
     def get_columns(self, table) -> list:
         """returns a list with column names in the given table"""

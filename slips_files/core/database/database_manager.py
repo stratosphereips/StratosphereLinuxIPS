@@ -774,6 +774,14 @@ class DBManager:
     def execute_query(self, *args, **kwargs):
         return self.sqlite.execute_query(*args, **kwargs)
 
+
+    def export_labeled_flows(self, *args, **kwargs):
+        """
+        exports the labeled flows and altflows stored in sqlite
+        db to json or csv based on the config file
+        """
+        self.sqlite.export_labeled_flows(self.get_output_dir(), *args, **kwargs)
+
     def close(self, *args, **kwargs):
         self.rdb.r.close()
         self.rdb.rcache.close()
