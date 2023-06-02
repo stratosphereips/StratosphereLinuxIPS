@@ -138,7 +138,7 @@ class SQLiteDB():
         """
         condition = f'uid = "{uid}"'
         if twid:
-            condition += f', twid = "{twid}"'
+            condition += f'AND twid = "{twid}"'
 
         res = self.select('flows', condition=condition)
         res = res[0][1] if res else {}
