@@ -14,7 +14,7 @@ class Module(ABC):
     def __init__(self, outputqueue, db=None, **kwargs):
         Process.__init__(self)
         self.outputqueue = outputqueue
-        if db == None:
+        if db is None:
             self.db = DBManager()
         else:
             # in unit tests, we pass a mock of the db here

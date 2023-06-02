@@ -8,10 +8,7 @@ import maxminddb
 
 class ASN:
     def __init__(self, db=None):
-        if db == None:
-            self.db = DBManager()
-        else:
-            self.db = db
+        self.db = db
         # Open the maxminddb ASN offline db
         try:
             self.asn_db = maxminddb.open_database(

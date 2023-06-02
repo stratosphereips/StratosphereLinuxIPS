@@ -52,8 +52,8 @@ def test_get_vendor(mocker, mock_db):
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.text = 'PCS Systemtechnik GmbH'
-
-    # tries to get vendor either online or from our offline db
-    mac_info = ip_info.get_vendor(mac_addr, host_name, profileid)
+    with patch.object(mock_db, 'get_mac_vendor_from_profile', return_value=False):
+        # tries to get vendor either online or from our offline db
+        mac_info = ip_info.get_vendor(mac_addr, host_name, profileid)
     assert mac_info is not False
     assert mac_info['Vendor'].lower() == 'Pcs Systemtechnik GmbH'.lower()

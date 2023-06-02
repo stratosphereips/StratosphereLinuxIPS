@@ -26,7 +26,7 @@ class Module(Module, multiprocessing.Process):
     def init(self):
         """This will be called when initializing this module"""
         self.pending_mac_queries = multiprocessing.Queue()
-        self.asn = ASN()
+        self.asn = ASN(self.db)
         self.JARM = JARM()
         # Set the output queue of our database instance
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup

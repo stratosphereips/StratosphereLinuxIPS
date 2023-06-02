@@ -151,9 +151,8 @@ class ModuleFactory:
 
     def create_profilerProcess_obj(self):
         profilerProcess = ProfilerProcess(
-            self.input_queue,
             self.output_queue,
-            1, 0,
+            input_queue=self.input_queue,
         )
 
         # override the self.print function to avoid broken pipes
