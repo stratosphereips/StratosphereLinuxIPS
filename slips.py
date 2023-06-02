@@ -26,10 +26,8 @@ from process_manager import ProcessManager
 from ui_manager import UIManager
 from checker import Checker
 from style import green
-import socket
 
 
-from multiprocessing import Queue
 from slips_files.core.inputProcess import InputProcess
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
@@ -50,6 +48,7 @@ from datetime import datetime
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
+import csv
 
 
 # Ignore warnings on CPU from tensorflow
@@ -128,6 +127,24 @@ class Main:
         if self.mode == 'daemonized':
             self.daemon.stop()
         sys.exit(0)
+
+
+    def export_labeled_flows(self):
+        print(f"@@@@@@@@@@@@@@@@ export_labeled_flows is called ")
+        export_labeled_flows_to: str = self.conf.export_labeled_flows_to()
+
+        if 'csv' in export_labeled_flows_to:
+            csv_output_file = os.path.join(self.args.output, 'labeled_flows.csv')
+            header = ['uid', 'flow','label','profileid', 'twid']
+            # Open the output file in write mode
+            with open(csv_output_file, 'w', newline='') as csvfile:
+                csv_writer = csv.writer(csvfile)
+                csv_writer.writerow()
+                # Fetch rows one by one and write them to the file
+                for row in self.db.iterate_flows():
+                    csv_writer.writerow(row)
+
+            print(f"@@@@@@@@@@@@@@@@ done writing to {csv_output_file}")
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
