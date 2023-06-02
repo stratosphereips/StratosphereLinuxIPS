@@ -172,9 +172,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             # and 2GB for soft limit
             # The original values were 50MB for maxmem and 8MB for soft limit.
             # don't flush the loaded db when using '-db'
+            # don't flush the db when starting or stopping the daemon, or when testing
             if (
                     cls.deletePrevdb
-                    and not ('-S' in sys.argv or '-cb' in sys.argv or '-d' in sys.argv)
+                    and not ('-S' in sys.argv or '-cb' in sys.argv or '-d' in sys.argv )
                     and cls.flush_db
             ):
                 # when stopping the daemon, don't flush bc we need to get the pids

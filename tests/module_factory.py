@@ -47,8 +47,8 @@ class ModuleFactory:
         self.profiler_queue = Queue()
         self.input_queue = Queue()
 
-    def create_db_manager_obj(self, port, output_dir='output/'):
-        db = DBManager(output_dir, self.output_queue, port)
+    def create_db_manager_obj(self, port, output_dir='output/', flush_db=False):
+        db = DBManager(output_dir, self.output_queue, port, flush_db=flush_db)
         db.r = db.rdb.r
         db.print = do_nothing
         return db
