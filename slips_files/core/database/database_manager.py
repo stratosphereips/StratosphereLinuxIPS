@@ -22,6 +22,12 @@ class DBManager:
 
         return cls._obj
 
+    def get_sqlite_db_path(self) -> str:
+        return self.sqlite.get_db_path()
+
+    def iterate_flows(self):
+        return self.sqlite.iterate_flows()
+
     def publish(self, *args, **kwargs):
         return self.rdb.publish(*args, **kwargs)
 

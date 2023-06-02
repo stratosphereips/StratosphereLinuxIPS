@@ -37,6 +37,12 @@ class SQLiteDB():
         """
         open(cls._flows_db,'w').close()
 
+    def get_db_path(self) -> str:
+        """
+        returns the path of the sqlite flows db placed in the output dir
+        """
+        return self._flows_db
+
     @classmethod
     def create_table(cls, table_name, schema):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
@@ -123,13 +129,30 @@ class SQLiteDB():
         for uid in uids:
             query = f'UPDATE flows SET label="{new_label}" WHERE uid="{uid}"'
             try:
-                self.conn.execute(
+                self.cursor.execute(
                     query
                 )
                 self.conn.commit()
             except sqlite3.Error as e:
                 # An error occurred during execution
                 print(f"Error executing query ({query}): {e}")
+
+
+    def iterate_flows(self):
+        """returns an iterator """
+        # generator function to iterate over the rows
+        def row_generator():
+            # select all flows and altflows
+            self.cursor.execute('SELECT * FROM flows UNION SELECT * FROM altflows')
+
+            while True:
+                row = self.cursor.fetchone()
+                if row is None:
+                    break
+                yield row
+
+        # Return the combined iterator
+        return iter(row_generator())
 
     def get_flow(self, uid: str, twid=False) -> dict:
         """
