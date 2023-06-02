@@ -364,6 +364,9 @@ class ProcessManager:
             if self.main.args.save:
                 self.main.save_the_db()
 
+            if self.main.conf.export_labeled_flows():
+                self.main.export_labeled_flows()
+
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
             self.main.store_zeek_dir_copy()

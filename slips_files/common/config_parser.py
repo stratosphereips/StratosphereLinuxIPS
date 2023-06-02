@@ -46,7 +46,6 @@ class ConfigParser(object):
         )
 
 
-
     def get_args(self):
         """
         Returns the args given to slips parsed by ArgumentParser
@@ -165,7 +164,23 @@ class ConfigParser(object):
         popups = self.read_configuration(
             'detection', 'popup_alerts', 'False'
         )
-        return  'yes' in popups.lower() 
+        return 'yes' in popups.lower()
+
+    def export_labeled_flows(self):
+        export = self.read_configuration(
+            'parameters', 'export_labeled_flows', 'no'
+        )
+        return 'yes' in export.lower()
+
+    def export_labeled_flows_to(self):
+        export = self.read_configuration(
+            'parameters', 'export_format', 'None'
+        ).lower()
+        if 'csv' in export:
+            return 'csv'
+        if 'json' in export:
+            return 'json'
+        return False
 
     def rotation(self):
         rotation = self.read_configuration(
