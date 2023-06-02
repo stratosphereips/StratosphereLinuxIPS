@@ -32,7 +32,9 @@ Slips v1.0.5
 # Slips: Behavioral Machine Learning-Based Intrusion Prevention System
 
 
-Slips is a behavioral intrusion prevention system that uses machine learning to detect malicious behaviors in network traffic. Slips focus on targeted attacks, detection of command and control channels, and providing a good visualization for the analyst. It can analyze network traffic in real-time, network captures such as pcap files, and network flows produced by Suricata, Zeek/Bro, and Argus. Slips processes the input data, analyzes it, and highlights suspicious behavior that needs the analyst's attention.
+Slips is a powerful behavioral intrusion prevention system that utilizes machine learning to detect malicious behaviors in network traffic. With a strong emphasis on targeted attacks and command and control channels, Slips offers the flexibility to analyze network traffic in real-time, pcap files, and network flows from popular tools like Suricata, Zeek/Bro, and Argus. 
+
+Running Slips becomes effortless through Docker. Linux systems can seamlessly leverage the Slips docker image for real-time traffic analysis. Detailed documentation is available to guide users through the usage instructions, ensuring effective utilization of Slips' advanced features.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" width="850px"
 title="Slips in action.">
