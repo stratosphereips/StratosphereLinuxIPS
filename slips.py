@@ -171,7 +171,7 @@ class Main:
         )
 
     def was_running_zeek(self) -> bool:
-        """returns true if zeek wa sused in this run """
+        """returns true if zeek was used in this run """
         return __database__.get_input_type() in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
 
     def store_zeek_dir_copy(self):
@@ -203,10 +203,10 @@ class Main:
         # default output/
         if '-o' in sys.argv:
             # -o is given
-            # delet all old files in the output dir
+            # delete all old files in the output dir
             if os.path.exists(self.args.output):
                 for file in os.listdir(self.args.output):
-                    # in integration tests, slips redirct its' output to slips_output.txt,
+                    # in integration tests, slips redirects its output to slips_output.txt,
                     # don't delete that file
                     if self.args.testing and 'slips_output.txt' in file:
                         continue
@@ -381,7 +381,7 @@ class Main:
 
     def setup_print_levels(self):
         """
-        setup debug and verose levels
+        setup debug and verbose levels
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if self.args.verbose is None:
@@ -389,7 +389,7 @@ class Main:
 
         # Limit any verbosity to > 0
         self.args.verbose = max(self.args.verbose, 1)
-        # Any deug passed as parameter overrides the configuration. Only check its value
+        # Any debug passed as parameter overrides the configuration. Only check its value
         if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
@@ -637,7 +637,7 @@ class Main:
 
                 modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
-                # for other files, we prin a progress bar + the stats using outputprocess
+                # for other files, we print a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
                     # How many profiles we have?
                     profilesLen = str(__database__.getProfilesLen())

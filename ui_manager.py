@@ -43,7 +43,7 @@ class UIManager:
 
         def run_webinterface():
             # starting the wbeinterface using the shell script results in slips not being able to
-            # get the PID of the python proc started by the .sh scrip
+            # get the PID of the python proc started by the .sh script
             command = ['python3', 'webinterface/app.py']
             webinterface = subprocess.Popen(
                 command,
@@ -73,8 +73,8 @@ class UIManager:
                             f"{error.strip().decode()}\n"
                             f"Port 55000 is used by PID {pid}")
 
-        # if theres's an error, this will be set to false, and the error will be printed
-        # otherwise we assume that the inetrface started
+        # if there's an error, this will be set to false, and the error will be printed
+        # otherwise we assume that the interface started
         # self.webinterface_started = True
         self.webinterface_return_value = Queue()
         self.webinterface_thread = threading.Thread(
