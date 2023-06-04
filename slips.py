@@ -724,5 +724,5 @@ if __name__ == '__main__':
         slips.start()
     
     if cpuProfilerEnabled:
-        cpuProfiler.end()
+        cpuProfiler.stop()
         cpuProfiler.print()
