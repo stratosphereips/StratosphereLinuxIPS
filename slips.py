@@ -21,6 +21,7 @@ import contextlib
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from slips_files.common.cpu_profiler import CPUProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -687,6 +688,16 @@ class Main:
 ####################
 if __name__ == '__main__':
     slips = Main()
+    cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
+    if cpuProfilerEnabled:
+        cpuProfiler = CPUProfiler(mode=slips.conf.get_cpu_profiler_mode(), limit=slips.conf.get_cpu_profiler_output_limit())
+        cpuProfiler.start()
+    #     import random
+    #     for i in range(1,10):
+    #         print(i*random.randint(1,10))
+    #     cpuProfiler.end()
+    #     cpuProfiler.print()
+    # exit(0)
     if slips.args.stopdaemon:
         # -S is provided
         daemon = Daemon(slips)
@@ -711,3 +722,7 @@ if __name__ == '__main__':
     else:
         # interactive mode
         slips.start()
+    
+    if cpuProfilerEnabled:
+        cpuProfiler.end()
+        cpuProfiler.print()

@@ -728,7 +728,12 @@ class ConfigParser(object):
             to_ignore.append('CYST')
 
         return to_ignore
+    
+    def get_cpu_profiler_enable(self):
+        return self.read_configuration('Profiling', 'cpu_profiler_enable', 'no')
 
-
-
-
+    def get_cpu_profiler_mode(self):
+        return self.read_configuration('Profiling', 'cpu_profiler_mode', 'dev')
+    
+    def get_cpu_profiler_output_limit(self) -> int:
+        return int(self.read_configuration('Profiling', 'cpu_profiler_output_limit', 20))
