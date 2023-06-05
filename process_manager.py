@@ -260,12 +260,12 @@ class ProcessManager:
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
+
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
 
             # get dict of PIDs spawned by slips
             self.PIDs = __database__.get_PIDs()
-            print(self.PIDs)
             # we don't want to kill this process
             self.PIDs.pop('slips.py', None)
 
