@@ -137,6 +137,10 @@ class RedisManager:
                     # even if it's unused, it adds 2 keys. so any db with only these 2 keys
                     # is unused
                     return port
+                else:
+                    # ignore the created obj of the used db, and try with
+                    # a new port
+                    db.discard_obj()
             except redis.exceptions.ConnectionError:
                 # Connection refused to this port
                 continue

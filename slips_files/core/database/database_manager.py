@@ -19,7 +19,6 @@ class DBManager:
             cls._obj = super().__new__(DBManager)
             cls.sqlite = SQLiteDB(output_dir)
             cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
-
         return cls._obj
 
     def get_sqlite_db_path(self) -> str:
@@ -55,6 +54,16 @@ class DBManager:
 
     def ask_for_ip_info(self, *args, **kwargs):
         return self.rdb.ask_for_ip_info(*args, **kwargs)
+
+    @classmethod
+    def discard_obj(cls):
+        """
+        when connecting on multiple ports, this dbmanager since it's a singelton
+        returns the same instance of the already used db
+        to fix this, we call this function every time we find a used db
+        that slips should connect to
+        """
+        cls._obj = None
 
     def update_times_contacted(self, *args, **kwargs):
         return self.rdb.update_times_contacted(*args, **kwargs)
