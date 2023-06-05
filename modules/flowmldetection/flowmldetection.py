@@ -380,7 +380,8 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.store_model()
+        if self.mode == 'train':
+            self.store_model()
         self.db.publish('finished_modules', self.name)
 
     def pre_main(self):

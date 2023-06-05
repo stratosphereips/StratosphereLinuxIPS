@@ -169,3 +169,5 @@ modules/flowmldetection/model.bin
 databases/macaddress-db.json
 modules/flowmldetection/model.bin
 output/
+config-live-macos-*
+dataset-private/*

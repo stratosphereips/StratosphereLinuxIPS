@@ -1,13 +1,16 @@
 -1.0.5 (May 2023):
-- Fix missing flows due to modules stopping before the processing is done
-- Fix how we detect vertical and horizontal portscans
-- Update whitelist by adding all the ips of whitelisted domains
-- Fixed error whitelisting Unencrypted HTTP traffic 
-- Remove the feature of creating log directories using -l, now the only logs Slips generates are store in the output/ dir
-- added support for reading flows from any module, not just inputprocess, using --input-module
-- CYST module improvements
-- Detect invalid DNS answers when querying adservers. thanks to @ganesh-dagadi 
-
+- Fix missing flows due to modules stopping before the processing is done.
+- Code improvements. Change the structure of all modules.
+- Fix how we detect vertical and horizontal port scans.
+- Update whitelist by adding all the IPs of whitelisted domains.
+- Fixed error whitelisting Unencrypted HTTP traffic.
+- Remove the feature of creating log directories using -l, now the only logs Slips generates are store in the output/ directory.
+- added support for reading flows from any module, not just inputprocess, using --input-module.
+- CYST module improvements.
+- Detect invalid DNS answers when querying adservers. thanks to @ganesh-dagadi .
+- Update Slips known ports.
+- Prevent model.bin and scaler.bin from changing in test mode. thanks to @haleelsada.
+- Use either 'ip neigh show' or 'arp -an' to get gateway MAC from the hosts ARP table. thanks to @naturalnetworks.
 
 -1.0.4 (April 2023)
 - Add more descriptive titles to VT scores in the web UI thanks to @shubhangi.

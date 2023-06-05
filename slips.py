@@ -204,10 +204,10 @@ class Main:
         # default output/
         if '-o' in sys.argv:
             # -o is given
-            # delet all old files in the output dir
+            # delete all old files in the output dir
             if os.path.exists(self.args.output):
                 for file in os.listdir(self.args.output):
-                    # in integration tests, slips redirct its' output to slips_output.txt,
+                    # in integration tests, slips redirects its output to slips_output.txt,
                     # don't delete that file
                     if self.args.testing and 'slips_output.txt' in file:
                         continue
@@ -316,7 +316,11 @@ class Main:
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode('utf-8')
-        if 'pcap capture file' in cmd_result and os.path.isfile(given_path):
+        if (
+                ('pcap capture file' in cmd_result
+                or 'pcapng capture file' in cmd_result)
+                and os.path.isfile(given_path)
+        ):
             input_type = 'pcap'
         elif (
                 ('dBase' in cmd_result
@@ -378,7 +382,7 @@ class Main:
 
     def setup_print_levels(self):
         """
-        setup debug and verose levels
+        setup debug and verbose levels
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if self.args.verbose is None:
@@ -386,7 +390,7 @@ class Main:
 
         # Limit any verbosity to > 0
         self.args.verbose = max(self.args.verbose, 1)
-        # Any deug passed as parameter overrides the configuration. Only check its value
+        # Any debug passed as parameter overrides the configuration. Only check its value
         if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
@@ -416,6 +420,7 @@ class Main:
                 or self.is_interface
         ):
             return True
+        return False
 
     def start(self):
         """Main Slips Function"""
@@ -609,6 +614,7 @@ class Main:
                     and message['data'] == 'stop_slips'
                 ):
                     self.proc_man.shutdown_gracefully()
+                    break
 
                 # Sleep some time to do routine checks
                 time.sleep(sleep_time)
@@ -620,7 +626,7 @@ class Main:
 
                 modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
-                # for other files, we prin a progress bar + the stats using outputprocess
+                # for other files, we print a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
                     # How many profiles we have?
                     profilesLen = self.db.get_profiles_len()
@@ -651,6 +657,7 @@ class Main:
                     # waited enough. stop slips
                     if intervals_to_wait == 0:
                         self.proc_man.shutdown_gracefully()
+                        break
 
                     # If there were no modified TWs in the last timewindow time,
                     # then start counting down
