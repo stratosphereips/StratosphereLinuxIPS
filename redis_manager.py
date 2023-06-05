@@ -1,6 +1,7 @@
+from slips_files.core.database.database_manager import DBManager
+from slips_files.common.slips_utils import utils
 import contextlib
 from datetime import datetime
-from slips_files.common.slips_utils import utils
 import redis
 import os
 import time
@@ -127,13 +128,15 @@ class RedisManager:
             # check if 1. we can connect
             # 2.server is not being used by another instance of slips
             # note: using r.keys() blocks the server
+            db = DBManager(self.main.args.output, self.main.outputqueue, port)
             try:
-                if self.main.db.connect_to_redis_server(port):
-                    server_used = len(list(self.main.db.r.keys())) < 2
-                    if server_used:
-                        # if the db managed to connect to this random port, then this is
-                        # the port we'll be using
-                        return port
+                if db.get_redis_keys_len() < 3:
+                    # if the db managed to connect to this random port, and it has
+                    #  less than 3 keys, then this is the port we'll be using
+                    # the reason i put 3 here is because the minute slips connects to the db,
+                    # even if it's unused, it adds 2 keys. so any db with only these 2 keys
+                    # is unused
+                    return port
             except redis.exceptions.ConnectionError:
                 # Connection refused to this port
                 continue

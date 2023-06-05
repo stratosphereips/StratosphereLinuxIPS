@@ -137,6 +137,12 @@ class DBManager:
     def mark_connection_error_as_logged(self, *args, **kwargs):
         return self.rdb.mark_connection_error_as_logged(*args, **kwargs)
 
+    def get_redis_keys_len(self):
+        """
+        returns all the keys in redis
+        """
+        return int(self.rdb.get_redis_keys_len())
+
     def was_ip_seen_in_connlog_before(self, *args, **kwargs):
         return self.rdb.was_ip_seen_in_connlog_before(*args, **kwargs)
 

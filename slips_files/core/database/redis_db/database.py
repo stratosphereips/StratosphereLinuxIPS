@@ -93,7 +93,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
         """
-
         cls.redis_port, cls.outputqueue = redis_port, outputqueue
         cls.flush_db = flush_db
         if cls.redis_port not in cls._instances:
@@ -479,6 +478,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time')
 
+    def get_redis_keys_len(self) -> int:
+        """returns the length of all keys in the db"""
+        return self.r.dbsize()
 
     def get_equivalent_tws(self, hrs: float):
         """
