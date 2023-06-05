@@ -80,7 +80,7 @@ class SQLiteDB():
     def get_all_flows_in_profileid_twid(self, profileid, twid):
         condition = f'profileid = "{profileid}" ' \
                     f'AND twid = "{twid}"'
-        all_flows: list = self.select('altflows', condition=condition)
+        all_flows: list = self.select('flows', condition=condition)
         if not all_flows:
             return False
         res = {}
