@@ -3,7 +3,7 @@ import sqlite3
 import json
 import csv
 from dataclasses import asdict
-
+from threading import Lock
 
 class SQLiteDB():
     """Stores all the flows slips reads and handles labeling them"""
@@ -18,6 +18,7 @@ class SQLiteDB():
             cls.conn = sqlite3.connect(cls._flows_db, check_same_thread=False)
             cls.cursor = cls.conn.cursor()
             cls.init_tables()
+            cls.cursor_lock = Lock()
         return cls._obj
 
 
@@ -249,8 +250,10 @@ class SQLiteDB():
         query = f"SELECT {columns} FROM {table_name}"
         if condition:
             query += f" WHERE {condition}"
+        self.cursor_lock.acquire(True)
         self.cursor.execute(query)
         result = self.cursor.fetchall()
+        self.cursor_lock.release()
         return result
 
     def execute_query(self, query):
