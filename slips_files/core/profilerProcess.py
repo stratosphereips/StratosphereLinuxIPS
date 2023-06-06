@@ -896,6 +896,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 return default_
 
         if event_type == 'flow':
+            starttime = utils.convert_format(get_value_at('flow', 'start'), 'unixtimestamp')
+            endtime = utils.convert_format(get_value_at('flow', 'end'), 'unixtimestamp')
             self.flow: SuricataFlow = SuricataFlow(
                 flow_id,
                 saddr,
@@ -905,8 +907,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 proto,
                 appproto,
 
-                utils.convert_to_datetime(get_value_at('flow', 'start')),
-                utils.convert_to_datetime(get_value_at('flow', 'end')),
+                starttime,
+                endtime,
 
                 int(get_value_at('flow', 'pkts_toserver', 0)),
                 int(get_value_at('flow', 'pkts_toclient', 0)),
