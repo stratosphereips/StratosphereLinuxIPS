@@ -517,7 +517,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         return self.r.zscore('labels', label)
 
     def get_disabled_modules(self) -> list:
-        return json.loads(self.r.hget('analysis', 'disabled_modules'))
+        if disabled_modules := self.r.hget('analysis', 'disabled_modules'):
+            return json.loads(disabled_modules)
+        else:
+            return {}
 
     def set_input_metadata(self, info:dict):
         """
