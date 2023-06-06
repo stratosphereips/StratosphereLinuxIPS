@@ -813,11 +813,11 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 return val or default_
             except (IndexError, KeyError):
                 return default_
-
+        starttime = utils.convert_format(get_value_at(0), 'unixtimestamp')
+        endtime = utils.convert_format(get_value_at(1), 'unixtimestamp')
         self.flow: NfdumpConn = NfdumpConn(
-            utils.convert_to_datetime(get_value_at(0)),
-            utils.convert_to_datetime(get_value_at(1)),
-
+            starttime,
+            endtime,
             get_value_at(2),
             get_value_at(7),
 
