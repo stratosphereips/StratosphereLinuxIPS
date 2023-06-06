@@ -37,3 +37,4 @@ flask
 tld
 tqdm
 termcolor
+viztracer
