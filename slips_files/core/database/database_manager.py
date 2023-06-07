@@ -552,6 +552,9 @@ class DBManager:
     def getBlockedProfTW(self, *args, **kwargs):
         return self.rdb.getBlockedProfTW(*args, **kwargs)
 
+    def get_used_redis_port(self):
+        return self.rdb.get_used_port()
+
     def checkBlockedProfTW(self, *args, **kwargs):
         return self.rdb.checkBlockedProfTW(*args, **kwargs)
 

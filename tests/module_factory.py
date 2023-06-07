@@ -41,7 +41,7 @@ def check_zeek_or_bro():
 
 class ModuleFactory:
     def __init__(self):
-        # used to create a different port for inputproc tests
+        # this port is incremented by 1 for each test that needs a newly created db
         self.redis_port = 6531
         self.output_queue = Queue()
         self.profiler_queue = Queue()
@@ -51,6 +51,8 @@ class ModuleFactory:
         db = DBManager(output_dir, self.output_queue, port, flush_db=flush_db)
         db.r = db.rdb.r
         db.print = do_nothing
+        print(f"@@@@@@@@@@@@@@@@ {db.get_used_redis_port()}")
+        assert db.get_used_redis_port() == port
         return db
 
 

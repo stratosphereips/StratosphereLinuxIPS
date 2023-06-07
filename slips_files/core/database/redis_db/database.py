@@ -507,6 +507,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             self.r.set("local_network", network_range)
             self.is_localnet_set = True
 
+    def get_used_port(self):
+        return int(self.r.config_get('port')['port'])
+
     def get_local_network(self):
          return self.r.get("local_network")
 

@@ -37,4 +37,3 @@ flask
 tld
 tqdm
 termcolor
-pytest-sugar
