@@ -15,8 +15,7 @@ import shutil
 
 alerts_file = 'alerts.log'
 
-# we'll be adding 1 to this port for each test that's we'll do
-redis_port = 6666
+
 
 def run_slips(cmd):
     """runs slips and waits for it to end"""
@@ -30,23 +29,21 @@ def run_slips(cmd):
 
 
 @pytest.mark.parametrize(
-    'pcap_path, expected_profiles, output_dir, expected_evidence',
+    'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
     [
         (
             'dataset/test7-malicious.pcap',
             15,
             'test7/',
             'A device changing IPs',
+            6666,
         ),
-        ('dataset/test8-malicious.pcap', 3, 'test8/', 'performing an arp scan'),
+        ('dataset/test8-malicious.pcap', 3, 'test8/', 'performing an arp scan', 6665),
     ],
 )
 def test_pcap(
-    pcap_path, expected_profiles, output_dir, expected_evidence, output_queue
+    pcap_path, expected_profiles, output_dir, expected_evidence, redis_port, output_queue
 ):
-    global redis_port
-    redis_port+=1
-
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
@@ -63,37 +60,42 @@ def test_pcap(
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize(
-    'binetflow_path, expected_profiles, expected_evidence, output_dir',
+    'binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port',
     [
         (
             'dataset/test4-malicious.binetflow',
             2,
             'horizontal port scan to port  81',
             'test4/',
+            6662,
         ),
         (
             'dataset/test3-mixed.binetflow',
             20,
             'horizontal port scan to port  3389',
             'test3/',
+            6663,
         ),
         (
             'dataset/test2-malicious.binetflow',
             1,
             'Detected Long Connection.',
             'test2/',
+            6664,
         ),
         (
             'dataset/test5-mixed.binetflow',
              4,
              'Long Connection',
              'test5/',
+             6655
          ),
         # (
         #     'dataset/test11-portscan.binetflow',
         #     0,
         #     'ICMP scanning',
         #     'test11/',
+        #     6669
         # )
     ],
 )
@@ -103,9 +105,8 @@ def test_binetflow(
     expected_profiles,
     expected_evidence,
     output_dir,
+    redis_port,
 ):
-    global redis_port
-    redis_port+=1
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
@@ -126,7 +127,7 @@ def test_binetflow(
 
 
 @pytest.mark.parametrize(
-    'zeek_dir_path,expected_profiles, expected_evidence,  output_dir',
+    'zeek_dir_path,expected_profiles, expected_evidence,  output_dir, redis_port',
     [
         (
             'dataset/test9-mixed-zeek-dir',
@@ -139,6 +140,7 @@ def test_binetflow(
                 'broadcasting unsolicited ARP',
             ],
             'test9-mixed-zeek-dir/',
+            6661,
         ),
         (
             'dataset/test16-malicious-zeek-dir',
@@ -148,6 +150,7 @@ def test_binetflow(
                 'broadcasting unsolicited ARP',
             ],
             'test16-malicious-zeek-dir/',
+            6671,
         ),
         (
             'dataset/test14-malicious-zeek-dir',
@@ -161,6 +164,7 @@ def test_binetflow(
                 'GRE tunnel'
             ],
             'test14-malicious-zeek-dir/',
+            6670
         ),
         (
             'dataset/test15-malicious-zeek-dir',
@@ -171,12 +175,14 @@ def test_binetflow(
                 'Malicious JA3: 6734f37431670b3ab4292b8f60f29984',
             ],
             'test15-malicious-zeek-dir',
+            2345
         ),
         (
             'dataset/test10-mixed-zeek-dir',
             20,
             'horizontal port scan',
             'test10-mixed-zeek-dir/',
+            6660,
         ),
     ],
 )
@@ -186,9 +192,8 @@ def test_zeek_dir(
     expected_profiles,
     expected_evidence,
     output_dir,
+    redis_port,
 ):
-    global redis_port
-    redis_port+=1
 
     output_dir = create_output_dir(output_dir)
 
@@ -213,19 +218,21 @@ def test_zeek_dir(
 
 
 @pytest.mark.parametrize(
-    'conn_log_path, expected_profiles, expected_evidence,  output_dir',
+    'conn_log_path, expected_profiles, expected_evidence,  output_dir, redis_port',
     [
         (
             'dataset/test9-mixed-zeek-dir/conn.log',
             4,
             'horizontal port scan',
             'test9-conn_log_only/',
+            6659,
         ),
         (
             'dataset/test10-mixed-zeek-dir/conn.log',
             5,
             'horizontal port scan',
             'test10-conn_log_only/',
+            6658,
         ),
     ],
 )
@@ -235,10 +242,8 @@ def test_zeek_conn_log(
     expected_profiles,
     expected_evidence,
     output_dir,
+    redis_port,
 ):
-    global redis_port
-    redis_port+=1
-
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
@@ -257,11 +262,12 @@ def test_zeek_conn_log(
 
 
 @pytest.mark.parametrize(
-    'suricata_path,  output_dir, expected_evidence',
+    'suricata_path,  output_dir, redis_port, expected_evidence',
     [
         (
                 'dataset/test6-malicious.suricata.json',
                 'test6/',
+                6657,
                 [
                     'Connection to unknown destination port',
                     'vertical port scan',
@@ -277,10 +283,9 @@ def test_suricata(
         output_queue,
         suricata_path,
         output_dir,
+        redis_port,
         expected_evidence
         ):
-    global redis_port
-    redis_port+=1
     output_dir = create_output_dir(output_dir)
     # we have an established flow in suricata file to this port 8760/udp
     # {"timestamp":"2021-06-06T15:57:37.272281+0200","flow_id":1630350322382106,"event_type":"flow",
@@ -310,20 +315,19 @@ def test_suricata(
     'nfdump' not in shutil.which('nfdump'), reason='nfdump is not installed'
 )
 @pytest.mark.parametrize(
-    'nfdump_path, output_dir',
-    [('dataset/test1-normal.nfdump', 'test1/',)],
+    'nfdump_path,  output_dir, redis_port',
+    [('dataset/test1-normal.nfdump', 'test1/', 6656)],
 )
 def test_nfdump(
         output_queue,
         nfdump_path,
         output_dir,
+        redis_port
         ):
     """
     checks that slips is reading nfdump no issue,
      the file is not malicious so there's no evidence that should be present
     """
-    global redis_port
-    redis_port+=1
     output_dir = create_output_dir(output_dir)
 
     # expected_evidence = 'Connection to unknown destination port 902/TCP'
