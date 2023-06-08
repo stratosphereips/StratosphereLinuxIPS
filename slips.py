@@ -526,6 +526,7 @@ class Main:
             self.evidenceProcessQueue = Queue()
             evidence_process = EvidenceProcess(
                 self.outputqueue,
+                self.db,
                 input_queue = self.evidenceProcessQueue,
                 output_dir = self.args.output,
                 )
@@ -546,6 +547,7 @@ class Main:
             self.profilerProcessQueue = Queue()
             profiler_process = ProfilerProcess(
                 self.outputqueue,
+                self.db,
                 input_queue=self.profilerProcessQueue,
             )
             profiler_process.start()
@@ -570,7 +572,7 @@ class Main:
                 self.zeek_bro,
                 self.zeek_folder,
                 self.line_type,
-                self.db
+                self.db,
             )
             inputProcess.start()
             self.print(

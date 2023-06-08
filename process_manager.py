@@ -146,6 +146,7 @@ class ProcessManager:
             else:
                 module = module_class(
                     self.main.outputqueue,
+                    self.main.db,
                 )
             module.start()
             self.main.db.store_process_PID(

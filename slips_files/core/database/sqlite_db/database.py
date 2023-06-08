@@ -141,7 +141,6 @@ class SQLiteDB():
     
     def export_labeled_flows(self, output_dir, format):
         if 'csv' in format:
-            print(f"@@@@@@@@@@@@@@@@ exporting to csv")
             csv_output_file = os.path.join(output_dir, 'labeled_flows.csv')
             header: list = self.get_columns('flows')
 
@@ -154,8 +153,8 @@ class SQLiteDB():
                 # Fetch rows one by one and write them to the file
                 for row in self.iterate_flows():
                     csv_writer.writerow(row)
+
         if 'json' in format:
-            print(f"@@@@@@@@@@@@@@@@ to json")
             json_output_file = os.path.join(output_dir, 'labeled_flows.json')
 
             with open(json_output_file, 'w', newline='') as json_file:
@@ -170,7 +169,6 @@ class SQLiteDB():
                         }
                     json.dump(json_labeled_flow, json_file)
                     json_file.write('\n')
-        print(f"@@@@@@@@@@@@@@@@ done")
 
     def get_columns(self, table) -> list:
         """returns a list with column names in the given table"""

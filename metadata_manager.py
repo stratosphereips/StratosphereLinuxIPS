@@ -159,8 +159,8 @@ class MetadataManager:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.bind(("localhost", port))
             return False
-        except OSError:
-            print(f"[Main] Port {port} already is use by another process."
+        except OSError as e:
+            print(f"[Main] Port {port} is already in use by another process."
                   f" Choose another port using -P <portnumber> \n"
                   f"Or kill your open redis ports using: ./slips.py -k ")
             self.main.terminate_slips()

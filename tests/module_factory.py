@@ -42,11 +42,14 @@ class ModuleFactory:
         self.profiler_queue = Queue()
         self.input_queue = Queue()
 
+    def get_default_db(self):
+        """default is o port 6379, this is the one we're using in conftest"""
+        return self.create_db_manager_obj(6379)
+
     def create_db_manager_obj(self, port, output_dir='output/', flush_db=False):
         db = DBManager(output_dir, self.output_queue, port, flush_db=flush_db)
         db.r = db.rdb.r
         db.print = do_nothing
-        print(f"@@@@@@@@@@@@@@@@ {db.get_used_redis_port()}")
         assert db.get_used_redis_port() == port
         return db
 
@@ -149,7 +152,7 @@ class ModuleFactory:
     def create_profilerProcess_obj(self):
         profilerProcess = ProfilerProcess(
             self.output_queue,
-            self.create_db_manager_obj(1234),
+            self.get_default_db(),
             input_queue=self.input_queue,
         )
 

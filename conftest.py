@@ -54,6 +54,6 @@ def profiler_queue():
 
 @pytest.fixture
 def database(output_queue):
-    db = DBManager('output/', output_queue, 1234)
+    db = DBManager('output/', output_queue, 6379)
     db.print = do_nothing
     return db
