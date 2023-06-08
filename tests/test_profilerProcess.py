@@ -10,8 +10,8 @@ import json
 @pytest.mark.parametrize(
     'file,expected_value', [('dataset/test6-malicious.suricata.json', 'suricata')]
 )
-def test_define_type_suricata(file, expected_value, database):
-    profilerProcess = ModuleFactory().create_profilerProcess_obj()
+def test_define_type_suricata(file, expected_value, mock_db):
+    profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
     with open(file) as f:
         while True:
             sample_flow = f.readline().replace('\n', '')
@@ -29,8 +29,8 @@ def test_define_type_suricata(file, expected_value, database):
     'file,expected_value',
     [('dataset/test10-mixed-zeek-dir/conn.log', 'zeek-tabs')],
 )
-def test_define_type_zeek_tab(file, expected_value, database):
-    profilerProcess = ModuleFactory().create_profilerProcess_obj()
+def test_define_type_zeek_tab(file, expected_value, mock_db):
+    profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
     with open(file) as f:
         while True:
             sample_flow = f.readline().replace('\n', '')
@@ -44,8 +44,8 @@ def test_define_type_zeek_tab(file, expected_value, database):
 @pytest.mark.parametrize(
     'file,expected_value', [('dataset/test9-mixed-zeek-dir/conn.log', 'zeek')]
 )
-def test_define_type_zeek_dict(file, expected_value, database):
-    profilerProcess = ModuleFactory().create_profilerProcess_obj()
+def test_define_type_zeek_dict(file, expected_value, mock_db):
+    profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
     with open(file) as f:
         sample_flow = f.readline().replace('\n', '')
 
@@ -58,7 +58,7 @@ def test_define_type_zeek_dict(file, expected_value, database):
 
 
 @pytest.mark.parametrize('nfdump_file', [('dataset/test1-normal.nfdump')])
-def test_define_type_nfdump(nfdump_file, database):
+def test_define_type_nfdump(nfdump_file, mock_db):
     # nfdump files aren't text files so we need to process them first
     command = f'nfdump -b -N -o csv -q -r {nfdump_file}'
     # Execute command
@@ -74,8 +74,8 @@ def test_define_type_nfdump(nfdump_file, database):
             continue
         line['data'] = nfdump_line
         break
-    profilerProcess = ModuleFactory().create_profilerProcess_obj()
-    profilerProcess = ModuleFactory().create_profilerProcess_obj()
+    profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
+    profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
     assert profilerProcess.define_type(line) == 'nfdump'
 
 
@@ -90,7 +90,7 @@ def test_define_type_nfdump(nfdump_file, database):
     ],
 )
 def test_define_columns(
-    file, separator, expected_value, database
+    file, separator, expected_value, mock_db
 ):
     # define_columns is called on header lines
     # line = '#fields ts      uid     id.orig_h       id.orig_p
@@ -104,7 +104,7 @@ def test_define_columns(
             line = f.readline()
             if line.startswith('#fields'):
                 break
-    profilerProcess = ModuleFactory().create_profilerProcess_obj()
+    profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
     line = {'data': line}
     profilerProcess.separator = separator
     assert profilerProcess.define_columns(line) == expected_value
@@ -114,7 +114,7 @@ def test_define_columns(
 # @pytest.mark.parametrize("pcap_file",[('dataset/test7-malicious.pcap')])
 # def test_define_type_pcap(pcap_file):
 #     # ('dataset/test7-malicious.pcap','zeek')
-#     profilerProcess = ModuleFactory().create_profilerProcess_obj()
+#     profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
 #
 #     # pcap files aren't text files so we need to process them first
 #     bro_parameter = '-r "' + pcap_file + '"'
@@ -137,8 +137,9 @@ def test_define_columns(
         ('dataset/test9-mixed-zeek-dir/files.log', 'files.log'),
     ],
 )
-def test_add_flow_to_profile(file, type_, database):
-    profilerProcess = ModuleFactory().create_profilerProcess_obj()
+def test_add_flow_to_profile(file, type_):
+    db = ModuleFactory().create_db_manager_obj(6379)
+    profilerProcess = ModuleFactory().create_profilerProcess_obj(db)
     # we're testing another functionality here
     profilerProcess.whitelist.is_whitelisted_flow = do_nothing
     # get zeek flow
@@ -162,9 +163,9 @@ def test_add_flow_to_profile(file, type_, database):
 
     # make sure it's added
     if type_ == 'conn':
-        added_flow = database.get_flow(uid, twid=twid)[uid]
+        added_flow = db.get_flow(uid, twid=twid)[uid]
     else:
         added_flow = (
-            database.get_altflow_from_uid(profileid, twid, uid) is not None
+            db.get_altflow_from_uid(profileid, twid, uid) is not None
         )
     assert added_flow is not None
