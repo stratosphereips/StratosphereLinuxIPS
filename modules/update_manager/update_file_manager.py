@@ -341,7 +341,7 @@ class UpdateFileManager:
         """
         # the response will be stored in self.responses if the file is old and needs to be updated
         # Get the last time this file was updated
-        ti_file_info = self.db.get_TI_file_info(file_to_download)
+        ti_file_info: dict = self.db.get_TI_file_info(file_to_download)
         last_update = ti_file_info.get('time', float('-inf'))
         if last_update + update_period > time.time():
             # Update period hasn't passed yet, but the file is in our db

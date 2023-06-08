@@ -14,6 +14,7 @@ def test_getting_header_fields(mocker, mock_db):
 
 
 def test_check_if_update_based_on_update_period(mock_db):
+    mock_db.get_TI_file_info.return_value = {'time': float('inf')}
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     url = 'abc.com/x'
     # update period hasn't passed

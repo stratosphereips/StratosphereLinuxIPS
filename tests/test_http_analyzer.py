@@ -56,6 +56,8 @@ def test_parsing_online_ua_info(mock_db, mocker):
     # use a different profile for this unit test to make sure we don't already have info about
     # it in the db
     profileid = 'profile_192.168.99.99'
+
+    mock_db.get_user_agent_from_profile.return_value = None
     # mock the function that gets info about the given ua from an online db
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200

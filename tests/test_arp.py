@@ -9,8 +9,8 @@ twid = 'timewindow1'
 
 
 # check_arp_scan is tested in test_dataset.py, check arp-only unit test
-def test_check_dstip_outside_localnet(output_queue):
-    ARP = ModuleFactory().create_arp_obj()
+def test_check_dstip_outside_localnet(mock_db):
+    ARP = ModuleFactory().create_arp_obj(mock_db)
     daddr = '1.1.1.1'
     uid = '1234'
     saddr = '192.168.1.1'
@@ -20,8 +20,8 @@ def test_check_dstip_outside_localnet(output_queue):
     )
 
 
-def test_detect_unsolicited_arp(output_queue):
-    ARP = ModuleFactory().create_arp_obj()
+def test_detect_unsolicited_arp(mock_db):
+    ARP = ModuleFactory().create_arp_obj(mock_db)
     uid = '1234'
     ts = '1632214645.783595'
     dst_mac = 'ff:ff:ff:ff:ff:ff'
@@ -33,29 +33,23 @@ def test_detect_unsolicited_arp(output_queue):
     )
 
 
-def test_detect_MITM_ARP_attack(output_queue, mock_db):
+def test_detect_MITM_ARP_attack(mock_db):
     ARP = ModuleFactory().create_arp_obj(mock_db)
-    # add this profile to the database
-    stime = ts = '1636305825.755100'
-    dur = '3600.0'
-    # database.addProfile(profileid, stime, dur)
-
     # add a mac addr to this profile
     src_mac = '2e:a4:18:f8:3d:02'
-    # database.add_mac_addr_to_profile(profileid, {'MAC': src_mac})
 
     # now in this flow we have another ip  '192.168.1.3' pretending to have the same src_mac
     uid = '1234'
     ts = '1636305825.755132'
     saddr = '192.168.1.3'
-    with patch.object(mock_db, 'get_ip_of_mac', return_value=json.dumps([profileid])):
-        assert (
-            ARP.detect_MITM_ARP_attack(
-                profileid,
-                twid,
-                uid,
-                saddr,
-                ts,
-                src_mac
-                ) is True
-        )
+    mock_db.get_ip_of_mac.return_value = json.dumps([profileid])
+    assert (
+        ARP.detect_MITM_ARP_attack(
+            profileid,
+            twid,
+            uid,
+            saddr,
+            ts,
+            src_mac
+            ) is True
+    )

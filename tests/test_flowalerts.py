@@ -38,7 +38,7 @@ def test_port_belongs_to_an_org(mock_db):
     assert flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) is False
 
 
-def test_check_unknown_port(mock_db):
+def test_check_unknown_port(mocker, mock_db):
     flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
     # database.set_port_info('23/udp', 'telnet')
     mock_db.get_port_info.return_value = 'telnet'
@@ -56,9 +56,11 @@ def test_check_unknown_port(mock_db):
 
     # test when the port is unknown
     mock_db.get_port_info.return_value = None
+    mock_db.is_ftp_port.return_value = False
     # mock the flowalerts call to port_belongs_to_an_org
-    flowalerts_mock = Mock(flowalerts)
-    flowalerts_mock.port_belongs_to_an_org.return_value = False
+    flowalerts_mock = mocker.patch("modules.flowalerts.flowalerts.Module.port_belongs_to_an_org")
+    flowalerts_mock.return_value = False
+
 
     assert flowalerts.check_unknown_port(
         '1337',
