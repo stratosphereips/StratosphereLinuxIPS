@@ -28,6 +28,7 @@ class GoDirector:
         self,
         printer: Printer,
         trustdb: TrustDB,
+        db,
         storage_name: str,
         override_p2p: bool = False,
         report_func=None,
@@ -60,7 +61,7 @@ class GoDirector:
         }
         self.key_type_processors = {'ip': validate_ip_address}
         self.read_configuration()
-        self.db = DBManager()
+        self.db = db
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(f'[TrustDB] {text}', verbose, debug)

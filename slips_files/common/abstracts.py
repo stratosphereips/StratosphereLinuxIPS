@@ -11,14 +11,10 @@ class Module(ABC):
     name = ''
     description = 'Template abstract module'
     authors = ['Template abstract Author']
-    def __init__(self, outputqueue, db=None, **kwargs):
+    def __init__(self, outputqueue, db, **kwargs):
         Process.__init__(self)
         self.outputqueue = outputqueue
-        if db is None:
-            self.db = DBManager()
-        else:
-            # in unit tests, we pass a mock of the db here
-            self.db = db
+        self.db = db
         self.control_channel = self.db.subscribe('control_module')
         self.msg_received = True
         self.init(**kwargs)

@@ -7,13 +7,13 @@ import os
 
 
 class Whitelist:
-    def __init__(self, outputqueue):
+    def __init__(self, outputqueue, db):
         self.name = 'whitelist'
         self.outputqueue = outputqueue
         self.read_configuration()
         self.org_info_path = 'slips_files/organizations_info/'
         self.ignored_flow_types = ('arp')
-        self.db = DBManager()
+        self.db = db
 
     def print(self, text, verbose=1, debug=0):
         """

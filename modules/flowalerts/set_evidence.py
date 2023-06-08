@@ -10,8 +10,8 @@ import sys
 
 
 class Helper:
-    def __init__(self):
-        self.db = DBManager()
+    def __init__(self, db):
+        self.db =  db
         
     def set_evidence_young_domain(
             self, domain, age, stime, profileid, twid, uid

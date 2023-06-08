@@ -140,6 +140,7 @@ class ProcessManager:
             if 'P2P Trust' == module_name:
                 module = module_class(
                     self.main.outputqueue,
+                    self.main.db,
                     output_dir=self.main.args.output,
                 )
             else:
@@ -342,8 +343,8 @@ class ProcessManager:
                             # so we don't care about the modules finishing their job when testing
                             # instead, kill them
                             if self.main.args.testing:
-                                pass
-                                # break
+                                # pass
+                                break
 
                             # delay killing unstopped modules until all of them
                             # are done processing

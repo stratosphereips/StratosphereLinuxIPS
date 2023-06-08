@@ -40,7 +40,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
     def init(self, input_queue=None, output_dir=None):
         self.name = 'Evidence'
         self.inputqueue = input_queue
-        self.whitelist = Whitelist(self.outputqueue)
+        self.whitelist = Whitelist(self.outputqueue, self.db)
         self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60

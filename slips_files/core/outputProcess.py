@@ -36,6 +36,7 @@ class OutputProcess(multiprocessing.Process):
         inputqueue,
         verbose,
         debug,
+        db,
         stdout='',
         stderr='output/errors.log',
         slips_logfile='output/slips.log'
@@ -43,7 +44,7 @@ class OutputProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        self.db = DBManager()
+        self.db = db
         ####### create the log files
         self.read_configuration()
         self.errors_logfile = stderr

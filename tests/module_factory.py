@@ -29,20 +29,15 @@ def check_zeek_or_bro():
     """
     Check if we have zeek or bro
     """
-    zeek_bro = None
     if shutil.which('zeek'):
-        zeek_bro = 'zeek'
-    elif shutil.which('bro'):
-        zeek_bro = 'bro'
-    else:
-        return False
-
-    return zeek_bro
+        return 'zeek'
+    if shutil.which('bro'):
+        return 'bro'
+    return False
 
 class ModuleFactory:
     def __init__(self):
-        # this port is incremented by 1 for each test that needs a newly created db
-        self.redis_port = 6531
+        # same db as in conftest
         self.output_queue = Queue()
         self.profiler_queue = Queue()
         self.input_queue = Queue()
@@ -66,13 +61,13 @@ class ModuleFactory:
 
 
     def create_http_analyzer_obj(self):
-        http_analyzer = http.Module(self.output_queue)
+        http_analyzer = http.Module(self.output_queue, self.create_db_manager_obj(1234))
         # override the self.print function to avoid broken pipes
         http_analyzer.print = do_nothing
         return http_analyzer
 
     def create_virustotal_obj(self):
-        virustotal = vt.Module(self.output_queue)
+        virustotal = vt.Module(self.output_queue, self.create_db_manager_obj(1234))
         # override the self.print function to avoid broken pipes
         virustotal.print = do_nothing
         virustotal.__read_configuration = read_configuration
@@ -82,19 +77,19 @@ class ModuleFactory:
         return virustotal
 
     def create_arp_obj(self):
-        ARP = arp.Module(self.output_queue)
+        ARP = arp.Module(self.output_queue, self.create_db_manager_obj(1234))
         # override the self.print function to avoid broken pipes
         ARP.print = do_nothing
         return ARP
 
     def create_blocking_obj(self):
-        blocking = blocking_module.Module(self.output_queue)
+        blocking = blocking_module.Module(self.output_queue, self.create_db_manager_obj(1234))
         # override the print function to avoid broken pipes
         blocking.print = do_nothing
         return blocking
 
     def create_flowalerts_obj(self):
-        flowalerts = flowalerts_module.Module(self.output_queue)
+        flowalerts = flowalerts_module.Module(self.output_queue, self.create_db_manager_obj(1234))
         # override the self.print function to avoid broken pipes
         flowalerts.print = do_nothing
         return flowalerts
@@ -102,7 +97,6 @@ class ModuleFactory:
     def create_inputProcess_obj(
         self, input_information, input_type
     ):
-        self.redis_port +=1
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
 
@@ -115,6 +109,7 @@ class ModuleFactory:
             check_zeek_or_bro(),
             zeek_tmp_dir,
             False,
+            self.create_db_manager_obj(1234)
         )
 
         inputProcess.bro_timeout = 1
@@ -141,7 +136,7 @@ class ModuleFactory:
         test_pcap = 'dataset/test7-malicious.pcap'
         yara_rules_path = 'tests/yara_rules_for_testing/rules/'
         compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
-        leak_detector = leak_detector_module.Module(self.output_queue)
+        leak_detector = leak_detector_module.Module(self.output_queue, self.create_db_manager_obj(1234))
         # override the self.print function to avoid broken pipes
         leak_detector.print = do_nothing
         # this is the path containing 1 yara rule for testing, it matches every pcap
@@ -154,6 +149,7 @@ class ModuleFactory:
     def create_profilerProcess_obj(self):
         profilerProcess = ProfilerProcess(
             self.output_queue,
+            self.create_db_manager_obj(1234),
             input_queue=self.input_queue,
         )
 
@@ -172,19 +168,19 @@ class ModuleFactory:
         return utils
 
     def create_threatintel_obj(self):
-        threatintel = ti.Module(self.output_queue)
+        threatintel = ti.Module(self.output_queue, self.create_db_manager_obj(1234))
         # override the self.print function to avoid broken pipes
         threatintel.print = do_nothing
         return threatintel
 
     def create_update_manager_obj(self):
-        update_manager = UpdateFileManager(self.output_queue)
+        update_manager = UpdateFileManager(self.output_queue, self.create_db_manager_obj(1234))
         # override the self.print function to avoid broken pipes
         update_manager.print = do_nothing
         return update_manager
 
     def create_whitelist_obj(self):
-        whitelist = Whitelist(self.output_queue)
+        whitelist = Whitelist(self.output_queue, self.create_db_manager_obj(1234))
         # override the self.print function to avoid broken pipes
         whitelist.print = do_nothing
         whitelist.whitelist_path = 'tests/test_whitelist.conf'

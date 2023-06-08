@@ -16,7 +16,7 @@ class UpdateManager(Module, multiprocessing.Process):
     def init(self):
         self.read_configuration()
         # Update file manager
-        self.update_manager = UpdateFileManager(self.outputqueue)
+        self.update_manager = UpdateFileManager(self.outputqueue, self.db)
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(
             self.update_period, self.update_ti_files

@@ -2,8 +2,8 @@ from slips_files.common.imports import *
 import ipaddress
 
 class HorizontalPortscan():
-    def __init__(self):
-        self.db = DBManager()
+    def __init__(self, db):
+        self.db = db
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.

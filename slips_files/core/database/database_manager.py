@@ -9,17 +9,25 @@ class DBManager:
     handler in here
     """
     _obj = None
+    # Stores instances per port
+    # this class is a singelton per redis port.meaning that each redis port will only be allowed to use
+    # exactly 1 instance
+    _instances = {}
 
-    def __new__(cls,  *args, **kwargs):
-        if cls._obj is None or not isinstance(cls._obj, cls):
+    def __new__(cls, output_dir, output_queue, redis_port, **kwargs):
+        cls.output_dir = output_dir
+        cls.output_queue = output_queue
+        cls.redis_port = redis_port
+        if cls.redis_port not in cls._instances:
+            cls._instances[redis_port] = super().__new__(cls)
             # these args will only be passed by slips.py
             # the rest of the modules can create an obj of this class without these args,
             # and will get the same obj instatiated by slips.py
-            output_dir, output_queue, redis_port = args[0], args[1], args[2]
+            # cls._instances[redis_port] = super().__new__(cls)
             cls._obj = super().__new__(DBManager)
             cls.sqlite = SQLiteDB(output_dir)
             cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
-        return cls._obj
+        return cls._instances[redis_port]
 
     def get_sqlite_db_path(self) -> str:
         return self.sqlite.get_db_path()

@@ -26,11 +26,11 @@ from slips_files.common.imports import *
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, dir_to_monitor, input_type):
+    def __init__(self, dir_to_monitor, input_type, db):
         super().__init__(self.REGEX)
         self.dir_to_monitor = dir_to_monitor
         utils.drop_root_privs()
-        self.db = DBManager()
+        self.db = db
         self.input_type = input_type
 
     def on_created(self, event):

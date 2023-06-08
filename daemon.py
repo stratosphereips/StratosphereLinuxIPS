@@ -241,6 +241,6 @@ class Daemon():
         self.stdout = 'slips.log'
         self.logsfile = 'slips.log'
         self.prepare_std_streams(output_dir)
-        self.db = DBManager()
+        self.db = DBManager(output_dir, multiprocessing.Queue(), port)
         self.slips.c1 = self.db.subscribe('finished_modules')
         self.slips.proc_man.shutdown_gracefully()

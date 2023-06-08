@@ -28,10 +28,10 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # Retrieve the labels
         self.subscribe_to_channels()
-        self.whitelist = Whitelist(self.outputqueue)
+        self.whitelist = Whitelist(self.outputqueue, self.db)
         self.conn_counter = 0
         # helper contains all functions used to set evidence
-        self.helper = Helper()
+        self.helper = Helper(self.db)
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = self.db.get_gateway_ip()

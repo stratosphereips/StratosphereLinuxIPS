@@ -13,8 +13,8 @@ class PortScanProcess(Module, multiprocessing.Process):
     authors = ['Sebastian Garcia', 'Alya Gomaa']
 
     def init(self):
-        self.horizontal_ps = HorizontalPortscan()
-        self.vertical_ps = VerticalPortscan()
+        self.horizontal_ps = HorizontalPortscan(self.db)
+        self.vertical_ps = VerticalPortscan(self.db)
         # Get from the database the separator used to separate the IP and the word profile
         self.fieldseparator = self.db.get_field_separator()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup

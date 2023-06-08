@@ -210,6 +210,7 @@ class Trust(Module, multiprocessing.Process):
             self.printer,
             self.trust_db,
             self.storage_name,
+            self.db,
             override_p2p=self.override_p2p,
             report_func=self.process_message_report,
             request_func=self.respond_to_message_request,

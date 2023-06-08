@@ -44,12 +44,13 @@ class InputProcess(multiprocessing.Process):
             zeek_or_bro,
             zeek_folder,
             line_type,
+            db
     ):
         multiprocessing.Process.__init__(self)
         self.name = 'Input'
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
-        self.db = DBManager()
+        self.db = db
         self.input_type = input_type
         # in case of reading from stdin, the user mst tell slips what type of lines is the input
         self.line_type = line_type
@@ -637,7 +638,11 @@ class InputProcess(multiprocessing.Process):
         # some process to tell us which files to read in real time when they appear
         # Get the file eventhandler
         # We have to set event_handler and event_observer before running zeek.
-        event_handler = FileEventHandler(self.zeek_folder, self.input_type)
+        event_handler = FileEventHandler(
+            self.zeek_folder,
+            self.input_type,
+            self.db
+            )
         # Create an observer
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler

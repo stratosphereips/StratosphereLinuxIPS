@@ -7,13 +7,13 @@ import requests
 
 URLHAUS_BASE_URL = 'https://urlhaus-api.abuse.ch/v1'
 
-class URLhaus():
+class URLhaus:
     name = 'URLhaus'
     description = 'URLhaus lookups of URLs and hashes'
     authors = ['Alya Gomaa']
 
-    def __init__(self):
-        self.db = DBManager()
+    def __init__(self, db):
+        self.db = db
         self.create_urlhaus_session()
 
 

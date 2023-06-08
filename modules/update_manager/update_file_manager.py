@@ -13,10 +13,10 @@ import datetime
 
 
 class UpdateFileManager:
-    def __init__(self, outputqueue):
+    def __init__(self, outputqueue, db):
         self.name = 'Update File Manager'
         self.outputqueue = outputqueue
-        self.db = DBManager()
+        self.db = db
         # Get a separator from the database
         self.separator = self.db.get_field_separator()
         self.read_configuration()
@@ -24,7 +24,7 @@ class UpdateFileManager:
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(outputqueue)
+        self.whitelist = Whitelist(outputqueue, self.db)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line

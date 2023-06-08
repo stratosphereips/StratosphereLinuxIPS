@@ -48,7 +48,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
-        self.whitelist = Whitelist(self.outputqueue)
+        self.whitelist = Whitelist(self.outputqueue, self.db)
         # Read the configuration
         self.read_configuration()
         # there has to be a timeout or it will wait forever and never receive a new line
