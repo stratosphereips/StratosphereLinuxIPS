@@ -44,8 +44,7 @@ has_net_admin_cap = pytest.mark.skipif(
 @linuxOS
 @isroot
 @has_net_admin_cap
-def is_slipschain_initialized(output_queue, database) -> bool:
-    blocking = ModuleFactory().create_blocking_obj()
+def is_slipschain_initialized() -> bool:
     blocking = ModuleFactory().create_blocking_obj()
     output = blocking.get_cmd_output(f'{blocking.sudo} iptables -S')
     rules = [
@@ -58,7 +57,7 @@ def is_slipschain_initialized(output_queue, database) -> bool:
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_initialize_chains_in_firewall(output_queue, database):
+def test_initialize_chains_in_firewall(output_queue):
     blocking = ModuleFactory().create_blocking_obj()
     # manually set the firewall
     blocking.firewall = 'iptables'
@@ -67,7 +66,7 @@ def test_initialize_chains_in_firewall(output_queue, database):
 
 
 # todo
-# def test_delete_slipsBlocking_chain(output_queue, database):
+# def test_delete_slipsBlocking_chain():
 #     blocking = ModuleFactory().create_blocking_obj()
 #     # first make sure they are initialized
 #     if not is_slipschain_initialized(output_queue):
@@ -78,7 +77,7 @@ def test_initialize_chains_in_firewall(output_queue, database):
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_block_ip(output_queue, database):
+def test_block_ip():
     blocking = ModuleFactory().create_blocking_obj()
     blocking.initialize_chains_in_firewall()
     if not blocking.is_ip_blocked('2.2.0.0'):
@@ -90,7 +89,7 @@ def test_block_ip(output_queue, database):
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_unblock_ip(output_queue, database):
+def test_unblock_ip():
     blocking = ModuleFactory().create_blocking_obj()
     ip = '2.2.0.0'
     from_ = True
