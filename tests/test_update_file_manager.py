@@ -2,8 +2,8 @@
 from tests.module_factory import ModuleFactory
 import json
 
-def test_getting_header_fields(output_queue, mocker, database):
-    update_manager = ModuleFactory().create_update_manager_obj()
+def test_getting_header_fields(mocker, mock_db):
+    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     url = 'google.com/play'
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
@@ -13,19 +13,20 @@ def test_getting_header_fields(output_queue, mocker, database):
     assert update_manager.get_e_tag(response) == '1234'
 
 
-def test_check_if_update_based_on_update_period(output_queue, database):
-    update_manager = ModuleFactory().create_update_manager_obj()
+def test_check_if_update_based_on_update_period(mock_db):
+    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     url = 'abc.com/x'
     # update period hasn't passed
     assert update_manager._UpdateFileManager__check_if_update(url, float('inf')) is False
 
-def test_check_if_update_based_on_e_tag(output_queue, database, mocker):
-    update_manager = ModuleFactory().create_update_manager_obj()
+def test_check_if_update_based_on_e_tag(mocker, mock_db):
+    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
 
     # period passed, etag same
     etag = '1234'
     url = 'google.com/images'
-    database.set_TI_file_info(url, {'e-tag': etag})
+    mock_db.get_TI_file_info.return_value =  {'e-tag': etag}
+
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'ETag': '1234'}
@@ -36,45 +37,49 @@ def test_check_if_update_based_on_e_tag(output_queue, database, mocker):
     # period passed, etag different
     etag = '1111'
     url = 'google.com/images'
-    database.set_TI_file_info(url, {'e-tag': etag})
+    mock_db.get_TI_file_info.return_value =  {'e-tag': etag}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'ETag': '2222'}
     mock_requests.return_value.text = ""
     assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is True
 
-def test_check_if_update_based_on_last_modified(output_queue, database, mocker):
-    update_manager = ModuleFactory().create_update_manager_obj()
+def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
+    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
 
     # period passed, no etag, last modified the same
     url = 'google.com/photos'
-    database.set_TI_file_info(url, {'Last-Modified': 10.0})
 
+    mock_db.get_TI_file_info.return_value = {'Last-Modified': 10.0}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'Last-Modified': 10.0}
     mock_requests.return_value.text = ""
+
     assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is False
 
     # period passed, no etag, last modified changed
     url = 'google.com/photos'
-    database.set_TI_file_info(url, {'Last-Modified': 10})
+
+    mock_db.get_TI_file_info.return_value = {'Last-Modified': 10}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'Last-Modified': 11}
     mock_requests.return_value.text = ""
+
     assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is True
 
 
-def test_read_ports_info(output_queue, database):
-    update_manager = ModuleFactory().create_update_manager_obj()
+def test_read_ports_info():
+    db = ModuleFactory().create_db_manager_obj(6379)
+    update_manager = ModuleFactory().create_update_manager_obj(db)
     filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
     assert update_manager.read_ports_info(filepath) > 100
 
-    org = json.loads(database.get_organization_of_port('5243/udp'))
+    org = json.loads(db.get_organization_of_port('5243/udp'))
     assert 'org_name' in org
     assert org['org_name'] == 'Viber'
 
-    org = json.loads(database.get_organization_of_port('65432/tcp'))
+    org = json.loads(db.get_organization_of_port('65432/tcp'))
     assert 'org_name' in org
     assert org['org_name'] == 'Apple'

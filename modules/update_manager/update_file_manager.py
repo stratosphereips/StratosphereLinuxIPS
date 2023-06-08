@@ -368,7 +368,7 @@ class UpdateFileManager:
                 return True
 
             # Get the E-TAG of this file to compare with current files
-            ti_file_info = self.db.get_TI_file_info(file_to_download)
+            ti_file_info: dict = self.db.get_TI_file_info(file_to_download)
             old_e_tag = ti_file_info.get('e-tag', '')
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
