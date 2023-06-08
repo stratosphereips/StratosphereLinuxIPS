@@ -273,6 +273,7 @@ class Module(Module, multiprocessing.Process):
         """
         # some zeek http flows don't have a user agent field
         if not user_agent:
+            print(f"@@@@@@@@@@@@@@@@ not ua?")
             return False
 
         # keep a history of the past user agents
@@ -317,6 +318,7 @@ class Module(Module, multiprocessing.Process):
             )
 
         self.db.add_user_agent_to_profile(profileid, json.dumps(UA_info))
+        print(f"@@@@@@@@@@@@@@@@ ret")
         return UA_info
 
     def extract_info_from_UA(self, user_agent, profileid):
@@ -327,6 +329,7 @@ class Module(Module, multiprocessing.Process):
         if self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return True
+
         # for example: server-bag[macOS,11.5.1,20G80,MacBookAir10,1]
         user_agent = (
             user_agent.replace('server-bag', '')
