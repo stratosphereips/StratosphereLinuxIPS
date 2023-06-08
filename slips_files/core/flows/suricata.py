@@ -90,7 +90,7 @@ class SuricataHTTP:
     status_msg: str = ''
     resp_mime_types: str = ''
     resp_fuids: str = ''
-    type_ = 'http'
+    type_:str = 'http'
 
 @dataclass
 class SuricataDNS:
