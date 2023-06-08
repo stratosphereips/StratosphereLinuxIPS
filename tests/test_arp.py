@@ -1,6 +1,7 @@
 """Unit test for ../arp.py"""
-from ..modules.arp.arp import Module
+from unittest.mock import patch
 from tests.module_factory import ModuleFactory
+import json
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
@@ -8,7 +9,7 @@ twid = 'timewindow1'
 
 
 # check_arp_scan is tested in test_dataset.py, check arp-only unit test
-def test_check_dstip_outside_localnet(output_queue, database):
+def test_check_dstip_outside_localnet(output_queue):
     ARP = ModuleFactory().create_arp_obj()
     daddr = '1.1.1.1'
     uid = '1234'
@@ -19,7 +20,7 @@ def test_check_dstip_outside_localnet(output_queue, database):
     )
 
 
-def test_detect_unsolicited_arp(output_queue, database):
+def test_detect_unsolicited_arp(output_queue):
     ARP = ModuleFactory().create_arp_obj()
     uid = '1234'
     ts = '1632214645.783595'
@@ -32,21 +33,29 @@ def test_detect_unsolicited_arp(output_queue, database):
     )
 
 
-def test_detect_MITM_ARP_attack(output_queue, database):
-    ARP = ModuleFactory().create_arp_obj()
+def test_detect_MITM_ARP_attack(output_queue, mock_db):
+    ARP = ModuleFactory().create_arp_obj(mock_db)
     # add this profile to the database
     stime = ts = '1636305825.755100'
     dur = '3600.0'
-    database.addProfile(profileid, stime, dur)
+    # database.addProfile(profileid, stime, dur)
 
     # add a mac addr to this profile
     src_mac = '2e:a4:18:f8:3d:02'
-    database.add_mac_addr_to_profile(profileid, {'MAC': src_mac})
+    # database.add_mac_addr_to_profile(profileid, {'MAC': src_mac})
 
     # now in this flow we have another ip  '192.168.1.3' pretending to have the same src_mac
     uid = '1234'
     ts = '1636305825.755132'
     saddr = '192.168.1.3'
-    assert (
-        ARP.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac) is True
-    )
+    with patch.object(mock_db, 'get_ip_of_mac', return_value=json.dumps([profileid])):
+        assert (
+            ARP.detect_MITM_ARP_attack(
+                profileid,
+                twid,
+                uid,
+                saddr,
+                ts,
+                src_mac
+                ) is True
+        )

@@ -79,8 +79,8 @@ class ModuleFactory:
         )
         return virustotal
 
-    def create_arp_obj(self):
-        ARP = arp.Module(self.output_queue, self.create_db_manager_obj(1234))
+    def create_arp_obj(self, mock_db):
+        ARP = arp.Module(self.output_queue, mock_db)
         # override the self.print function to avoid broken pipes
         ARP.print = do_nothing
         return ARP
