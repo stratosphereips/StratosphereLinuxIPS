@@ -690,14 +690,10 @@ if __name__ == '__main__':
     slips = Main()
     cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
     if cpuProfilerEnabled:
-        cpuProfiler = CPUProfiler(mode=slips.conf.get_cpu_profiler_mode(), limit=slips.conf.get_cpu_profiler_output_limit())
+        cpuProfiler = CPUProfiler(mode=slips.conf.get_cpu_profiler_mode(),
+                                  limit=slips.conf.get_cpu_profiler_output_limit(),
+                                  interval=slips.conf.get_cpu_profiler_sampling_interval())
         cpuProfiler.start()
-    #     import random
-    #     for i in range(1,10):
-    #         print(i*random.randint(1,10))
-    #     cpuProfiler.end()
-    #     cpuProfiler.print()
-    # exit(0)
     if slips.args.stopdaemon:
         # -S is provided
         daemon = Daemon(slips)
