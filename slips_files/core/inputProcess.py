@@ -351,7 +351,6 @@ class InputProcess(multiprocessing.Process):
             self.cache_lines = {}
             # Try to keep track of when was the last update so we stop this reading
             self.last_updated_file_time = datetime.now()
-
             lines = 0
             while True:
                 self.check_if_time_to_del_rotated_files()
@@ -432,7 +431,6 @@ class InputProcess(multiprocessing.Process):
                 full_path = os.path.join(self.given_path, os.listdir(self.given_path)[0])
                 self.is_zeek_tabs = self.is_zeek_tabs_file(full_path)
 
-
             total_flows = 0
             for file in os.listdir(self.given_path):
                 full_path = os.path.join(self.given_path, file)
@@ -460,8 +458,8 @@ class InputProcess(multiprocessing.Process):
 
                 # in testing mode, we only need to read one zeek file to know
                 # that this function is working correctly
-                if self.testing: break
-
+                if self.testing:
+                    break
             self.db.set_input_metadata({'total_flows': total_flows})
 
             lines = self.read_zeek_files()
