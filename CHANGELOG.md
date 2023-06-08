@@ -1,3 +1,12 @@
+-1.0.6 (June 2023):
+- Store flows in SQLite database in the outout directory
+- Support the labeling of flows based on Slips detections.
+- Add support for exporting labeled flows in json and csv formats.
+- 55% RAM usage decrease.
+- Code improvements. Change the structure of all modules.
+- Graceful shutdown of all modules thanks to @danieltherealyang
+- 
+
 -1.0.5 (May 2023):
 - Fix missing flows due to modules stopping before the processing is done.
 - Code improvements. Change the structure of all modules.

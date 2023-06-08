@@ -10,8 +10,7 @@ This blog creates an example module to detect when any private IP address commun
 
 ### High-level View of how a Module Works
 
-The Module consists of the __init__() function for initializations, for example starting the database, 
-setting up the outputqueue for printing and logging, subscribing to channels, etc.
+The Module consists of the init() function for initializations, subscribing to channels, reading API files etc.
 
 The main function of each module is the ```main()```, 
 this function is run in a while loop that keeps looping as long as
