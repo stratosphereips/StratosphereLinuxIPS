@@ -63,14 +63,14 @@ class ModuleFactory:
         return main
 
 
-    def create_http_analyzer_obj(self):
-        http_analyzer = http.Module(self.output_queue, self.create_db_manager_obj(1234))
+    def create_http_analyzer_obj(self, mock_db):
+        http_analyzer = http.Module(self.output_queue, mock_db)
         # override the self.print function to avoid broken pipes
         http_analyzer.print = do_nothing
         return http_analyzer
 
-    def create_virustotal_obj(self):
-        virustotal = vt.Module(self.output_queue, self.create_db_manager_obj(1234))
+    def create_virustotal_obj(self, mock_db):
+        virustotal = vt.Module(self.output_queue, mock_db)
         # override the self.print function to avoid broken pipes
         virustotal.print = do_nothing
         virustotal.__read_configuration = read_configuration
@@ -85,21 +85,21 @@ class ModuleFactory:
         ARP.print = do_nothing
         return ARP
 
-    def create_blocking_obj(self):
-        blocking = blocking_module.Module(self.output_queue, self.create_db_manager_obj(1234))
+    def create_blocking_obj(self, mock_db):
+        blocking = blocking_module.Module(self.output_queue, mock_db)
         # override the print function to avoid broken pipes
         blocking.print = do_nothing
         return blocking
 
-    def create_flowalerts_obj(self):
-        flowalerts = flowalerts_module.Module(self.output_queue, self.create_db_manager_obj(1234))
+    def create_flowalerts_obj(self, mock_db):
+        flowalerts = flowalerts_module.Module(self.output_queue, mock_db)
         # override the self.print function to avoid broken pipes
         flowalerts.print = do_nothing
         return flowalerts
 
     def create_inputProcess_obj(
-        self, input_information, input_type
-    ):
+            self, input_information, input_type, mock_db
+            ):
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
 
@@ -112,7 +112,7 @@ class ModuleFactory:
             check_zeek_or_bro(),
             zeek_tmp_dir,
             False,
-            self.create_db_manager_obj(1234)
+            mock_db
         )
 
         inputProcess.bro_timeout = 1
@@ -124,22 +124,22 @@ class ModuleFactory:
         return inputProcess
 
 
-    def create_ip_info_obj(self, db=None):
-        ip_info = ip_info_module.Module(self.output_queue, db=db)
+    def create_ip_info_obj(self, db):
+        ip_info = ip_info_module.Module(self.output_queue, db)
         # override the self.print function to avoid broken pipes
         ip_info.print = do_nothing
         return ip_info
 
-    def create_asn_obj(self, db=None):
+    def create_asn_obj(self, db):
         return asn.ASN(db)
 
-    def create_leak_detector_obj(self):
+    def create_leak_detector_obj(self, mock_db):
         # this file will be used for storing the module output
         # and deleted when the tests are done
         test_pcap = 'dataset/test7-malicious.pcap'
         yara_rules_path = 'tests/yara_rules_for_testing/rules/'
         compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
-        leak_detector = leak_detector_module.Module(self.output_queue, self.create_db_manager_obj(1234))
+        leak_detector = leak_detector_module.Module(self.output_queue, mock_db)
         # override the self.print function to avoid broken pipes
         leak_detector.print = do_nothing
         # this is the path containing 1 yara rule for testing, it matches every pcap
@@ -149,10 +149,10 @@ class ModuleFactory:
         return leak_detector
 
 
-    def create_profilerProcess_obj(self):
+    def create_profilerProcess_obj(self, mock_db):
         profilerProcess = ProfilerProcess(
             self.output_queue,
-            self.get_default_db(),
+            mock_db,
             input_queue=self.input_queue,
         )
 
@@ -170,20 +170,20 @@ class ModuleFactory:
     def create_utils_obj(self):
         return utils
 
-    def create_threatintel_obj(self):
-        threatintel = ti.Module(self.output_queue, self.create_db_manager_obj(1234))
+    def create_threatintel_obj(self, mock_db):
+        threatintel = ti.Module(self.output_queue, mock_db)
         # override the self.print function to avoid broken pipes
         threatintel.print = do_nothing
         return threatintel
 
-    def create_update_manager_obj(self):
-        update_manager = UpdateFileManager(self.output_queue, self.create_db_manager_obj(1234))
+    def create_update_manager_obj(self, mock_db):
+        update_manager = UpdateFileManager(self.output_queue, mock_db)
         # override the self.print function to avoid broken pipes
         update_manager.print = do_nothing
         return update_manager
 
-    def create_whitelist_obj(self):
-        whitelist = Whitelist(self.output_queue, self.create_db_manager_obj(1234))
+    def create_whitelist_obj(self, mock_db):
+        whitelist = Whitelist(self.output_queue, mock_db)
         # override the self.print function to avoid broken pipes
         whitelist.print = do_nothing
         whitelist.whitelist_path = 'tests/test_whitelist.conf'
