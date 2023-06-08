@@ -1,10 +1,7 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
-import pytest
-import binascii
-import base64
-import os
+from unittest.mock import Mock
 import json
 from numpy import arange
 
@@ -18,55 +15,99 @@ daddr = '192.168.1.2'
 dst_profileid = f'profile_{daddr}'
 
 
-def test_port_belongs_to_an_org(database, output_queue):
-    flowalerts = ModuleFactory().create_flowalerts_obj()
-    # store in the db that both ips have apple as a vendor
-    MAC_info = {'MAC': '123', 'Vendor': 'Apple, Inc'}
-    database.add_mac_addr_to_profile(profileid, MAC_info)
-    database.add_mac_addr_to_profile(dst_profileid, MAC_info)
+def test_port_belongs_to_an_org(mock_db):
+    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
 
     # belongs to apple
     portproto = '65509/tcp'
-    database.set_organization_of_port('apple', '', portproto)
-    assert (
-            flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) is True
-    )
+
+    # mock the db response to say that the org of this port
+    # is apple and the mac vendor of the
+    # given profile is also apple
+    mock_db.get_organization_of_port.return_value = json.dumps(
+        {'ip':[], 'org_name':'apple'}
+        )
+    mock_db.get_mac_vendor_from_profile.return_value = 'apple'
+
+    assert flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) is True
+
     # doesn't belong to any org
     portproto = '78965/tcp'
-    assert (
-            flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) is False
-    )
+    # expectations
+    mock_db.get_organization_of_port.return_value = None
+    assert flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) is False
 
 
-def test_check_unknown_port(output_queue, database):
-    flowalerts = ModuleFactory().create_flowalerts_obj()
-    database.set_port_info('23/udp', 'telnet')
+def test_check_unknown_port(mock_db):
+    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+    # database.set_port_info('23/udp', 'telnet')
+    mock_db.get_port_info.return_value = 'telnet'
     # now we have info 23 udp
-    assert (
-        flowalerts.check_unknown_port('23', 'udp', daddr, profileid, twid, uid, timestamp, 'Established') is False
-    )
+    assert flowalerts.check_unknown_port(
+        '23',
+        'udp',
+        daddr,
+        profileid,
+        twid,
+        uid,
+        timestamp,
+        'Established'
+        ) is False
+
+    # test when the port is unknown
+    mock_db.get_port_info.return_value = None
+    # mock the flowalerts call to port_belongs_to_an_org
+    flowalerts_mock = Mock(flowalerts)
+    flowalerts_mock.port_belongs_to_an_org.return_value = False
+
+    assert flowalerts.check_unknown_port(
+        '1337',
+        'udp',
+        daddr,
+        profileid,
+        twid,
+        uid,
+        timestamp,
+        'Established'
+        ) is True
 
 
 def test_check_if_resolution_was_made_by_different_version(
-    output_queue, database
+    mock_db
 ):
-    flowalerts = ModuleFactory().create_flowalerts_obj()
-    # tell the db that this ipv6 belongs to the same profileid
-    ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
-    database.set_ipv6_of_profile(profileid, ipv6)
-    other_ip = database.get_the_other_ip_version(profileid)
-    assert json.loads(other_ip) == ipv6
-    database.set_dns_resolution(
-        'example.com', [daddr], timestamp, uid, 'AAAA', ipv6, twid
-    )
-    res = flowalerts.check_if_resolution_was_made_by_different_version(
+    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+
+    # now  this ipv6 belongs to the same profileid, is supposed to be
+    # the other version of the ipv4 of the used profileid
+    mock_db.get_the_other_ip_version.return_value = json.dumps(
+        '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+        )
+    # now the daddr given to check_if_resolution_was_made_by_different_version()
+    # is supposed to be resolved by the ipv6 of the profile, not th eipv4
+    mock_db.get_dns_resolution.return_value = {
+        'resolved-by': '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+        }
+
+    # give flowalerts the ipv4 and the daddr, it should detect that it
+    # was resolved by the othger versio
+    assert flowalerts.check_if_resolution_was_made_by_different_version(
         profileid, daddr
-    )
-    assert res is True
+    ) is True
+
+    # check the case when the resolution wasn't done by another IP
+    mock_db.get_the_other_ip_version.return_value = json.dumps(
+        '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+        )
+    mock_db.get_dns_resolution.return_value = {'resolved-by': []}
+
+    assert flowalerts.check_if_resolution_was_made_by_different_version(
+        profileid, '2.3.4.5'
+    ) is False
 
 
-def test_check_dns_arpa_scan(output_queue, database):
-    flowalerts = ModuleFactory().create_flowalerts_obj()
+
+def test_check_dns_arpa_scan(mock_db):
+    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
     # make 10 different arpa scans
     for ts in arange(0, 1, 1 / 10):
         is_arpa_scan = flowalerts.check_dns_arpa_scan(
@@ -77,8 +118,8 @@ def test_check_dns_arpa_scan(output_queue, database):
 
 
 # check_multiple_ssh_clients is tested in test_dataset
-def test_detect_DGA(output_queue, database):
-    flowalerts = ModuleFactory().create_flowalerts_obj()
+def test_detect_DGA(mock_db):
+    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
     rcode_name = 'NXDOMAIN'
     # arbitrary ip to be able to call detect_DGA
     daddr = '10.0.0.1'
@@ -89,12 +130,18 @@ def test_detect_DGA(output_queue, database):
     assert dga_detected is True
 
 
-def test_detect_young_domains(output_queue, database):
-    flowalerts = ModuleFactory().create_flowalerts_obj()
+def test_detect_young_domains(mock_db):
+    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
     domain = 'example.com'
+
     # age in days
-    age = 50
-    database.setInfoForDomains(domain, {'Age': age})
+    mock_db.getDomainData.return_value = {'Age': 50}
     assert (
         flowalerts.detect_young_domains(domain, timestamp, profileid, twid, uid) is True
+    )
+
+    # more than the age threshold
+    mock_db.getDomainData.return_value = {'Age': 1000}
+    assert (
+        flowalerts.detect_young_domains(domain, timestamp, profileid, twid, uid) is False
     )

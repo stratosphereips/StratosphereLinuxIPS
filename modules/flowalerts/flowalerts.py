@@ -442,9 +442,10 @@ class Module(Module, multiprocessing.Process):
             return False
 
         portproto = f'{dport}/{proto}'
-        if port_info := self.db.get_port_info(portproto):
+        if self.db.get_port_info(portproto):
             # it's a known port
             return False
+
         # we don't have port info in our database
         # is it a port that is known to be used by
         # a specific organization?
@@ -480,7 +481,8 @@ class Module(Module, multiprocessing.Process):
                 return True
         except AttributeError:
             # It can be that the dns_resolution sometimes gives back a list and gets this error
-            return False
+            pass
+        return False
 
     def is_connection_made_by_different_version(
         self, profileid, twid, daddr
@@ -1208,7 +1210,7 @@ class Module(Module, multiprocessing.Process):
         if domain.endswith('.arpa') or domain.endswith('.local'):
             return False
 
-        domain_info = self.db.getDomainData(domain)
+        domain_info: dict = self.db.getDomainData(domain)
         if not domain_info:
             return False
 
