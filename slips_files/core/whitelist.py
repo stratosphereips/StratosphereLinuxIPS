@@ -492,7 +492,7 @@ class Whitelist:
         self.db.set_whitelist('organizations', whitelisted_orgs)
         self.db.set_whitelist('mac', whitelisted_mac)
 
-        return line_number
+        return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_mac
 
     def get_domains_of_flow(self, saddr, daddr):
         """Returns the domains of each ip (src and dst) that appeard in this flow"""
