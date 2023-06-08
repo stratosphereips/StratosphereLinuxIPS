@@ -737,3 +737,6 @@ class ConfigParser(object):
     
     def get_cpu_profiler_output_limit(self) -> int:
         return int(self.read_configuration('Profiling', 'cpu_profiler_output_limit', 20))
+    
+    def get_cpu_profiler_sampling_interval(self) -> int:
+        return int(self.read_configuration('Profiling', 'cpu_profiler_sampling_interval', 5))
