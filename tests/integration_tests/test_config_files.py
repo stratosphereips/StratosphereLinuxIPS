@@ -86,7 +86,7 @@ def test_conf_file(
         assert file in os.listdir(metadata_path)
 
     # test label=malicious
-    assert int(database.get_label_count('malicious')) > 700
+    assert int(database.get_label_count('malicious')) > 370
 
     # test disable
     for module in ['template' , 'ensembling', 'Flow ML Detection']:
@@ -135,6 +135,6 @@ def test_conf_file2(
     assert profiles == expected_profiles
 
     shutil.rmtree(output_dir)
-    slips = create_Main_instance(pcap_path)
-    slips.prepare_zeek_output_dir()
+
+
 

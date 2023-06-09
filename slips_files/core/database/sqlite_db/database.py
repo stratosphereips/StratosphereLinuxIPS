@@ -211,7 +211,7 @@ class SQLiteDB():
 
         parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
         self.cursor.execute(
-            'INSERT INTO flows (profileid, twid, uid, flow, label) '
+            'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) '
             'VALUES (?, ?, ?, ?, ?);',
             parameters,
         )
