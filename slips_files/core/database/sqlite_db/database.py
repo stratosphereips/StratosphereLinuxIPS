@@ -131,15 +131,8 @@ class SQLiteDB():
         """
         for uid in uids:
             query = f'UPDATE flows SET label="{new_label}" WHERE uid="{uid}"'
-            try:
-                self.cursor.execute(
-                    query
-                )
-                self.commit()
-            except sqlite3.Error as e:
-                # An error occurred during execution
-                print(f"Error executing query ({query}): {e}")
-    
+            self.execute(query)
+
     def export_labeled_flows(self, output_dir, format):
         if 'csv' in format:
             csv_output_file = os.path.join(output_dir, 'labeled_flows.csv')
@@ -173,7 +166,7 @@ class SQLiteDB():
 
     def get_columns(self, table) -> list:
         """returns a list with column names in the given table"""
-        self.cursor.execute(f"PRAGMA table_info({table})")
+        self.execute(f"PRAGMA table_info({table})")
         columns = self.cursor.fetchall()
         return [column[1] for column in columns]
 
@@ -182,7 +175,7 @@ class SQLiteDB():
         # generator function to iterate over the rows
         def row_generator():
             # select all flows and altflows
-            self.cursor.execute('SELECT * FROM flows UNION SELECT * FROM altflows')
+            self.execute('SELECT * FROM flows UNION SELECT * FROM altflows')
 
             while True:
                 row = self.cursor.fetchone()
@@ -212,63 +205,72 @@ class SQLiteDB():
 
         parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
 
-        self.cursor.execute(
+        self.execute(
             'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) '
             'VALUES (?, ?, ?, ?, ?);',
             parameters,
         )
-        self.commit()
+
 
 
     def add_altflow(
             self, flow, profileid: str, twid:str, label='benign'
             ):
         parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
-        self.cursor.execute(
+        self.execute(
             'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label) '
             'VALUES (?, ?, ?, ?, ?);',
             parameters,
         )
-        self.commit()
+
 
 
     def insert(self, table_name, values):
         query = f"INSERT INTO {table_name} VALUES ({values})"
-        self.cursor.execute(query)
-        self.commit()
+        self.execute(query)
+
 
     def update(self, table_name, set_clause, condition):
         query = f"UPDATE {table_name} SET {set_clause} WHERE {condition}"
-        self.cursor.execute(query)
-        self.commit()
+        self.execute(query)
+
 
     def delete(self, table_name, condition):
         query = f"DELETE FROM {table_name} WHERE {condition}"
-        self.cursor.execute(query)
-        self.commit()
+        self.execute(query)
+
 
     def select(self, table_name, columns="*", condition=None):
         query = f"SELECT {columns} FROM {table_name}"
         if condition:
             query += f" WHERE {condition}"
-        self.cursor.execute(query)
+        self.execute(query)
         result = self.cursor.fetchall()
         return result
-
-    def execute_query(self, query):
-        self.cursor.execute(query)
-        self.commit()
 
     def close(self):
         self.cursor.close()
         self.conn.close()
 
-    def commit(self):
+    def execute(self, query, params=None):
         """
+        wrapper for sqlite execute() To avoid 'Recursive use of cursors not allowed' error
+        and to be able to use a Lock()
         since sqlite is terrible with multi-process applications
-        this will serve as a wrapper for the commit()
-        to be able to use a Lock()
+        this should be used instead of all calls to commit() and execute()
         """
         self.cursor_lock.acquire(True)
-        self.conn.commit()
+
+        try:
+            if not params:
+                self.cursor.execute(query)
+            else:
+                self.cursor.execute(query, params)
+            self.conn.commit()
+        except sqlite3.Error as e:
+            # An error occurred during execution
+            print(f"Error executing query ({query}): {e}")
+
         self.cursor_lock.release()
+
+        
