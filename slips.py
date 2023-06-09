@@ -456,7 +456,7 @@ class Main:
 
 
             self.db = DBManager(self.args.output, self.outputqueue, self.redis_port)
-
+            self.db.set_input_metadata({'output_dir': self.args.output})
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
