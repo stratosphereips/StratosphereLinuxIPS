@@ -13,6 +13,11 @@ curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.0
 sudo apt update
 sudo apt install zeek
 
+# elk[start] #
+echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-7.x.list  search
+wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
+# elk[end] #
+
 
 # create a symlink to zeek so that slips can find it
 echo "[+] Executing 'ln -s /opt/zeek/bin/zeek /usr/local/bin/bro'\n"
@@ -24,6 +29,7 @@ echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
 
 
 echo "[+] Installing Slips dependencies ...\n"
+sudo apt update
 sudo apt install -y --no-install-recommends \
   python3 \
   redis-server \
@@ -45,7 +51,10 @@ sudo apt install -y --no-install-recommends \
   golang \
   notify-osd \
   yara \
-  libnotify-bin
+  libnotify-bin \
+  elasticsearch \
+  logstash \
+  kibana
 
 
 echo "[+] Executing 'python3 -m pip install --upgrade pip'\n"
