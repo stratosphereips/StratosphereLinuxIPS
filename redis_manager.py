@@ -1,6 +1,6 @@
-import contextlib
-from slips_files.core.database.database import __database__
+from slips_files.core.database.database_manager import DBManager
 from slips_files.common.slips_utils import utils
+import contextlib
 from datetime import datetime
 import redis
 import os
@@ -65,8 +65,7 @@ class RedisManager:
     def load_db(self):
         self.input_type = 'database'
         # self.input_information = 'database'
-        from slips_files.core.database.database import __database__
-        __database__.start(6379)
+        self.main.db.start(6379)
 
         # this is where the db will be loaded
         redis_port = 32850
@@ -75,11 +74,11 @@ class RedisManager:
             self.flush_redis_server(pid=pid)
             self.kill_redis_server(pid)
 
-        if not __database__.load(self.main.args.db):
+        if not self.main.db.load(self.main.args.db):
             print(f'Error loading the database {self.main.args.db}')
         else:
             self.load_redis_db(redis_port)
-            # __database__.disable_redis_persistence()
+            # self.main.db.disable_redis_persistence()
 
         self.main.terminate_slips()
 
@@ -129,13 +128,19 @@ class RedisManager:
             # check if 1. we can connect
             # 2.server is not being used by another instance of slips
             # note: using r.keys() blocks the server
+            db = DBManager(self.main.args.output, self.main.outputqueue, port)
             try:
-                if __database__.connect_to_redis_server(port):
-                    server_used = len(list(__database__.r.keys())) < 2
-                    if server_used:
-                        # if the db managed to connect to this random port, then this is
-                        # the port we'll be using
-                        return port
+                if db.get_redis_keys_len() < 3:
+                    # if the db managed to connect to this random port, and it has
+                    #  less than 3 keys, then this is the port we'll be using
+                    # the reason i put 3 here is because the minute slips connects to the db,
+                    # even if it's unused, it adds 2 keys. so any db with only these 2 keys
+                    # is unused
+                    return port
+                else:
+                    # ignore the created obj of the used db, and try with
+                    # a new port
+                    db.discard_obj()
             except redis.exceptions.ConnectionError:
                 # Connection refused to this port
                 continue
@@ -297,7 +302,7 @@ class RedisManager:
 
         # clear the server opened on this port
         try:
-            # if connected := __database__.connect_to_redis_server(port):
+            # if connected := self.main.db.connect_to_redis_server(port):
             # noinspection PyTypeChecker
             #todo move this to the db
             r = redis.StrictRedis(

@@ -1,7 +1,4 @@
-from slips_files.common.abstracts import Module
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-import multiprocessing
+from slips_files.common.imports import *
 import sys
 import base64
 import time
@@ -9,7 +6,6 @@ import binascii
 import os
 import subprocess
 import json
-import traceback
 import shutil
 
 class Module(Module, multiprocessing.Process):
@@ -18,11 +14,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect leaks of data in the traffic'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
+    def init(self):
         # this module is only loaded when a pcap is given get the pcap path
         try:
             self.pcap = utils.sanitize(sys.argv[sys.argv.index('-f') + 1])
@@ -54,7 +46,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
 
     def fix_json_packet(self, json_packet):
@@ -177,7 +169,7 @@ class Module(Module, multiprocessing.Process):
             )
 
             portproto = f'{dport}/{proto}'
-            port_info = __database__.get_port_info(portproto)
+            port_info = self.db.get_port_info(portproto)
 
             # generate a random uid
             uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
@@ -189,18 +181,18 @@ class Module(Module, multiprocessing.Process):
             # wait a while before alerting.
             time.sleep(4)
             # make sure we have a profile for any of the above IPs
-            if __database__.has_profile(src_profileid):
+            if self.db.has_profile(src_profileid):
                 attacker_direction = 'dstip'
                 profileid = src_profileid
                 attacker = dstip
-                ip_identification = __database__.getIPIdentification(dstip)
+                ip_identification = self.db.get_ip_identification(dstip)
                 description = f"{rule} to destination address: {dstip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
-            elif __database__.has_profile(dst_profileid):
+            elif self.db.has_profile(dst_profileid):
                 attacker_direction = 'srcip'
                 profileid = dst_profileid
                 attacker = srcip
-                ip_identification = __database__.getIPIdentification(srcip)
+                ip_identification = self.db.get_ip_identification(srcip)
                 description = f"{rule} to destination address: {srcip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             else:
@@ -208,7 +200,7 @@ class Module(Module, multiprocessing.Process):
                 return
 
             # in which tw is this ts?
-            twid = __database__.getTWofTime(profileid, ts)
+            twid = self.db.getTWofTime(profileid, ts)
             # convert ts to a readable format
             ts = utils.convert_format(ts, utils.alerts_format)
             if twid:
@@ -219,7 +211,7 @@ class Module(Module, multiprocessing.Process):
                 category = 'Malware'
                 confidence = 0.9
                 threat_level = 'high'
-                __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                          description, ts, category, source_target_tag=source_target_tag, port=dport,
                                          proto=proto, profileid=profileid, twid=twid, uid=uid)
 

@@ -15,10 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts import Module
+from slips_files.common.imports import *
 
 from slips_files.core.flows.zeek import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
 from slips_files.core.flows.zeek import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
@@ -43,30 +40,20 @@ from re import split
 # Profiler Process
 class ProfilerProcess(Module, multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
+    name = 'Profiler'
 
-    def __init__(
-        self, inputqueue, outputqueue, verbose, debug, redis_port
-    ):
-        self.name = 'Profiler'
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.inputqueue = inputqueue
-        self.outputqueue = outputqueue
+    def init(self, input_queue=None):
+        self.inputqueue = input_queue
         self.timeformat = None
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
-        self.whitelist = Whitelist(outputqueue, redis_port)
+        self.whitelist = Whitelist(self.outputqueue, self.db)
         # Read the configuration
         self.read_configuration()
-        __database__.start(redis_port)
-        # Set the database output queue
-        __database__.setOutputQueue(self.outputqueue)
-        self.verbose = verbose
-        self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
-        self.c1 = __database__.subscribe('reload_whitelist')
+        self.c1 = self.db.subscribe('reload_whitelist')
         self.channels = {
             'reload_whitelist': self.c1,
         }
@@ -192,65 +179,39 @@ class ProfilerProcess(Module, multiprocessing.Process):
         """
         # These are the indexes for later fast processing
         line = new_line['data']
-        # use null instead of false because 0==False and starttime index
-        # won't be adde to the temp_dict at the end of this function
-        self.column_idx = {
-            'starttime': 'null',
-            'endtime': 'null',
-            'dur': 'null',
-            'proto': 'null',
-            'appproto': 'null',
-            'saddr': 'null',
-            'sport': 'null',
-            'dir': 'null',
-            'daddr': 'null',
-            'dport': 'null',
-            'state': 'null',
-            'pkts': 'null',
-            'spkts': 'null',
-            'dpkts': 'null',
-            'bytes': 'null',
-            'sbytes': 'null',
-            'dbytes': 'null',
-        }
-
+        self.column_idx = {}
+        # these are the fields as slips understands them {original_field_name, slips_field_name}
+        supported_fields = {
+                'time': 'starttime',
+                'endtime':'endtime',
+                'appproto': 'appproto',
+                'dur':'dur',
+                'proto':'proto',
+                'srca':'saddr',
+                'sport':'sport',
+                'dir':'dir',
+                'dsta':'daddr',
+                'dport':'dport',
+                'state':'state',
+                'totpkts':'pkts',
+                'totbytes':'bytes',
+                'srcbytes':'sbytes',
+                'dstbytes':'dbytes',
+                'srcpkts':'spkts',
+                'dstpkts':'dpkts',
+            }
         try:
             nline = line.strip().split(self.separator)
+            # parse the given nline, and try to map the fields we find to the fields slips
+            # undertsands from the dict above.
             for field in nline:
-                if 'time' in field.lower():
-                    self.column_idx['starttime'] = nline.index(field)
-                elif 'dur' in field.lower():
-                    self.column_idx['dur'] = nline.index(field)
-                elif 'proto' in field.lower():
-                    self.column_idx['proto'] = nline.index(field)
-                elif 'srca' in field.lower():
-                    self.column_idx['saddr'] = nline.index(field)
-                elif 'sport' in field.lower():
-                    self.column_idx['sport'] = nline.index(field)
-                elif 'dir' in field.lower():
-                    self.column_idx['dir'] = nline.index(field)
-                elif 'dsta' in field.lower():
-                    self.column_idx['daddr'] = nline.index(field)
-                elif 'dport' in field.lower():
-                    self.column_idx['dport'] = nline.index(field)
-                elif 'state' in field.lower():
-                    self.column_idx['state'] = nline.index(field)
-                elif 'totpkts' in field.lower():
-                    self.column_idx['pkts'] = nline.index(field)
-                elif 'totbytes' in field.lower():
-                    self.column_idx['bytes'] = nline.index(field)
-                elif 'srcbytes' in field.lower():
-                    self.column_idx['sbytes'] = nline.index(field)
-                elif 'srcpkts' in field.lower():
-                    self.column_idx['spkts'] = nline.index(field)
-                elif 'dstpkts' in field.lower():
-                    self.column_idx['dpkts'] = nline.index(field)
-            # Some of the fields were not found probably,
-            # so just delete them from the index if their value is False.
-            # If not we will believe that we have data on them
-            # We need a temp dict because we can not change the size of dict while analyzing it
-            temp_dict = {k: e for k, e in self.column_idx.items() if e != 'null'}
-            self.column_idx = temp_dict
+                for original_field, slips_field in supported_fields.items():
+                    if original_field in field.lower():
+                        # found 1 original field that slips supports. store its' slips
+                        # equivalent name and index in the column_index
+                        self.column_idx[slips_field] = nline.index(field)
+                        break
+
             return self.column_idx
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -566,7 +527,6 @@ class ProfilerProcess(Module, multiprocessing.Process):
         else:
             starttime = ''
 
-
         if 'conn' in file_type:
             self.flow: Conn = Conn(
                 starttime,
@@ -853,11 +813,11 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 return val or default_
             except (IndexError, KeyError):
                 return default_
-
+        starttime = utils.convert_format(get_value_at(0), 'unixtimestamp')
+        endtime = utils.convert_format(get_value_at(1), 'unixtimestamp')
         self.flow: NfdumpConn = NfdumpConn(
-            utils.convert_to_datetime(get_value_at(0)),
-            utils.convert_to_datetime(get_value_at(1)),
-
+            starttime,
+            endtime,
             get_value_at(2),
             get_value_at(7),
 
@@ -936,6 +896,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 return default_
 
         if event_type == 'flow':
+            starttime = utils.convert_format(get_value_at('flow', 'start'), 'unixtimestamp')
+            endtime = utils.convert_format(get_value_at('flow', 'end'), 'unixtimestamp')
             self.flow: SuricataFlow = SuricataFlow(
                 flow_id,
                 saddr,
@@ -945,8 +907,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 proto,
                 appproto,
 
-                utils.convert_to_datetime(get_value_at('flow', 'start')),
-                utils.convert_to_datetime(get_value_at('flow', 'end')),
+                starttime,
+                endtime,
 
                 int(get_value_at('flow', 'pkts_toserver', 0)),
                 int(get_value_at('flow', 'pkts_toclient', 0)),
@@ -1076,7 +1038,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
         }
         if host_name:
             to_send['host_name'] = host_name
-        __database__.publish('new_MAC', json.dumps(to_send))
+        self.db.publish('new_MAC', json.dumps(to_send))
 
     def is_supported_flow(self):
 
@@ -1138,23 +1100,23 @@ class ProfilerProcess(Module, multiprocessing.Process):
         if not self.flow.daddr:
             # some flows don't have a daddr like software.log flows
             return False, False
-        rev_profileid = __database__.getProfileIdFromIP(self.daddr_as_obj)
+        rev_profileid = self.db.getProfileIdFromIP(self.daddr_as_obj)
         if not rev_profileid:
             self.print(
                 'The dstip profile was not here... create', 3, 0
             )
             # Create a reverse profileid for managing the data going to the dstip.
             rev_profileid = f'profile_{self.flow.daddr}'
-            __database__.addProfile(
+            self.db.addProfile(
                 rev_profileid, self.flow.starttime, self.width
             )
             # Try again
-            rev_profileid = __database__.getProfileIdFromIP(
+            rev_profileid = self.db.getProfileIdFromIP(
                 self.daddr_as_obj
             )
 
         # in the database, Find the id of the tw where the flow belongs.
-        rev_twid = __database__.get_timewindow(self.flow.starttime, rev_profileid)
+        rev_twid = self.db.get_timewindow(self.flow.starttime, rev_profileid)
         return rev_profileid, rev_twid
 
     def publish_to_new_dhcp(self):
@@ -1168,10 +1130,10 @@ class ProfilerProcess(Module, multiprocessing.Process):
         # on home networks, the router serves as a simple DHCP server
         to_send = {
             'profileid': self.profileid,
-            'twid': __database__.get_timewindow(epoch_time, self.profileid),
+            'twid': self.db.get_timewindow(epoch_time, self.profileid),
             'flow': asdict(self.flow)
         }
-        __database__.publish('new_dhcp', json.dumps(to_send))
+        self.db.publish('new_dhcp', json.dumps(to_send))
 
 
     def publish_to_new_software(self):
@@ -1182,10 +1144,10 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.flow.starttime = epoch_time
         to_send = {
             'sw_flow': asdict(self.flow),
-            'twid':  __database__.get_timewindow(epoch_time, self.profileid),
+            'twid':  self.db.get_timewindow(epoch_time, self.profileid),
         }
 
-        __database__.publish(
+        self.db.publish(
             'new_software', json.dumps(to_send)
         )
 
@@ -1227,14 +1189,14 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.print(f'Storing data in the profile: {self.profileid}', 3, 0)
             self.convert_starttime_to_epoch()
             # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
-            self.twid = __database__.get_timewindow(self.flow.starttime, self.profileid)
+            self.twid = self.db.get_timewindow(self.flow.starttime, self.profileid)
 
             if self.home_net:
                 # Home network is defined in slips.conf. Create profiles for home IPs only
                 for network in self.home_net:
                     if self.saddr_as_obj in network:
                         # if a new profile is added for this saddr
-                        __database__.addProfile(
+                        self.db.addProfile(
                             self.profileid, self.flow.starttime, self.width
                         )
                         self.store_features_going_out()
@@ -1247,7 +1209,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
             else:
                 # home_network param wasn't set in slips.conf
                 # Create profiles for all ips we see
-                __database__.addProfile(self.profileid, self.flow.starttime, self.width)
+                self.db.addProfile(self.profileid, self.flow.starttime, self.width)
                 self.store_features_going_out()
                 if self.analysis_direction == 'all':
                     # No home. Store all
@@ -1270,58 +1232,86 @@ class ProfilerProcess(Module, multiprocessing.Process):
         symbol = self.compute_symbol('OutTuples')
         # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
         # Add the out tuple
-        __database__.add_tuple(
+        self.db.add_tuple(
             self.profileid, self.twid, tupleid, symbol, role, self.flow
         )
         # Add the dstip
-        __database__.add_ips(self.profileid, self.twid, self.flow, role)
+        self.db.add_ips(self.profileid, self.twid, self.flow, role)
         # Add the dstport
         port_type = 'Dst'
-        __database__.add_port(self.profileid, self.twid, self.flow, role, port_type)
+        self.db.add_port(self.profileid, self.twid, self.flow, role, port_type)
         # Add the srcport
         port_type = 'Src'
-        __database__.add_port(self.profileid, self.twid, self.flow, role, port_type)
-        # Add the flow with all the fields interpreted
-        __database__.add_flow(
+        self.db.add_port(self.profileid, self.twid, self.flow, role, port_type)
+        # store the original flow as benign in sqlite
+        self.db.add_flow(
             self.flow,
-            profileid=self.profileid,
-            twid=self.twid,
-            label=self.label,
+            self.profileid,
+            self.twid,
+            'benign'
         )
+        res = self.db.get_flow(self.flow.uid)
+
         self.publish_to_new_MAC(self.flow.smac, self.flow.saddr)
         self.publish_to_new_MAC(self.flow.dmac, self.flow.daddr)
 
     def handle_dns(self):
-        __database__.add_out_dns(
+        self.db.add_out_dns(
             self.profileid,
             self.twid,
             self.flow
+        )
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
         )
 
     def handle_http(self):
-        __database__.add_out_http(
+        self.db.add_out_http(
             self.profileid,
             self.twid,
             self.flow,
+        )
 
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
         )
 
     def handle_ssl(self):
-        __database__.add_out_ssl(
+        self.db.add_out_ssl(
             self.profileid,
             self.twid,
             self.flow
         )
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
 
     def handle_ssh(self):
-        __database__.add_out_ssh(
+        self.db.add_out_ssh(
             self.profileid,
             self.twid,
             self.flow
         )
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
 
     def handle_notice(self):
-        __database__.add_out_notice(
+        self.db.add_out_notice(
                 self.profileid,
                 self.twid,
                 self.flow
@@ -1330,11 +1320,19 @@ class ProfilerProcess(Module, multiprocessing.Process):
         if 'Gateway_addr_identified' in self.flow.note:
             # get the gw addr form the msg
             gw_addr = self.flow.msg.split(': ')[-1].strip()
-            __database__.set_default_gateway("IP", gw_addr)
+            self.db.set_default_gateway("IP", gw_addr)
 
     def handle_ftp(self):
         if used_port := self.flow.used_port:
-            __database__.set_ftp_port(used_port)
+            self.db.set_ftp_port(used_port)
+
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
 
     def handle_smtp(self):
         to_send = {
@@ -1343,7 +1341,15 @@ class ProfilerProcess(Module, multiprocessing.Process):
             'twid': self.twid,
         }
         to_send = json.dumps(to_send)
-        __database__.publish('new_smtp', to_send)
+        self.db.publish('new_smtp', to_send)
+
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
 
     def handle_in_flows(self):
         """
@@ -1358,8 +1364,16 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.store_features_going_in(rev_profileid, rev_twid)
 
     def handle_software(self):
-        profile = __database__.add_software_to_profile(self.profileid, self.flow)
+        self.db.add_software_to_profile(self.profileid, self.flow)
         self.publish_to_new_software()
+
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
 
     def handle_dhcp(self):
         if self.flow.smac:
@@ -1370,10 +1384,22 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 host_name=(self.flow.host_name or False)
             )
         if self.flow.server_addr:
-            __database__.store_dhcp_server(self.flow.server_addr)
-            __database__.mark_profile_as_dhcp(self.profileid)
+            self.db.store_dhcp_server(self.flow.server_addr)
+            self.db.mark_profile_as_dhcp(self.profileid)
 
         self.publish_to_new_dhcp()
+        for uid in self.flow.uids:
+            # we're modifying the copy of self.flow
+            # the goal is to store a copy of this flow for each uid in self.flow.uids
+            flow = self.flow
+            flow.uid = uid
+            self.db.add_altflow(
+                self.flow,
+                self.profileid,
+                self.twid,
+                'benign'
+            )
+
 
     def handle_files(self):
         """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
@@ -1386,10 +1412,9 @@ class ProfilerProcess(Module, multiprocessing.Process):
         }
 
         to_send = json.dumps(to_send)
-        __database__.publish('new_downloaded_file', to_send)
+        self.db.publish('new_downloaded_file', to_send)
 
     def handle_arp(self):
-        # todo this fun shoud be moved to the db
         to_send = {
             'flow': asdict(self.flow),
             'profileid': self.profileid,
@@ -1397,7 +1422,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
         }
         # send to arp module
         to_send = json.dumps(to_send)
-        __database__.publish('new_arp', to_send)
+        self.db.publish('new_arp', to_send)
 
         self.publish_to_new_MAC(
             self.flow.dmac, self.flow.daddr
@@ -1405,15 +1430,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.publish_to_new_MAC(
             self.flow.smac, self.flow.saddr
         )
-        #todo therse are add flow params
-
-
-        # Add the flow with all the fields interpreted
-        __database__.add_flow(
-            self.flow,
-            self.profileid,
-            self.twid,
-        )
+        #TODO we're not adding these flows to the sqlite db until we need them
 
     def handle_weird(self):
         """
@@ -1425,7 +1442,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
             'flow': asdict(self.flow)
         }
         to_send = json.dumps(to_send)
-        __database__.publish('new_weird', to_send)
+        self.db.publish('new_weird', to_send)
 
 
     def handle_tunnel(self):
@@ -1435,7 +1452,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
             'flow': asdict(self.flow)
         }
         to_send = json.dumps(to_send)
-        __database__.publish('new_tunnel', to_send)
+        self.db.publish('new_tunnel', to_send)
 
     def store_features_going_out(self):
         """
@@ -1469,9 +1486,10 @@ class ProfilerProcess(Module, multiprocessing.Process):
                     cases[flow]()
             return False
 
+
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
-        __database__.markProfileTWAsModified(self.profileid, self.twid, '')
+        self.db.markProfileTWAsModified(self.profileid, self.twid, '')
 
     def store_features_going_in(self, profileid, twid):
         """
@@ -1493,27 +1511,27 @@ class ProfilerProcess(Module, multiprocessing.Process):
         tupleid = f'{self.saddr_as_obj}-{self.flow.dport}-{self.flow.proto}'
         role = 'Server'
         # create the intuple
-        __database__.add_tuple(
+        self.db.add_tuple(
             profileid, twid, tupleid, symbol, role, self.flow
         )
 
         # Add the srcip and srcport
-        __database__.add_ips(profileid, twid, self.flow, role)
+        self.db.add_ips(profileid, twid, self.flow, role)
         port_type = 'Src'
-        __database__.add_port(profileid, twid, self.flow, role, port_type)
+        self.db.add_port(profileid, twid, self.flow, role, port_type)
 
         # Add the dstport
         port_type = 'Dst'
-        __database__.add_port(profileid, twid, self.flow, role, port_type)
+        self.db.add_port(profileid, twid, self.flow, role, port_type)
 
         # Add the flow with all the fields interpreted
-        __database__.add_flow(
+        self.db.add_flow(
             self.flow,
             profileid=profileid,
             twid=twid,
             label=self.label,
         )
-        __database__.markProfileTWAsModified(profileid, twid, '')
+        self.db.markProfileTWAsModified(profileid, twid, '')
 
     def compute_symbol(
         self,
@@ -1560,7 +1578,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
 
             # Get the time of the last flow in this tuple, and the last last
             # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
-            (last_last_ts, last_ts) = __database__.getT2ForProfileTW(
+            (last_last_ts, last_ts) = self.db.getT2ForProfileTW(
                 self.profileid, self.twid, tupleid, tuple_key
             )
             # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
@@ -1714,7 +1732,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
             except TypeError:
                 T2 = False
             # self.print("T2:{}".format(T2), 0, 1)
-            # p = __database__.start_profiling()
+            # p = self.db.start_profiling()
             # Compute the rest
             periodicity, zeros = compute_periodicity(
                 now_ts, last_ts, last_last_ts
@@ -1739,7 +1757,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 ),
                 3, 0,
             )
-            # p = __database__.end_profiling(p)
+            # p = self.db.end_profiling(p)
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
@@ -1753,7 +1771,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         self.print(f"Stopping profiler process. Number of whitelisted conn flows: {self.whitelisted_flows_ctr}", 2, 0)
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
-        __database__.publish('finished_modules', 'Profiler')
+        self.db.publish('finished_modules', 'Profiler')
 
     def pre_main(self):
         utils.drop_root_privs()

@@ -1,24 +1,15 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-import sys
-import traceback
-import time
+from slips_files.common.imports import *
 import ipaddress
-import json
-import threading
 
 class HorizontalPortscan():
-    def __init__(self):
+    def __init__(self, db):
+        self.db = db
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
         self.cache_det_thresholds = {}
-        self.malicious_label = __database__.malicious_label
-
         # the separator used to separate the IP and the word profile
-        self.fieldseparator = __database__.getFieldSeparator()
+        self.fieldseparator = self.db.get_field_separator()
 
         # The minimum amount of ips to scan horizontal scan
         self.port_scan_minimum_dips = 5
@@ -79,7 +70,7 @@ class HorizontalPortscan():
         dstips_to_discard = []
         # Remove dstips that have DNS resolution already
         for dip in dstips:
-            dns_resolution = __database__.get_dns_resolution(dip)
+            dns_resolution = self.db.get_dns_resolution(dip)
             dns_resolution = dns_resolution.get('domains', [])
             if dns_resolution:
                 dstips_to_discard.append(dip)
@@ -112,7 +103,7 @@ class HorizontalPortscan():
         type_data = 'Ports'
         for state in ('Established', 'Not Established'):
             for protocol in ('TCP', 'UDP'):
-                dports = __database__.getDataFromProfileTW(
+                dports = self.db.getDataFromProfileTW(
                     profileid, twid, direction, state, protocol, role, type_data
                 )
 
@@ -206,7 +197,7 @@ class HorizontalPortscan():
         threat_level = 'medium'
         category = 'Recon.Scanning'
         portproto = f'{dport}/{protocol}'
-        port_info = __database__.get_port_info(portproto)
+        port_info = self.db.get_port_info(portproto)
         port_info = port_info or ""
         confidence = self.calculate_confidence(pkts_sent)
         description = (
@@ -217,10 +208,6 @@ class HorizontalPortscan():
             f'Confidence: {confidence}. by Slips'
         )
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
                                  port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
-        # Set 'malicious' label in the detected profile
-        __database__.set_profile_module_label(
-            profileid, evidence_type, self.malicious_label
-        )

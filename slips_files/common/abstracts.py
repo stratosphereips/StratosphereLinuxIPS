@@ -1,18 +1,34 @@
 from abc import ABC, abstractmethod
-from slips_files.core.database.database import __database__
+# common imports for all modules
+from slips_files.core.database.database_manager import DBManager
 from slips_files.common.slips_utils import utils
+from multiprocessing import Process
 import sys
 import traceback
+
 # This is the abstract Module class to check against. Do not modify
 class Module(ABC):
     name = ''
     description = 'Template abstract module'
     authors = ['Template abstract Author']
-
-    def __init__(self, outputqueue):
+    def __init__(self, outputqueue, db, **kwargs):
+        Process.__init__(self)
         self.outputqueue = outputqueue
-        self.control_channel = __database__.subscribe('control_module')
+        self.db = db
+        self.control_channel = self.db.subscribe('control_module')
         self.msg_received = True
+        self.init(**kwargs)
+
+    @abstractmethod
+    def init(self, **kwargs):
+        """
+        all the code that was in the __init__ of all modules, is now in this method
+        the goal of this is to have one common __init__() for all modules, which is the one
+        in this file
+        this init will have access to all keyword args passes when initializing the module
+        """
+
+
 
     def should_stop(self) -> bool:
         """
@@ -25,7 +41,7 @@ class Module(ABC):
             # this module is still receiving msgs, don't stop
             return False
 
-        message = __database__.get_message(self.control_channel)
+        message = self.db.get_message(self.control_channel)
         if message and message['data'] == 'stop_process':
             self.shutdown_gracefully()
             return True
@@ -70,7 +86,7 @@ class Module(ABC):
         pass
 
     def get_msg(self, channel_name):
-        message = __database__.get_message(self.channels[channel_name])
+        message = self.db.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
             self.msg_received = True
             return message

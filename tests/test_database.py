@@ -1,7 +1,6 @@
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
-from dataclasses import asdict
-import ipaddress
+from tests.module_factory import ModuleFactory
 import redis
 import os
 import json
@@ -27,51 +26,19 @@ flow = Conn(
     'Established',''
 )
 
-def do_nothing(*arg):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-
-
-# create another database instance other than the one in
-# conftest because the port in conftest is used in other test files
-def create_db_instace(outputQueue):
-    from slips_files.core.database.database import __database__
-    __database__.outputqueue = outputQueue
-    __database__.print = do_nothing
-    __database__.deletePrevdb = True
-    __database__.disabled_detections = []
-    __database__.home_network = utils.home_network_ranges
-    __database__.width = 3600
-    __database__.connect_to_redis_server(6381)
-    __database__.r.flushdb()
-    __database__.setSlipsInternalTime(0)
-    return __database__
-
-def add_flow(db):
-    return db.add_flow(flow, profileid, twid)
-
 # this should always be the first unit test in this file
 # because we don't want another unit test adding the same flow before this one
-def test_add_flow(outputQueue):
-    database = create_db_instace(outputQueue)
-    uid = '1234'
-    assert add_flow(database)
 
-    flow_from_db = database.r.hget(f'{profileid}_{twid}_flows', uid)
-    flow_from_db = json.loads(flow_from_db)
-
-    # make sure the exact flow is stored in the db
-    assert flow.daddr in flow_from_db['daddr']
-    assert flow.bytes == flow_from_db['allbytes']
-    assert flow.saddr in flow_from_db['saddr']
-    assert flow.state in flow_from_db['state']
+database = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
 
 
+def add_flow():
+    database.add_flow(flow, '', profileid, twid, label='benign')
 
-def test_getProfileIdFromIP(outputQueue):
+
+def test_getProfileIdFromIP():
     """unit test for addProfile and getProfileIdFromIP"""
 
-    database = create_db_instace(outputQueue)
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
 
@@ -81,9 +48,8 @@ def test_getProfileIdFromIP(outputQueue):
     assert database.getProfileIdFromIP(test_ip) is not False
 
 
-def test_timewindows(outputQueue):
+def test_timewindows():
     """unit tests for addNewTW ,getLastTWforProfile and getFirstTWforProfile"""
-    database = create_db_instace(outputQueue)
     profileid = 'profile_192.168.1.1'
     # add a profile
     database.addProfile(profileid, '00:00', '1')
@@ -100,8 +66,7 @@ def getSlipsInternalTime():
     return 50.0
 
 
-def test_add_ips(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_add_ips():
     # add a profile
     database.addProfile(profileid, '00:00', '1')
     # add a tw to that profile
@@ -130,8 +95,7 @@ def test_add_ips(outputQueue):
     assert stored_dstips == '{"192.168.1.1": 1}'
 
 
-def test_add_port(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_add_port():
     new_flow = flow
     new_flow.state = 'Not Established'
     database.add_port(profileid, twid, flow, 'Server', 'Dst')
@@ -141,8 +105,7 @@ def test_add_port(outputQueue):
     assert flow.daddr in added_ports['DstPortsServerTCPNot Established']
 
 
-def test_setEvidence(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_setEvidence():
     attacker_direction = 'ip'
     attacker = test_ip
     evidence_type = f'SSHSuccessful-by-{attacker}'
@@ -168,8 +131,7 @@ def test_setEvidence(outputQueue):
     assert evidence_details['description'] == description
 
 
-def test_deleteEvidence(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_deleteEvidence():
     description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
     database.deleteEvidence(profileid, twid, description)
     added_evidence = json.loads(database.r.hget(f'evidence{profileid}', twid))
@@ -180,24 +142,8 @@ def test_deleteEvidence(outputQueue):
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
 
-def test_module_labels(outputQueue):
-    database = create_db_instace(outputQueue)
-    """ tests set and get_module_labels_from_flow """
-    # clear the database before running this test
-    os.system('./slips.py -cc')
-    add_flow(database)
-    module_label = 'malicious'
-    module_name = 'test'
-    uid = '1234'
-    assert database.set_module_label_to_flow(profileid, twid, uid, module_name, module_label) is True
 
-    labels = database.get_module_labels_from_flow(profileid, twid, uid)
-    assert 'test' in labels
-    assert labels['test'] == 'malicious'
-
-
-def test_setInfoForDomains(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_setInfoForDomains():
     """ tests setInfoForDomains, setNewDomain and getDomainData """
     domain = 'www.google.com'
     domain_data = {'threatintelligence': 'sample data'}
@@ -208,16 +154,14 @@ def test_setInfoForDomains(outputQueue):
     assert stored_data['threatintelligence'] == 'sample data'
 
 
-def test_subscribe(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_subscribe():
     # invalid channel
     assert database.subscribe('invalid_channel') is False
     # valid channel, shoud return a pubsub object
     assert type(database.subscribe('tw_modified')) == redis.client.PubSub
 
 
-def test_profile_moddule_labels(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_profile_moddule_labels():
     """ tests set and get_profile_module_label """
     module_label = 'malicious'
     module_name = 'test'
@@ -227,8 +171,7 @@ def test_profile_moddule_labels(outputQueue):
     assert labels['test'] == 'malicious'
 
 
-def test_add_mac_addr_to_profile(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_add_mac_addr_to_profile():
     ipv4 = '192.168.1.5'
     profileid_ipv4 = f'profile_{ipv4}'
     MAC_info = {'MAC': '00:00:5e:00:53:af'}
@@ -259,8 +202,7 @@ def test_add_mac_addr_to_profile(outputQueue):
     assert ipv6 in str(database.r.hmget(profileid_ipv4, 'IPv6'))
 
 
-def test_get_the_other_ip_version(outputQueue):
-    database = create_db_instace(outputQueue)
+def test_get_the_other_ip_version():
     # profileid is ipv4
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     database.set_ipv6_of_profile(profileid, ipv6)

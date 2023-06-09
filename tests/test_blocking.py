@@ -2,6 +2,8 @@
 this file needs sudoroot to run
 """
 from ..modules.blocking.blocking import Module
+from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER, do_nothing
+from tests.module_factory import ModuleFactory
 import platform
 import pytest
 import os
@@ -16,7 +18,6 @@ def has_netadmin_cap():
 
 
 IS_DEPENDENCY_IMAGE = os.environ.get('IS_DEPENDENCY_IMAGE', False)
-IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 # ignore all tests if not using linux
 linuxOS = pytest.mark.skipif(
     platform.system() != 'Linux',
@@ -39,24 +40,12 @@ has_net_admin_cap = pytest.mark.skipif(
 
 
 
-def do_nothing(*args):
-    """Used to override the print function because using the print causes broken pipes"""
-    pass
-
-
-def create_blocking_instance(outputQueue):
-    """Create an instance of blocking.py
-    needed by every other test in this file"""
-    blocking = Module(outputQueue, 6380)
-    # override the print function to avoid broken pipes
-    blocking.print = do_nothing
-    return blocking
 
 @linuxOS
 @isroot
 @has_net_admin_cap
-def is_slipschain_initialized(outputQueue) -> bool:
-    blocking = create_blocking_instance(outputQueue)
+def is_slipschain_initialized() -> bool:
+    blocking = ModuleFactory().create_blocking_obj()
     output = blocking.get_cmd_output(f'{blocking.sudo} iptables -S')
     rules = [
         '-A INPUT -j slipsBlocking',
@@ -68,28 +57,28 @@ def is_slipschain_initialized(outputQueue) -> bool:
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_initialize_chains_in_firewall(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+def test_initialize_chains_in_firewall(output_queue):
+    blocking = ModuleFactory().create_blocking_obj()
     # manually set the firewall
     blocking.firewall = 'iptables'
     blocking.initialize_chains_in_firewall()
-    assert is_slipschain_initialized(outputQueue) is True
+    assert is_slipschain_initialized(output_queue) is True
 
 
 # todo
-# def test_delete_slipsBlocking_chain(outputQueue, database):
-#     blocking = create_blocking_instance(outputQueue)
+# def test_delete_slipsBlocking_chain():
+#     blocking = ModuleFactory().create_blocking_obj()
 #     # first make sure they are initialized
-#     if not is_slipschain_initialized(outputQueue):
+#     if not is_slipschain_initialized(output_queue):
 #         blocking.initialize_chains_in_firewall()
 #     os.system('./slips.py -cb')
-#     assert is_slipschain_initialized(outputQueue) == False
+#     assert is_slipschain_initialized(output_queue) == False
 
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_block_ip(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+def test_block_ip():
+    blocking = ModuleFactory().create_blocking_obj()
     blocking.initialize_chains_in_firewall()
     if not blocking.is_ip_blocked('2.2.0.0'):
         ip = '2.2.0.0'
@@ -100,8 +89,8 @@ def test_block_ip(outputQueue, database):
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_unblock_ip(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+def test_unblock_ip():
+    blocking = ModuleFactory().create_blocking_obj()
     ip = '2.2.0.0'
     from_ = True
     to = True

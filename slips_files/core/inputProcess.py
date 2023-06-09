@@ -15,9 +15,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
-import multiprocessing
 from pathlib import Path
 from re import split
 import sys
@@ -26,7 +23,7 @@ import socket
 from datetime import datetime
 from watchdog.observers import Observer
 from .filemonitor import FileEventHandler
-from slips_files.core.database.database import __database__
+from slips_files.common.imports import *
 import time
 import json
 import traceback
@@ -47,14 +44,13 @@ class InputProcess(multiprocessing.Process):
             zeek_or_bro,
             zeek_folder,
             line_type,
-            redis_port,
+            db
     ):
         multiprocessing.Process.__init__(self)
         self.name = 'Input'
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
-        __database__.start(redis_port)
-        self.redis_port = redis_port
+        self.db = db
         self.input_type = input_type
         # in case of reading from stdin, the user mst tell slips what type of lines is the input
         self.line_type = line_type
@@ -91,7 +87,7 @@ class InputProcess(multiprocessing.Process):
             target=self.remove_old_zeek_files, daemon=True
         )
         self.open_file_handlers = {}
-        self.c1 = __database__.subscribe('remove_old_files')
+        self.c1 = self.db.subscribe('remove_old_files')
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []
@@ -153,7 +149,7 @@ class InputProcess(multiprocessing.Process):
                 self.print('Error reading nfdump output ', 1, 3)
             else:
                 total_flows = len(self.nfdump_output.splitlines())
-                __database__.set_input_metadata({'total_flows': total_flows})
+                self.db.set_input_metadata({'total_flows': total_flows})
 
                 for nfdump_line in self.nfdump_output.splitlines():
                     # this line is taken from stdout we need to remove whitespaces
@@ -329,7 +325,7 @@ class InputProcess(multiprocessing.Process):
             # It may happen that we check all the files in the folder,
             # and there is still no files for us.
             # To cover this case, just refresh the list of files
-            self.zeek_files = __database__.get_all_zeek_file()
+            self.zeek_files = self.db.get_all_zeek_file()
             # time.sleep(1)
             return False, False
 
@@ -349,13 +345,12 @@ class InputProcess(multiprocessing.Process):
     def read_zeek_files(self) -> int:
         try:
             # Get the zeek files in the folder now
-            self.zeek_files = __database__.get_all_zeek_file()
+            self.zeek_files = self.db.get_all_zeek_file()
             self.open_file_handlers = {}
             self.file_time = {}
             self.cache_lines = {}
             # Try to keep track of when was the last update so we stop this reading
             self.last_updated_file_time = datetime.now()
-
             lines = 0
             while True:
                 self.check_if_time_to_del_rotated_files()
@@ -392,7 +387,7 @@ class InputProcess(multiprocessing.Process):
                 del self.file_time[file_with_earliest_flow]
                 # Get the new list of files. Since new files may have been created by
                 # Zeek while we were processing them.
-                self.zeek_files = __database__.get_all_zeek_file()
+                self.zeek_files = self.db.get_all_zeek_file()
 
             self.close_all_handles()
 
@@ -421,7 +416,7 @@ class InputProcess(multiprocessing.Process):
         try:
             # wait max 10 seconds before stopping slips if no new flows are read
             self.bro_timeout = 10
-            if __database__.is_growing_zeek_dir():
+            if self.db.is_growing_zeek_dir():
                 # slips is given a dir that is growing i.e zeek dir running on an interface
                 # don't stop zeek or slips
                 self.bro_timeout = float('inf')
@@ -436,7 +431,6 @@ class InputProcess(multiprocessing.Process):
                 full_path = os.path.join(self.given_path, os.listdir(self.given_path)[0])
                 self.is_zeek_tabs = self.is_zeek_tabs_file(full_path)
 
-
             total_flows = 0
             for file in os.listdir(self.given_path):
                 full_path = os.path.join(self.given_path, file)
@@ -445,7 +439,7 @@ class InputProcess(multiprocessing.Process):
                 if self.is_ignored_file(full_path):
                     continue
 
-                if not __database__.is_growing_zeek_dir():
+                if not self.db.is_growing_zeek_dir():
                     # get the total number of flows slips is going to read (used later for the progress bar)
                     total_flows += self.get_flows_number(full_path)
                     if self.is_zeek_tabs:
@@ -457,16 +451,16 @@ class InputProcess(multiprocessing.Process):
                 filename, file_extension = os.path.splitext(file)
                 if file_extension == '.log':
                     # Add log file without ext to the database
-                    __database__.add_zeek_file(
+                    self.db.add_zeek_file(
                         full_path[:-4]
                     )
 
 
                 # in testing mode, we only need to read one zeek file to know
                 # that this function is working correctly
-                if self.testing: break
-
-            __database__.set_input_metadata({'total_flows': total_flows})
+                if self.testing:
+                    break
+            self.db.set_input_metadata({'total_flows': total_flows})
 
             lines = self.read_zeek_files()
 
@@ -516,7 +510,7 @@ class InputProcess(multiprocessing.Process):
         try:
             # the number of flows returned by get_flows_number contains the header, so subtract that
             total_flows = self.get_flows_number(self.given_path) -1
-            __database__.set_input_metadata({'total_flows': total_flows})
+            self.db.set_input_metadata({'total_flows': total_flows})
 
             self.lines = 0
             with open(self.given_path) as file_stream:
@@ -549,8 +543,7 @@ class InputProcess(multiprocessing.Process):
     def handle_suricata(self):
         try:
             total_flows = self.get_flows_number(self.given_path)
-            __database__.set_input_metadata({'total_flows': total_flows})
-
+            self.db.set_input_metadata({'total_flows': total_flows})
             with open(self.given_path) as file_stream:
                 for t_line in file_stream:
                     line = {
@@ -604,11 +597,11 @@ class InputProcess(multiprocessing.Process):
                     # zeek tab files contain many comments at the begging of the file and at the end
                     # subtract the comments from the flows number
                     total_flows -= 9
-                __database__.set_input_metadata({'total_flows': total_flows})
+                self.db.set_input_metadata({'total_flows': total_flows})
 
             file_path_without_extension = os.path.splitext(self.given_path)[0]
             # Add log file to database
-            __database__.add_zeek_file(file_path_without_extension)
+            self.db.add_zeek_file(file_path_without_extension)
 
             # this timeout is the only thing that
             # makes the read_zeek_files() return
@@ -643,7 +636,11 @@ class InputProcess(multiprocessing.Process):
         # some process to tell us which files to read in real time when they appear
         # Get the file eventhandler
         # We have to set event_handler and event_observer before running zeek.
-        event_handler = FileEventHandler(self.redis_port, self.zeek_folder, self.input_type)
+        event_handler = FileEventHandler(
+            self.zeek_folder,
+            self.input_type,
+            self.db
+            )
         # Create an observer
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler
@@ -686,7 +683,7 @@ class InputProcess(multiprocessing.Process):
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
 
-            __database__.store_process_PID('Zeek', self.zeek_pid)
+            self.db.store_process_PID('Zeek', self.zeek_pid)
             if not hasattr(self, 'is_zeek_tabs'):
                 self.is_zeek_tabs = False
             lines = self.read_zeek_files()
@@ -718,7 +715,7 @@ class InputProcess(multiprocessing.Process):
         """
         while True:
             # keep the rotated files for the period specified in slips.conf
-            msg = __database__.get_message(self.c1)
+            msg = self.db.get_message(self.c1)
             if msg and msg['data'] == 'stop_process':
                 return True
             if utils.is_msg_intended_for(msg, 'remove_old_files'):
@@ -762,9 +759,9 @@ class InputProcess(multiprocessing.Process):
         self.stop_observer()
 
         if hasattr(self, 'zeek_pid'):
-            __database__.publish('finished_modules', 'Zeek')
+            self.db.publish('finished_modules', 'Zeek')
 
-        __database__.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def run_zeek(self):
         """
@@ -854,12 +851,12 @@ class InputProcess(multiprocessing.Process):
         if self.line_type != 'zeek':
             return
 
-        channel = __database__.subscribe('new_module_flow')
+        channel = self.db.subscribe('new_module_flow')
         while True:
             # the CYST module will send msgs to this channel when it read s a new flow from the CYST UDS
             # todo when to break? cyst should send something like stop?
 
-            msg = __database__.get_message(channel)
+            msg = self.db.get_message(channel)
             if msg and msg['data'] == 'stop_process':
                 self.shutdown_gracefully()
                 return True
@@ -888,7 +885,7 @@ class InputProcess(multiprocessing.Process):
         utils.drop_root_privs()
         if (
             running_on_interface := '-i' in sys.argv
-            or __database__.is_growing_zeek_dir()
+            or self.db.is_growing_zeek_dir()
         ):
             # this thread should be started from run() to get the PID of inputprocess and have shared variables
             # if it started from __init__() it will have the PID of slips.py therefore,

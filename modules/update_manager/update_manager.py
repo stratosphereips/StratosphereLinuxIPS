@@ -1,8 +1,4 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
+from slips_files.common.imports import *
 import sys
 import traceback
 import asyncio
@@ -17,20 +13,10 @@ class UpdateManager(Module, multiprocessing.Process):
     description = 'Update Threat Intelligence files'
     authors = ['Kamila Babayeva', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
+    def init(self):
         self.read_configuration()
-        # Start the DB
-        self.redis_port = redis_port
-        __database__.start(self.redis_port)
         # Update file manager
-        self.update_manager = UpdateFileManager(
-            self.outputqueue, redis_port
-        )
+        self.update_manager = UpdateFileManager(self.outputqueue, self.db)
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(
             self.update_period, self.update_ti_files
@@ -57,7 +43,7 @@ class UpdateManager(Module, multiprocessing.Process):
         self.mac_db_update_manager.cancel()
         self.online_whitelist_update_timer.cancel()
         # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
         return True
 
     async def update_ti_files(self):
@@ -68,7 +54,7 @@ class UpdateManager(Module, multiprocessing.Process):
         update_finished = asyncio.create_task(self.update_manager.update())
         # wait for UpdateFileManager to finish before starting all the modules
         await update_finished
-        self.print(f'{__database__.get_loaded_ti_files()} TI files successfully loaded.')
+        self.print(f'{self.db.get_loaded_ti_files()} TI files successfully loaded.')
 
     def pre_main(self):
         utils.drop_root_privs()

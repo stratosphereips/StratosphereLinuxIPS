@@ -1,8 +1,5 @@
 import contextlib
-from slips_files.common.abstracts import Module
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
+from slips_files.common.imports import *
 from .TimerThread import TimerThread
 from .set_evidence import Helper
 from slips_files.core.whitelist import Whitelist
@@ -14,7 +11,6 @@ import datetime
 import sys
 import validators
 import collections
-import traceback
 import math
 import time
 
@@ -27,26 +23,18 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
-        super().__init__(outputqueue)
+    def init(self):
         # Read the configuration
         self.read_configuration()
-        self.normal_label = __database__.normal_label
-        self.malicious_label = __database__.malicious_label
         # Retrieve the labels
         self.subscribe_to_channels()
-        self.whitelist = Whitelist(outputqueue, redis_port)
+        self.whitelist = Whitelist(self.outputqueue, self.db)
         self.conn_counter = 0
         # helper contains all functions used to set evidence
-        self.helper = Helper()
+        self.helper = Helper(self.db)
         self.p2p_daddrs = {}
         # get the default gateway
-        self.gateway = __database__.get_gateway_ip()
+        self.gateway = self.db.get_gateway_ip()
         # Cache list of connections that we already checked in the timer
         # thread (we waited for the connection of these dns resolutions)
         self.connections_checked_in_dns_conn_timer_thread = []
@@ -87,17 +75,17 @@ class Module(Module, multiprocessing.Process):
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
     def subscribe_to_channels(self):
-        self.c1 = __database__.subscribe('new_flow')
-        self.c2 = __database__.subscribe('new_ssh')
-        self.c3 = __database__.subscribe('new_notice')
-        self.c4 = __database__.subscribe('new_ssl')
-        self.c5 = __database__.subscribe('tw_closed')
-        self.c6 = __database__.subscribe('new_dns')
-        self.c7 = __database__.subscribe('new_downloaded_file')
-        self.c8 = __database__.subscribe('new_smtp')
-        self.c9 = __database__.subscribe('new_software')
-        self.c10 = __database__.subscribe('new_weird')
-        self.c11 = __database__.subscribe('new_tunnel')
+        self.c1 = self.db.subscribe('new_flow')
+        self.c2 = self.db.subscribe('new_ssh')
+        self.c3 = self.db.subscribe('new_notice')
+        self.c4 = self.db.subscribe('new_ssl')
+        self.c5 = self.db.subscribe('tw_closed')
+        self.c6 = self.db.subscribe('new_dns')
+        self.c7 = self.db.subscribe('new_downloaded_file')
+        self.c8 = self.db.subscribe('new_smtp')
+        self.c9 = self.db.subscribe('new_software')
+        self.c10 = self.db.subscribe('new_weird')
+        self.c11 = self.db.subscribe('new_tunnel')
         self.channels = {
             'new_flow': self.c1,
             'new_ssh': self.c2,
@@ -137,7 +125,7 @@ class Module(Module, multiprocessing.Process):
         except for DNS connections to the gateway
         """
         def is_dns_conn():
-            return dport == 53 and proto.lower() == 'udp' and daddr == __database__.get_gateway_ip()
+            return dport == 53 and proto.lower() == 'udp' and daddr == self.db.get_gateway_ip()
 
         with contextlib.suppress(ValueError):
             dport = int(dport)
@@ -184,22 +172,14 @@ class Module(Module, multiprocessing.Process):
 
         if type(dur) == str:
             dur = float(dur)
-        module_name = 'flowalerts-long-connection'
+
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
-            # set "flowalerts-long-connection:malicious" label in the flow (needed for Ensembling module)
-
-            module_label = self.malicious_label
             self.helper.set_evidence_long_connection(
                 daddr, dur, profileid, twid, uid, timestamp, ip_state='dstip'
             )
-        else:
-            # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
-            module_label = self.normal_label
-
-        __database__.set_module_label_to_flow(
-            profileid, twid, uid, module_name, module_label
-        )
+            return True
+        return False
 
     def is_p2p(self, dport, proto, daddr):
         """
@@ -230,7 +210,7 @@ class Module(Module, multiprocessing.Process):
         organization or not, and returns true if the daddr belongs to the
         same org as the port
         """
-        organization_info = __database__.get_organization_of_port(
+        organization_info = self.db.get_organization_of_port(
                 portproto
         )
         if not organization_info:
@@ -259,10 +239,10 @@ class Module(Module, multiprocessing.Process):
         # not a range either since nothing is specified, e.g. ip is set to ""
         # check the source and dst mac address vendors
         src_mac_vendor = str(
-            __database__.get_mac_vendor_from_profile(profileid)
+            self.db.get_mac_vendor_from_profile(profileid)
         )
         dst_mac_vendor = str(
-            __database__.get_mac_vendor_from_profile(
+            self.db.get_mac_vendor_from_profile(
                 f'profile_{daddr}'
             )
         )
@@ -275,7 +255,7 @@ class Module(Module, multiprocessing.Process):
             return True
 
         # check if the SNI, hostname, rDNS of this ip belong to org_name
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         if org_name in ip_identification.lower():
             return True
 
@@ -356,7 +336,8 @@ class Module(Module, multiprocessing.Process):
                 # get the conn.log with the same uid,
                 # returns {uid: {actual flow..}}
                 # always returns a dict, never returns None
-                flow: dict = __database__.get_flow(profileid, twid, uid)
+                # flow: dict = self.db.get_flow(profileid, twid, uid)
+                flow: dict = self.db.get_flow(uid)
                 if flow := flow.get(uid):
                     flow = json.loads(flow)
                     if 'ts' in flow:
@@ -384,8 +365,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # orig_bytes is number of payload bytes downloaded
-        downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
-
+        downloaded_bytes = flow.get('resp_bytes', 0)
         if downloaded_bytes >= self.pastebin_downloads_threshold:
             self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
             return True
@@ -402,12 +382,10 @@ class Module(Module, multiprocessing.Process):
         For each contacted ip in this twid,
         check if the total bytes sent to this ip is >= data_exfiltration_threshold
         """
-        def get_sent_bytes(all_flows):
+        def get_sent_bytes(all_flows: dict):
             """Returns a dict of sent bytes to all ips {contacted_ip: (mbs_sent, [uids])}"""
             bytes_sent = {}
-            for flow in all_flows:
-                uid = next(iter(flow))
-                flow = flow[uid]
+            for uid, flow in all_flows.items():
                 daddr = flow['daddr']
                 sbytes: int = flow.get('sbytes', 0)
 
@@ -424,7 +402,7 @@ class Module(Module, multiprocessing.Process):
 
             return bytes_sent
 
-        all_flows = __database__.get_all_flows_in_profileid(
+        all_flows = self.db.get_all_flows_in_profileid(
             profileid
         )
         if not all_flows:
@@ -464,9 +442,10 @@ class Module(Module, multiprocessing.Process):
             return False
 
         portproto = f'{dport}/{proto}'
-        if port_info := __database__.get_port_info(portproto):
+        if self.db.get_port_info(portproto):
             # it's a known port
             return False
+
         # we don't have port info in our database
         # is it a port that is known to be used by
         # a specific organization?
@@ -476,7 +455,7 @@ class Module(Module, multiprocessing.Process):
         if (
             'icmp' not in proto
             and not self.is_p2p(dport, proto, daddr)
-            and not __database__.is_ftp_port(dport)
+            and not self.db.is_ftp_port(dport)
         ):
             # we don't have info about this port
             self.helper.set_evidence_unknown_port(
@@ -491,18 +470,19 @@ class Module(Module, multiprocessing.Process):
         Sometimes the same computer makes dns requests using its ipv4 and ipv6 address, check if this is the case
         """
         # get the other ip version of this computer
-        other_ip = __database__.get_the_other_ip_version(profileid)
+        other_ip = self.db.get_the_other_ip_version(profileid)
         if other_ip:
             other_ip = json.loads(other_ip)
         # get the domain of this ip
-        dns_resolution = __database__.get_dns_resolution(daddr)
+        dns_resolution = self.db.get_dns_resolution(daddr)
 
         try:
             if other_ip and other_ip in dns_resolution.get('resolved-by', []):
                 return True
         except AttributeError:
             # It can be that the dns_resolution sometimes gives back a list and gets this error
-            return False
+            pass
+        return False
 
     def is_connection_made_by_different_version(
         self, profileid, twid, daddr
@@ -511,12 +491,12 @@ class Module(Module, multiprocessing.Process):
         :param daddr: the ip this connection is made to (destination ip)
         """
         # get the other ip version of this computer
-        other_ip = __database__.get_the_other_ip_version(profileid)
+        other_ip = self.db.get_the_other_ip_version(profileid)
         if not other_ip:
             return False
-
+        other_ip = other_ip[0]
         # get the ips contacted by the other_ip
-        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(
+        contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
             f'profile_{other_ip}', twid
         )
         if not contacted_ips:
@@ -575,7 +555,7 @@ class Module(Module, multiprocessing.Process):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
         to a well-known org"""
 
-        ip_data = __database__.getIPData(ip)
+        ip_data = self.db.getIPData(ip)
         try:
             SNI = ip_data['SNI']
             if type(SNI) == list:
@@ -630,19 +610,19 @@ class Module(Module, multiprocessing.Process):
 
         # disable this alert when running on a zeek conn.log file
         # because there's no dns.log to know if the dns was made
-        if __database__.get_input_type() == 'zeek_log_file':
+        if self.db.get_input_type() == 'zeek_log_file':
             return False
 
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to them without a DNS request.
         # We dont have yet the dhcp in the redis, when is there check it
-        # if __database__.get_dhcp_servers(daddr):
+        # if self.db.get_dhcp_servers(daddr):
         # continue
 
         # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
         # until 30 minutes has passed
         # after starting slips because the dns may have happened before starting slips
-        if '-i' in sys.argv or __database__.is_growing_zeek_dir():
+        if '-i' in sys.argv or self.db.is_growing_zeek_dir():
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
@@ -650,7 +630,7 @@ class Module(Module, multiprocessing.Process):
             if saddr not in self.our_ips:
                 return False
 
-            start_time = __database__.get_slips_start_time()
+            start_time = self.db.get_slips_start_time()
             now = datetime.datetime.now()
             diff = utils.get_time_diff(start_time, now, return_type='minutes')
             if diff < self.conn_without_dns_interface_wait_time:
@@ -658,7 +638,7 @@ class Module(Module, multiprocessing.Process):
                 return False
 
         # search 24hs back for a dns resolution
-        if __database__.is_ip_resolved(daddr, 24):
+        if self.db.is_ip_resolved(daddr, 24):
             return False
         # self.print(f'No DNS resolution in {answers_dict}')
         # There is no DNS resolution, but it can be that Slips is
@@ -712,7 +692,7 @@ class Module(Module, multiprocessing.Process):
             if not validators.domain(CNAME):
                 # it's an ip
                 continue
-            ips = __database__.get_domain_resolution(CNAME)
+            ips = self.db.get_domain_resolution(CNAME)
             for ip in ips:
                 if ip in contacted_ips:
                     return True
@@ -757,7 +737,7 @@ class Module(Module, multiprocessing.Process):
         # This happens, for example, when there is 1 DNS resolution with A, then 1 DNS resolution
         # with AAAA, and the computer chooses the A address. Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
-        if prev_domain_resolutions := __database__.getDomainData(domain):
+        if prev_domain_resolutions := self.db.getDomainData(domain):
             prev_domain_resolutions = prev_domain_resolutions.get('IPs',[])
             # if there's a domain in the cache (prev_domain_resolutions) that is not in the
             # current answers given to this function, append it to the answers list
@@ -770,7 +750,7 @@ class Module(Module, multiprocessing.Process):
             return False
         # self.print(f'The extended DNS query to {domain} had as answers {answers} ')
 
-        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(
+        contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
             profileid, twid
         )
         # If contacted_ips is empty it can be because we didnt read yet all the flows.
@@ -827,7 +807,7 @@ class Module(Module, multiprocessing.Process):
         """
         Check for auth_success: true in the given zeek flow
         """
-        original_ssh_flow = __database__.search_tws_for_flow(profileid, twid, uid)
+        original_ssh_flow = self.db.search_tws_for_flow(profileid, twid, uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
             ssh_flow_dict = json.loads(
@@ -870,13 +850,14 @@ class Module(Module, multiprocessing.Process):
         Try Slips method to detect if SSH was successful by
         comparing all bytes sent and received to our threshold
         """
-        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+        # this is the ssh flow read from conn.log not ssh.log
+        original_ssh_flow = self.db.get_flow(uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
             ssh_flow_dict = json.loads(
                 original_ssh_flow[original_flow_uid]
             )
-            size = ssh_flow_dict['allbytes']
+            size = ssh_flow_dict['sbytes'] + ssh_flow_dict['dbytes']
             if size > self.ssh_succesful_detection_threshold:
                 daddr = ssh_flow_dict['daddr']
                 saddr = ssh_flow_dict['saddr']
@@ -993,7 +974,7 @@ class Module(Module, multiprocessing.Process):
         # returns a dict with
         # software:
         #   { 'version-major': ,'version-minor': ,'uid': }
-        cached_used_sw: dict = __database__.get_software_from_profile(
+        cached_used_sw: dict = self.db.get_software_from_profile(
             profileid
         )
         if not cached_used_sw:
@@ -1056,19 +1037,19 @@ class Module(Module, multiprocessing.Process):
                     )
 
     def check_invalid_dns_answers(self, domain, answers, daddr, profileid, twid, stime, uid):
-        # this function is used to check for certain IP answers to DNS queries being blocked 
+        # this function is used to check for certain IP answers to DNS queries being blocked
         # (perhaps by ad blockers) and set to the following IP values
         invalid_answers = {"127.0.0.1" , "0.0.0.0"} # currently hardcoding blocked ips
         if not answers:
             return
-        
+
         for answer in answers:
             if answer in invalid_answers and domain != "localhost":
                 #blocked answer found
                 self.helper.set_evidence_invalid_dns_answer(domain, answer, daddr, profileid, twid, stime, uid)
                 # delete answer from redis cache to prevent associating this dns answer with this domain/query and
                 # avoid FP "DNS without connection" evidence
-                __database__.delete_dns_resolution(answer)
+                self.db.delete_dns_resolution(answer)
 
     def detect_DGA(self, rcode_name, query, stime, daddr, profileid, twid, uid):
 
@@ -1178,7 +1159,7 @@ class Module(Module, multiprocessing.Process):
         key = f'{saddr}-{daddr}-{dport}'
 
         # add this conn to the stored number of reconnections
-        current_reconnections = __database__.getReconnectionsForTW(profileid, twid)
+        current_reconnections = self.db.get_reconnections_for_tw(profileid, twid)
 
         try:
             reconnections, uids = current_reconnections[key]
@@ -1193,7 +1174,7 @@ class Module(Module, multiprocessing.Process):
             return
 
         ip_identification = (
-            __database__.getIPIdentification(daddr)
+            self.db.get_ip_identification(daddr)
         )
         description = (
             f'Multiple reconnection attempts to Destination IP:'
@@ -1211,7 +1192,7 @@ class Module(Module, multiprocessing.Process):
         # reset the reconnection attempts of this src->dst
         current_reconnections[key] = (0, [])
 
-        __database__.setReconnections(
+        self.db.setReconnections(
             profileid, twid, current_reconnections
         )
 
@@ -1229,7 +1210,7 @@ class Module(Module, multiprocessing.Process):
         if domain.endswith('.arpa') or domain.endswith('.local'):
             return False
 
-        domain_info = __database__.getDomainData(domain)
+        domain_info: dict = self.db.getDomainData(domain)
         if not domain_info:
             return False
 
@@ -1249,7 +1230,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         self.print(f"Number of connections processed by flowalerts: {self.conn_counter}", 2, 0)
-        __database__.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def check_smtp_bruteforce(
             self,
@@ -1331,7 +1312,7 @@ class Module(Module, multiprocessing.Process):
 
         dport_name = appproto
         if not dport_name:
-            dport_name = __database__.get_port_info(
+            dport_name = self.db.get_port_info(
                 f'{dport}/{proto}'
             )
 
@@ -1349,7 +1330,7 @@ class Module(Module, multiprocessing.Process):
 
             # get all the dst ips with established tcp connections
             daddrs = (
-                __database__.getDataFromProfileTW(
+                self.db.getDataFromProfileTW(
                     profileid,
                     twid,
                     direction,
@@ -1370,7 +1351,7 @@ class Module(Module, multiprocessing.Process):
             if len(dstports) <= 1:
                 return
 
-            ip_identification = __database__.getIPIdentification(daddr)
+            ip_identification = self.db.get_ip_identification(daddr)
             description = (
                 f'Connection to multiple ports {dstports} of '
                 f'Destination IP: {daddr}. {ip_identification}'
@@ -1395,7 +1376,7 @@ class Module(Module, multiprocessing.Process):
 
             # get all the src ips with established tcp connections
             saddrs = (
-                __database__.getDataFromProfileTW(
+                self.db.getDataFromProfileTW(
                     profileid,
                     twid,
                     direction,
@@ -1440,7 +1421,7 @@ class Module(Module, multiprocessing.Process):
             return
 
         # get the dict of malicious ja3 stored in our db
-        malicious_ja3_dict = __database__.get_ja3_in_IoC()
+        malicious_ja3_dict = self.db.get_ja3_in_IoC()
 
         if ja3 in malicious_ja3_dict:
             self.helper.set_evidence_malicious_JA3(
@@ -1484,7 +1465,7 @@ class Module(Module, multiprocessing.Process):
 
 
         ip_identification = (
-            __database__.getIPIdentification(daddr)
+            self.db.get_ip_identification(daddr)
         )
         description = f'Self-signed certificate. Destination IP: {daddr}.' \
                       f' {ip_identification}'
@@ -1549,7 +1530,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # check if we have this sha1 marked as malicious from one of our feeds
-        ssl_info_from_db = __database__.get_ssl_info(sha1)
+        ssl_info_from_db = self.db.get_ssl_info(sha1)
         if not ssl_info_from_db:
             return False
 
@@ -1674,7 +1655,7 @@ class Module(Module, multiprocessing.Process):
         """
         ip_to_check = saddr if what_to_check == 'srcip' else daddr
         ip_obj = ipaddress.ip_address(ip_to_check)
-        own_local_network = __database__.get_local_network()
+        own_local_network = self.db.get_local_network()
 
         if not own_local_network:
             # the current local network wasn't set in the db yet
@@ -1721,11 +1702,11 @@ class Module(Module, multiprocessing.Process):
 
         saddr = profileid.split("_")[-1]
 
-        if __database__.was_ip_seen_in_connlog_before(saddr):
+        if self.db.was_ip_seen_in_connlog_before(saddr):
             # we should only check once for the first time we're seeing this flow
             return
 
-        __database__.mark_srcip_as_seen_in_connlog(saddr)
+        self.db.mark_srcip_as_seen_in_connlog(saddr)
 
         if not (
                 validators.ipv4(saddr)
@@ -1733,7 +1714,7 @@ class Module(Module, multiprocessing.Process):
         ):
             return
 
-        if old_ip_list := __database__.get_IP_of_MAC(smac):
+        if old_ip_list := self.db.get_ip_of_mac(smac):
             # old_ip is a list that may contain the ipv6 of this MAC
             # this ipv6 may be of the same device that has the given saddr and MAC
             # so this would be fp. make sure we're dealing with ipv4 only
@@ -2053,7 +2034,7 @@ class Module(Module, multiprocessing.Process):
                 timestamp
             )
 
-        if msg:= self.get_msg('tw_closed'):
+        if msg := self.get_msg('tw_closed'):
             profileid_tw = msg['data'].split('_')
             profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)

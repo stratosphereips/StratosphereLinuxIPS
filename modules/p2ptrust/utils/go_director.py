@@ -1,6 +1,5 @@
 import base64
 import binascii
-from slips_files.common.config_parser import ConfigParser
 import json
 from typing import Dict
 
@@ -11,10 +10,8 @@ from modules.p2ptrust.utils.utils import (
     send_evaluation_to_go,
     send_empty_evaluation_to_go,
 )
-from slips_files.common.slips_utils import utils
-from modules.p2ptrust.utils.printer import Printer
 from modules.p2ptrust.trust.trustdb import TrustDB
-from slips_files.core.database.database import __database__
+from slips_files.common.imports import *
 import time
 
 
@@ -25,11 +22,12 @@ class GoDirector:
     Requests from other peers are validated, data is read from the database and from slips, and the response is sent.
     If peer sends invalid data, his reputation is lowered.
     """
-
+    name = 'P2P Go Director'
     def __init__(
         self,
-        printer: Printer,
         trustdb: TrustDB,
+        db,
+        output_queue,
         storage_name: str,
         override_p2p: bool = False,
         report_func=None,
@@ -44,8 +42,7 @@ class GoDirector:
             raise Exception(
                 'Override_p2p set but not provided appropriate functions'
             )
-
-        self.printer = printer
+        self.output_queue = output_queue
         self.trustdb = trustdb
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
@@ -62,9 +59,27 @@ class GoDirector:
         }
         self.key_type_processors = {'ip': validate_ip_address}
         self.read_configuration()
+        self.db = db
 
-    def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
-        self.printer.print(f'[TrustDB] {text}', verbose, debug)
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
+        """
+
+        levels = f'{verbose}{debug}'
+        self.output_queue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -139,7 +154,7 @@ class GoDirector:
 
         report_time = validate_timestamp(report[key_report_time])
         if report_time is None:
-            self.print('Invalid timestamp', 0, 1)
+            self.print('Invalid timestamp', 0, 2)
             return
 
         reporter = report[key_reporter]
@@ -169,7 +184,7 @@ class GoDirector:
         else:
             # TODO: lower reputation
             self.print(
-                f'Peer {report} sent unknown message type {message_type}: {data}'
+                f'Peer {report} sent unknown message type {message_type}: {data}', 0,2
             )
             self.print('Peer sent unknown message type', 0, 2)
 
@@ -270,10 +285,10 @@ class GoDirector:
         """
         Gets the info about the IP the peer asked about, and send it to the network
         """
-        score, confidence = get_ip_info_from_slips(key)
+        score, confidence = get_ip_info_from_slips(key, self.db)
         if score is not None:
             send_evaluation_to_go(
-                key, score, confidence, reporter, self.pygo_channel
+                key, score, confidence, reporter, self.pygo_channel, self.db
             )
             self.print(
                 f'[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.',
@@ -423,13 +438,13 @@ class GoDirector:
             'report_time': utils.convert_format(report_time, utils.alerts_format),
         }
         report_info.update(evaluation)
-        __database__.store_p2p_report(key, report_info)
+        self.db.store_p2p_report(key, report_info)
 
         # create a new profile for the reported ip
         # with the width from slips.conf and the starttime as the report time
         if key_type == 'ip':
             profileid_of_attacker = f'profile_{key}'
-            __database__.addProfile(profileid_of_attacker, report_time, self.width)
+            self.db.addProfile(profileid_of_attacker, report_time, self.width)
             self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
 
     def set_evidence_p2p_report(self, ip, reporter, score, confidence, timestamp, profileid_of_attacker):
@@ -444,7 +459,7 @@ class GoDirector:
 
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
-        ip_identification = __database__.getIPIdentification(ip, get_ti_data=False)
+        ip_identification = self.db.get_ip_identification(ip, get_ti_data=False)
         last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
 
         # this should never happen. if we have a report, we will have a reporter
@@ -456,15 +471,15 @@ class GoDirector:
         description = f'attacking another peer: {reporter_ip} ({reporter}). threat level: {threat_level} ' \
                       f'confidence: {confidence} {ip_identification}'
         # get the tw of this report time
-        if twid := __database__.getTWofTime(profileid_of_attacker, timestamp):
+        if twid := self.db.getTWofTime(profileid_of_attacker, timestamp):
             twid = twid[0]
         else:
             # create a new twid for the attacker profile that has the
             # report time to add this evidence to
-            twid = __database__.get_timewindow(timestamp, profileid_of_attacker)
+            twid = self.db.get_timewindow(timestamp, profileid_of_attacker)
 
         uid = ''
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid_of_attacker, twid=twid, uid=uid)
 
 

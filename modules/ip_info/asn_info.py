@@ -1,5 +1,4 @@
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 import time
 import ipaddress
 import ipwhois
@@ -8,7 +7,8 @@ import requests
 import maxminddb
 
 class ASN:
-    def __init__(self):
+    def __init__(self, db=None):
+        self.db = db
         # Open the maxminddb ASN offline db
         try:
             self.asn_db = maxminddb.open_database(
@@ -29,7 +29,7 @@ class ASN:
             # invalid ip or no cached asns
             return
 
-        cached_asn: str = __database__.get_asn_cache(first_octet=first_octet)
+        cached_asn: str = self.db.get_asn_cache(first_octet=first_octet)
         if not cached_asn:
             return
 
@@ -104,7 +104,7 @@ class ASN:
             asn_number = whois_info.get('asn', False)
 
             if asnorg and asn_cidr not in ('', 'NA'):
-                __database__.set_asn_cache(asnorg, asn_cidr, asn_number)
+                self.db.set_asn_cache(asnorg, asn_cidr, asn_number)
                 asn_info = {
                     'asn': {
                         'number': f'AS{asn_number}',
@@ -177,7 +177,7 @@ class ASN:
         asn.update({'timestamp': time.time()})
         cached_ip_info.update(asn)
         # store the ASN we found in 'IPsInfo'
-        __database__.setInfoForIPs(ip, cached_ip_info)
+        self.db.setInfoForIPs(ip, cached_ip_info)
 
     def get_asn(self, ip, cached_ip_info):
         """

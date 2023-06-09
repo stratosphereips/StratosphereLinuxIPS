@@ -1,8 +1,4 @@
-from slips_files.common.abstracts import Module
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
-import multiprocessing
+from slips_files.common.imports import *
 from slack import WebClient
 from slack.errors import SlackApiError
 import os
@@ -12,7 +8,6 @@ from cabby import create_client
 import time
 import threading
 import sys
-import traceback
 import datetime
 
 class Module(Module, multiprocessing.Process):
@@ -25,13 +20,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Export alerts to slack or STIX format'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         self.port = None
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
-        self.c1 = __database__.subscribe('export_evidence')
+        self.c1 = self.db.subscribe('export_evidence')
         self.channels = {
             'export_evidence': self.c1
         }
@@ -42,7 +33,7 @@ class Module(Module, multiprocessing.Process):
         self.is_bundle_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
-        self.is_running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        self.is_running_on_interface = '-i' in sys.argv or self.db.is_growing_zeek_dir()
         self.export_to_taxii_thread = threading.Thread(
             target=self.send_to_server, daemon=True
         )
@@ -301,7 +292,7 @@ class Module(Module, multiprocessing.Process):
             self.send_to_slack(f'{date_time}: Slips finished on sensor: {self.sensor_name}.')
 
         # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
         if (

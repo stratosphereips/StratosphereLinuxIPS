@@ -10,8 +10,7 @@ This blog creates an example module to detect when any private IP address commun
 
 ### High-level View of how a Module Works
 
-The Module consists of the __init__() function for initializations, for example starting the database, 
-setting up the outputqueue for printing and logging, subscribing to channels, etc.
+The Module consists of the init() function for initializations, subscribing to channels, reading API files etc.
 
 The main function of each module is the ```main()```, 
 this function is run in a while loop that keeps looping as long as
@@ -20,18 +19,18 @@ Slips is running so that the module doesn't terminate.
 In case of errors in the module, the ```main()``` function should return 1 which will cause
 the module to immediately terminate.
 
-any initializations that should be run only once should be placed in the __init__ function 
+any initializations that should be run only once should be placed in the init() function 
 OR the ```pre_main()```. the ```pre_main()``` is a function that acts as a hook for the main function. it runs only 
 once and then the main starts running in a loop.
-the pre main is the place for initializatoion logic that cannot be done in the init, for example
-dropping the root priviledges from a module. we'll discuss this in more detail later.
+the pre-main is the place for initialization logic that cannot be done in the init, for example
+dropping the root privileges from a module. we'll discuss this in more detail later.
 
-Each module has its own ```print()``` function that handles text printing 
+Each module has a common ```print()``` method that handles text printing 
 and logging by passing everything to the 
 ```OutputProcess.py``` for processing. the print function is implemented in the abstract module 
 ```slips_files/common/abstracts.py ``` and used by all modules.
 
-Each Module also has its own ```shutdown_gracefully()``` function
+Each Module has its own ```shutdown_gracefully()``` function
 that handles cleaning up after the module is done processing.
 It handles for example:
 - Saving a model before Slips stops
@@ -85,7 +84,7 @@ Remember to delete the __pycache__ dir if it's copied to the new module using:
 First, we need to subscribe to the channel ```new_flow``` 
 
 ```python
-self.c1 = __database__.subscribe('new_flow')
+self.c1 = self.db.subscribe('new_flow')
 ```
 and add this to the module's list of channels
 ```python
@@ -115,8 +114,8 @@ flow = msg['data']
 Thus far, we have the following code that gets a msg everytime slips reads a new flow
 
 ```python
-def __init__(self, outputqueue, config, redis_port):
-    self.c1 = __database__.subscribe('new_ip')
+def init(self):
+    self.c1 = self.db.subscribe('new_ip')
     self.channels = {
         'new_ip': self.c1,
     }
@@ -173,7 +172,7 @@ if srcip_obj.is_private and dstip_obj.is_private:
     pass
 ```
 
-Now that we're sure both ips are private, we need to generate an alert.
+Now that we're sure both IPs are private, we need to generate an alert.
 
 Slips requires certain info about the evidence to be able to sort them and properly display them using Kalipso.
 
@@ -198,12 +197,12 @@ description = f'Detected a connection to a local device {daddr}'
 timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 # the crrent profile is the source ip, this comes in 
 # the msg received in the channel
-profileid = message['profileid']
+profileid = msg['profileid']
 # Profiles are split into timewindows, each timewindow is 1h, 
 # this comes in the msg received in the channel
-twid = message['twid']
+twid = msg['twid']
 
-__database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                          timestamp, category, profileid=profileid, twid=twid)
 ```
 
@@ -273,15 +272,7 @@ Detailed explanation of [Slips profiles and timewindows here](https://idea.cesne
 Here is the whole local_connection_detector.py code for copy/paste.
 
 ```python
-# Must imports
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-import platform
-import sys
-
-# Your imports
+from slips_files.common.imports import *
 import datetime
 import ipaddress
 import json
@@ -293,43 +284,33 @@ class Module(Module, multiprocessing.Process):
     description = 'detects connections to other devices in your local network'
     authors = ['Template Author']
 
-    def __init__(self, outputqueue, config, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
-        # In case you need to read the config/slips.conf configuration file for
-        # your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(redis_port)
+    def init(self)
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
-        # slips/core/database.py file. However common options are:
+        # slips/core/redis_database.py file. However common options are:
         # - new_ip
         # - tw_modified
         # - evidence_added
-        # Remember to subscribe to this channel in database.py
-        self.c1 = __database__.subscribe('new_flow')
+        # Remember to subscribe to this channel in redis_db/database.py
+        self.c1 = self.db.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1,
-        }
+            }
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
-        
+        self.db.publish('finished_modules', self.name)
+
     def pre_main(self):
         """
         Initializations that run only once before the main() function runs in a loop
         """
         utils.drop_root_privs()
-        
+
     def main(self):
         """Main loop function"""
-        if msg:= self.get_msg('new_flow'):
+        if msg := self.get_msg('new_flow'):
             msg = msg['data']
             msg = json.loads(msg)
             flow = json.loads(msg['flow'])
@@ -356,13 +337,15 @@ class Module(Module, multiprocessing.Process):
                 description = f'Detected a connection to a local device {daddr}'
                 timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
                 # the crrent profile is the source ip, this comes in the msg received in the channel
-                profileid = message['profileid']
+                profileid = msg['profileid']
                 # Profiles are split into timewindows, each timewindow is 1h, this comes in the msg received in the channel
-                twid = message['twid']
+                twid = msg['twid']
 
-                __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level,
-                                         confidence, description, timestamp, category, profileid=profileid,
-                                         twid=twid)
+                self.db.setEvidence(
+                    evidence_type, attacker_direction, attacker, threat_level,
+                    confidence, description, timestamp, category, profileid=profileid,
+                    twid=twid
+                    )
 
 ```
 
@@ -370,36 +353,23 @@ class Module(Module, multiprocessing.Process):
 ## Line by Line Explanation of the Module
 
 
-This section is for more detailed explaination of what each line of the module does.
+This section is for more detailed explanation of what each line of the module does.
 
 ```python
-self.outputqueue = outputqueue
+from slips_files.common.imports import *
 ```
+This line imports all the common modules that need to be imported by all Slips modules in order for them to work
+you can check the import here slips_files/common/imports.py
+---
 
-the outputqueue is used whenever the module wants to print something,
-each module has it's own print() function that uses this queue.
 
-So in order to print you simply write
+In order to print in your module, you simply use the following line
 
     self.print("some text", 1, 0)
 
-and the text will be sent to the outputqueue to process, log, and print to the terminal.
+and the text will be sent to the output queue to process, log, and print to the terminal.
 
 ---
-
-```python
-self.config = config
-```
-
-This line is necessary if you need to read the ```config/slips.conf ``` configuration file for your own configurations
-
-```python
-__database__.start(redis_port)
-```
-
-This line starts the redis database, Slips mainly depends on redis Pub/Sub system for modules communications, 
-so if you need to listen on a specific channel after starting the db you can add the following line to __init__()
-
 
 Now here's the pre_main() function, all initializations like dropping root privs, checking for API keys, etc
 should be done here
@@ -432,7 +402,7 @@ if msg := self.get_msg('new_flow'):
 
 The above line listens on the channel called ```new_flow``` that we subscribed to earlier.
 
-The messages received in the channel can either be stop_process or a message with data
+The messages received in the channel are flows the slips read by the the input process.
 
 
 ## Reading Input flows from an external module
@@ -459,7 +429,7 @@ doing and shutdown.
 So, for example if you're training a ML model in your module, 
 and you want to save it before the module stops, 
 
-You should place the save_model() function in the shutdown_gracefully() function, right before the module
+You should place your save_model() function in the shutdown_gracefully() function, right before the module
 announces its name as finished in the ```finished_modules``` channel
 
 Inside shutdown_gracefully() we have the following line, This is the module, 
@@ -467,7 +437,7 @@ responding to the stop_message, telling slips.py that it successfully finished p
 is ready to be killed.
 
 ```python
-__database__.publish('finished_modules', self.name)
+self.db.publish('finished_modules', self.name)
 
 ```
 
@@ -492,9 +462,7 @@ the channel, make sure that:
 
 	-Other modules subscribed to the channel get the message
 
-	-Module is started in time (this should not be an issue in new SLIPS releases)
-    
-    - the channel name is present in the supported_channels list in database.py
+    - the channel name is present in the supported_channels list in redis_db/database.py
 
 ### Testing
 
@@ -522,10 +490,13 @@ Slips uses ```pytest``` as the main testing framework, You can add your own unit
 1- create a file called ```test_module_name.py``` in the ```tests/``` dir
 
 
-2- every function should start with ```test_```
+2- create a method for initializing your module in ```tests/module_factory.py```
 
 
-3- go to the main slips dir and run ```./tests/run_all_tests.sh``` and every test file in the ```tests/``` dir will run
+3- every function should start with ```test_```
+
+
+4- go to the main slips dir and run ```./tests/run_all_tests.sh``` and every test file in the ```tests/``` dir will run
 
 ### Getting in touch
 
