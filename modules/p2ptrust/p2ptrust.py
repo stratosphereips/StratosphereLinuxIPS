@@ -579,7 +579,8 @@ class Trust(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         if hasattr(self, 'pigeon'):
             self.pigeon.send_signal(signal.SIGINT)
-        self.trust_db.__del__()
+        if hasattr(self, 'trust_db'):
+            self.trust_db.__del__()
         self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
