@@ -343,9 +343,9 @@ class ProcessManager:
                             # -t flag is only used in integration tests,
                             # so we don't care about the modules finishing their job when testing
                             # instead, kill them
-                            if self.main.args.testing:
-                                # pass
-                                break
+                            # if self.main.args.testing:
+                            #     pass
+                            #     break
 
                             # delay killing unstopped modules until all of them
                             # are done processing
