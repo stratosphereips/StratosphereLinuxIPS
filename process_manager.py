@@ -137,17 +137,10 @@ class ProcessManager:
                 continue
 
             module_class = modules_to_call[module_name]['obj']
-            if 'P2P Trust' == module_name:
-                module = module_class(
-                    self.main.outputqueue,
-                    self.main.db,
-                    output_dir=self.main.args.output,
-                )
-            else:
-                module = module_class(
-                    self.main.outputqueue,
-                    self.main.db,
-                )
+            module = module_class(
+                self.main.outputqueue,
+                self.main.db,
+            )
             module.start()
             self.main.db.store_process_PID(
                 module_name, int(module.pid)

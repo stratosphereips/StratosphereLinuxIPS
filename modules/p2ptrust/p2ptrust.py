@@ -1,3 +1,10 @@
+
+import modules.p2ptrust.trust.base_model as reputation_model
+import modules.p2ptrust.trust.trustdb as trustdb
+import modules.p2ptrust.utils.utils as p2p_utils
+from modules.p2ptrust.utils.go_director import GoDirector
+from slips_files.common.imports import *
+import threading
 import os
 import shutil
 import signal
@@ -8,14 +15,6 @@ from typing import Dict
 import json
 import sys
 import socket
-import modules.p2ptrust.trust.base_model as reputation_model
-import modules.p2ptrust.trust.trustdb as trustdb
-import modules.p2ptrust.utils.utils as p2p_utils
-from modules.p2ptrust.utils.go_director import GoDirector
-from modules.p2ptrust.utils.printer import Printer
-from slips_files.common.imports import *
-import threading
-
 
 def validate_slips_data(message_data: str) -> (str, int):
     """
@@ -54,28 +53,25 @@ class Trust(Module, multiprocessing.Process):
     name = 'P2P Trust'
     description = 'Enables sharing detection data with other Slips instances'
     authors = ['Dita', 'Alya Gomaa']
+    pigeon_port=6668
+    rename_with_port=False
+    slips_update_channel='ip_info_change'
+    p2p_data_request_channel='p2p_data_request'
+    gopy_channel_raw='p2p_gopy'
+    pygo_channel_raw='p2p_pygo'
+    start_pigeon=True
+    pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips')  # or make sure the binary is in $PATH
+    pigeon_key_file='pigeon.keys'
+    rename_redis_ip_info=False
+    rename_sql_db_file=False
+    override_p2p=False
 
-    def init(self,
-        pigeon_port=6668,
-        rename_with_port=False,
-        output_dir='output/',
-        slips_update_channel='ip_info_change',
-        p2p_data_request_channel='p2p_data_request',
-        gopy_channel='p2p_gopy',
-        pygo_channel='p2p_pygo',
-        start_pigeon=True,
-        pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips'),  # or make sure the binary is in $PATH
-        pigeon_key_file='pigeon.keys',
-        rename_redis_ip_info=False,
-        rename_sql_db_file=False,
-        override_p2p=False,
-    ):
+    def init(self, *args, **kwargs):
+        output_dir = self.db.get_output_dir()
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
-        # get the used interface
-        # self.get_used_interface()
-        # pigeon_logfile = f'output/{used_interface}/p2p.log'
-        pigeon_logfile = os.path.join(output_dir, 'p2p.log')
+        self.pigeon_logfile_raw = os.path.join(output_dir, 'p2p.log')
+
         self.p2p_reports_logfile = os.path.join(output_dir, 'p2p_reports.log')
         # pigeon generate keys and stores them in the following dir, if this is placed in the <output> dir,
         # when restarting slips, it will look for the old keys in the new output dir! so it wont find them and will
@@ -83,25 +79,14 @@ class Trust(Module, multiprocessing.Process):
         # store the keys in slips main dir so they don't change every run
         data_dir = os.path.join(os.getcwd(), 'p2ptrust_runtime/')
         # data_dir = f'./output/{used_interface}/p2ptrust_runtime/'
-
         # create data folder
         Path(data_dir).mkdir(parents=True, exist_ok=True)
+        self.data_dir = data_dir
 
         self.port = self.get_available_port()
         self.host = self.get_local_IP()
-        self.rename_with_port = rename_with_port
-        self.gopy_channel_raw = gopy_channel
-        self.pygo_channel_raw = pygo_channel
-        self.pigeon_logfile_raw = pigeon_logfile
-        self.start_pigeon = start_pigeon
-        self.override_p2p = override_p2p
-        self.data_dir = data_dir
 
         str_port = str(self.port) if self.rename_with_port else ''
-        self.printer = Printer(self.output_queue, self.name + str_port)
-
-        self.slips_update_channel = slips_update_channel
-        self.p2p_data_request_channel = p2p_data_request_channel
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
@@ -114,11 +99,9 @@ class Trust(Module, multiprocessing.Process):
             self.rotator_thread = threading.Thread(
                 target=self.rotate_p2p_logfile, daemon=True
             )
-        self.pigeon_key_file = pigeon_key_file
-        self.pigeon_binary = pigeon_binary
 
         self.storage_name = 'IPsInfo'
-        if rename_redis_ip_info:
+        if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
         self.c1 = self.db.subscribe('report_to_peers')
         # channel to send msgs to whenever slips needs info from other peers about an ip
@@ -142,17 +125,12 @@ class Trust(Module, multiprocessing.Process):
         }
 
         self.sql_db_name = f'{self.data_dir}trustdb.db'
-        if rename_sql_db_file:
+        if self.rename_sql_db_file:
             self.sql_db_name += str(pigeon_port)
         # todo don't duplicate this dict, move it to slips_utils
         # all evidence slips detects has threat levels of strings
         # each string should have a corresponding int value to be able to calculate
         # the accumulated threat level and alert
-
-
-
-    def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
-        self.printer.print(text, verbose, debug)
 
 
     def read_configuration(self):
@@ -200,17 +178,17 @@ class Trust(Module, multiprocessing.Process):
     def _configure(self):
         # TODO: do not drop tables on startup
         self.trust_db = trustdb.TrustDB(
-            self.sql_db_name, self.printer, drop_tables_on_startup=True
+            self.sql_db_name, self.outputqueue, drop_tables_on_startup=True
         )
         self.reputation_model = reputation_model.BaseModel(
-            self.printer, self.trust_db
+            self.outputqueue, self.trust_db
         )
         # print(f"[DEBUGGING] Starting godirector with pygo_channel: {self.pygo_channel}")
         self.go_director = GoDirector(
-            self.printer,
             self.trust_db,
-            self.storage_name,
             self.db,
+            self.outputqueue,
+            self.storage_name,
             override_p2p=self.override_p2p,
             report_func=self.process_message_report,
             request_func=self.respond_to_message_request,
