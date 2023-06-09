@@ -311,7 +311,7 @@ class Trust(Module, multiprocessing.Process):
         if not data_already_reported:
             # Take data and send it to a peer as report.
             p2p_utils.send_evaluation_to_go(
-                attacker, score, confidence, '*', self.pygo_channel, self.rdb
+                attacker, score, confidence, '*', self.pygo_channel, self.db
             )
 
     def gopy_callback(self, msg: Dict):
@@ -542,7 +542,7 @@ class Trust(Module, multiprocessing.Process):
                 combined_score,
                 combined_confidence,
                 network_score,
-                self.rdb,
+                self.db,
                 self.storage_name,
             )
             if int(combined_score) * int(confidence) > 0:
