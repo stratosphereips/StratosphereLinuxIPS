@@ -340,7 +340,7 @@ class Trust(Module, multiprocessing.Process):
             if msg and type(msg['data']) != int:
                 self.handle_data_request(msg['data'])
         except Exception as e:
-            self.printer.print(f'Exception {e} in data_request_callback', 0, 1)
+            self.print(f'Exception {e} in data_request_callback', 0, 1)
 
     # def handle_update(self, ip_address: str) -> None:
     #     """
@@ -507,7 +507,7 @@ class Trust(Module, multiprocessing.Process):
         # TODO: in some cases, it is not necessary to wait, specify that and implement it
         #       I do not remember writing this comment. I have no idea in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
-        p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.rdb)
+        p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.db)
         self.print(f'[Slips -> The Network] request about {ip_address}')
 
         # go will send a reply in no longer than 10s (or whatever the
