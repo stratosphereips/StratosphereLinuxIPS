@@ -171,3 +171,4 @@ modules/flowmldetection/model.bin
 output/
 config-live-macos-*
 dataset-private/*
+appendonly.aof
