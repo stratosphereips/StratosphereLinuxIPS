@@ -4,6 +4,7 @@ from database.database import __database__
 from database.signals import message_sent
 from analysis.analysis import analysis
 from general.general import general
+from documentation.documentation import documentation
 from utils import *
 
 
@@ -62,6 +63,8 @@ if __name__ == '__main__':
     app.register_blueprint(analysis, url_prefix="/analysis")
 
     app.register_blueprint(general, url_prefix="/general")
+    
+    app.register_blueprint(documentation, url_prefix="/documentation")
 
     app.run(host="0.0.0.0", port=55000)
 
