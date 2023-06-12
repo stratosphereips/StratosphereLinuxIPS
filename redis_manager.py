@@ -129,7 +129,7 @@ class RedisManager:
             # check if 1. we can connect
             # 2.server is not being used by another instance of slips
             # note: using r.keys() blocks the server
-            db = DBManager(self.main.args.output, self.main.outputqueue, port)
+            db = DBManager(self.main.args.output, self.main.outputqueue, port, flush_db=False)
             try:
                 if db.get_redis_keys_len() < 3:
                     # if the db managed to connect to this random port, and it has
