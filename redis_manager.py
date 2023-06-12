@@ -95,6 +95,7 @@ class RedisManager:
         tries = 0
         while True:
             try:
+                # first try connecting to the cache db normally
                 r = redis.StrictRedis(
                     host=redis_host,
                     port=redis_port,
@@ -105,14 +106,14 @@ class RedisManager:
                 r.ping()
                 return True
             except Exception as ex:
-                # only try to open redi-server once.
+                # only try to open redis-server twice.
                 if tries == 2:
                     print(f'[Main] Problem starting redis cache database. \n{ex}\nStopping')
                     self.main.terminate_slips()
                     return False
 
                 print('[Main] Starting redis cache database..')
-                os.system('redis-server redis.conf --daemonize yes  > /dev/null 2>&1')
+                os.system('redis-server config/redis.conf --daemonize yes  > /dev/null 2>&1')
                 # give the server time to start
                 time.sleep(1)
                 tries += 1
@@ -128,7 +129,7 @@ class RedisManager:
             # check if 1. we can connect
             # 2.server is not being used by another instance of slips
             # note: using r.keys() blocks the server
-            db = DBManager(self.main.args.output, self.main.outputqueue, port)
+            db = DBManager(self.main.args.output, self.main.outputqueue, port, flush_db=False)
             try:
                 if db.get_redis_keys_len() < 3:
                     # if the db managed to connect to this random port, and it has

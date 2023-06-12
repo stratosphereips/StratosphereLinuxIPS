@@ -81,7 +81,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         sudo = ''
     # flag to know if we found the gateway MAC using the most seen MAC method
     _gateway_MAC_found = False
-    _conf_file = 'redis.conf'
+    _conf_file = 'config/redis.conf'
     our_ips = utils.get_own_IPs()
     # flag to know which flow is the start of the pcap/file
     first_flow = True
@@ -116,7 +116,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
          when using a different port we override it with -p
         """
         cls._options = {
-                'port': 6379,
                 'daemonize': 'yes',
                 'stop-writes-on-bgsave-error': 'no',
                 'save': '""',
@@ -198,7 +197,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """Connects to the given port and Sets r and rcache"""
         # start the redis server
         os.system(
-            f'redis-server redis.conf --port {cls.redis_port}  > /dev/null 2>&1'
+            f'redis-server {cls._conf_file} --port {cls.redis_port}  > /dev/null 2>&1'
         )
         try:
             # db 0 changes everytime we run slips
@@ -246,8 +245,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 # 32850 is where we have the loaded rdb file when loading a saved db
                 # we shouldn't close it because this is what kalipso will
                 # use to view the loaded the db
-
                 cls.close_redis_server(cls.redis_port)
+
             return False
 
     @classmethod
