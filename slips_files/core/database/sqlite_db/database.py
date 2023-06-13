@@ -171,7 +171,7 @@ class SQLiteDB():
     def get_columns(self, table) -> list:
         """returns a list with column names in the given table"""
         self.execute(f"PRAGMA table_info({table})")
-        columns = self.cursor.fetchall()
+        columns = self.fetchall()
         return [column[1] for column in columns]
 
     def iterate_flows(self):
@@ -182,7 +182,7 @@ class SQLiteDB():
             self.execute('SELECT * FROM flows UNION SELECT uid, flow, label, profileid, twid FROM altflows')
 
             while True:
-                row = self.cursor.fetchone()
+                row = self.fetchone()
                 if row is None:
                     break
                 yield row
@@ -249,13 +249,32 @@ class SQLiteDB():
         if condition:
             query += f" WHERE {condition}"
         self.execute(query)
-        result = self.cursor.fetchall()
+        result = self.fetchall()
         return result
 
     def close(self):
         self.cursor.close()
         self.conn.close()
 
+    def fetchall(self):
+        """
+        wrapper for sqlite fetchall to be able to use a lock
+        """
+        self.cursor_lock.acquire(True)
+        res = self.cursor.fetchall()
+        self.cursor_lock.release()
+        return res
+
+
+    def fetchone(self):
+        """
+        wrapper for sqlite fetchone to be able to use a lock
+        """
+        self.cursor_lock.acquire(True)
+        res = self.cursor.fetchone()
+        self.cursor_lock.release()
+        return res    
+    
     def execute(self, query, params=None):
         """
         wrapper for sqlite execute() To avoid 'Recursive use of cursors not allowed' error
