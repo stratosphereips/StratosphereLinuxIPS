@@ -130,7 +130,11 @@ class SQLiteDB():
         sets the given new_label to each flow in the uids list
         """
         for uid in uids:
+            # add the label to the flow (conn.log flow)
             query = f'UPDATE flows SET label="{new_label}" WHERE uid="{uid}"'
+            self.execute(query)
+            # add the label to the altflow (dns, http, whatever it is)
+            query = f'UPDATE altflows SET label="{new_label}" WHERE uid="{uid}"'
             self.execute(query)
 
     def export_labeled_flows(self, output_dir, format):
@@ -175,7 +179,7 @@ class SQLiteDB():
         # generator function to iterate over the rows
         def row_generator():
             # select all flows and altflows
-            self.execute('SELECT * FROM flows UNION SELECT * FROM altflows')
+            self.execute('SELECT * FROM flows UNION SELECT uid, flow, label, profileid, twid FROM altflows')
 
             while True:
                 row = self.cursor.fetchone()
