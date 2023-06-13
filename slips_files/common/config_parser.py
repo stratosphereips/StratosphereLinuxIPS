@@ -176,8 +176,8 @@ class ConfigParser(object):
         export = self.read_configuration(
             'parameters', 'export_format', 'None'
         ).lower()
-        if 'csv' in export:
-            return 'csv'
+        if 'tsv' in export:
+            return 'tsv'
         if 'json' in export:
             return 'json'
         return False

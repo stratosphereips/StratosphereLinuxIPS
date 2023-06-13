@@ -134,19 +134,19 @@ class SQLiteDB():
             self.execute(query)
 
     def export_labeled_flows(self, output_dir, format):
-        if 'csv' in format:
-            csv_output_file = os.path.join(output_dir, 'labeled_flows.csv')
+        if 'tsv' in format:
+            csv_output_file = os.path.join(output_dir, 'labeled_flows.tsv')
             header: list = self.get_columns('flows')
 
-            with open(csv_output_file, 'w', newline='') as csv_file:
-                csv_writer = csv.writer(csv_file)
+            with open(csv_output_file, 'w', newline='') as tsv_file:
+                writer = csv.writer(tsv_file, delimiter='\t')
 
                 # write the header
-                csv_writer.writerow(header)
+                writer.writerow(header)
 
                 # Fetch rows one by one and write them to the file
                 for row in self.iterate_flows():
-                    csv_writer.writerow(row)
+                    writer.writerow(row)
 
         if 'json' in format:
             json_output_file = os.path.join(output_dir, 'labeled_flows.json')

@@ -531,6 +531,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
         return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
 
     def label_flows_causing_alert(self):
+        """Add the label "malicious" to all flows causing this alert in our db """
         for evidence_id in self.IDs_causing_an_alert:
             uids: list = self.db.get_flows_causing_evidence(evidence_id)
             self.db.set_flow_label(uids, 'malicious')
