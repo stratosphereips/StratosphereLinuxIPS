@@ -66,7 +66,7 @@ Processes may publish data into the channels, while others subscribe to these ch
 
 Slips uses SQLite database to store all flows in Slips interpreted format.
 The SQLite database is stored in the output/ dir and each flow is labeled to either 'malicious' or 'benign' based on slips detections.
-all the labeled flows in the SQLite database can be exported to csv or json format.
+all the labeled flows in the SQLite database can be exported to tsv or json format.
 
 
 ### Threat Levels  
