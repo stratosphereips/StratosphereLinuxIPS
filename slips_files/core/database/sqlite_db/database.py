@@ -28,7 +28,7 @@ class SQLiteDB():
         """creates the tables we're gonna use"""
         table_schema = {
             'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT",
-            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT"
+            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT"
             }
         for table_name, schema in table_schema.items():
             cls.create_table(table_name, schema)
@@ -216,10 +216,10 @@ class SQLiteDB():
     def add_altflow(
             self, flow, profileid: str, twid:str, label='benign'
             ):
-        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
+        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label, flow.type_)
         self.execute(
-            'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label) '
-            'VALUES (?, ?, ?, ?, ?);',
+            'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label, flow_type) '
+            'VALUES (?, ?, ?, ?, ?, ?);',
             parameters,
         )
 
