@@ -176,7 +176,7 @@ class Module(Module, multiprocessing.Process):
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
             self.helper.set_evidence_long_connection(
-                daddr, dur, profileid, twid, uid, timestamp, ip_state='dstip'
+                daddr, dur, profileid, twid, uid, timestamp, attacker_direction='srcip'
             )
             return True
         return False
@@ -995,7 +995,7 @@ class Module(Module, multiprocessing.Process):
         uids = [cached_ssh_versions['uid'], flow['uid']]
         self.helper.set_evidence_multiple_ssh_versions(
             flow['saddr'], cached_versions, current_versions,
-            flow['starttime'], twid, uids, role=role
+            flow['starttime'], twid, uids, flow['daddr'], role=role
         )
         return True
 
@@ -1431,6 +1431,7 @@ class Module(Module, multiprocessing.Process):
                 twid,
                 uid,
                 timestamp,
+                daddr,
                 type_='ja3',
                 ioc=ja3,
             )
@@ -1443,6 +1444,7 @@ class Module(Module, multiprocessing.Process):
                 twid,
                 uid,
                 timestamp,
+                saddr,
                 type_='ja3s',
                 ioc=ja3s,
             )
