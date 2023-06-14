@@ -412,7 +412,7 @@ class Trust(Module, multiprocessing.Process):
         :param confidence: how confident the network opinion is about this opinion
         """
 
-        ip = ip_info.get('ip')
+        attacker = ip_info.get('ip')
         ip_state = ip_info.get('ip_state')
         # proto = ip_info.get('proto', '').upper()
         uid = ip_info.get('uid')
@@ -421,29 +421,34 @@ class Trust(Module, multiprocessing.Process):
         timestamp = str(ip_info.get('stime'))
 
         attacker_direction = ip_state
-        attacker = ip
         evidence_type = 'Malicious-IP-from-P2P-network'
 
         category = 'Anomaly.Traffic'
         # dns_resolution = self.db.get_dns_resolution(ip)
         # dns_resolution = dns_resolution.get('domains', [])
         # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
-        direction = 'from' if 'src' in ip_state else 'to'
-        # we'll be using this to make the description more clear
-        other_direction = 'to' if 'from' in direction else 'from'
+        victim = profileid.split("_")[-1]
 
-        ip_identification = self.db.get_ip_identification(ip)
+        if 'src' in ip_state:
+            direction = 'from'
+            # we'll be using this to make the description more clear
+            other_direction = 'to'
+        else:
+            direction = 'to'
+            other_direction = 'from'
+
+        ip_identification = self.db.get_ip_identification(attacker)
         description = (
-            f'connection {direction} blacklisted IP {ip} ({ip_identification}) '
+            f'connection {direction} blacklisted IP {attacker} ({ip_identification}) '
             f'{other_direction} {profileid.split("_")[-1]}'
             f' Source: Slips P2P network.'
         )
 
         self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid, victim=victim)
 
         # add this ip to our MaliciousIPs hash in the database
-        self.db.set_malicious_ip(ip, profileid, twid)
+        self.db.set_malicious_ip(attacker, profileid, twid)
 
     def handle_data_request(self, message_data: str) -> None:
         """
