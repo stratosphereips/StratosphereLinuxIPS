@@ -252,7 +252,7 @@ class Module(Module, multiprocessing.Process):
             attacker_direction = 'srcip'
             attacker = profileid.split('_')[1]
             self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
+                                     description, ts, category, profileid=profileid, twid=twid, uid=uid, victim=daddr)
             return True
 
     def detect_unsolicited_arp(
@@ -334,11 +334,10 @@ class Module(Module, multiprocessing.Process):
 
             description = f'{saddr} performing a MITM ARP attack. The MAC {src_mac}, ' \
                           f'now belonging to {saddr}, was seen before for {original_IP}.'
-
             # self.print(f'{saddr} is claiming to have {src_mac}')
             self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                      description, ts, category, source_target_tag=source_target_tag,
-                                     profileid=profileid, twid=twid, uid=uid)
+                                     profileid=profileid, twid=twid, uid=uid, victim=original_IP)
             return True
 
     def shutdown_gracefully(self):
