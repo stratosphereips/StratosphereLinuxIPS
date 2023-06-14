@@ -1250,7 +1250,6 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.twid,
             'benign'
         )
-        res = self.db.get_flow(self.flow.uid)
 
         self.publish_to_new_MAC(self.flow.smac, self.flow.saddr)
         self.publish_to_new_MAC(self.flow.dmac, self.flow.daddr)
@@ -1321,6 +1320,13 @@ class ProfilerProcess(Module, multiprocessing.Process):
             # get the gw addr form the msg
             gw_addr = self.flow.msg.split(': ')[-1].strip()
             self.db.set_default_gateway("IP", gw_addr)
+
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
 
     def handle_ftp(self):
         if used_port := self.flow.used_port:
@@ -1413,6 +1419,12 @@ class ProfilerProcess(Module, multiprocessing.Process):
 
         to_send = json.dumps(to_send)
         self.db.publish('new_downloaded_file', to_send)
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
 
     def handle_arp(self):
         to_send = {
@@ -1430,7 +1442,12 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.publish_to_new_MAC(
             self.flow.smac, self.flow.saddr
         )
-        #TODO we're not adding these flows to the sqlite db until we need them
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
 
     def handle_weird(self):
         """
@@ -1443,6 +1460,12 @@ class ProfilerProcess(Module, multiprocessing.Process):
         }
         to_send = json.dumps(to_send)
         self.db.publish('new_weird', to_send)
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
 
 
     def handle_tunnel(self):
@@ -1453,6 +1476,13 @@ class ProfilerProcess(Module, multiprocessing.Process):
         }
         to_send = json.dumps(to_send)
         self.db.publish('new_tunnel', to_send)
+
+        self.db.add_altflow(
+            self.flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
 
     def store_features_going_out(self):
         """

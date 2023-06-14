@@ -80,7 +80,12 @@ class InputProcess(multiprocessing.Process):
             'ocsp',
             'reporter',
             'x509',
-            'pe'
+            'pe',
+            'mqtt_publish',
+            'mqtt_subscribe',
+            'mqtt_connect',
+            'analyzer',
+            'ntp'
         }
         # create the remover thread
         self.remover_thread = threading.Thread(
@@ -202,7 +207,7 @@ class InputProcess(multiprocessing.Process):
         if filename_without_ext in self.ignored_files:
             return True
 
-    def get_file_handler(self, filename):
+    def get_file_handle(self, filename):
         # Update which files we know about
         try:
             # We already opened this file
@@ -254,19 +259,21 @@ class InputProcess(multiprocessing.Process):
         return timestamp, nline
 
     def cache_nxt_line_in_file(self, filename):
-        file_handler = self.get_file_handler(filename)
-        if not file_handler:
+        """
+        reads 1 line of the given file and stores in queue for sending to the profiler
+        """
+        file_handle = self.get_file_handle(filename)
+        if not file_handle:
             return False
 
-
-        # Only read the next line if the previous line  from this file was sent
+        # Only read the next line if the previous line from this file was sent to profiler
         if filename in self.cache_lines:
             # We have still something to send, do not read the next line from this file
             return False
 
         # We don't have any waiting line for this file, so proceed
         try:
-            zeek_line = file_handler.readline()
+            zeek_line = file_handle.readline()
         except ValueError:
             # remover thread just finished closing all old handles.
             # comes here if I/O operation failed due to a closed file.
@@ -276,7 +283,7 @@ class InputProcess(multiprocessing.Process):
         # Did the file end?
         if not zeek_line or zeek_line.startswith('#'):
             # We reached the end of one of the files that we were reading.
-            # Wait for more data to come from another file
+            # Wait for more lines to come from another file
             return False
 
         timestamp, nline = self.get_ts_from_line(zeek_line)
@@ -399,17 +406,20 @@ class InputProcess(multiprocessing.Process):
         """
         returns the number of flows/lines in a given file
         """
-        # using grep -c instead of wc because wc doesn't count last of
-        # the file if it does not have end of line character
-        p = subprocess.Popen(
-            ['grep', '-c', "", file],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        line_count, err = p.communicate()
-        if p.returncode != 0:
-            return 0
-        return int(line_count.strip().split()[0])
+        # using wc -l doesn't count last line of the file if it does not have end of line character
+        # using  grep -c "" returns incorrect line numbers sometimes
+        # this method is the most efficient and accurate i found online
+        # https://stackoverflow.com/a/68385697/11604069
+        def _make_gen(reader):
+            """yeilds (64 kilobytes) at a time from the file"""
+            while True:
+                b = reader(2 ** 16)
+                if not b: break
+                yield b
+
+        with open(file, "rb") as f:
+            count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+        return count
 
     def read_zeek_folder(self):
         # This is the case that a folder full of zeek files is passed with -f

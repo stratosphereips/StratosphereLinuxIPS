@@ -28,7 +28,7 @@ class SQLiteDB():
         """creates the tables we're gonna use"""
         table_schema = {
             'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT",
-            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT"
+            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT"
             }
         for table_name, schema in table_schema.items():
             cls.create_table(table_name, schema)
@@ -130,23 +130,27 @@ class SQLiteDB():
         sets the given new_label to each flow in the uids list
         """
         for uid in uids:
+            # add the label to the flow (conn.log flow)
             query = f'UPDATE flows SET label="{new_label}" WHERE uid="{uid}"'
+            self.execute(query)
+            # add the label to the altflow (dns, http, whatever it is)
+            query = f'UPDATE altflows SET label="{new_label}" WHERE uid="{uid}"'
             self.execute(query)
 
     def export_labeled_flows(self, output_dir, format):
-        if 'csv' in format:
-            csv_output_file = os.path.join(output_dir, 'labeled_flows.csv')
+        if 'tsv' in format:
+            csv_output_file = os.path.join(output_dir, 'labeled_flows.tsv')
             header: list = self.get_columns('flows')
 
-            with open(csv_output_file, 'w', newline='') as csv_file:
-                csv_writer = csv.writer(csv_file)
+            with open(csv_output_file, 'w', newline='') as tsv_file:
+                writer = csv.writer(tsv_file, delimiter='\t')
 
                 # write the header
-                csv_writer.writerow(header)
+                writer.writerow(header)
 
                 # Fetch rows one by one and write them to the file
                 for row in self.iterate_flows():
-                    csv_writer.writerow(row)
+                    writer.writerow(row)
 
         if 'json' in format:
             json_output_file = os.path.join(output_dir, 'labeled_flows.json')
@@ -167,7 +171,7 @@ class SQLiteDB():
     def get_columns(self, table) -> list:
         """returns a list with column names in the given table"""
         self.execute(f"PRAGMA table_info({table})")
-        columns = self.cursor.fetchall()
+        columns = self.fetchall()
         return [column[1] for column in columns]
 
     def iterate_flows(self):
@@ -175,10 +179,10 @@ class SQLiteDB():
         # generator function to iterate over the rows
         def row_generator():
             # select all flows and altflows
-            self.execute('SELECT * FROM flows UNION SELECT * FROM altflows')
+            self.execute('SELECT * FROM flows UNION SELECT uid, flow, label, profileid, twid FROM altflows')
 
             while True:
-                row = self.cursor.fetchone()
+                row = self.fetchone()
                 if row is None:
                     break
                 yield row
@@ -216,10 +220,10 @@ class SQLiteDB():
     def add_altflow(
             self, flow, profileid: str, twid:str, label='benign'
             ):
-        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
+        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label, flow.type_)
         self.execute(
-            'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label) '
-            'VALUES (?, ?, ?, ?, ?);',
+            'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label, flow_type) '
+            'VALUES (?, ?, ?, ?, ?, ?);',
             parameters,
         )
 
@@ -245,13 +249,32 @@ class SQLiteDB():
         if condition:
             query += f" WHERE {condition}"
         self.execute(query)
-        result = self.cursor.fetchall()
+        result = self.fetchall()
         return result
 
     def close(self):
         self.cursor.close()
         self.conn.close()
 
+    def fetchall(self):
+        """
+        wrapper for sqlite fetchall to be able to use a lock
+        """
+        self.cursor_lock.acquire(True)
+        res = self.cursor.fetchall()
+        self.cursor_lock.release()
+        return res
+
+
+    def fetchone(self):
+        """
+        wrapper for sqlite fetchone to be able to use a lock
+        """
+        self.cursor_lock.acquire(True)
+        res = self.cursor.fetchone()
+        self.cursor_lock.release()
+        return res    
+    
     def execute(self, query, params=None):
         """
         wrapper for sqlite execute() To avoid 'Recursive use of cursors not allowed' error
