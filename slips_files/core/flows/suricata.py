@@ -158,7 +158,7 @@ class SuricataFile:
     appproto: str
 
     size: int
-    type_ = 'files'
+    type_: str = 'files'
     # required to match zeek files.log
     md5: str = ''
     sha1: str = ''
