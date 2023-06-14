@@ -205,8 +205,6 @@ class AlertHandler:
 
         if not victim:
             victim = self.get_victim(profileid, attacker)
-            #TODO see what you wanna do with the victim
-
 
         evidence_to_send = {
             'profileid': str(profileid),
@@ -221,6 +219,7 @@ class AlertHandler:
             'threat_level': threat_level,
             'category': category,
             'ID': evidence_ID,
+            'victim': victim
         }
         # not all evidence requires a conn_coun, scans only
         if conn_count:
