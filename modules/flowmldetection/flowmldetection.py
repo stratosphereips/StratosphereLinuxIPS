@@ -434,7 +434,7 @@ class Module(Module, multiprocessing.Process):
 
                 # After processing the flow, it may happen that we delete icmp/arp/etc
                 # so the dataframe can be empty
-                if not self.flow.empty:
+                if self.flow is not None and not self.flow.empty:
                     # Predict
                     pred = self.detect()
                     label = self.flow_dict['label']
