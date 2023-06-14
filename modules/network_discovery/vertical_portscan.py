@@ -83,7 +83,7 @@ class VerticalPortscan():
                     )
         self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
-                                 proto=protocol, profileid=profileid, twid=twid, uid=uid)
+                                 proto=protocol, profileid=profileid, twid=twid, uid=uid, victim=dstip)
 
 
     def calculate_confidence(self, pkts_sent):
