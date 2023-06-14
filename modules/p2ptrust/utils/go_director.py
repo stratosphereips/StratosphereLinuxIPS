@@ -479,8 +479,20 @@ class GoDirector:
             twid = self.db.get_timewindow(timestamp, profileid_of_attacker)
 
         uid = ''
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid_of_attacker, twid=twid, uid=uid)
+        self.db.setEvidence(
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid_of_attacker,
+            twid=twid,
+            uid=uid,
+            victim=reporter_ip
+            )
 
 
     def process_go_update(self, data: dict) -> None:
