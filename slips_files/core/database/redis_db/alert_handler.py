@@ -123,6 +123,14 @@ class AlertHandler:
         uids = self.r.hget("flows_causing_evidence", evidence_ID)
         return json.loads(uids) if uids else []
 
+    def get_victim(self, profileid, attacker):
+        saddr = profileid.split("_")[-1]
+        if saddr not in attacker:
+            return saddr
+        # if the saddr is the attacker, then the victim should be passed as a param to this function
+        # there's no 1 victim in this case. for example in ARP scans, the victim is the whole network
+        return ''
+
     def setEvidence(
             self,
             evidence_type,
@@ -139,7 +147,8 @@ class AlertHandler:
             proto=False,
             profileid='',
             twid='',
-            uid=''
+            uid='',
+            victim=''
     ):
         """
         Set the evidence for this Profile and Timewindow.
@@ -155,6 +164,8 @@ class AlertHandler:
                         needed to get the flow from the database.
         category: what is this evidence category according to IDEA categories
         conn_count: the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
+        victim: the ip/domain that was attacked by the attacker param. if not given slips can deduce it.
+        this param is usually passed if the saddr is the attacker and slips can't deduce the victim
 
         source_target_tag:
             this is the IDEA category of the source and dst ip used in the evidence
@@ -192,6 +203,11 @@ class AlertHandler:
         if timestamp:
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
 
+        if not victim:
+            victim = self.get_victim(profileid, attacker)
+            #TODO see what you wanna do with the victim
+
+
         evidence_to_send = {
             'profileid': str(profileid),
             'twid': str(twid),
@@ -222,7 +238,7 @@ class AlertHandler:
         evidence_to_send = json.dumps(evidence_to_send)
 
 
-        # Check if we have and get the current evidence stored in the DB for
+        # Check if we have the current evidence stored in the DB for
         # this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
         current_evidence = json.loads(current_evidence) if current_evidence else {}
@@ -234,7 +250,7 @@ class AlertHandler:
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
         self.r.hset(
-            profileid + self.separator + twid, 'Evidence', current_evidence
+            f'{profileid}_{twid}', 'Evidence', current_evidence
         )
 
         self.r.hset(f'evidence{profileid}', twid, current_evidence)
