@@ -566,6 +566,7 @@ class EvidenceProcess(Core):
                 proto = data.get('proto', False)
                 source_target_tag = data.get('source_target_tag', False)
                 evidence_ID = data.get('ID', False)
+                victim = data.get('victim', '')
 
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence below
@@ -574,8 +575,9 @@ class EvidenceProcess(Core):
 
                 # Ignore alert if IP is whitelisted
                 if self.whitelist.is_whitelisted_evidence(
-                    srcip, attacker, attacker_direction, description
+                    srcip, attacker, attacker_direction, description, victim
                 ):
+                    print(f"@@@@@@@@@@@@@@@@ found a whitelisted ev: {description} from {profileid} attacker {attacker}")
                     self.db.cache_whitelisted_evidence_ID(evidence_ID)
                     # Modules add evidence to the db before reaching this point, now
                     # remove evidence from db so it could be completely ignored
