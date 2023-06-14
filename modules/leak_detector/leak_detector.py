@@ -183,6 +183,7 @@ class Module(Module, multiprocessing.Process):
             # make sure we have a profile for any of the above IPs
             if self.db.has_profile(src_profileid):
                 attacker_direction = 'dstip'
+                victim = srcip
                 profileid = src_profileid
                 attacker = dstip
                 ip_identification = self.db.get_ip_identification(dstip)
@@ -190,6 +191,7 @@ class Module(Module, multiprocessing.Process):
 
             elif self.db.has_profile(dst_profileid):
                 attacker_direction = 'srcip'
+                victim = dstip
                 profileid = dst_profileid
                 attacker = srcip
                 ip_identification = self.db.get_ip_identification(srcip)
@@ -213,7 +215,7 @@ class Module(Module, multiprocessing.Process):
                 threat_level = 'high'
                 self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                          description, ts, category, source_target_tag=source_target_tag, port=dport,
-                                         proto=proto, profileid=profileid, twid=twid, uid=uid)
+                                         proto=proto, profileid=profileid, twid=twid, uid=uid, victim=victim)
 
     def compile_and_save_rules(self):
         """
