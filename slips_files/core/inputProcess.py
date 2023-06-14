@@ -207,7 +207,7 @@ class InputProcess(multiprocessing.Process):
         if filename_without_ext in self.ignored_files:
             return True
 
-    def get_file_handler(self, filename):
+    def get_file_handle(self, filename):
         # Update which files we know about
         try:
             # We already opened this file
@@ -259,19 +259,21 @@ class InputProcess(multiprocessing.Process):
         return timestamp, nline
 
     def cache_nxt_line_in_file(self, filename):
-        file_handler = self.get_file_handler(filename)
-        if not file_handler:
+        """
+        reads 1 line of the given file and stores in queue for sending to the profiler
+        """
+        file_handle = self.get_file_handle(filename)
+        if not file_handle:
             return False
 
-
-        # Only read the next line if the previous line  from this file was sent
+        # Only read the next line if the previous line from this file was sent to profiler
         if filename in self.cache_lines:
             # We have still something to send, do not read the next line from this file
             return False
 
         # We don't have any waiting line for this file, so proceed
         try:
-            zeek_line = file_handler.readline()
+            zeek_line = file_handle.readline()
         except ValueError:
             # remover thread just finished closing all old handles.
             # comes here if I/O operation failed due to a closed file.
@@ -281,7 +283,7 @@ class InputProcess(multiprocessing.Process):
         # Did the file end?
         if not zeek_line or zeek_line.startswith('#'):
             # We reached the end of one of the files that we were reading.
-            # Wait for more data to come from another file
+            # Wait for more lines to come from another file
             return False
 
         timestamp, nline = self.get_ts_from_line(zeek_line)
@@ -404,10 +406,10 @@ class InputProcess(multiprocessing.Process):
         """
         returns the number of flows/lines in a given file
         """
-        # using grep -c instead of wc because wc doesn't count last of
+        # using grep -c instead of wc because wc doesn't count last line of
         # the file if it does not have end of line character
         p = subprocess.Popen(
-            ['grep', '-c', "", file],
+            ['grep', '-c', "\n", file],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
