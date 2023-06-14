@@ -406,17 +406,20 @@ class InputProcess(multiprocessing.Process):
         """
         returns the number of flows/lines in a given file
         """
-        # using grep -c instead of wc because wc doesn't count last line of
-        # the file if it does not have end of line character
-        p = subprocess.Popen(
-            ['grep', '-c', "\n", file],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        line_count, err = p.communicate()
-        if p.returncode != 0:
-            return 0
-        return int(line_count.strip().split()[0])
+        # using wc -l doesn't count last line of the file if it does not have end of line character
+        # using  grep -c "" returns incorrect line numbers sometimes
+        # this method is the most efficient and accurate i found online
+        # https://stackoverflow.com/a/68385697/11604069
+        def _make_gen(reader):
+            """yeilds (64 kilobytes) at a time from the file"""
+            while True:
+                b = reader(2 ** 16)
+                if not b: break
+                yield b
+
+        with open(file, "rb") as f:
+            count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+        return count
 
     def read_zeek_folder(self):
         # This is the case that a folder full of zeek files is passed with -f
