@@ -80,7 +80,12 @@ class InputProcess(multiprocessing.Process):
             'ocsp',
             'reporter',
             'x509',
-            'pe'
+            'pe',
+            'mqtt_publish',
+            'mqtt_subscribe',
+            'mqtt_connect',
+            'analyzer',
+            'ntp'
         }
         # create the remover thread
         self.remover_thread = threading.Thread(
