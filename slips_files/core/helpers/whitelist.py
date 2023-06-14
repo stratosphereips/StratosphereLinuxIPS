@@ -666,14 +666,16 @@ class Whitelist:
 
 
     def is_whitelisted_evidence(
-            self, srcip, data, attacker_direction, description
+            self, srcip, attacker, attacker_direction, description, victim
         ) -> bool:
         """
         Checks if IP is whitelisted
         :param srcip: Src IP that generated the evidence
-        :param data: This is what was detected in the evidence. (attacker) can be ip, domain, tuple(ip:port:proto).
-        :param attacker_direction: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
+        :param attacker: This is what was detected in the evidence. (attacker) can be ip, domain, tuple(ip:port:proto).
+        :param attacker_direction: this is the type of the attacker param. 'sip', 'dip', 'sport', 'dport', 'inTuple',
+        'outTuple', 'dstdomain'
         :param description: may contain IPs if the evidence is coming from portscan module
+        :param victim: ip of the victim (will either be the saddr, the daddr, or '' in case of scans)
         """
 
         # self.print(f'Checking the whitelist of {srcip}: {data} {attacker_direction} {description} ')
@@ -694,26 +696,35 @@ class Whitelist:
 
         whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist(whitelist)
 
-        # Set data type
+        if self.check_whitelisted_attacker(attacker, attacker_direction):
+            return True
+
+        # if self.check_whitelisted_victim(victim, whitelisted_domains, whitelisted_IPs, whitelisted_orgs, whitelisted_macs):
+        #     return True
+
+    def check_whitelisted_attacker(self, attacker, attacker_direction, whitelisted_domains, whitelisted_IPs,
+                                   whitelisted_orgs, whitelisted_macs):
+
+        # Set attacker type
         if 'domain' in attacker_direction:
-            data_type = 'domain'
+            attacker_type = 'domain'
         elif 'outTuple' in attacker_direction:
             # for example: ip:port:proto
-            data = data.split('-')[0]
-            data_type = 'ip'
+            attacker = attacker.split('-')[0]
+            attacker_type = 'ip'
         else:
             # it's probably one of the following:  'sip', 'dip', 'sport'
-            data_type = 'ip'
+            attacker_type = 'ip'
 
-            # Check IPs
-        if data_type == 'domain':
+        # Check IPs
+        if attacker_type == 'domain':
             is_srcdomain = attacker_direction in ('srcdomain')
             is_dstdomain = attacker_direction in ('dstdomain')
             # extract the top level domain
             try:
-                domain = tld.get_fld(data, fix_protocol=True)
+                domain = tld.get_fld(attacker, fix_protocol=True)
             except (tld.exceptions.TldBadUrl, tld.exceptions.TldDomainNotFound):
-                domain = data
+                domain = attacker
                 for str_ in ('http://', 'https://','www'):
                     domain = domain.replace(str_, "")
             # is domain in whitelisted domains?
@@ -749,10 +760,10 @@ class Whitelist:
                 # https://tranco-list.eu/list/X5QNN/1000000
                 return True
 
-        elif data_type == 'ip':
+        elif attacker_type == 'ip':
             # Check that the IP in the content of the alert is whitelisted
             # Was the evidence coming as a src or dst?
-            ip = data
+            ip = attacker
             is_srcip = self.is_srcip(attacker_direction)
             is_dstip = self.is_dstip(attacker_direction)
             if ip in whitelisted_IPs:
@@ -788,6 +799,7 @@ class Whitelist:
 
 
             # Check orgs
+
         if whitelisted_orgs:
             is_src = self.is_srcip(attacker_direction) or attacker_direction in 'srcdomain'
             is_dst = self.is_dstip(attacker_direction) or attacker_direction in 'dstdomain'
@@ -808,14 +820,14 @@ class Whitelist:
                 )
 
                     # Check if the IP in the alert belongs to a whitelisted organization
-                if data_type == 'domain':
-                    flow_domain = data
+                if attacker_type == 'domain':
+                    flow_domain = attacker
                     # Method 3 Check if the domains of this flow belong to this org domains
                     if self.is_domain_in_org(flow_domain, org):
                         return True
 
-                elif data_type == 'ip':
-                    ip = data
+                elif attacker_type == 'ip':
+                    ip = attacker
                     if ignore_alerts_from_org or ignore_alerts_to_org:
                         # Method 1: using asn
                         self.is_ip_asn_in_org_asn(ip, org)
@@ -826,7 +838,6 @@ class Whitelist:
                             # self.print(f'Whitelisting evidence sent by {srcip} about {ip},'
                             #            f'due to {ip} being in the range of {org}. {data} in {description}')
                             return True
-
 
         return False
 
