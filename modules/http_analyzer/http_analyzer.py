@@ -72,10 +72,11 @@ class Module(Module, multiprocessing.Process):
                 threat_level = 'high'
                 category = 'Anomaly.Behaviour'
                 confidence = 1
-                description = f'suspicious user-agent: {user_agent} while connecting to {host}{uri}'
+                victim = f'{host}{uri}'
+                description = f'suspicious user-agent: {user_agent} while connecting to {victim}'
                 self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                          description, timestamp, category, source_target_tag=source_target_tag,
-                                         profileid=profileid, twid=twid, uid=uid)
+                                         profileid=profileid, twid=twid, uid=uid, victim=victim)
                 return True
         return False
 
@@ -116,8 +117,18 @@ class Module(Module, multiprocessing.Process):
             category = 'Anomaly.Connection' 
             confidence = 1
             description = f'multiple empty HTTP connections to {host}'
-            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uids)
+            self.db.setEvidence(evidence_type,
+                                attacker_direction,
+                                attacker,
+                                threat_level,
+                                confidence,
+                                description,
+                                timestamp,
+                                category,
+                                profileid=profileid,
+                                twid=twid,
+                                uid=uids,
+                                victim=host)
             # reset the counter
             self.connections_counter[host] = ([], 0)
             return True
@@ -137,14 +148,16 @@ class Module(Module, multiprocessing.Process):
         os_name = user_agent.get('os_name', '').lower()
         browser = user_agent.get('browser', '').lower()
         user_agent = user_agent.get('user_agent', '')
+        victim = f'{host}{uri}'
         description = (
-            f'using incompatible user-agent that belongs to OS: {os_name} type: {os_type} browser: {browser}. '
-            f'while connecting to {host}{uri}. '
+            f'using incompatible user-agent ({user_agent}) that belongs to OS: {os_name} '
+            f'type: {os_type} browser: {browser}. '
+            f'while connecting to {victim}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
         self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+                                 twid=twid, uid=uid, victim=victim)
         
     def report_executable_mime_type(self, mime_type, attacker, profileid, twid, uid, timestamp):
         confidence = 1
@@ -381,7 +394,7 @@ class Module(Module, multiprocessing.Process):
         attacker_direction = 'srcip'
         source_target_tag = 'MultipleUserAgent'
         attacker = profileid.split('_')[1]
-        evidence_type = 'IncompatibleUserAgent'
+        evidence_type = 'MultipleUserAgent'
         threat_level = 'info'
         category = 'Anomaly.Behaviour'
         confidence = 1
