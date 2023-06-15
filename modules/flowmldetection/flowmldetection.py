@@ -1,8 +1,4 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
@@ -31,19 +27,14 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
+    def init(self):
         # Subscribe to the channel
-        self.c1 = __database__.subscribe('new_flow')
+        self.c1 = self.db.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1
         }
-        self.fieldseparator = __database__.getFieldSeparator()
+        self.fieldseparator = self.db.get_field_separator()
         # Set the output queue of our database instance
-        __database__.setOutputQueue(self.outputqueue)
         # Read the configuration
         self.read_configuration()
         # Minum amount of new lables needed to trigger the train
@@ -221,11 +212,11 @@ class Module(Module, multiprocessing.Process):
         try:
             # We get all the flows so far
             # because this retraining happens in batches
-            flows = __database__.get_all_flows()
+            flows = self.db.get_all_flows()
 
             # Check how many different labels are in the DB
             # We need both normal and malware
-            labels = __database__.get_labels()
+            labels = self.db.get_labels()
             if len(labels) == 1:
                 # Only 1 label has flows
                 # There are not enough different labels, so insert two flows
@@ -381,17 +372,17 @@ class Module(Module, multiprocessing.Process):
         category = 'Anomaly.Traffic'
         attacker = f'{str(saddr)}:{str(sport)}-{str(daddr)}:{str(dport)}'
         evidence_type = 'MaliciousFlow'
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
         timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid)
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         if self.mode == 'train':
             self.store_model()
-        __database__.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -420,7 +411,7 @@ class Module(Module, multiprocessing.Process):
 
                 # Is the amount in the DB of labels enough to retrain?
                 # Use labeled flows
-                labels = __database__.get_labels()
+                labels = self.db.get_labels()
                 sum_labeled_flows = sum(i[1] for i in labels)
                 if (
                     sum_labeled_flows >= self.minimum_lables_to_retrain
@@ -443,7 +434,7 @@ class Module(Module, multiprocessing.Process):
 
                 # After processing the flow, it may happen that we delete icmp/arp/etc
                 # so the dataframe can be empty
-                if not self.flow.empty:
+                if self.flow is not None and not self.flow.empty:
                     # Predict
                     pred = self.detect()
                     label = self.flow_dict['label']

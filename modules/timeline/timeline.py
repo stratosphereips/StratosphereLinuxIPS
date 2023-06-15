@@ -1,9 +1,5 @@
 # Must imports
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 import traceback
 import sys
 
@@ -18,14 +14,10 @@ class Module(Module, multiprocessing.Process):
     description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
-        self.separator = __database__.getFieldSeparator()
+    def init(self):
+        self.separator = self.db.get_field_separator()
         # Subscribe to 'new_flow' channel
-        self.c1 = __database__.subscribe('new_flow')
+        self.c1 = self.db.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1,
         }
@@ -61,7 +53,7 @@ class Module(Module, multiprocessing.Process):
             proto = flow_dict['proto'].upper()
             dport_name = flow_dict.get('appproto', '')
             if not dport_name:
-                dport_name = __database__.get_port_info(
+                dport_name = self.db.get_port_info(
                     f'{str(dport)}/{proto.lower()}'
                 )
                 if dport_name:
@@ -112,7 +104,7 @@ class Module(Module, multiprocessing.Process):
                 if self.analysis_direction == 'all' and str(daddr) == str(
                         profile_ip
                 ):
-                    dns_resolution = __database__.get_dns_resolution(daddr)
+                    dns_resolution = self.db.get_dns_resolution(daddr)
                     dns_resolution = dns_resolution.get('domains', [])
 
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
@@ -163,7 +155,7 @@ class Module(Module, multiprocessing.Process):
                         critical_warning_dport_name = (
                             'Protocol not recognized by Slips nor Zeek.'
                         )
-                    dns_resolution = __database__.get_dns_resolution(daddr)
+                    dns_resolution = self.db.get_dns_resolution(daddr)
                     dns_resolution = dns_resolution.get('domains', [])
 
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
@@ -263,19 +255,19 @@ class Module(Module, multiprocessing.Process):
             # Sometimes we need to wait a little to give time to Zeek to find the related flow since they are read very fast together.
             # This should be improved algorithmically probably
             time.sleep(0.05)
-            alt_flow_json = __database__.get_altflow_from_uid(
+            alt_flow: dict = self.db.get_altflow_from_uid(
                 profileid, twid, uid
             )
 
             alt_activity = {}
             http_data = {}
-            if alt_flow_json:
-                alt_flow = json.loads(alt_flow_json)
+            if alt_flow:
+                flow_type = alt_flow['type_']
                 self.print(
-                    f"Received an altflow of type {alt_flow['type']}: {alt_flow}",
+                    f"Received an altflow of type {flow_type}: {alt_flow}",
                     3, 0
                 )
-                if 'dns' in alt_flow['type']:
+                if 'dns' in flow_type:
                     answer = alt_flow['answers']
                     if 'NXDOMAIN' in alt_flow['rcode_name']:
                         answer = 'NXDOMAIN'
@@ -287,7 +279,7 @@ class Module(Module, multiprocessing.Process):
                         'info': dns_activity,
                         'critical warning':'',
                     }
-                elif alt_flow['type'] == 'http':
+                elif flow_type == 'http':
                     http_data_all = {
                         'Request': alt_flow['method']
                         + ' http://'
@@ -306,7 +298,7 @@ class Module(Module, multiprocessing.Process):
                         if v != '' and v != '/'
                     }
                     alt_activity = {'info': http_data}
-                elif alt_flow['type'] == 'ssl':
+                elif flow_type == 'ssl':
                     if alt_flow['validation_status'] == 'ok':
                         validation = 'Yes'
                         resumed = 'False'
@@ -335,7 +327,7 @@ class Module(Module, multiprocessing.Process):
                         'dns_resolution': alt_flow['server_name']
                     }
                     alt_activity = {'info': ssl_activity}
-                elif alt_flow['type'] == 'ssh':
+                elif flow_type == 'ssh':
                     success = 'Successful' if alt_flow[
                         'auth_success'] else 'Not Successful'
                     ssh_activity = {
@@ -352,7 +344,7 @@ class Module(Module, multiprocessing.Process):
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
             activity.update(alt_activity)
             if activity:
-                __database__.add_timeline_line(
+                self.db.add_timeline_line(
                     profileid, twid, activity, timestamp
                 )
             self.print(
@@ -371,7 +363,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()

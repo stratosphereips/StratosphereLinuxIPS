@@ -39,3 +39,4 @@ tqdm
 termcolor
 viztracer
 yappi
+pytest-sugar

@@ -1,6 +1,4 @@
-from slips_files.common.abstracts import Module
-from slips_files.common.slips_utils import utils
-from slips_files.core.database.database import __database__
+from slips_files.common.imports import *
 from style import green
 import signal
 import os
@@ -139,19 +137,12 @@ class ProcessManager:
                 continue
 
             module_class = modules_to_call[module_name]['obj']
-            if 'P2P Trust' == module_name:
-                module = module_class(
-                    self.main.outputqueue,
-                    self.main.redis_port,
-                    output_dir=self.main.args.output
-                )
-            else:
-                module = module_class(
-                    self.main.outputqueue,
-                    self.main.redis_port
-                )
+            module = module_class(
+                self.main.outputqueue,
+                self.main.db,
+            )
             module.start()
-            __database__.store_process_PID(
+            self.main.db.store_process_PID(
                 module_name, int(module.pid)
             )
             self.module_objects[module_name] = module # maps name -> object
@@ -233,7 +224,7 @@ class ProcessManager:
         ]
         if self.main.args.blocking:
             modules_to_be_killed_last.append('Blocking')
-        if 'exporting_alerts' not in __database__.get_disabled_modules():
+        if 'exporting_alerts' not in self.main.db.get_disabled_modules():
             modules_to_be_killed_last.append('Exporting Alerts')
         return modules_to_be_killed_last
 
@@ -251,26 +242,25 @@ class ProcessManager:
 
             wait_for_modules_to_finish  = self.main.conf.wait_for_modules_to_finish()
             # close all tws
-            __database__.check_TW_to_close(close_all=True)
+            self.main.db.check_TW_to_close(close_all=True)
 
             # set analysis end date
             end_date = self.main.metadata_man.set_analysis_end_date()
 
-            start_time = __database__.get_slips_start_time()
+            start_time = self.main.db.get_slips_start_time()
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
             # Stop the modules that are subscribed to channels
-            __database__.publish_stop()
+            self.main.db.publish_stop()
 
             # get dict of PIDs spawned by slips
-            self.PIDs = __database__.get_PIDs()
-            print(self.PIDs)
+            self.PIDs = self.main.db.get_pids()
             # we don't want to kill this process
             self.PIDs.pop('slips.py', None)
 
             if self.main.mode == 'daemonized':
-                profilesLen = __database__.getProfilesLen()
+                profilesLen = self.main.db.get_profiles_len()
                 self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
 
             modules_to_be_killed_last: list = self.get_modules_to_be_killed_last()
@@ -346,9 +336,9 @@ class ProcessManager:
                             # -t flag is only used in integration tests,
                             # so we don't care about the modules finishing their job when testing
                             # instead, kill them
-                            if self.main.args.testing:
-                                pass
-                                # break
+                            # if self.main.args.testing:
+                            #     pass
+                            #     break
 
                             # delay killing unstopped modules until all of them
                             # are done processing
@@ -365,7 +355,6 @@ class ProcessManager:
                     # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
                     pass
-
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
             self.kill_all(self.PIDs.copy())
@@ -375,6 +364,10 @@ class ProcessManager:
             if self.main.args.save:
                 self.main.save_the_db()
 
+            if self.main.conf.export_labeled_flows():
+                format = self.main.conf.export_labeled_flows_to().lower()
+                self.main.db.export_labeled_flows(format)
+
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
             self.main.store_zeek_dir_copy()
@@ -382,6 +375,7 @@ class ProcessManager:
             # if delete_zeek_files is set to yes in slips.conf,
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
+            self.main.db.close()
 
             if self.main.mode == 'daemonized':
                 # if slips finished normally without stopping the daemon with -S

@@ -1,56 +1,31 @@
 """Unit test for modules/ip_info/ip_info.py"""
-from ..modules.ip_info.ip_info import Module
-from ..modules.ip_info.asn_info import ASN
-from ..modules.update_manager.update_file_manager import UpdateFileManager
+from tests.module_factory import ModuleFactory
+from slips_files.core.database.database_manager import DBManager
+import modules.ip_info.asn_info as asn
+from unittest.mock import patch
 import maxminddb
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-
-
-def create_ip_info_instance(outputQueue):
-    """Create an instance of ip_info.py
-    needed by every other test in this file"""
-    ip_info = Module(outputQueue, 6380)
-    # override the self.print function to avoid broken pipes
-    ip_info.print = do_nothing
-    return ip_info
-
-# needed to make sure the macdb is downloaded before running the unit tests
-def create_update_manager_instance(outputQueue):
-    """Create an instance of update_manager.py
-    needed by every other test in this file"""
-    update_manager = UpdateFileManager(outputQueue, 6380)
-    # override the self.print function to avoid broken pipes
-    update_manager.print = do_nothing
-    return update_manager
-
-def create_ASN_Info_instance():
-    """Create an instance of asn_info.py
-    needed by every other test in this file"""
-    return ASN()
 
 
 # ASN unit tests
-def test_get_asn_info_from_geolite(database):
+def test_get_asn_info_from_geolite(mock_db):
     """
     geolite is an offline db
     """
-    ASN_info = create_ASN_Info_instance()
+    ASN_info = ModuleFactory().create_asn_obj(mock_db)
     # check an ip that we know is in the db
     expected_asn_info = {'asn': {'number': 'AS7018', 'org': 'ATT-INTERNET4'}}
     assert ASN_info.get_asn_info_from_geolite('108.200.116.255') == expected_asn_info
     # test  asn info not found in geolite
     assert ASN_info.get_asn_info_from_geolite('0.0.0.0') == {}
 
-def test_cache_ip_range(database):
-    ASN_info = create_ASN_Info_instance()
+def test_cache_ip_range(mock_db):
+    # Patch the database object creation before it is instantiated
+    ASN_info = ModuleFactory().create_asn_obj(mock_db)
     assert ASN_info.cache_ip_range('8.8.8.8') == {'asn': {'number': 'AS15169', 'org': 'GOOGLE, US'}}
 
 # GEOIP unit tests
-def test_get_geocountry(outputQueue, database):
-    ip_info = create_ip_info_instance(outputQueue)
+def test_get_geocountry(mock_db):
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
 
     #open the db we'll be using for this test
     # ip_info.wait_for_dbs()
@@ -65,9 +40,9 @@ def test_get_geocountry(outputQueue, database):
         'geocountry': 'Unknown'
     }
 
-def test_get_vendor(outputQueue, database, mocker):
+def test_get_vendor(mocker, mock_db):
     # make sure the mac db is download so that wai_for_dbs doesn't wait forever :'D
-    ip_info = create_ip_info_instance(outputQueue)
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
     host_name = 'FooBar-PC'
@@ -77,8 +52,10 @@ def test_get_vendor(outputQueue, database, mocker):
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.text = 'PCS Systemtechnik GmbH'
+    mock_db.get_mac_vendor_from_profile.return_value = False
 
     # tries to get vendor either online or from our offline db
     mac_info = ip_info.get_vendor(mac_addr, host_name, profileid)
+
     assert mac_info is not False
     assert mac_info['Vendor'].lower() == 'Pcs Systemtechnik GmbH'.lower()

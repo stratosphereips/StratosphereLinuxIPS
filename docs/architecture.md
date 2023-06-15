@@ -15,8 +15,9 @@ open source network security monitoring tool. Slips divides flows into profiles 
 each profile into a timewindows.
 Slips runs detection modules on each flow and stores all evidence, 
 alerts and features in an appropriate profile structure. 
-All data, i.e. zeek flows, performed detections, profiles and timewindows' data,
+All profile info, performed detections, profiles and timewindows' data,
 is stored inside a <a href="https://redis.io/">Redis</a> database. 
+All flows are read, interpreted by Slips, labeled, and stored in the SQLite database in the output/ dir of each run
 The output of Slips is a folder with logs (output/ directory) that has alert.json, alerts.log, errors.log.
 Kalipso, a terminal graphical user interface. or the Web interface.
 
@@ -45,7 +46,7 @@ Below is more explanation on internal representation of data, usage of Zeek and 
 
 Slips works at a flow level, instead of a packet level, gaining a high level view of behaviors. Slips creates traffic profiles for each IP that appears in the traffic. A profile contains the complete behavior of an IP address. Each profile is divided into time windows. Each time window is 1 hour long by default and contains dozens of features computed for all connections that start in that time window. Detections are done in each time window, allowing the profile to be marked as uninfected in the next time window.
 
-### Alerts vs Evidence  
+### Alerts vs Evidence 
 
 When running Slips, the alerts you see in red in the CLI or at the very bottom in kalispo, are a bunch of evidence. Evidence in slips are detections caused by a specific IP in a specific timeframe. Slips doesn't alert on every evidence/detection. it accumulates evidence and only generates and alert when the amount of gathered evidence crosses a threshold. After this threshold Slips generates an alert, marks the timewindow as malicious(displays it in red in kalipso) and blocks the IP causing the alert.
  
@@ -56,7 +57,16 @@ Slips uses Zeek to generate files for most input types, and this data is used to
 
 ### Usage of Redis database. 
 
-All the data inside Slips is stored in Redis, an in-memory data structure. Redis allows all the modules in Slips to access the data in parallel. Apart from read and write operations, Slips takes advantage of the Redis messaging system called Redis PUB/SUB. Processes may publish data into the channels, while others subscribe to these channels and process the new data when it is published. 
+All the data inside Slips is stored in Redis, an in-memory data structure.
+Redis allows all the modules in Slips to access the data in parallel.
+Apart from read and write operations, Slips takes advantage of the Redis messaging system called Redis PUB/SUB.
+Processes may publish data into the channels, while others subscribe to these channels and process the new data when it is published. 
+
+### Usage of SQLite database. 
+
+Slips uses SQLite database to store all flows in Slips interpreted format.
+The SQLite database is stored in the output/ dir and each flow is labeled to either 'malicious' or 'benign' based on slips detections.
+all the labeled flows in the SQLite database can be exported to tsv or json format.
 
 
 ### Threat Levels  

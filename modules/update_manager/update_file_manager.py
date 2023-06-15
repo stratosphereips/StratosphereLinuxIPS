@@ -1,6 +1,4 @@
-from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 from slips_files.core.whitelist import Whitelist
 import time
 import os
@@ -15,20 +13,19 @@ import datetime
 
 
 class UpdateFileManager:
-    def __init__(self, outputqueue, redis_port):
-        self.outputqueue = outputqueue
-        # For now, read the malicious IPs from here
+    def __init__(self, outputqueue, db):
         self.name = 'Update File Manager'
-        __database__.start(redis_port)
+        self.outputqueue = outputqueue
+        self.db = db
         # Get a separator from the database
-        self.separator = __database__.getFieldSeparator()
+        self.separator = self.db.get_field_separator()
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(outputqueue, redis_port)
-        self.slips_logfile = __database__.get_stdfile("stdout")
+        self.whitelist = Whitelist(outputqueue, self.db)
+        self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line
         # then this line should be ignored by slips
@@ -127,10 +124,10 @@ class UpdateFileManager:
             # remove commented lines from the cache db
             if url.startswith(';'):
                 feed = url.split('/')[-1]
-                if __database__.get_TI_file_info(feed):
-                    __database__.delete_feed(feed)
+                if self.db.get_TI_file_info(feed):
+                    self.db.delete_feed(feed)
                     # to avoid calling delete_feed again with the same feed
-                    __database__.delete_file_info(feed)
+                    self.db.delete_file_info(feed)
                 continue
 
             # make sure the given tl is valid
@@ -210,13 +207,13 @@ class UpdateFileManager:
 
                         for port in range(first_port, last_port+1):
                             portproto = f'{port}/{proto}'
-                            __database__.set_organization_of_port(
+                            self.db.set_organization_of_port(
                                 organization, ip, portproto
                             )
                     else:
                         # it's a single port
                         portproto = f'{ports_range}/{proto}'
-                        __database__.set_organization_of_port(
+                        self.db.set_organization_of_port(
                             organization, ip, portproto
                         )
 
@@ -243,13 +240,13 @@ class UpdateFileManager:
                         port = line.split(',')[1]
                         proto = line.split(',')[2]
                         # descr = line.split(',')[3]
-                        __database__.set_port_info(
+                        self.db.set_port_info(
                             f'{str(port)}/{proto}', name
                         )
 
             # Store the new hash of file in the database
             file_info = {'hash': self.new_hash}
-            __database__.set_TI_file_info(file_path, file_info)
+            self.db.set_TI_file_info(file_path, file_info)
             return True
 
         except OSError:
@@ -266,7 +263,7 @@ class UpdateFileManager:
         new_hash = utils.get_hash_from_file(file_path)
 
         # Get last hash of the file stored in the database
-        file_info = __database__.get_TI_file_info(file_path)
+        file_info = self.db.get_TI_file_info(file_path)
         old_hash = file_info.get('hash', False)
 
         if not old_hash or old_hash != new_hash:
@@ -284,7 +281,7 @@ class UpdateFileManager:
         Used for online whitelist specified in slips.conf
         """
         # Get the last time this file was updated
-        ti_file_info = __database__.get_TI_file_info('tranco_whitelist')
+        ti_file_info = self.db.get_TI_file_info('tranco_whitelist')
         last_update = ti_file_info.get('time', float('-inf'))
 
         now = time.time()
@@ -300,7 +297,7 @@ class UpdateFileManager:
             return False
 
         # update the timestamp in the db
-        __database__.set_TI_file_info(
+        self.db.set_TI_file_info(
             'tranco_whitelist',
             {'time': time.time()}
         )
@@ -344,7 +341,7 @@ class UpdateFileManager:
         """
         # the response will be stored in self.responses if the file is old and needs to be updated
         # Get the last time this file was updated
-        ti_file_info = __database__.get_TI_file_info(file_to_download)
+        ti_file_info: dict = self.db.get_TI_file_info(file_to_download)
         last_update = ti_file_info.get('time', float('-inf'))
         if last_update + update_period > time.time():
             # Update period hasn't passed yet, but the file is in our db
@@ -371,7 +368,7 @@ class UpdateFileManager:
                 return True
 
             # Get the E-TAG of this file to compare with current files
-            ti_file_info = __database__.get_TI_file_info(file_to_download)
+            ti_file_info: dict = self.db.get_TI_file_info(file_to_download)
             old_e_tag = ti_file_info.get('e-tag', '')
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
@@ -391,7 +388,7 @@ class UpdateFileManager:
                     return True
                 else:
                     # update the time we last checked this file for update
-                    __database__.set_last_update_time(file_to_download, time.time())
+                    self.db.set_last_update_time(file_to_download, time.time())
                     self.loaded_ti_files += 1
                     return False
 
@@ -406,7 +403,7 @@ class UpdateFileManager:
                 # update period passed but the file hasnt changed on the server, no need to update
                 # Store the update time like we downloaded it anyway
                 # Store the new etag and time of file in the database
-                __database__.set_last_update_time(file_to_download, time.time())
+                self.db.set_last_update_time(file_to_download, time.time())
                 self.loaded_ti_files += 1
                 return False
 
@@ -546,7 +543,7 @@ class UpdateFileManager:
                     )
                     continue
         # Add all loaded malicious sha1 to the database
-        __database__.add_ssl_sha1_to_IoC(malicious_ssl_certs)
+        self.db.add_ssl_sha1_to_IoC(malicious_ssl_certs)
         return True
 
     async def update_TI_file(self, link_to_download: str) -> bool:
@@ -602,7 +599,7 @@ class UpdateFileManager:
                 'time': time.time(),
                 'Last-Modified': self.get_last_modified(response)
             }
-            __database__.set_TI_file_info(link_to_download, file_info)
+            self.db.set_TI_file_info(link_to_download, file_info)
 
             self.log(f'Successfully updated in DB the remote file {link_to_download}')
             self.loaded_ti_files += 1
@@ -660,7 +657,7 @@ class UpdateFileManager:
                                 'source': url,
                             }
                         )
-                        __database__.add_domains_to_IoC(malicious_domains_dict)
+                        self.db.add_domains_to_IoC(malicious_domains_dict)
             except KeyError:
                 self.print(
                     f'RiskIQ returned: {response["message"]}. Update Cancelled.', 0, 1,
@@ -669,7 +666,7 @@ class UpdateFileManager:
 
             # update the timestamp in the db
             malicious_file_info = {'time': time.time()}
-            __database__.set_TI_file_info(
+            self.db.set_TI_file_info(
                 'riskiq_domains', malicious_file_info
             )
             self.log('Successfully updated RiskIQ domains.')
@@ -684,7 +681,7 @@ class UpdateFileManager:
         """
         When file is updated, delete the old IPs in the cache
         """
-        all_data = __database__.get_IPs_in_IoC()
+        all_data = self.db.get_IPs_in_IoC()
         old_data = []
         for ip_data in all_data.items():
             ip = ip_data[0]
@@ -692,13 +689,13 @@ class UpdateFileManager:
             if data['source'] == file:
                 old_data.append(ip)
         if old_data:
-            __database__.delete_ips_from_IoC_ips(old_data)
+            self.db.delete_ips_from_IoC_ips(old_data)
 
     def __delete_old_source_Domains(self, file):
         """
         When file is updated, delete the old Domains in the cache
         """
-        all_data = __database__.get_Domains_in_IoC()
+        all_data = self.db.get_Domains_in_IoC()
         old_data = []
         for domain_data in all_data.items():
             domain = domain_data[0]
@@ -706,7 +703,7 @@ class UpdateFileManager:
             if data['source'] == file:
                 old_data.append(domain)
         if old_data:
-            __database__.delete_domains_from_IoC_domains(old_data)
+            self.db.delete_domains_from_IoC_domains(old_data)
 
     def __delete_old_source_data_from_database(self, data_file):
         """
@@ -848,7 +845,7 @@ class UpdateFileManager:
                         continue
 
             # Add all loaded malicious ja3 to the database
-            __database__.add_ja3_to_IoC(malicious_ja3_dict)
+            self.db.add_ja3_to_IoC(malicious_ja3_dict)
             return True
 
         except Exception:
@@ -889,7 +886,7 @@ class UpdateFileManager:
                         }
                     )
 
-            __database__.add_ips_to_IoC(malicious_ips_dict)
+            self.db.add_ips_to_IoC(malicious_ips_dict)
             return True
 
 
@@ -926,7 +923,7 @@ class UpdateFileManager:
                             'tags': tags,
                         }
                     )
-            __database__.add_domains_to_IoC(malicious_domains_dict)
+            self.db.add_domains_to_IoC(malicious_domains_dict)
             return True
 
     def get_description_column(self, header):
@@ -1285,7 +1282,7 @@ class UpdateFileManager:
                             # set the score and confidence of this ip in ipsinfo
                             # and the profile of this ip to the same as the ones given in slips.conf
                             # todo for now the confidence is 1
-                            __database__.update_threat_level(
+                            self.db.update_threat_level(
                                 f'profile_{data}', threat_level, 1
                             )
                     elif data_type == 'ip_range':
@@ -1355,9 +1352,9 @@ class UpdateFileManager:
                                 }
                             )
 
-            __database__.add_ips_to_IoC(malicious_ips_dict)
-            __database__.add_domains_to_IoC(malicious_domains_dict)
-            __database__.add_ip_range_to_IoC(malicious_ip_ranges)
+            self.db.add_ips_to_IoC(malicious_ips_dict)
+            self.db.add_domains_to_IoC(malicious_domains_dict)
+            self.db.add_ip_range_to_IoC(malicious_ip_ranges)
             return True
 
         except Exception:
@@ -1370,14 +1367,14 @@ class UpdateFileManager:
             return False
 
     def check_if_update_org(self, file):
-        cached_hash = __database__.get_TI_file_info(file).get('hash','')
+        cached_hash = self.db.get_TI_file_info(file).get('hash','')
         if utils.get_hash_from_file(file) != cached_hash:
             return True
 
 
     def get_whitelisted_orgs(self) -> list:
         self.whitelist.read_whitelist()
-        whitelisted_orgs: dict = __database__.get_whitelist('organizations')
+        whitelisted_orgs: dict = self.db.get_whitelist('organizations')
         whitelisted_orgs: list = list(whitelisted_orgs.keys())
         return whitelisted_orgs
 
@@ -1408,7 +1405,7 @@ class UpdateFileManager:
                 info = {
                     'hash': utils.get_hash_from_file(file),
                 }
-                __database__.set_TI_file_info(file, info)
+                self.db.set_TI_file_info(file, info)
 
     def update_ports_info(self):
         for file in os.listdir('slips_files/ports_info'):
@@ -1459,7 +1456,7 @@ class UpdateFileManager:
         with open(path_to_mac_db, 'w') as mac_db:
             mac_db.write(mac_info)
 
-        __database__.set_TI_file_info(
+        self.db.set_TI_file_info(
             self.mac_db_link,
             {'time': time.time()}
         )
@@ -1479,7 +1476,7 @@ class UpdateFileManager:
         with open(online_whitelist_download_path, 'r') as f:
             while line := f.readline():
                 domain = line.split(',')[1]
-                __database__.store_tranco_whitelisted_domain(domain)
+                self.db.store_tranco_whitelisted_domain(domain)
 
         os.remove(online_whitelist_download_path)
 
@@ -1541,7 +1538,7 @@ class UpdateFileManager:
                 # in case all our files are updated, we don't have task defined, skip
                 pass
 
-            __database__.set_loaded_ti_files(self.loaded_ti_files)
+            self.db.set_loaded_ti_files(self.loaded_ti_files)
             self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:

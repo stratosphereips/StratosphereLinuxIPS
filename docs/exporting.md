@@ -9,6 +9,7 @@ For now the supported systems are:
 - Warden servers
 - IDEA JSON format
 - Logstash
+- TSV and json of labeled flows
 
 ## Slack
 Slips uses the WebHook method to send data to Slack, more info [here](https://api.slack.com/messaging/webhooks).
@@ -140,3 +141,15 @@ By default, the output of Slips is stored in the ```output/``` directory in two 
 
 1. alert.json in IDEA0 format
 2. alerts.log human readable text format
+
+## TSV and json of labeled flows
+
+Slips supports exporting all the labeled flows and altflows stored in the sqlite database
+the sqlite database can be exported to json or tsv format. 
+
+this can be done by setting the ```export_labeled_flows``` parameter to ```yes``` in slips.conf and changing 
+the ```export_format``` parameter to your desired format. 
+for now, the ```export_format``` parameter supports tsv or json formats only.
+
+the exported flows are stored in a file called ```labeled_flows.json``` or ```labeled_flows.tsv``` in the output directory.
+

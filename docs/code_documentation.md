@@ -15,7 +15,9 @@ later, when slips is starting all the modules, slips also starts the update mana
 it creates profiles and timewindows for each IP it encounters.
 5. Profiler process gives each flow to the appropriate module to deal with it. for example flows from http.log will be sent to http_analyzer.py 
 to analyze them.
-6. It also stores the flows, profiles, etc. in the database for later processing. the info stored in the db will be used by all modules later.
+6. Profiler process stores the flows, profiles, etc. in slips databases for later processing. the info stored in the dbs will be used by all modules later.
+Slips has 2 databases, Redis and SQLite. it uses the sqlite db to store all the flows read and labeled. and uses redis for all other operations. the sqlite db is 
+created in the output directory, meanwhite the redis database is in-memory.
 7-8. using the flows stored in the db in step 6 and with the help of the timeline module, slips puts the given flows in a human-readable form which is 
 then used by the web UI and kalipso UI.
 9. when a module finds a detection, it sends the detection to the evidence process to deal with it (step 10) but first, this evidence is checked by the whitelist to see if it's

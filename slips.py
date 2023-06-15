@@ -22,6 +22,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.cpu_profiler import CPUProfiler
+from slips_files.common.imports import *
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -29,14 +30,14 @@ from process_manager import ProcessManager
 from ui_manager import UIManager
 from checker import Checker
 from style import green
-import socket
 
 
-from multiprocessing import Queue
 from slips_files.core.inputProcess import InputProcess
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
 from slips_files.core.evidenceProcess import EvidenceProcess
+from slips_files.core.database.database_manager import DBManager
+
 
 import signal
 import sys
@@ -45,15 +46,14 @@ import time
 import shutil
 import warnings
 import json
-import errno
 import subprocess
 import re
 from datetime import datetime
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
+import csv
 
-import pdb
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -75,9 +75,9 @@ class Main:
         self.checker = Checker(self)
         self.conf = ConfigParser()
         self.version = self.get_slips_version()
-        self.args = self.conf.get_args()
         # in testing mode we manually set the following params
         if not testing:
+            self.args = self.conf.get_args()
             self.pid = os.getpid()
             self.checker.check_given_flags()
             if not self.args.stopdaemon:
@@ -132,13 +132,16 @@ class Main:
             self.daemon.stop()
         sys.exit(0)
 
+
+
+
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
         try:
             # only one instance of slips should be able to update ports and orgs at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
-                update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
+                update_manager = UpdateFileManager(self.outputqueue, self.db)
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -166,15 +169,15 @@ class Main:
             ]
         # Give the exact path to save(), this is where our saved .rdb backup will be
         rdb_filepath = os.path.join(backups_dir, self.input_information)
-        __database__.save(rdb_filepath)
-        # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
+        self.db.save(rdb_filepath)
+        # info will be lost only if you're out of space and redis can't write to dump.self.rdb, otherwise you're fine
         print(
             '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
         )
 
     def was_running_zeek(self) -> bool:
         """returns true if zeek wa sused in this run """
-        return __database__.get_input_type() in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
+        return self.db.get_input_type() in ('pcap', 'interface') or self.db.is_growing_zeek_dir()
 
     def store_zeek_dir_copy(self):
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
@@ -205,10 +208,10 @@ class Main:
         # default output/
         if '-o' in sys.argv:
             # -o is given
-            # delet all old files in the output dir
+            # delete all old files in the output dir
             if os.path.exists(self.args.output):
                 for file in os.listdir(self.args.output):
-                    # in integration tests, slips redirct its' output to slips_output.txt,
+                    # in integration tests, slips redirects its output to slips_output.txt,
                     # don't delete that file
                     if self.args.testing and 'slips_output.txt' in file:
                         continue
@@ -383,7 +386,7 @@ class Main:
 
     def setup_print_levels(self):
         """
-        setup debug and verose levels
+        setup debug and verbose levels
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if self.args.verbose is None:
@@ -391,7 +394,7 @@ class Main:
 
         # Limit any verbosity to > 0
         self.args.verbose = max(self.args.verbose, 1)
-        # Any deug passed as parameter overrides the configuration. Only check its value
+        # Any debug passed as parameter overrides the configuration. Only check its value
         if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
@@ -426,15 +429,17 @@ class Main:
     def start(self):
         """Main Slips Function"""
         try:
+
             self.print_version()
             print('https://stratosphereips.org')
             print('-' * 27)
 
             self.setup_print_levels()
 
-            ##########################
-            # Creation of the threads
-            ##########################
+            # Output thread. outputprocess should be created first because it handles
+            # the output of the rest of the threads.
+            self.outputqueue = Queue()
+
             # get the port that is going to be used for this instance of slips
             if self.args.port:
                 self.redis_port = int(self.args.port)
@@ -453,10 +458,9 @@ class Main:
                 self.redis_port = 6379
                 # self.check_if_port_is_in_use(self.redis_port)
 
-            # Output thread. outputprocess should be created first because it handles
-            # the output of the rest of the threads.
-            self.outputqueue = Queue()
 
+            self.db = DBManager(self.args.output, self.outputqueue, self.redis_port)
+            self.db.set_input_metadata({'output_dir': self.args.output})
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
@@ -464,31 +468,27 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.redis_port,
+                self.db,
                 stdout=current_stdout,
                 stderr=stderr,
                 slips_logfile=slips_logfile,
             )
-            # this process starts the db
             output_process.start()
-            __database__.store_process_PID('Output', int(output_process.pid))
+            self.db.store_process_PID('Output', int(output_process.pid))
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':
                     self.print(f"Parameter -g should be using with -f <dirname> not a {self.input_type}. Ignoring -g")
                 else:
                     self.print(f"Running on a growing zeek dir: {self.input_information}")
-                    __database__.set_growing_zeek_dir()
+                    self.db.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
             self.redis_man.log_redis_server_PID(self.redis_port, redis_pid)
 
-            if 'CYST' in self.input_type:
-                __database__.mark_cyst_as_enabled()
-
-            __database__.set_slips_mode(self.mode)
+            self.db.set_slips_mode(self.mode)
 
             if self.mode == 'daemonized':
                 std_files = {
@@ -504,20 +504,18 @@ class Main:
                     'stdout': slips_logfile,
                 }
 
-            __database__.store_std_file(**std_files)
+            self.db.store_std_file(**std_files)
 
             self.print(f'Using redis server on port: {green(self.redis_port)}', 1, 0)
             self.print(f'Started {green("Main")} process [PID {green(self.pid)}]', 1, 0)
             self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
-
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
                 # update local files before starting modules
                 self.update_local_TI_files()
-                self.loaded_modules: list = self.proc_man.load_modules()
-
+                self.proc_man.load_modules()
 
             # self.start_gui_process()
             if self.args.webinterface:
@@ -531,44 +529,42 @@ class Main:
 
             self.evidenceProcessQueue = Queue()
             evidence_process = EvidenceProcess(
-                self.evidenceProcessQueue,
                 self.outputqueue,
-                self.args.output,
-                self.redis_port,
-            )
+                self.db,
+                input_queue = self.evidenceProcessQueue,
+                output_dir = self.args.output,
+                )
             evidence_process.start()
             self.print(
                 f'Started {green("Evidence Process")} '
                 f'[PID {green(evidence_process.pid)}]', 1, 0
             )
-            __database__.store_process_PID(
+            self.db.store_process_PID(
                 'Evidence',
                 int(evidence_process.pid)
             )
-            __database__.store_process_PID(
+            self.db.store_process_PID(
                 'slips.py',
                 int(self.pid)
             )
 
             self.profilerProcessQueue = Queue()
             profiler_process = ProfilerProcess(
-                self.profilerProcessQueue,
                 self.outputqueue,
-                self.args.verbose,
-                self.args.debug,
-                self.redis_port,
+                self.db,
+                input_queue=self.profilerProcessQueue,
             )
             profiler_process.start()
             self.print(
                 f'Started {green("Profiler Process")} '
                 f'[PID {green(profiler_process.pid)}]', 1, 0
             )
-            __database__.store_process_PID(
+            self.db.store_process_PID(
                 'Profiler',
                 int(profiler_process.pid)
             )
 
-            self.c1 = __database__.subscribe('finished_modules')
+            self.c1 = self.db.subscribe('finished_modules')
             self.metadata_man.enable_metadata()
 
             inputProcess = InputProcess(
@@ -580,14 +576,14 @@ class Main:
                 self.zeek_bro,
                 self.zeek_folder,
                 self.line_type,
-                self.redis_port,
+                self.db,
             )
             inputProcess.start()
             self.print(
                 f'Started {green("Input Process")} '
                 f'[PID {green(inputProcess.pid)}]', 1, 0
             )
-            __database__.store_process_PID(
+            self.db.store_process_PID(
                 'Input Process',
                 int(inputProcess.pid)
             )
@@ -618,7 +614,8 @@ class Main:
             intervals_to_wait = max_intervals_to_wait
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
-            self.is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
+            self.is_interface: bool = self.args.interface or self.db.is_growing_zeek_dir()
+
             while True:
                 message = self.c1.get_message(timeout=0.01)
                 if (
@@ -639,10 +636,10 @@ class Main:
 
                 modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
-                # for other files, we prin a progress bar + the stats using outputprocess
+                # for other files, we print a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
                     # How many profiles we have?
-                    profilesLen = str(__database__.getProfilesLen())
+                    profilesLen = self.db.get_profiles_len()
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
                     print(
                         f'Total analyzed IPs so '
@@ -653,16 +650,17 @@ class Main:
                     )
 
                 # Check if we need to close any TWs
-                __database__.check_TW_to_close()
+                self.db.check_TW_to_close()
 
                 if self.is_interface and hostIP not in modified_profiles:
                     # In interface we keep track of the host IP. If there was no
                     # modified TWs in the host IP, we check if the network was changed.
                     if hostIP := self.metadata_man.get_host_ip():
-                        __database__.set_host_ip(hostIP)
+                        self.db.set_host_ip(hostIP)
 
                 if self.should_run_non_stop():
                     continue
+
                 # Reaches this point if we're running Slips on a file.
                 # countdown until slips stops if no TW modifications are happening
                 if modified_ips_in_the_last_tw == 0:
@@ -676,7 +674,7 @@ class Main:
                     intervals_to_wait -= 1
 
 
-                __database__.pubsub.check_health()
+                self.db.check_health()
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while the system call was in progress
             # comes here if zeek terminates while slips is still working
@@ -718,7 +716,6 @@ if __name__ == '__main__':
     else:
         # interactive mode
         slips.start()
-    
     if cpuProfilerEnabled:
         cpuProfiler.stop()
         cpuProfiler.print()

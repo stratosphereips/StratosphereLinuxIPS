@@ -12,10 +12,7 @@
 # 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 
 
 class Module(Module, multiprocessing.Process):
@@ -24,13 +21,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Template module'
     authors = ['Template Author']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
+    def init(self):
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -39,7 +30,7 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         # Remember to subscribe to this channel in database.py
-        self.c1 = __database__.subscribe('new_ip')
+        self.c1 = self.db.subscribe('new_ip')
         self.channels = {
             'new_ip': self.c1,
         }
@@ -47,7 +38,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         """
@@ -60,6 +51,6 @@ class Module(Module, multiprocessing.Process):
         if msg:= self.get_msg('new_ip'):
             # Example of printing the number of profiles in the
             # Database every second
-            data = len(__database__.getProfiles())
+            data = len(self.db.getProfiles())
             self.print(f'Amount of profiles: {data}', 3, 0)
 

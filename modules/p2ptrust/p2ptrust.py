@@ -1,4 +1,10 @@
-import multiprocessing
+
+import modules.p2ptrust.trust.base_model as reputation_model
+import modules.p2ptrust.trust.trustdb as trustdb
+import modules.p2ptrust.utils.utils as p2p_utils
+from modules.p2ptrust.utils.go_director import GoDirector
+from slips_files.common.imports import *
+import threading
 import os
 import shutil
 import signal
@@ -9,17 +15,6 @@ from typing import Dict
 import json
 import sys
 import socket
-from slips_files.common.config_parser import ConfigParser
-import modules.p2ptrust.trust.base_model as reputation_model
-import modules.p2ptrust.trust.trustdb as trustdb
-import modules.p2ptrust.utils.utils as p2p_utils
-from slips_files.common.slips_utils import utils
-from modules.p2ptrust.utils.go_director import GoDirector
-from modules.p2ptrust.utils.printer import Printer
-from slips_files.common.abstracts import Module
-from slips_files.core.database.database import __database__
-import threading
-
 
 def validate_slips_data(message_data: str) -> (str, int):
     """
@@ -57,35 +52,26 @@ def validate_slips_data(message_data: str) -> (str, int):
 class Trust(Module, multiprocessing.Process):
     name = 'P2P Trust'
     description = 'Enables sharing detection data with other Slips instances'
-    authors = ['Dita']
+    authors = ['Dita', 'Alya Gomaa']
+    pigeon_port=6668
+    rename_with_port=False
+    slips_update_channel='ip_info_change'
+    p2p_data_request_channel='p2p_data_request'
+    gopy_channel_raw='p2p_gopy'
+    pygo_channel_raw='p2p_pygo'
+    start_pigeon=True
+    pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips')  # or make sure the binary is in $PATH
+    pigeon_key_file='pigeon.keys'
+    rename_redis_ip_info=False
+    rename_sql_db_file=False
+    override_p2p=False
 
-    def __init__(
-        self,
-        output_queue: multiprocessing.Queue,
-        redis_port: int,
-        pigeon_port=6668,
-        rename_with_port=False,
-        output_dir='output/',
-        slips_update_channel='ip_info_change',
-        p2p_data_request_channel='p2p_data_request',
-        gopy_channel='p2p_gopy',
-        pygo_channel='p2p_pygo',
-        start_pigeon=True,
-        pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips'),  # or make sure the binary is in $PATH
-        pigeon_key_file='pigeon.keys',
-        rename_redis_ip_info=False,
-        rename_sql_db_file=False,
-        override_p2p=False,
-    ):
-        # this module is called automatically when slips starts
-        multiprocessing.Process.__init__(self)
-        super().__init__(output_queue)
+    def init(self, *args, **kwargs):
+        output_dir = self.db.get_output_dir()
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
-        # get the used interface
-        # self.get_used_interface()
-        # pigeon_logfile = f'output/{used_interface}/p2p.log'
-        pigeon_logfile = os.path.join(output_dir, 'p2p.log')
+        self.pigeon_logfile_raw = os.path.join(output_dir, 'p2p.log')
+
         self.p2p_reports_logfile = os.path.join(output_dir, 'p2p_reports.log')
         # pigeon generate keys and stores them in the following dir, if this is placed in the <output> dir,
         # when restarting slips, it will look for the old keys in the new output dir! so it wont find them and will
@@ -93,26 +79,14 @@ class Trust(Module, multiprocessing.Process):
         # store the keys in slips main dir so they don't change every run
         data_dir = os.path.join(os.getcwd(), 'p2ptrust_runtime/')
         # data_dir = f'./output/{used_interface}/p2ptrust_runtime/'
-
         # create data folder
         Path(data_dir).mkdir(parents=True, exist_ok=True)
-
-        self.output_queue = output_queue
-        self.port = self.get_available_port()
-        self.host = self.get_local_IP()
-        self.rename_with_port = rename_with_port
-        self.gopy_channel_raw = gopy_channel
-        self.pygo_channel_raw = pygo_channel
-        self.pigeon_logfile_raw = pigeon_logfile
-        self.start_pigeon = start_pigeon
-        self.override_p2p = override_p2p
         self.data_dir = data_dir
 
-        str_port = str(self.port) if self.rename_with_port else ''
-        self.printer = Printer(output_queue, self.name + str_port)
+        self.port = self.get_available_port()
+        self.host = self.get_local_IP()
 
-        self.slips_update_channel = slips_update_channel
-        self.p2p_data_request_channel = p2p_data_request_channel
+        str_port = str(self.port) if self.rename_with_port else ''
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
@@ -125,17 +99,15 @@ class Trust(Module, multiprocessing.Process):
             self.rotator_thread = threading.Thread(
                 target=self.rotate_p2p_logfile, daemon=True
             )
-        self.pigeon_key_file = pigeon_key_file
-        self.pigeon_binary = pigeon_binary
 
         self.storage_name = 'IPsInfo'
-        if rename_redis_ip_info:
+        if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
-        self.c1 = __database__.subscribe('report_to_peers')
+        self.c1 = self.db.subscribe('report_to_peers')
         # channel to send msgs to whenever slips needs info from other peers about an ip
-        self.c2 = __database__.subscribe(self.p2p_data_request_channel)
+        self.c2 = self.db.subscribe(self.p2p_data_request_channel)
         # this channel receives peers requests/updates
-        self.c3 = __database__.subscribe(self.gopy_channel)
+        self.c3 = self.db.subscribe(self.gopy_channel)
         self.channels = {
             'report_to_peers': self.c1,
             self.p2p_data_request_channel: self.c2,
@@ -151,20 +123,14 @@ class Trust(Module, multiprocessing.Process):
             'high': 0.8,
             'critical': 1,
         }
-        __database__.start(redis_port)
 
         self.sql_db_name = f'{self.data_dir}trustdb.db'
-        if rename_sql_db_file:
+        if self.rename_sql_db_file:
             self.sql_db_name += str(pigeon_port)
         # todo don't duplicate this dict, move it to slips_utils
         # all evidence slips detects has threat levels of strings
         # each string should have a corresponding int value to be able to calculate
         # the accumulated threat level and alert
-
-
-
-    def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
-        self.printer.print(text, verbose, debug)
 
 
     def read_configuration(self):
@@ -212,15 +178,16 @@ class Trust(Module, multiprocessing.Process):
     def _configure(self):
         # TODO: do not drop tables on startup
         self.trust_db = trustdb.TrustDB(
-            self.sql_db_name, self.printer, drop_tables_on_startup=True
+            self.sql_db_name, self.outputqueue, drop_tables_on_startup=True
         )
         self.reputation_model = reputation_model.BaseModel(
-            self.printer, self.trust_db
+            self.outputqueue, self.trust_db
         )
         # print(f"[DEBUGGING] Starting godirector with pygo_channel: {self.pygo_channel}")
         self.go_director = GoDirector(
-            self.printer,
             self.trust_db,
+            self.db,
+            self.outputqueue,
             self.storage_name,
             override_p2p=self.override_p2p,
             report_func=self.process_message_report,
@@ -344,7 +311,7 @@ class Trust(Module, multiprocessing.Process):
         if not data_already_reported:
             # Take data and send it to a peer as report.
             p2p_utils.send_evaluation_to_go(
-                attacker, score, confidence, '*', self.pygo_channel
+                attacker, score, confidence, '*', self.pygo_channel, self.db
             )
 
     def gopy_callback(self, msg: Dict):
@@ -373,7 +340,7 @@ class Trust(Module, multiprocessing.Process):
             if msg and type(msg['data']) != int:
                 self.handle_data_request(msg['data'])
         except Exception as e:
-            self.printer.print(f'Exception {e} in data_request_callback', 0, 1)
+            self.print(f'Exception {e} in data_request_callback', 0, 1)
 
     # def handle_update(self, ip_address: str) -> None:
     #     """
@@ -458,25 +425,25 @@ class Trust(Module, multiprocessing.Process):
         evidence_type = 'Malicious-IP-from-P2P-network'
 
         category = 'Anomaly.Traffic'
-        # dns_resolution = __database__.get_dns_resolution(ip)
+        # dns_resolution = self.db.get_dns_resolution(ip)
         # dns_resolution = dns_resolution.get('domains', [])
         # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
         direction = 'from' if 'src' in ip_state else 'to'
         # we'll be using this to make the description more clear
         other_direction = 'to' if 'from' in direction else 'from'
 
-        ip_identification = __database__.getIPIdentification(ip)
+        ip_identification = self.db.get_ip_identification(ip)
         description = (
             f'connection {direction} blacklisted IP {ip} ({ip_identification}) '
             f'{other_direction} {profileid.split("_")[-1]}'
             f' Source: Slips P2P network.'
         )
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
         # add this ip to our MaliciousIPs hash in the database
-        __database__.set_malicious_ip(ip, profileid, twid)
+        self.db.set_malicious_ip(ip, profileid, twid)
 
     def handle_data_request(self, message_data: str) -> None:
         """
@@ -540,7 +507,7 @@ class Trust(Module, multiprocessing.Process):
         # TODO: in some cases, it is not necessary to wait, specify that and implement it
         #       I do not remember writing this comment. I have no idea in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
-        p2p_utils.send_request_to_go(ip_address, self.pygo_channel)
+        p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.db)
         self.print(f'[Slips -> The Network] request about {ip_address}')
 
         # go will send a reply in no longer than 10s (or whatever the
@@ -575,6 +542,7 @@ class Trust(Module, multiprocessing.Process):
                 combined_score,
                 combined_confidence,
                 network_score,
+                self.db,
                 self.storage_name,
             )
             if int(combined_score) * int(confidence) > 0:
@@ -605,14 +573,15 @@ class Trust(Module, multiprocessing.Process):
         # All keys and data sent to this function is validated in go_director.py
         data = json.dumps(data)
         # give the report to evidenceProcess to decide whether to block or not
-        __database__.publish('new_blame', data)
+        self.db.publish('new_blame', data)
 
 
     def shutdown_gracefully(self):
-        if self.start_pigeon:
+        if hasattr(self, 'pigeon'):
             self.pigeon.send_signal(signal.SIGINT)
-        self.trust_db.__del__()
-        __database__.publish('finished_modules', self.name)
+        if hasattr(self, 'trust_db'):
+            self.trust_db.__del__()
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -631,7 +600,7 @@ class Trust(Module, multiprocessing.Process):
             self.rotator_thread.start()
 
         # should call self.update_callback
-        # self.c4 = __database__.subscribe(self.slips_update_channel)
+        # self.c4 = self.db.subscribe(self.slips_update_channel)
 
     def main(self):
         """main loop function"""
@@ -655,7 +624,7 @@ class Trust(Module, multiprocessing.Process):
             if not self.mutliaddress_printed:
                 # give the pigeon time to put the multiaddr in the db
                 time.sleep(2)
-                multiaddr = __database__.get_multiaddr()
+                multiaddr = self.db.get_multiaddr()
                 self.print(f"You Multiaddress is: {multiaddr}")
                 self.mutliaddress_printed = True
 

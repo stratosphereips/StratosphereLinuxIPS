@@ -1,37 +1,10 @@
 """Unit test for ../slips.py"""
+from tests.common_test_utils import do_nothing, IS_IN_A_DOCKER_CONTAINER
+from tests.module_factory import ModuleFactory
 from ..slips import *
-from ..redis_manager import RedisManager
-from ..process_manager import ProcessManager
-import os
-import argparse
-import subprocess
-import time
-import pytest
-
-IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
-
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-
-
-# Main Class tests
-def create_Main_instance():
-    """returns an instance of Main() class in slips.py"""
-    main = Main(testing=True)
-    main.input_information = 'test.pcap'
-    main.input_type = 'pcap'
-    main.line_type = False
-    return main
-
-def create_redis_manager_instance(main):
-    return RedisManager(main)
-def create_process_manager_instance():
-    return ProcessManager(create_Main_instance())
 
 def test_load_modules():
-    proc_manager = create_process_manager_instance()
+    proc_manager = ModuleFactory().create_process_manager_obj()
     failed_to_load_modules = proc_manager.get_modules(
         ['template', 'mldetection-1', 'ensembling']
     )[1]
@@ -67,8 +40,8 @@ def test_load_modules():
 #     assert 'CDm47v3jrYL8lx0cOh' in str(x)
 
 def test_clear_redis_cache_database():
-    main = create_Main_instance()
-    redis_manager = create_redis_manager_instance(main)
+    main = ModuleFactory().create_main_obj('test.pcap')
+    redis_manager = ModuleFactory().create_redis_manager_obj(main)
     assert redis_manager.clear_redis_cache_database() == True
 
 

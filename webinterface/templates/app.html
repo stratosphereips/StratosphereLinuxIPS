@@ -67,7 +67,8 @@
         </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" type="button" id="nav-documentation-tab" target=”_blank” href="https://stratospherelinuxips.readthedocs.io/en/develop/" aria-selected="false">
+        <a class="nav-link" type="button" id="nav-documentation-tab" data-bs-toggle="tab" data-bs-target="#nav-documentation" role="tab"
+        aria-controls="nav-documentation" aria-selected="false">
           Documentation
         </a>
       </li>
@@ -92,6 +93,9 @@
       </div>
       <div class="tab-pane fade" id="nav-general" role="tabpanel" aria-labelledby="nav-general-tab">
         {% include 'general.html' %}
+      </div>
+      <div class="tab-pane fade" id="nav-documentation" role="tabpanel" aria-labelledby="nav-documentation-tab">
+        {% include 'documentation.html' %}
       </div>
     </div>
     <div class="modal " id="modal_choose_redis" tabindex="-1" role="dialog" aria-labelledby="staticBackdropLabel">
