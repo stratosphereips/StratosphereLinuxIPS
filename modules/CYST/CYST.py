@@ -154,11 +154,11 @@ class Module(Module, multiprocessing.Process):
         if not self.is_cyst_enabled():
             return 1
         # connect to cyst
-        print(f"Initializing socket", 0, 1)
+        self.print(f"Initializing socket", 0, 1)
         self.sock, self.cyst_conn = self.initialize_unix_socket()
         if not self.sock:
             return 1
-        print(f"Done initializing socket", 0, 1)
+        self.print(f"Done initializing socket", 0, 1)
 
     def main(self):
         """
