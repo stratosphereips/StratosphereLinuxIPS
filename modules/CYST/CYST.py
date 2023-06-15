@@ -5,7 +5,6 @@ import json
 import os
 import errno
 import sys
-from pprint import pp
 import contextlib
 
 class CYST(Module, multiprocessing.Process):
@@ -107,11 +106,6 @@ class CYST(Module, multiprocessing.Process):
             'alert_ID': alert_ID,
             'ip_to_block': ip_to_block
         }
-
-        self.print(f"Sending alert to CYST: ")
-        self.print(pp(alert_to_send))
-
-
         alert_to_send: bytes = json.dumps(alert_to_send).encode()
         self.send_length(alert_to_send)
 
@@ -135,7 +129,6 @@ class CYST(Module, multiprocessing.Process):
         if not custom_flows:
             return False
 
-
         with contextlib.suppress(ValueError):
             # are we reading custom flows from this module?
             if self.name in sys.argv[sys.argv.index('--input-module') + 1]:
@@ -155,7 +148,7 @@ class CYST(Module, multiprocessing.Process):
 
     def pre_main(self):
         # are the flows being read from the default inputprocess or from a custom module? like this one
-        if not self.is_cyst_enabled():
+        if not self.db.is_cyst_enabled():
             return 1
         self.db.set_cyst_enabled()
         # connect to cyst
@@ -181,10 +174,6 @@ class CYST(Module, multiprocessing.Process):
                 'flow': flow,
                 'module': self.name # to know where this flow is coming from aka what's the input module
                 }
-
-            self.print(f"Received flow from cyst")
-            self.print(pp(to_send))
-
             self.db.publish('new_module_flow', json.dumps(to_send))
 
         # check for connection before receiving
