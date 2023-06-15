@@ -4,6 +4,8 @@ import socket
 import json
 import os
 import errno
+import sys
+import contextlib
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -120,6 +122,24 @@ class Module(Module, multiprocessing.Process):
         # delete the socket
         os.unlink(self.cyst_UDS)
 
+
+    def is_cyst_enabled(self):
+        # are the flows being read from the default inputprocess or from a custom module? like this one
+        custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
+        if not custom_flows:
+            return False
+
+
+        with contextlib.suppress(ValueError):
+            # are we reading custom flows from this module?
+            if self.name in sys.argv[sys.argv.index('--input-module') + 1]:
+                return True
+
+            if self.name in sys.argv[sys.argv.index('--im') + 1]:
+                return True
+
+        return True
+
     def shutdown_gracefully(self):
         self.close_connection()
         # Confirm that the module is done processing
@@ -131,7 +151,7 @@ class Module(Module, multiprocessing.Process):
 
     def pre_main(self):
         # are the flows being read from the default inputprocess or from a custom module? like this one
-        if not self.db.is_cyst_enabled():
+        if not self.is_cyst_enabled():
             return 1
         # connect to cyst
         print(f"Initializing socket", 0, 1)
