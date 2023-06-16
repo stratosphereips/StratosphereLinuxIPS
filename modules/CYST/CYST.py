@@ -5,6 +5,7 @@ import json
 import os
 import errno
 import sys
+from pprint import pp
 import contextlib
 
 class Module(Module, multiprocessing.Process):
@@ -106,6 +107,11 @@ class Module(Module, multiprocessing.Process):
             'alert_ID': alert_ID,
             'ip_to_block': ip_to_block
         }
+
+        self.print(f"Sending alert to CYST: ")
+        self.print(pp(alert_to_send))
+
+
         alert_to_send: bytes = json.dumps(alert_to_send).encode()
         self.send_length(alert_to_send)
 
@@ -174,6 +180,10 @@ class Module(Module, multiprocessing.Process):
                 'flow': flow,
                 'module': self.name # to know where this flow is coming from aka what's the input module
                 }
+
+            self.print(f"Received flow from cyst")
+            self.print(pp(to_send))
+
             self.db.publish('new_module_flow', json.dumps(to_send))
 
         # check for connection before receiving
