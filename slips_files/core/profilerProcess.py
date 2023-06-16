@@ -36,6 +36,7 @@ import os
 import binascii
 import base64
 from re import split
+from pprint import pp
 
 # Profiler Process
 class ProfilerProcess(Module, multiprocessing.Process):
@@ -1206,6 +1207,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
                         and self.daddr_as_obj in network
                     ):
                         self.handle_in_flows()
+
             else:
                 # home_network param wasn't set in slips.conf
                 # Create profiles for all ips we see
@@ -1214,6 +1216,12 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 if self.analysis_direction == 'all':
                     # No home. Store all
                     self.handle_in_flows()
+
+            if self.db.is_cyst_enabled:
+                # print the added flow as a form of debugging feedback for
+                # the user to know that slips is working
+                self.print(pp(asdict(self.flow)))
+
             return True
         except Exception:
             # For some reason we can not use the output queue here.. check
@@ -1515,7 +1523,6 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 if flow in self.flow.type_:
                     cases[flow]()
             return False
-
 
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
