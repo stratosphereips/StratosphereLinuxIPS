@@ -482,6 +482,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """returns the length of all keys in the db"""
         return self.r.dbsize()
 
+    def set_cyst_enabled(self):
+        return self.r.set('is_cyst_enabled', 'yes')
+
+    def is_cyst_enabled(self):
+        return self.r.get('is_cyst_enabled')
+
+
     def get_equivalent_tws(self, hrs: float):
         """
         How many tws correspond to the given hours?

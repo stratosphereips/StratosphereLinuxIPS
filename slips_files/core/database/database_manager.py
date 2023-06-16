@@ -396,6 +396,12 @@ class DBManager:
     def get_ti_queue_size(self, *args, **kwargs):
         return self.rdb.get_ti_queue_size(*args, **kwargs)
 
+    def set_cyst_enabled(self, *args, **kwargs):
+        return self.rdb.set_cyst_enabled(*args, **kwargs)
+
+    def is_cyst_enabled(self, *args, **kwargs):
+        return self.rdb.is_cyst_enabled(*args, **kwargs)
+
     def give_threat_intelligence(self, *args, **kwargs):
         return self.rdb.give_threat_intelligence(*args, **kwargs)
 
