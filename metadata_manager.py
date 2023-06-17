@@ -79,13 +79,14 @@ class MetadataManager:
         # Add a copy of whitelist.conf
         whitelist = self.main.conf.whitelist_path()
         shutil.copy(whitelist, metadata_dir)
-
+        '''ISSUE: cause of lingering git<defunct>'''
         branch_info = utils.get_branch_info()
         commit, branch = None, None
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
-
+        print(commit, branch)
+        '''END ISSUE'''
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
 
