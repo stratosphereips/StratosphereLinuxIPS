@@ -5,7 +5,7 @@
 - 55% RAM usage decrease.
 - Code improvements. Change the structure of all modules.
 - Graceful shutdown of all modules thanks to @danieltherealyang
-- 
+- Added basic cpu profiling capabilities with a live mode (sampling profiler) and development mode (deterministic profiler).
 
 -1.0.5 (May 2023):
 - Fix missing flows due to modules stopping before the processing is done.
