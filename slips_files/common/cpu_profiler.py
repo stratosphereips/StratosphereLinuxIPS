@@ -2,19 +2,20 @@ import viztracer
 import time
 import threading
 import yappi
+import io
 import pstats
 
 from slips_files.common.abstracts import ProfilerInterface
 
 class CPUProfiler(ProfilerInterface):
-    def __init__(self, mode="dev", limit=20, interval=20):
+    def __init__(self, db, output, mode="dev", limit=20, interval=20):
         valid_modes = ["dev", "live"]
         if mode not in valid_modes:
             raise Exception("cpu_profiler_mode = " + mode + " is invalid, must be one of " + str(valid_modes) + ", CPU Profiling will be disabled")
         if mode == "dev":
-            self.profiler = DevProfiler(limit)
+            self.profiler = DevProfiler(output)
         if mode == "live":
-            self.profiler = LiveProfiler(limit, interval)
+            self.profiler = LiveProfiler(db, limit, interval)
     
     def _create_profiler(self):
         self.profiler._create_profiler()
@@ -31,9 +32,9 @@ class CPUProfiler(ProfilerInterface):
         self.profiler.print()
 
 class DevProfiler(ProfilerInterface):
-    def __init__(self, limit):
+    def __init__(self, output):
         self.profiler = self._create_profiler()
-        self.limit = limit
+        self.output = output
     
     def _create_profiler(self):
         return viztracer.VizTracer()
@@ -45,15 +46,17 @@ class DevProfiler(ProfilerInterface):
         self.profiler.stop()
 
     def print(self):
-        self.profiler.save('output/result.json')
+        self.profiler.save(self.output + 'cpu_profiling_result.json')
 
 class LiveProfiler(ProfilerInterface):
-    def __init__(self, limit=20, interval=20):
+    def __init__(self, db, limit=20, interval=20):
         self.profiler = self._create_profiler()
         self.limit = limit
         self.interval = interval
         self.is_running = False
         self.timer_thread = threading.Thread(target=self._sampling_loop)
+        self.db = db
+        self.stats = None
 
     def _create_profiler(self):
         return yappi
@@ -70,13 +73,20 @@ class LiveProfiler(ProfilerInterface):
             self.profiler.stop()
 
     def print(self):
-        stats = self.profiler.convert2pstats(self.profiler.get_func_stats())
-        stats.sort_stats('cumulative')
-        stats.print_stats(self.limit)
+        self.stats.print_stats(self.limit)
     
     def _sampling_loop(self):
+        stringio = io.StringIO()
         while self.is_running:
             # replace the print with a redis update
-            self.print()
-            time.sleep(self.interval)
             self.profiler.clear_stats()
+
+            time.sleep(self.interval)
+
+            self.stats = pstats.Stats(stream=stringio)
+            self.stats.add(self.profiler.convert2pstats(self.profiler.get_func_stats()))
+            self.stats.sort_stats('cumulative')
+            self.print() #prints to stringio, not stdout
+
+            self.db.publish('cpu_profile', stringio.getvalue())
+            

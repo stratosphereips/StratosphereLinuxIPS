@@ -88,6 +88,46 @@ class Main:
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
+        # Output thread. outputprocess should be created first because it handles
+        # the output of the rest of the threads.
+        self.outputqueue = Queue()
+
+        # get the port that is going to be used for this instance of slips
+        if self.args.port:
+            self.redis_port = int(self.args.port)
+            # close slips if port is in use
+            self.metadata_man.check_if_port_is_in_use(self.redis_port)
+        elif self.args.multiinstance:
+            self.redis_port = self.redis_man.get_random_redis_port()
+            if not self.redis_port:
+                # all ports are unavailable
+                inp = input("Press Enter to close all ports.\n")
+                if inp == '':
+                    self.redis_man.close_all_ports()
+                self.terminate_slips()
+        else:
+            # even if this port is in use, it will be overwritten by slips
+            self.redis_port = 6379
+            # self.check_if_port_is_in_use(self.redis_port)
+        self.db = DBManager(self.args.output, self.outputqueue, self.redis_port)
+        self.db.set_input_metadata({'output_dir': self.args.output})
+
+    def cpu_profiler_init(self):
+        self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
+        if self.cpuProfilerEnabled:
+            try:
+                self.cpuProfiler = CPUProfiler(db=self.db, output=self.args.output, mode=slips.conf.get_cpu_profiler_mode(),
+                                        limit=slips.conf.get_cpu_profiler_output_limit(),
+                                        interval=slips.conf.get_cpu_profiler_sampling_interval())
+                self.cpuProfiler.start()
+            except Exception as e:
+                print(e)
+                self.cpuProfilerEnabled = False
+    
+    def cpu_profiler_release(self):
+        if self.cpuProfilerEnabled:
+            self.cpuProfiler.stop()
+            self.cpuProfiler.print()
 
     def get_slips_version(self):
         version_file = 'VERSION'
@@ -435,31 +475,6 @@ class Main:
 
             self.setup_print_levels()
 
-            # Output thread. outputprocess should be created first because it handles
-            # the output of the rest of the threads.
-            self.outputqueue = Queue()
-
-            # get the port that is going to be used for this instance of slips
-            if self.args.port:
-                self.redis_port = int(self.args.port)
-                # close slips if port is in use
-                self.metadata_man.check_if_port_is_in_use(self.redis_port)
-            elif self.args.multiinstance:
-                self.redis_port = self.redis_man.get_random_redis_port()
-                if not self.redis_port:
-                    # all ports are unavailable
-                    inp = input("Press Enter to close all ports.\n")
-                    if inp == '':
-                        self.redis_man.close_all_ports()
-                    self.terminate_slips()
-            else:
-                # even if this port is in use, it will be overwritten by slips
-                self.redis_port = 6379
-                # self.check_if_port_is_in_use(self.redis_port)
-
-
-            self.db = DBManager(self.args.output, self.outputqueue, self.redis_port)
-            self.db.set_input_metadata({'output_dir': self.args.output})
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
@@ -685,16 +700,7 @@ class Main:
 ####################
 if __name__ == '__main__':
     slips = Main()
-    cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
-    if cpuProfilerEnabled:
-        try:
-            cpuProfiler = CPUProfiler(mode=slips.conf.get_cpu_profiler_mode(),
-                                    limit=slips.conf.get_cpu_profiler_output_limit(),
-                                    interval=slips.conf.get_cpu_profiler_sampling_interval())
-            cpuProfiler.start()
-        except Exception as e:
-            print(e)
-            cpuProfilerEnabled = False
+    slips.cpu_profiler_init()
     if slips.args.stopdaemon:
         # -S is provided
         daemon = Daemon(slips)
@@ -719,6 +725,4 @@ if __name__ == '__main__':
     else:
         # interactive mode
         slips.start()
-    if cpuProfilerEnabled:
-        cpuProfiler.stop()
-        cpuProfiler.print()
+    slips.cpu_profiler_release()

@@ -85,7 +85,6 @@ class MetadataManager:
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
-        print(commit, branch)
         '''END ISSUE'''
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
