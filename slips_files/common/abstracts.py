@@ -28,8 +28,6 @@ class Module(ABC):
         this init will have access to all keyword args passes when initializing the module
         """
 
-
-
     def should_stop(self) -> bool:
         """
         The module should stop on the following 2 conditions
@@ -133,3 +131,50 @@ class Module(ABC):
                 self.print(f'Problem in main() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)
                 return True
+
+class Core(Module):
+    """
+    Interface for all Core files placed in slips_files/core/
+    """
+    name = ''
+    description = 'Short description of the core class purpose'
+    authors = ['Name of the author creating the class']
+
+    def __init__(self, db, input_queue, output_queue, profiler_queue, output_dir, **kwargs):
+        """
+        contains common initializations in all Helpers in  slips_files/core/
+        the goal of this is to have one common __init__() for all modules, which is the one
+        in this file
+        """
+        Process.__init__(self)
+
+        self.output_queue = output_queue
+        self.input_queue = input_queue
+        self.profiler_queue = profiler_queue
+
+        self.output_dir = output_dir
+
+        self.db = db
+        self.control_channel = self.db.subscribe('control_module')
+        self.msg_received = True
+        self.init(**kwargs)
+
+    def run(self):
+        """
+        must be called run because this is what multiprocessing runs
+        """
+        try:
+             # this should be defined in every core file
+            # this won't run in a loop because it's not a module
+            error: bool = self.main()
+            if error:
+                # finished with some error
+                self.shutdown_gracefully()
+
+        except KeyboardInterrupt:
+            return True
+        except Exception:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem in main() line {exception_line}', 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
+            return True
