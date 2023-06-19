@@ -16,14 +16,15 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.imports import *
-from .notify import Notify
+from slips_files.core.helpers.whitelist import Whitelist
+from slips_files.core.helpers.notify import Notify
+from slips_files.common.abstracts import Core
 import json
 from datetime import datetime
 from os import path
 from colorama import Fore, Style
 import sys
 import os
-from .whitelist import Whitelist
 import time
 import platform
 import traceback
@@ -31,16 +32,16 @@ import traceback
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 # Evidence Process
-class EvidenceProcess(Module, multiprocessing.Process):
+class EvidenceProcess(Core):
     """
     A class to process the evidence from the alerts and update the threat level
     It only work on evidence for IPs that were profiled
     This should be converted into a module
     """
-    def init(self, input_queue=None, output_dir=None):
-        self.name = 'Evidence'
-        self.inputqueue = input_queue
-        self.whitelist = Whitelist(self.outputqueue, self.db)
+    name = 'Evidence'
+
+    def init(self):
+        self.whitelist = Whitelist(self.output_queue, self.db)
         self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
@@ -62,16 +63,16 @@ class EvidenceProcess(Module, multiprocessing.Process):
         }
 
         # clear output/alerts.log
-        self.logfile = self.clean_file(output_dir, 'alerts.log')
+        self.logfile = self.clean_file(self.output_dir, 'alerts.log')
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_interface = self.is_running_on_interface()
 
         # clear output/alerts.json
-        self.jsonfile = self.clean_file(output_dir, 'alerts.json')
+        self.jsonfile = self.clean_file(self.output_dir, 'alerts.json')
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
 
-        self.print(f'Storing Slips logs in {output_dir}')
+        self.print(f'Storing Slips logs in {self.output_dir}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
 
@@ -537,203 +538,215 @@ class EvidenceProcess(Module, multiprocessing.Process):
             self.db.set_flow_label(uids, 'malicious')
 
     def main(self):
-        if msg := self.get_msg('evidence_added'):
-            # Data sent in the channel as a json dict, it needs to be deserialized first
-            data = json.loads(msg['data'])
-            profileid = data.get('profileid')
-            srcip = profileid.split(self.separator)[1]
-            twid = data.get('twid')
-            attacker_direction = data.get(
-                'attacker_direction'
-            )   # example: dstip srcip dport sport dstdomain
-            attacker = data.get(
-                'attacker'
-            )   # example: ip, port, inTuple, outTuple, domain
-            evidence_type = data.get(
-                'evidence_type'
-            )   # example: PortScan, ThreatIntelligence, etc..
-            description = data.get('description')
-            timestamp = data.get('stime')
-            # this is all the uids of the flows that cause this evidence
-            all_uids = data.get('uid')
-            # tags = data.get('tags', False)
-            confidence = data.get('confidence', False)
-            threat_level = data.get('threat_level', False)
-            category = data.get('category', False)
-            conn_count = data.get('conn_count', False)
-            port = data.get('port', False)
-            proto = data.get('proto', False)
-            source_target_tag = data.get('source_target_tag', False)
-            evidence_ID = data.get('ID', False)
-
-            # FP whitelisted alerts happen when the db returns an evidence
-            # that isn't processed in this channel, in the tw_evidence below
-            # to avoid this, we only alert on processed evidence
-            self.db.mark_evidence_as_processed(evidence_ID)
-
-            # Ignore alert if IP is whitelisted
-            if self.whitelist.is_whitelisted_evidence(
-                srcip, attacker, attacker_direction, description
-            ):
-                self.db.cache_whitelisted_evidence_ID(evidence_ID)
-                # Modules add evidence to the db before reaching this point, now
-                # remove evidence from db so it could be completely ignored
-                self.db.deleteEvidence(
-                    profileid, twid, evidence_ID
-                )
-                return
-
-            # Format the time to a common style given multiple type of time variables
-            if self.is_running_on_interface():
-                timestamp: datetime = utils.convert_to_local_timezone(timestamp)
-            flow_datetime = utils.convert_format(timestamp, 'iso')
-
-            # prepare evidence for text log file
-            evidence = self.format_evidence_string(srcip, evidence_type, attacker, description)
-            # prepare evidence for json log file
-            IDEA_dict = utils.IDEA_format(
-                srcip,
-                evidence_type,
-                attacker_direction,
-                attacker,
-                description,
-                confidence,
-                category,
-                conn_count,
-                source_target_tag,
-                port,
-                proto,
-                evidence_ID
-            )
-
-            # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
-            alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
-            alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
-
-            # Add the evidence to alerts.log
-            self.add_to_log_file(alert_to_log)
-            # add to alerts.json
-            self.add_to_json_log_file(IDEA_dict, all_uids)
-
-            self.db.set_evidence_for_profileid(IDEA_dict)
-            self.db.publish('report_to_peers', json.dumps(data))
-
-            if tw_evidence := self.get_evidence_for_tw(profileid, twid):
-                # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
-                # Important! It may happen that the evidence is not related to a profileid and twid.
-                # For example when the evidence is on some src IP attacking our home net, and we are not creating
-                # profiles for attackers
-
-                # The accumulated threat level is for all the types of evidence for this profile
-                accumulated_threat_level = self.get_accumulated_threat_level(tw_evidence)
-
-                ID = self.get_last_evidence_ID(tw_evidence)
-
-                # if the profile was already blocked in this twid, we shouldn't alert
-                profile_already_blocked = self.db.checkBlockedProfTW(profileid, twid)
-
-                # This is the part to detect if the accumulated evidence was enough for generating a detection
-                # The detection should be done in attacks per minute. The parameter in the configuration
-                # is attacks per minute
-                # So find out how many attacks corresponds to the width we are using
-                if (
-                    accumulated_threat_level >= self.detection_threshold_in_this_width
-                    and not profile_already_blocked
-                ):
-                    # store the alert in our database
-                    # the alert ID is profileid_twid + the ID of the last evidence causing this alert
-                    alert_ID = f'{profileid}_{twid}_{ID}'
-                    self.db.set_evidence_causing_alert(
-                        profileid,
-                        twid,
-                        alert_ID,
-                        self.IDs_causing_an_alert
-                    )
-                    to_send = {
-                        'alert_ID': alert_ID,
-                        'profileid': profileid,
-                        'twid': twid,
-                    }
-                    self.db.publish('new_alert', json.dumps(to_send))
-                    self.label_flows_causing_alert()
-                    self.send_to_exporting_module(tw_evidence)
-
-                    # print the alert
-                    alert_to_print = (
-                        self.format_evidence_causing_this_alert(
-                            tw_evidence,
-                            profileid,
-                            twid,
-                            flow_datetime,
-                        )
-                    )
-                    self.print(f'{alert_to_print}', 1, 0)
-
-                    if self.popup_alerts:
-                        # remove the colors from the alerts before printing
-                        alert_to_print = (
-                            alert_to_print.replace(Fore.RED, '')
-                            .replace(Fore.CYAN, '')
-                            .replace(Style.RESET_ALL, '')
-                        )
-                        self.notify.show_popup(alert_to_print)
-
-                    # todo if it's already blocked, we shouldn't decide blocking
-                    blocked = False
-
-                    if self.is_blocking_module_enabled():
-                        # send ip to the blocking module
-                        if self.decide_blocking(profileid):
-                            blocked = True
-
-                    self.mark_as_blocked(
-                        profileid,
-                        twid,
-                        flow_datetime,
-                        accumulated_threat_level,
-                        IDEA_dict,
-                        blocked=blocked
-                    )
-
-        if msg := self.get_msg('new_blame'):
-            self.msg_received = True
-            data = msg['data']
+        while True:
             try:
-                data = json.loads(data)
-            except json.decoder.JSONDecodeError:
-                self.print(
-                    'Error in the report received from p2ptrust module'
-                )
-                return
-            # The available values for the following variables are defined in go_director
+                if msg := self.get_msg('evidence_added'):
+                    # Data sent in the channel as a json dict, it needs to be deserialized first
+                    data = json.loads(msg['data'])
+                    profileid = data.get('profileid')
+                    srcip = profileid.split(self.separator)[1]
+                    twid = data.get('twid')
+                    attacker_direction = data.get(
+                        'attacker_direction'
+                    )   # example: dstip srcip dport sport dstdomain
+                    attacker = data.get(
+                        'attacker'
+                    )   # example: ip, port, inTuple, outTuple, domain
+                    evidence_type = data.get(
+                        'evidence_type'
+                    )   # example: PortScan, ThreatIntelligence, etc..
+                    description = data.get('description')
+                    timestamp = data.get('stime')
+                    # this is all the uids of the flows that cause this evidence
+                    all_uids = data.get('uid')
+                    # tags = data.get('tags', False)
+                    confidence = data.get('confidence', False)
+                    threat_level = data.get('threat_level', False)
+                    category = data.get('category', False)
+                    conn_count = data.get('conn_count', False)
+                    port = data.get('port', False)
+                    proto = data.get('proto', False)
+                    source_target_tag = data.get('source_target_tag', False)
+                    evidence_ID = data.get('ID', False)
 
-            # available key types: "ip"
-            key_type = data['key_type']
+                    # FP whitelisted alerts happen when the db returns an evidence
+                    # that isn't processed in this channel, in the tw_evidence below
+                    # to avoid this, we only alert on processed evidence
+                    self.db.mark_evidence_as_processed(evidence_ID)
 
-            # if the key type is ip, the ip is validated
-            key = data['key']
+                    # Ignore alert if IP is whitelisted
+                    if self.whitelist.is_whitelisted_evidence(
+                        srcip, attacker, attacker_direction, description
+                    ):
+                        self.db.cache_whitelisted_evidence_ID(evidence_ID)
+                        # Modules add evidence to the db before reaching this point, now
+                        # remove evidence from db so it could be completely ignored
+                        self.db.deleteEvidence(
+                            profileid, twid, evidence_ID
+                        )
+                        return
 
-            # available evaluation types: 'score_confidence'
-            evaluation_type = data['evaluation_type']
+                    # Format the time to a common style given multiple type of time variables
+                    if self.is_running_on_interface():
+                        timestamp: datetime = utils.convert_to_local_timezone(timestamp)
+                    flow_datetime = utils.convert_format(timestamp, 'iso')
 
-            # this is the score_confidence received from the peer
-            evaluation = data['evaluation']
-            # {"key_type": "ip", "key": "1.2.3.40",
-            # "evaluation_type": "score_confidence",
-            # "evaluation": { "score": 0.9, "confidence": 0.6 }}
-            ip_info = {
-                'p2p4slips': evaluation
-            }
-            ip_info['p2p4slips'].update({'ts': time.time()})
-            self.db.store_blame_report(key, evaluation)
+                    # prepare evidence for text log file
+                    evidence = self.format_evidence_string(srcip, evidence_type, attacker, description)
+                    # prepare evidence for json log file
+                    IDEA_dict = utils.IDEA_format(
+                        srcip,
+                        evidence_type,
+                        attacker_direction,
+                        attacker,
+                        description,
+                        confidence,
+                        category,
+                        conn_count,
+                        source_target_tag,
+                        port,
+                        proto,
+                        evidence_ID
+                    )
 
-            blocking_data = {
-                'ip': key,
-                'block': True,
-                'to': True,
-                'from': True,
-                'block_for': self.width * 2,  # block for 2 timewindows
-            }
-            blocking_data = json.dumps(blocking_data)
-            self.db.publish('new_blocking', blocking_data)
+                    # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
+                    alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
+                    alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
 
+                    # Add the evidence to alerts.log
+                    self.add_to_log_file(alert_to_log)
+                    # add to alerts.json
+                    self.add_to_json_log_file(IDEA_dict, all_uids)
+
+                    self.db.set_evidence_for_profileid(IDEA_dict)
+                    self.db.publish('report_to_peers', json.dumps(data))
+
+                    if tw_evidence := self.get_evidence_for_tw(profileid, twid):
+                        # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
+                        # Important! It may happen that the evidence is not related to a profileid and twid.
+                        # For example when the evidence is on some src IP attacking our home net, and we are not creating
+                        # profiles for attackers
+
+                        # The accumulated threat level is for all the types of evidence for this profile
+                        accumulated_threat_level = self.get_accumulated_threat_level(tw_evidence)
+
+                        ID = self.get_last_evidence_ID(tw_evidence)
+
+                        # if the profile was already blocked in this twid, we shouldn't alert
+                        profile_already_blocked = self.db.checkBlockedProfTW(profileid, twid)
+
+                        # This is the part to detect if the accumulated evidence was enough for generating a detection
+                        # The detection should be done in attacks per minute. The parameter in the configuration
+                        # is attacks per minute
+                        # So find out how many attacks corresponds to the width we are using
+                        if (
+                            accumulated_threat_level >= self.detection_threshold_in_this_width
+                            and not profile_already_blocked
+                        ):
+                            # store the alert in our database
+                            # the alert ID is profileid_twid + the ID of the last evidence causing this alert
+                            alert_ID = f'{profileid}_{twid}_{ID}'
+                            self.db.set_evidence_causing_alert(
+                                profileid,
+                                twid,
+                                alert_ID,
+                                self.IDs_causing_an_alert
+                            )
+                            to_send = {
+                                'alert_ID': alert_ID,
+                                'profileid': profileid,
+                                'twid': twid,
+                            }
+                            self.db.publish('new_alert', json.dumps(to_send))
+                            self.label_flows_causing_alert()
+                            self.send_to_exporting_module(tw_evidence)
+
+                            # print the alert
+                            alert_to_print = (
+                                self.format_evidence_causing_this_alert(
+                                    tw_evidence,
+                                    profileid,
+                                    twid,
+                                    flow_datetime,
+                                )
+                            )
+                            self.print(f'{alert_to_print}', 1, 0)
+
+                            if self.popup_alerts:
+                                # remove the colors from the alerts before printing
+                                alert_to_print = (
+                                    alert_to_print.replace(Fore.RED, '')
+                                    .replace(Fore.CYAN, '')
+                                    .replace(Style.RESET_ALL, '')
+                                )
+                                self.notify.show_popup(alert_to_print)
+
+                            # todo if it's already blocked, we shouldn't decide blocking
+                            blocked = False
+
+                            if self.is_blocking_module_enabled():
+                                # send ip to the blocking module
+                                if self.decide_blocking(profileid):
+                                    blocked = True
+
+                            self.mark_as_blocked(
+                                profileid,
+                                twid,
+                                flow_datetime,
+                                accumulated_threat_level,
+                                IDEA_dict,
+                                blocked=blocked
+                            )
+
+                if msg := self.get_msg('new_blame'):
+                    self.msg_received = True
+                    data = msg['data']
+                    try:
+                        data = json.loads(data)
+                    except json.decoder.JSONDecodeError:
+                        self.print(
+                            'Error in the report received from p2ptrust module'
+                        )
+                        return
+                    # The available values for the following variables are defined in go_director
+
+                    # available key types: "ip"
+                    key_type = data['key_type']
+
+                    # if the key type is ip, the ip is validated
+                    key = data['key']
+
+                    # available evaluation types: 'score_confidence'
+                    evaluation_type = data['evaluation_type']
+
+                    # this is the score_confidence received from the peer
+                    evaluation = data['evaluation']
+                    # {"key_type": "ip", "key": "1.2.3.40",
+                    # "evaluation_type": "score_confidence",
+                    # "evaluation": { "score": 0.9, "confidence": 0.6 }}
+                    ip_info = {
+                        'p2p4slips': evaluation
+                    }
+                    ip_info['p2p4slips'].update({'ts': time.time()})
+                    self.db.store_blame_report(key, evaluation)
+
+                    blocking_data = {
+                        'ip': key,
+                        'block': True,
+                        'to': True,
+                        'from': True,
+                        'block_for': self.width * 2,  # block for 2 timewindows
+                    }
+                    blocking_data = json.dumps(blocking_data)
+                    self.db.publish('new_blocking', blocking_data)
+
+            except KeyboardInterrupt:
+                if self.should_stop():
+                    return True
+                else:
+                    continue
+            except Exception:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem in main() line {exception_line}', 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
+                return True
