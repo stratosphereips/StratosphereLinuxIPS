@@ -88,12 +88,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
 
-    def __new__(cls, redis_port, outputqueue, flush_db=True):
+    def __new__(cls, redis_port, output_queue, flush_db=True):
         """
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
         """
-        cls.redis_port, cls.outputqueue = redis_port, outputqueue
+        cls.redis_port, cls.outputqueue = redis_port, output_queue
         cls.flush_db = flush_db
         if cls.redis_port not in cls._instances:
             cls._instances[cls.redis_port] = super().__new__(cls)

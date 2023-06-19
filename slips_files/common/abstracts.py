@@ -11,9 +11,9 @@ class Module(ABC):
     name = ''
     description = 'Template abstract module'
     authors = ['Template abstract Author']
-    def __init__(self, outputqueue, db, **kwargs):
+    def __init__(self, output_queue, db, **kwargs):
         Process.__init__(self)
-        self.outputqueue = outputqueue
+        self.output_queue = output_queue
         self.db = db
         self.control_channel = self.db.subscribe('control_module')
         self.msg_received = True
@@ -62,7 +62,7 @@ class Module(ABC):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
+        self.output_queue.put(f'{levels}|{self.name}|{text}')
 
     @abstractmethod
     def shutdown_gracefully(self):

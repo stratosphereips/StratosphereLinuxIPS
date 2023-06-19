@@ -51,7 +51,7 @@ class ProcessManager:
             # Send manual stops to the processes using queues
             stop_msg = 'stop_process'
             self.main.profilerProcessQueue.put(stop_msg)
-            self.main.outputqueue.put(stop_msg)
+            self.main.output_queue.put(stop_msg)
 
     def get_modules(self, to_ignore):
         """
@@ -138,7 +138,7 @@ class ProcessManager:
 
             module_class = modules_to_call[module_name]['obj']
             module = module_class(
-                self.main.outputqueue,
+                self.main.output_queue,
                 self.main.db,
             )
             module.start()

@@ -13,9 +13,9 @@ import datetime
 
 
 class UpdateFileManager:
-    def __init__(self, outputqueue, db):
+    def __init__(self, output_queue, db):
         self.name = 'Update File Manager'
-        self.outputqueue = outputqueue
+        self.output_queue = output_queue
         self.db = db
         # Get a separator from the database
         self.separator = self.db.get_field_separator()
@@ -24,7 +24,7 @@ class UpdateFileManager:
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(outputqueue, self.db)
+        self.whitelist = Whitelist(self.output_queue, self.db)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line
@@ -163,13 +163,13 @@ class UpdateFileManager:
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
+        self.output_queue.put(f'{levels}|{self.name}|{text}')
 
     def log(self, text):
         """
         sends the text to output process to log it to slips.log without outputting to the terminal
         """
-        self.outputqueue.put(f'01|{self.name}|{text}log-only')
+        self.output_queue.put(f'01|{self.name}|{text}log-only')
 
     def read_ports_info(self, ports_info_filepath) -> int:
         """
