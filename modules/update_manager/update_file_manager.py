@@ -1,5 +1,5 @@
 from slips_files.common.imports import *
-from slips_files.core.whitelist import Whitelist
+from slips_files.core.helpers.whitelist import Whitelist
 import time
 import os
 import json

@@ -10,7 +10,7 @@ import modules.blocking.blocking as blocking_module
 import modules.http_analyzer.http_analyzer as http
 import modules.ip_info.ip_info as ip_info_module
 from slips_files.common.slips_utils import utils
-from slips_files.core.whitelist import Whitelist
+from slips_files.core.helpers.whitelist import Whitelist
 from tests.common_test_utils import do_nothing
 import modules.virustotal.virustotal as vt
 from process_manager import ProcessManager
