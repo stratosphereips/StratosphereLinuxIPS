@@ -19,10 +19,10 @@ from pathlib import Path
 from re import split
 import sys
 import os
-import socket
+from slips_files.common.abstracts import Core
 from datetime import datetime
 from watchdog.observers import Observer
-from .filemonitor import FileEventHandler
+from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.common.imports import *
 import time
 import json
@@ -31,12 +31,14 @@ import threading
 import subprocess
 
 # Input Process
-class InputProcess(multiprocessing.Process):
-    """A class process to run the process of the flows"""
+class InputProcess(Core):
+    """ A class process to run the process of the flows """
 
-    def __init__(
+    name = 'Input'
+
+    def init(
             self,
-            outputqueue,
+            output_queue,
             profilerqueue,
             input_type,
             input_information,
@@ -46,9 +48,7 @@ class InputProcess(multiprocessing.Process):
             line_type,
             db
     ):
-        multiprocessing.Process.__init__(self)
-        self.name = 'Input'
-        self.outputqueue = outputqueue
+        self.output_queue = output_queue
         self.profilerqueue = profilerqueue
         self.db = db
         self.input_type = input_type
@@ -110,35 +110,14 @@ class InputProcess(multiprocessing.Process):
         self.enable_rotation = conf.rotation()
         self.rotation_period = conf.rotation_period()
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
-
     def stop_queues(self):
         """Stops the profiler and output queues"""
         self.profilerqueue.put('stop')
         now = utils.convert_format(datetime.now(), utils.alerts_format)
-        self.outputqueue.put(
+        self.output_queue.put(
             f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
         )
-        self.outputqueue.close()
+        self.output_queue.close()
         self.profilerqueue.close()
 
     def read_nfdump_output(self) -> int:
@@ -891,7 +870,7 @@ class InputProcess(multiprocessing.Process):
 
 
 
-    def run(self):
+    def main(self):
         utils.drop_root_privs()
         if (
             running_on_interface := '-i' in sys.argv
