@@ -23,41 +23,44 @@ from datetime import datetime
 import os
 import traceback
 from tqdm.auto import tqdm
+from slips_files.common.abstracts import Core
 
-class OutputProcess(multiprocessing.Process):
+class OutputProcess(Core):
     """
     A class to process the output of everything Slips need. Manages all the output
     If any Slips module or process needs to output anything to screen, or logs,
     it should use always the output queue. Then this output class will handle how to deal with it
     """
 
-    def __init__(
+    name = 'Output'
+
+    def init(
         self,
-        inputqueue,
-        verbose,
-        debug,
-        db,
+        verbose=None,
+        debug=None,
         stdout='',
         stderr='output/errors.log',
         slips_logfile='output/slips.log'
     ):
-        multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        self.db = db
         ####### create the log files
         self.read_configuration()
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
-        self.name = 'Output'
-        self.queue = inputqueue
+
+        # set in the Core interface
+        self.queue = self.output_queue
+
         self.create_logfile(self.errors_logfile)
         self.create_logfile(self.slips_logfile)
         utils.change_logfiles_ownership(self.errors_logfile, self.UID, self.GID)
         utils.change_logfiles_ownership(self.slips_logfile, self.UID, self.GID)
-        self.stdout = stdout
+
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
+
+        self.stdout = stdout
         if stdout != '':
             self.change_stdout(self.stdout)
         if self.verbose > 2:
@@ -368,7 +371,7 @@ class OutputProcess(multiprocessing.Process):
                 refresh=True
             )
 
-    def run(self):
+    def main(self):
         while True:
             try:
                 self.update_stats()

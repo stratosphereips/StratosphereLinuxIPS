@@ -137,7 +137,7 @@ class Main:
             # only one instance of slips should be able to update ports and orgs at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
-                update_manager = UpdateFileManager(self.outputqueue, self.db)
+                update_manager = UpdateFileManager(self.output_queue, self.db)
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -275,7 +275,7 @@ class Main:
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
+        self.output_queue.put(f'{levels}|{self.name}|{text}')
 
     def handle_flows_from_stdin(self, input_information):
         """
@@ -434,7 +434,7 @@ class Main:
 
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
-            self.outputqueue = Queue()
+            self.output_queue = Queue()
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -455,16 +455,17 @@ class Main:
                 # self.check_if_port_is_in_use(self.redis_port)
 
 
-            self.db = DBManager(self.args.output, self.outputqueue, self.redis_port)
+            self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
             self.db.set_input_metadata({'output_dir': self.args.output})
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
             output_process = OutputProcess(
-                self.outputqueue,
-                self.args.verbose,
-                self.args.debug,
                 self.db,
+                self.output_queue,
+                self.args.output,
+                verbose=self.args.verbose,
+                debug=self.args.debug,
                 stdout=current_stdout,
                 stderr=stderr,
                 slips_logfile=slips_logfile,
@@ -545,7 +546,7 @@ class Main:
 
             self.profilerProcessQueue = Queue()
             profiler_process = ProfilerProcess(
-                self.outputqueue,
+                self.output_queue,
                 self.db,
                 input_queue=self.profilerProcessQueue,
             )
@@ -563,7 +564,7 @@ class Main:
             self.metadata_man.enable_metadata()
 
             inputProcess = InputProcess(
-                self.outputqueue,
+                self.output_queue,
                 self.profilerProcessQueue,
                 self.input_type,
                 self.input_information,
