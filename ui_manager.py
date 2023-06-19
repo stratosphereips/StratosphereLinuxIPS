@@ -1,4 +1,3 @@
-from slips_files.core.guiProcess import GuiProcess
 from style import green
 
 import subprocess
@@ -82,20 +81,4 @@ class UIManager:
         )
         self.webinterface_thread.start()
         # we'll be checking the return value of this thread later
-    
-    def start_gui_process(self):
-        # Get the type of output from the parameters
-        # Several combinations of outputs should be able to be used
-        if self.main.args.gui:
-            # Create the curses thread
-            guiProcessQueue = Queue()
-            guiProcess = GuiProcess(
-                guiProcessQueue, self.main.outputqueue, self.main.args.verbose,
-                self.main.args.debug
-            )
-            self.main.db.store_process_PID(
-                'GUI',
-                int(guiProcess.pid)
-            )
-            guiProcess.start()
-            self.main.print('quiet')
+

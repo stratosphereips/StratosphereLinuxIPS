@@ -513,7 +513,6 @@ class Main:
                 self.update_local_TI_files()
                 self.proc_man.load_modules()
 
-            # self.start_gui_process()
             if self.args.webinterface:
                 self.ui_man.start_webinterface()
 
