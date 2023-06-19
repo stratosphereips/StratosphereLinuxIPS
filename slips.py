@@ -116,9 +116,13 @@ class Main:
         self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
         if self.cpuProfilerEnabled:
             try:
-                self.cpuProfiler = CPUProfiler(db=self.db, output=self.args.output, mode=slips.conf.get_cpu_profiler_mode(),
-                                        limit=slips.conf.get_cpu_profiler_output_limit(),
-                                        interval=slips.conf.get_cpu_profiler_sampling_interval())
+                self.cpuProfiler = CPUProfiler(
+                    db=self.db,
+                    output=self.args.output,
+                    mode=slips.conf.get_cpu_profiler_mode(),
+                    limit=slips.conf.get_cpu_profiler_output_limit(),
+                    interval=slips.conf.get_cpu_profiler_sampling_interval()
+                    )
                 self.cpuProfiler.start()
             except Exception as e:
                 print(e)

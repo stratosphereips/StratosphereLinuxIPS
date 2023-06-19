@@ -4,6 +4,7 @@ import threading
 import yappi
 import io
 import pstats
+import os
 
 from slips_files.common.abstracts import ProfilerInterface
 
@@ -11,12 +12,13 @@ class CPUProfiler(ProfilerInterface):
     def __init__(self, db, output, mode="dev", limit=20, interval=20):
         valid_modes = ["dev", "live"]
         if mode not in valid_modes:
-            raise Exception("cpu_profiler_mode = " + mode + " is invalid, must be one of " + str(valid_modes) + ", CPU Profiling will be disabled")
+            raise Exception("cpu_profiler_mode = " + mode + " is invalid, must be one of " +
+                            str(valid_modes) + ", CPU Profiling will be disabled")
         if mode == "dev":
             self.profiler = DevProfiler(output)
         if mode == "live":
             self.profiler = LiveProfiler(db, limit, interval)
-    
+
     def _create_profiler(self):
         self.profiler._create_profiler()
 
@@ -46,7 +48,8 @@ class DevProfiler(ProfilerInterface):
         self.profiler.stop()
 
     def print(self):
-        self.profiler.save(self.output + 'cpu_profiling_result.json')
+        result_path = os.path.join(self.output, 'cpu_profiling_result.json' )
+        self.profiler.save(result_path)
 
 class LiveProfiler(ProfilerInterface):
     def __init__(self, db, limit=20, interval=20):
