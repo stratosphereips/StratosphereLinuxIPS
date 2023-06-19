@@ -132,7 +132,7 @@ class Module(ABC):
                 self.print(traceback.format_exc(), 0, 1)
                 return True
 
-class Core(Module):
+class Core(Module, Process):
     """
     Interface for all Core files placed in slips_files/core/
     """
@@ -140,7 +140,9 @@ class Core(Module):
     description = 'Short description of the core class purpose'
     authors = ['Name of the author creating the class']
 
-    def __init__(self, db, input_queue, output_queue, profiler_queue, output_dir, **kwargs):
+    def __init__(
+            self, db, output_queue, output_dir, **kwargs
+            ):
         """
         contains common initializations in all Helpers in  slips_files/core/
         the goal of this is to have one common __init__() for all modules, which is the one
@@ -149,9 +151,6 @@ class Core(Module):
         Process.__init__(self)
 
         self.output_queue = output_queue
-        self.input_queue = input_queue
-        self.profiler_queue = profiler_queue
-
         self.output_dir = output_dir
 
         self.db = db
