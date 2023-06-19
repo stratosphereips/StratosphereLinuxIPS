@@ -491,8 +491,8 @@ class Main:
                 stderr=stderr,
                 slips_logfile=slips_logfile,
             )
-            output_process.start()
-            self.db.store_process_PID('Output', int(output_process.pid))
+            # output_process.start()
+            # self.db.store_process_PID('Output', int(output_process.pid))
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':
@@ -533,7 +533,7 @@ class Main:
             if not self.args.db:
                 # update local files before starting modules
                 self.update_local_TI_files()
-                self.proc_man.load_modules()
+                # self.proc_man.load_modules()
 
             # self.start_gui_process()
             if self.args.webinterface:
@@ -552,15 +552,15 @@ class Main:
                 input_queue = self.evidenceProcessQueue,
                 output_dir = self.args.output,
                 )
-            evidence_process.start()
+            # evidence_process.start()
             self.print(
                 f'Started {green("Evidence Process")} '
                 f'[PID {green(evidence_process.pid)}]', 1, 0
             )
-            self.db.store_process_PID(
-                'Evidence',
-                int(evidence_process.pid)
-            )
+            # self.db.store_process_PID(
+            #     'Evidence',
+            #     int(evidence_process.pid)
+            # )
             self.db.store_process_PID(
                 'slips.py',
                 int(self.pid)
@@ -572,15 +572,15 @@ class Main:
                 self.db,
                 input_queue=self.profilerProcessQueue,
             )
-            profiler_process.start()
+            # profiler_process.start()
             self.print(
                 f'Started {green("Profiler Process")} '
                 f'[PID {green(profiler_process.pid)}]', 1, 0
             )
-            self.db.store_process_PID(
-                'Profiler',
-                int(profiler_process.pid)
-            )
+            # self.db.store_process_PID(
+            #     'Profiler',
+            #     int(profiler_process.pid)
+            # )
 
             self.c1 = self.db.subscribe('finished_modules')
             self.metadata_man.enable_metadata()
@@ -596,15 +596,15 @@ class Main:
                 self.line_type,
                 self.db,
             )
-            inputProcess.start()
+            # inputProcess.start()
             self.print(
                 f'Started {green("Input Process")} '
                 f'[PID {green(inputProcess.pid)}]', 1, 0
             )
-            self.db.store_process_PID(
-                'Input Process',
-                int(inputProcess.pid)
-            )
+            # self.db.store_process_PID(
+            #     'Input Process',
+            #     int(inputProcess.pid)
+            # )
             self.zeek_folder = inputProcess.zeek_folder
             self.metadata_man.set_input_metadata()
 
