@@ -1,6 +1,4 @@
 from slips_files.common.imports import *
-import sys
-import traceback
 import asyncio
 from exclusiveprocess import Lock, CannotAcquireLock
 from modules.update_manager.timer_manager import InfiniteTimer

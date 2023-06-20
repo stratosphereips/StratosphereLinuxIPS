@@ -88,6 +88,7 @@ class InputProcess(Core):
         )
         self.open_file_handlers = {}
         self.c1 = self.db.subscribe('remove_old_files')
+        self.channels = {'remove_old_files': self.c1}
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []
@@ -699,7 +700,7 @@ class InputProcess(Core):
         """
         while not self.termination_event.is_set():
             # keep the rotated files for the period specified in slips.conf
-            msg = self.db.get_message(self.c1)
+            msg = self.get_msg('remove_old_files')
             if msg and msg['data'] == 'stop_process':
                 return True
             if utils.is_msg_intended_for(msg, 'remove_old_files'):
@@ -822,7 +823,7 @@ class InputProcess(Core):
         if out:
             print(f"Zeek: {out}")
         if error:
-            self.print (f"Zeek error. return code: {zeek.returncode} error:{error.strip()}")
+            self.print(f"Zeek error. return code: {zeek.returncode} error:{error.strip()}")
 
     def handle_cyst(self):
         """
@@ -836,11 +837,12 @@ class InputProcess(Core):
             return
 
         channel = self.db.subscribe('new_module_flow')
+        self.channels.update({'new_module_flow': channel})
         while not self.termination_event.is_set():
             # the CYST module will send msgs to this channel when it read s a new flow from the CYST UDS
             # todo when to break? cyst should send something like stop?
 
-            msg = self.db.get_message(channel)
+            msg = self.get_msg('new_module_flow')
             if msg and msg['data'] == 'stop_process':
                 self.shutdown_gracefully()
                 return True
