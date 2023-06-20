@@ -1,4 +1,5 @@
 from slips_files.common.imports import *
+from slips_files.core.outputProcess import OutputProcess
 from style import green
 import signal
 import os
@@ -14,6 +15,20 @@ class ProcessManager:
     def __init__(self, main):
         self.main = main
         self.module_objects = {}
+
+    def start_output_process(self, current_stdout, stderr, slips_logfile):
+        output_process = OutputProcess(
+                    self.main.db,
+                    self.main.output_queue,
+                    self.main.args.output,
+                    verbose=self.main.args.verbose,
+                    debug=self.main.args.debug,
+                    stdout=current_stdout,
+                    stderr=stderr,
+                    slips_logfile=slips_logfile,
+                )
+        output_process.start()
+        return output_process
 
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
@@ -210,7 +225,7 @@ class ProcessManager:
         """
         now = datetime.now()
         diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
-        return  diff >= wait_for_modules_to_finish
+        return diff >= wait_for_modules_to_finish
 
     def get_modules_to_be_killed_last(self) -> list:
         """
@@ -228,6 +243,7 @@ class ProcessManager:
             modules_to_be_killed_last.append('Exporting Alerts')
         return modules_to_be_killed_last
 
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing
@@ -235,6 +251,7 @@ class ProcessManager:
         """
         # 15 mins from this time, all modules should be killed
         function_start_time = datetime.now()
+
         try:
             if not self.main.args.stopdaemon:
                 print('\n' + '-' * 27)

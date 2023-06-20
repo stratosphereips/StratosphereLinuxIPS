@@ -460,17 +460,9 @@ class Main:
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
-            output_process = OutputProcess(
-                self.db,
-                self.output_queue,
-                self.args.output,
-                verbose=self.args.verbose,
-                debug=self.args.debug,
-                stdout=current_stdout,
-                stderr=stderr,
-                slips_logfile=slips_logfile,
-            )
-            output_process.start()
+
+            output_process = self.proc_man.start_output_process(current_stdout, stderr, slips_logfile)
+
             self.db.store_process_PID('Output', int(output_process.pid))
 
             if self.args.growing:
