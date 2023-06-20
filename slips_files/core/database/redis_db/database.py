@@ -1171,13 +1171,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         self.r.hset('PIDs', process, pid)
 
-    def get_pids(self):
+    def get_pids(self) -> dict:
         """returns a dict with module names as keys and PIDs as values"""
         return self.r.hgetall('PIDs')
 
     def get_pid_of(self, module_name: str):
         pid = self.r.hget('PIDs', module_name)
         return int(pid) if pid else None
+
+    def get_name_of_module_at(self, given_pid):
+        """returns the name of the module that has the given pid """
+        for name, pid in self.get_pids().items():
+            if int(given_pid) == pid:
+                return name
+
 
     def set_org_info(self, org, org_info, info_type):
         """
