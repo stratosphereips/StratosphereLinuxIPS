@@ -373,45 +373,35 @@ class OutputProcess(Core):
 
     def main(self):
         while True:
-            try:
-                self.update_stats()
-                line = self.queue.get()
-                if line == 'quiet':
-                    self.quiet = True
-                elif 'initialize progress bar' in line:
-                    self.init_progress_bar()
-                elif 'update progress bar' in line:
-                    self.update_progress_bar()
+            self.update_stats()
+            line = self.queue.get()
+            if line == 'quiet':
+                self.quiet = True
+            elif 'initialize progress bar' in line:
+                self.init_progress_bar()
+            elif 'update progress bar' in line:
+                self.update_progress_bar()
 
-                elif 'stop_process' in line or line == 'stop':
-                    self.shutdown_gracefully()
-                    return True
-                elif not self.quiet:
-                    # output to terminal and logs or logs only?
-
-                    if 'log-only' in line:
-                        line = line.replace('log-only', '')
-                        (level, sender, msg) = self.process_line(line)
-                        self.log_line(sender, msg)
-                    else:
-                        (level, sender, msg) = self.process_line(line)
-                        # output to terminal
-                        self.output_line(level, sender, msg)
-
-                else:
-                    # Here we should still print the lines coming in
-                    # the input for a while after receiving a 'stop'. We don't know how to do it.
-                    print('Stopping the output process')
-                    self.shutdown_gracefully()
-                    return True
-
-            except KeyboardInterrupt:
+            elif 'stop_process' in line or line == 'stop':
                 self.shutdown_gracefully()
                 return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                print(
-                    f'\tProblem with OutputProcess() line {exception_line}',
-                )
-                print(traceback.print_exc(), 0, 1)
+            elif not self.quiet:
+                # output to terminal and logs or logs only?
+
+                if 'log-only' in line:
+                    line = line.replace('log-only', '')
+                    (level, sender, msg) = self.process_line(line)
+                    self.log_line(sender, msg)
+                else:
+                    (level, sender, msg) = self.process_line(line)
+                    # output to terminal
+                    self.output_line(level, sender, msg)
+
+            else:
+                # Here we should still print the lines coming in
+                # the input for a while after receiving a 'stop'.
+                # We don't know how to do it.
+                print('Stopping the output process')
+                self.shutdown_gracefully()
                 return True
+

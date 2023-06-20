@@ -877,60 +877,43 @@ class InputProcess(Core):
             # delete old zeek-date.log files
             self.remover_thread.start()
 
-        try:
-            # Process the file that was given
-            # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
-            if self.input_type == 'stdin':
-                self.read_from_stdin()
-            elif self.input_type == 'zeek_folder':
-                # is a zeek folder
-                self.read_zeek_folder()
-            elif self.input_type == 'zeek_log_file':
-                # Is a zeek.log file
-                file_name = self.given_path.split('/')[-1]
-                if 'log' in file_name:
-                    self.handle_zeek_log_file()
-                else:
-                    return False
-            elif self.input_type == 'nfdump':
-                # binary nfdump file
-                self.handle_nfdump()
-            elif self.input_type == 'binetflow' or 'binetflow-tabs' in self.input_type:
-                # argus or binetflow
-                self.handle_binetflow()
-            elif self.input_type in ['pcap', 'interface']:
-                self.handle_pcap_and_interface()
-            elif self.input_type == 'suricata':
-                self.handle_suricata()
-            elif self.input_type == 'CYST':
-                self.handle_cyst()
-            else:
-                # if self.input_type is 'file':
-                # default value
-                self.print(
-                    f'Unrecognized file type "{self.input_type}". Stopping.'
-                )
-                return False
-            self.shutdown_gracefully()
 
-            # keep the module idle until slips.py kills it
-            # without this, the module exits but the pid will remain in memory as <defunct>
-            # while True:
-            #     time.sleep(1)
-        except KeyboardInterrupt:
-            self.shutdown_gracefully()
-            return False
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
+        # Process the file that was given
+        # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
+        if self.input_type == 'stdin':
+            self.read_from_stdin()
+        elif self.input_type == 'zeek_folder':
+            # is a zeek folder
+            self.read_zeek_folder()
+        elif self.input_type == 'zeek_log_file':
+            # Is a zeek.log file
+            file_name = self.given_path.split('/')[-1]
+            if 'log' in file_name:
+                self.handle_zeek_log_file()
+            else:
+                return False
+        elif self.input_type == 'nfdump':
+            # binary nfdump file
+            self.handle_nfdump()
+        elif self.input_type == 'binetflow' or 'binetflow-tabs' in self.input_type:
+            # argus or binetflow
+            self.handle_binetflow()
+        elif self.input_type in ['pcap', 'interface']:
+            self.handle_pcap_and_interface()
+        elif self.input_type == 'suricata':
+            self.handle_suricata()
+        elif self.input_type == 'CYST':
+            self.handle_cyst()
+        else:
+            # if self.input_type is 'file':
+            # default value
             self.print(
-                f'Problem with Input Process. line {exception_line}', 0, 1
+                f'Unrecognized file type "{self.input_type}". Stopping.'
             )
-            self.print(
-                f'Stopping input process. Sent {self.lines} lines', 0, 1
-            )
-            self.print(type(inst), 0, 1)
-            self.print(inst.args, 0, 1)
-            self.print(inst, 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
-            self.shutdown_gracefully()
             return False
+        self.shutdown_gracefully()
+
+        # keep the module idle until slips.py kills it
+        # without this, the module exits but the pid will remain in memory as <defunct>
+        # while True:
+        #     time.sleep(1)
