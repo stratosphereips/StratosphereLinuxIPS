@@ -372,7 +372,7 @@ class OutputProcess(Core):
             )
 
     def main(self):
-        while not self.termination_event.is_set():
+        while not self.should_stop():
             self.update_stats()
             line = self.queue.get()
             if line == 'quiet':

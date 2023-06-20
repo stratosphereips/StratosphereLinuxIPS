@@ -538,7 +538,7 @@ class EvidenceProcess(Core):
             self.db.set_flow_label(uids, 'malicious')
 
     def main(self):
-        while not self.termination_event.is_set():
+        while not self.should_stop():
             if msg := self.get_msg('evidence_added'):
                 # Data sent in the channel as a json dict, it needs to be deserialized first
                 data = json.loads(msg['data'])

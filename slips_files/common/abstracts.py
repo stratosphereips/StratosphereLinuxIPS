@@ -16,7 +16,7 @@ class Module(ABC):
         self.output_queue = output_queue
         self.db = db
         self.control_channel = self.db.subscribe('control_module')
-        self.msg_received = True
+        self.msg_received = False
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.init(**kwargs)
@@ -37,8 +37,9 @@ class Module(ABC):
         2. no msgs left to process in the module
         This function calls the shutdown_gracefully pf the module when the 2 conditions are true
         """
-        if self.msg_received:
-            # this module is still receiving msgs, don't stop
+        if self.msg_received or not self.termination_event.is_set():
+            # this module is still receiving msgs,
+            # don't stop
             return False
 
         message = self.db.get_message(self.control_channel)
@@ -98,7 +99,7 @@ class Module(ABC):
         """ This is the loop function, it runs non-stop as long as the module is online """
         try:
             error: bool = self.pre_main()
-            if error or self.termination_event.is_set():
+            if error or self.should_stop():
                 self.shutdown_gracefully()
                 return True
         except KeyboardInterrupt:
@@ -111,7 +112,7 @@ class Module(ABC):
             return True
 
         error = False
-        while not error and not self.termination_event.is_set() and not self.should_stop():
+        while not error and not self.should_stop():
             try:
                 # keep running main() in a loop as long as the module is online
                 # if a module's main() returns 1, it means there's an error and it needs to stop immediately
@@ -152,7 +153,7 @@ class Core(Module, Process):
         self.termination_event: Event = termination_event
         self.db = db
         self.control_channel = self.db.subscribe('control_module')
-        self.msg_received = True
+        self.msg_received = False
         self.init(**kwargs)
 
     def run(self):
@@ -163,8 +164,7 @@ class Core(Module, Process):
             # this should be defined in every core file
             # this won't run in a loop because it's not a module
             error: bool = self.main()
-            #TODO this should be checked in a loop
-            if error or self.termination_event.is_set():
+            if error or self.should_stop():
                 # finished with some error
                 self.shutdown_gracefully()
                 return True

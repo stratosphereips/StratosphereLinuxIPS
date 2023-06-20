@@ -1786,7 +1786,7 @@ class ProfilerProcess(Core):
         utils.drop_root_privs()
 
     def main(self):
-        while not self.termination_event.is_set():
+        while not self.should_stop():
             try:
                 line = self.profiler_queue.get(timeout=5)
             except Exception as e:
