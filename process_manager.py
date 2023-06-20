@@ -27,6 +27,7 @@ class ProcessManager:
         # to the profiler
         self.profiler_queue = Queue()
         self.termination_event: Event = multiprocessing.Event()
+        self.stopped_modules = 0
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         output_process = OutputProcess(
@@ -125,25 +126,6 @@ class ProcessManager:
             self.kill(module)
             self.print_stopped_module(module)
 
-    def stop_core_processes(self):
-        self.kill('Input')
-
-        if self.main.mode == 'daemonized':
-            # when using -D, we kill the processes because
-            # the queues are not there yet to send stop msgs
-            for process in (
-                        'ProfilerProcess',
-                        'OutputProcess'
-
-            ):
-                self.kill(process, INT=True)
-
-        else:
-            # Send manual stops to the processes using queues
-            stop_msg = 'stop_process'
-            self.main.profiler_queue.put(stop_msg)
-            self.main.output_queue.put(stop_msg)
-
     def get_modules(self, to_ignore):
         """
         Get modules from the 'modules' folder.
@@ -168,7 +150,6 @@ class ProcessManager:
             dir_name = module_name.split('.')[1]
             file_name = module_name.split('.')[2]
             if dir_name != file_name:
-                print(f"@@@@@@@@@@@@@@@@ skipping {file_name} in {dir_name}")
                 continue
 
             # Try to import the module, otherwise skip.
@@ -253,10 +234,9 @@ class ProcessManager:
         return loaded_modules
     
     def print_stopped_module(self, module):
-        self.PIDs.pop(module, None)
-        # all text printed in green should be wrapped in the following
+        self.stopped_modules += 1
+        modules_left = len(self.processes) - self.stopped_modules
 
-        modules_left = len(list(self.PIDs.keys()))
         # to vertically align them when printing
         module += ' ' * (20 - len(module))
         print(
@@ -369,34 +349,23 @@ class ProcessManager:
 
             for process in self.processes:
                 if process.pid in pids_to_kill_first:
-                    print(f"@@@@@@@@@@@@@@@@ waiting for {process} to join")
                     process.join()
-            print(f"@@@@@@@@@@@@@@@@ done joining everything to be killed first")
+                    self.print_stopped_module(process.name)
+
 
             for process in self.processes:
                 if process.pid in pids_to_kill_last:
-                    print(f"@@@@@@@@@@@@@@@@ waiting for {process} to join")
                     process.join()
-            print(f"@@@@@@@@@@@@@@@@ done joining everything to be killed last")
+                    self.print_stopped_module(process.name)
 
 
-            # # get dict of PIDs spawned by slips
-            # self.PIDs = self.main.db.get_pids()
-            #
-            # # we don't want to kill this process
-            # self.PIDs.pop('slips.py', None)
-            #
             if self.main.mode == 'daemonized':
                 profilesLen = self.main.db.get_profiles_len()
                 self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
 
-            #
-
-            #
-            # self.stop_core_processes()
-            # # only print that modules are still running once
+            # only print that modules are still running once
             # warning_printed = False
-            #
+
             # # loop until all loaded modules are finished
             # # in the case of -S, slips doesn't even start the modules,
             # # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
