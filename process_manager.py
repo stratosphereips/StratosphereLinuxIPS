@@ -1,6 +1,7 @@
 from slips_files.common.imports import *
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.inputProcess import InputProcess
 from multiprocessing import Queue
 from style import green
 import signal
@@ -17,6 +18,9 @@ class ProcessManager:
     def __init__(self, main):
         self.main = main
         self.module_objects = {}
+        # this is the queue that will be used by the input proces to pass flows
+        # to the profiler
+        self.profiler_queue = Queue()
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         output_process = OutputProcess(
@@ -33,7 +37,7 @@ class ProcessManager:
         return output_process
 
     def start_profiler_process(self):
-        self.profiler_queue = Queue()
+
         profiler_process = ProfilerProcess(
             self.main.db,
             self.main.output_queue,
@@ -42,6 +46,21 @@ class ProcessManager:
         )
         profiler_process.start()
         return profiler_process
+
+
+    def start_input_process(self):
+        input_process = InputProcess(
+            self.main.db, self.main.output_queue, self.main.args.output,
+            profiler_queue=self.profiler_queue,
+            input_type=self.main.input_type,
+            input_information=self.main.input_information,
+            cli_packet_filter= self.main.args.pcapfilter,
+            zeek_or_bro=self.main.zeek_bro,
+            zeek_dir=self.main.zeek_dir,
+            line_type=self.main.line_type,
+        )
+        input_process.start()
+        return input_process
 
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL

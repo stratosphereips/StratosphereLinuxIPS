@@ -27,9 +27,6 @@ from ui_manager import UIManager
 from checker import Checker
 from style import green
 
-
-from slips_files.core.inputProcess import InputProcess
-
 from slips_files.core.evidenceProcess import EvidenceProcess
 from slips_files.core.database.database_manager import DBManager
 
@@ -546,17 +543,7 @@ class Main:
             self.c1 = self.db.subscribe('finished_modules')
             self.metadata_man.enable_metadata()
 
-            input_process = InputProcess(
-                self.db, self.output_queue, self.args.output,
-                profiler_queue=self.profiler_queue,
-                input_type=self.input_type,
-                input_information=self.input_information,
-                cli_packet_filter= self.args.pcapfilter,
-                zeek_or_bro=self.zeek_bro,
-                zeek_dir=self.zeek_dir,
-                line_type=self.line_type,
-            )
-            input_process.start()
+            input_process = self.proc_man.start_input_process()
             self.print(
                 f'Started {green("Input Process")} '
                 f'[PID {green(input_process.pid)}]', 1, 0
