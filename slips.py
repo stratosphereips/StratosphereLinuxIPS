@@ -513,11 +513,13 @@ class Main:
 
             self.proc_man.start_input_process()
 
+            # obtain the list of active processes
+            self.proc_man.processes = multiprocessing.active_children()
+
             self.db.store_process_PID(
                 'slips.py',
                 int(self.pid)
             )
-
             self.metadata_man.set_input_metadata()
 
             if self.conf.use_p2p() and not self.args.interface:
