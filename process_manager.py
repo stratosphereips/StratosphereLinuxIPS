@@ -107,24 +107,26 @@ class ProcessManager:
         )
         return input_process
 
-    def kill(self, module_name, INT=False):
+    def kill(self, module_pid: int, module_name:str, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
         try:
-            pid = int(self.PIDs[module_name])
+            pid = module_pid
             self.module_objects[module_name].shutdown_gracefully()
             os.kill(pid, sig)
         except (KeyError, ProcessLookupError):
             # process hasn't started yet
             pass
 
-    def kill_all(self, PIDs):
-        for module in PIDs:
-            if module not in self.PIDs:
-                # modules the are last to kill aren't always started and there in self.PIDs
-                # ignore them
+    def kill_all_children(self):
+        for process in self.processes:
+            module_name: str = self.main.db.get_name_of_module_at(process.pid)
+            if not module_name:
+                # if it's a thread started by one of the modules or
+                # by slips.py, we don't have it stored in the db so just skip it
                 continue
-            self.kill(module)
-            self.print_stopped_module(module)
+
+            self.kill(process.pid, module_name)
+            self.print_stopped_module(module_name)
 
     def get_modules(self, to_ignore):
         """
@@ -346,7 +348,6 @@ class ProcessManager:
             pids_to_kill_first, pids_to_kill_last = self.get_hitlist_in_order()
 
             self.termination_event.set()
-
             for process in self.processes:
                 if process.pid in pids_to_kill_first:
                     process.join()
@@ -362,6 +363,7 @@ class ProcessManager:
             if self.main.mode == 'daemonized':
                 profilesLen = self.main.db.get_profiles_len()
                 self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
+
 
             # only print that modules are still running once
             # warning_printed = False
