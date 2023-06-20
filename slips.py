@@ -542,11 +542,12 @@ class Main:
                 int(self.pid)
             )
 
-            self.profilerProcessQueue = Queue()
+            self.profiler_queue = Queue()
             profiler_process = ProfilerProcess(
-                self.output_queue,
                 self.db,
-                profiler_queue=self.profilerProcessQueue,
+                self.output_queue,
+                self.args.output,
+                profiler_queue=self.profiler_queue,
             )
             profiler_process.start()
             self.print(
@@ -561,24 +562,24 @@ class Main:
             self.c1 = self.db.subscribe('finished_modules')
             self.metadata_man.enable_metadata()
 
-            inputProcess = InputProcess(
+            input_process = InputProcess(
                 self.db, self.output_queue, self.args.output,
-                profiler_queue=self.profilerProcessQueue,
+                profiler_queue=self.profiler_queue,
                 input_type=self.input_type,
                 input_information=self.input_information,
                 cli_packet_filter= self.args.pcapfilter,
-                zeek_bro=self.zeek_bro,
+                zeek_or_bro=self.zeek_bro,
                 zeek_dir=self.zeek_dir,
                 line_type=self.line_type,
             )
-            inputProcess.start()
+            input_process.start()
             self.print(
                 f'Started {green("Input Process")} '
-                f'[PID {green(inputProcess.pid)}]', 1, 0
+                f'[PID {green(input_process.pid)}]', 1, 0
             )
             self.db.store_process_PID(
                 'Input Process',
-                int(inputProcess.pid)
+                int(input_process.pid)
             )
 
             print(f"@@@@@@@@@@@@@@@@ done?")

@@ -1811,7 +1811,7 @@ class ProfilerProcess(Core):
                     # Find the type of input received
                     self.define_type(line)
                     # Find the number of flows we're going to receive of input received
-                    self.outputqueue.put("initialize progress bar")
+                    self.output_queue.put("initialize progress bar")
 
                 # What type of input do we have?
                 if not self.input_type:
@@ -1824,7 +1824,7 @@ class ProfilerProcess(Core):
                         # Add the flow to the profile
                         self.add_flow_to_profile()
 
-                    self.outputqueue.put("update progress bar")
+                    self.output_queue.put("update progress bar")
 
                 elif self.input_type in ['argus', 'argus-tabs']:
                     # self.print('Argus line')
@@ -1845,7 +1845,7 @@ class ProfilerProcess(Core):
                         if self.process_argus_input(line):
                             # Add the flow to the profile
                             self.add_flow_to_profile()
-                        self.outputqueue.put("update progress bar")
+                        self.output_queue.put("update progress bar")
                     except (AttributeError, KeyError):
                         # Define columns. Do not add this line to profile, its only headers
                         self.define_columns(line)
@@ -1855,17 +1855,17 @@ class ProfilerProcess(Core):
                         self.add_flow_to_profile()
                     # update progress bar anyway because 1 flow was processed even
                     # if slips didn't use it
-                    self.outputqueue.put("update progress bar")
+                    self.output_queue.put("update progress bar")
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
                     if self.process_zeek_tabs_input(line):
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-                    self.outputqueue.put("update progress bar")
+                    self.output_queue.put("update progress bar")
                 elif self.input_type == 'nfdump':
                     if self.process_nfdump_input(line):
                         self.add_flow_to_profile()
-                    self.outputqueue.put("update progress bar")
+                    self.output_queue.put("update progress bar")
                 else:
                     self.print("Can't recognize input file type.")
                     return False
