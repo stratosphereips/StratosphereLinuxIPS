@@ -41,11 +41,7 @@ class Module(ABC):
             # this module is still receiving msgs,
             # don't stop
             return False
-
-        message = self.db.get_message(self.control_channel)
-        if message and message['data'] == 'stop_process':
-            self.shutdown_gracefully()
-            return True
+        return True
 
     def print(self, text, verbose=1, debug=0):
         """
