@@ -6,7 +6,7 @@ from slips_files.core.profilerProcess import ProfilerProcess
 import modules.threat_intelligence.threat_intelligence as ti
 import modules.flowalerts.flowalerts as flowalerts_module
 from slips_files.core.inputProcess import InputProcess
-import modules.blocking.blocking as blocking_module
+from modules.blocking.blocking import Blocking
 import modules.http_analyzer.http_analyzer as http
 import modules.ip_info.ip_info as ip_info_module
 from slips_files.common.slips_utils import utils
@@ -86,7 +86,7 @@ class ModuleFactory:
         return ARP
 
     def create_blocking_obj(self, mock_db):
-        blocking = blocking_module.Module(self.output_queue, mock_db)
+        blocking = Blocking(self.output_queue, mock_db)
         # override the print function to avoid broken pipes
         blocking.print = do_nothing
         return blocking

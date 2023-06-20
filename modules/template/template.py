@@ -6,16 +6,15 @@
 #    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
 # 3. Make it a module
 #    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
+# 4. Change the name of the class, the module name, description and author in the variables
+# 5. The file name of the python file (template.py) MUST be the same as the name of the folder (template)
+# 6. The variable 'name' MUST have the public name of this module. This is used to be able to disable the module later
 
 # Must imports
 from slips_files.common.imports import *
 
 
-class Module(Module, multiprocessing.Process):
+class Template(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Template'
     description = 'Template module'

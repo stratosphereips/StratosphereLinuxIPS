@@ -1,7 +1,6 @@
 from slips_files.common.imports import *
-import json
 
-class Module(Module, multiprocessing.Process):
+class Ensembling(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Ensembling'
     description = 'The module to assign '
@@ -80,7 +79,6 @@ class Module(Module, multiprocessing.Process):
     def main(self):
         if msg := self.get_msg('tw_closed'):
             data = msg['data']
-            # Convert from json to dict
             profileip = data.split(self.separator)[1]
             twid = data.split(self.separator)[2]
             profileid = f'profile{self.separator}{profileip}'

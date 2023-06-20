@@ -8,7 +8,7 @@ import time
 import json
 
 
-class Module(Module, multiprocessing.Process):
+class Timeline(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Timeline'
     description = 'Creates kalipso timeline of what happened in the network based on flows and available data'

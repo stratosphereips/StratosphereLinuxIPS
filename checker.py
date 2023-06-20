@@ -146,9 +146,9 @@ class Checker:
     def delete_blocking_chain(self):
         # start only the blocking module process and the db
         from multiprocessing import Queue, active_children
-        from modules.blocking.blocking import Module
+        from modules.blocking.blocking import Blocking
 
-        blocking = Module(Queue())
+        blocking = Blocking(Queue())
         blocking.start()
         blocking.delete_slipsBlocking_chain()
         # kill the blocking module manually because we can't

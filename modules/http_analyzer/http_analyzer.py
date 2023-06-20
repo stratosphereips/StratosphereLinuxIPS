@@ -4,7 +4,7 @@ import urllib
 import requests
 
 
-class Module(Module, multiprocessing.Process):
+class HTTPAnalyzer(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'HTTP Analyzer'
     description = 'Analyze HTTP flows'

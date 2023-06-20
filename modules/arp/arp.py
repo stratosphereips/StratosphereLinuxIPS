@@ -6,7 +6,7 @@ import time
 import threading
 from multiprocessing import Queue
 
-class Module(Module, multiprocessing.Process):
+class ARP(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'ARP'
     description = 'Detect arp attacks'

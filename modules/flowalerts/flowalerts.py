@@ -15,7 +15,7 @@ import math
 import time
 
 
-class Module(Module, multiprocessing.Process):
+class FlowAlerts(Module, multiprocessing.Process):
     name = 'Flow Alerts'
     description = (
         'Alerts about flows: long connection, successful ssh, '

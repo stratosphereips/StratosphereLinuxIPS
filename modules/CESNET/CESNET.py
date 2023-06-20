@@ -11,7 +11,7 @@ import validators
 import traceback
 
 
-class Module(Module, multiprocessing.Process):
+class CESNET(Module, multiprocessing.Process):
     name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']

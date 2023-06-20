@@ -19,7 +19,7 @@ import warnings
 warnings.warn = warn
 
 
-class Module(Module, multiprocessing.Process):
+class FlowMLDetection(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Flow ML Detection'
     description = (

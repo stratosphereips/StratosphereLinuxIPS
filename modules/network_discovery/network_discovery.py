@@ -3,7 +3,7 @@ import json
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 
-class PortScanProcess(Module, multiprocessing.Process):
+class NetworkDiscovery(Module, multiprocessing.Process):
     """
     A class process to find port scans
     This should be converted into a module that wakesup alone when a new alert arrives

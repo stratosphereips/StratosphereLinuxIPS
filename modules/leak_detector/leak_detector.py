@@ -8,7 +8,7 @@ import subprocess
 import json
 import shutil
 
-class Module(Module, multiprocessing.Process):
+class LeakDetector(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Leak Detector'
     description = 'Detect leaks of data in the traffic'

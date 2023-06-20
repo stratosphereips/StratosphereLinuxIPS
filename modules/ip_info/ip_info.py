@@ -17,7 +17,7 @@ import time
 import asyncio
 
 
-class Module(Module, multiprocessing.Process):
+class IPInfo(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'IP Info'
     description = 'Get different info about an IP/MAC address'

@@ -13,7 +13,7 @@ import threading
 import time
 
 
-class Module(Module, multiprocessing.Process, URLhaus):
+class ThreatIntel(Module, multiprocessing.Process, URLhaus):
     name = 'Threat Intelligence'
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia, Alya Gomaa']

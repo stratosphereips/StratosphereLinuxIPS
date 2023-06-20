@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
-class Module(Module, multiprocessing.Process):
+class CCDetection(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'RNN C&C Detection'
     description = 'Detect C&C channels based on behavioral letters'

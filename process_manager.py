@@ -5,9 +5,10 @@ from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
 from slips_files.core.evidenceProcess import EvidenceProcess
 from slips_files.core.inputProcess import InputProcess
-from multiprocessing import Queue, Event
+from multiprocessing import Queue, Event, Process
 from collections import OrderedDict
 from datetime import datetime
+from typing import List, Tuple
 from style import green
 import signal
 import time
@@ -100,7 +101,7 @@ class ProcessManager:
                 f'[PID {green(input_process.pid)}]', 1, 0
             )
         self.main.db.store_process_PID(
-            'Input Process',
+            'Input',
             int(input_process.pid)
         )
         return input_process
@@ -167,6 +168,7 @@ class ProcessManager:
             dir_name = module_name.split('.')[1]
             file_name = module_name.split('.')[2]
             if dir_name != file_name:
+                print(f"@@@@@@@@@@@@@@@@ skipping {file_name} in {dir_name}")
                 continue
 
             # Try to import the module, otherwise skip.
@@ -303,21 +305,36 @@ class ProcessManager:
         diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
         return diff >= wait_for_modules_to_finish
 
-    def get_modules_to_be_killed_last(self) -> list:
+    def get_hitlist_in_order(self) -> Tuple[List[int], List[int]]:
         """
-        based on what modules were started in this instance of slips return the list of processes that we want to kill last
-        @return: list of modules to be kileld last
+        returns a list of PIDs that slipss should terminate first, and pids that shjould be killed last
         """
-        modules_to_be_killed_last = [
-            'Evidence',
-            # 'Blocking',
-            # 'Exporting Alerts',
+        # all modules that deal with evidence, blocking and alerts should be killed last
+        # so we don't miss reporting, exporting or blocking any malicious IoC
+        pids_to_kill_last = [
+            self.main.db.get_pid_of('Evidence'),
+            self.main.db.get_pid_of('Input'),
+            self.main.db.get_pid_of('Output'),
+            self.main.db.get_pid_of('Profiler')
         ]
+
         if self.main.args.blocking:
-            modules_to_be_killed_last.append('Blocking')
+            pids_to_kill_last.append(self.main.db.get_pid_of('Blocking'))
+
         if 'exporting_alerts' not in self.main.db.get_disabled_modules():
-            modules_to_be_killed_last.append('Exporting Alerts')
-        return modules_to_be_killed_last
+            pids_to_kill_last.append(self.main.db.get_pid_of('Exporting Alerts'))
+
+        # remove all None PIDs
+        pids_to_kill_last = [pid for pid in pids_to_kill_last if pid is not None]
+
+        pids_to_kill_first: List[int] = []
+        for process in self.processes:
+            # if it's not to kill be killed last, then we need to kill it first :'D
+            if process.pid not in pids_to_kill_last:
+                pids_to_kill_first.append(process.pid)
+
+        return pids_to_kill_first, pids_to_kill_last
+
 
 
     def shutdown_gracefully(self):
@@ -346,15 +363,22 @@ class ProcessManager:
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
+            pids_to_kill_first, pids_to_kill_last = self.get_hitlist_in_order()
 
             self.termination_event.set()
+
             for process in self.processes:
-                print(f"@@@@@@@@@@@@@@@@ waiting for {process} to join")
-                process.join()
+                if process.pid in pids_to_kill_first:
+                    print(f"@@@@@@@@@@@@@@@@ waiting for {process} to join")
+                    process.join()
+            print(f"@@@@@@@@@@@@@@@@ done joining everything to be killed first")
 
+            for process in self.processes:
+                if process.pid in pids_to_kill_last:
+                    print(f"@@@@@@@@@@@@@@@@ waiting for {process} to join")
+                    process.join()
+            print(f"@@@@@@@@@@@@@@@@ done joining everything to be killed last")
 
-            # Stop the modules that are subscribed to channels
-            # self.main.db.publish_stop()
 
             # # get dict of PIDs spawned by slips
             # self.PIDs = self.main.db.get_pids()
@@ -362,11 +386,12 @@ class ProcessManager:
             # # we don't want to kill this process
             # self.PIDs.pop('slips.py', None)
             #
-            # if self.main.mode == 'daemonized':
-            #     profilesLen = self.main.db.get_profiles_len()
-            #     self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
+            if self.main.mode == 'daemonized':
+                profilesLen = self.main.db.get_profiles_len()
+                self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
+
             #
-            # modules_to_be_killed_last: list = self.get_modules_to_be_killed_last()
+
             #
             # self.stop_core_processes()
             # # only print that modules are still running once

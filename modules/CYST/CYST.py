@@ -5,7 +5,7 @@ import json
 import os
 import errno
 
-class Module(Module, multiprocessing.Process):
+class CYST(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'CYST'
     description = 'Communicates with CYST simulation framework'
