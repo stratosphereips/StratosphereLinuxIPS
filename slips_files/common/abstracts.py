@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 # common imports for all modules
-from slips_files.core.database.database_manager import DBManager
+from multiprocessing import Event
 from slips_files.common.slips_utils import utils
 from multiprocessing import Process
 import sys
@@ -11,12 +11,14 @@ class Module(ABC):
     name = ''
     description = 'Template abstract module'
     authors = ['Template abstract Author']
-    def __init__(self, output_queue, db, **kwargs):
+    def __init__(self, output_queue, db, termination_event, **kwargs):
         Process.__init__(self)
         self.output_queue = output_queue
         self.db = db
         self.control_channel = self.db.subscribe('control_module')
         self.msg_received = True
+        # used to tell all slips.py children to stop
+        self.termination_event: Event = termination_event
         self.init(**kwargs)
 
     @abstractmethod
@@ -96,7 +98,7 @@ class Module(ABC):
         """ This is the loop function, it runs non-stop as long as the module is online """
         try:
             error: bool = self.pre_main()
-            if error:
+            if error or self.termination_event.is_set():
                 self.shutdown_gracefully()
                 return True
         except KeyboardInterrupt:
@@ -109,28 +111,22 @@ class Module(ABC):
             return True
 
         error = False
-        while not error:
+        while not error and not self.termination_event.is_set() and not self.should_stop():
             try:
                 # keep running main() in a loop as long as the module is online
                 # if a module's main() returns 1, it means there's an error and it needs to stop immediately
                 error: bool = self.main()
-                if error:
-                    # finished with some error
-                    self.shutdown_gracefully()
-                elif self.should_stop():
-                    # finished because no more msgs in queue
-                    return True
 
             except KeyboardInterrupt:
-                if self.should_stop():
-                    return True
-                else:
-                    continue
+                continue
             except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem in main() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)
                 return True
+
+        self.shutdown_gracefully()
+        return True
 
 class Core(Module, Process):
     """
@@ -141,7 +137,7 @@ class Core(Module, Process):
     authors = ['Name of the author creating the class']
 
     def __init__(
-            self, db, output_queue, output_dir, **kwargs
+            self, db, output_queue, output_dir, termination_event, **kwargs
             ):
         """
         contains common initializations in all core files in  slips_files/core/
@@ -152,7 +148,8 @@ class Core(Module, Process):
 
         self.output_queue = output_queue
         self.output_dir = output_dir
-
+        # used to tell all slips.py children to stop
+        self.termination_event: Event = termination_event
         self.db = db
         self.control_channel = self.db.subscribe('control_module')
         self.msg_received = True
@@ -166,9 +163,11 @@ class Core(Module, Process):
             # this should be defined in every core file
             # this won't run in a loop because it's not a module
             error: bool = self.main()
-            if error:
+            #TODO this should be checked in a loop
+            if error or self.termination_event.is_set():
                 # finished with some error
                 self.shutdown_gracefully()
+                return True
 
         except KeyboardInterrupt:
             return True
