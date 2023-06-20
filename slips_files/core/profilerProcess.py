@@ -1788,7 +1788,6 @@ class ProfilerProcess(Core):
     def main(self):
         while line := self.profiler_queue.get():
             try:
-
                 if 'stop' in line:
                     self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
                                f"{self.whitelisted_flows_ctr}", 2, 0)

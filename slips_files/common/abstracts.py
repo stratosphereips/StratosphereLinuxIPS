@@ -163,7 +163,7 @@ class Core(Module, Process):
         must be called run because this is what multiprocessing runs
         """
         try:
-             # this should be defined in every core file
+            # this should be defined in every core file
             # this won't run in a loop because it's not a module
             error: bool = self.main()
             if error:

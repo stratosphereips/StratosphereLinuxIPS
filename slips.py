@@ -582,7 +582,6 @@ class Main:
                 int(input_process.pid)
             )
 
-            print(f"@@@@@@@@@@@@@@@@ done?")
             self.metadata_man.set_input_metadata()
 
             if self.conf.use_p2p() and not self.args.interface:

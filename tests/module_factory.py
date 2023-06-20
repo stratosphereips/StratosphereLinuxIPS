@@ -104,15 +104,16 @@ class ModuleFactory:
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
 
         inputProcess = InputProcess(
+            mock_db,
             self.output_queue,
-            self.profiler_queue,
-            input_type,
-            input_information,
-            None,
-            check_zeek_or_bro(),
-            zeek_tmp_dir,
-            False,
-            mock_db
+            'output/',
+            profiler_queue=self.profiler_queue,
+            input_type=input_type,
+            input_information=input_information,
+            cli_packet_filter= None,
+            zeek_or_bro=check_zeek_or_bro(),
+            zeek_dir=zeek_tmp_dir,
+            line_type=False,
         )
 
         inputProcess.bro_timeout = 1
@@ -151,9 +152,10 @@ class ModuleFactory:
 
     def create_profilerProcess_obj(self, mock_db):
         profilerProcess = ProfilerProcess(
-            self.output_queue,
             mock_db,
-            input_queue=self.input_queue,
+            self.output_queue,
+            'output/',
+            profiler_queue=self.input_queue,
         )
 
         # override the self.print function to avoid broken pipes
