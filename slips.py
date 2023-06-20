@@ -115,9 +115,9 @@ class Main:
         from pathlib import Path
         without_ext = Path(self.input_information).stem
         if self.conf.store_zeek_files_in_the_output_dir():
-            self.zeek_folder = os.path.join(self.args.output, 'zeek_files')
+            self.zeek_dir = os.path.join(self.args.output, 'zeek_files')
         else:
-            self.zeek_folder = f'zeek_files_{without_ext}/'
+            self.zeek_dir = f'zeek_files_{without_ext}/'
 
     def terminate_slips(self):
         """
@@ -181,14 +181,14 @@ class Main:
         if store_a_copy_of_zeek_files and was_running_zeek:
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
-            copy_tree(self.zeek_folder, dest_zeek_dir)
+            copy_tree(self.zeek_dir, dest_zeek_dir)
             print(
                 f'[Main] Stored a copy of zeek files to {dest_zeek_dir}'
             )
 
     def delete_zeek_files(self):
         if self.conf.delete_zeek_files():
-            shutil.rmtree(self.zeek_folder)
+            shutil.rmtree(self.zeek_dir)
 
     def is_debugger_active(self) -> bool:
         """Return if the debugger is currently active"""
@@ -523,12 +523,10 @@ class Main:
             # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
             signal.signal(signal.SIGTERM, sig_handler)
 
-            self.evidenceProcessQueue = Queue()
             evidence_process = EvidenceProcess(
-                self.outputqueue,
                 self.db,
-                input_queue = self.evidenceProcessQueue,
-                output_dir = self.args.output,
+                self.output_queue,
+                self.args.output,
                 )
             evidence_process.start()
             self.print(
@@ -548,7 +546,7 @@ class Main:
             profiler_process = ProfilerProcess(
                 self.output_queue,
                 self.db,
-                input_queue=self.profilerProcessQueue,
+                profiler_queue=self.profilerProcessQueue,
             )
             profiler_process.start()
             self.print(
@@ -564,15 +562,14 @@ class Main:
             self.metadata_man.enable_metadata()
 
             inputProcess = InputProcess(
-                self.output_queue,
-                self.profilerProcessQueue,
-                self.input_type,
-                self.input_information,
-                self.args.pcapfilter,
-                self.zeek_bro,
-                self.zeek_folder,
-                self.line_type,
-                self.db,
+                self.db, self.output_queue, self.args.output,
+                profiler_queue=self.profilerProcessQueue,
+                input_type=self.input_type,
+                input_information=self.input_information,
+                cli_packet_filter= self.args.pcapfilter,
+                zeek_bro=self.zeek_bro,
+                zeek_dir=self.zeek_dir,
+                line_type=self.line_type,
             )
             inputProcess.start()
             self.print(
@@ -583,7 +580,8 @@ class Main:
                 'Input Process',
                 int(inputProcess.pid)
             )
-            self.zeek_folder = inputProcess.zeek_folder
+
+            print(f"@@@@@@@@@@@@@@@@ done?")
             self.metadata_man.set_input_metadata()
 
             if self.conf.use_p2p() and not self.args.interface:

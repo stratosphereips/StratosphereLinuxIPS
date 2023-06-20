@@ -18,7 +18,7 @@ def test_handle_pcap_and_interface(
     inputProcess.is_zeek_tabs = True
     assert inputProcess.handle_pcap_and_interface() is True
     # delete the zeek logs created
-    shutil.rmtree(inputProcess.zeek_folder)
+    shutil.rmtree(inputProcess.zeek_dir)
 
 
 @pytest.mark.parametrize(

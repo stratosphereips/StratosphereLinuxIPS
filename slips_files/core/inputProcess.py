@@ -35,29 +35,24 @@ class InputProcess(Core):
     """ A class process to run the process of the flows """
 
     name = 'Input'
-
     def init(
             self,
-            output_queue,
-            profilerqueue,
-            input_type,
-            input_information,
-            cli_packet_filter,
-            zeek_or_bro,
-            zeek_folder,
-            line_type,
-            db
+            profiler_queue=None,
+            input_type=None,
+            input_information=None,
+            cli_packet_filter= None,
+            zeek_or_bro=None,
+            zeek_dir=None,
+            line_type=None,
     ):
-        self.output_queue = output_queue
-        self.profilerqueue = profilerqueue
-        self.db = db
         self.input_type = input_type
-        # in case of reading from stdin, the user mst tell slips what type of lines is the input
+        self.profiler_queue = profiler_queue
+        # in case of reading from stdin, the user mst tell slips what
+        # type of lines is the input
         self.line_type = line_type
         # entire path
         self.given_path = input_information
-        # filename only
-        self.zeek_folder = zeek_folder
+        self.zeek_dir = zeek_dir
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
 
@@ -112,13 +107,13 @@ class InputProcess(Core):
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
     def stop_queues(self):
         """Stops the profiler and output queues"""
-        self.profilerqueue.put('stop')
+        self.profiler_queue.put('stop')
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         self.output_queue.put(
             f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
         )
         self.output_queue.close()
-        self.profilerqueue.close()
+        self.profiler_queue.close()
 
     def read_nfdump_output(self) -> int:
         try:
@@ -147,7 +142,7 @@ class InputProcess(Core):
                         'type': 'nfdump',
                         'data': nfdump_line
                     }
-                    self.profilerqueue.put(line)
+                    self.profiler_queue.put(line)
                     if self.testing: break
 
             return total_flows
@@ -363,7 +358,7 @@ class InputProcess(Core):
                     continue
 
                 self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
-                self.profilerqueue.put(earliest_line)
+                self.profiler_queue.put(earliest_line)
                 lines += 1
                 # when testing, no need to read the whole file!
                 if lines == 10 and self.testing:
@@ -411,7 +406,7 @@ class InputProcess(Core):
                 self.bro_timeout = float('inf')
 
 
-            self.zeek_folder = self.given_path
+            self.zeek_dir = self.given_path
             self.start_observer()
 
 
@@ -488,7 +483,7 @@ class InputProcess(Core):
                 'data' : line
             }
             self.print(f'	> Sent Line: {line_info}', 0, 3)
-            self.profilerqueue.put(line_info)
+            self.profiler_queue.put(line_info)
             self.lines += 1
             self.print('Done reading 1 flow.\n ', 0, 3)
 
@@ -510,7 +505,7 @@ class InputProcess(Core):
                     'type': type_,
                     'data': t_line
                 }
-                self.profilerqueue.put(line)
+                self.profiler_queue.put(line)
                 self.lines += 1
 
                 # go through the rest of the file
@@ -521,7 +516,7 @@ class InputProcess(Core):
                     }
                     # argus files are either tab separated orr comma separated
                     if len(t_line.strip()) != 0:
-                        self.profilerqueue.put(line)
+                        self.profiler_queue.put(line)
                     self.lines += 1
                     if self.testing: break
             self.stop_queues()
@@ -541,7 +536,7 @@ class InputProcess(Core):
                     }
                     self.print(f'	> Sent Line: {line}', 0, 3)
                     if len(t_line.strip()) != 0:
-                        self.profilerqueue.put(line)
+                        self.profiler_queue.put(line)
                     self.lines += 1
                     if self.testing:
                         break
@@ -626,7 +621,7 @@ class InputProcess(Core):
         # Get the file eventhandler
         # We have to set event_handler and event_observer before running zeek.
         event_handler = FileEventHandler(
-            self.zeek_folder,
+            self.zeek_dir,
             self.input_type,
             self.db
             )
@@ -634,7 +629,7 @@ class InputProcess(Core):
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler
         self.event_observer.schedule(
-            event_handler, self.zeek_folder, recursive=True
+            event_handler, self.zeek_dir, recursive=True
         )
         # monitor changes to whitelist
         self.event_observer.schedule(
@@ -648,9 +643,9 @@ class InputProcess(Core):
 
         try:
             # Create zeek_folder if does not exist.
-            if not os.path.exists(self.zeek_folder):
-                os.makedirs(self.zeek_folder)
-            self.print(f'Storing zeek log files in {self.zeek_folder}')
+            if not os.path.exists(self.zeek_dir):
+                os.makedirs(self.zeek_dir)
+            self.print(f'Storing zeek log files in {self.zeek_dir}')
             self.start_observer()
 
             if self.input_type == 'interface':
@@ -661,11 +656,11 @@ class InputProcess(Core):
                 # if bro does not receive any new line while reading a pcap
                 self.bro_timeout = 30
 
-            zeek_files = os.listdir(self.zeek_folder)
+            zeek_files = os.listdir(self.zeek_dir)
             if len(zeek_files) > 0:
                 # First clear the zeek folder of old .log files
                 for f in zeek_files:
-                    os.remove(os.path.join(self.zeek_folder, f))
+                    os.remove(os.path.join(self.zeek_dir, f))
 
             # run zeek
             self.zeek_thread.start()
@@ -679,7 +674,7 @@ class InputProcess(Core):
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
             )
-            connlog_path = os.path.join(self.zeek_folder, 'conn.log')
+            connlog_path = os.path.join(self.zeek_dir, 'conn.log')
 
             self.print(f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}", 2, 0)
 
@@ -817,7 +812,7 @@ class InputProcess(Core):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            cwd=self.zeek_folder,
+            cwd=self.zeek_dir,
             preexec_fn=detach_child
         )
         # you have to get the pid before communicate()
@@ -862,7 +857,7 @@ class InputProcess(Core):
                     'data': flow
                 }
                 self.print(f'	> Sent Line: {line_info}', 0, 3)
-                self.profilerqueue.put(line_info)
+                self.profiler_queue.put(line_info)
                 self.lines += 1
                 self.print('Done reading 1 CYST flow.\n ', 0, 3)
 

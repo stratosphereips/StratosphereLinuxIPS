@@ -160,7 +160,7 @@ class Checker:
         print('Deleting Cache DB in Redis.')
         self.main.redis_man.clear_redis_cache_database()
         self.main.input_information = ''
-        self.main.zeek_folder = ''
+        self.main.zeek_dir = ''
         self.main.redis_man.log_redis_server_PID(6379, self.main.redis_man.get_pid_of_redis_server(6379))
         self.main.terminate_slips()
 
