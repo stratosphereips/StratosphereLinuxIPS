@@ -1175,6 +1175,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """returns a dict with module names as keys and PIDs as values"""
         return self.r.hgetall('PIDs')
 
+    def get_pid_of(self, module_name: str):
+        pid = self.r.hget('PIDs', module_name)
+        return int(pid) if pid else None
+
     def set_org_info(self, org, org_info, info_type):
         """
         store ASN, IP and domains of an org in the db

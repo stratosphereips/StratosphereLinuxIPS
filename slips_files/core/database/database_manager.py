@@ -800,6 +800,8 @@ class DBManager:
     def execute_query(self, *args, **kwargs):
         return self.sqlite.execute_query(*args, **kwargs)
 
+    def get_pid_of(self, *args, **kwargs):
+        return self.rdb.get_pid_of(*args, **kwargs)
 
     def export_labeled_flows(self, *args, **kwargs):
         """
