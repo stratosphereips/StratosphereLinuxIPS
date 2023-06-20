@@ -1,5 +1,7 @@
 from slips_files.common.imports import *
 from slips_files.core.outputProcess import OutputProcess
+from slips_files.core.profilerProcess import ProfilerProcess
+from multiprocessing import Queue
 from style import green
 import signal
 import os
@@ -29,6 +31,17 @@ class ProcessManager:
                 )
         output_process.start()
         return output_process
+
+    def start_profiler_process(self):
+        self.profiler_queue = Queue()
+        profiler_process = ProfilerProcess(
+            self.main.db,
+            self.main.output_queue,
+            self.main.args.output,
+            profiler_queue=self.profiler_queue,
+        )
+        profiler_process.start()
+        return profiler_process
 
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL

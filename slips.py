@@ -29,8 +29,7 @@ from style import green
 
 
 from slips_files.core.inputProcess import InputProcess
-from slips_files.core.outputProcess import OutputProcess
-from slips_files.core.profilerProcess import ProfilerProcess
+
 from slips_files.core.evidenceProcess import EvidenceProcess
 from slips_files.core.database.database_manager import DBManager
 
@@ -534,14 +533,7 @@ class Main:
                 int(self.pid)
             )
 
-            self.profiler_queue = Queue()
-            profiler_process = ProfilerProcess(
-                self.db,
-                self.output_queue,
-                self.args.output,
-                profiler_queue=self.profiler_queue,
-            )
-            profiler_process.start()
+            profiler_process = self.proc_man.start_profiler_process()
             self.print(
                 f'Started {green("Profiler Process")} '
                 f'[PID {green(profiler_process.pid)}]', 1, 0
