@@ -1,6 +1,7 @@
 from slips_files.common.imports import *
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.evidenceProcess import EvidenceProcess
 from slips_files.core.inputProcess import InputProcess
 from multiprocessing import Queue
 from style import green
@@ -34,10 +35,10 @@ class ProcessManager:
                     slips_logfile=slips_logfile,
                 )
         output_process.start()
+        self.main.db.store_process_PID('Output', int(output_process.pid))
         return output_process
 
     def start_profiler_process(self):
-
         profiler_process = ProfilerProcess(
             self.main.db,
             self.main.output_queue,
@@ -45,8 +46,32 @@ class ProcessManager:
             profiler_queue=self.profiler_queue,
         )
         profiler_process.start()
+        self.main.print(
+                f'Started {green("Profiler Process")} '
+                f'[PID {green(profiler_process.pid)}]', 1, 0
+        )
+        self.main.db.store_process_PID(
+            'Profiler',
+            int(profiler_process.pid)
+        )
         return profiler_process
 
+    def start_evidence_process(self):
+        evidence_process = EvidenceProcess(
+                self.main.db,
+                self.main.output_queue,
+                self.main.args.output,
+                )
+        evidence_process.start()
+        self.main.print(
+                f'Started {green("Evidence Process")} '
+                f'[PID {green(evidence_process.pid)}]', 1, 0
+            )
+        self.main.db.store_process_PID(
+            'Evidence',
+            int(evidence_process.pid)
+        )
+        return evidence_process
 
     def start_input_process(self):
         input_process = InputProcess(
@@ -60,6 +85,14 @@ class ProcessManager:
             line_type=self.main.line_type,
         )
         input_process.start()
+        self.main.print(
+                f'Started {green("Input Process")} '
+                f'[PID {green(input_process.pid)}]', 1, 0
+            )
+        self.main.db.store_process_PID(
+            'Input Process',
+            int(input_process.pid)
+        )
         return input_process
 
     def kill(self, module_name, INT=False):

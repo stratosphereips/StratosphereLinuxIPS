@@ -27,10 +27,6 @@ from ui_manager import UIManager
 from checker import Checker
 from style import green
 
-from slips_files.core.evidenceProcess import EvidenceProcess
-from slips_files.core.database.database_manager import DBManager
-
-
 import signal
 import sys
 import os
@@ -44,7 +40,7 @@ from datetime import datetime
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
-import csv
+
 
 
 # Ignore warnings on CPU from tensorflow
@@ -123,9 +119,6 @@ class Main:
         if self.mode == 'daemonized':
             self.daemon.stop()
         sys.exit(0)
-
-
-
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
@@ -457,13 +450,14 @@ class Main:
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
 
-            output_process = self.proc_man.start_output_process(current_stdout, stderr, slips_logfile)
-
-            self.db.store_process_PID('Output', int(output_process.pid))
+            output_process = self.proc_man.start_output_process(
+                current_stdout, stderr, slips_logfile
+                )
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':
-                    self.print(f"Parameter -g should be using with -f <dirname> not a {self.input_type}. Ignoring -g")
+                    self.print(f"Parameter -g should be using with "
+                               f"-f <dirname> not a {self.input_type}. Ignoring -g")
                 else:
                     self.print(f"Running on a growing zeek dir: {self.input_information}")
                     self.db.set_growing_zeek_dir()
@@ -511,46 +505,17 @@ class Main:
             # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
             signal.signal(signal.SIGTERM, sig_handler)
 
-            evidence_process = EvidenceProcess(
-                self.db,
-                self.output_queue,
-                self.args.output,
-                )
-            evidence_process.start()
-            self.print(
-                f'Started {green("Evidence Process")} '
-                f'[PID {green(evidence_process.pid)}]', 1, 0
-            )
-            self.db.store_process_PID(
-                'Evidence',
-                int(evidence_process.pid)
-            )
-            self.db.store_process_PID(
-                'slips.py',
-                int(self.pid)
-            )
-
-            profiler_process = self.proc_man.start_profiler_process()
-            self.print(
-                f'Started {green("Profiler Process")} '
-                f'[PID {green(profiler_process.pid)}]', 1, 0
-            )
-            self.db.store_process_PID(
-                'Profiler',
-                int(profiler_process.pid)
-            )
+            self.proc_man.start_evidence_process()
+            self.proc_man.start_profiler_process()
 
             self.c1 = self.db.subscribe('finished_modules')
             self.metadata_man.enable_metadata()
 
-            input_process = self.proc_man.start_input_process()
-            self.print(
-                f'Started {green("Input Process")} '
-                f'[PID {green(input_process.pid)}]', 1, 0
-            )
+            self.proc_man.start_input_process()
+
             self.db.store_process_PID(
-                'Input Process',
-                int(input_process.pid)
+                'slips.py',
+                int(self.pid)
             )
 
             self.metadata_man.set_input_metadata()
