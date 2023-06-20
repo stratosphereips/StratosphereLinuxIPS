@@ -1786,8 +1786,16 @@ class ProfilerProcess(Core):
         utils.drop_root_privs()
 
     def main(self):
-        while line := self.profiler_queue.get():
-            # try:
+        while not self.termination_event.is_set():
+            try:
+                line = self.profiler_queue.get(timeout=5)
+            except Exception as e:
+                self.shutdown_gracefully()
+                return 1
+
+            # TODO who is putting this True here?
+            if line == True:
+                continue
             if 'stop' in line:
                 self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
                            f"{self.whitelisted_flows_ctr}", 2, 0)
@@ -1878,13 +1886,4 @@ class ProfilerProcess(Core):
                 # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
                 self.whitelist.read_whitelist()
 
-            # except KeyboardInterrupt:
-            #     if self.should_stop():
-            #         return True
-            #     else:
-            #         continue
-            # except Exception:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.print(f'Problem in main() line {exception_line}', 0, 1)
-            #     self.print(traceback.format_exc(), 0, 1)
-            #     return True
+        return 1
