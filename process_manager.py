@@ -1,19 +1,22 @@
+import multiprocessing
+
 from slips_files.common.imports import *
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
 from slips_files.core.evidenceProcess import EvidenceProcess
 from slips_files.core.inputProcess import InputProcess
-from multiprocessing import Queue
+from multiprocessing import Queue, Event
+from collections import OrderedDict
+from datetime import datetime
 from style import green
 import signal
-import os
 import time
 import pkgutil
 import inspect
 import modules
 import importlib
-from datetime import datetime
-from collections import OrderedDict
+import os
+
 
 class ProcessManager:
     def __init__(self, main):
@@ -22,12 +25,14 @@ class ProcessManager:
         # this is the queue that will be used by the input proces to pass flows
         # to the profiler
         self.profiler_queue = Queue()
+        self.termination_event: Event = multiprocessing.Event()
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         output_process = OutputProcess(
                     self.main.db,
                     self.main.output_queue,
                     self.main.args.output,
+                    self.termination_event,
                     verbose=self.main.args.verbose,
                     debug=self.main.args.debug,
                     stdout=current_stdout,
@@ -43,6 +48,7 @@ class ProcessManager:
             self.main.db,
             self.main.output_queue,
             self.main.args.output,
+            self.termination_event,
             profiler_queue=self.profiler_queue,
         )
         profiler_process.start()
@@ -61,6 +67,7 @@ class ProcessManager:
                 self.main.db,
                 self.main.output_queue,
                 self.main.args.output,
+                self.termination_event,
                 )
         evidence_process.start()
         self.main.print(
@@ -75,11 +82,14 @@ class ProcessManager:
 
     def start_input_process(self):
         input_process = InputProcess(
-            self.main.db, self.main.output_queue, self.main.args.output,
+            self.main.db,
+            self.main.output_queue,
+            self.main.args.output,
+            self.termination_event,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
             input_information=self.main.input_information,
-            cli_packet_filter= self.main.args.pcapfilter,
+            cli_packet_filter=self.main.args.pcapfilter,
             zeek_or_bro=self.main.zeek_bro,
             zeek_dir=self.main.zeek_dir,
             line_type=self.main.line_type,
@@ -220,6 +230,7 @@ class ProcessManager:
             module = module_class(
                 self.main.output_queue,
                 self.main.db,
+                self.termination_event,
             )
             module.start()
             self.main.db.store_process_PID(
@@ -314,7 +325,8 @@ class ProcessManager:
         Wait for all modules to confirm that they're done processing
         or kill them after 15 mins
         """
-        # 15 mins from this time, all modules should be killed
+
+        # by default, 15 mins from this time, all modules should be killed
         function_start_time = datetime.now()
 
         try:
@@ -322,7 +334,8 @@ class ProcessManager:
                 print('\n' + '-' * 27)
             print('Stopping Slips')
 
-            wait_for_modules_to_finish  = self.main.conf.wait_for_modules_to_finish()
+            # how long to wait for modules to finish
+            wait_for_modules_to_finish = self.main.conf.wait_for_modules_to_finish()
             # close all tws
             self.main.db.check_TW_to_close(close_all=True)
 
@@ -333,114 +346,123 @@ class ProcessManager:
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
+
+            self.termination_event.set()
+            for process in self.processes:
+                print(f"@@@@@@@@@@@@@@@@ waiting for {process} to join")
+                process.join()
+
+
             # Stop the modules that are subscribed to channels
-            self.main.db.publish_stop()
+            # self.main.db.publish_stop()
 
-            # get dict of PIDs spawned by slips
-            self.PIDs = self.main.db.get_pids()
-            # we don't want to kill this process
-            self.PIDs.pop('slips.py', None)
+            # # get dict of PIDs spawned by slips
+            # self.PIDs = self.main.db.get_pids()
+            #
+            # # we don't want to kill this process
+            # self.PIDs.pop('slips.py', None)
+            #
+            # if self.main.mode == 'daemonized':
+            #     profilesLen = self.main.db.get_profiles_len()
+            #     self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
+            #
+            # modules_to_be_killed_last: list = self.get_modules_to_be_killed_last()
+            #
+            # self.stop_core_processes()
+            # # only print that modules are still running once
+            # warning_printed = False
+            #
+            # # loop until all loaded modules are finished
+            # # in the case of -S, slips doesn't even start the modules,
+            # # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
+            # if not self.main.args.stopdaemon:
+            #     #  modules_to_be_killed_last are ignored when they publish a msg in finished modules channel,
+            #     # we will kill them later, so we shouldn't be waiting for them to get outta the loop
+            #     slips_processes = len(list(self.PIDs.keys())) - len(modules_to_be_killed_last)
+            #
+            #     try:
+            #         finished_modules = []
+            #         # timeout variable so we don't loop forever
+            #         # give slips enough time to close all modules - make sure
+            #         # all modules aren't considered 'busy' when slips stops
+            #         max_loops = 430
+            #         while (
+            #             len(finished_modules) < slips_processes and max_loops != 0
+            #         ):
+            #             # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
+            #             try:
+            #                 message = self.main.c1.get_message(timeout=0.00000001)
+            #             except NameError:
+            #                 continue
+            #
+            #             if message and message['data'] in ('stop_process', 'stop_slips'):
+            #                 continue
+            #
+            #             if utils.is_msg_intended_for(message, 'finished_modules'):
+            #                 # all modules must reply with their names in this channel after
+            #                 # receiving the stop_process msg
+            #                 # to confirm that all processing is done and we can safely exit now
+            #                 module_name = message['data']
+            #                 if module_name in modules_to_be_killed_last:
+            #                     # we should kill these modules the very last, or else we'll miss evidence generated
+            #                     # right before slips stops
+            #                     continue
+            #
+            #                 if module_name not in finished_modules:
+            #                     finished_modules.append(module_name)
+            #                     self.kill(module_name)
+            #                     self.print_stopped_module(module_name)
+            #
+            #                     # some modules publish in finished_modules channel before slips.py starts listening,
+            #                     # but they finished gracefully.
+            #                     # remove already stopped modules from PIDs dict
+            #                     for module in self.get_already_stopped_modules():
+            #                         finished_modules.append(module)
+            #                         self.print_stopped_module(module)
+            #
+            #             max_loops -= 1
+            #             # after reaching the max_loops and before killing the modules that aren't finished,
+            #             # make sure we're not processing
+            #             # the logical flow is self.pids should be empty by now as all modules
+            #             # are closed, the only ones left are the ones we want to kill last
+            #             modules_running = len(self.PIDs)
+            #             modules_that_should_be_running = len(modules_to_be_killed_last)
+            #             if modules_running > modules_that_should_be_running and max_loops < 2:
+            #                 if not warning_printed and self.warn_about_pending_modules(finished_modules):
+            #                     if 'Update Manager' not in finished_modules:
+            #                         print(
+            #                             f"[Main] Update Manager may take several minutes "
+            #                             f"to finish updating 45+ TI files."
+            #                         )
+            #                     warning_printed = True
+            #
+            #                 # -t flag is only used in integration tests,
+            #                 # so we don't care about the modules finishing their job when testing
+            #                 # instead, kill them
+            #                 # if self.main.args.testing:
+            #                 #     pass
+            #                 #     break
+            #
+            #                 # delay killing unstopped modules until all of them
+            #                 # are done processing
+            #                 max_loops += 1
+            #
+            #                 # checks if 15 minutes has passed since the start of the function
+            #                 if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
+            #                     print(f"Killing modules that took more than "
+            #                           f"{wait_for_modules_to_finish} mins to finish.")
+            #                     break
+            #
+            #     except KeyboardInterrupt:
+            #         # either the user wants to kill the remaining modules (pressed ctrl +c again)
+            #         # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
+            #         # pass to kill the remaining modules
+            #         pass
+            # # modules that aren't subscribed to any channel will always be killed and not stopped
+            # # comes here if the user pressed ctrl+c again
+            # self.kill_all(self.PIDs.copy())
+            # self.kill_all(modules_to_be_killed_last)
 
-            if self.main.mode == 'daemonized':
-                profilesLen = self.main.db.get_profiles_len()
-                self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
-
-            modules_to_be_killed_last: list = self.get_modules_to_be_killed_last()
-
-            self.stop_core_processes()
-            # only print that modules are still running once
-            warning_printed = False
-
-            # loop until all loaded modules are finished
-            # in the case of -S, slips doesn't even start the modules,
-            # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
-            if not self.main.args.stopdaemon:
-                #  modules_to_be_killed_last are ignored when they publish a msg in finished modules channel,
-                # we will kill them later, so we shouldn't be waiting for them to get outta the loop
-                slips_processes = len(list(self.PIDs.keys())) - len(modules_to_be_killed_last)
-
-                try:
-                    finished_modules = []
-                    # timeout variable so we don't loop forever
-                    # give slips enough time to close all modules - make sure
-                    # all modules aren't considered 'busy' when slips stops
-                    max_loops = 430
-                    while (
-                        len(finished_modules) < slips_processes and max_loops != 0
-                    ):
-                        # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
-                        try:
-                            message = self.main.c1.get_message(timeout=0.00000001)
-                        except NameError:
-                            continue
-
-                        if message and message['data'] in ('stop_process', 'stop_slips'):
-                            continue
-
-                        if utils.is_msg_intended_for(message, 'finished_modules'):
-                            # all modules must reply with their names in this channel after
-                            # receiving the stop_process msg
-                            # to confirm that all processing is done and we can safely exit now
-                            module_name = message['data']
-                            if module_name in modules_to_be_killed_last:
-                                # we should kill these modules the very last, or else we'll miss evidence generated
-                                # right before slips stops
-                                continue
-
-                            if module_name not in finished_modules:
-                                finished_modules.append(module_name)
-                                self.kill(module_name)
-                                self.print_stopped_module(module_name)
-
-                                # some modules publish in finished_modules channel before slips.py starts listening,
-                                # but they finished gracefully.
-                                # remove already stopped modules from PIDs dict
-                                for module in self.get_already_stopped_modules():
-                                    finished_modules.append(module)
-                                    self.print_stopped_module(module)
-
-                        max_loops -= 1
-                        # after reaching the max_loops and before killing the modules that aren't finished,
-                        # make sure we're not processing
-                        # the logical flow is self.pids should be empty by now as all modules
-                        # are closed, the only ones left are the ones we want to kill last
-                        modules_running = len(self.PIDs)
-                        modules_that_should_be_running = len(modules_to_be_killed_last)
-                        if modules_running > modules_that_should_be_running and max_loops < 2:
-                            if not warning_printed and self.warn_about_pending_modules(finished_modules):
-                                if 'Update Manager' not in finished_modules:
-                                    print(
-                                        f"[Main] Update Manager may take several minutes "
-                                        f"to finish updating 45+ TI files."
-                                    )
-                                warning_printed = True
-
-                            # -t flag is only used in integration tests,
-                            # so we don't care about the modules finishing their job when testing
-                            # instead, kill them
-                            # if self.main.args.testing:
-                            #     pass
-                            #     break
-
-                            # delay killing unstopped modules until all of them
-                            # are done processing
-                            max_loops += 1
-
-                            # checks if 15 minutes has passed since the start of the function
-                            if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
-                                print(f"Killing modules that took more than "
-                                      f"{wait_for_modules_to_finish} mins to finish.")
-                                break
-
-                except KeyboardInterrupt:
-                    # either the user wants to kill the remaining modules (pressed ctrl +c again)
-                    # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
-                    # pass to kill the remaining modules
-                    pass
-            # modules that aren't subscribed to any channel will always be killed and not stopped
-            # comes here if the user pressed ctrl+c again
-            self.kill_all(self.PIDs.copy())
-            self.kill_all(modules_to_be_killed_last)
 
             # save redis database if '-s' is specified
             if self.main.args.save:
@@ -465,6 +487,6 @@ class ProcessManager:
                 self.main.daemon.delete_pidfile()
             return True
         except KeyboardInterrupt:
-            self.kill_all(self.PIDs.copy())
-            self.kill_all(modules_to_be_killed_last)
+            # self.kill_all(self.PIDs.copy())
+            # self.kill_all(modules_to_be_killed_last)
             return False
