@@ -135,7 +135,7 @@ class MetadataManager:
 
         if hasattr(self.main, 'zeek_folder'):
             info.update({
-                'zeek_dir': self.main.zeek_folder
+                'zeek_dir': self.main.zeek_dir
             })
 
         size_in_mb = '-'

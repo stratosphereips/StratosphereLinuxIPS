@@ -144,7 +144,7 @@ class Core(Module, Process):
             self, db, output_queue, output_dir, **kwargs
             ):
         """
-        contains common initializations in all Helpers in  slips_files/core/
+        contains common initializations in all core files in  slips_files/core/
         the goal of this is to have one common __init__() for all modules, which is the one
         in this file
         """

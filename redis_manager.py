@@ -33,7 +33,7 @@ class RedisManager:
 
                 f.write(
                     f'{now},{self.main.input_information},{redis_port},'
-                    f'{redis_pid},{self.main.zeek_folder},{self.main.args.output},'
+                    f'{redis_pid},{self.main.zeek_dir},{self.main.args.output},'
                     f'{os.getpid()},'
                     f'{bool(self.main.args.daemon)},{self.main.args.save}\n'
                 )

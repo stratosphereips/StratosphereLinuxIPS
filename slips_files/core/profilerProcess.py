@@ -42,8 +42,9 @@ class ProfilerProcess(Core):
     """A class to create the profiles for IPs and the rest of data"""
     name = 'Profiler'
 
-    def init(self, input_queue=None):
-        self.inputqueue = input_queue
+    def init(self, profiler_queue=None):
+        # every line put in this queue should be profiled
+        self.profiler_queue = profiler_queue
         self.timeformat = None
         self.input_type = False
         self.whitelisted_flows_ctr = 0
@@ -1785,7 +1786,7 @@ class ProfilerProcess(Core):
         utils.drop_root_privs()
 
     def main(self):
-        while line := self.inputqueue.get():
+        while line := self.profiler_queue.get():
             try:
 
                 if 'stop' in line:
