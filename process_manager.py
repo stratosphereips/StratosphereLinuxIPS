@@ -348,22 +348,37 @@ class ProcessManager:
             pids_to_kill_first, pids_to_kill_last = self.get_hitlist_in_order()
 
             self.termination_event.set()
-            for process in self.processes:
-                if process.pid in pids_to_kill_first:
-                    process.join()
-                    self.print_stopped_module(process.name)
+            try:
+                for process in self.processes:
+                    if process.pid in pids_to_kill_first:
+                        process.join()
+                        self.print_stopped_module(process.name)
 
 
-            for process in self.processes:
-                if process.pid in pids_to_kill_last:
-                    process.join()
-                    self.print_stopped_module(process.name)
+                for process in self.processes:
+                    if process.pid in pids_to_kill_last:
+                        process.join()
+                        self.print_stopped_module(process.name)
 
 
-            if self.main.mode == 'daemonized':
-                profilesLen = self.main.db.get_profiles_len()
-                self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
+                if self.main.mode == 'daemonized':
+                    profilesLen = self.main.db.get_profiles_len()
+                    self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
 
+
+                # checks if 15 minutes has passed since the start of the function
+                if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
+                    print(f"Killing modules that took more than "
+                          f"{wait_for_modules_to_finish} mins to finish.")
+                    return
+
+            except KeyboardInterrupt:
+                # either the user wants to kill the remaining modules (pressed ctrl +c again)
+                # or slips was stuck looping for too long that the OS sent an automatic sigint to kill slips
+                # pass to kill the remaining modules
+                pass
+
+            self.kill_all_children()
 
             # only print that modules are still running once
             # warning_printed = False
