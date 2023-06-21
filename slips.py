@@ -114,22 +114,32 @@ class Main:
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
+        self.cpuProfilerMultiprocess = slips.conf.get_cpu_profiler_multiprocess() == 'yes'
         if self.cpuProfilerEnabled:
             try:
-                self.cpuProfiler = CPUProfiler(
-                    db=self.db,
-                    output=self.args.output,
-                    mode=slips.conf.get_cpu_profiler_mode(),
-                    limit=slips.conf.get_cpu_profiler_output_limit(),
-                    interval=slips.conf.get_cpu_profiler_sampling_interval()
-                    )
-                self.cpuProfiler.start()
+                if (self.cpuProfilerMultiprocess):
+                    print("Starting multiprocess profiling recursive subprocess")
+                    args = sys.argv
+                    if (args[-1] != "--no-recurse"):
+                        args.insert(0,'viztracer')
+                        args.append("--no-recurse")
+                        subprocess.run(args)
+                        exit(0)
+                else:
+                    self.cpuProfiler = CPUProfiler(
+                        db=self.db,
+                        output=self.args.output,
+                        mode=slips.conf.get_cpu_profiler_mode(),
+                        limit=slips.conf.get_cpu_profiler_output_limit(),
+                        interval=slips.conf.get_cpu_profiler_sampling_interval()
+                        )
+                    self.cpuProfiler.start()
             except Exception as e:
                 print(e)
                 self.cpuProfilerEnabled = False
     
     def cpu_profiler_release(self):
-        if self.cpuProfilerEnabled:
+        if self.cpuProfilerEnabled and not self.cpuProfilerMultiprocess:
             self.cpuProfiler.stop()
             self.cpuProfiler.print()
 
@@ -596,15 +606,15 @@ class Main:
                 self.line_type,
                 self.db,
             )
-            # inputProcess.start()
+            inputProcess.start()
             self.print(
                 f'Started {green("Input Process")} '
                 f'[PID {green(inputProcess.pid)}]', 1, 0
             )
-            # self.db.store_process_PID(
-            #     'Input Process',
-            #     int(inputProcess.pid)
-            # )
+            self.db.store_process_PID(
+                'Input Process',
+                int(inputProcess.pid)
+            )
             self.zeek_folder = inputProcess.zeek_folder
             self.metadata_man.set_input_metadata()
 

@@ -938,7 +938,6 @@ class InputProcess(multiprocessing.Process):
                 )
                 return False
             self.shutdown_gracefully()
-
             # keep the module idle until slips.py kills it
             # without this, the module exits but the pid will remain in memory as <defunct>
             # while True:

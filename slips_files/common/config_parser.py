@@ -750,6 +750,9 @@ class ConfigParser(object):
     def get_cpu_profiler_mode(self):
         return self.read_configuration('Profiling', 'cpu_profiler_mode', 'dev')
     
+    def get_cpu_profiler_multiprocess(self):
+        return self.read_configuration('Profiling', 'cpu_profiler_multiprocess', 'yes')
+    
     def get_cpu_profiler_output_limit(self) -> int:
         return int(self.read_configuration('Profiling', 'cpu_profiler_output_limit', 20))
     
