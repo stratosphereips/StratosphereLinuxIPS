@@ -17,6 +17,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from pathlib import Path
 from re import split
+import signal
 import sys
 import os
 from slips_files.common.abstracts import Core
@@ -716,11 +717,27 @@ class InputProcess(Core):
 
     def shutdown_gracefully(self):
         self.stop_observer()
+        try:
+            self.remover_thread.join()
+        except:
+            pass
+        try:
+            self.zeek_thread.join()
+        except:
+            pass
+
+        if hasattr(self, 'open_file_handlers'):
+            self.close_all_handles()
 
         if hasattr(self, 'zeek_pid'):
-            self.db.publish('finished_modules', 'Zeek')
+            # kill zeek manually if it started bc it's detached from this process and will never recv the sigint
+            # also withoutt this, inputproc will never shutdown and will always remain in memory causing 1000 bugs in
+            # proc_man:shutdown_gracefully()
+            try:
+                os.kill(self.zeek_pid, signal.SIGKILL)
+            except Exception as e:
+                pass
 
-        self.db.publish('finished_modules', self.name)
 
     def run_zeek(self):
         """
@@ -788,7 +805,7 @@ class InputProcess(Core):
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,
             cwd=self.zeek_dir,
-            preexec_fn=detach_child
+            preexec_fn=detach_child,
         )
         # you have to get the pid before communicate()
         self.zeek_pid = zeek.pid
@@ -832,7 +849,7 @@ class InputProcess(Core):
                     'line_type': self.line_type,
                     'data': flow
                 }
-                self.print(f'	> Sent Line: {line_info}', 0, 3)
+                self.print(f'   > Sent Line: {line_info}', 0, 3)
                 self.profiler_queue.put(line_info)
                 self.lines += 1
                 self.print('Done reading 1 CYST flow.\n ', 0, 3)
