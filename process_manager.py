@@ -328,24 +328,23 @@ class ProcessManager:
 
         return to_kill_first, to_kill_last
 
-    def wait_for_processes_to_finish(self, pids_to_kill: List[int]) -> List[int]:
+    def wait_for_processes_to_finish(self, pids_to_kill: List[Process]) -> List[Process]:
         """
         :param pids_to_kill: list of PIDs to wait for
         :return: list of PIDs that still are not done yet
         """
-        alive_processes = []
+        alive_processes: List[Process] = []
         # go through all processes to kill and see which
         # of them still need time
-        for process in self.processes:
-            if process.pid in pids_to_kill:
-                # 3 is the timeout
-                process.join(3)
+        for process in pids_to_kill:
+            # wait 3s for it to stop
+            process.join(3)
 
-                if process.is_alive():
-                    # reached timeout
-                    alive_processes.append(process.pid)
-                else:
-                    self.print_stopped_module(process.name)
+            if process.is_alive():
+                # reached timeout
+                alive_processes.append(process)
+            else:
+                self.print_stopped_module(process.name)
 
         return alive_processes
 
