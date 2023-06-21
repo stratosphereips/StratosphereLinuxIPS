@@ -110,6 +110,12 @@ class InputProcess(Core):
 
     def stop_queues(self):
         """Stops the profiler and output queues"""
+        # By default if a process(inputprocess) is not the creator of the queue(profiler_queue) then on
+        # exit it will attempt to join the queue’s background thread.
+        # this causes a deadlock
+        # to avoid this behaviour we should call cancel_join_thread
+        self.profiler_queue.cancel_join_thread()
+        self.output_queue.cancel_join_thread()
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         self.output_queue.put(
             f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
@@ -717,6 +723,7 @@ class InputProcess(Core):
 
     def shutdown_gracefully(self):
         self.stop_observer()
+        self.stop_queues()
         try:
             self.remover_thread.join()
         except:
