@@ -263,10 +263,6 @@ class CESNET(Module, multiprocessing.Process):
 
         self.db.add_ips_to_IoC(src_ips)
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
-
     def pre_main(self):
         utils.drop_root_privs()
         # Stop module if the configuration file is invalid or not found

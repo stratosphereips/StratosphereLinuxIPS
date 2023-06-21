@@ -394,7 +394,6 @@ class EvidenceProcess(Core):
     def shutdown_gracefully(self):
         self.logfile.close()
         self.jsonfile.close()
-        self.db.publish('finished_modules', 'Evidence')
 
     def delete_alerted_evidence(self, profileid, twid, tw_evidence:dict):
         """

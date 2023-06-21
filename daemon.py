@@ -243,5 +243,4 @@ class Daemon():
         self.prepare_std_streams(output_dir)
         db = DBManager(output_dir, multiprocessing.Queue(), port, flush_db=False)
         self.slips.db = db
-        self.slips.c1 = db.subscribe('finished_modules')
         self.slips.proc_man.shutdown_gracefully()

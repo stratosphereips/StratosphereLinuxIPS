@@ -361,10 +361,6 @@ class Timeline(Module, multiprocessing.Process):
             self.print(traceback.print_exc(),0,1)
             return True
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
-
     def pre_main(self):
         utils.drop_root_privs()
 

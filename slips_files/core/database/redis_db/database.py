@@ -49,7 +49,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         'new_ssh',
         'new_notice',
         'new_url',
-        'finished_modules',
         'new_downloaded_file',
         'reload_whitelist',
         'new_service',
@@ -69,7 +68,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         'report_to_peers',
         'new_tunnel',
         'check_jarm_hash',
-        'control_module',
+        'control_channel',
         }
     # The name is used to print in the outputprocess
     name = 'DB'
@@ -309,7 +308,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             return channel.get_message(timeout=timeout)
         except redis.exceptions.ConnectionError as ex:
             if not self.is_connection_error_logged():
-                self.publish('finished_modules', 'stop_slips')
+
                 self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 0, 1)
                 # make sure we publish the stop msg and log the error only once
                 self.mark_connection_error_as_logged()

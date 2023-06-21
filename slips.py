@@ -508,7 +508,8 @@ class Main:
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
 
-            self.c1 = self.db.subscribe('finished_modules')
+            self.c1 = self.db.subscribe('control_channel')
+
             self.metadata_man.enable_metadata()
 
             self.proc_man.start_input_process()
@@ -552,7 +553,7 @@ class Main:
                 message = self.c1.get_message(timeout=0.01)
                 if (
                     message
-                    and utils.is_msg_intended_for(message, 'finished_modules')
+                    and utils.is_msg_intended_for(message, 'control_channel')
                     and message['data'] == 'stop_slips'
                 ):
                     self.proc_man.shutdown_gracefully()

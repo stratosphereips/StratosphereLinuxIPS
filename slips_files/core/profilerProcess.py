@@ -1777,11 +1777,6 @@ class ProfilerProcess(Core):
             self.print('Error in compute_symbol in Profiler Process.', 0, 1)
             self.print('{}'.format(traceback.format_exc()), 0, 1)
 
-    def shutdown_gracefully(self):
-        self.print(f"Stopping profiler process. Number of whitelisted conn flows: {self.whitelisted_flows_ctr}", 2, 0)
-        # can't use self.name because multiprocessing library adds the child number to the name so it's not const
-        self.db.publish('finished_modules', 'Profiler')
-
     def pre_main(self):
         utils.drop_root_privs()
 

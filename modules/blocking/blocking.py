@@ -321,10 +321,6 @@ class Blocking(Module, multiprocessing.Process):
             return True
         return False
 
-    def shutdown_gracefully(self):
-        self.db.publish('finished_modules', self.name)
-
-
     def check_for_ips_to_unblock(self):
             unblocked_ips = set()
             # check if any ip needs to be unblocked

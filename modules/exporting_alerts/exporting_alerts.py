@@ -291,8 +291,6 @@ class ExportingAlerts(Module, multiprocessing.Process):
             date_time = utils.convert_format(date_time, utils.alerts_format)
             self.send_to_slack(f'{date_time}: Slips finished on sensor: {self.sensor_name}.')
 
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
         if (

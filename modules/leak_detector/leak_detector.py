@@ -44,10 +44,6 @@ class LeakDetector(Module, multiprocessing.Process):
         self.print("yara is not installed. install it using:\nsudo apt-get install yara")
         return False
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
-
 
     def fix_json_packet(self, json_packet):
         """

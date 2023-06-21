@@ -84,9 +84,6 @@ class RiskIQ(Module, multiprocessing.Process):
         sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
         return sorted_pt_results
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:

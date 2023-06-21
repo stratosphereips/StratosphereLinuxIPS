@@ -15,7 +15,6 @@ class Module(ABC):
         Process.__init__(self)
         self.output_queue = output_queue
         self.db = db
-        self.control_channel = self.db.subscribe('control_module')
         self.msg_received = False
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
@@ -63,12 +62,12 @@ class Module(ABC):
         levels = f'{verbose}{debug}'
         self.output_queue.put(f'{levels}|{self.name}|{text}')
 
-    @abstractmethod
     def shutdown_gracefully(self):
         """
         Tells slips.py that this module is
         done processing and does necessary cleanup
         """
+        pass
     @abstractmethod
     def main(self):
         """
@@ -148,7 +147,6 @@ class Core(Module, Process):
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.db = db
-        self.control_channel = self.db.subscribe('control_module')
         self.msg_received = False
         self.init(**kwargs)
 

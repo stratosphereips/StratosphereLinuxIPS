@@ -34,11 +34,6 @@ class Template(Module, multiprocessing.Process):
             'new_ip': self.c1,
         }
 
-
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
-
     def pre_main(self):
         """
         Initializations that run only once before the main() function runs in a loop

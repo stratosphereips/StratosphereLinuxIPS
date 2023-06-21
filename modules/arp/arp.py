@@ -341,9 +341,6 @@ class ARP(Module, multiprocessing.Process):
                                      profileid=profileid, twid=twid, uid=uid)
             return True
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
     def check_if_gratutitous_ARP(
             self, saddr, daddr, src_mac, dst_mac, src_hw, dst_hw, operation

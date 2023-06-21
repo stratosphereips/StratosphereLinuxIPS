@@ -338,9 +338,6 @@ class ProcessManager:
         Wait for all modules to confirm that they're done processing
         or kill them after 15 mins
         """
-
-
-
         try:
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)

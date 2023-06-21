@@ -581,7 +581,6 @@ class Trust(Module, multiprocessing.Process):
             self.pigeon.send_signal(signal.SIGINT)
         if hasattr(self, 'trust_db'):
             self.trust_db.__del__()
-        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()

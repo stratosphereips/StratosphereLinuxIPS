@@ -40,8 +40,6 @@ class UpdateManager(Module, multiprocessing.Process):
         self.timer_manager.cancel()
         self.mac_db_update_manager.cancel()
         self.online_whitelist_update_timer.cancel()
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
         return True
 
     async def update_ti_files(self):

@@ -328,7 +328,6 @@ class OutputProcess(Core):
         self.log_line('[Output Process]', ' Stopping output process. '
                                         'Further evidence may be missing. '
                                         'Check alerts.log for full evidence list.')
-        self.db.publish('finished_modules', self.name)
 
     def remove_stats_from_progress_bar(self):
         # remove the stats from the progress bar

@@ -45,8 +45,6 @@ class NetworkDiscovery(Module, multiprocessing.Process):
         # alert about all the pending evidence before this module stops
         self.horizontal_ps.combine_evidence()
         self.vertical_ps.combine_evidence()
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
         """

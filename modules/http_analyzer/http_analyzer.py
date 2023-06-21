@@ -451,10 +451,6 @@ class HTTPAnalyzer(Module, multiprocessing.Process):
             return True
 
 
-
-
-    def shutdown_gracefully(self):
-        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
 

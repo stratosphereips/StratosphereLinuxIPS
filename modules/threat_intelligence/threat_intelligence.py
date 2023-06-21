@@ -570,11 +570,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
         """
         return protocol == 'ICMP' and ip_state == 'dstip'
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
-        return True
-
     def spamhaus(self, ip):
         """
         Supports IP lookups only

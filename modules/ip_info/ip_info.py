@@ -382,8 +382,6 @@ class IPInfo(Module, multiprocessing.Process):
             self.country_db.close()
         if hasattr(self, 'mac_db'):
             self.mac_db.close()
-        # confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
     # GW
     def get_gateway_ip(self):

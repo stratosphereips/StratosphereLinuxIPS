@@ -1,7 +1,6 @@
 """Unit test for modules/blocking/blocking.py
 this file needs sudoroot to run
 """
-from ..modules.blocking.blocking import Module
 from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER, do_nothing
 from tests.module_factory import ModuleFactory
 import platform
