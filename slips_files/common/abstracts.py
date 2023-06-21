@@ -32,9 +32,8 @@ class Module(ABC):
     def should_stop(self) -> bool:
         """
         The module should stop on the following 2 conditions
-        1. slips.py publishes the stop_process msg in the control_module channel
-        2. no msgs left to process in the module
-        This function calls the shutdown_gracefully pf the module when the 2 conditions are true
+        1. no new msgs are received in any of the channels the module is subscribed to
+        2. the termination event is set by the process_manager.py
         """
         if self.msg_received or not self.termination_event.is_set():
             # this module is still receiving msgs,
