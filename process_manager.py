@@ -347,7 +347,7 @@ class ProcessManager:
             print("Stopping Slips")
 
             # by default, 15 mins from this time, all modules should be killed
-            method_start_time = datetime.now()
+            method_start_time = time.time()
 
             # how long to wait for modules to finish in minutes
             timeout: float = self.main.conf.wait_for_modules_to_finish()
