@@ -118,12 +118,13 @@ class Main:
         if self.cpuProfilerEnabled:
             try:
                 if (self.cpuProfilerMultiprocess):
-                    print("Starting multiprocess profiling recursive subprocess")
                     args = sys.argv
                     if (args[-1] != "--no-recurse"):
-                        args.insert(0,'viztracer')
-                        args.append("--no-recurse")
-                        subprocess.run(args)
+                        viz_args = ['viztracer', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
+                        viz_args.extend(args)
+                        viz_args.append("--no-recurse")
+                        print("Starting multiprocess profiling recursive subprocess")
+                        subprocess.run(viz_args)
                         exit(0)
                 else:
                     self.cpuProfiler = CPUProfiler(

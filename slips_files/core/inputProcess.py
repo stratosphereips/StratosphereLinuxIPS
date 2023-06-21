@@ -19,7 +19,6 @@ from pathlib import Path
 from re import split
 import sys
 import os
-import socket
 from datetime import datetime
 from watchdog.observers import Observer
 from .filemonitor import FileEventHandler
@@ -96,10 +95,10 @@ class InputProcess(multiprocessing.Process):
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []
-        self.zeek_thread = threading.Thread(
-            target=self.run_zeek,
-            daemon=True
-        )
+        # self.zeek_thread = threading.Thread(
+        #     target=self.run_zeek,
+        #     daemon=True
+        # )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -689,7 +688,7 @@ class InputProcess(multiprocessing.Process):
                     os.remove(os.path.join(self.zeek_folder, f))
 
             # run zeek
-            self.zeek_thread.start()
+            self.run_zeek()
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
 
@@ -839,7 +838,7 @@ class InputProcess(multiprocessing.Process):
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,
             cwd=self.zeek_folder,
-            preexec_fn=detach_child
+            start_new_session=True
         )
         # you have to get the pid before communicate()
         self.zeek_pid = zeek.pid
@@ -938,6 +937,7 @@ class InputProcess(multiprocessing.Process):
                 )
                 return False
             self.shutdown_gracefully()
+            return False
             # keep the module idle until slips.py kills it
             # without this, the module exits but the pid will remain in memory as <defunct>
             # while True:
