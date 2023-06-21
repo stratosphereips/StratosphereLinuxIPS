@@ -258,33 +258,28 @@ class ProcessManager:
                 already_stopped_modules.append(module)
         return already_stopped_modules
 
-    def warn_about_pending_modules(self):
+    def warn_about_pending_modules(self, pending_modules: List[Process]):
         """
         Prints the names of the modules that are not finished yet.
+        :param pending_modules: List of active/pending process that aren't killed or stoppped yet
         """
         if self.warning_printed_once:
             return
-        pending_modules: List[Process] = []
-        update_manager_alive = False
-        # exclude the module that are already stopped from the pending modules
-        for process in self.processes:
-            if not process.is_alive():
-                continue
-            if 'UpdateManager' in process.name:
-                update_manager_alive = True
-            pending_modules.append(process.name)
 
+        pending_module_names: List[str] = [proc.name for proc in pending_modules]
         print(
             f'\n[Main] The following modules are busy working on your data.'
-            f'\n\n{pending_modules}\n\n'
+            f'\n\n{pending_module_names}\n\n'
             'You can wait for them to finish, or you can '
             'press CTRL-C again to force-kill.\n'
         )
 
-        if update_manager_alive:
+        # check if update manager is still alive
+        if 'UpdateManager' in pending_module_names:
              print(f"[Main] Update Manager may take several minutes "
                    f"to finish updating 45+ TI files.")
 
+        self.warning_printed_once = True
         return True
 
     def should_kill_all_modules(self,
@@ -375,6 +370,7 @@ class ProcessManager:
             end_date = self.main.metadata_man.set_analysis_end_date()
 
             start_time = self.main.db.get_slips_start_time()
+            start_time: float = utils.convert_format(start_time, 'unixtimestamp')
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
