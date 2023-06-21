@@ -294,7 +294,7 @@ class ProcessManager:
         diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
         return diff >= wait_for_modules_to_finish
 
-    def get_hitlist_in_order(self) -> Tuple[List[int], List[int]]:
+    def get_hitlist_in_order(self) -> Tuple[List[Process], List[Process]]:
         """
         returns a list of PIDs that slipss should terminate first, and pids that shjould be killed last
         """
@@ -314,15 +314,19 @@ class ProcessManager:
             pids_to_kill_last.append(self.main.db.get_pid_of('Exporting Alerts'))
 
         # remove all None PIDs
-        pids_to_kill_last = [pid for pid in pids_to_kill_last if pid is not None]
+        pids_to_kill_last: List[int] = [pid for pid in pids_to_kill_last if pid is not None]
 
-        pids_to_kill_first: List[int] = []
+        to_kill_first: List[Process] = []
+        to_kill_last: List[Process] = []
         for process in self.processes:
             # if it's not to kill be killed last, then we need to kill it first :'D
-            if process.pid not in pids_to_kill_last:
-                pids_to_kill_first.append(process.pid)
+            if process.pid in pids_to_kill_last:
+                to_kill_last.append(process)
+            else:
+                to_kill_first.append(process)
 
-        return pids_to_kill_first, pids_to_kill_last
+
+        return to_kill_first, to_kill_last
 
     def wait_for_processes_to_finish(self, pids_to_kill: List[int]) -> List[int]:
         """
@@ -374,7 +378,9 @@ class ProcessManager:
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
-            pids_to_kill_first, pids_to_kill_last = self.get_hitlist_in_order()
+            hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
+            to_kill_first: List[Process] = hitlist[0]
+            to_kill_last: List[Process] = hitlist[1]
 
             self.termination_event.set()
             # to make sure we only warn the user once about hte pending modules
