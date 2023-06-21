@@ -321,34 +321,42 @@ class ProcessManager:
 
         return alive_processes
 
+    def get_analysis_time(self):
+        """
+        Returns how long slips tool to analyze the given file
+        """
+        # set analysis end date
+        end_date = self.main.metadata_man.set_analysis_end_date()
+
+        start_time = self.main.db.get_slips_start_time()
+        return utils.get_time_diff(
+            start_time, end_date, return_type="minutes"
+        )
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing
         or kill them after 15 mins
         """
 
-        # by default, 15 mins from this time, all modules should be killed
-        function_start_time = datetime.now()
+
 
         try:
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
             print("Stopping Slips")
 
+            # by default, 15 mins from this time, all modules should be killed
+            method_start_time = datetime.now()
+
             # how long to wait for modules to finish in minutes
             timeout: float = self.main.conf.wait_for_modules_to_finish()
             timeout_seconds: float = timeout * 60
+
             # close all tws
             self.main.db.check_TW_to_close(close_all=True)
 
-            # set analysis end date
-            end_date = self.main.metadata_man.set_analysis_end_date()
-
-            start_time = self.main.db.get_slips_start_time()
-            start_time: float = utils.convert_format(start_time, "unixtimestamp")
-            analysis_time = utils.get_time_diff(
-                start_time, end_date, return_type="minutes"
-            )
+            analysis_time = self.get_analysis_time()
             print(f"[Main] Analysis finished in {analysis_time:.2f} minutes")
 
             hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
@@ -360,7 +368,7 @@ class ProcessManager:
             self.warning_printed_once = False
             try:
                 # Wait timeout_seconds for all the processes to finish
-                while time.time() - start_time < timeout_seconds:
+                while time.time() - method_start_time < timeout_seconds:
                     # wait for the processes to be killed first as long as they want
                     # maximum time to wait is timeout_seconds
                     alive_processes = self.wait_for_processes_to_finish(to_kill_first)
@@ -393,7 +401,7 @@ class ProcessManager:
                 # pass to kill the remaining modules
                 pass
 
-            if time.time() - start_time >= timeout_seconds:
+            if time.time() - method_start_time >= timeout_seconds:
                 # getting here means we're killing them bc of the timeout
                 # not getting here means we're killing them bc of double
                 # ctr+c OR they terminated successfully
