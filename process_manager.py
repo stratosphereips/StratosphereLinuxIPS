@@ -387,18 +387,30 @@ class ProcessManager:
             try:
                 # Wait timeout_seconds for all the processes to finish
                 while time.time() - start_time < timeout_seconds:
-
                     # wait for the processes to be killed first as long as they want
                     # maximum time to wait is timeout_seconds
-                    alive_processes = self.wait_for_processes_to_finish(pids_to_kill_first)
+                    alive_processes = self.wait_for_processes_to_finish(to_kill_first)
                     if alive_processes:
-                        # All processes have finished
-                        self.warn_about_pending_modules()
-                        continue
+                        # update the list of processes to kill first with only the ones that are still alive
+                        to_kill_first: List[Process] = alive_processes
 
-                    alive_processes = self.wait_for_processes_to_finish(pids_to_kill_last)
-                    if not alive_processes:
-                        # all processes shutdown successfully
+                        # the 2 lists combined are all the children that are still alive
+                        # here to_kill_last are considered alive because we haven't tried to join() em yet
+                        self.warn_about_pending_modules(alive_processes + to_kill_last)
+                        continue
+                    else:
+                        # all of them are killed
+                        to_kill_first = []
+
+                    alive_processes = self.wait_for_processes_to_finish(to_kill_last)
+                    if alive_processes:
+                        # update the list of processes to kill last with only the ones that are still alive
+                        to_kill_last: List[Process] = alive_processes
+
+                        # the 2 lists combined are all the children that are still alive
+                        self.warn_about_pending_modules(alive_processes)
+                    else:
+                        # all of them are killed
                         break
 
             except KeyboardInterrupt:
