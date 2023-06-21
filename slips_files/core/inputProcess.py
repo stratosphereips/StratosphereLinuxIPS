@@ -110,18 +110,17 @@ class InputProcess(Core):
 
     def stop_queues(self):
         """Stops the profiler and output queues"""
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
+        self.output_queue.put(
+            f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
+        )
+
         # By default if a process(inputprocess) is not the creator of the queue(profiler_queue) then on
         # exit it will attempt to join the queue’s background thread.
         # this causes a deadlock
         # to avoid this behaviour we should call cancel_join_thread
         self.profiler_queue.cancel_join_thread()
         self.output_queue.cancel_join_thread()
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
-        self.output_queue.put(
-            f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
-        )
-        self.output_queue.close()
-        self.profiler_queue.close()
 
     def read_nfdump_output(self) -> int:
         """
@@ -450,7 +449,7 @@ class InputProcess(Core):
             f'\nWe read everything from the folder.'
             f' No more input. Stopping input process. Sent {lines} lines', 2, 0,
         )
-        self.stop_queues()
+
         return True
 
     def read_from_stdin(self):
@@ -483,7 +482,6 @@ class InputProcess(Core):
             self.lines += 1
             self.print('Done reading 1 flow.\n ', 0, 3)
 
-        self.stop_queues()
         return True
 
     def handle_binetflow(self):
@@ -514,7 +512,6 @@ class InputProcess(Core):
                     self.profiler_queue.put(line)
                 self.lines += 1
                 if self.testing: break
-        self.stop_queues()
         return True
 
     def handle_suricata(self):
@@ -532,7 +529,6 @@ class InputProcess(Core):
                 self.lines += 1
                 if self.testing:
                     break
-        self.stop_queues()
         return True
 
     def is_zeek_tabs_file(self, filepath) -> bool:
@@ -583,7 +579,6 @@ class InputProcess(Core):
         # as we're running on an interface
         self.bro_timeout = 30
         self.lines = self.read_zeek_files()
-        self.stop_queues()
         return True
 
     def handle_nfdump(self):
