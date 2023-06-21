@@ -258,21 +258,33 @@ class ProcessManager:
                 already_stopped_modules.append(module)
         return already_stopped_modules
 
-    def warn_about_pending_modules(self, finished_modules):
-        # exclude the module that are already stopped from the pending modules
-        pending_modules = [
-            module
-            for module in list(self.PIDs.keys())
-            if module not in finished_modules
-        ]
-        if not len(pending_modules):
+    def warn_about_pending_modules(self):
+        """
+        Prints the names of the modules that are not finished yet.
+        """
+        if self.warning_printed_once:
             return
+        pending_modules: List[Process] = []
+        update_manager_alive = False
+        # exclude the module that are already stopped from the pending modules
+        for process in self.processes:
+            if not process.is_alive():
+                continue
+            if 'UpdateManager' in process.name:
+                update_manager_alive = True
+            pending_modules.append(process.name)
+
         print(
             f'\n[Main] The following modules are busy working on your data.'
             f'\n\n{pending_modules}\n\n'
             'You can wait for them to finish, or you can '
             'press CTRL-C again to force-kill.\n'
         )
+
+        if update_manager_alive:
+             print(f"[Main] Update Manager may take several minutes "
+                   f"to finish updating 45+ TI files.")
+
         return True
 
     def should_kill_all_modules(self,
