@@ -365,8 +365,9 @@ class ProcessManager:
                 print('\n' + '-' * 27)
             print('Stopping Slips')
 
-            # how long to wait for modules to finish
-            wait_for_modules_to_finish = self.main.conf.wait_for_modules_to_finish()
+            # how long to wait for modules to finish in minutes
+            timeout: float = self.main.conf.wait_for_modules_to_finish()
+            timeout_seconds: float = timeout * 60
             # close all tws
             self.main.db.check_TW_to_close(close_all=True)
 
@@ -380,29 +381,24 @@ class ProcessManager:
             pids_to_kill_first, pids_to_kill_last = self.get_hitlist_in_order()
 
             self.termination_event.set()
+            # to make sure we only warn the user once about hte pending modules
+            self.warning_printed_once = False
             try:
-                for process in self.processes:
-                    if process.pid in pids_to_kill_first:
-                        process.join()
-                        self.print_stopped_module(process.name)
+                # Wait timeout_seconds for all the processes to finish
+                while time.time() - start_time < timeout_seconds:
 
+                    # wait for the processes to be killed first as long as they want
+                    # maximum time to wait is timeout_seconds
+                    alive_processes = self.wait_for_processes_to_finish(pids_to_kill_first)
+                    if alive_processes:
+                        # All processes have finished
+                        self.warn_about_pending_modules()
+                        continue
 
-                for process in self.processes:
-                    if process.pid in pids_to_kill_last:
-                        process.join()
-                        self.print_stopped_module(process.name)
-
-
-                if self.main.mode == 'daemonized':
-                    profilesLen = self.main.db.get_profiles_len()
-                    self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
-
-
-                # checks if 15 minutes has passed since the start of the function
-                if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
-                    print(f"Killing modules that took more than "
-                          f"{wait_for_modules_to_finish} mins to finish.")
-                    return
+                    alive_processes = self.wait_for_processes_to_finish(pids_to_kill_last)
+                    if not alive_processes:
+                        # all processes shutdown successfully
+                        break
 
             except KeyboardInterrupt:
                 # either the user wants to kill the remaining modules (pressed ctrl +c again)
@@ -410,7 +406,21 @@ class ProcessManager:
                 # pass to kill the remaining modules
                 pass
 
+            if time.time() - start_time >= timeout_seconds:
+                # getting here means we're killing them bc of the timeout
+                # not getting here means we're killing them bc of double
+                # ctr+c OR they terminated successfully
+                print(f"Killing modules that took more than {timeout} mins to finish.")
+
+
             self.kill_all_children()
+
+
+
+            if self.main.mode == 'daemonized':
+                profilesLen = self.main.db.get_profiles_len()
+                self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
+
 
             # only print that modules are still running once
             # warning_printed = False
