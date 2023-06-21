@@ -108,21 +108,21 @@ class Module(ABC):
             return True
 
         error = False
-        while not error and not self.should_stop():
-            try:
+        try:
+            while not self.should_stop():
                 # keep running main() in a loop as long as the module is online
                 # if a module's main() returns 1, it means there's an error and it needs to stop immediately
                 error: bool = self.main()
+                if error:
+                    self.shutdown_gracefully()
 
-            except KeyboardInterrupt:
-                continue
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem in main() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+        except KeyboardInterrupt:
+            self.shutdown_gracefully()
+        except Exception:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem in main() line {exception_line}', 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
 
-        self.shutdown_gracefully()
         return True
 
 class Core(Module, Process):
@@ -163,12 +163,12 @@ class Core(Module, Process):
             if error or self.should_stop():
                 # finished with some error
                 self.shutdown_gracefully()
-                return True
 
         except KeyboardInterrupt:
-            return True
+            self.shutdown_gracefully()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem in main() line {exception_line}', 0, 1)
             self.print(traceback.format_exc(), 0, 1)
-            return True
+
+        return True
