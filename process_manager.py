@@ -393,8 +393,10 @@ class ProcessManager:
         # they are the children of the slips.py that ran using -D
         # (so they started on a previous run)
         # and we only have access to the PIDs
-        pass
-
+        pids: dict = self.main.db.get_pids()
+        for module_name, pid in pids.items():
+            self.kill(pid, module_name, sigint=True)
+            self.print_stopped_module(module_name)
 
     def shutdown_gracefully(self):
         """
