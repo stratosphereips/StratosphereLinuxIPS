@@ -118,7 +118,7 @@ class ProcessManager:
                 # if it's a thread started by one of the modules or
                 # by slips.py, we don't have it stored in the db so just skip it
                 continue
-
+            process.join(3)
             self.kill(process.pid, module_name)
             self.print_stopped_module(module_name)
 
@@ -266,7 +266,7 @@ class ProcessManager:
         )
 
         # check if update manager is still alive
-        if "UpdateManager" in pending_module_names:
+        if "Update Manager" in pending_module_names:
             print(
                 f"[Main] Update Manager may take several minutes "
                 f"to finish updating 45+ TI files."
@@ -367,7 +367,6 @@ class ProcessManager:
 
             analysis_time = self.get_analysis_time()
             print(f"[Main] Analysis finished in {analysis_time:.2f} minutes")
-
             hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
             to_kill_first: List[Process] = hitlist[0]
             to_kill_last: List[Process] = hitlist[1]
