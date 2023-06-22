@@ -345,6 +345,52 @@ class ProcessManager:
             start_time, end_date, return_type="minutes"
         )
 
+
+    def shutdown_interactive(self, to_kill_first, to_kill_last):
+        """
+        Shuts down modules in interactive mode only.
+        it won't work with the daemon's -S because the
+        processes aren't technically the children of the daemon
+        returns 2 lists of alive children
+        """
+        # wait for the processes to be killed first as long as they want
+        # maximum time to wait is timeout_seconds
+        alive_processes = self.wait_for_processes_to_finish(to_kill_first)
+        if alive_processes:
+            # update the list of processes to kill first with only the ones that are still alive
+            to_kill_first: List[Process] = alive_processes
+
+            # the 2 lists combined are all the children that are still alive
+            # here to_kill_last are considered alive because we haven't tried to join() em yet
+            self.warn_about_pending_modules(alive_processes + to_kill_last)
+            return to_kill_first, to_kill_last
+        else:
+            # all of them are killed
+            to_kill_first = []
+
+        alive_processes = self.wait_for_processes_to_finish(to_kill_last)
+        if alive_processes:
+            # update the list of processes to kill last with only the ones that are still alive
+            to_kill_last: List[Process] = alive_processes
+
+            # the 2 lists combined are all the children that are still alive
+            self.warn_about_pending_modules(alive_processes)
+            return to_kill_first, to_kill_last
+        # all of them are killed
+        return None, None
+
+    def shutdown_daemon(self):
+        """
+        Shutdown slips modules in daemon mode
+        using the daemon's -s
+        """
+        # this method doesn't deal with self.processes bc they aren't the daemon's children,
+        # they are the children of the slips.py that ran using -D
+        # (so they started on a previous run)
+        # and we only have access to the PIDs
+        pass
+
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing
@@ -377,31 +423,13 @@ class ProcessManager:
             try:
                 # Wait timeout_seconds for all the processes to finish
                 while time.time() - method_start_time < timeout_seconds:
-                    # wait for the processes to be killed first as long as they want
-                    # maximum time to wait is timeout_seconds
-                    alive_processes = self.wait_for_processes_to_finish(to_kill_first)
-                    if alive_processes:
-                        # update the list of processes to kill first with only the ones that are still alive
-                        to_kill_first: List[Process] = alive_processes
-
-                        # the 2 lists combined are all the children that are still alive
-                        # here to_kill_last are considered alive because we haven't tried to join() em yet
-                        self.warn_about_pending_modules(alive_processes + to_kill_last)
-                        continue
+                    if self.main.mode == "daemonized":
+                        self.shutdown_daemon()
                     else:
-                        # all of them are killed
-                        to_kill_first = []
-
-                    alive_processes = self.wait_for_processes_to_finish(to_kill_last)
-                    if alive_processes:
-                        # update the list of processes to kill last with only the ones that are still alive
-                        to_kill_last: List[Process] = alive_processes
-
-                        # the 2 lists combined are all the children that are still alive
-                        self.warn_about_pending_modules(alive_processes)
-                    else:
-                        # all of them are killed
-                        break
+                        to_kill_first, to_kill_last = self.shutdown_interactive(to_kill_first, to_kill_last)
+                        if not to_kill_first and not to_kill_last:
+                            # all modules are done
+                            break
 
             except KeyboardInterrupt:
                 # either the user wants to kill the remaining modules (pressed ctrl +c again)
