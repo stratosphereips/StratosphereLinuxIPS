@@ -14,7 +14,7 @@ class DBManager:
     # exactly 1 instance
     _instances = {}
 
-    def __new__(cls, output_dir, output_queue, redis_port, **kwargs):
+    def __new__(cls, output_dir, output_queue, redis_port, start_sqlite=True, **kwargs):
         cls.output_dir = output_dir
         cls.output_queue = output_queue
         cls.redis_port = redis_port
@@ -25,7 +25,13 @@ class DBManager:
             # and will get the same obj instatiated by slips.py
             # cls._instances[redis_port] = super().__new__(cls)
             cls._obj = super().__new__(DBManager)
-            cls.sqlite = SQLiteDB(output_dir)
+            # in some rare cases we don't wanna start sqlite,
+            # like when using -S
+            # we just want to connect to redis to get the PIDs
+            cls.sqlite = None
+            if start_sqlite:
+                cls.sqlite = SQLiteDB(output_dir)
+
             cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
         return cls._instances[redis_port]
 
@@ -816,4 +822,6 @@ class DBManager:
     def close(self, *args, **kwargs):
         self.rdb.r.close()
         self.rdb.rcache.close()
-        self.sqlite.close(*args, **kwargs)
+        # when stopping the daemon using -S, slips doesn't start the sqlite db
+        if self.sqlite:
+            self.sqlite.close(*args, **kwargs)
