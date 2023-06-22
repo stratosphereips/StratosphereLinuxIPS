@@ -18,6 +18,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import contextlib
+import multiprocessing
 from slips_files.common.imports import *
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
@@ -121,12 +122,13 @@ class Main:
         sys.exit(0)
 
     def update_local_TI_files(self):
-        from modules.update_manager.update_file_manager import UpdateFileManager
+        from modules.update_manager.update_manager import UpdateManager
         try:
             # only one instance of slips should be able to update ports and orgs at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
-                update_manager = UpdateFileManager(self.output_queue, self.db)
+                # pass a dummy termination event for update manager to update orgs and ports info
+                update_manager = UpdateManager(self.output_queue, self.db, multiprocessing.Event())
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
