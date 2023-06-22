@@ -25,7 +25,7 @@ class ProcessManager:
         # to the profiler
         self.profiler_queue = Queue()
         self.termination_event: Event = multiprocessing.Event()
-        self.stopped_modules = 0
+        self.stopped_modules = []
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         output_process = OutputProcess(
@@ -118,6 +118,10 @@ class ProcessManager:
                 # if it's a thread started by one of the modules or
                 # by slips.py, we don't have it stored in the db so just skip it
                 continue
+            if module_name in self.stopped_modules:
+                # already stopped
+                continue
+
             process.join(3)
             self.kill(process.pid, module_name)
             self.print_stopped_module(module_name)
@@ -242,8 +246,9 @@ class ProcessManager:
         return loaded_modules
 
     def print_stopped_module(self, module):
-        self.stopped_modules += 1
-        modules_left = len(self.processes) - self.stopped_modules
+        self.stopped_modules.append(module)
+
+        modules_left = len(self.processes) - len(self.stopped_modules)
 
         # to vertically align them when printing
         module += " " * (20 - len(module))
@@ -416,7 +421,6 @@ class ProcessManager:
             hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
             to_kill_first: List[Process] = hitlist[0]
             to_kill_last: List[Process] = hitlist[1]
-
             self.termination_event.set()
             # to make sure we only warn the user once about hte pending modules
             self.warning_printed_once = False
@@ -425,6 +429,7 @@ class ProcessManager:
                 while time.time() - method_start_time < timeout_seconds:
                     if self.main.mode == "daemonized":
                         self.shutdown_daemon()
+                        break
                     else:
                         to_kill_first, to_kill_last = self.shutdown_interactive(to_kill_first, to_kill_last)
                         if not to_kill_first and not to_kill_last:
@@ -442,7 +447,6 @@ class ProcessManager:
                 # not getting here means we're killing them bc of double
                 # ctr+c OR they terminated successfully
                 print(f"Killing modules that took more than {timeout} mins to finish.")
-
             self.kill_all_children()
 
             if self.main.mode == "daemonized":

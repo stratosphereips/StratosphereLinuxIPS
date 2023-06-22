@@ -1181,7 +1181,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def get_name_of_module_at(self, given_pid):
         """returns the name of the module that has the given pid """
         for name, pid in self.get_pids().items():
-            if int(given_pid) == pid:
+            if int(given_pid) == int(pid):
                 return name
 
 
