@@ -241,6 +241,13 @@ class Daemon():
         self.stdout = 'slips.log'
         self.logsfile = 'slips.log'
         self.prepare_std_streams(output_dir)
-        db = DBManager(output_dir, multiprocessing.Queue(), port, flush_db=False)
+        db = DBManager(output_dir,
+                       multiprocessing.Queue(),
+                       port,
+                       start_sqlite=False,
+                       flush_db=False)
+        db.set_slips_mode('daemonized')
+        self.slips.set_mode('daemonized', daemon=self)
+
         self.slips.db = db
         self.slips.proc_man.shutdown_gracefully()
