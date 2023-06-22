@@ -1,23 +1,25 @@
+import multiprocessing
+
 from slips import Main
-from modules.update_manager.update_file_manager import UpdateFileManager
-import modules.leak_detector.leak_detector as leak_detector_module
+from modules.update_manager.update_manager import UpdateManager
+from modules.leak_detector.leak_detector import LeakDetector
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.profilerProcess import ProfilerProcess
-import modules.threat_intelligence.threat_intelligence as ti
-import modules.flowalerts.flowalerts as flowalerts_module
+from modules.threat_intelligence.threat_intelligence import ThreatIntel
+from modules.flowalerts.flowalerts import FlowAlerts
 from slips_files.core.inputProcess import InputProcess
 from modules.blocking.blocking import Blocking
-import modules.http_analyzer.http_analyzer as http
-import modules.ip_info.ip_info as ip_info_module
+from modules.http_analyzer.http_analyzer import HTTPAnalyzer
+from modules.ip_info.ip_info import IPInfo
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist import Whitelist
 from tests.common_test_utils import do_nothing
-import modules.virustotal.virustotal as vt
+from modules.virustotal.virustotal import VT
 from process_manager import ProcessManager
 from redis_manager import RedisManager
-import modules.ip_info.asn_info as asn
-from multiprocessing import Queue
-import modules.arp.arp as arp
+from modules.ip_info.asn_info import ASN
+from multiprocessing import Queue, Event
+from modules.arp.arp import ARP
 import shutil
 import os
 
@@ -41,6 +43,8 @@ class ModuleFactory:
         self.output_queue = Queue()
         self.profiler_queue = Queue()
         self.input_queue = Queue()
+        self.dummy_termination_event = Event()
+
 
     def get_default_db(self):
         """default is o port 6379, this is the one we're using in conftest"""
@@ -64,13 +68,13 @@ class ModuleFactory:
 
 
     def create_http_analyzer_obj(self, mock_db):
-        http_analyzer = http.Module(self.output_queue, mock_db)
+        http_analyzer = HTTPAnalyzer(self.output_queue, mock_db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
         http_analyzer.print = do_nothing
         return http_analyzer
 
     def create_virustotal_obj(self, mock_db):
-        virustotal = vt.Module(self.output_queue, mock_db)
+        virustotal = VT(self.output_queue, mock_db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
         virustotal.print = do_nothing
         virustotal.__read_configuration = read_configuration
@@ -80,19 +84,19 @@ class ModuleFactory:
         return virustotal
 
     def create_arp_obj(self, mock_db):
-        ARP = arp.Module(self.output_queue, mock_db)
+        ARP = ARP(self.output_queue, mock_db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
         ARP.print = do_nothing
         return ARP
 
     def create_blocking_obj(self, mock_db):
-        blocking = Blocking(self.output_queue, mock_db)
+        blocking = Blocking(self.output_queue, mock_db, self.dummy_termination_event)
         # override the print function to avoid broken pipes
         blocking.print = do_nothing
         return blocking
 
     def create_flowalerts_obj(self, mock_db):
-        flowalerts = flowalerts_module.Module(self.output_queue, mock_db)
+        flowalerts = FlowAlerts(self.output_queue, mock_db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
         flowalerts.print = do_nothing
         return flowalerts
@@ -107,6 +111,7 @@ class ModuleFactory:
             mock_db,
             self.output_queue,
             'output/',
+            self.dummy_termination_event,
             profiler_queue=self.profiler_queue,
             input_type=input_type,
             input_information=input_information,
@@ -126,13 +131,13 @@ class ModuleFactory:
 
 
     def create_ip_info_obj(self, db):
-        ip_info = ip_info_module.Module(self.output_queue, db)
+        ip_info = IPInfo(self.output_queue, db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
         ip_info.print = do_nothing
         return ip_info
 
     def create_asn_obj(self, db):
-        return asn.ASN(db)
+        return ASN(db)
 
     def create_leak_detector_obj(self, mock_db):
         # this file will be used for storing the module output
@@ -140,7 +145,7 @@ class ModuleFactory:
         test_pcap = 'dataset/test7-malicious.pcap'
         yara_rules_path = 'tests/yara_rules_for_testing/rules/'
         compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
-        leak_detector = leak_detector_module.Module(self.output_queue, mock_db)
+        leak_detector = LeakDetector(self.output_queue, mock_db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
         leak_detector.print = do_nothing
         # this is the path containing 1 yara rule for testing, it matches every pcap
@@ -155,6 +160,7 @@ class ModuleFactory:
             mock_db,
             self.output_queue,
             'output/',
+            self.dummy_termination_event,
             profiler_queue=self.input_queue,
         )
 
@@ -173,13 +179,13 @@ class ModuleFactory:
         return utils
 
     def create_threatintel_obj(self, mock_db):
-        threatintel = ti.Module(self.output_queue, mock_db)
+        threatintel = ThreatIntel(self.output_queue, mock_db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
         threatintel.print = do_nothing
         return threatintel
 
     def create_update_manager_obj(self, mock_db):
-        update_manager = UpdateFileManager(self.output_queue, mock_db)
+        update_manager = UpdateManager(self.output_queue, mock_db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
         update_manager.print = do_nothing
         return update_manager
