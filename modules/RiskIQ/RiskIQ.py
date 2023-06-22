@@ -87,7 +87,8 @@ class RiskIQ(Module, multiprocessing.Process):
     def pre_main(self):
         utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:
-            return False
+            return 1
+
     def main(self):
         # Main loop function
         if msg := self.get_msg('new_ip'):
