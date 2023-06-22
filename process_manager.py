@@ -327,6 +327,8 @@ class ProcessManager:
         # go through all processes to kill and see which
         # of them still need time
         for process in pids_to_kill:
+            if 'output' in process.name.lower():
+                self.main.output_queue.put('stop')
             # wait 3s for it to stop
             process.join(3)
 
@@ -419,7 +421,7 @@ class ProcessManager:
             self.main.db.check_TW_to_close(close_all=True)
 
             analysis_time = self.get_analysis_time()
-            print(f"[Main] Analysis finished in {analysis_time:.2f} minutes")
+            print(f"\n[Main] Analysis finished in {analysis_time:.2f} minutes")
 
             if self.main.mode == 'daemonized':
                 self.processes: List[int] = self.main.db.get_pids()
