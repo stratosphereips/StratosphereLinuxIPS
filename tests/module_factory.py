@@ -84,10 +84,10 @@ class ModuleFactory:
         return virustotal
 
     def create_arp_obj(self, mock_db):
-        ARP = ARP(self.output_queue, mock_db, self.dummy_termination_event)
+        arp = ARP(self.output_queue, mock_db, self.dummy_termination_event)
         # override the self.print function to avoid broken pipes
-        ARP.print = do_nothing
-        return ARP
+        arp.print = do_nothing
+        return arp
 
     def create_blocking_obj(self, mock_db):
         blocking = Blocking(self.output_queue, mock_db, self.dummy_termination_event)
