@@ -9,8 +9,8 @@ import traceback
 # This is the abstract Module class to check against. Do not modify
 class Module(ABC):
     name = ''
-    description = 'Template abstract module'
-    authors = ['Template abstract Author']
+    description = 'Template module'
+    authors = ['Template Author']
     def __init__(self, output_queue, db, termination_event, **kwargs):
         Process.__init__(self)
         self.output_queue = output_queue

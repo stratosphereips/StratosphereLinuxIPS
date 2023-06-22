@@ -1783,8 +1783,10 @@ class ProfilerProcess(Core):
     def main(self):
         while not self.should_stop():
             try:
-                line = self.profiler_queue.get(timeout=5)
+                line = self.profiler_queue.get(timeout=3)
             except Exception as e:
+                # the queue is empty, which means input proc
+                # is done reading flows
                 self.shutdown_gracefully()
                 return 1
 

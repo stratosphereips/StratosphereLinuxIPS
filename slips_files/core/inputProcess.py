@@ -27,7 +27,6 @@ from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.common.imports import *
 import time
 import json
-import traceback
 import threading
 import subprocess
 
@@ -905,4 +904,10 @@ class InputProcess(Core):
             )
             return False
 
-        self.shutdown_gracefully()
+        # keep the module idle until slips.py kills it
+        # without this, the module exits but the pid will remain in memory as <defunct>
+        # OK, without this, the input proc calls stop_queues(), which calls cancel_join_thread
+        # WHICH stops the profiler queue while the profiler process is still processing flows
+        # so. do not remove this.
+        while True:
+            time.sleep(3)
