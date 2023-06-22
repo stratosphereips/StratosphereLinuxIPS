@@ -909,5 +909,5 @@ class InputProcess(Core):
         # OK, without this, the input proc calls stop_queues(), which calls cancel_join_thread
         # WHICH stops the profiler queue while the profiler process is still processing flows
         # so. do not remove this.
-        while True:
+        while not self.should_stop():
             time.sleep(3)
