@@ -122,7 +122,7 @@ class ProcessManager:
             self.kill(process.pid, module_name)
             self.print_stopped_module(module_name)
 
-    def get_modules(self, to_ignore):
+    def get_modules(self, to_ignore: list):
         """
         Get modules from the 'modules' folder.
         """
@@ -136,8 +136,20 @@ class ProcessManager:
         for loader, module_name, ispkg in pkgutil.walk_packages(
             modules.__path__, f"{modules.__name__}."
         ):
-            if any(module_name.__contains__(mod) for mod in to_ignore):
+            ignore_module = False
+            for ignored_module in to_ignore:
+                ignored_module = ignored_module.replace(' ','').replace('_','').replace('-','').lower()
+                # this version of the module name wont contain _ or spaces so we can
+                # easily match it with the ignored module name
+                curr_module_name = module_name.replace('_','').replace('-','').lower()
+                if curr_module_name.__contains__(ignored_module):
+                    ignore_module = True
+                    break
+
+            if ignore_module:
                 continue
+
+
             # If current item is a package, skip.
             if ispkg:
                 continue
