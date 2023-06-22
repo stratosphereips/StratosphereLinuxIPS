@@ -380,7 +380,6 @@ class OutputProcess(Core):
                 self.init_progress_bar()
             elif 'update progress bar' in line:
                 self.update_progress_bar()
-
             elif 'stop_process' in line or line == 'stop':
                 self.shutdown_gracefully()
                 return True

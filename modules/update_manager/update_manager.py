@@ -1558,7 +1558,6 @@ class UpdateManager(Module, multiprocessing.Process):
         self.timer_manager.cancel()
         self.mac_db_update_manager.cancel()
         self.online_whitelist_update_timer.cancel()
-        self.output_queue.cancel_join_thread()
         return True
 
     def pre_main(self):

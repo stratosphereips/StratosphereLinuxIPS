@@ -120,7 +120,6 @@ class InputProcess(Core):
         # this causes a deadlock
         # to avoid this behaviour we should call cancel_join_thread
         self.profiler_queue.cancel_join_thread()
-        self.output_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:
         """
@@ -510,6 +509,7 @@ class InputProcess(Core):
                 # argus files are either tab separated orr comma separated
                 if len(t_line.strip()) != 0:
                     self.profiler_queue.put(line)
+
                 self.lines += 1
                 if self.testing: break
         return True
@@ -906,8 +906,3 @@ class InputProcess(Core):
             return False
 
         self.shutdown_gracefully()
-
-        # keep the module idle until slips.py kills it
-        # without this, the module exits but the pid will remain in memory as <defunct>
-        # while True:
-        #     time.sleep(1)

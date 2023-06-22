@@ -60,7 +60,7 @@ class Module(ABC):
 
         levels = f'{verbose}{debug}'
         self.output_queue.put(f'{levels}|{self.name}|{text}')
-
+    
     def shutdown_gracefully(self):
         """
         Tells slips.py that this module is
@@ -94,9 +94,11 @@ class Module(ABC):
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():
+                self.output_queue.cancel_join_thread()
                 self.shutdown_gracefully()
                 return True
         except KeyboardInterrupt:
+            self.output_queue.cancel_join_thread()
             self.shutdown_gracefully()
             return True
         except Exception:
@@ -112,9 +114,11 @@ class Module(ABC):
                 # if a module's main() returns 1, it means there's an error and it needs to stop immediately
                 error: bool = self.main()
                 if error:
+                    self.output_queue.cancel_join_thread()
                     self.shutdown_gracefully()
 
         except KeyboardInterrupt:
+            self.output_queue.cancel_join_thread()
             self.shutdown_gracefully()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -159,9 +163,11 @@ class Core(Module, Process):
             error: bool = self.main()
             if error or self.should_stop():
                 # finished with some error
+                self.output_queue.cancel_join_thread()
                 self.shutdown_gracefully()
 
         except KeyboardInterrupt:
+            self.output_queue.cancel_join_thread()
             self.shutdown_gracefully()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
