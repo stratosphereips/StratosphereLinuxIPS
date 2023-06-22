@@ -420,40 +420,45 @@ class ProcessManager:
 
             analysis_time = self.get_analysis_time()
             print(f"[Main] Analysis finished in {analysis_time:.2f} minutes")
-            hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
-            to_kill_first: List[Process] = hitlist[0]
-            to_kill_last: List[Process] = hitlist[1]
-            self.termination_event.set()
-            # to make sure we only warn the user once about hte pending modules
-            self.warning_printed_once = False
-            try:
-                # Wait timeout_seconds for all the processes to finish
-                while time.time() - method_start_time < timeout_seconds:
-                    if self.main.mode == "daemonized":
-                        self.shutdown_daemon()
-                        break
-                    else:
+
+            if self.main.mode == 'daemonized':
+                self.processes: List[int] = self.main.db.get_pids()
+                self.shutdown_daemon()
+                profilesLen = self.main.db.get_profiles_len()
+                self.main.daemon.print(f"Total analyzed IPs: {profilesLen}.")
+                # if slips finished normally without stopping the daemon with -S
+                # then we need to delete the pidfile
+                self.main.daemon.delete_pidfile()
+
+            else:
+                hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
+                to_kill_first: List[Process] = hitlist[0]
+                to_kill_last: List[Process] = hitlist[1]
+
+                self.termination_event.set()
+
+                # to make sure we only warn the user once about hte pending modules
+                self.warning_printed_once = False
+                try:
+                    # Wait timeout_seconds for all the processes to finish
+                    while time.time() - method_start_time < timeout_seconds:
                         to_kill_first, to_kill_last = self.shutdown_interactive(to_kill_first, to_kill_last)
                         if not to_kill_first and not to_kill_last:
                             # all modules are done
                             break
+                except KeyboardInterrupt:
+                    # either the user wants to kill the remaining modules (pressed ctrl +c again)
+                    # or slips was stuck looping for too long that the OS sent an automatic sigint to kill slips
+                    # pass to kill the remaining modules
+                    pass
 
-            except KeyboardInterrupt:
-                # either the user wants to kill the remaining modules (pressed ctrl +c again)
-                # or slips was stuck looping for too long that the OS sent an automatic sigint to kill slips
-                # pass to kill the remaining modules
-                pass
+                if time.time() - method_start_time >= timeout_seconds:
+                    # getting here means we're killing them bc of the timeout
+                    # not getting here means we're killing them bc of double
+                    # ctr+c OR they terminated successfully
+                    print(f"Killing modules that took more than {timeout} mins to finish.")
 
-            if time.time() - method_start_time >= timeout_seconds:
-                # getting here means we're killing them bc of the timeout
-                # not getting here means we're killing them bc of double
-                # ctr+c OR they terminated successfully
-                print(f"Killing modules that took more than {timeout} mins to finish.")
-            self.kill_all_children()
-
-            if self.main.mode == "daemonized":
-                profilesLen = self.main.db.get_profiles_len()
-                self.main.daemon.print(f"Total analyzed IPs: {profilesLen}.")
+                self.kill_all_children()
 
             # save redis database if '-s' is specified
             if self.main.args.save:
@@ -471,12 +476,6 @@ class ProcessManager:
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
             self.main.db.close()
-
-            if self.main.mode == "daemonized":
-                # if slips finished normally without stopping the daemon with -S
-                # then we need to delete the pidfile
-                self.main.daemon.delete_pidfile()
             return True
-
         except KeyboardInterrupt:
             return False
