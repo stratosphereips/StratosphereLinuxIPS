@@ -1787,12 +1787,12 @@ class ProfilerProcess(Core):
             except Exception as e:
                 # the queue is empty, which means input proc
                 # is done reading flows
-                self.shutdown_gracefully()
-                return 1
+                continue
 
             # TODO who is putting this True here?
             if line == True:
                 continue
+
             if 'stop' in line:
                 self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
                            f"{self.whitelisted_flows_ctr}", 2, 0)
