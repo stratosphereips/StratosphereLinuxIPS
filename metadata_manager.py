@@ -133,7 +133,7 @@ class MetadataManager:
             'input_type': self.main.input_type,
         }
 
-        if hasattr(self.main, 'zeek_folder'):
+        if hasattr(self.main, 'zeek_dir'):
             info.update({
                 'zeek_dir': self.main.zeek_dir
             })
