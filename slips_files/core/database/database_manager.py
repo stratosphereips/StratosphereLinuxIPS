@@ -812,6 +812,10 @@ class DBManager:
     def get_name_of_module_at(self, *args, **kwargs):
         return self.rdb.get_name_of_module_at(*args, **kwargs)
 
+
+    def get_redis_pid(self, *args, **kwargs):
+        return self.rdb.get_redis_pid(*args, **kwargs)
+
     def export_labeled_flows(self, *args, **kwargs):
         """
         exports the labeled flows and altflows stored in sqlite

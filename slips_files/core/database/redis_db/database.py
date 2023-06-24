@@ -579,6 +579,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         if is_new_info:
             self.r.publish('ip_info_change', ip)
 
+    def get_redis_pid(self):
+        """returns the pid of the current redis server"""
+        return int(self.r.info()['process_id'])
+
     def get_p2p_reports_about_ip(self, ip) -> dict:
         """
         returns a dict of all p2p past reports about the given ip
