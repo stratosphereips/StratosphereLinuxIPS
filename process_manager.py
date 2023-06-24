@@ -5,7 +5,6 @@ from slips_files.core.evidenceProcess import EvidenceProcess
 from slips_files.core.inputProcess import InputProcess
 from multiprocessing import Queue, Event, Process
 from collections import OrderedDict
-from datetime import datetime
 from typing import List, Tuple
 from style import green
 import signal
@@ -15,6 +14,7 @@ import inspect
 import modules
 import importlib
 import os
+from sys import exit
 
 
 class ProcessManager:
@@ -478,6 +478,6 @@ class ProcessManager:
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
             self.main.db.close()
-            return True
+            exit()
         except KeyboardInterrupt:
             return False
