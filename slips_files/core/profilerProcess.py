@@ -1777,6 +1777,13 @@ class ProfilerProcess(Core):
             self.print('Error in compute_symbol in Profiler Process.', 0, 1)
             self.print('{}'.format(traceback.format_exc()), 0, 1)
 
+    def shutdown_gracefully(self):
+        # By default if a process(profiler) is not the creator of the queue(profiler_queue) then on
+        # exit it will attempt to join the queue’s background thread.
+        # this causes a deadlock
+        # to avoid this behaviour we should call cancel_join_thread
+        self.profiler_queue.cancel_join_thread()
+
     def pre_main(self):
         utils.drop_root_privs()
 

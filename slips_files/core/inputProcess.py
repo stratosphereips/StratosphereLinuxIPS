@@ -114,11 +114,7 @@ class InputProcess(Core):
             f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
         )
 
-        # By default if a process(inputprocess) is not the creator of the queue(profiler_queue) then on
-        # exit it will attempt to join the queue’s background thread.
-        # this causes a deadlock
-        # to avoid this behaviour we should call cancel_join_thread
-        self.profiler_queue.cancel_join_thread()
+        self.profiler_queue.put('stop')
 
     def read_nfdump_output(self) -> int:
         """
