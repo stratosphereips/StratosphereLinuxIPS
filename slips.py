@@ -29,6 +29,8 @@ from process_manager import ProcessManager
 from ui_manager import UIManager
 from checker import Checker
 from style import green
+import psutil
+import os
 
 
 from slips_files.core.inputProcess import InputProcess
@@ -120,7 +122,7 @@ class Main:
                 if (self.cpuProfilerMultiprocess):
                     args = sys.argv
                     if (args[-1] != "--no-recurse"):
-                        viz_args = ['viztracer', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
+                        viz_args = ['viztracer', '--exclude_files', './modules', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
                         viz_args.extend(args)
                         viz_args.append("--no-recurse")
                         print("Starting multiprocess profiling recursive subprocess")
@@ -544,7 +546,11 @@ class Main:
             if not self.args.db:
                 # update local files before starting modules
                 self.update_local_TI_files()
-                # self.proc_man.load_modules()
+                args = sys.argv
+                if (args[-1] != "--no-recurse"):
+                    self.proc_man.load_modules()
+                else:
+                    print("Modules are not compatible with cpu profiling, running as disabled")
 
             # self.start_gui_process()
             if self.args.webinterface:
