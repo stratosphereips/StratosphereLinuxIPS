@@ -19,7 +19,7 @@ import warnings
 warnings.warn = warn
 
 
-class Module(Module, multiprocessing.Process):
+class FlowMLDetection(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Flow ML Detection'
     description = (
@@ -382,7 +382,6 @@ class Module(Module, multiprocessing.Process):
         # Confirm that the module is done processing
         if self.mode == 'train':
             self.store_model()
-        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()

@@ -49,7 +49,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         'new_ssh',
         'new_notice',
         'new_url',
-        'finished_modules',
         'new_downloaded_file',
         'reload_whitelist',
         'new_service',
@@ -69,7 +68,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         'report_to_peers',
         'new_tunnel',
         'check_jarm_hash',
-        'control_module',
+        'control_channel',
         }
     # The name is used to print in the outputprocess
     name = 'DB'
@@ -88,12 +87,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
 
-    def __new__(cls, redis_port, outputqueue, flush_db=True):
+    def __new__(cls, redis_port, output_queue, flush_db=True):
         """
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
         """
-        cls.redis_port, cls.outputqueue = redis_port, outputqueue
+        cls.redis_port, cls.outputqueue = redis_port, output_queue
         cls.flush_db = flush_db
         if cls.redis_port not in cls._instances:
             cls._instances[cls.redis_port] = super().__new__(cls)
@@ -298,7 +297,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         to shutdown slips gracefully, this function should only be used by slips.py
         """
         self.print('Sending the stop signal to all listeners', 0, 3)
-        self.r.publish('control_module', 'stop_process')
+        self.r.publish('control_channel', 'stop_slips')
 
     def get_message(self, channel, timeout=0.0000001):
         """
@@ -309,7 +308,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             return channel.get_message(timeout=timeout)
         except redis.exceptions.ConnectionError as ex:
             if not self.is_connection_error_logged():
-                self.publish('finished_modules', 'stop_slips')
+                self.publish_stop()
                 self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 0, 1)
                 # make sure we publish the stop msg and log the error only once
                 self.mark_connection_error_as_logged()
@@ -579,6 +578,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_info))
         if is_new_info:
             self.r.publish('ip_info_change', ip)
+
+    def get_redis_pid(self):
+        """returns the pid of the current redis server"""
+        return int(self.r.info()['process_id'])
 
     def get_p2p_reports_about_ip(self, ip) -> dict:
         """
@@ -1171,9 +1174,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         self.r.hset('PIDs', process, pid)
 
-    def get_pids(self):
+    def get_pids(self) -> dict:
         """returns a dict with module names as keys and PIDs as values"""
         return self.r.hgetall('PIDs')
+
+    def get_pid_of(self, module_name: str):
+        pid = self.r.hget('PIDs', module_name)
+        return int(pid) if pid else None
+
+    def get_name_of_module_at(self, given_pid):
+        """returns the name of the module that has the given pid """
+        for name, pid in self.get_pids().items():
+            if int(given_pid) == int(pid):
+                return name
+
 
     def set_org_info(self, org, org_info, info_type):
         """

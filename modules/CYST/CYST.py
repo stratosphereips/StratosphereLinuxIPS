@@ -5,7 +5,7 @@ import json
 import os
 import errno
 
-class Module(Module, multiprocessing.Process):
+class CYST(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'CYST'
     description = 'Communicates with CYST simulation framework'
@@ -122,11 +122,9 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         self.close_connection()
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
         # if slips is done, slips shouldn't expect more flows or send evidence
         # it should terminate
-        self.db.publish('finished_modules', 'stop_slips')
+        self.db.publish('control_channel', 'stop_slips')
         return
 
     def pre_main(self):

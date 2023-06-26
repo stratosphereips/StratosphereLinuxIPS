@@ -3,7 +3,7 @@ import json
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 
-class PortScanProcess(Module, multiprocessing.Process):
+class NetworkDiscovery(Module, multiprocessing.Process):
     """
     A class process to find port scans
     This should be converted into a module that wakesup alone when a new alert arrives
@@ -45,8 +45,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         # alert about all the pending evidence before this module stops
         self.horizontal_ps.combine_evidence()
         self.vertical_ps.combine_evidence()
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
         """

@@ -1,7 +1,6 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
-from unittest.mock import Mock
 import json
 from numpy import arange
 
@@ -58,7 +57,7 @@ def test_check_unknown_port(mocker, mock_db):
     mock_db.get_port_info.return_value = None
     mock_db.is_ftp_port.return_value = False
     # mock the flowalerts call to port_belongs_to_an_org
-    flowalerts_mock = mocker.patch("modules.flowalerts.flowalerts.Module.port_belongs_to_an_org")
+    flowalerts_mock = mocker.patch("modules.flowalerts.flowalerts.FlowAlerts.port_belongs_to_an_org")
     flowalerts_mock.return_value = False
 
 

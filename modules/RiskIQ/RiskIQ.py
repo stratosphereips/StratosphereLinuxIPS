@@ -6,7 +6,7 @@ import json
 import requests
 from requests.auth import HTTPBasicAuth
 
-class Module(Module, multiprocessing.Process):
+class RiskIQ(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Risk IQ'
     description = 'Module to get passive DNS info about IPs from RiskIQ'
@@ -84,13 +84,11 @@ class Module(Module, multiprocessing.Process):
         sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
         return sorted_pt_results
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:
-            return False
+            return 1
+
     def main(self):
         # Main loop function
         if msg := self.get_msg('new_ip'):

@@ -2,7 +2,7 @@ import contextlib
 from slips_files.common.imports import *
 from .TimerThread import TimerThread
 from .set_evidence import Helper
-from slips_files.core.whitelist import Whitelist
+from slips_files.core.helpers.whitelist import Whitelist
 import multiprocessing
 import json
 import threading
@@ -15,7 +15,7 @@ import math
 import time
 
 
-class Module(Module, multiprocessing.Process):
+class FlowAlerts(Module, multiprocessing.Process):
     name = 'Flow Alerts'
     description = (
         'Alerts about flows: long connection, successful ssh, '
@@ -28,7 +28,7 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # Retrieve the labels
         self.subscribe_to_channels()
-        self.whitelist = Whitelist(self.outputqueue, self.db)
+        self.whitelist = Whitelist(self.output_queue, self.db)
         self.conn_counter = 0
         # helper contains all functions used to set evidence
         self.helper = Helper(self.db)
@@ -1227,10 +1227,6 @@ class Module(Module, multiprocessing.Process):
             domain, age, stime, profileid, twid, uid
         )
         return True
-
-    def shutdown_gracefully(self):
-        self.print(f"Number of connections processed by flowalerts: {self.conn_counter}", 2, 0)
-        self.db.publish('finished_modules', self.name)
 
     def check_smtp_bruteforce(
             self,

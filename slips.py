@@ -18,6 +18,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import contextlib
+import multiprocessing
 from slips_files.common.imports import *
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
@@ -26,14 +27,6 @@ from process_manager import ProcessManager
 from ui_manager import UIManager
 from checker import Checker
 from style import green
-
-
-from slips_files.core.inputProcess import InputProcess
-from slips_files.core.outputProcess import OutputProcess
-from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.evidenceProcess import EvidenceProcess
-from slips_files.core.database.database_manager import DBManager
-
 
 import signal
 import sys
@@ -48,7 +41,7 @@ from datetime import datetime
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
-import csv
+
 
 
 # Ignore warnings on CPU from tensorflow
@@ -115,9 +108,9 @@ class Main:
         from pathlib import Path
         without_ext = Path(self.input_information).stem
         if self.conf.store_zeek_files_in_the_output_dir():
-            self.zeek_folder = os.path.join(self.args.output, 'zeek_files')
+            self.zeek_dir = os.path.join(self.args.output, 'zeek_files')
         else:
-            self.zeek_folder = f'zeek_files_{without_ext}/'
+            self.zeek_dir = f'zeek_files_{without_ext}/'
 
     def terminate_slips(self):
         """
@@ -128,16 +121,14 @@ class Main:
             self.daemon.stop()
         sys.exit(0)
 
-
-
-
     def update_local_TI_files(self):
-        from modules.update_manager.update_file_manager import UpdateFileManager
+        from modules.update_manager.update_manager import UpdateManager
         try:
             # only one instance of slips should be able to update ports and orgs at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
-                update_manager = UpdateFileManager(self.outputqueue, self.db)
+                # pass a dummy termination event for update manager to update orgs and ports info
+                update_manager = UpdateManager(self.output_queue, self.db, multiprocessing.Event())
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -181,14 +172,14 @@ class Main:
         if store_a_copy_of_zeek_files and was_running_zeek:
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
-            copy_tree(self.zeek_folder, dest_zeek_dir)
+            copy_tree(self.zeek_dir, dest_zeek_dir)
             print(
                 f'[Main] Stored a copy of zeek files to {dest_zeek_dir}'
             )
 
     def delete_zeek_files(self):
         if self.conf.delete_zeek_files():
-            shutil.rmtree(self.zeek_folder)
+            shutil.rmtree(self.zeek_dir)
 
     def is_debugger_active(self) -> bool:
         """Return if the debugger is currently active"""
@@ -275,7 +266,7 @@ class Main:
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
+        self.output_queue.put(f'{levels}|{self.name}|{text}')
 
     def handle_flows_from_stdin(self, input_information):
         """
@@ -432,9 +423,7 @@ class Main:
 
             self.setup_print_levels()
 
-            # Output thread. outputprocess should be created first because it handles
-            # the output of the rest of the threads.
-            self.outputqueue = Queue()
+
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -454,27 +443,25 @@ class Main:
                 self.redis_port = 6379
                 # self.check_if_port_is_in_use(self.redis_port)
 
+            # Output thread.
+            self.output_queue = Queue()
 
-            self.db = DBManager(self.args.output, self.outputqueue, self.redis_port)
+            self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
             self.db.set_input_metadata({'output_dir': self.args.output})
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
-            output_process = OutputProcess(
-                self.outputqueue,
-                self.args.verbose,
-                self.args.debug,
-                self.db,
-                stdout=current_stdout,
-                stderr=stderr,
-                slips_logfile=slips_logfile,
-            )
-            output_process.start()
-            self.db.store_process_PID('Output', int(output_process.pid))
+
+            # outputprocess should be created first because it handles
+            # the output of the rest of the threads.
+            output_process = self.proc_man.start_output_process(
+                current_stdout, stderr, slips_logfile
+                )
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':
-                    self.print(f"Parameter -g should be using with -f <dirname> not a {self.input_type}. Ignoring -g")
+                    self.print(f"Parameter -g should be using with "
+                               f"-f <dirname> not a {self.input_type}. Ignoring -g")
                 else:
                     self.print(f"Running on a growing zeek dir: {self.input_information}")
                     self.db.set_growing_zeek_dir()
@@ -513,7 +500,6 @@ class Main:
                 self.update_local_TI_files()
                 self.proc_man.load_modules()
 
-            # self.start_gui_process()
             if self.args.webinterface:
                 self.ui_man.start_webinterface()
 
@@ -523,67 +509,22 @@ class Main:
             # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
             signal.signal(signal.SIGTERM, sig_handler)
 
-            self.evidenceProcessQueue = Queue()
-            evidence_process = EvidenceProcess(
-                self.outputqueue,
-                self.db,
-                input_queue = self.evidenceProcessQueue,
-                output_dir = self.args.output,
-                )
-            evidence_process.start()
-            self.print(
-                f'Started {green("Evidence Process")} '
-                f'[PID {green(evidence_process.pid)}]', 1, 0
-            )
-            self.db.store_process_PID(
-                'Evidence',
-                int(evidence_process.pid)
-            )
+            self.proc_man.start_evidence_process()
+            self.proc_man.start_profiler_process()
+
+            self.c1 = self.db.subscribe('control_channel')
+
+            self.metadata_man.enable_metadata()
+
+            self.proc_man.start_input_process()
+
+            # obtain the list of active processes
+            self.proc_man.processes = multiprocessing.active_children()
+
             self.db.store_process_PID(
                 'slips.py',
                 int(self.pid)
             )
-
-            self.profilerProcessQueue = Queue()
-            profiler_process = ProfilerProcess(
-                self.outputqueue,
-                self.db,
-                input_queue=self.profilerProcessQueue,
-            )
-            profiler_process.start()
-            self.print(
-                f'Started {green("Profiler Process")} '
-                f'[PID {green(profiler_process.pid)}]', 1, 0
-            )
-            self.db.store_process_PID(
-                'Profiler',
-                int(profiler_process.pid)
-            )
-
-            self.c1 = self.db.subscribe('finished_modules')
-            self.metadata_man.enable_metadata()
-
-            inputProcess = InputProcess(
-                self.outputqueue,
-                self.profilerProcessQueue,
-                self.input_type,
-                self.input_information,
-                self.args.pcapfilter,
-                self.zeek_bro,
-                self.zeek_folder,
-                self.line_type,
-                self.db,
-            )
-            inputProcess.start()
-            self.print(
-                f'Started {green("Input Process")} '
-                f'[PID {green(inputProcess.pid)}]', 1, 0
-            )
-            self.db.store_process_PID(
-                'Input Process',
-                int(inputProcess.pid)
-            )
-            self.zeek_folder = inputProcess.zeek_folder
             self.metadata_man.set_input_metadata()
 
             if self.conf.use_p2p() and not self.args.interface:
@@ -616,7 +557,7 @@ class Main:
                 message = self.c1.get_message(timeout=0.01)
                 if (
                     message
-                    and utils.is_msg_intended_for(message, 'finished_modules')
+                    and utils.is_msg_intended_for(message, 'control_channel')
                     and message['data'] == 'stop_slips'
                 ):
                     self.proc_man.shutdown_gracefully()

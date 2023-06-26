@@ -6,7 +6,7 @@ import time
 import threading
 from multiprocessing import Queue
 
-class Module(Module, multiprocessing.Process):
+class ARP(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'ARP'
     description = 'Detect arp attacks'
@@ -341,9 +341,6 @@ class Module(Module, multiprocessing.Process):
                                      profileid=profileid, twid=twid, uid=uid)
             return True
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
     def check_if_gratutitous_ARP(
             self, saddr, daddr, src_mac, dst_mac, src_hw, dst_hw, operation
