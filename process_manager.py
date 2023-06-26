@@ -478,6 +478,8 @@ class ProcessManager:
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
             self.main.db.close()
+            self.main.output_queue.close()
+            self.main.output_queue.cancel_join_thread()
             exit()
         except KeyboardInterrupt:
             return False

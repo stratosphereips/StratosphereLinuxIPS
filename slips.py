@@ -423,9 +423,7 @@ class Main:
 
             self.setup_print_levels()
 
-            # Output thread. outputprocess should be created first because it handles
-            # the output of the rest of the threads.
-            self.output_queue = Queue()
+
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -445,6 +443,8 @@ class Main:
                 self.redis_port = 6379
                 # self.check_if_port_is_in_use(self.redis_port)
 
+            # Output thread.
+            self.output_queue = Queue()
 
             self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
             self.db.set_input_metadata({'output_dir': self.args.output})
@@ -452,6 +452,8 @@ class Main:
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
 
+            # outputprocess should be created first because it handles
+            # the output of the rest of the threads.
             output_process = self.proc_man.start_output_process(
                 current_stdout, stderr, slips_logfile
                 )
