@@ -706,7 +706,6 @@ class Whitelist:
             return True
 
     def check_whitelisted_victim(self, victim, profileid):
-        # todo refactor and test this and check_whitelisted_attacker()
         if not victim:
             return False
 
@@ -728,45 +727,13 @@ class Whitelist:
             if self.is_domain_whitelisted(victim, 'dstdomain'):
                 return True
 
+        direction = 'src' if srcip in victim else 'dst'
+        if (
+                whitelisted_orgs
+                and self.is_part_of_a_whitelisted_org(victim, victim_type, direction)
+        ):
+            return True
 
-        if whitelisted_orgs:
-            is_src = True if srcip in victim else False
-            is_dst = not is_srcip
-
-            for org in whitelisted_orgs:
-                from_ = whitelisted_orgs[org]['from']
-                what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
-                ignore_alerts = self.should_ignore_alerts(what_to_ignore)
-                ignore_alerts_from_org = (
-                    ignore_alerts
-                    and is_src
-                    and self.should_ignore_from(from_)
-                )
-                ignore_alerts_to_org = (
-                    ignore_alerts
-                    and is_dst
-                    and self.should_ignore_to(from_)
-                )
-
-                    # Check if the IP in the alert belongs to a whitelisted organization
-                if victim_type == 'domain':
-                    flow_domain = victim
-                    # Method 3 Check if the domains of this flow belong to this org domains
-                    if self.is_domain_in_org(flow_domain, org):
-                        return True
-
-                elif victim_type == 'ip':
-                    ip = victim
-                    if ignore_alerts_from_org or ignore_alerts_to_org:
-                        # Method 1: using asn
-                        self.is_ip_asn_in_org_asn(ip, org)
-
-                        # Method 2 using the organization's list of ips
-                        # ip doesn't have asn info, search in the list of organization IPs
-                        if self.is_ip_in_org(ip, org):
-                            # self.print(f'Whitelisting evidence sent by {srcip} about {ip},'
-                            #            f'due to {ip} being in the range of {org}. {data} in {description}')
-                            return True
 
     def check_whitelisted_attacker(self, attacker, attacker_direction):
 
