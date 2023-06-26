@@ -819,46 +819,7 @@ class Whitelist:
 
         # Check IPs
         if attacker_type == 'domain':
-            is_srcdomain = attacker_direction in ('srcdomain')
-            is_dstdomain = attacker_direction in ('dstdomain')
-            # extract the top level domain
-            try:
-                domain = tld.get_fld(attacker, fix_protocol=True)
-            except (tld.exceptions.TldBadUrl, tld.exceptions.TldDomainNotFound):
-                domain = attacker
-                for str_ in ('http://', 'https://','www'):
-                    domain = domain.replace(str_, "")
-            # is domain in whitelisted domains?
-            for domain_in_whitelist in whitelisted_domains:
-                # We go one by one so we can match substrings in the domains
-                sub_domain = domain[-len(domain_in_whitelist) :]
-                if domain_in_whitelist in sub_domain:
-                    # Ignore src or dst
-                    direction = whitelisted_domains[sub_domain]['from']
-                    # Ignore flows or alerts?
-                    what_to_ignore = whitelisted_domains[sub_domain][
-                        'what_to_ignore'
-                    ]   # alerts or flows
-                    ignore_alerts = self.should_ignore_alerts(what_to_ignore)
-                    ignore_alerts_from_domain = (
-                        ignore_alerts
-                        and is_srcdomain
-                        and self.should_ignore_from(direction)
-                    )
-                    ignore_alerts_to_domain = (
-                        ignore_alerts
-                        and is_dstdomain
-                        and self.should_ignore_to(direction)
-                    )
-                    if ignore_alerts_from_domain or ignore_alerts_to_domain:
-                        # self.print(f'Whitelisting evidence about '
-                        #            f'{domain_in_whitelist}, due to a connection '
-                        #            f'related to {data} in {description}')
-                        return True
-
-            if self.db.is_whitelisted_tranco_domain(domain):
-                # tranco list contains the top 10k known benign domains
-                # https://tranco-list.eu/list/X5QNN/1000000
+            if self.is_domain_whitelisted(attacker, attacker_direction):
                 return True
 
         elif attacker_type == 'ip':
