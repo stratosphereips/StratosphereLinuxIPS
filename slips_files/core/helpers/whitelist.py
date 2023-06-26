@@ -102,10 +102,12 @@ class Whitelist:
 
     def is_whitelisted_domain(self, domain_to_check, saddr, daddr, ignore_type):
         """
+        Used only when checking whitelisted flows
+        (aka domains associated with the src or dstip of a flow)
         :param domain_to_check: the domain we want to know if whitelisted or not
         :param saddr: saddr of the flow we're checking
         :param daddr: daddr of the flow we're checking
-        :param ignore_type: alerts or flows or both
+        :param ignore_type: what did the user whitelist? alerts or flows or both
         """
 
         whitelisted_domains = self.db.get_whitelist('domains')
@@ -118,7 +120,7 @@ class Whitelist:
             src_domains_of_flow,
         ) = self.get_domains_of_flow(saddr, daddr)
 
-#         # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
+        # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
         # Go through each whitelisted domain and check if what arrived is there
         for whitelisted_domain in list(whitelisted_domains.keys()):
             what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
@@ -497,8 +499,11 @@ class Whitelist:
         return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_mac
 
     def get_domains_of_flow(self, saddr, daddr):
-        """Returns the domains of each ip (src and dst) that appeard in this flow"""
-        # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
+        """
+        Returns the domains of each ip (src and dst) that appeard in this flow
+        """
+        # These separate lists, hold the domains that we should only
+        # check if they are SRC or DST. Not both
         domains_to_check_src = []
         domains_to_check_dst = []
         try:
@@ -697,10 +702,11 @@ class Whitelist:
         if self.check_whitelisted_attacker(attacker, attacker_direction):
             return True
 
-        if self.check_whitelisted_victim(victim):
+        if self.check_whitelisted_victim(victim, srcip):
+            print(f"@@@@@@@@@@@@@@@@ found a whitelisted victimm !! {victim}")
             return True
 
-    def check_whitelisted_victim(self, victim, profileid):
+    def check_whitelisted_victim(self, victim, srcip):
         if not victim:
             return False
 
@@ -708,7 +714,6 @@ class Whitelist:
         whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist(whitelist)
 
         victim = victim.strip()
-        srcip = profileid.split('_')[-1]
         victim_type = utils.detect_data_type(victim)
 
         if victim_type == 'ip':
@@ -909,7 +914,9 @@ class Whitelist:
                 return True
 
     def is_domain_whitelisted(self, domain: str, direction: str):
-        """direction can be either srcdomain or dstdomain"""
+        """
+        :param direction: can be either srcdomain or dstdomain
+        """
         # todo differentiate between this and is_whitelisted_Domain()
         is_srcdomain = direction in ('srcdomain')
         is_dstdomain = direction in ('dstdomain')
@@ -997,7 +1004,7 @@ class Whitelist:
 
                     # Method 2 using the organization's list of ips
                     # ip doesn't have asn info, search in the list of organization IPs
-                    if self.is_ip_in_org(ip, org):
+                    if self.is_ip_in_org(ioc, org):
                         # self.print(f'Whitelisting evidence sent by {srcip} about {ip},'
                         #            f'due to {ip} being in the range of {org}. {data} in {description}')
                         return True
