@@ -763,7 +763,6 @@ class Whitelist:
         if victim_type == 'ip':
             ip = victim
             is_srcip = True if srcip in victim else False
-            is_dstip = not is_srcip
             if self.is_ip_whitelisted(ip, is_srcip):
                 return True
 
@@ -915,37 +914,9 @@ class Whitelist:
             # Was the evidence coming as a src or dst?
             ip = attacker
             is_srcip = self.is_srcip(attacker_direction)
-            is_dstip = self.is_dstip(attacker_direction)
-            if ip in whitelisted_IPs:
-                # Check if we should ignore src or dst alerts from this ip
-                # from_ can be: src, dst, both
-                # what_to_ignore can be: alerts or flows or both
-                direction = whitelisted_IPs[ip]['from']
-                what_to_ignore = whitelisted_IPs[ip]['what_to_ignore']
-                ignore_alerts = self.should_ignore_alerts(what_to_ignore)
-
-                ignore_alerts_from_ip = (
-                    ignore_alerts
-                    and is_srcip
-                    and self.should_ignore_from(direction)
-                )
-                ignore_alerts_to_ip = (
-                    ignore_alerts
-                    and is_dstip
-                    and self.should_ignore_to(direction)
-                )
-                if ignore_alerts_from_ip or ignore_alerts_to_ip:
-                    # self.print(f'Whitelisting src IP {srcip} for evidence'
-                    #            f' about {ip}, due to a connection related to {data} '
-                    #            f'in {description}')
-                    return True
-
-                    # Now we know this ipv4 or ipv6 isn't whitelisted
-                    # is the mac address of this ip whitelisted?
-                if whitelisted_macs and self.profile_has_whitelisted_mac(
-                    ip, whitelisted_macs, is_srcip, is_dstip
-                ):
-                    return True
+            # is_dstip = self.is_dstip(attacker_direction)
+            if self.is_ip_whitelisted(ip, is_srcip):
+                return True
 
         # Check orgs
         if whitelisted_orgs:
