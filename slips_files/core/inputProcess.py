@@ -80,7 +80,10 @@ class InputProcess(Core):
             'mqtt_subscribe',
             'mqtt_connect',
             'analyzer',
-            'ntp'
+            'ntp',
+            'radiuss',
+            'sip',
+            'syslog'
         }
         # create the remover thread
         self.remover_thread = threading.Thread(
