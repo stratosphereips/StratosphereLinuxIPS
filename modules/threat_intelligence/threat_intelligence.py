@@ -881,7 +881,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
                 self.urlhaus.set_evidence_malicious_hash(blacklist_details)
             else:
                 self.set_evidence_malicious_hash(blacklist_details)
-        self.db.mark_as_analyzed_by_ti_module()
 
 
     def is_malicious_url(
@@ -966,16 +965,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
             self.db.set_TI_file_info(filename, malicious_file_info)
             return True
 
-
-    def have_pending_ips_in_queue(self):
-        """ check if this module has pending ips/domains to analyse """
-        q_size = self.db.get_ti_queue_size()
-        if q_size is None:
-            return False
-        if int(q_size) > 0:
-            return True
-        return False
-
     def pre_main(self):
         utils.drop_root_privs()
         # Load the local Threat Intelligence files that are
@@ -985,7 +974,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
         self.update_local_file('own_malicious_JA3.csv')
         self.update_local_file('own_malicious_JARM.csv')
         self.circllu_calls_thread.start()
-        self.db.init_ti_queue()
 
     def main(self):
         # The channel now can receive an IP address or a domain name
@@ -1039,7 +1027,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
                     profileid,
                     twid
                 )
-            self.db.mark_as_analyzed_by_ti_module()
 
         if msg:= self.get_msg('new_downloaded_file'):
             file_info = json.loads(msg['data'])
