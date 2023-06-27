@@ -143,7 +143,7 @@ class ProfileHandler():
                         )
                         # amount_of_current_tw is the real amount of tw we have now
                         amount_of_current_tw = (
-                            self.getamountTWsfromProfile(profileid)
+                            self.get_number_of_tws_in_profile(profileid)
                         )
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
@@ -1077,11 +1077,11 @@ class ProfileHandler():
             else False
         )
 
-    def getamountTWsfromProfile(self, profileid):
+    def get_number_of_tws_in_profile(self, profileid) -> int:
         """
         Receives a profile id and returns the number of all the TWs in that profile
         """
-        return len(self.getTWsfromProfile(profileid)) if profileid else False
+        return len(self.getTWsfromProfile(profileid)) if profileid else 0
 
     def getSrcIPsfromProfileTW(self, profileid, twid):
         """

@@ -593,8 +593,8 @@ class DBManager:
     def getTWsfromProfile(self, *args, **kwargs):
         return self.rdb.getTWsfromProfile(*args, **kwargs)
 
-    def getamountTWsfromProfile(self, *args, **kwargs):
-        return self.rdb.getamountTWsfromProfile(*args, **kwargs)
+    def get_number_of_tws_in_profile(self, *args, **kwargs):
+        return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
 
     def getSrcIPsfromProfileTW(self, *args, **kwargs):
         return self.rdb.getSrcIPsfromProfileTW(*args, **kwargs)
