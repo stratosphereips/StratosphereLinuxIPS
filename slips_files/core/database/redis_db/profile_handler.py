@@ -1393,12 +1393,13 @@ class ProfileHandler():
             return json.loads(MAC_info)['MAC']
         else:
             return MAC_info
+
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
         Used to associate this profile with it's used user_agent
         :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
-        self.r.hset(profileid, 'User-agent', user_agent)
+        self.r.hset(profileid, 'first user-agent', user_agent)
 
     def add_all_user_agent_to_profile(self, profileid, user_agent: str):
         """
@@ -1436,7 +1437,8 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if user_agent := self.r.hmget(profileid, 'User-agent')[0]:
+
+        if user_agent := self.r.hmget(profileid, 'first user-agent')[0]:
             # user agents may be OpenSSH_8.6 , no need to deserialize them
             if '{' in user_agent:
                 user_agent = json.loads(user_agent)
