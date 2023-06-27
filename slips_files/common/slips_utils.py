@@ -565,9 +565,13 @@ class Utils(object):
                 {
                     'Type': ['Malware'],
                     'Hash': [f'md5:{attacker}'],
-                    'Size': int(description.split('size:')[1].split('from')[0]),
                 }
+
             ]
+            if 'size' in description:
+                IDEA_dict.update(
+                    {'Size': int(description.split('size:')[1].split('from')[0])}
+                )
 
         return IDEA_dict
 
