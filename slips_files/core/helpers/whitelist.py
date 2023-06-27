@@ -703,7 +703,6 @@ class Whitelist:
             return True
 
         if self.check_whitelisted_victim(victim, srcip):
-            print(f"@@@@@@@@@@@@@@@@ found a whitelisted victimm !! {victim}")
             return True
 
     def check_whitelisted_victim(self, victim, srcip):

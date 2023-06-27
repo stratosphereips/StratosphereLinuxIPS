@@ -577,7 +577,6 @@ class EvidenceProcess(Core):
                 if self.whitelist.is_whitelisted_evidence(
                     srcip, attacker, attacker_direction, description, victim
                 ):
-                    print(f"@@@@@@@@@@@@@@@@ found a whitelisted ev: {description} from {profileid} attacker {attacker}")
                     self.db.cache_whitelisted_evidence_ID(evidence_ID)
                     # Modules add evidence to the db before reaching this point, now
                     # remove evidence from db so it could be completely ignored
