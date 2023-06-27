@@ -81,7 +81,7 @@ class ProfileHandler():
                     # profileid is None if we're dealing with a profile
                     # outside of home_network when this param is given
                     return False
-                [(lasttwid, lasttw_start_time)] = self.getLastTWforProfile(profileid)
+                [(lasttwid, lasttw_start_time)] = self.get_last_twid_of_profile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
@@ -112,7 +112,7 @@ class ProfileHandler():
                         (flowtime - lasttw_end_time) / self.width
                     )
                     self.print(
-                        f'We have to create {amount_of_new_tw} empty TWs in the midle.',
+                        f'We have to create {amount_of_new_tw} empty TWs in the middle.',
                         3,
                         0,
                     )
@@ -122,7 +122,7 @@ class ProfileHandler():
                         twid = self.addNewTW(profileid, new_start)
                         self.print(f'Creating the TW id {twid}. Start: {new_start}.', 3, 0)
                         temp_end = new_start + self.width
-                        # Now get the id of the last TW so we can return it
+
                 else:
                     # The flow was not in the last TW, its OLDER that it
                     self.print(
@@ -1131,8 +1131,8 @@ class ProfileHandler():
         profiles_n =  self.r.scard('profiles')
         return 0 if not profiles_n else int(profiles_n)
 
-    def getLastTWforProfile(self, profileid):
-        """Return the last TW id and the time for the given profile id"""
+    def get_last_twid_of_profile(self, profileid):
+        """Return the last TW id and the starttime of the given profile id"""
         return (
             self.r.zrange(f'tws{profileid}', -1, -1, withscores=True)
             if profileid
@@ -1223,7 +1223,7 @@ class ProfileHandler():
             """
             # Get the last twid and obtain the new tw id
             try:
-                (lastid, lastid_time) = self.getLastTWforProfile(profileid)[0]
+                (lastid, lastid_time) = self.get_last_twid_of_profile(profileid)[0]
                 # We have a last id
                 # Increment it
                 twid = 'timewindow' + str(
