@@ -734,6 +734,9 @@ class DBManager:
     def get_hostname_from_profile(self, *args, **kwargs):
         return self.rdb.get_hostname_from_profile(*args, **kwargs)
 
+    def add_host_name_to_profile(self, *args, **kwargs):
+        return self.rdb.add_host_name_to_profile(*args, **kwargs)
+
     def get_ipv4_from_profile(self, *args, **kwargs):
         return self.rdb.get_ipv4_from_profile(*args, **kwargs)
 

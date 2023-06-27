@@ -1287,7 +1287,7 @@ class ProfileHandler():
         Used to associate this profile with its MAC addr in the 'MAC' key in the db
         format of the MAC key is
             MAC: [ipv4, ipv6, etc.]
-        :param MAC_info: dict containing mac address, hostname and vendor info
+        :param MAC_info: dict containing mac address and vendor info
         this functions is called for all macs found in dhcp.log, conn.log, arp.log etc.
         """
         if not profileid:
@@ -1317,7 +1317,7 @@ class ProfileHandler():
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset('MAC', MAC_info['MAC'], ip)
-            # Add the MAC addr, hostname and vendor to this profile
+            # Add the MAC addr and vendor to this profile
             self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
         else:
             # we found another profile that has the same mac as this one
@@ -1786,14 +1786,20 @@ class ProfileHandler():
         """
         Returns hostname about a certain profile or None
         """
+
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
-            return json.loads(MAC_info).get('host_name', False)
-        else:
-            return MAC_info
+
+        return self.r.hget(profileid, 'host_name')
+
+    def add_host_name_to_profile(self, hostname, profileid):
+        """
+        Adds the given hostname to the given profile
+        """
+        if not self.get_hostname_from_profile(profileid):
+            self.r.hset(profileid, 'host_name', hostname)
 
     def get_ipv4_from_profile(self, profileid) -> str:
         """
