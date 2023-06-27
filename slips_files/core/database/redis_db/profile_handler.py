@@ -1401,19 +1401,33 @@ class ProfileHandler():
         """
         self.r.hset(profileid, 'first user-agent', user_agent)
 
+    def get_user_agents_count(self, profileid) -> int:
+        """
+        returns the number of unique UAs seen for the given profileid
+        """
+        return int(self.r.hget(profileid, 'user_agents_count'))
+
+
     def add_all_user_agent_to_profile(self, profileid, user_agent: str):
         """
         Used to keep history of past user agents of profile
         :param user_agent: str of user_agent
         """
-        if not self.r.hexists(profileid ,'past_user_agents'):
+        if not self.r.hexists(profileid, 'past_user_agents'):
+            # add the first user agent seen to the db
             self.r.hset(profileid, 'past_user_agents', json.dumps([user_agent]))
+            self.r.hset(profileid, 'user_agents_count', 1)
         else:
+            # we have previous UAs
             user_agents = json.loads(self.r.hget(profileid, 'past_user_agents'))
             if user_agent not in user_agents:
+                # the given ua is not cached. cache it as a str
                 user_agents.append(user_agent)
                 self.r.hset(profileid, 'past_user_agents', json.dumps(user_agents))
 
+                # incr the number of user agents seen for this profile
+                user_agents_count: int = self.get_user_agents_count(profileid)
+                self.r.hset(profileid, 'user_agents_count', user_agents_count+1 )
 
 
     def get_software_from_profile(self, profileid):
