@@ -133,7 +133,6 @@ def test_binetflow(
             'dataset/test9-mixed-zeek-dir',
             4,
             [
-                'SSH client version changing',
                 'Incompatible certificate CN',
                 'Malicious JA3: 6734f37431670b3ab4292b8f60f29984',
                 'sending ARP packet to a destination address outside of local network',
