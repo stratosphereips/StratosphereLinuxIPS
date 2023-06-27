@@ -268,14 +268,14 @@ class IPInfo(Module, multiprocessing.Process):
         ):
             return False
 
-    def get_vendor_offline(self, mac_addr, host_name, profileid):
+    def get_vendor_offline(self, mac_addr, profileid):
         """
         Gets vendor from Slips' offline database databases/macaddr-db.json
         """
         if not hasattr(self, 'mac_db'):
             # when update manager is done updating the mac db, we should ask
             # the db for all these pending queries
-            self.pending_mac_queries.put((mac_addr, host_name, profileid))
+            self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
         oui = mac_addr[:8].upper()
@@ -292,7 +292,7 @@ class IPInfo(Module, multiprocessing.Process):
                 line = json.loads(line)
                 return line['vendorName']
 
-    def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
+    def get_vendor(self, mac_addr: str, profileid: str):
         """
         Returns vendor info of a MAC address either from an offline or an online
          database
@@ -312,10 +312,7 @@ class IPInfo(Module, multiprocessing.Process):
             'MAC': mac_addr
         }
 
-        if host_name:
-            MAC_info['host_name'] = host_name
-
-        if vendor:= self.get_vendor_offline(mac_addr, host_name, profileid):
+        if vendor:= self.get_vendor_offline(mac_addr, profileid):
             MAC_info['Vendor'] = vendor
         elif vendor:= self.get_vendor_online(mac_addr):
             MAC_info['Vendor'] = vendor
@@ -470,8 +467,8 @@ class IPInfo(Module, multiprocessing.Process):
         if hasattr(self, 'mac_db') and not self.pending_mac_queries.empty():
             while True:
                 try:
-                    mac, host_name, profileid = self.pending_mac_queries.get(timeout=0.5)
-                    self.get_vendor(mac, host_name, profileid)
+                    mac, profileid = self.pending_mac_queries.get(timeout=0.5)
+                    self.get_vendor(mac, profileid)
 
                 except Exception:
                     # queue is empty
@@ -567,7 +564,11 @@ class IPInfo(Module, multiprocessing.Process):
             mac_addr = data['MAC']
             host_name = data.get('host_name', False)
             profileid = data['profileid']
-            self.get_vendor(mac_addr, host_name, profileid)
+
+            if host_name:
+                self.db.add_host_name_to_profile(host_name, profileid)
+
+            self.get_vendor(mac_addr, profileid)
             self.check_if_we_have_pending_mac_queries()
             # set the gw mac and ip if they're not set yet
             if not self.is_gw_mac_set:
