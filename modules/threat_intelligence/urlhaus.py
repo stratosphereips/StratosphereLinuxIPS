@@ -144,10 +144,13 @@ class URLhaus:
         daddr = flow["daddr"]
 
         ip_identification = self.db.get_ip_identification(daddr)
+
+        size = f"size: {flow['size']}" if flow['size'] else ''
+
         # we have more info about the downloaded file
         # so we need a more detailed description
         description = f"Malicious downloaded file: {flow['md5']}. " \
-                      f"size: {flow['size']}" \
+                      f"{size}" \
                       f"from IP: {flow['daddr']} {ip_identification}." \
                       f"file name: {file_info['file_name']} " \
                       f"file type: {file_info['file_type']} " \
