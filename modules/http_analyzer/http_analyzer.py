@@ -19,7 +19,7 @@ class HTTPAnalyzer(Module, multiprocessing.Process):
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware
         # to check your internet connection
-        self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com']
+        self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com', 'gmail.com']
         self.read_configuration()
         self.executable_mime_types = [
             'application/x-msdownload',
