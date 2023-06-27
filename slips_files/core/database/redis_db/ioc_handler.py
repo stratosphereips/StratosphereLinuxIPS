@@ -21,8 +21,6 @@ class IoCHandler():
         """
         return self.r.get('loaded TI files') or 0
 
-
-
     def give_threat_intelligence(
             self, profileid, twid, ip_state, starttime, uid, daddr, proto=False, lookup='', extra_info:dict =False
     ):

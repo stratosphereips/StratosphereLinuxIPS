@@ -396,8 +396,6 @@ class DBManager:
     def get_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.get_loaded_ti_files(*args, **kwargs)
 
-
-
     def give_threat_intelligence(self, *args, **kwargs):
         return self.rdb.give_threat_intelligence(*args, **kwargs)
 
@@ -648,6 +646,9 @@ class DBManager:
 
     def add_user_agent_to_profile(self, *args, **kwargs):
         return self.rdb.add_user_agent_to_profile(*args, **kwargs)
+
+    def get_first_user_agent(self, *args, **kwargs):
+        return self.rdb.get_first_user_agent(*args, **kwargs)
 
     def add_all_user_agent_to_profile(self, *args, **kwargs):
         return self.rdb.add_all_user_agent_to_profile(*args, **kwargs)

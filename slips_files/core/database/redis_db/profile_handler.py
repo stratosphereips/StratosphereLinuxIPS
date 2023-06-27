@@ -1442,6 +1442,10 @@ class ProfileHandler():
             return used_software
 
 
+    def get_first_user_agent(self, profileid) -> str:
+        """returns the first user agent used by the given profile"""
+        return self.r.hmget(profileid, 'first user-agent')[0]
+
     def get_user_agent_from_profile(self, profileid) -> str:
         """
         Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
@@ -1452,7 +1456,7 @@ class ProfileHandler():
             # outside of home_network when this param is given
             return False
 
-        if user_agent := self.r.hmget(profileid, 'first user-agent')[0]:
+        if user_agent := self.get_first_user_agent(profileid):
             # user agents may be OpenSSH_8.6 , no need to deserialize them
             if '{' in user_agent:
                 user_agent = json.loads(user_agent)
