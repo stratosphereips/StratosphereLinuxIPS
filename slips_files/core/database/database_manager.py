@@ -611,8 +611,8 @@ class DBManager:
     def get_profiles_len(self, *args, **kwargs):
         return self.rdb.get_profiles_len(*args, **kwargs)
 
-    def getLastTWforProfile(self, *args, **kwargs):
-        return self.rdb.getLastTWforProfile(*args, **kwargs)
+    def get_last_twid_of_profile(self, *args, **kwargs):
+        return self.rdb.get_last_twid_of_profile(*args, **kwargs)
 
     def getFirstTWforProfile(self, *args, **kwargs):
         return self.rdb.getFirstTWforProfile(*args, **kwargs)
