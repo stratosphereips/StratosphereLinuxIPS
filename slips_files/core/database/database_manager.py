@@ -812,6 +812,9 @@ class DBManager:
     def get_name_of_module_at(self, *args, **kwargs):
         return self.rdb.get_name_of_module_at(*args, **kwargs)
 
+    def get_flows_count(self, *args, **kwargs):
+        return self.sqlite.get_flows_count(*args, **kwargs)
+
 
     def get_redis_pid(self, *args, **kwargs):
         return self.rdb.get_redis_pid(*args, **kwargs)
