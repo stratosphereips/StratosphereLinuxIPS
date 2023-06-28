@@ -393,8 +393,8 @@ class Main:
         branch_info = utils.get_branch_info()
         if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
-            commit = branch_info[0]
-            slips_version += f' ({commit[:8]})'
+            self.commit, self.branch = branch_info
+            slips_version += f' ({self.commit[:8]})'
         print(slips_version)
 
     def should_run_non_stop(self) -> bool:

@@ -536,6 +536,18 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         return self.r.hget('analysis', 'zeek_dir')
 
+    def get_commit(self):
+        """
+        gets the currently used commit from the db
+        """
+        return self.r.hget('analysis', 'commit')
+
+    def get_branch(self):
+        """
+        gets the currently used branch from the db
+        """
+        return self.r.hget('analysis', 'branch')
+
 
     def get_input_type(self):
         """
