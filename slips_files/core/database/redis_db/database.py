@@ -1040,10 +1040,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def set_organization_of_port(self, organization, ip: str, portproto: str):
         """
         Save in the DB a port with its organization and the ip/ range used by this organization
-        :param portproto: portnumber.lower() + / + protocol
+        :param portproto: portnumber + / + protocol.lower()
         :param ip: can be a single org ip, or a range or ''
         """
-        org_info = {'org_name': organization, 'ip': ip}
+        if org_info := self.get_organization_of_port(portproto):
+            # this port and proto was used with another organization, append to it
+            org_info = json.loads(org_info)
+            org_info['ip'].append(ip)
+            org_info['org_name'].append(organization)
+        else:
+            org_info = {'org_name': [organization], 'ip': [ip]}
+
         org_info = json.dumps(org_info)
         self.rcache.hset('organization_port', portproto, org_info)
 
