@@ -45,8 +45,7 @@ def test_get_vendor(mocker, mock_db):
     ip_info = ModuleFactory().create_ip_info_obj(mock_db)
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
-    host_name = 'FooBar-PC'
-    #
+
     # # mock the online vendor
     # if the vendor isn't found offline, this mocker will run instead of get_vendor_online
     mock_requests = mocker.patch("requests.get")
@@ -55,7 +54,7 @@ def test_get_vendor(mocker, mock_db):
     mock_db.get_mac_vendor_from_profile.return_value = False
 
     # tries to get vendor either online or from our offline db
-    mac_info = ip_info.get_vendor(mac_addr, host_name, profileid)
+    mac_info = ip_info.get_vendor(mac_addr, profileid)
 
     assert mac_info is not False
     assert mac_info['Vendor'].lower() == 'Pcs Systemtechnik GmbH'.lower()
