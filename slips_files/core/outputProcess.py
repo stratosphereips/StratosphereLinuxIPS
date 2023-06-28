@@ -85,7 +85,7 @@ class OutputProcess(Core):
         # both will be False when we're in docker because there's no .git/ there
         branch = self.db.get_branch()
         commit = self.db.get_commit()
-        if not branch and not commit:
+        if branch == 'None' and commit == 'None':
             return
 
         branch_info = ''
