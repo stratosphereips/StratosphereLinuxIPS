@@ -570,7 +570,7 @@ class Utils(object):
             ]
             if 'size' in description:
                 IDEA_dict.update(
-                    {'Size': int(description.split('size:')[1].split('from')[0])}
+                    {'Size': int(description.replace(".",'').split('size:')[1].split('from')[0])}
                 )
 
         return IDEA_dict
