@@ -585,6 +585,7 @@ class EvidenceProcess(Core):
                     )
                     continue
 
+
                 # Format the time to a common style given multiple type of time variables
                 if self.is_running_on_interface():
                     timestamp: datetime = utils.convert_to_local_timezone(timestamp)
