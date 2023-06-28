@@ -4,6 +4,7 @@ import json
 import csv
 from dataclasses import asdict
 from threading import Lock
+from time import sleep
 
 class SQLiteDB():
     """Stores all the flows slips reads and handles labeling them"""
@@ -304,18 +305,26 @@ class SQLiteDB():
         since sqlite is terrible with multi-process applications
         this should be used instead of all calls to commit() and execute()
         """
-        self.cursor_lock.acquire(True)
 
         try:
+            self.cursor_lock.acquire(True)
+
             if not params:
                 self.cursor.execute(query)
             else:
                 self.cursor.execute(query, params)
             self.conn.commit()
-        except sqlite3.Error as e:
-            # An error occurred during execution
-            print(f"Error executing query ({query}): {e}")
 
-        self.cursor_lock.release()
+            self.cursor_lock.release()
+        except sqlite3.Error as e:
+            if "database is locked" in str(e):
+                self.cursor_lock.release()
+                # Retry after a short delay
+                sleep(0.1)
+                self.execute(query, params=params)
+            else:
+                # An error occurred during execution
+                print(f"Error executing query ({query}): {e}")
+
 
         
