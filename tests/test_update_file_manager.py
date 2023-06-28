@@ -77,7 +77,7 @@ def test_read_ports_info():
     filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
     assert update_manager.read_ports_info(filepath) > 100
 
-    org = db.get_organization_of_port('5243/udp')
+    org = update_manager.db.get_organization_of_port('5243/udp')
     assert org
 
     org = json.loads(org)
@@ -85,7 +85,7 @@ def test_read_ports_info():
     assert 'Viber' in org['org_name']
 
 
-    org = db.get_organization_of_port('65432/tcp')
+    org = update_manager.db.get_organization_of_port('65432/tcp')
     assert org
 
     org = json.loads(org)
