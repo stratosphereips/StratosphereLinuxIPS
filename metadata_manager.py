@@ -131,8 +131,6 @@ class MetadataManager:
             'disabled_modules': json.dumps(to_ignore),
             'output_dir': self.main.args.output,
             'input_type': self.main.input_type,
-            'commit': self.main.commit,
-            'branch': self.main.branch,
         }
 
         if hasattr(self.main, 'zeek_dir'):

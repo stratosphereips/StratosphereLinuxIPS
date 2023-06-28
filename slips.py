@@ -447,7 +447,12 @@ class Main:
             self.output_queue = Queue()
 
             self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
-            self.db.set_input_metadata({'output_dir': self.args.output})
+            self.db.set_input_metadata({
+                    'output_dir': self.args.output,
+                    'commit': self.commit,
+                    'branch': self.branch,
+                })
+
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
