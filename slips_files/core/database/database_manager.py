@@ -826,6 +826,13 @@ class DBManager:
         """
         self.sqlite.export_labeled_flows(self.get_output_dir(), *args, **kwargs)
 
+
+    def get_commit(self, *args, **kwargs):
+        return self.rdb.get_commit(*args, **kwargs)
+
+    def get_branch(self, *args, **kwargs):
+        return self.rdb.get_branch(*args, **kwargs)
+
     def close(self, *args, **kwargs):
         self.rdb.r.close()
         self.rdb.rcache.close()

@@ -82,12 +82,21 @@ class OutputProcess(Core):
         self.UID = conf.get_UID()
 
     def log_branch_info(self, logfile):
-        if branch_info := utils.get_branch_info():
-            # it's false when we're in docker because there's no .git/ there
-            commit, branch = branch_info[0], branch_info[1]
-            now = datetime.now()
-            with open(logfile, 'a') as f:
-                f.write(f'Using {branch} - {commit} - {now}\n\n')
+        # both will be False when we're in docker because there's no .git/ there
+        branch = self.db.get_branch()
+        commit = self.db.get_commit()
+        if not branch and not commit:
+            return
+
+        branch_info = ''
+        if branch:
+            branch_info += branch
+        if commit:
+            branch_info += f' ({commit})'
+
+        now = datetime.now()
+        with open(logfile, 'a') as f:
+            f.write(f'Using {branch_info} - {now}\n\n')
 
     def create_logfile(self, path):
         """
