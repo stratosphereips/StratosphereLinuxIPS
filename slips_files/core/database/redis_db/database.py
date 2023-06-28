@@ -548,6 +548,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         return self.r.hget('analysis', 'branch')
 
+    def get_evidence_detection_threshold(self):
+        """
+        gets the currently used evidence_detection_threshold from the db
+        """
+        return self.r.hget('analysis', 'evidence_detection_threshold')
+
 
     def get_input_type(self):
         """

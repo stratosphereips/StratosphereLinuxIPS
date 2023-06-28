@@ -125,6 +125,7 @@ class MetadataManager:
             'disabled_modules': json.dumps(to_ignore),
             'output_dir': self.main.args.output,
             'input_type': self.main.input_type,
+            'evidence_detection_threshold': self.main.conf.evidence_detection_threshold(),
         }
 
         if hasattr(self.main, 'zeek_dir'):
