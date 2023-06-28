@@ -80,12 +80,6 @@ class MetadataManager:
         whitelist = self.main.conf.whitelist_path()
         shutil.copy(whitelist, metadata_dir)
 
-        branch_info = utils.get_branch_info()
-        commit, branch = None, None
-        if branch_info != False:
-            # it's false when we're in docker because there's no .git/ there
-            commit, branch = branch_info[0], branch_info[1]
-
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
 
@@ -93,8 +87,8 @@ class MetadataManager:
         with open(self.info_path, 'w') as f:
             f.write(f'Slips version: {self.main.version}\n'
                     f'File: {self.main.input_information}\n'
-                    f'Branch: {branch}\n'
-                    f'Commit: {commit}\n'
+                    f'Branch: {self.main.db.get_branch()}\n'
+                    f'Commit: {self.main.db.get_commit()}\n'
                     f'Slips start date: {now}\n'
                     )
 
