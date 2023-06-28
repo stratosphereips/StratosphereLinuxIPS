@@ -222,20 +222,22 @@ class FlowAlerts(Module, multiprocessing.Process):
         organization_info = json.loads(organization_info)
 
         # get the organization ip or range
-        org_ip = organization_info['ip']
+        org_ips: list = organization_info['ip']
 
         # org_name = organization_info['org_name']
 
-        if daddr in org_ip:
+        if daddr in org_ips:
             # it's an ip and it belongs to this org, consider the port as known
             return True
 
-        # is it a range?
-        with contextlib.suppress(ValueError):
-            # we have the org range in our database, check if the daddr belongs to this range
-            if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
-                # it does, consider the port as known
-                return True
+        for ip in org_ips:
+            # is any of them a range?
+            with contextlib.suppress(ValueError):
+                # we have the org range in our database, check if the daddr belongs to this range
+                if ipaddress.ip_address(daddr) in ipaddress.ip_network(ip):
+                    # it does, consider the port as known
+                    return True
+
         # not a range either since nothing is specified, e.g. ip is set to ""
         # check the source and dst mac address vendors
         src_mac_vendor = str(
