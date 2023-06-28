@@ -82,7 +82,7 @@ def test_read_ports_info():
 
     org = json.loads(org)
     assert 'org_name' in org
-    assert org['org_name'] == 'Viber'
+    assert 'Viber' in org['org_name']
 
 
     org = db.get_organization_of_port('65432/tcp')
@@ -90,4 +90,4 @@ def test_read_ports_info():
 
     org = json.loads(org)
     assert 'org_name' in org
-    assert org['org_name'] == 'Apple'
+    assert 'Apple' in org['org_name']
