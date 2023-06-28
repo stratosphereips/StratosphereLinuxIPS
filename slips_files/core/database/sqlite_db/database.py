@@ -215,6 +215,15 @@ class SQLiteDB():
             parameters,
         )
 
+    def get_flows_count(self, profileid, twid) -> int:
+        """
+        returns the total number of flows AND altflows
+         in the db for this profileid and twid
+         """
+        condition = f'profileid="{profileid}" AND twid= "{twid}"'
+        flows = self.get_count('flows', condition=condition)
+        flows += self.get_count('altflows', condition=condition)
+        return flows
 
 
     def add_altflow(
@@ -251,6 +260,19 @@ class SQLiteDB():
         self.execute(query)
         result = self.fetchall()
         return result
+
+    def get_count(self, table, condition=None):
+        """
+        returns th enumber of matching rows in the given table based on a specific contioins
+        """
+        query = f"SELECT COUNT(*) FROM {table}"
+
+        if condition:
+            query += f" WHERE {condition}"
+
+        self.execute(query)
+        return self.fetchone()[0]
+
 
     def close(self):
         self.cursor.close()

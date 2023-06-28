@@ -64,6 +64,9 @@ class Main:
         self.checker = Checker(self)
         self.conf = ConfigParser()
         self.version = self.get_slips_version()
+        # will be filled later
+        self.commit = 'None'
+        self.branch = 'None'
         # in testing mode we manually set the following params
         if not testing:
             self.args = self.conf.get_args()
@@ -393,8 +396,8 @@ class Main:
         branch_info = utils.get_branch_info()
         if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
-            commit = branch_info[0]
-            slips_version += f' ({commit[:8]})'
+            self.commit, self.branch = branch_info
+            slips_version += f' ({self.commit[:8]})'
         print(slips_version)
 
     def should_run_non_stop(self) -> bool:
@@ -447,7 +450,12 @@ class Main:
             self.output_queue = Queue()
 
             self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
-            self.db.set_input_metadata({'output_dir': self.args.output})
+            self.db.set_input_metadata({
+                    'output_dir': self.args.output,
+                    'commit': self.commit,
+                    'branch': self.branch,
+                })
+
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
@@ -538,6 +546,9 @@ class Main:
                     f'redis servers running. '
                     f'Run Slips with --killall to stop them.'
                 )
+
+            self.print("Warning: Slips may generate a large amount of traffic by querying TI sites.")
+
 
             hostIP = self.metadata_man.store_host_ip()
 

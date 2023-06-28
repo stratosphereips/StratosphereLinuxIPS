@@ -421,7 +421,7 @@ class ProcessManager:
             self.main.db.check_TW_to_close(close_all=True)
 
             analysis_time = self.get_analysis_time()
-            print(f"\n[Main] Analysis finished in {analysis_time:.2f} minutes")
+            print(f"\n[Main] Analysis of {self.main.input_information} finished in {analysis_time:.2f} minutes")
 
             if self.main.mode == 'daemonized':
                 self.processes: List[int] = self.main.db.get_pids()

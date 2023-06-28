@@ -81,7 +81,7 @@ class ProfileHandler():
                     # profileid is None if we're dealing with a profile
                     # outside of home_network when this param is given
                     return False
-                [(lasttwid, lasttw_start_time)] = self.getLastTWforProfile(profileid)
+                [(lasttwid, lasttw_start_time)] = self.get_last_twid_of_profile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
@@ -112,7 +112,7 @@ class ProfileHandler():
                         (flowtime - lasttw_end_time) / self.width
                     )
                     self.print(
-                        f'We have to create {amount_of_new_tw} empty TWs in the midle.',
+                        f'We have to create {amount_of_new_tw} empty TWs in the middle.',
                         3,
                         0,
                     )
@@ -122,7 +122,7 @@ class ProfileHandler():
                         twid = self.addNewTW(profileid, new_start)
                         self.print(f'Creating the TW id {twid}. Start: {new_start}.', 3, 0)
                         temp_end = new_start + self.width
-                        # Now get the id of the last TW so we can return it
+
                 else:
                     # The flow was not in the last TW, its OLDER that it
                     self.print(
@@ -143,7 +143,7 @@ class ProfileHandler():
                         )
                         # amount_of_current_tw is the real amount of tw we have now
                         amount_of_current_tw = (
-                            self.getamountTWsfromProfile(profileid)
+                            self.get_number_of_tws_in_profile(profileid)
                         )
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
@@ -1077,11 +1077,11 @@ class ProfileHandler():
             else False
         )
 
-    def getamountTWsfromProfile(self, profileid):
+    def get_number_of_tws_in_profile(self, profileid) -> int:
         """
         Receives a profile id and returns the number of all the TWs in that profile
         """
-        return len(self.getTWsfromProfile(profileid)) if profileid else False
+        return len(self.getTWsfromProfile(profileid)) if profileid else 0
 
     def getSrcIPsfromProfileTW(self, profileid, twid):
         """
@@ -1131,8 +1131,8 @@ class ProfileHandler():
         profiles_n =  self.r.scard('profiles')
         return 0 if not profiles_n else int(profiles_n)
 
-    def getLastTWforProfile(self, profileid):
-        """Return the last TW id and the time for the given profile id"""
+    def get_last_twid_of_profile(self, profileid):
+        """Return the last TW id and the starttime of the given profile id"""
         return (
             self.r.zrange(f'tws{profileid}', -1, -1, withscores=True)
             if profileid
@@ -1223,7 +1223,7 @@ class ProfileHandler():
             """
             # Get the last twid and obtain the new tw id
             try:
-                (lastid, lastid_time) = self.getLastTWforProfile(profileid)[0]
+                (lastid, lastid_time) = self.get_last_twid_of_profile(profileid)[0]
                 # We have a last id
                 # Increment it
                 twid = 'timewindow' + str(
@@ -1287,7 +1287,7 @@ class ProfileHandler():
         Used to associate this profile with its MAC addr in the 'MAC' key in the db
         format of the MAC key is
             MAC: [ipv4, ipv6, etc.]
-        :param MAC_info: dict containing mac address, hostname and vendor info
+        :param MAC_info: dict containing mac address and vendor info
         this functions is called for all macs found in dhcp.log, conn.log, arp.log etc.
         """
         if not profileid:
@@ -1317,7 +1317,7 @@ class ProfileHandler():
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset('MAC', MAC_info['MAC'], ip)
-            # Add the MAC addr, hostname and vendor to this profile
+            # Add the MAC addr and vendor to this profile
             self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
         else:
             # we found another profile that has the same mac as this one
@@ -1393,26 +1393,41 @@ class ProfileHandler():
             return json.loads(MAC_info)['MAC']
         else:
             return MAC_info
+
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
         Used to associate this profile with it's used user_agent
         :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
-        self.r.hset(profileid, 'User-agent', user_agent)
+        self.r.hset(profileid, 'first user-agent', user_agent)
+
+    def get_user_agents_count(self, profileid) -> int:
+        """
+        returns the number of unique UAs seen for the given profileid
+        """
+        return int(self.r.hget(profileid, 'user_agents_count'))
+
 
     def add_all_user_agent_to_profile(self, profileid, user_agent: str):
         """
         Used to keep history of past user agents of profile
         :param user_agent: str of user_agent
         """
-        if not self.r.hexists(profileid ,'past_user_agents'):
+        if not self.r.hexists(profileid, 'past_user_agents'):
+            # add the first user agent seen to the db
             self.r.hset(profileid, 'past_user_agents', json.dumps([user_agent]))
+            self.r.hset(profileid, 'user_agents_count', 1)
         else:
+            # we have previous UAs
             user_agents = json.loads(self.r.hget(profileid, 'past_user_agents'))
             if user_agent not in user_agents:
+                # the given ua is not cached. cache it as a str
                 user_agents.append(user_agent)
                 self.r.hset(profileid, 'past_user_agents', json.dumps(user_agents))
 
+                # incr the number of user agents seen for this profile
+                user_agents_count: int = self.get_user_agents_count(profileid)
+                self.r.hset(profileid, 'user_agents_count', user_agents_count+1 )
 
 
     def get_software_from_profile(self, profileid):
@@ -1427,6 +1442,10 @@ class ProfileHandler():
             return used_software
 
 
+    def get_first_user_agent(self, profileid) -> str:
+        """returns the first user agent used by the given profile"""
+        return self.r.hmget(profileid, 'first user-agent')[0]
+
     def get_user_agent_from_profile(self, profileid) -> str:
         """
         Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
@@ -1436,7 +1455,8 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if user_agent := self.r.hmget(profileid, 'User-agent')[0]:
+
+        if user_agent := self.get_first_user_agent(profileid):
             # user agents may be OpenSSH_8.6 , no need to deserialize them
             if '{' in user_agent:
                 user_agent = json.loads(user_agent)
@@ -1766,14 +1786,20 @@ class ProfileHandler():
         """
         Returns hostname about a certain profile or None
         """
+
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
-            return json.loads(MAC_info).get('host_name', False)
-        else:
-            return MAC_info
+
+        return self.r.hget(profileid, 'host_name')
+
+    def add_host_name_to_profile(self, hostname, profileid):
+        """
+        Adds the given hostname to the given profile
+        """
+        if not self.get_hostname_from_profile(profileid):
+            self.r.hset(profileid, 'host_name', hostname)
 
     def get_ipv4_from_profile(self, profileid) -> str:
         """
