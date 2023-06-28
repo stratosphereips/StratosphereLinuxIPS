@@ -1198,7 +1198,7 @@ class ProfilerProcess(Core):
                     # No home. Store all
                     self.handle_in_flows()
 
-            if self.db.is_cyst_enabled:
+            if self.db.is_cyst_enabled():
                 # print the added flow as a form of debugging feedback for
                 # the user to know that slips is working
                 self.print(pp(asdict(self.flow)))
