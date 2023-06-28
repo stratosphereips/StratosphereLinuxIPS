@@ -544,6 +544,9 @@ class Main:
                     f'Run Slips with --killall to stop them.'
                 )
 
+            self.print("Warning: Slips may generate a large amount of traffic by querying TI sites.")
+
+
             hostIP = self.metadata_man.store_host_ip()
 
             # Check every 5 secs if we should stop slips or not
