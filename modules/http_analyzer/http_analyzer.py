@@ -400,7 +400,7 @@ class HTTPAnalyzer(Module, multiprocessing.Process):
         confidence = 1
         ua = cached_ua.get('user_agent', '')
         description = (
-            f'using multiple user-agents: {ua} then {user_agent}'
+            f'using multiple user-agents: "{ua}" then "{user_agent}"'
         )
         self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
