@@ -583,7 +583,8 @@ class EvidenceProcess(Core):
                     self.db.deleteEvidence(
                         profileid, twid, evidence_ID
                     )
-                    return
+                    continue
+
 
                 # Format the time to a common style given multiple type of time variables
                 if self.is_running_on_interface():
