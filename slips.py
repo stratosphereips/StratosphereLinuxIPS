@@ -64,6 +64,9 @@ class Main:
         self.checker = Checker(self)
         self.conf = ConfigParser()
         self.version = self.get_slips_version()
+        # will be filled later
+        self.commit = None
+        self.branch = None
         # in testing mode we manually set the following params
         if not testing:
             self.args = self.conf.get_args()
