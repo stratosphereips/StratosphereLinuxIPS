@@ -9,7 +9,6 @@ import modules
 import importlib
 from datetime import datetime
 from collections import OrderedDict
-from viztracer import ignore_function
 
 class ProcessManager:
     def __init__(self, main):
@@ -123,7 +122,7 @@ class ProcessManager:
             plugins.move_to_end('CYST', last=True)
 
         return plugins, failed_to_load_modules
-    @ignore_function
+
     def load_modules(self):
         to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
         # Import all the modules

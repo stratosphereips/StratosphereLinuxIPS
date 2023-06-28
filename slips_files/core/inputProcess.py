@@ -95,10 +95,10 @@ class InputProcess(multiprocessing.Process):
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []
-        # self.zeek_thread = threading.Thread(
-        #     target=self.run_zeek,
-        #     daemon=True
-        # )
+        self.zeek_thread = threading.Thread(
+            target=self.run_zeek,
+            daemon=True
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
