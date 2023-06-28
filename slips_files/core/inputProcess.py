@@ -688,7 +688,7 @@ class InputProcess(multiprocessing.Process):
                     os.remove(os.path.join(self.zeek_folder, f))
 
             # run zeek
-            self.run_zeek()
+            self.zeek_thread.start()
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
 

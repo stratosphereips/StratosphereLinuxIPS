@@ -546,7 +546,11 @@ class Main:
             if not self.args.db:
                 # update local files before starting modules
                 self.update_local_TI_files()
-                self.proc_man.load_modules()
+                args = sys.argv
+                if (args[-1] != "--no-recurse"):
+                    self.proc_man.load_modules()
+                else:
+                    print("Modules are not compatible with cpu profiling, running as disabled")
 
             # self.start_gui_process()
             if self.args.webinterface:
