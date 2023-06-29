@@ -426,6 +426,8 @@ class Main:
 
             self.setup_print_levels()
 
+            # this is used in get_random_redis_port(), don't move this line
+            self.output_queue = Queue()
 
 
             # get the port that is going to be used for this instance of slips
@@ -446,8 +448,6 @@ class Main:
                 self.redis_port = 6379
                 # self.check_if_port_is_in_use(self.redis_port)
 
-            # Output thread.
-            self.output_queue = Queue()
 
             self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
             self.db.set_input_metadata({
