@@ -5,6 +5,7 @@ from datetime import datetime
 import redis
 import os
 import time
+import socket
 
 class RedisManager:
     def __init__(self, main):
@@ -119,35 +120,29 @@ class RedisManager:
                 tries += 1
 
 
-    def get_random_redis_port(self):
+    def get_random_redis_port(self) -> int:
         """
-        Keeps trying to connect to random generated ports until we're connected.
-        returns the used port
+        Keeps trying to connect to random generated ports until we found an available port.
+        returns the port number
         """
-        # generate a random unused port
         for port in range(self.start_port, self.end_port+1):
-            # check if 1. we can connect
-            # 2.server is not being used by another instance of slips
-            # note: using r.keys() blocks the server
-            db = DBManager(self.main.args.output, self.main.output_queue, port, flush_db=False)
+            # Create a socket object
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                if db.get_redis_keys_len() < 3:
-                    # if the db managed to connect to this random port, and it has
-                    #  less than 3 keys, then this is the port we'll be using
-                    # the reason i put 3 here is because the minute slips connects to the db,
-                    # even if it's unused, it adds 2 keys. so any db with only these 2 keys
-                    # is unused
-                    return port
-                else:
-                    # ignore the created obj of the used db, and try with
-                    # a new port
-                    db.discard_obj()
-            except redis.exceptions.ConnectionError:
-                # Connection refused to this port
+                # Attempt to bind to the port
+                sock.bind(('localhost', port))
+                # Close the socket if successful
+                sock.close()
+                return port
+            except OSError:
+                # Port is already in use, continue to the next port
+                sock.close()
                 continue
+
         # there's no usable port in this range
         print(f"All ports from {self.start_port} to {self.end_port} are used. "
                "Unable to start slips.\n")
+
         return False
     
     def clear_redis_cache_database(
