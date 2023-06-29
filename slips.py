@@ -589,9 +589,11 @@ class Main:
                     # How many profiles we have?
                     profilesLen = self.db.get_profiles_len()
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
+                    evidence_number = self.db.get_evidence_number() or 0
                     print(
                         f'Total analyzed IPs so '
                         f'far: {profilesLen}. '
+                        f'Evidence added: {evidence_number}. '
                         f'IPs sending traffic in the last {self.twid_width}: {modified_ips_in_the_last_tw}. '
                         f'({now})',
                         end='\r',
