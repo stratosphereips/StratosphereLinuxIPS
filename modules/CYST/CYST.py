@@ -4,8 +4,11 @@ import socket
 import json
 import os
 import errno
+import sys
+from pprint import pp
+import contextlib
 
-class CYST(Module, multiprocessing.Process):
+class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'CYST'
     description = 'Communicates with CYST simulation framework'
@@ -104,6 +107,11 @@ class CYST(Module, multiprocessing.Process):
             'alert_ID': alert_ID,
             'ip_to_block': ip_to_block
         }
+
+        self.print(f"Sending alert to CYST: ")
+        self.print(pp(alert_to_send))
+
+
         alert_to_send: bytes = json.dumps(alert_to_send).encode()
         self.send_length(alert_to_send)
 
@@ -120,6 +128,23 @@ class CYST(Module, multiprocessing.Process):
         # delete the socket
         os.unlink(self.cyst_UDS)
 
+
+    def is_cyst_enabled(self):
+        # are the flows being read from the default inputprocess or from a custom module? like this one
+        custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
+        if not custom_flows:
+            return False
+
+        with contextlib.suppress(ValueError):
+            # are we reading custom flows from this module?
+            if self.name in sys.argv[sys.argv.index('--input-module') + 1]:
+                return True
+
+            if self.name in sys.argv[sys.argv.index('--im') + 1]:
+                return True
+
+        return True
+
     def shutdown_gracefully(self):
         self.close_connection()
         # if slips is done, slips shouldn't expect more flows or send evidence
@@ -131,12 +156,13 @@ class CYST(Module, multiprocessing.Process):
         # are the flows being read from the default inputprocess or from a custom module? like this one
         if not self.db.is_cyst_enabled():
             return 1
+        self.db.set_cyst_enabled()
         # connect to cyst
-        print(f"Initializing socket", 0, 1)
+        self.print(f"Initializing socket", 0, 1)
         self.sock, self.cyst_conn = self.initialize_unix_socket()
         if not self.sock:
             return 1
-        print(f"Done initializing socket", 0, 1)
+        self.print(f"Done initializing socket", 0, 1)
 
     def main(self):
         """
@@ -154,6 +180,10 @@ class CYST(Module, multiprocessing.Process):
                 'flow': flow,
                 'module': self.name # to know where this flow is coming from aka what's the input module
                 }
+
+            self.print(f"Received flow from cyst")
+            self.print(pp(to_send))
+
             self.db.publish('new_module_flow', json.dumps(to_send))
 
         # check for connection before receiving
@@ -162,7 +192,7 @@ class CYST(Module, multiprocessing.Process):
             return 1
 
         if msg := self.get_msg('new_alert'):
-            print(f"Cyst module received a new blocking request . sending ... ")
+            self.print(f"Cyst module received a new blocking request . sending to CYST ... ")
             alert_info: dict = json.loads(msg['data'])
             profileid = alert_info['profileid']
             # twid = alert_info['twid']

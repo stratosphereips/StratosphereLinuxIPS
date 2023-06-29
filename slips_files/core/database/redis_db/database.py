@@ -69,6 +69,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         'new_tunnel',
         'check_jarm_hash',
         'control_channel',
+        'new_module_flow'
         }
     # The name is used to print in the outputprocess
     name = 'DB'
@@ -479,6 +480,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def get_redis_keys_len(self) -> int:
         """returns the length of all keys in the db"""
         return self.r.dbsize()
+
+    def set_cyst_enabled(self):
+        return self.r.set('is_cyst_enabled', 'yes')
+
+    def is_cyst_enabled(self):
+        return self.r.get('is_cyst_enabled')
+
 
     def get_equivalent_tws(self, hrs: float):
         """
@@ -1032,10 +1040,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def set_organization_of_port(self, organization, ip: str, portproto: str):
         """
         Save in the DB a port with its organization and the ip/ range used by this organization
-        :param portproto: portnumber.lower() + / + protocol
+        :param portproto: portnumber + / + protocol.lower()
         :param ip: can be a single org ip, or a range or ''
         """
-        org_info = {'org_name': organization, 'ip': ip}
+        if org_info := self.get_organization_of_port(portproto):
+            # this port and proto was used with another organization, append to it
+            org_info = json.loads(org_info)
+            org_info['ip'].append(ip)
+            org_info['org_name'].append(organization)
+        else:
+            org_info = {'org_name': [organization], 'ip': [ip]}
+
         org_info = json.dumps(org_info)
         self.rcache.hset('organization_port', portproto, org_info)
 
