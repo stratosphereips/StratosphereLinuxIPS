@@ -249,21 +249,26 @@ class FlowAlerts(Module, multiprocessing.Process):
             )
         )
 
-        org_name = organization_info['org_name'].lower()
-        if (
-                org_name in src_mac_vendor.lower()
-                or org_name in dst_mac_vendor.lower()
-        ):
-            return True
+        # get the list of all orgs known to use this port and proto
+        for org_name in organization_info['org_name']:
+            org_name = org_name.lower()
+            if (
+                    org_name in src_mac_vendor.lower()
+                    or org_name in dst_mac_vendor.lower()
+            ):
+                return True
 
-        # check if the SNI, hostname, rDNS of this ip belong to org_name
-        ip_identification = self.db.get_ip_identification(daddr)
-        if org_name in ip_identification.lower():
-            return True
+            # check if the SNI, hostname, rDNS of this ip belong to org_name
+            ip_identification = self.db.get_ip_identification(daddr)
+            if org_name in ip_identification.lower():
+                return True
 
-        # if it's an org that slips has info about (apple, fb, google,etc.),
-        # check if the daddr belongs to it
-        return bool(self.whitelist.is_ip_in_org(daddr, org_name))
+            # if it's an org that slips has info about (apple, fb, google,etc.),
+            # check if the daddr belongs to it
+            if bool(self.whitelist.is_ip_in_org(daddr, org_name)):
+                return True
+
+        return False
 
 
 
