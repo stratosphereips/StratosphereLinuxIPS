@@ -14,7 +14,14 @@ class DBManager:
     # exactly 1 instance
     _instances = {}
 
-    def __new__(cls, output_dir, output_queue, redis_port, start_sqlite=True, **kwargs):
+    def __new__(
+            cls,
+            output_dir,
+            output_queue,
+            redis_port,
+            start_sqlite=True,
+            **kwargs
+    ):
         cls.output_dir = output_dir
         cls.output_queue = output_queue
         cls.redis_port = redis_port
