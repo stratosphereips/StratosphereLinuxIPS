@@ -1505,7 +1505,6 @@ class ProfilerProcess(Core):
                     cases[flow]()
             return False
 
-
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
         self.db.markProfileTWAsModified(self.profileid, self.twid, '')
