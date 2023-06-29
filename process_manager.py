@@ -41,6 +41,7 @@ class ProcessManager:
         )
         output_process.start()
         self.main.db.store_process_PID('Output', int(output_process.pid))
+        self.slips_logfile = output_process.slips_logfile
         return output_process
 
     def start_profiler_process(self):
@@ -423,6 +424,7 @@ class ProcessManager:
             analysis_time = self.get_analysis_time()
             print(f"\n[Main] Analysis finished in {analysis_time:.2f} minutes")
 
+            graceful_shutdown = True
             if self.main.mode == 'daemonized':
                 self.processes: List[int] = self.main.db.get_pids()
                 self.shutdown_daemon()
@@ -452,13 +454,17 @@ class ProcessManager:
                     # either the user wants to kill the remaining modules (pressed ctrl +c again)
                     # or slips was stuck looping for too long that the OS sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
+                    reason = "User pressed ctr+c or slips was killed by the OS"
+                    graceful_shutdown = False
                     pass
 
                 if time.time() - method_start_time >= timeout_seconds:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
-                    print(f"Killing modules that took more than {timeout} mins to finish.")
+                    reason = f"Killing modules that took more than {timeout} mins to finish."
+                    print(reason)
+                    graceful_shutdown = False
 
                 self.kill_all_children()
 
@@ -478,8 +484,16 @@ class ProcessManager:
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
             self.main.db.close()
+
             self.main.output_queue.close()
             self.main.output_queue.cancel_join_thread()
+
+            with open(self.slips_logfile, 'a') as f:
+                if graceful_shutdown:
+                    f.write("[Process Manager] Slips shutdown gracefully\n")
+                else:
+                    f.write(f"[Process Manager] Slips didn't shutdown gracefully - {reason}\n")
+
             exit()
         except KeyboardInterrupt:
             return False
