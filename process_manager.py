@@ -102,15 +102,23 @@ class ProcessManager:
         self.main.db.store_process_PID("Input", int(input_process.pid))
         return input_process
 
-    def kill(self, module_pid: int, module_name: str, sigint=False):
-        sig = signal.SIGINT if sigint else signal.SIGKILL
+
+    def kill_process_tree(self, pid: int):
         try:
-            pid = module_pid
-            self.module_objects[module_name].shutdown_gracefully()
-            os.kill(pid, sig)
-        except (KeyError, ProcessLookupError):
-            # process hasn't started yet
-            pass
+            # Send SIGKILL signal to the process
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass  # Ignore if the process doesn't exist or cannot be killed
+
+        # Get the child processes of the current process
+        try:
+            process_list = os.popen('pgrep -P {}'.format(pid)).read().splitlines()
+        except:
+            process_list = []
+
+        # Recursively kill the child processes
+        for child_pid in process_list:
+            self.kill_process_tree(int(child_pid))
 
     def kill_all_children(self):
         for process in self.processes:
@@ -124,7 +132,7 @@ class ProcessManager:
                 continue
 
             process.join(3)
-            self.kill(process.pid, module_name)
+            self.kill_process_tree(process.pid)
             self.print_stopped_module(module_name)
 
     def get_modules(self, to_ignore: list):
@@ -396,9 +404,8 @@ class ProcessManager:
         # they are the children of the slips.py that ran using -D
         # (so they started on a previous run)
         # and we only have access to the PIDs
-        pids: dict = self.main.db.get_pids()
-        for module_name, pid in pids.items():
-            self.kill(pid, module_name, sigint=True)
+        for module_name, pid in self.processes.items():
+            self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name)
 
     def shutdown_gracefully(self):
@@ -426,12 +433,14 @@ class ProcessManager:
 
             graceful_shutdown = True
             if self.main.mode == 'daemonized':
-                self.processes: List[int] = self.main.db.get_pids()
+                self.processes: dict = self.main.db.get_pids()
                 self.shutdown_daemon()
+
                 profilesLen = self.main.db.get_profiles_len()
                 self.main.daemon.print(f"Total analyzed IPs: {profilesLen}.")
+
                 # if slips finished normally without stopping the daemon with -S
-                # then we need to delete the pidfile
+                # then we need to delete the pidfile here
                 self.main.daemon.delete_pidfile()
 
             else:
@@ -485,8 +494,10 @@ class ProcessManager:
             self.main.delete_zeek_files()
             self.main.db.close()
 
-            self.main.output_queue.close()
-            self.main.output_queue.cancel_join_thread()
+            # when using -S, the main has no output_queue
+            if hasattr(self.main, 'output_queue'):
+                self.main.output_queue.close()
+                self.main.output_queue.cancel_join_thread()
 
             with open(self.slips_logfile, 'a') as f:
                 if graceful_shutdown:

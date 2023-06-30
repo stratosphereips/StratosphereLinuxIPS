@@ -248,6 +248,9 @@ class Daemon():
                        flush_db=False)
         db.set_slips_mode('daemonized')
         self.slips.set_mode('daemonized', daemon=self)
-
+        # used in shutdown gracefully to print the name of the stopped file in slips.log
+        self.slips.input_information = db.get_input_file()
         self.slips.db = db
+        # set file used by proc_manto log if slips was shutdown gracefully
+        self.slips.proc_man.slips_logfile = self.logsfile
         self.slips.proc_man.shutdown_gracefully()
