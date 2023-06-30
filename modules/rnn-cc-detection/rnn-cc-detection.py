@@ -1,8 +1,5 @@
 # Must imports
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 import warnings
 import json
 import traceback
@@ -17,20 +14,14 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
-class Module(Module, multiprocessing.Process):
+class CCDetection(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'RNN C&C Detection'
     description = 'Detect C&C channels based on behavioral letters'
     authors = ['Sebastian Garcia', 'Kamila Babayeva', 'Ondrej Lukas']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        # All the printing output should be sent to the outputqueue. The
-        # outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
-        self.c1 = __database__.subscribe('new_letters')
+    def init(self):
+        self.c1 = self.db.subscribe('new_letters')
         self.channels = {
             'new_letters': self.c1,
         }
@@ -58,16 +49,17 @@ class Module(Module, multiprocessing.Process):
         tupleid = tupleid.split('-')
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
         portproto = f'{port}/{proto}'
-        port_info = __database__.get_port_info(portproto)
-        ip_identification = __database__.getIPIdentification(dstip)
+        port_info = self.db.get_port_info(portproto)
+        ip_identification = self.db.get_ip_identification(dstip)
         description = (
             f'C&C channel, destination IP: {dstip} '
             f'port: {port_info.upper() if port_info else ""} {portproto} '
             f'score: {format(score, ".4f")}. {ip_identification}'
         )
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        victim = profileid.split('_')[-1]
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, categroy, source_target_tag=source_target_tag, port=port, proto=proto,
-                                 profileid=profileid, twid=twid, uid=uid)
+                                 profileid=profileid, twid=twid, uid=uid, victim= victim)
 
 
 
@@ -113,10 +105,6 @@ class Module(Module, multiprocessing.Process):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
-        return True
     def pre_main(self):
         utils.drop_root_privs()
         # TODO: set the decision threshold in the function call
@@ -189,7 +177,7 @@ class Module(Module, multiprocessing.Process):
                         'flow': flow,
                         'uid': uid,
                     }
-                    __database__.publish('check_jarm_hash', json.dumps(to_send))
+                    self.db.publish('check_jarm_hash', json.dumps(to_send))
 
             """
             elif 'udp' in tupleid.lower():

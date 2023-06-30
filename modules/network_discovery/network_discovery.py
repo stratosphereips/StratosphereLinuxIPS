@@ -1,16 +1,9 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-import sys
-import traceback
-import time
-import ipaddress
+from slips_files.common.imports import *
 import json
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 
-class PortScanProcess(Module, multiprocessing.Process):
+class NetworkDiscovery(Module, multiprocessing.Process):
     """
     A class process to find port scans
     This should be converted into a module that wakesup alone when a new alert arrives
@@ -19,34 +12,24 @@ class PortScanProcess(Module, multiprocessing.Process):
     description = 'Detect Horizonal, Vertical Port scans, ICMP, and DHCP scans'
     authors = ['Sebastian Garcia', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.horizontal_ps = HorizontalPortscan()
-        self.vertical_ps = VerticalPortscan()
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
-        # Set the output queue of our database instance
-        __database__.setOutputQueue(self.outputqueue)
+    def init(self):
+        self.horizontal_ps = HorizontalPortscan(self.db)
+        self.vertical_ps = VerticalPortscan(self.db)
         # Get from the database the separator used to separate the IP and the word profile
-        self.fieldseparator = __database__.getFieldSeparator()
+        self.fieldseparator = self.db.get_field_separator()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        self.c1 = __database__.subscribe('tw_modified')
-        self.c2 = __database__.subscribe('new_notice')
-        self.c3 = __database__.subscribe('new_dhcp')
+        self.c1 = self.db.subscribe('tw_modified')
+        self.c2 = self.db.subscribe('new_notice')
+        self.c3 = self.db.subscribe('new_dhcp')
         self.channels = {
             'tw_modified': self.c1,
             'new_notice': self.c2,
             'new_dhcp': self.c3,
         }
-
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
         self.cache_det_thresholds = {}
-        # Retrieve malicious/benigh labels
-        self.normal_label = __database__.normal_label
-        self.malicious_label = __database__.malicious_label
         self.separator = '_'
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
@@ -62,8 +45,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         # alert about all the pending evidence before this module stops
         self.horizontal_ps.combine_evidence()
         self.vertical_ps.combine_evidence()
-        # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
         """
@@ -86,16 +67,13 @@ class PortScanProcess(Module, multiprocessing.Process):
         confidence = 1 / (255 - 5) * (hosts_scanned - 255) + 1
         threat_level = 'medium'
         category = 'Recon.Scanning'
-        # attacker_direction is set to dstip even though the srcip is the one performing the scan
-        # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
-        # to generate an alert every 5,10,15,.. scans #todo test this
         attacker_direction = 'srcip'
         # this is the last dip scanned
         attacker = profileid.split('_')[1]
         source_target_tag = 'Recon'
         description = msg
         # this one is detected by zeek so we can't track the uids causing it
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=hosts_scanned,
                                  profileid=profileid, twid=twid, uid=uid)
 
@@ -122,7 +100,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             else:
                 # Between 3 and 10 pkts compute a kind of linear grow
                 confidence = totalpkts / 10.0
-            __database__.setEvidence(profileid, twid, evidence_type, threat_level, confidence)
+            self.db.setEvidence(profileid, twid, evidence_type, threat_level, confidence)
             self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
         """
 
@@ -141,7 +119,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         type_data = 'Ports'
         protocol = 'ICMP'
         state = 'Established'
-        sports = __database__.getDataFromProfileTW(
+        sports = self.db.getDataFromProfileTW(
                     profileid, twid, direction, state, protocol, role, type_data
                 )
         for sport, sport_info in sports.items():
@@ -249,20 +227,19 @@ class PortScanProcess(Module, multiprocessing.Process):
                             f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
                             f'Confidence: {confidence}. by Slips'
                         )
+            victim = scanned_ip
         else:
             description = (
                 f'ICMP scanning {number_of_scanned_ips} different IPs. ICMP scan type: {attack}. '
                 f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
                 f'Confidence: {confidence}. by Slips'
             )
+            # not a single victim, there are many
+            victim = ''
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
-                                 proto=protocol, profileid=profileid, twid=twid, uid=icmp_flows_uids)
-        # Set 'malicious' label in the detected profile
-        __database__.set_profile_module_label(
-            profileid, evidence_type, self.malicious_label
-        )
+                                 proto=protocol, profileid=profileid, twid=twid, uid=icmp_flows_uids, victim=victim)
 
 
     def set_evidence_dhcp_scan(
@@ -287,14 +264,10 @@ class PortScanProcess(Module, multiprocessing.Process):
             f'Confidence: {confidence}. by Slips'
         )
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag,
                                  conn_count=number_of_requested_addrs, profileid=profileid, twid=twid, uid=uids)
 
-        # Set 'malicious' label in the detected profile
-        __database__.set_profile_module_label(
-            profileid, evidence_type, self.malicious_label
-        )
 
     def check_dhcp_scan(self, flow_info):
         """
@@ -317,7 +290,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         #       { requested_addr: uid,
         #         requested_addr2: uid2... }
 
-        dhcp_flows: dict = __database__.get_dhcp_flows(profileid, twid)
+        dhcp_flows: dict = self.db.get_dhcp_flows(profileid, twid)
 
         if dhcp_flows:
             # client was seen requesting an addr before in this tw
@@ -327,16 +300,16 @@ class PortScanProcess(Module, multiprocessing.Process):
                 return
 
             # it was requesting a different addr, keep track of it and its uid
-            __database__.set_dhcp_flow(profileid, twid, requested_addr, uids)
+            self.db.set_dhcp_flow(profileid, twid, requested_addr, uids)
         else:
             # first time for this client to make a dhcp request in this tw
-            __database__.set_dhcp_flow(profileid, twid, requested_addr, uids)
+            self.db.set_dhcp_flow(profileid, twid, requested_addr, uids)
             return
 
 
         # TODO if we are not going to use the requested addr, no need to store it
         # TODO just store the uids
-        dhcp_flows: dict = __database__.get_dhcp_flows(profileid, twid)
+        dhcp_flows: dict = self.db.get_dhcp_flows(profileid, twid)
 
         # we alert every 4,8,12, etc. requested IPs
         number_of_requested_addrs = len(dhcp_flows)

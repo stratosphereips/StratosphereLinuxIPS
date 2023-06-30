@@ -1,10 +1,11 @@
-import contextlib
-from slips_files.core.database.database import __database__
+from slips_files.core.database.database_manager import DBManager
 from slips_files.common.slips_utils import utils
+import contextlib
 from datetime import datetime
 import redis
 import os
 import time
+import socket
 
 class RedisManager:
     def __init__(self, main):
@@ -33,7 +34,7 @@ class RedisManager:
 
                 f.write(
                     f'{now},{self.main.input_information},{redis_port},'
-                    f'{redis_pid},{self.main.zeek_folder},{self.main.args.output},'
+                    f'{redis_pid},{self.main.zeek_dir},{self.main.args.output},'
                     f'{os.getpid()},'
                     f'{bool(self.main.args.daemon)},{self.main.args.save}\n'
                 )
@@ -65,8 +66,7 @@ class RedisManager:
     def load_db(self):
         self.input_type = 'database'
         # self.input_information = 'database'
-        from slips_files.core.database.database import __database__
-        __database__.start(6379)
+        self.main.db.start(6379)
 
         # this is where the db will be loaded
         redis_port = 32850
@@ -75,11 +75,11 @@ class RedisManager:
             self.flush_redis_server(pid=pid)
             self.kill_redis_server(pid)
 
-        if not __database__.load(self.main.args.db):
+        if not self.main.db.load(self.main.args.db):
             print(f'Error loading the database {self.main.args.db}')
         else:
             self.load_redis_db(redis_port)
-            # __database__.disable_redis_persistence()
+            # self.main.db.disable_redis_persistence()
 
         self.main.terminate_slips()
 
@@ -96,6 +96,7 @@ class RedisManager:
         tries = 0
         while True:
             try:
+                # first try connecting to the cache db normally
                 r = redis.StrictRedis(
                     host=redis_host,
                     port=redis_port,
@@ -106,42 +107,42 @@ class RedisManager:
                 r.ping()
                 return True
             except Exception as ex:
-                # only try to open redi-server once.
+                # only try to open redis-server twice.
                 if tries == 2:
                     print(f'[Main] Problem starting redis cache database. \n{ex}\nStopping')
                     self.main.terminate_slips()
                     return False
 
                 print('[Main] Starting redis cache database..')
-                os.system('redis-server redis.conf --daemonize yes  > /dev/null 2>&1')
+                os.system('redis-server config/redis.conf --daemonize yes  > /dev/null 2>&1')
                 # give the server time to start
                 time.sleep(1)
                 tries += 1
 
 
-    def get_random_redis_port(self):
+    def get_random_redis_port(self) -> int:
         """
-        Keeps trying to connect to random generated ports until we're connected.
-        returns the used port
+        Keeps trying to connect to random generated ports until we found an available port.
+        returns the port number
         """
-        # generate a random unused port
         for port in range(self.start_port, self.end_port+1):
-            # check if 1. we can connect
-            # 2.server is not being used by another instance of slips
-            # note: using r.keys() blocks the server
+            # Create a socket object
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                if __database__.connect_to_redis_server(port):
-                    server_used = len(list(__database__.r.keys())) < 2
-                    if server_used:
-                        # if the db managed to connect to this random port, then this is
-                        # the port we'll be using
-                        return port
-            except redis.exceptions.ConnectionError:
-                # Connection refused to this port
+                # Attempt to bind to the port
+                sock.bind(('localhost', port))
+                # Close the socket if successful
+                sock.close()
+                return port
+            except OSError:
+                # Port is already in use, continue to the next port
+                sock.close()
                 continue
+
         # there's no usable port in this range
         print(f"All ports from {self.start_port} to {self.end_port} are used. "
                "Unable to start slips.\n")
+
         return False
     
     def clear_redis_cache_database(
@@ -297,7 +298,7 @@ class RedisManager:
 
         # clear the server opened on this port
         try:
-            # if connected := __database__.connect_to_redis_server(port):
+            # if connected := self.main.db.connect_to_redis_server(port):
             # noinspection PyTypeChecker
             #todo move this to the db
             r = redis.StrictRedis(

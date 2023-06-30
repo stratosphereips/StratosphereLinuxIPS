@@ -1,6 +1,4 @@
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-
+from slips_files.common.imports import *
 import socket
 import psutil
 import sys
@@ -43,14 +41,14 @@ class MetadataManager:
         """
         Store the host IP address if input type is interface
         """
-        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        running_on_interface = '-i' in sys.argv or self.main.db.is_growing_zeek_dir()
         if not running_on_interface:
             return
 
         hostIP = self.get_host_ip()
         while True:
             try:
-                __database__.set_host_ip(hostIP)
+                self.main.db.set_host_ip(hostIP)
                 break
             except redis.exceptions.DataError:
                 self.main.print(
@@ -82,12 +80,6 @@ class MetadataManager:
         whitelist = self.main.conf.whitelist_path()
         shutil.copy(whitelist, metadata_dir)
 
-        branch_info = utils.get_branch_info()
-        commit, branch = None, None
-        if branch_info != False:
-            # it's false when we're in docker because there's no .git/ there
-            commit, branch = branch_info[0], branch_info[1]
-
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
 
@@ -95,8 +87,8 @@ class MetadataManager:
         with open(self.info_path, 'w') as f:
             f.write(f'Slips version: {self.main.version}\n'
                     f'File: {self.main.input_information}\n'
-                    f'Branch: {branch}\n'
-                    f'Commit: {commit}\n'
+                    f'Branch: {self.main.db.get_branch()}\n'
+                    f'Commit: {self.main.db.get_commit()}\n'
                     f'Slips start date: {now}\n'
                     )
 
@@ -110,7 +102,7 @@ class MetadataManager:
         """
         self.enable_metadata = self.main.conf.enable_metadata()
         end_date = utils.convert_format(datetime.now(), utils.alerts_format)
-        __database__.set_input_metadata({'analysis_end': end_date})
+        self.main.db.set_input_metadata({'analysis_end': end_date})
         if self.enable_metadata:
             # add slips end date in the metadata dir
             try:
@@ -133,11 +125,12 @@ class MetadataManager:
             'disabled_modules': json.dumps(to_ignore),
             'output_dir': self.main.args.output,
             'input_type': self.main.input_type,
+            'evidence_detection_threshold': self.main.conf.evidence_detection_threshold(),
         }
 
-        if hasattr(self.main, 'zeek_folder'):
+        if hasattr(self.main, 'zeek_dir'):
             info.update({
-                'zeek_dir': self.main.zeek_folder
+                'zeek_dir': self.main.zeek_dir
             })
 
         size_in_mb = '-'
@@ -151,7 +144,7 @@ class MetadataManager:
         })
         # analysis end date will be set in shutdown_gracefully
         # file(pcap,netflow, etc.) start date will be set in
-        __database__.set_input_metadata(info)
+        self.main.db.set_input_metadata(info)
 
     def check_if_port_is_in_use(self, port):
         if port == 6379:
@@ -161,8 +154,8 @@ class MetadataManager:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.bind(("localhost", port))
             return False
-        except OSError:
-            print(f"[Main] Port {port} already is use by another process."
+        except OSError as e:
+            print(f"[Main] Port {port} is already in use by another process."
                   f" Choose another port using -P <portnumber> \n"
                   f"Or kill your open redis ports using: ./slips.py -k ")
             self.main.terminate_slips()
@@ -171,17 +164,17 @@ class MetadataManager:
         """
         updates the number of processed ips, slips internal time, and modified tws so far in the db
         """
-        slips_internal_time = float(__database__.getSlipsInternalTime()) + 1
+        slips_internal_time = float(self.main.db.getSlipsInternalTime()) + 1
 
         # Get the amount of modified profiles since we last checked
-        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(
+        modified_profiles, last_modified_tw_time = self.main.db.getModifiedProfilesSince(
             slips_internal_time
         )
         modified_ips_in_the_last_tw = len(modified_profiles)
-        __database__.set_input_metadata({'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw})
+        self.main.db.set_input_metadata({'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw})
         # Get the time of last modified timewindow and set it as a new
         if last_modified_tw_time != 0:
-            __database__.setSlipsInternalTime(
+            self.main.db.set_slips_internal_time(
                 last_modified_tw_time
             )
         return modified_ips_in_the_last_tw, modified_profiles

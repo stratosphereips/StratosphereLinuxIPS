@@ -1,6 +1,5 @@
 # Must imports
-from slips_files.common.slips_utils import utils
-from slips_files.core.database.database import __database__
+from slips_files.common.imports import *
 
 # Your imports
 import json
@@ -8,12 +7,13 @@ import requests
 
 URLHAUS_BASE_URL = 'https://urlhaus-api.abuse.ch/v1'
 
-class URLhaus():
+class URLhaus:
     name = 'URLhaus'
     description = 'URLhaus lookups of URLs and hashes'
     authors = ['Alya Gomaa']
 
-    def __init__(self):
+    def __init__(self, db):
+        self.db = db
         self.create_urlhaus_session()
 
 
@@ -143,15 +143,23 @@ class URLhaus():
         attacker = flow["md5"]
         daddr = flow["daddr"]
 
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
+
+        # add the following fields in the evidence description but only if we're sure they exist
+        size = f" size: {flow['size']}." if flow.get('size', False) else ''
+        file_name = f" file name: {flow['file_name']}." if flow.get('file_name', False) else ''
+        file_type = f" file type: {flow['file_type']}." if flow.get('file_type', False) else ''
+        tags = f" tags: {flow['tags']}." if flow.get('tags', False) else ''
+
         # we have more info about the downloaded file
         # so we need a more detailed description
-        description = f"Malicious downloaded file: {flow['md5']}. " \
-                      f"size: {flow['size']}" \
-                      f"from IP: {flow['daddr']} {ip_identification}." \
-                      f"file name: {file_info['file_name']} " \
-                      f"file type: {file_info['file_type']} " \
-                      f"tags: {file_info['tags']}. by URLhaus." \
+        description = f"Malicious downloaded file: {flow['md5']}." \
+                      f"{size}" \
+                      f" from IP: {flow['daddr']} {ip_identification}." \
+                      f"{file_name}" \
+                      f"{file_type}" \
+                      f"{tags}" \
+                      f" by URLhaus." \
 
         if threat_level:
             # threat level here is the vt percentage from urlhaus
@@ -162,7 +170,7 @@ class URLhaus():
 
         confidence = 0.7
 
-        __database__.setEvidence(evidence_type,
+        self.db.setEvidence(evidence_type,
                                  attacker_direction,
                                  attacker,
                                  threat_level,
@@ -207,5 +215,5 @@ class URLhaus():
         category = 'Malware'
         evidence_type = 'MaliciousURL'
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)

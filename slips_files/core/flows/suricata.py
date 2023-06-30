@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from slips_files.common.slips_utils import utils
 from datetime import datetime, timedelta
 import json
 
@@ -54,7 +54,10 @@ class SuricataFlow:
     type_: str = 'conn'
 
     def __post_init__(self):
-        self.dur = (self.endtime - self.starttime).total_seconds() or 0
+        self.dur = (
+               utils.convert_to_datetime(self.endtime)
+               - utils.convert_to_datetime(self.starttime)
+            ).total_seconds() or 0
         self.pkts = self.dpkts + self.spkts
         self.bytes = self.dbytes + self.sbytes
 
@@ -87,7 +90,7 @@ class SuricataHTTP:
     status_msg: str = ''
     resp_mime_types: str = ''
     resp_fuids: str = ''
-    type_ = 'http'
+    type_:str = 'http'
 
 @dataclass
 class SuricataDNS:
@@ -155,7 +158,7 @@ class SuricataFile:
     appproto: str
 
     size: int
-    type_ = 'files'
+    type_: str = 'files'
     # required to match zeek files.log
     md5: str = ''
     sha1: str = ''

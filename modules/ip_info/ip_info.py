@@ -1,12 +1,8 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 from modules.ip_info.jarm import JARM
 from .asn_info import ASN
 import platform
 import sys
-import traceback
 import datetime
 import maxminddb
 import ipaddress
@@ -21,34 +17,29 @@ import time
 import asyncio
 
 
-class Module(Module, multiprocessing.Process):
+class IPInfo(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'IP Info'
     description = 'Get different info about an IP/MAC address'
     authors = ['Alya Gomaa', 'Sebastian Garcia']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
+    def init(self):
+        """This will be called when initializing this module"""
         self.pending_mac_queries = multiprocessing.Queue()
-        self.asn = ASN()
+        self.asn = ASN(self.db)
         self.JARM = JARM()
         # Set the output queue of our database instance
-        __database__.setOutputQueue(self.outputqueue)
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        self.c1 = __database__.subscribe('new_ip')
-        self.c2 = __database__.subscribe('new_MAC')
-        self.c3 = __database__.subscribe('new_dns')
-        self.c4 = __database__.subscribe('check_jarm_hash')
+        self.c1 = self.db.subscribe('new_ip')
+        self.c2 = self.db.subscribe('new_MAC')
+        self.c3 = self.db.subscribe('new_dns')
+        self.c4 = self.db.subscribe('check_jarm_hash')
         self.channels = {
             'new_ip': self.c1,
             'new_MAC': self.c2,
             'new_dns': self.c3,
             'check_jarm_hash': self.c4,
         }
-
         # update asn every 1 month
         self.update_period = 2592000
         self.is_gw_mac_set = False
@@ -218,7 +209,7 @@ class Module(Module, multiprocessing.Process):
 
         else:
             data = {'geocountry': 'Unknown'}
-        __database__.setInfoForIPs(ip, data)
+        self.db.setInfoForIPs(ip, data)
         return data
 
     # RDNS functions
@@ -247,7 +238,7 @@ class Module(Module, multiprocessing.Process):
             except socket.error:
                 # all good, store it
                 data['reverse_dns'] = reverse_dns
-                __database__.setInfoForIPs(ip, data)
+                self.db.setInfoForIPs(ip, data)
         except (socket.gaierror, socket.herror, OSError):
             # not an ip or multicast, can't get the reverse dns record of it
             return False
@@ -277,14 +268,14 @@ class Module(Module, multiprocessing.Process):
         ):
             return False
 
-    def get_vendor_offline(self, mac_addr, host_name, profileid):
+    def get_vendor_offline(self, mac_addr, profileid):
         """
         Gets vendor from Slips' offline database databases/macaddr-db.json
         """
         if not hasattr(self, 'mac_db'):
             # when update manager is done updating the mac db, we should ask
             # the db for all these pending queries
-            self.pending_mac_queries.put((mac_addr, host_name, profileid))
+            self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
         oui = mac_addr[:8].upper()
@@ -301,7 +292,7 @@ class Module(Module, multiprocessing.Process):
                 line = json.loads(line)
                 return line['vendorName']
 
-    def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
+    def get_vendor(self, mac_addr: str, profileid: str):
         """
         Returns vendor info of a MAC address either from an offline or an online
          database
@@ -314,17 +305,14 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # don't look for the vendor again if we already have it for this profileid
-        if __database__.get_mac_vendor_from_profile(profileid):
+        if self.db.get_mac_vendor_from_profile(profileid):
             return True
 
         MAC_info = {
             'MAC': mac_addr
         }
 
-        if host_name:
-            MAC_info['host_name'] = host_name
-
-        if vendor:= self.get_vendor_offline(mac_addr, host_name, profileid):
+        if vendor:= self.get_vendor_offline(mac_addr, profileid):
             MAC_info['Vendor'] = vendor
         elif vendor:= self.get_vendor_online(mac_addr):
             MAC_info['Vendor'] = vendor
@@ -332,7 +320,7 @@ class Module(Module, multiprocessing.Process):
             MAC_info['Vendor'] = 'Unknown'
 
         # either we found the vendor or not, store the mac of this ip to the db
-        __database__.add_mac_addr_to_profile(profileid, MAC_info)
+        self.db.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
 
     # domain info
@@ -353,7 +341,7 @@ class Module(Module, multiprocessing.Process):
             # tld not supported
             return False
 
-        cached_data = __database__.getDomainData(domain)
+        cached_data = self.db.getDomainData(domain)
         if cached_data and 'Age' in cached_data:
             # we already have age info about this domain
             return False
@@ -381,7 +369,7 @@ class Module(Module, multiprocessing.Process):
             return_type='days'
         )
 
-        __database__.setInfoForDomains(domain, {'Age': age})
+        self.db.setInfoForDomains(domain, {'Age': age})
         return age
 
     def shutdown_gracefully(self):
@@ -391,8 +379,6 @@ class Module(Module, multiprocessing.Process):
             self.country_db.close()
         if hasattr(self, 'mac_db'):
             self.mac_db.close()
-        # confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
 
     # GW
     def get_gateway_ip(self):
@@ -401,7 +387,7 @@ class Module(Module, multiprocessing.Process):
         this method tries to get the default gateway IP address using ip route
         only works when running on an interface
         """
-        if not ('-i' in sys.argv or __database__.is_growing_zeek_dir()):
+        if not ('-i' in sys.argv or self.db.is_growing_zeek_dir()):
             # only works if running on an interface
             return False
 
@@ -434,12 +420,12 @@ class Module(Module, multiprocessing.Process):
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
         # check if we have the mac of this ip already saved in the db.
-        if gw_MAC := __database__.get_mac_addr_from_profile(f'profile_{gw_ip}'):
-            __database__.set_default_gateway('MAC', gw_MAC)
+        if gw_MAC := self.db.get_mac_addr_from_profile(f'profile_{gw_ip}'):
+            self.db.set_default_gateway('MAC', gw_MAC)
             return gw_MAC
 
         # we don't have it in arp.log(in the db)
-        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        running_on_interface = '-i' in sys.argv or self.db.is_growing_zeek_dir()
         if not running_on_interface:
             # no MAC in arp.log (in the db) and can't use arp tables,
             # so it's up to the db.is_gw_mac() function to determine the gw mac
@@ -452,7 +438,7 @@ class Module(Module, multiprocessing.Process):
             ip_output = subprocess.run(["ip", "neigh", "show", gw_ip],
                                       capture_output=True, check=True, text=True).stdout
             gw_MAC = ip_output.split()[-2]
-            __database__.set_default_gateway('MAC', gw_MAC)
+            self.db.set_default_gateway('MAC', gw_MAC)
             return gw_MAC
         except (subprocess.CalledProcessError, FileNotFoundError):
             # If the ip command doesn't exist or has failed, try using the arp command
@@ -465,7 +451,7 @@ class Module(Module, multiprocessing.Process):
                     # Match the gw_ip in the output with the one given to this function
                     if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
                         gw_MAC = fields[-4]
-                        __database__.set_default_gateway('MAC', gw_MAC)
+                        self.db.set_default_gateway('MAC', gw_MAC)
                         return gw_MAC
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Could not find the MAC address of gw_ip
@@ -481,8 +467,8 @@ class Module(Module, multiprocessing.Process):
         if hasattr(self, 'mac_db') and not self.pending_mac_queries.empty():
             while True:
                 try:
-                    mac, host_name, profileid = self.pending_mac_queries.get(timeout=0.5)
-                    self.get_vendor(mac, host_name, profileid)
+                    mac, profileid = self.pending_mac_queries.get(timeout=0.5)
+                    self.get_vendor(mac, profileid)
 
                 except Exception:
                     # queue is empty
@@ -518,16 +504,16 @@ class Module(Module, multiprocessing.Process):
         confidence = 0.7
         category = 'Anomaly.Traffic'
         portproto = f'{dport}/{protocol}'
-        port_info = __database__.get_port_info(portproto)
+        port_info = self.db.get_port_info(portproto)
         port_info = port_info or ""
         port_info = f'({port_info.upper()})' if port_info else ""
-        dstip_id = __database__.getIPIdentification(dstip)
+        dstip_id = self.db.get_ip_identification(dstip)
         description = (
            f"Malicious JARM hash detected for destination IP: {dstip}"
            f" on port: {portproto} {port_info}.  {dstip_id}"
         )
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag,
                                  port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
 
@@ -536,7 +522,7 @@ class Module(Module, multiprocessing.Process):
         self.wait_for_dbs()
         # the following method only works when running on an interface
         if ip := self.get_gateway_ip():
-            __database__.set_default_gateway('IP', ip)
+            self.db.set_default_gateway('IP', ip)
 
     def handle_new_ip(self, ip):
         try:
@@ -549,7 +535,7 @@ class Module(Module, multiprocessing.Process):
         if not ip_addr.is_multicast:
             # Do we have cached info about this ip in redis?
             # If yes, load it
-            cached_ip_info = __database__.getIPData(ip)
+            cached_ip_info = self.db.getIPData(ip)
             if not cached_ip_info:
                 cached_ip_info = {}
 
@@ -578,14 +564,18 @@ class Module(Module, multiprocessing.Process):
             mac_addr = data['MAC']
             host_name = data.get('host_name', False)
             profileid = data['profileid']
-            self.get_vendor(mac_addr, host_name, profileid)
+
+            if host_name:
+                self.db.add_host_name_to_profile(host_name, profileid)
+
+            self.get_vendor(mac_addr, profileid)
             self.check_if_we_have_pending_mac_queries()
             # set the gw mac and ip if they're not set yet
             if not self.is_gw_mac_set:
                 # whether we found the gw ip using dhcp in profileprocess
                 # or using ip route using self.get_gateway_ip()
                 # now that it's found, get and store the mac addr of it
-                if ip:= __database__.get_gateway_ip():
+                if ip:= self.db.get_gateway_ip():
                     # now that we know the GW IP address,
                     # try to get the MAC of this IP (of the gw)
                     self.get_gateway_MAC(ip)

@@ -1,34 +1,45 @@
 from abc import ABC, abstractmethod
-from slips_files.core.database.database import __database__
+# common imports for all modules
+from multiprocessing import Event
 from slips_files.common.slips_utils import utils
+from multiprocessing import Process
 import sys
 import traceback
+
 # This is the abstract Module class to check against. Do not modify
 class Module(ABC):
     name = ''
-    description = 'Template abstract module'
-    authors = ['Template abstract Author']
+    description = 'Template module'
+    authors = ['Template Author']
+    def __init__(self, output_queue, db, termination_event, **kwargs):
+        Process.__init__(self)
+        self.output_queue = output_queue
+        self.db = db
+        self.msg_received = False
+        # used to tell all slips.py children to stop
+        self.termination_event: Event = termination_event
+        self.init(**kwargs)
 
-    def __init__(self, outputqueue):
-        self.outputqueue = outputqueue
-        self.control_channel = __database__.subscribe('control_module')
-        self.msg_received = True
+    @abstractmethod
+    def init(self, **kwargs):
+        """
+        all the code that was in the __init__ of all modules, is now in this method
+        the goal of this is to have one common __init__() for all modules, which is the one
+        in this file
+        this init will have access to all keyword args passes when initializing the module
+        """
 
     def should_stop(self) -> bool:
         """
         The module should stop on the following 2 conditions
-        1. slips.py publishes the stop_process msg in the control_module channel
-        2. no msgs left to process in the module
-        This function calls the shutdown_gracefully pf the module when the 2 conditions are true
+        1. no new msgs are received in any of the channels the module is subscribed to
+        2. the termination event is set by the process_manager.py
         """
-        if self.msg_received:
-            # this module is still receiving msgs, don't stop
+        if self.msg_received or not self.termination_event.is_set():
+            # this module is still receiving msgs,
+            # don't stop
             return False
-
-        message = __database__.get_message(self.control_channel)
-        if message and message['data'] == 'stop_process':
-            self.shutdown_gracefully()
-            return True
+        return True
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -48,14 +59,14 @@ class Module(ABC):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
-
-    @abstractmethod
+        self.output_queue.put(f'{levels}|{self.name}|{text}')
+    
     def shutdown_gracefully(self):
         """
         Tells slips.py that this module is
         done processing and does necessary cleanup
         """
+        pass
     @abstractmethod
     def main(self):
         """
@@ -70,7 +81,7 @@ class Module(ABC):
         pass
 
     def get_msg(self, channel_name):
-        message = __database__.get_message(self.channels[channel_name])
+        message = self.db.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
             self.msg_received = True
             return message
@@ -82,10 +93,12 @@ class Module(ABC):
         """ This is the loop function, it runs non-stop as long as the module is online """
         try:
             error: bool = self.pre_main()
-            if error:
+            if error or self.should_stop():
+                self.output_queue.cancel_join_thread()
                 self.shutdown_gracefully()
                 return True
         except KeyboardInterrupt:
+            self.output_queue.cancel_join_thread()
             self.shutdown_gracefully()
             return True
         except Exception:
@@ -95,25 +108,70 @@ class Module(ABC):
             return True
 
         error = False
-        while not error:
-            try:
+        try:
+            while not self.should_stop():
                 # keep running main() in a loop as long as the module is online
                 # if a module's main() returns 1, it means there's an error and it needs to stop immediately
                 error: bool = self.main()
                 if error:
-                    # finished with some error
+                    self.output_queue.cancel_join_thread()
                     self.shutdown_gracefully()
-                elif self.should_stop():
-                    # finished because no more msgs in queue
-                    return True
 
-            except KeyboardInterrupt:
-                if self.should_stop():
-                    return True
-                else:
-                    continue
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem in main() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+        except KeyboardInterrupt:
+            self.output_queue.cancel_join_thread()
+            self.shutdown_gracefully()
+        except Exception:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem in main() line {exception_line}', 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
+
+        return True
+
+class Core(Module, Process):
+    """
+    Interface for all Core files placed in slips_files/core/
+    """
+    name = ''
+    description = 'Short description of the core class purpose'
+    authors = ['Name of the author creating the class']
+
+    def __init__(
+            self, db, output_queue, output_dir, termination_event, **kwargs
+            ):
+        """
+        contains common initializations in all core files in  slips_files/core/
+        the goal of this is to have one common __init__() for all modules, which is the one
+        in this file
+        """
+        Process.__init__(self)
+
+        self.output_queue = output_queue
+        self.output_dir = output_dir
+        # used to tell all slips.py children to stop
+        self.termination_event: Event = termination_event
+        self.db = db
+        self.msg_received = False
+        self.init(**kwargs)
+
+    def run(self):
+        """
+        must be called run because this is what multiprocessing runs
+        """
+        try:
+            # this should be defined in every core file
+            # this won't run in a loop because it's not a module
+            error: bool = self.main()
+            if error or self.should_stop():
+                # finished with some error
+                self.output_queue.cancel_join_thread()
+                self.shutdown_gracefully()
+
+        except KeyboardInterrupt:
+            # self.output_queue.cancel_join_thread()
+            self.shutdown_gracefully()
+        except Exception:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem in main() line {exception_line}', 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
+
+        return True

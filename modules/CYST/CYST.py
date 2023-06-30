@@ -1,11 +1,12 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database.database import __database__
-import sys
 import socket
 import json
 import os
 import errno
+import sys
+from pprint import pp
+import contextlib
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -13,13 +14,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Communicates with CYST simulation framework'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+    def init(self):
         self.port = None
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
-        self.c1 = __database__.subscribe('new_alert')
+        self.c1 = self.db.subscribe('new_alert')
         self.channels = {'new_alert': self.c1}
         self.cyst_UDS = '/run/slips.sock'
         self.conn_closed = False
@@ -110,6 +107,11 @@ class Module(Module, multiprocessing.Process):
             'alert_ID': alert_ID,
             'ip_to_block': ip_to_block
         }
+
+        self.print(f"Sending alert to CYST: ")
+        self.print(pp(alert_to_send))
+
+
         alert_to_send: bytes = json.dumps(alert_to_send).encode()
         self.send_length(alert_to_send)
 
@@ -126,25 +128,41 @@ class Module(Module, multiprocessing.Process):
         # delete the socket
         os.unlink(self.cyst_UDS)
 
+
+    def is_cyst_enabled(self):
+        # are the flows being read from the default inputprocess or from a custom module? like this one
+        custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
+        if not custom_flows:
+            return False
+
+        with contextlib.suppress(ValueError):
+            # are we reading custom flows from this module?
+            if self.name in sys.argv[sys.argv.index('--input-module') + 1]:
+                return True
+
+            if self.name in sys.argv[sys.argv.index('--im') + 1]:
+                return True
+
+        return True
+
     def shutdown_gracefully(self):
         self.close_connection()
-        # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
         # if slips is done, slips shouldn't expect more flows or send evidence
         # it should terminate
-        __database__.publish('finished_modules', 'stop_slips')
+        self.db.publish('control_channel', 'stop_slips')
         return
 
     def pre_main(self):
         # are the flows being read from the default inputprocess or from a custom module? like this one
-        if not __database__.is_cyst_enabled():
+        if not self.db.is_cyst_enabled():
             return 1
+        self.db.set_cyst_enabled()
         # connect to cyst
-        print(f"Initializing socket", 0, 1)
+        self.print(f"Initializing socket", 0, 1)
         self.sock, self.cyst_conn = self.initialize_unix_socket()
         if not self.sock:
             return 1
-        print(f"Done initializing socket", 0, 1)
+        self.print(f"Done initializing socket", 0, 1)
 
     def main(self):
         """
@@ -162,7 +180,11 @@ class Module(Module, multiprocessing.Process):
                 'flow': flow,
                 'module': self.name # to know where this flow is coming from aka what's the input module
                 }
-            __database__.publish('new_module_flow', json.dumps(to_send))
+
+            self.print(f"Received flow from cyst")
+            self.print(pp(to_send))
+
+            self.db.publish('new_module_flow', json.dumps(to_send))
 
         # check for connection before receiving
         if self.conn_closed:
@@ -170,7 +192,7 @@ class Module(Module, multiprocessing.Process):
             return 1
 
         if msg := self.get_msg('new_alert'):
-            print(f"Cyst module received a new blocking request . sending ... ")
+            self.print(f"Cyst module received a new blocking request . sending to CYST ... ")
             alert_info: dict = json.loads(msg['data'])
             profileid = alert_info['profileid']
             # twid = alert_info['twid']

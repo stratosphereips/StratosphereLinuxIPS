@@ -15,10 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
-import multiprocessing
+from slips_files.common.imports import *
 import sys
 import io
 from pathlib import Path
@@ -26,40 +23,44 @@ from datetime import datetime
 import os
 import traceback
 from tqdm.auto import tqdm
+from slips_files.common.abstracts import Core
 
-class OutputProcess(multiprocessing.Process):
+class OutputProcess(Core):
     """
     A class to process the output of everything Slips need. Manages all the output
     If any Slips module or process needs to output anything to screen, or logs,
     it should use always the output queue. Then this output class will handle how to deal with it
     """
 
-    def __init__(
+    name = 'Output'
+
+    def init(
         self,
-        inputqueue,
-        verbose,
-        debug,
-        redis_port,
+        verbose=None,
+        debug=None,
         stdout='',
         stderr='output/errors.log',
         slips_logfile='output/slips.log'
     ):
-        multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
         ####### create the log files
         self.read_configuration()
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
-        self.name = 'Output'
-        self.queue = inputqueue
+
+        # set in the Core interface
+        self.queue = self.output_queue
+
         self.create_logfile(self.errors_logfile)
         self.create_logfile(self.slips_logfile)
         utils.change_logfiles_ownership(self.errors_logfile, self.UID, self.GID)
         utils.change_logfiles_ownership(self.slips_logfile, self.UID, self.GID)
-        self.stdout = stdout
+
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
+
+        self.stdout = stdout
         if stdout != '':
             self.change_stdout(self.stdout)
         if self.verbose > 2:
@@ -67,10 +68,8 @@ class OutputProcess(multiprocessing.Process):
                 f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
             )
         self.done_reading_flows = False
-        # Start the DB
-        __database__.start(redis_port)
         # are we in daemon of interactive mode
-        self.slips_mode = __database__.get_slips_mode()
+        self.slips_mode = self.db.get_slips_mode()
         # we update the stats printed by slips every 5seconds
         # this is the last time the stats was printed
         self.last_updated_stats_time = float("-inf")
@@ -83,12 +82,21 @@ class OutputProcess(multiprocessing.Process):
         self.UID = conf.get_UID()
 
     def log_branch_info(self, logfile):
-        if branch_info := utils.get_branch_info():
-            # it's false when we're in docker because there's no .git/ there
-            commit, branch = branch_info[0], branch_info[1]
-            now = datetime.now()
-            with open(logfile, 'a') as f:
-                f.write(f'Using {branch} - {commit} - {now}\n\n')
+        # both will be False when we're in docker because there's no .git/ there
+        branch = self.db.get_branch()
+        commit = self.db.get_commit()
+        if branch == 'None' and commit == 'None':
+            return
+
+        branch_info = ''
+        if branch:
+            branch_info += branch
+        if commit:
+            branch_info += f' ({commit})'
+
+        now = datetime.now()
+        with open(logfile, 'a') as f:
+            f.write(f'Using {branch_info} - {now}\n\n')
 
     def create_logfile(self, path):
         """
@@ -261,7 +269,7 @@ class OutputProcess(multiprocessing.Process):
         When running on a pcap, interface, or taking flows from an
         external module, the total amount of flows are unknown
         """
-        if __database__.get_input_type() in ('pcap', 'interface', 'stdin'):
+        if self.db.get_input_type() in ('pcap', 'interface', 'stdin'):
             return True
 
         # whenever any of those is present, slips won't be able to get the
@@ -286,7 +294,7 @@ class OutputProcess(multiprocessing.Process):
             # no need to print the progress bar
             return
 
-        self.total_flows = int(__database__.get_total_flows())
+        self.total_flows = int(self.db.get_total_flows())
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
@@ -329,7 +337,6 @@ class OutputProcess(multiprocessing.Process):
         self.log_line('[Output Process]', ' Stopping output process. '
                                         'Further evidence may be missing. '
                                         'Check alerts.log for full evidence list.')
-        __database__.publish('finished_modules', self.name)
 
     def remove_stats_from_progress_bar(self):
         # remove the stats from the progress bar
@@ -352,9 +359,9 @@ class OutputProcess(multiprocessing.Process):
         # only update the stats if 5 seconds passed
         self.last_updated_stats_time = now
         now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
-        modified_ips_in_the_last_tw = __database__.get_modified_ips_in_the_last_tw()
-        profilesLen = __database__.getProfilesLen()
-        evidence_number = __database__.get_evidence_number() or 0
+        modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
+        profilesLen = self.db.get_profiles_len()
+        evidence_number = self.db.get_evidence_number() or 0
         msg = f'Analyzed IPs: ' \
               f'{profilesLen}. ' \
               f'Evidence Added: {evidence_number} ' \
@@ -372,47 +379,38 @@ class OutputProcess(multiprocessing.Process):
                 refresh=True
             )
 
-    def run(self):
-        while True:
-            try:
-                self.update_stats()
-                line = self.queue.get()
-                if line == 'quiet':
-                    self.quiet = True
-                elif 'initialize progress bar' in line:
-                    self.init_progress_bar()
-                elif 'update progress bar' in line:
-                    self.update_progress_bar()
-
-                elif 'stop_process' in line or line == 'stop':
-                    self.shutdown_gracefully()
-                    return True
-                elif not self.quiet:
-                    # output to terminal and logs or logs only?
-
-                    if 'log-only' in line:
-                        line = line.replace('log-only', '')
-                        (level, sender, msg) = self.process_line(line)
-                        self.log_line(sender, msg)
-                    else:
-                        (level, sender, msg) = self.process_line(line)
-                        # output to terminal
-                        self.output_line(level, sender, msg)
-
-                else:
-                    # Here we should still print the lines coming in
-                    # the input for a while after receiving a 'stop'. We don't know how to do it.
-                    print('Stopping the output process')
-                    self.shutdown_gracefully()
-                    return True
-
-            except KeyboardInterrupt:
+    def main(self):
+        while not self.should_stop():
+            self.update_stats()
+            line = self.queue.get()
+            if line == 'quiet':
+                self.quiet = True
+            elif 'initialize progress bar' in line:
+                self.init_progress_bar()
+            elif 'update progress bar' in line:
+                self.update_progress_bar()
+            elif 'stop_process' in line or line == 'stop':
                 self.shutdown_gracefully()
                 return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                print(
-                    f'\tProblem with OutputProcess() line {exception_line}',
-                )
-                print(traceback.print_exc(), 0, 1)
+            elif not self.quiet:
+                # output to terminal and logs or logs only?
+
+                if 'log-only' in line:
+                    line = line.replace('log-only', '')
+                    (level, sender, msg) = self.process_line(line)
+                    self.log_line(sender, msg)
+                else:
+                    (level, sender, msg) = self.process_line(line)
+                    # output to terminal
+                    self.output_line(level, sender, msg)
+
+            else:
+                # Here we should still print the lines coming in
+                # the input for a while after receiving a 'stop'.
+                # We don't know how to do it.
+                print('Stopping the output process')
+                self.shutdown_gracefully()
                 return True
+
+        self.shutdown_gracefully()
+        return True

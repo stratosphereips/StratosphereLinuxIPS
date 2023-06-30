@@ -1,29 +1,19 @@
 # Must imports
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
-import traceback
+from slips_files.common.imports import *
 
 # Your imports
 import json
-import sys
 import requests
 from requests.auth import HTTPBasicAuth
 
-class Module(Module, multiprocessing.Process):
+class RiskIQ(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Risk IQ'
     description = 'Module to get passive DNS info about IPs from RiskIQ'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
-        self.c1 = __database__.subscribe('new_ip')
+    def init(self):
+        self.c1 = self.db.subscribe('new_ip')
         self.channels = {
             'new_ip': self.c1,
         }
@@ -94,13 +84,11 @@ class Module(Module, multiprocessing.Process):
         sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
         return sorted_pt_results
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:
-            return False
+            return 1
+
     def main(self):
         # Main loop function
         if msg := self.get_msg('new_ip'):
@@ -109,10 +97,10 @@ class Module(Module, multiprocessing.Process):
                 # return here means keep looping
                 return
             # Only get passive total dns data if we don't have it in the db
-            if __database__.get_passive_dns(ip):
+            if self.db.get_passive_dns(ip):
                 return
             # we don't have it in the db , get it from passive total
             if passive_dns := self.get_passive_dns(ip):
                 # we found data from passive total, store it in the db
-                __database__.set_passive_dns(ip, passive_dns)
+                self.db.set_passive_dns(ip, passive_dns)
 

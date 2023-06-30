@@ -1,6 +1,6 @@
 # Must imports
-from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.core.database.database_manager import DBManager
 
 # Your imports
 import json
@@ -10,6 +10,9 @@ import sys
 
 
 class Helper:
+    def __init__(self, db):
+        self.db =  db
+        
     def set_evidence_young_domain(
             self, domain, age, stime, profileid, twid, uid
     ):
@@ -20,12 +23,11 @@ class Helper:
         attacker_direction = 'dstdomain'
         attacker = domain
         description = f'connection to a young domain: {domain} registered {age} days ago.'
-
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  stime, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_multiple_ssh_versions(
-            self, srcip, cached_versions, current_versions, timestamp, twid, uid, role=''
+            self, srcip, cached_versions, current_versions, timestamp, twid, uid, daddr, role=''
     ):
         """
         :param cached_versions: major.minor
@@ -41,8 +43,8 @@ class Helper:
         attacker = srcip
         role = 'client' if 'CLIENT' in role else 'server'
         description = f'SSH {role} version changing from {cached_versions} to {current_versions}'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid, victim=daddr)
 
     def set_evidence_different_localnet_usage(
             self,
@@ -75,14 +77,14 @@ class Helper:
         category = 'Anomaly.Traffic'
         attacker_direction = ip_outside_localnet
         evidence_type = 'DifferentLocalnet'
-        localnet = __database__.get_local_network()
+        localnet = self.db.get_local_network()
         description = f'A connection {direction} a private IP ({attacker}) ' \
                           f'outside of the used local network {localnet}.' \
                           f' {rev_direction} IP: {victim} '
 
         if attacker_direction == 'dstip':
             description += 'using ARP' if 'arp' in portproto else f'on port: {portproto}'
-        __database__.setEvidence(
+        self.db.setEvidence(
             evidence_type,
             attacker_direction,
             attacker,
@@ -93,7 +95,8 @@ class Helper:
             category,
             profileid=profileid,
             twid=twid,
-            uid=uid
+            uid=uid,
+            victim=victim
         )
 
     def set_evidence_device_changing_ips(
@@ -115,8 +118,8 @@ class Helper:
         description = f'A device changing IPs. IP {saddr} was found ' \
                       f'with MAC address {smac} but the MAC belongs originally to IP: {old_ip}. '
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid, victim=old_ip)
 
     def set_evidence_non_http_port_80_conn(
             self, daddr, profileid, timestamp, twid, uid
@@ -127,11 +130,11 @@ class Helper:
         attacker_direction = 'dstip'
         evidence_type = 'Non-HTTP-Port-80-Connection'
         attacker = daddr
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
 
         description = f'non-HTTP established connection to port 80.' \
                       f' destination IP: {daddr} {ip_identification}'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_non_ssl_port_443_conn(
@@ -143,11 +146,11 @@ class Helper:
         attacker_direction = 'dstip'
         evidence_type = 'Non-SSL-Port-443-Connection'
         attacker = daddr
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = f'non-SSL established connection to port 443.' \
                       f' destination IP: {daddr} {ip_identification}'
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_weird_http_method(
@@ -167,9 +170,9 @@ class Helper:
         attacker_direction = 'srcip'
         evidence_type = 'WeirdHTTPMethod'
         attacker = profileid.split("_")[-1]
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = f'Weird HTTP method "{weird_method}" to IP: {daddr} {ip_identification}. by Zeek.'
-        __database__.setEvidence(evidence_type,
+        self.db.setEvidence(evidence_type,
                                  attacker_direction,
                                  attacker,
                                  threat_level,
@@ -179,7 +182,9 @@ class Helper:
                                  category,
                                  profileid=profileid,
                                  twid=twid,
-                                 uid=uid)
+                                 uid=uid,
+                                 victim=daddr,
+                            )
 
     def set_evidence_incompatible_CN(
             self, org, timestamp, daddr, profileid, twid, uid
@@ -190,12 +195,12 @@ class Helper:
         confidence = 0.9
         threat_level = 'medium'
         category = 'Anomaly.Traffic'
-        attacker_direction = 'srcip'
+        attacker_direction = 'dstip'
         evidence_type = 'IncompatibleCN'
         attacker = daddr
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = f'Incompatible certificate CN to IP: {daddr} {ip_identification} claiming to belong {org.capitalize()}.'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_DGA(self, nxdomains: int, stime, profileid, twid, uid):
@@ -211,7 +216,7 @@ class Helper:
         description = f'possible DGA or domain scanning. {attacker} failed to resolve {nxdomains} domains'
         conn_count = nxdomains
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  stime, category, source_target_tag=source_target_tag, conn_count=conn_count,
                                  profileid=profileid, twid=twid, uid=uid)
 
@@ -225,7 +230,7 @@ class Helper:
         evidence_type = 'DNSWithoutConnection'
         attacker = domain
         description = f'domain {domain} resolved with no connection'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_pastebin_download(
@@ -242,7 +247,7 @@ class Helper:
         description = (
             f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
         )
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         return True
@@ -259,20 +264,20 @@ class Helper:
         attacker = daddr
         # the first 5 hours the confidence of connection w/o dns
         # is 0.1  in case of interface only, until slips learns all the dns
-        start_time = __database__.get_slips_start_time()
+        start_time = self.db.get_slips_start_time()
         now = time.time()
         confidence = 0.8
         if (
             '-i' in sys.argv
-            or __database__.is_growing_zeek_dir()
+            or self.db.is_growing_zeek_dir()
         ):
             diff = utils.get_time_diff(start_time, now, return_type='hours')
             if diff < 5:
                 confidence = 0.1
 
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = f'a connection without DNS resolution to IP: {daddr} {ip_identification}'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
 
@@ -287,7 +292,7 @@ class Helper:
         description = f'doing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
         attacker = profileid.split('_')[1]
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  stime, category, conn_count=arpa_scan_threshold, profileid=profileid, twid=twid,
                                  uid=uid)
 
@@ -300,14 +305,26 @@ class Helper:
         attacker_direction = 'srcip'
         evidence_type = 'UnknownPort'
         attacker = profileid.split('_')[-1]
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = (
             f'Connection to unknown destination port {dport}/{proto.upper()} '
             f'destination IP {daddr}. {ip_identification}'
         )
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, port=dport, proto=proto, profileid=profileid, twid=twid, uid=uid)
+        self.db.setEvidence(evidence_type,
+                            attacker_direction,
+                            attacker,
+                            threat_level,
+                            confidence,
+                            description,
+                            timestamp,
+                            category,
+                            port=dport,
+                            proto=proto,
+                            profileid=profileid,
+                            twid=twid,
+                            uid=uid,
+                            victim=daddr)
 
     def set_evidence_pw_guessing(self, msg, timestamp, profileid, twid, uid, by=''):
         # 222.186.30.112 appears to be guessing SSH passwords (seen in 30 connections)
@@ -322,7 +339,7 @@ class Helper:
         scanning_ip = msg.split(' appears')[0]
         conn_count = int(msg.split('in ')[1].split('connections')[0])
 
-        __database__.setEvidence(evidence_type, attacker_direction, scanning_ip, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, scanning_ip, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=conn_count,
                                  profileid=profileid, twid=twid, uid=uid)
 
@@ -340,7 +357,7 @@ class Helper:
         category = 'Recon.Scanning'
         # get the number of unique hosts scanned on a specific port
         conn_count = int(msg.split('least')[1].split('unique')[0])
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=conn_count,
                                  profileid=profileid, twid=twid, uid=uid)
 
@@ -368,9 +385,9 @@ class Helper:
         category = 'Recon'
         attacker_direction = 'srcip'
         attacker = saddr
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid,
-                                 twid=twid, uid=uid)
+                                 twid=twid, uid=uid, victim=daddr)
 
     def set_evidence_GRE_tunnel(
             self,
@@ -385,7 +402,7 @@ class Helper:
         ts = tunnel_flow['starttime']
         uid = tunnel_flow['uid']
 
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         saddr = profileid.split('_')[-1]
         description = f'GRE tunnel from {saddr} ' \
                       f'to {daddr} {ip_identification} ' \
@@ -394,7 +411,7 @@ class Helper:
         threat_level = 'info'
         evidence_type = 'GRETunnel'
         category = 'Info'
-        __database__.setEvidence(
+        self.db.setEvidence(
              evidence_type,
              'dstip',
              daddr,
@@ -405,7 +422,7 @@ class Helper:
              category,
              profileid=profileid,
              twid=twid,
-             uid=uid
+             uid=uid,
         )
 
 
@@ -428,9 +445,10 @@ class Helper:
         source_target_tag = 'Recon'
         conn_count = int(msg.split('least ')[1].split(' unique')[0])
         attacker = scanning_ip
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        victim = msg.splt('ports of ')[-1]
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=conn_count,
-                                 profileid=profileid, twid=twid, uid=uid)
+                                 profileid=profileid, twid=twid, uid=uid, victim=victim)
 
     def set_evidence_ssh_successful(
             self,
@@ -457,25 +475,23 @@ class Helper:
         threat_level = 'info'
         confidence = 0.8
         category = 'Infomation'
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = (
             f'SSH successful to IP {daddr}. {ip_identification}. '
             f'From IP {saddr}. Size: {str(size)}. Detection model {by}.'
             f' Confidence {confidence}'
         )
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid, victim=daddr)
 
     def set_evidence_long_connection(
-            self, ip, duration, profileid, twid, uid, timestamp, ip_state='ip'
+            self, attacker, duration, profileid, twid, uid, timestamp, attacker_direction=''
     ):
         """
         Set an evidence for a long connection.
         """
 
-        attacker_direction = ip_state
-        attacker = ip
         evidence_type = 'LongConnection'
         threat_level = 'low'
         category = 'Anomaly.Connection'
@@ -483,17 +499,17 @@ class Helper:
         # scale the confidence from 0 to 1, 1 means 24 hours long
         confidence = 1 / (3600 * 24) * (duration - 3600 * 24) + 1
         confidence = round(confidence, 2)
-        ip_identification = __database__.getIPIdentification(ip)
+        ip_identification = self.db.get_ip_identification(attacker)
         # get the duration in minutes
         duration = int(duration / 60)
         srcip = profileid.split('_')[1]
-        description = f'Long Connection. Connection from {srcip} to destination address: {ip} ' \
+        description = f'Long Connection. Connection from {srcip} to destination address: {attacker} ' \
                       f'{ip_identification} took {duration} mins'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid, victim=srcip)
 
     def set_evidence_self_signed_certificates(
-            self, profileid, twid, ip, description, uid, timestamp
+            self, profileid, twid, attacker, description, uid, timestamp
     ):
         """
         Set evidence for self signed certificates.
@@ -503,13 +519,11 @@ class Helper:
         category = 'Anomaly.Behaviour'
         attacker_direction = 'dstip'
         evidence_type = 'SelfSignedCertificate'
-        attacker = ip
-
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_for_multiple_reconnection_attempts(
-            self, profileid, twid, ip, description, uid, timestamp
+            self, profileid, twid, attacker, description, uid, timestamp
     ):
         """
         Set evidence for Reconnection Attempts.
@@ -519,9 +533,8 @@ class Helper:
         category = 'Anomaly.Traffic'
         attacker_direction = 'dstip'
         evidence_type = 'MultipleReconnectionAttempts'
-        attacker = ip
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_for_connection_to_multiple_ports(
@@ -537,7 +550,7 @@ class Helper:
         evidence_type = 'ConnectionToMultiplePorts'
         attacker = ip
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_suspicious_dns_answer(self, query, answer, entropy, daddr, profileid, twid, stime, uid):
@@ -549,7 +562,7 @@ class Helper:
         attacker = daddr
         description = f'A DNS TXT answer with high entropy. ' \
                       f'query: {query} answer: "{answer}" entropy: {round(entropy, 2)} '
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  stime, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_invalid_dns_answer(self, query, answer, daddr, profileid, twid, stime, uid):
@@ -561,7 +574,7 @@ class Helper:
         description = f"The DNS query {query} was resolved to {answer}"
         timestamp = stime
         category = "Anamoly.Behaviour"
-        __database__.setEvidence(evidence_type , attacker_direction , attacker , threat_level , confidence , description ,
+        self.db.setEvidence(evidence_type , attacker_direction , attacker , threat_level , confidence , description ,
                                  timestamp , category , profileid=profileid , twid=twid , uid=uid)
 
     def set_evidence_for_port_0_connection(
@@ -571,19 +584,26 @@ class Helper:
         confidence = 0.8
         threat_level = 'high'
         category = 'Anomaly.Connection'
-        attacker_direction = 'srcip' if direction == 'source' else 'dstip'
         source_target_tag = 'Recon'
         evidence_type = 'Port0Connection'
-        attacker = saddr if direction == 'source' else daddr
 
-        ip_identification = __database__.getIPIdentification(daddr)
+        if direction == 'source':
+            attacker = saddr
+            attacker_direction = 'srcip'
+            victim = daddr
+        else:
+            attacker = daddr
+            attacker_direction = 'dstip'
+            victim = saddr
+
+        ip_identification = self.db.get_ip_identification(daddr)
         description = f'Connection on port 0 from {saddr}:{sport} to {daddr}:{dport}. {ip_identification}.'
 
         conn_count = 1
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=conn_count,
-                                 profileid=profileid, twid=twid, uid=uid)
+                                 profileid=profileid, twid=twid, uid=uid, victim=victim)
 
     def set_evidence_malicious_JA3(
             self,
@@ -593,6 +613,7 @@ class Helper:
             twid,
             uid,
             timestamp,
+            victim,
             type_='',
             ioc='',
     ):
@@ -607,6 +628,7 @@ class Helper:
             category = 'Intrusion.Botnet'
             source_target_tag = 'Botnet'
             attacker_direction = 'srcip'
+
         elif type_ == 'ja3s':
             description = (
                 f'Malicious JA3s: (possible C&C server): {ioc} to server {ip} '
@@ -617,7 +639,7 @@ class Helper:
             attacker_direction = 'dstip'
 
         # append daddr identification to the description
-        ip_identification = __database__.getIPIdentification(ip)
+        ip_identification = self.db.get_ip_identification(ip)
         description += (
             f'{ip_identification} description: {ja3_description} {tags}'
         )
@@ -625,9 +647,9 @@ class Helper:
         attacker = ip
         confidence = 1
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+                                 twid=twid, uid=uid, victim=victim)
 
     def set_evidence_data_exfiltration(
             self,
@@ -644,13 +666,13 @@ class Helper:
         evidence_type = 'DataUpload'
         category = 'Malware'
         attacker = daddr
-        ip_identification = __database__.getIPIdentification(
+        ip_identification = self.db.get_ip_identification(
             daddr
         )
         description = f'Large data upload. {src_mbs} MBs sent to {daddr} '
         description += f'{ip_identification}'
         timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
 
@@ -663,13 +685,13 @@ class Helper:
         evidence_type = 'BadSMTPLogin'
         attacker_direction = 'srcip'
         attacker = saddr
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = (
             f'doing bad SMTP login to {daddr} {ip_identification}'
         )
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 stime, category, profileid=profileid, twid=twid, uid=uid)
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 stime, category, profileid=profileid, twid=twid, uid=uid, victim=daddr)
 
     def set_evidence_smtp_bruteforce(
             self,
@@ -688,25 +710,28 @@ class Helper:
         category = 'Attempt.Login'
         attacker_direction = 'srcip'
         evidence_type = 'SMTPLoginBruteforce'
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = f'doing SMTP login bruteforce to {daddr}. ' \
                       f'{smtp_bruteforce_threshold} logins in 10 seconds. ' \
                       f'{ip_identification}'
         attacker = saddr
         conn_count = smtp_bruteforce_threshold
 
-        __database__.setEvidence(evidence_type,
-                                 attacker_direction,
-                                 attacker,
-                                 threat_level,
-                                 confidence,
-                                 description,
-                                 stime,
-                                 category,
-                                 conn_count=conn_count,
-                                 profileid=profileid,
-                                 twid=twid,
-                                 uid=uid)
+        self.db.setEvidence(
+             evidence_type,
+             attacker_direction,
+             attacker,
+             threat_level,
+             confidence,
+             description,
+             stime,
+             category,
+             conn_count=conn_count,
+             profileid=profileid,
+             twid=twid,
+             uid=uid,
+             victim=daddr
+            )
 
     def set_evidence_malicious_ssl(
             self, ssl_info: dict, ssl_info_from_db: dict
@@ -732,7 +757,7 @@ class Helper:
 
         description = f'Malicious SSL certificate to server {daddr}.'
         # append daddr identification to the description
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description += (
             f'{ip_identification} description: {cert_description} {tags}  '
         )
@@ -744,7 +769,7 @@ class Helper:
 
         attacker = daddr
         confidence = 1
-        __database__.setEvidence(evidence_type, attacker_direction,
+        self.db.setEvidence(evidence_type, attacker_direction,
                                  attacker, threat_level, confidence,
                                  description, ts, category,
                                  source_target_tag=source_target_tag,

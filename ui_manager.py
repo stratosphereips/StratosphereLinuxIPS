@@ -1,5 +1,3 @@
-from slips_files.core.database.database import __database__
-from slips_files.core.guiProcess import GuiProcess
 from style import green
 
 import subprocess
@@ -43,7 +41,7 @@ class UIManager:
 
         def run_webinterface():
             # starting the wbeinterface using the shell script results in slips not being able to
-            # get the PID of the python proc started by the .sh scrip
+            # get the PID of the python proc started by the .sh script
             command = ['python3', 'webinterface/app.py']
             webinterface = subprocess.Popen(
                 command,
@@ -53,7 +51,7 @@ class UIManager:
                 preexec_fn=detach_child
             )
             # self.webinterface_pid = webinterface.pid
-            __database__.store_process_PID('Web Interface', webinterface.pid)
+            self.main.db.store_process_PID('Web Interface', webinterface.pid)
             # we'll assume that it started, and if not, the return value will immediately change and this thread will
             # print an error
             self.webinterface_return_value.put(True)
@@ -73,8 +71,8 @@ class UIManager:
                             f"{error.strip().decode()}\n"
                             f"Port 55000 is used by PID {pid}")
 
-        # if theres's an error, this will be set to false, and the error will be printed
-        # otherwise we assume that the inetrface started
+        # if there's an error, this will be set to false, and the error will be printed
+        # otherwise we assume that the interface started
         # self.webinterface_started = True
         self.webinterface_return_value = Queue()
         self.webinterface_thread = threading.Thread(
@@ -83,20 +81,4 @@ class UIManager:
         )
         self.webinterface_thread.start()
         # we'll be checking the return value of this thread later
-    
-    def start_gui_process(self):
-        # Get the type of output from the parameters
-        # Several combinations of outputs should be able to be used
-        if self.main.args.gui:
-            # Create the curses thread
-            guiProcessQueue = Queue()
-            guiProcess = GuiProcess(
-                guiProcessQueue, self.main.outputqueue, self.main.args.verbose,
-                self.main.args.debug
-            )
-            __database__.store_process_PID(
-                'GUI',
-                int(guiProcess.pid)
-            )
-            guiProcess.start()
-            self.main.print('quiet')
+

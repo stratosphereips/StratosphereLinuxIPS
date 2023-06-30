@@ -1,32 +1,20 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
-import sys
-import json
-import traceback
+from slips_files.common.imports import *
 
-class Module(Module, multiprocessing.Process):
+class Ensembling(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Ensembling'
     description = 'The module to assign '
     authors = ['Kamila Babayeva, Sebastian Garcia']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
+    def init(self):
         # Retrieve the labels
-        self.normal_label = __database__.normal_label
-        self.malicious_label = __database__.malicious_label
-        self.c1 = __database__.subscribe('tw_closed')
+        self.normal_label = self.db.get_normal_label()
+        self.malicious_label = self.db.get_malicious_label()
+        self.c1 = self.db.subscribe('tw_closed')
         self.channels = {
             'tw_closed': self.c1
         }
-        self.separator = __database__.separator
+        self.separator = self.db.get_separator()
 
 
     def set_label_per_flow_dstip(self, profileid, twid):
@@ -39,10 +27,9 @@ class Module(Module, multiprocessing.Process):
         : return: None
         """
 
-        flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
+        flows = self.db.get_all_flows_in_profileid_twid(profileid, twid)
         dstip_labels_total = {}
         for flow_uid, flow_data in flows.items():
-            flow_data = json.loads(flow_data)
             flow_module_labels = flow_data['module_labels']
             # First stage - calculate the amount of malicious and normal labels per each flow.
             # Set the final label per flow using majority voting
@@ -62,9 +49,9 @@ class Module(Module, multiprocessing.Process):
                 malicious_label_total == normal_label_total == 0
                 or normal_label_total > malicious_label_total
             ):
-                __database__.set_first_stage_ensembling_label_to_flow(
-                    profileid, twid, flow_uid, self.normal_label
-                )
+                # self.db.set_first_stage_ensembling_label_to_flow(
+                #     profileid, twid, flow_uid, self.normal_label
+                # )
                 # Second stage - calculate the amount of normal and malicious labels per daddr
                 dstip_labels_total[flow_data['daddr']][self.normal_label] = (
                     dstip_labels_total[flow_data['daddr']].get(
@@ -73,9 +60,9 @@ class Module(Module, multiprocessing.Process):
                     + 1
                 )
             else:
-                __database__.set_first_stage_ensembling_label_to_flow(
-                    profileid, twid, flow_uid, self.malicious_label
-                )
+                # self.db.set_first_stage_ensembling_label_to_flow(
+                #     profileid, twid, flow_uid, self.malicious_label
+                # )
                 # Second stage - calculate the amount of normal and malicious labels per daddr
                 dstip_labels_total[flow_data['daddr']][
                     self.malicious_label
@@ -92,7 +79,6 @@ class Module(Module, multiprocessing.Process):
     def main(self):
         if msg := self.get_msg('tw_closed'):
             data = msg['data']
-            # Convert from json to dict
             profileip = data.split(self.separator)[1]
             twid = data.split(self.separator)[2]
             profileid = f'profile{self.separator}{profileip}'

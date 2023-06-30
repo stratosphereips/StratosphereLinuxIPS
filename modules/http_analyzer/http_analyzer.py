@@ -1,37 +1,25 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
-import sys
-import traceback
+from slips_files.common.imports import *
 import json
 import urllib
 import requests
 
 
-class Module(Module, multiprocessing.Process):
+class HTTPAnalyzer(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'HTTP Analyzer'
     description = 'Analyze HTTP flows'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
-        __database__.start(redis_port)
-        self.c1 = __database__.subscribe('new_http')
+    def init(self):
+        self.c1 = self.db.subscribe('new_http')
         self.channels = {
             'new_http': self.c1
         }
-
         self.connections_counter = {}
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware
         # to check your internet connection
-        self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com']
+        self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com', 'gmail.com']
         self.read_configuration()
         self.executable_mime_types = [
             'application/x-msdownload',
@@ -84,10 +72,11 @@ class Module(Module, multiprocessing.Process):
                 threat_level = 'high'
                 category = 'Anomaly.Behaviour'
                 confidence = 1
-                description = f'suspicious user-agent: {user_agent} while connecting to {host}{uri}'
-                __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                victim = f'{host}{uri}'
+                description = f'suspicious user-agent: {user_agent} while connecting to {victim}'
+                self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                          description, timestamp, category, source_target_tag=source_target_tag,
-                                         profileid=profileid, twid=twid, uid=uid)
+                                         profileid=profileid, twid=twid, uid=uid, victim=victim)
                 return True
         return False
 
@@ -128,8 +117,18 @@ class Module(Module, multiprocessing.Process):
             category = 'Anomaly.Connection' 
             confidence = 1
             description = f'multiple empty HTTP connections to {host}'
-            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uids)
+            self.db.setEvidence(evidence_type,
+                                attacker_direction,
+                                attacker,
+                                threat_level,
+                                confidence,
+                                description,
+                                timestamp,
+                                category,
+                                profileid=profileid,
+                                twid=twid,
+                                uid=uids,
+                                victim=host)
             # reset the counter
             self.connections_counter[host] = ([], 0)
             return True
@@ -149,14 +148,16 @@ class Module(Module, multiprocessing.Process):
         os_name = user_agent.get('os_name', '').lower()
         browser = user_agent.get('browser', '').lower()
         user_agent = user_agent.get('user_agent', '')
+        victim = f'{host}{uri}'
         description = (
-            f'using incompatible user-agent that belongs to OS: {os_name} type: {os_type} browser: {browser}. '
-            f'while connecting to {host}{uri}. '
+            f'using incompatible user-agent ({user_agent}) that belongs to OS: {os_name} '
+            f'type: {os_type} browser: {browser}. '
+            f'while connecting to {victim}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+                                 twid=twid, uid=uid, victim=victim)
         
     def report_executable_mime_type(self, mime_type, attacker, profileid, twid, uid, timestamp):
         confidence = 1
@@ -166,11 +167,11 @@ class Module(Module, multiprocessing.Process):
         evidence_type = 'ExecutableMIMEType'
         attacker_direction = 'dstip'
         srcip = profileid.split('_')[1]
-        ip_identification = __database__.getIPIdentification(attacker)
+        ip_identification = self.db.get_ip_identification(attacker)
         description = f'download of an executable with mime type: {mime_type} ' \
                       f'by {srcip} from {attacker} {ip_identification}.'
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
 
@@ -182,12 +183,12 @@ class Module(Module, multiprocessing.Process):
         Compare the user agent of this profile to the MAC vendor and check incompatibility
         """
         # get the mac vendor
-        vendor = __database__.get_mac_vendor_from_profile(profileid)
+        vendor = self.db.get_mac_vendor_from_profile(profileid)
         if not vendor:
             return False
         vendor = vendor.lower()
 
-        user_agent: dict = __database__.get_user_agent_from_profile(profileid)
+        user_agent: dict = self.db.get_user_agent_from_profile(profileid)
         if not user_agent or type(user_agent) != dict:
             return False
 
@@ -288,10 +289,10 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # keep a history of the past user agents
-        __database__.add_all_user_agent_to_profile(profileid, user_agent)
+        self.db.add_all_user_agent_to_profile(profileid, user_agent)
 
         # don't make a request again if we already have a user agent associated with this profile
-        if __database__.get_user_agent_from_profile(profileid) is not None:
+        if self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return False
 
@@ -328,7 +329,7 @@ class Module(Module, multiprocessing.Process):
                 }
             )
 
-        __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
+        self.db.add_user_agent_to_profile(profileid, json.dumps(UA_info))
         return UA_info
 
     def extract_info_from_UA(self, user_agent, profileid):
@@ -336,9 +337,10 @@ class Module(Module, multiprocessing.Process):
         Zeek sometimes collects info about a specific UA, in this case the UA starts with
         'server-bag'
         """
-        if __database__.get_user_agent_from_profile(profileid) is not None:
+        if self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return True
+
         # for example: server-bag[macOS,11.5.1,20G80,MacBookAir10,1]
         user_agent = (
             user_agent.replace('server-bag', '')
@@ -357,7 +359,7 @@ class Module(Module, multiprocessing.Process):
             }
         )
         UA_info = json.dumps(UA_info)
-        __database__.add_user_agent_to_profile(profileid, UA_info)
+        self.db.add_user_agent_to_profile(profileid, UA_info)
         return UA_info
 
     def check_multiple_UAs(
@@ -392,15 +394,15 @@ class Module(Module, multiprocessing.Process):
         attacker_direction = 'srcip'
         source_target_tag = 'MultipleUserAgent'
         attacker = profileid.split('_')[1]
-        evidence_type = 'IncompatibleUserAgent'
+        evidence_type = 'MultipleUserAgent'
         threat_level = 'info'
         category = 'Anomaly.Behaviour'
         confidence = 1
         ua = cached_ua.get('user_agent', '')
         description = (
-            f'using multiple user-agents: {ua} then {user_agent}'
+            f'using multiple user-agents: "{ua}" then "{user_agent}"'
         )
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         return True
@@ -420,7 +422,7 @@ class Module(Module, multiprocessing.Process):
         saddr = profileid.split('_')[-1]
         description = (f'Unencrypted HTTP traffic from {saddr} to {daddr}.')
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         return True
@@ -441,7 +443,7 @@ class Module(Module, multiprocessing.Process):
         except ValueError:
             return False
 
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         if ('pastebin' in ip_identification
             and response_body_len > self.pastebin_downloads_threshold
             and method == 'GET'):
@@ -456,16 +458,12 @@ class Module(Module, multiprocessing.Process):
             description = (
                f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
             )
-            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                      description, timestamp, category, source_target_tag=source_target_tag,
                                      profileid=profileid, twid=twid, uid=uid)
             return True
 
 
-
-
-    def shutdown_gracefully(self):
-        __database__.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
 
@@ -494,7 +492,7 @@ class Module(Module, multiprocessing.Process):
             )
             # find the UA of this profileid if we don't have it
             # get the last used ua of this profile
-            cached_ua = __database__.get_user_agent_from_profile(
+            cached_ua = self.db.get_user_agent_from_profile(
                 profileid
             )
             if cached_ua:

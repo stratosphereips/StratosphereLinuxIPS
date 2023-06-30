@@ -15,19 +15,16 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts import Module
-from .notify import Notify
+from slips_files.common.imports import *
+from slips_files.core.helpers.whitelist import Whitelist
+from slips_files.core.helpers.notify import Notify
+from slips_files.common.abstracts import Core
 import json
 from datetime import datetime
 from os import path
 from colorama import Fore, Style
 import sys
 import os
-from .whitelist import Whitelist
 import time
 import platform
 import traceback
@@ -35,32 +32,21 @@ import traceback
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 # Evidence Process
-class EvidenceProcess(Module, multiprocessing.Process):
+class EvidenceProcess(Core):
     """
     A class to process the evidence from the alerts and update the threat level
     It only work on evidence for IPs that were profiled
     This should be converted into a module
     """
+    name = 'Evidence'
 
-    def __init__(
-        self,
-        inputqueue,
-        outputqueue,
-        output_dir,
-        redis_port,
-    ):
-        self.name = 'Evidence'
-        multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
-        self.inputqueue = inputqueue
-        self.outputqueue = outputqueue
-        self.whitelist = Whitelist(outputqueue, redis_port)
-        __database__.start(redis_port)
-        self.separator = __database__.separator
+    def init(self):
+        self.whitelist = Whitelist(self.output_queue, self.db)
+        self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
         # to keep track of the number of generated evidence
-        __database__.init_evidence_number()
+        self.db.init_evidence_number()
         if self.popup_alerts:
             self.notify = Notify()
             if self.notify.bin_found:
@@ -69,46 +55,26 @@ class EvidenceProcess(Module, multiprocessing.Process):
             else:
                 self.popup_alerts = False
 
-        self.c1 = __database__.subscribe('evidence_added')
-        self.c2 = __database__.subscribe('new_blame')
+        self.c1 = self.db.subscribe('evidence_added')
+        self.c2 = self.db.subscribe('new_blame')
         self.channels = {
             'evidence_added': self.c1,
             'new_blame': self.c2,
         }
 
         # clear output/alerts.log
-        self.logfile = self.clean_file(output_dir, 'alerts.log')
+        self.logfile = self.clean_file(self.output_dir, 'alerts.log')
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_interface = self.is_running_on_interface()
 
         # clear output/alerts.json
-        self.jsonfile = self.clean_file(output_dir, 'alerts.json')
+        self.jsonfile = self.clean_file(self.output_dir, 'alerts.json')
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
 
-        self.print(f'Storing Slips logs in {output_dir}')
+        self.print(f'Storing Slips logs in {self.output_dir}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -134,14 +100,14 @@ class EvidenceProcess(Module, multiprocessing.Process):
         :return : string with a correct evidence displacement
         """
         evidence_string = ''
-        dns_resolution_attacker = __database__.get_dns_resolution(attacker)
+        dns_resolution_attacker = self.db.get_dns_resolution(attacker)
         dns_resolution_attacker = dns_resolution_attacker.get(
             'domains', []
         )
         dns_resolution_attacker = dns_resolution_attacker[
                                         :3] if dns_resolution_attacker else ''
 
-        dns_resolution_ip = __database__.get_dns_resolution(ip)
+        dns_resolution_ip = self.db.get_dns_resolution(ip)
         dns_resolution_ip = dns_resolution_ip.get('domains', [])
         if len(dns_resolution_ip) >= 1:
             dns_resolution_ip = dns_resolution_ip[0]
@@ -234,7 +200,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
         domains_to_check_dst = []
         try:
             domains_to_check_src.append(
-                __database__.getIPData(flow['saddr'])
+                self.db.getIPData(flow['saddr'])
                 .get('SNI', [{}])[0]
                 .get('server_name')
             )
@@ -242,8 +208,8 @@ class EvidenceProcess(Module, multiprocessing.Process):
             pass
         try:
             # self.print(f"DNS of src IP {self.column_values['saddr']}:
-            # {__database__.get_dns_resolution(self.column_values['saddr'])}")
-            src_dns_domains = __database__.get_dns_resolution(flow['saddr'])
+            # {self.db.get_dns_resolution(self.column_values['saddr'])}")
+            src_dns_domains = self.db.get_dns_resolution(flow['saddr'])
             src_dns_domains = src_dns_domains.get('domains', [])
 
             domains_to_check_src.extend(iter(src_dns_domains))
@@ -251,9 +217,9 @@ class EvidenceProcess(Module, multiprocessing.Process):
             pass
         try:
             # self.print(f"IPData of dst IP {self.column_values['daddr']}:
-            # {__database__.getIPData(self.column_values['daddr'])}")
+            # {self.db.getIPData(self.column_values['daddr'])}")
             domains_to_check_dst.append(
-                __database__.getIPData(flow['daddr'])
+                self.db.getIPData(flow['daddr'])
                 .get('SNI', [{}])[0]
                 .get('server_name')
             )
@@ -292,7 +258,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
             twid_start_time = None
             while twid_start_time is None:
                 # give the database time to retreive the time
-                twid_start_time = __database__.getTimeTW(profileid, twid)
+                twid_start_time = self.db.getTimeTW(profileid, twid)
 
             tw_start_time_str = utils.convert_format(twid_start_time,  '%Y/%m/%d %H:%M:%S')
             # datetime obj
@@ -310,7 +276,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
                  '%Y/%m/%d %H:%M:%S'
             )
 
-            hostname = __database__.get_hostname_from_profile(profileid)
+            hostname = self.db.get_hostname_from_profile(profileid)
             # if there's no hostname, set it as ' '
             hostname = hostname or ''
             if hostname:
@@ -352,7 +318,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
         return alert_to_print
 
     def is_running_on_interface(self):
-        return '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        return '-i' in sys.argv or self.db.is_growing_zeek_dir()
 
 
     def decide_blocking(self, profileid) -> bool:
@@ -379,7 +345,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
             'block': True,
         }
         blocking_data = json.dumps(blocking_data)
-        __database__.publish('new_blocking', blocking_data)
+        self.db.publish('new_blocking', blocking_data)
         return True
 
     def mark_as_blocked(
@@ -397,7 +363,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
         ip = profileid.split('_')[-1].strip()
         msg = f'{flow_datetime}: Src IP {ip:26}. '
         if blocked:
-            __database__.markProfileTWAsBlocked(profileid, twid)
+            self.db.markProfileTWAsBlocked(profileid, twid)
             # Add to log files that this srcip is being blocked
             msg += 'Blocked '
         else:
@@ -428,7 +394,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         self.logfile.close()
         self.jsonfile.close()
-        __database__.publish('finished_modules', 'Evidence')
 
     def delete_alerted_evidence(self, profileid, twid, tw_evidence:dict):
         """
@@ -436,7 +401,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
         from the current evidence
         """
         # format of tw_evidence is {<ev_id>: {evidence_details}}
-        past_alerts = __database__.get_profileid_twid_alerts(profileid, twid)
+        past_alerts = self.db.get_profileid_twid_alerts(profileid, twid)
         if not past_alerts:
             return tw_evidence
 
@@ -458,8 +423,8 @@ class EvidenceProcess(Module, multiprocessing.Process):
             # evidence that came to new_evidence channel and were processed by it
             # so they are ready to be a part of an alerted
             if (
-                    not __database__.is_whitelisted_evidence(evidence_ID)
-                    and __database__.is_evidence_processed(evidence_ID)
+                    not self.db.is_whitelisted_evidence(evidence_ID)
+                    and self.db.is_evidence_processed(evidence_ID)
             ):
                 res[evidence_ID] = evidence_info
         return res
@@ -484,7 +449,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
 
     def get_evidence_for_tw(self, profileid, twid):
         # Get all the evidence for this profile in this TW
-        tw_evidence = __database__.getEvidenceForTW(
+        tw_evidence = self.db.getEvidenceForTW(
             profileid, twid
         )
         if not tw_evidence:
@@ -540,12 +505,12 @@ class EvidenceProcess(Module, multiprocessing.Process):
 
     def send_to_exporting_module(self, tw_evidence):
         for evidence in tw_evidence.values():
-            __database__.publish('export_evidence', evidence)
+            self.db.publish('export_evidence', evidence)
 
     def add_hostname_to_alert(self, alert_to_log, profileid, flow_datetime, evidence):
         # sometimes slips tries to get the hostname of a profile before ip_info stores it in the db
         # there's nothing we can do about it
-        if hostname := __database__.get_hostname_from_profile(profileid):
+        if hostname := self.db.get_hostname_from_profile(profileid):
             srcip = profileid.split("_")[-1]
             srcip = f'{srcip} ({hostname})'
             # fill the rest of the 26 characters with spaces to keep the alignment
@@ -565,213 +530,213 @@ class EvidenceProcess(Module, multiprocessing.Process):
         custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
         return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
 
+    def label_flows_causing_alert(self):
+        """Add the label "malicious" to all flows causing this alert in our db """
+        for evidence_id in self.IDs_causing_an_alert:
+            uids: list = self.db.get_flows_causing_evidence(evidence_id)
+            self.db.set_flow_label(uids, 'malicious')
+
     def main(self):
-        if msg := self.get_msg('evidence_added'):
-            # Data sent in the channel as a json dict, it needs to be deserialized first
-            data = json.loads(msg['data'])
-            profileid = data.get('profileid')
-            srcip = profileid.split(self.separator)[1]
-            twid = data.get('twid')
-            attacker_direction = data.get(
-                'attacker_direction'
-            )   # example: dstip srcip dport sport dstdomain
-            attacker = data.get(
-                'attacker'
-            )   # example: ip, port, inTuple, outTuple, domain
-            evidence_type = data.get(
-                'evidence_type'
-            )   # example: PortScan, ThreatIntelligence, etc..
-            description = data.get('description')
-            timestamp = data.get('stime')
-            # this is all the uids of the flows that cause this evidence
-            all_uids = data.get('uid')
-            # tags = data.get('tags', False)
-            confidence = data.get('confidence', False)
-            threat_level = data.get('threat_level', False)
-            category = data.get('category', False)
-            conn_count = data.get('conn_count', False)
-            port = data.get('port', False)
-            proto = data.get('proto', False)
-            source_target_tag = data.get('source_target_tag', False)
-            evidence_ID = data.get('ID', False)
-            if type(all_uids) == list:
-                # more than 1 flow caused the evidence
-                uid = all_uids[-1]
-            else:
-                # all_uids is just 1 str uid
-                # TODO this is terrible and should be refactored
-                uid = all_uids
+        while not self.should_stop():
+            if msg := self.get_msg('evidence_added'):
+                # Data sent in the channel as a json dict, it needs to be deserialized first
+                data = json.loads(msg['data'])
+                profileid = data.get('profileid')
+                srcip = profileid.split(self.separator)[1]
+                twid = data.get('twid')
+                attacker_direction = data.get(
+                    'attacker_direction'
+                )   # example: dstip srcip dport sport dstdomain
+                attacker = data.get(
+                    'attacker'
+                )   # example: ip, port, inTuple, outTuple, domain
+                evidence_type = data.get(
+                    'evidence_type'
+                )   # example: PortScan, ThreatIntelligence, etc..
+                description = data.get('description')
+                timestamp = data.get('stime')
+                # this is all the uids of the flows that cause this evidence
+                all_uids = data.get('uid')
+                # tags = data.get('tags', False)
+                confidence = data.get('confidence', False)
+                threat_level = data.get('threat_level', False)
+                category = data.get('category', False)
+                conn_count = data.get('conn_count', False)
+                port = data.get('port', False)
+                proto = data.get('proto', False)
+                source_target_tag = data.get('source_target_tag', False)
+                evidence_ID = data.get('ID', False)
+                victim = data.get('victim', '')
 
-            flow = __database__.get_flow(profileid, twid, uid)
+                # FP whitelisted alerts happen when the db returns an evidence
+                # that isn't processed in this channel, in the tw_evidence below
+                # to avoid this, we only alert on processed evidence
+                self.db.mark_evidence_as_processed(evidence_ID)
 
-            # FP whitelisted alerts happen when the db returns an evidence
-            # that isn't processed in this channel, in the tw_evidence below
-            # to avoid this, we only alert on processed evidence
-            __database__.mark_evidence_as_processed(evidence_ID)
-
-            # Ignore alert if IP is whitelisted
-            if flow and self.whitelist.is_whitelisted_evidence(
-                srcip, attacker, attacker_direction, description
-            ):
-                __database__.cache_whitelisted_evidence_ID(evidence_ID)
-                # Modules add evidence to the db before reaching this point, now
-                # remove evidence from db so it could be completely ignored
-                __database__.deleteEvidence(
-                    profileid, twid, evidence_ID
-                )
-                return
-
-            # Format the time to a common style given multiple type of time variables
-            if self.is_running_on_interface():
-                timestamp: datetime = utils.convert_to_local_timezone(timestamp)
-            flow_datetime = utils.convert_format(timestamp, 'iso')
-
-            # prepare evidence for text log file
-            evidence = self.format_evidence_string(srcip, evidence_type, attacker, description)
-            # prepare evidence for json log file
-            IDEA_dict = utils.IDEA_format(
-                srcip,
-                evidence_type,
-                attacker_direction,
-                attacker,
-                description,
-                confidence,
-                category,
-                conn_count,
-                source_target_tag,
-                port,
-                proto,
-                evidence_ID
-            )
-
-            # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
-            alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
-            alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
-
-            # Add the evidence to alerts.log
-            self.add_to_log_file(alert_to_log)
-            # add to alerts.json
-            self.add_to_json_log_file(IDEA_dict, all_uids)
-
-            __database__.set_evidence_for_profileid(IDEA_dict)
-            __database__.publish('report_to_peers', json.dumps(data))
-
-            if tw_evidence := self.get_evidence_for_tw(profileid, twid):
-                # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
-                # Important! It may happen that the evidence is not related to a profileid and twid.
-                # For example when the evidence is on some src IP attacking our home net, and we are not creating
-                # profiles for attackers
-
-                # The accumulated threat level is for all the types of evidence for this profile
-                accumulated_threat_level = self.get_accumulated_threat_level(tw_evidence)
-
-                ID = self.get_last_evidence_ID(tw_evidence)
-
-                # if the profile was already blocked in this twid, we shouldn't alert
-                profile_already_blocked = __database__.checkBlockedProfTW(profileid, twid)
-
-                # This is the part to detect if the accumulated evidence was enough for generating a detection
-                # The detection should be done in attacks per minute. The parameter in the configuration
-                # is attacks per minute
-                # So find out how many attacks corresponds to the width we are using
-                if (
-                    accumulated_threat_level >= self.detection_threshold_in_this_width
-                    and not profile_already_blocked
+                # Ignore alert if IP is whitelisted
+                if self.whitelist.is_whitelisted_evidence(
+                    srcip, attacker, attacker_direction, description, victim
                 ):
-                    # store the alert in our database
-                    # the alert ID is profileid_twid + the ID of the last evidence causing this alert
-                    alert_ID = f'{profileid}_{twid}_{ID}'
-                    __database__.set_evidence_causing_alert(
-                        profileid,
-                        twid,
-                        alert_ID,
-                        self.IDs_causing_an_alert
+                    self.db.cache_whitelisted_evidence_ID(evidence_ID)
+                    # Modules add evidence to the db before reaching this point, now
+                    # remove evidence from db so it could be completely ignored
+                    self.db.deleteEvidence(
+                        profileid, twid, evidence_ID
                     )
-                    to_send = {
-                        'alert_ID': alert_ID,
-                        'profileid': profileid,
-                        'twid': twid,
-                    }
-                    __database__.publish('new_alert', json.dumps(to_send))
+                    continue
 
-                    self.send_to_exporting_module(tw_evidence)
 
-                    # print the alert
-                    alert_to_print = (
-                        self.format_evidence_causing_this_alert(
-                            tw_evidence,
+                # Format the time to a common style given multiple type of time variables
+                if self.is_running_on_interface():
+                    timestamp: datetime = utils.convert_to_local_timezone(timestamp)
+                flow_datetime = utils.convert_format(timestamp, 'iso')
+
+                # prepare evidence for text log file
+                evidence = self.format_evidence_string(srcip, evidence_type, attacker, description)
+                # prepare evidence for json log file
+                IDEA_dict = utils.IDEA_format(
+                    srcip,
+                    evidence_type,
+                    attacker_direction,
+                    attacker,
+                    description,
+                    confidence,
+                    category,
+                    conn_count,
+                    source_target_tag,
+                    port,
+                    proto,
+                    evidence_ID
+                )
+
+                # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
+                alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
+                alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
+
+                # Add the evidence to alerts.log
+                self.add_to_log_file(alert_to_log)
+                # add to alerts.json
+                self.add_to_json_log_file(IDEA_dict, all_uids)
+
+                self.db.set_evidence_for_profileid(IDEA_dict)
+                self.db.publish('report_to_peers', json.dumps(data))
+
+                if tw_evidence := self.get_evidence_for_tw(profileid, twid):
+                    # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
+                    # Important! It may happen that the evidence is not related to a profileid and twid.
+                    # For example when the evidence is on some src IP attacking our home net, and we are not creating
+                    # profiles for attackers
+
+                    # The accumulated threat level is for all the types of evidence for this profile
+                    accumulated_threat_level = self.get_accumulated_threat_level(tw_evidence)
+
+                    ID = self.get_last_evidence_ID(tw_evidence)
+
+                    # if the profile was already blocked in this twid, we shouldn't alert
+                    profile_already_blocked = self.db.checkBlockedProfTW(profileid, twid)
+
+                    # This is the part to detect if the accumulated evidence was enough for generating a detection
+                    # The detection should be done in attacks per minute. The parameter in the configuration
+                    # is attacks per minute
+                    # So find out how many attacks corresponds to the width we are using
+                    if (
+                        accumulated_threat_level >= self.detection_threshold_in_this_width
+                        and not profile_already_blocked
+                    ):
+                        # store the alert in our database
+                        # the alert ID is profileid_twid + the ID of the last evidence causing this alert
+                        alert_ID = f'{profileid}_{twid}_{ID}'
+                        self.db.set_evidence_causing_alert(
+                            profileid,
+                            twid,
+                            alert_ID,
+                            self.IDs_causing_an_alert
+                        )
+                        to_send = {
+                            'alert_ID': alert_ID,
+                            'profileid': profileid,
+                            'twid': twid,
+                        }
+                        self.db.publish('new_alert', json.dumps(to_send))
+                        self.label_flows_causing_alert()
+                        self.send_to_exporting_module(tw_evidence)
+
+                        # print the alert
+                        alert_to_print = (
+                            self.format_evidence_causing_this_alert(
+                                tw_evidence,
+                                profileid,
+                                twid,
+                                flow_datetime,
+                            )
+                        )
+                        self.print(f'{alert_to_print}', 1, 0)
+
+                        if self.popup_alerts:
+                            # remove the colors from the alerts before printing
+                            alert_to_print = (
+                                alert_to_print.replace(Fore.RED, '')
+                                .replace(Fore.CYAN, '')
+                                .replace(Style.RESET_ALL, '')
+                            )
+                            self.notify.show_popup(alert_to_print)
+
+                        # todo if it's already blocked, we shouldn't decide blocking
+                        blocked = False
+
+                        if self.is_blocking_module_enabled():
+                            # send ip to the blocking module
+                            if self.decide_blocking(profileid):
+                                blocked = True
+
+                        self.mark_as_blocked(
                             profileid,
                             twid,
                             flow_datetime,
+                            accumulated_threat_level,
+                            IDEA_dict,
+                            blocked=blocked
                         )
+
+            if msg := self.get_msg('new_blame'):
+                self.msg_received = True
+                data = msg['data']
+                try:
+                    data = json.loads(data)
+                except json.decoder.JSONDecodeError:
+                    self.print(
+                        'Error in the report received from p2ptrust module'
                     )
-                    self.print(f'{alert_to_print}', 1, 0)
+                    return
+                # The available values for the following variables are defined in go_director
 
-                    if self.popup_alerts:
-                        # remove the colors from the alerts before printing
-                        alert_to_print = (
-                            alert_to_print.replace(Fore.RED, '')
-                            .replace(Fore.CYAN, '')
-                            .replace(Style.RESET_ALL, '')
-                        )
-                        self.notify.show_popup(alert_to_print)
+                # available key types: "ip"
+                key_type = data['key_type']
 
-                    # todo if it's already blocked, we shouldn't decide blocking
-                    blocked = False
+                # if the key type is ip, the ip is validated
+                key = data['key']
 
-                    if self.is_blocking_module_enabled():
-                        # send ip to the blocking module
-                        if self.decide_blocking(profileid):
-                            blocked = True
+                # available evaluation types: 'score_confidence'
+                evaluation_type = data['evaluation_type']
 
-                    self.mark_as_blocked(
-                        profileid,
-                        twid,
-                        flow_datetime,
-                        accumulated_threat_level,
-                        IDEA_dict,
-                        blocked=blocked
-                    )
+                # this is the score_confidence received from the peer
+                evaluation = data['evaluation']
+                # {"key_type": "ip", "key": "1.2.3.40",
+                # "evaluation_type": "score_confidence",
+                # "evaluation": { "score": 0.9, "confidence": 0.6 }}
+                ip_info = {
+                    'p2p4slips': evaluation
+                }
+                ip_info['p2p4slips'].update({'ts': time.time()})
+                self.db.store_blame_report(key, evaluation)
 
-        if msg := self.get_msg('new_blame'):
-            self.msg_received = True
-            data = msg['data']
-            try:
-                data = json.loads(data)
-            except json.decoder.JSONDecodeError:
-                self.print(
-                    'Error in the report received from p2ptrust module'
-                )
-                return
-            # The available values for the following variables are defined in go_director
-
-            # available key types: "ip"
-            key_type = data['key_type']
-
-            # if the key type is ip, the ip is validated
-            key = data['key']
-
-            # available evaluation types: 'score_confidence'
-            evaluation_type = data['evaluation_type']
-
-            # this is the score_confidence received from the peer
-            evaluation = data['evaluation']
-            # {"key_type": "ip", "key": "1.2.3.40",
-            # "evaluation_type": "score_confidence",
-            # "evaluation": { "score": 0.9, "confidence": 0.6 }}
-            ip_info = {
-                'p2p4slips': evaluation
-            }
-            ip_info['p2p4slips'].update({'ts': time.time()})
-            __database__.store_blame_report(key, evaluation)
-
-            blocking_data = {
-                'ip': key,
-                'block': True,
-                'to': True,
-                'from': True,
-                'block_for': self.width * 2,  # block for 2 timewindows
-            }
-            blocking_data = json.dumps(blocking_data)
-            __database__.publish('new_blocking', blocking_data)
+                blocking_data = {
+                    'ip': key,
+                    'block': True,
+                    'to': True,
+                    'from': True,
+                    'block_for': self.width * 2,  # block for 2 timewindows
+                }
+                blocking_data = json.dumps(blocking_data)
+                self.db.publish('new_blocking', blocking_data)
 
