@@ -118,6 +118,8 @@ class InputProcess(Core):
         )
 
         self.profiler_queue.put('stop')
+        self.output_queue.cancel_join_thread()
+        self.profiler_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:
         """
@@ -734,7 +736,7 @@ class InputProcess(Core):
                 os.kill(self.zeek_pid, signal.SIGKILL)
             except Exception as e:
                 pass
-
+        return True
 
     def run_zeek(self):
         """
@@ -903,10 +905,3 @@ class InputProcess(Core):
             )
             return False
 
-        # keep the module idle until slips.py kills it
-        # without this, the module exits but the pid will remain in memory as <defunct>
-        # OK, without this, the input proc calls stop_queues(), which calls cancel_join_thread
-        # WHICH stops the profiler queue while the profiler process is still processing flows
-        # so. do not remove this.
-        while not self.should_stop():
-            time.sleep(3)

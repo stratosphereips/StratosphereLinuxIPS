@@ -167,7 +167,7 @@ class Core(Module, Process):
                 self.shutdown_gracefully()
 
         except KeyboardInterrupt:
-            self.output_queue.cancel_join_thread()
+            # self.output_queue.cancel_join_thread()
             self.shutdown_gracefully()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno

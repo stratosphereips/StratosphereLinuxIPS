@@ -297,8 +297,8 @@ class ProcessManager:
         # all modules that deal with evidence, blocking and alerts should be killed last
         # so we don't miss reporting, exporting or blocking any malicious IoC
         pids_to_kill_last = [
-            self.main.db.get_pid_of("Evidence"),
             self.main.db.get_pid_of("Input"),
+            self.main.db.get_pid_of("Evidence"),
             self.main.db.get_pid_of("Output"),
             self.main.db.get_pid_of("Profiler"),
         ]
@@ -314,6 +314,7 @@ class ProcessManager:
             pid for pid in pids_to_kill_last if pid is not None
         ]
 
+        # convert the above list to process objs
         to_kill_first: List[Process] = []
         to_kill_last: List[Process] = []
         for process in self.processes:
