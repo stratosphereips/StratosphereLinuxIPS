@@ -122,6 +122,9 @@ class DBManager:
     def get_output_dir(self, *args, **kwargs):
         return self.rdb.get_output_dir(*args, **kwargs)
 
+    def get_input_file(self, *args, **kwargs):
+        return self.rdb.get_input_file(*args, **kwargs)
+
     def setInfoForIPs(self, *args, **kwargs):
         return self.rdb.setInfoForIPs(*args, **kwargs)
 

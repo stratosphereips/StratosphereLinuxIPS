@@ -544,6 +544,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         return self.r.hget('analysis', 'zeek_dir')
 
+    def get_input_file(self):
+        """
+        gets zeek output dir from the db
+        """
+        return self.r.hget('analysis', 'name')
+
     def get_commit(self):
         """
         gets the currently used commit from the db
