@@ -2,6 +2,7 @@ import contextlib
 from slips_files.common.imports import *
 from .TimerThread import TimerThread
 from .set_evidence import Helper
+from urllib.parse import urlparse
 from slips_files.core.helpers.whitelist import Whitelist
 import multiprocessing
 import json
@@ -722,15 +723,16 @@ class FlowAlerts(Module, multiprocessing.Process):
         # - When there is an NXDOMAIN as answer, it means
         # the domain isn't resolved, so we should not expect any connection later
 
-        if (
-            'arpa' in domain
-            or '.local' in domain
-            or '*' in domain
-            or '.cymru.com' in domain[-10:]
-            or len(domain.split('.')) == 1
-            or domain == 'WPAD'
-            or rcode_name != 'NOERROR'
+        parsed_domain = urlparse('http://' + domain).hostname
 
+        if (
+            'arpa' in parsed_domain
+            or '.local' in parsed_domain
+            or '*' in parsed_domain
+            or parsed_domain.endswith('.cymru.com')
+            or len(parsed_domain.split('.')) == 1
+            or parsed_domain == 'WPAD'
+            or rcode_name != 'NOERROR'
         ):
             return False
         # One DNS query may not be answered exactly by UID, but the computer can re-ask the domain,
