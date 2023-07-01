@@ -1,5 +1,6 @@
 from flask import Blueprint
 from flask import render_template
+from flask import escape
 import json
 from collections import defaultdict
 from datetime import datetime
@@ -306,7 +307,8 @@ def set_alerts(profile, timewindow):
             tw_name = tws[timewindow]["name"]
 
             data.append(
-                {"alert": alert_timestamp, "alert_id": alert_ID, "profileid": profile_ip, "timewindow": tw_name,
+                {"alert": escape(alert_timestamp), "alert_id": escape(alert_ID), 
+                 "profileid": escape(profile_ip), "timewindow": escape(tw_name), 
                  "evidence_count": evidence_count})
     return {"data": data}
 
