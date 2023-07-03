@@ -803,7 +803,7 @@ class InputProcess(Core):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            cwd=self.zeek_folder,
+            cwd=self.zeek_dir,
             start_new_session=True
         )
         # you have to get the pid before communicate()

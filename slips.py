@@ -18,10 +18,9 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import contextlib
-from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
-from slips_files.common.cpu_profiler import CPUProfiler
+import multiprocessing
 from slips_files.common.imports import *
+from slips_files.common.cpu_profiler import CPUProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -91,29 +90,6 @@ class Main:
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
-        # Output thread. outputprocess should be created first because it handles
-        # the output of the rest of the threads.
-        self.outputqueue = Queue()
-
-        # get the port that is going to be used for this instance of slips
-        if self.args.port:
-            self.redis_port = int(self.args.port)
-            # close slips if port is in use
-            self.metadata_man.check_if_port_is_in_use(self.redis_port)
-        elif self.args.multiinstance:
-            self.redis_port = self.redis_man.get_random_redis_port()
-            if not self.redis_port:
-                # all ports are unavailable
-                inp = input("Press Enter to close all ports.\n")
-                if inp == '':
-                    self.redis_man.close_all_ports()
-                self.terminate_slips()
-        else:
-            # even if this port is in use, it will be overwritten by slips
-            self.redis_port = 6379
-            # self.check_if_port_is_in_use(self.redis_port)
-        self.db = DBManager(self.args.output, self.outputqueue, self.redis_port)
-        self.db.set_input_metadata({'output_dir': self.args.output})
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
@@ -123,11 +99,12 @@ class Main:
                 if (self.cpuProfilerMultiprocess):
                     args = sys.argv
                     if (args[-1] != "--no-recurse"):
-                        viz_args = ['viztracer', '--exclude_files', './modules', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
+                        viz_args = ['viztracer', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
                         viz_args.extend(args)
                         viz_args.append("--no-recurse")
                         print("Starting multiprocess profiling recursive subprocess")
-                        subprocess.run(viz_args)
+                        print(viz_args)
+                        # subprocess.run(viz_args)
                         exit(0)
                 else:
                     self.cpuProfiler = CPUProfiler(
@@ -491,6 +468,38 @@ class Main:
 
             self.setup_print_levels()
 
+            # this is used in get_random_redis_port(), don't move this line
+            self.output_queue = Queue()
+
+
+            # get the port that is going to be used for this instance of slips
+            if self.args.port:
+                self.redis_port = int(self.args.port)
+                # close slips if port is in use
+                self.metadata_man.check_if_port_is_in_use(self.redis_port)
+            elif self.args.multiinstance:
+                self.redis_port = self.redis_man.get_random_redis_port()
+                if not self.redis_port:
+                    # all ports are unavailable
+                    inp = input("Press Enter to close all ports.\n")
+                    if inp == '':
+                        self.redis_man.close_all_ports()
+                    self.terminate_slips()
+            else:
+                # even if this port is in use, it will be overwritten by slips
+                self.redis_port = 6379
+                # self.check_if_port_is_in_use(self.redis_port)
+
+
+            self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
+            self.db.set_input_metadata({
+                    'output_dir': self.args.output,
+                    'commit': self.commit,
+                    'branch': self.branch,
+                })
+            
+            self.cpu_profiler_init()
+
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
@@ -675,7 +684,6 @@ class Main:
 ####################
 if __name__ == '__main__':
     slips = Main()
-    slips.cpu_profiler_init()
     if slips.args.stopdaemon:
         # -S is provided
         daemon = Daemon(slips)

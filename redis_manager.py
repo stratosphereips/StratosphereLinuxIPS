@@ -6,6 +6,7 @@ import redis
 import os
 import time
 import socket
+import subprocess
 
 class RedisManager:
     def __init__(self, main):

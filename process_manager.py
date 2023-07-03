@@ -501,6 +501,5 @@ class ProcessManager:
                 else:
                     f.write(f"[Process Manager] Slips didn't shutdown gracefully - {reason}\n")
 
-            exit()
         except KeyboardInterrupt:
             return False
