@@ -74,6 +74,9 @@ class Main:
         self.checker = Checker(self)
         self.conf = ConfigParser()
         self.version = self.get_slips_version()
+        # will be filled later
+        self.commit = 'None'
+        self.branch = 'None'
         # in testing mode we manually set the following params
         if not testing:
             self.args = self.conf.get_args()
@@ -458,8 +461,8 @@ class Main:
         branch_info = utils.get_branch_info()
         if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
-            commit = branch_info[0]
-            slips_version += f' ({commit[:8]})'
+            self.commit, self.branch = branch_info
+            slips_version += f' ({self.commit[:8]})'
         print(slips_version)
 
     def should_run_non_stop(self) -> bool:
@@ -583,6 +586,9 @@ class Main:
                     f'Run Slips with --killall to stop them.'
                 )
 
+            self.print("Warning: Slips may generate a large amount of traffic by querying TI sites.")
+
+
             hostIP = self.metadata_man.store_host_ip()
 
             # Check every 5 secs if we should stop slips or not
@@ -622,9 +628,11 @@ class Main:
                     # How many profiles we have?
                     profilesLen = self.db.get_profiles_len()
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
+                    evidence_number = self.db.get_evidence_number() or 0
                     print(
                         f'Total analyzed IPs so '
                         f'far: {profilesLen}. '
+                        f'Evidence added: {evidence_number}. '
                         f'IPs sending traffic in the last {self.twid_width}: {modified_ips_in_the_last_tw}. '
                         f'({now})',
                         end='\r',

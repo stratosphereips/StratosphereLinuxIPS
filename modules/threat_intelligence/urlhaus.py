@@ -144,14 +144,22 @@ class URLhaus:
         daddr = flow["daddr"]
 
         ip_identification = self.db.get_ip_identification(daddr)
+
+        # add the following fields in the evidence description but only if we're sure they exist
+        size = f" size: {flow['size']}." if flow.get('size', False) else ''
+        file_name = f" file name: {flow['file_name']}." if flow.get('file_name', False) else ''
+        file_type = f" file type: {flow['file_type']}." if flow.get('file_type', False) else ''
+        tags = f" tags: {flow['tags']}." if flow.get('tags', False) else ''
+
         # we have more info about the downloaded file
         # so we need a more detailed description
-        description = f"Malicious downloaded file: {flow['md5']}. " \
-                      f"size: {flow['size']}" \
-                      f"from IP: {flow['daddr']} {ip_identification}." \
-                      f"file name: {file_info['file_name']} " \
-                      f"file type: {file_info['file_type']} " \
-                      f"tags: {file_info['tags']}. by URLhaus." \
+        description = f"Malicious downloaded file: {flow['md5']}." \
+                      f"{size}" \
+                      f" from IP: {flow['daddr']} {ip_identification}." \
+                      f"{file_name}" \
+                      f"{file_type}" \
+                      f"{tags}" \
+                      f" by URLhaus." \
 
         if threat_level:
             # threat level here is the vt percentage from urlhaus

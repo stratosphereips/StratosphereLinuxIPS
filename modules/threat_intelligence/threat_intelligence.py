@@ -93,7 +93,7 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
 
     def set_evidence_malicious_asn(
             self,
-            ip,
+            attacker,
             uid,
             timestamp,
             ip_info,
@@ -106,7 +106,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
         :param asn_info: the malicious asn info taken from own_malicious_iocs.csv
         """
         attacker_direction = 'dstip'
-        attacker = ip
         category = 'Anomaly.Traffic'
         evidence_type = 'ThreatIntelligenceBlacklistedASN'
         confidence = 0.8
@@ -116,9 +115,9 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
 
         tags = asn_info.get('tags', False)
         source_target_tag = tags.capitalize() if tags else 'BlacklistedASN'
-        identification = self.db.get_ip_identification(ip)
+        identification = self.db.get_ip_identification(attacker)
 
-        description = f'Connection to IP: {ip} with blacklisted ASN: {asn} ' \
+        description = f'Connection to IP: {attacker} with blacklisted ASN: {asn} ' \
                       f'Description: {asn_info["description"]}, ' \
                       f'Found in feed: {asn_info["source"]}, ' \
                       f'Confidence: {confidence}.'\
@@ -163,11 +162,11 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
         if 'src' in attacker_direction:
             direction = 'from'
             opposite_dir = 'to'
-            other_ip = daddr
+            victim = daddr
         elif 'dst' in attacker_direction:
             direction = 'to'
             opposite_dir = 'from'
-            other_ip = profileid.split("_")[-1]
+            victim = profileid.split("_")[-1]
         else:
             # attacker_dir is not specified?
             return
@@ -190,7 +189,7 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
             # this will be 'blacklisted conn from x to y'
             # or 'blacklisted conn to x from y'
             description = f'connection {direction} blacklisted IP {ip} ' \
-                          f'{opposite_dir} {other_ip}. '
+                          f'{opposite_dir} {victim}. '
 
 
         description += f'blacklisted IP {ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
@@ -205,7 +204,7 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
 
         self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+                                 twid=twid, uid=uid, victim=victim)
 
         # mark this ip as malicious in our database
         ip_info = {'threatintelligence': ip_info}
@@ -882,7 +881,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
                 self.urlhaus.set_evidence_malicious_hash(blacklist_details)
             else:
                 self.set_evidence_malicious_hash(blacklist_details)
-        self.db.mark_as_analyzed_by_ti_module()
 
 
     def is_malicious_url(
@@ -967,16 +965,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
             self.db.set_TI_file_info(filename, malicious_file_info)
             return True
 
-
-    def have_pending_ips_in_queue(self):
-        """ check if this module has pending ips/domains to analyse """
-        q_size = self.db.get_ti_queue_size()
-        if q_size is None:
-            return False
-        if int(q_size) > 0:
-            return True
-        return False
-
     def pre_main(self):
         utils.drop_root_privs()
         # Load the local Threat Intelligence files that are
@@ -986,7 +974,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
         self.update_local_file('own_malicious_JA3.csv')
         self.update_local_file('own_malicious_JARM.csv')
         self.circllu_calls_thread.start()
-        self.db.init_ti_queue()
 
     def main(self):
         # The channel now can receive an IP address or a domain name
@@ -1040,7 +1027,6 @@ class ThreatIntel(Module, multiprocessing.Process, URLhaus):
                     profileid,
                     twid
                 )
-            self.db.mark_as_analyzed_by_ti_module()
 
         if msg:= self.get_msg('new_downloaded_file'):
             file_info = json.loads(msg['data'])

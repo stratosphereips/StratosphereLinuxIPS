@@ -77,6 +77,12 @@ export {
 
             if ( !detect_scans ) {return F;}
 
+            if ( icmp$itype==3){
+                # destination unreachable, it shouldn't be considered a scan
+                return F ;
+            }
+
+
             local used_table: table[addr] of set[addr];
 
             if ( icmp$itype==8){

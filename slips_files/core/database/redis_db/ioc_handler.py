@@ -9,10 +9,6 @@ class IoCHandler():
     name = 'DB'
 
 
-    def init_ti_queue(self):
-        """used when the TI module starts to initialize the queue size """
-        self.r.set('threat_intelligence_q_size', 0)
-
     def set_loaded_ti_files(self, number_of_loaded_files: int):
         """
         Stores the number of successfully loaded TI files
@@ -24,16 +20,6 @@ class IoCHandler():
         returns the number of successfully loaded TI files. or 0 if none is loaded
         """
         return self.r.get('loaded TI files') or 0
-
-    def mark_as_analyzed_by_ti_module(self):
-        """
-        everytime an ip/domain is analyzed by the ti module, this function will decrease the
-        ti queue by 1
-        """
-        self.r.incrby('threat_intelligence_q_size', -1)
-
-    def get_ti_queue_size(self):
-        return self.r.get('threat_intelligence_q_size')
 
     def give_threat_intelligence(
             self, profileid, twid, ip_state, starttime, uid, daddr, proto=False, lookup='', extra_info:dict =False
@@ -55,8 +41,6 @@ class IoCHandler():
         self.publish(
             'give_threat_intelligence', json.dumps(data_to_send)
         )
-        # this is a trick to know how many ips/domains that slips needs to analyze before stopping
-        self.r.incr("threat_intelligence_q_size")
 
         return data_to_send
 

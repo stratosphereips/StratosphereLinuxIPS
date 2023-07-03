@@ -14,7 +14,14 @@ class DBManager:
     # exactly 1 instance
     _instances = {}
 
-    def __new__(cls, output_dir, output_queue, redis_port, start_sqlite=True, **kwargs):
+    def __new__(
+            cls,
+            output_dir,
+            output_queue,
+            redis_port,
+            start_sqlite=True,
+            **kwargs
+    ):
         cls.output_dir = output_dir
         cls.output_queue = output_queue
         cls.redis_port = redis_port
@@ -114,6 +121,9 @@ class DBManager:
 
     def get_output_dir(self, *args, **kwargs):
         return self.rdb.get_output_dir(*args, **kwargs)
+
+    def get_input_file(self, *args, **kwargs):
+        return self.rdb.get_input_file(*args, **kwargs)
 
     def setInfoForIPs(self, *args, **kwargs):
         return self.rdb.setInfoForIPs(*args, **kwargs)
@@ -351,6 +361,9 @@ class DBManager:
     def setEvidence(self, *args, **kwargs):
         return self.rdb.setEvidence(*args, **kwargs)
 
+    def get_user_agents_count(self, *args, **kwargs):
+        return self.rdb.get_user_agents_count(*args, **kwargs)
+
     def init_evidence_number(self, *args, **kwargs):
         return self.rdb.init_evidence_number(*args, **kwargs)
 
@@ -387,9 +400,6 @@ class DBManager:
     def update_threat_level(self, *args, **kwargs):
         return self.rdb.update_threat_level(*args, **kwargs)
 
-    def init_ti_queue(self, *args, **kwargs):
-        return self.rdb.init_ti_queue(*args, **kwargs)
-
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
 
@@ -401,6 +411,12 @@ class DBManager:
 
     def get_ti_queue_size(self, *args, **kwargs):
         return self.rdb.get_ti_queue_size(*args, **kwargs)
+
+    def set_cyst_enabled(self, *args, **kwargs):
+        return self.rdb.set_cyst_enabled(*args, **kwargs)
+
+    def is_cyst_enabled(self, *args, **kwargs):
+        return self.rdb.is_cyst_enabled(*args, **kwargs)
 
     def give_threat_intelligence(self, *args, **kwargs):
         return self.rdb.give_threat_intelligence(*args, **kwargs)
@@ -599,8 +615,8 @@ class DBManager:
     def getTWsfromProfile(self, *args, **kwargs):
         return self.rdb.getTWsfromProfile(*args, **kwargs)
 
-    def getamountTWsfromProfile(self, *args, **kwargs):
-        return self.rdb.getamountTWsfromProfile(*args, **kwargs)
+    def get_number_of_tws_in_profile(self, *args, **kwargs):
+        return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
 
     def getSrcIPsfromProfileTW(self, *args, **kwargs):
         return self.rdb.getSrcIPsfromProfileTW(*args, **kwargs)
@@ -617,8 +633,8 @@ class DBManager:
     def get_profiles_len(self, *args, **kwargs):
         return self.rdb.get_profiles_len(*args, **kwargs)
 
-    def getLastTWforProfile(self, *args, **kwargs):
-        return self.rdb.getLastTWforProfile(*args, **kwargs)
+    def get_last_twid_of_profile(self, *args, **kwargs):
+        return self.rdb.get_last_twid_of_profile(*args, **kwargs)
 
     def getFirstTWforProfile(self, *args, **kwargs):
         return self.rdb.getFirstTWforProfile(*args, **kwargs)
@@ -652,6 +668,9 @@ class DBManager:
 
     def add_user_agent_to_profile(self, *args, **kwargs):
         return self.rdb.add_user_agent_to_profile(*args, **kwargs)
+
+    def get_first_user_agent(self, *args, **kwargs):
+        return self.rdb.get_first_user_agent(*args, **kwargs)
 
     def add_all_user_agent_to_profile(self, *args, **kwargs):
         return self.rdb.add_all_user_agent_to_profile(*args, **kwargs)
@@ -737,6 +756,9 @@ class DBManager:
     def get_hostname_from_profile(self, *args, **kwargs):
         return self.rdb.get_hostname_from_profile(*args, **kwargs)
 
+    def add_host_name_to_profile(self, *args, **kwargs):
+        return self.rdb.add_host_name_to_profile(*args, **kwargs)
+
     def get_ipv4_from_profile(self, *args, **kwargs):
         return self.rdb.get_ipv4_from_profile(*args, **kwargs)
 
@@ -812,6 +834,11 @@ class DBManager:
     def get_name_of_module_at(self, *args, **kwargs):
         return self.rdb.get_name_of_module_at(*args, **kwargs)
 
+    def get_evidence_detection_threshold(self, *args, **kwargs):
+        return self.rdb.get_evidence_detection_threshold(*args, **kwargs)
+
+    def get_flows_count(self, *args, **kwargs):
+        return self.sqlite.get_flows_count(*args, **kwargs)
 
     def get_redis_pid(self, *args, **kwargs):
         return self.rdb.get_redis_pid(*args, **kwargs)
@@ -822,6 +849,13 @@ class DBManager:
         db to json or csv based on the config file
         """
         self.sqlite.export_labeled_flows(self.get_output_dir(), *args, **kwargs)
+
+
+    def get_commit(self, *args, **kwargs):
+        return self.rdb.get_commit(*args, **kwargs)
+
+    def get_branch(self, *args, **kwargs):
+        return self.rdb.get_branch(*args, **kwargs)
 
     def close(self, *args, **kwargs):
         self.rdb.r.close()

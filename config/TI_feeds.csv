@@ -50,3 +50,4 @@ https://raw.githubusercontent.com/Orange-Cyberdefense/russia-ukraine_IOCs/main/O
 https://hole.cert.pl/domains/domains.json,medium, ['malicious']
 # this feed is random, not the full version of rstcloud ips
 https://raw.githubusercontent.com/rstcloud/rstthreats/master/feeds/full/random100_ioc_ip_latest.json,medium,['malicious']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/binarydefense.intel,medium, ['honeypot']

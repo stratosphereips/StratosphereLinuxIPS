@@ -176,7 +176,7 @@ class FlowAlerts(Module, multiprocessing.Process):
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
             self.helper.set_evidence_long_connection(
-                daddr, dur, profileid, twid, uid, timestamp, ip_state='dstip'
+                daddr, dur, profileid, twid, uid, timestamp, attacker_direction='srcip'
             )
             return True
         return False
@@ -222,20 +222,22 @@ class FlowAlerts(Module, multiprocessing.Process):
         organization_info = json.loads(organization_info)
 
         # get the organization ip or range
-        org_ip = organization_info['ip']
+        org_ips: list = organization_info['ip']
 
         # org_name = organization_info['org_name']
 
-        if daddr in org_ip:
+        if daddr in org_ips:
             # it's an ip and it belongs to this org, consider the port as known
             return True
 
-        # is it a range?
-        with contextlib.suppress(ValueError):
-            # we have the org range in our database, check if the daddr belongs to this range
-            if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
-                # it does, consider the port as known
-                return True
+        for ip in org_ips:
+            # is any of them a range?
+            with contextlib.suppress(ValueError):
+                # we have the org range in our database, check if the daddr belongs to this range
+                if ipaddress.ip_address(daddr) in ipaddress.ip_network(ip):
+                    # it does, consider the port as known
+                    return True
+
         # not a range either since nothing is specified, e.g. ip is set to ""
         # check the source and dst mac address vendors
         src_mac_vendor = str(
@@ -247,21 +249,26 @@ class FlowAlerts(Module, multiprocessing.Process):
             )
         )
 
-        org_name = organization_info['org_name'].lower()
-        if (
-                org_name in src_mac_vendor.lower()
-                or org_name in dst_mac_vendor.lower()
-        ):
-            return True
+        # get the list of all orgs known to use this port and proto
+        for org_name in organization_info['org_name']:
+            org_name = org_name.lower()
+            if (
+                    org_name in src_mac_vendor.lower()
+                    or org_name in dst_mac_vendor.lower()
+            ):
+                return True
 
-        # check if the SNI, hostname, rDNS of this ip belong to org_name
-        ip_identification = self.db.get_ip_identification(daddr)
-        if org_name in ip_identification.lower():
-            return True
+            # check if the SNI, hostname, rDNS of this ip belong to org_name
+            ip_identification = self.db.get_ip_identification(daddr)
+            if org_name in ip_identification.lower():
+                return True
 
-        # if it's an org that slips has info about (apple, fb, google,etc.),
-        # check if the daddr belongs to it
-        return bool(self.whitelist.is_ip_in_org(daddr, org_name))
+            # if it's an org that slips has info about (apple, fb, google,etc.),
+            # check if the daddr belongs to it
+            if bool(self.whitelist.is_ip_in_org(daddr, org_name)):
+                return True
+
+        return False
 
 
 
@@ -995,7 +1002,7 @@ class FlowAlerts(Module, multiprocessing.Process):
         uids = [cached_ssh_versions['uid'], flow['uid']]
         self.helper.set_evidence_multiple_ssh_versions(
             flow['saddr'], cached_versions, current_versions,
-            flow['starttime'], twid, uids, role=role
+            flow['starttime'], twid, uids, flow['daddr'], role=role
         )
         return True
 
@@ -1427,6 +1434,7 @@ class FlowAlerts(Module, multiprocessing.Process):
                 twid,
                 uid,
                 timestamp,
+                daddr,
                 type_='ja3',
                 ioc=ja3,
             )
@@ -1439,6 +1447,7 @@ class FlowAlerts(Module, multiprocessing.Process):
                 twid,
                 uid,
                 timestamp,
+                saddr,
                 type_='ja3s',
                 ioc=ja3s,
             )

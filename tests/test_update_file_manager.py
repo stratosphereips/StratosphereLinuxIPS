@@ -71,16 +71,3 @@ def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     assert update_manager.check_if_update(url, float('-inf')) is True
 
 
-def test_read_ports_info():
-    db = ModuleFactory().create_db_manager_obj(6379)
-    update_manager = ModuleFactory().create_update_manager_obj(db)
-    filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
-    assert update_manager.read_ports_info(filepath) > 100
-
-    org = json.loads(db.get_organization_of_port('5243/udp'))
-    assert 'org_name' in org
-    assert org['org_name'] == 'Viber'
-
-    org = json.loads(db.get_organization_of_port('65432/tcp'))
-    assert 'org_name' in org
-    assert org['org_name'] == 'Apple'

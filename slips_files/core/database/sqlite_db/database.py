@@ -4,6 +4,7 @@ import json
 import csv
 from dataclasses import asdict
 from threading import Lock
+from time import sleep
 
 class SQLiteDB():
     """Stores all the flows slips reads and handles labeling them"""
@@ -215,6 +216,15 @@ class SQLiteDB():
             parameters,
         )
 
+    def get_flows_count(self, profileid, twid) -> int:
+        """
+        returns the total number of flows AND altflows
+         in the db for this profileid and twid
+         """
+        condition = f'profileid="{profileid}" AND twid= "{twid}"'
+        flows = self.get_count('flows', condition=condition)
+        flows += self.get_count('altflows', condition=condition)
+        return flows
 
 
     def add_altflow(
@@ -252,6 +262,19 @@ class SQLiteDB():
         result = self.fetchall()
         return result
 
+    def get_count(self, table, condition=None):
+        """
+        returns th enumber of matching rows in the given table based on a specific contioins
+        """
+        query = f"SELECT COUNT(*) FROM {table}"
+
+        if condition:
+            query += f" WHERE {condition}"
+
+        self.execute(query)
+        return self.fetchone()[0]
+
+
     def close(self):
         self.cursor.close()
         self.conn.close()
@@ -282,18 +305,26 @@ class SQLiteDB():
         since sqlite is terrible with multi-process applications
         this should be used instead of all calls to commit() and execute()
         """
-        self.cursor_lock.acquire(True)
 
         try:
+            self.cursor_lock.acquire(True)
+
             if not params:
                 self.cursor.execute(query)
             else:
                 self.cursor.execute(query, params)
             self.conn.commit()
-        except sqlite3.Error as e:
-            # An error occurred during execution
-            print(f"Error executing query ({query}): {e}")
 
-        self.cursor_lock.release()
+            self.cursor_lock.release()
+        except sqlite3.Error as e:
+            if "database is locked" in str(e):
+                self.cursor_lock.release()
+                # Retry after a short delay
+                sleep(0.1)
+                self.execute(query, params=params)
+            else:
+                # An error occurred during execution
+                print(f"Error executing query ({query}): {e}")
+
 
         

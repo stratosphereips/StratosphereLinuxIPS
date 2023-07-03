@@ -68,6 +68,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         'report_to_peers',
         'new_tunnel',
         'check_jarm_hash',
+        'control_channel',
+        'new_module_flow'
         'control_module',
         'cpu_profile'
         }
@@ -102,7 +104,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             cls.start()
             # By default the slips internal time is 0 until we receive something
             cls.set_slips_internal_time(0)
-            while cls.get_slips_start_time() is None:
+            if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
             # useful for debugging using 'CLIENT LIST' redis cmd
             cls.r.client_setname(f"Slips-DB")
@@ -481,6 +483,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """returns the length of all keys in the db"""
         return self.r.dbsize()
 
+    def set_cyst_enabled(self):
+        return self.r.set('is_cyst_enabled', 'yes')
+
+    def is_cyst_enabled(self):
+        return self.r.get('is_cyst_enabled')
+
+
     def get_equivalent_tws(self, hrs: float):
         """
         How many tws correspond to the given hours?
@@ -536,6 +545,30 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         gets zeek output dir from the db
         """
         return self.r.hget('analysis', 'zeek_dir')
+
+    def get_input_file(self):
+        """
+        gets zeek output dir from the db
+        """
+        return self.r.hget('analysis', 'name')
+
+    def get_commit(self):
+        """
+        gets the currently used commit from the db
+        """
+        return self.r.hget('analysis', 'commit')
+
+    def get_branch(self):
+        """
+        gets the currently used branch from the db
+        """
+        return self.r.hget('analysis', 'branch')
+
+    def get_evidence_detection_threshold(self):
+        """
+        gets the currently used evidence_detection_threshold from the db
+        """
+        return self.r.hget('analysis', 'evidence_detection_threshold')
 
 
     def get_input_type(self):
@@ -1015,10 +1048,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def set_organization_of_port(self, organization, ip: str, portproto: str):
         """
         Save in the DB a port with its organization and the ip/ range used by this organization
-        :param portproto: portnumber.lower() + / + protocol
+        :param portproto: portnumber + / + protocol.lower()
         :param ip: can be a single org ip, or a range or ''
         """
-        org_info = {'org_name': organization, 'ip': ip}
+        if org_info := self.get_organization_of_port(portproto):
+            # this port and proto was used with another organization, append to it
+            org_info = json.loads(org_info)
+            org_info['ip'].append(ip)
+            org_info['org_name'].append(organization)
+        else:
+            org_info = {'org_name': [organization], 'ip': [ip]}
+
         org_info = json.dumps(org_info)
         self.rcache.hset('organization_port', portproto, org_info)
 

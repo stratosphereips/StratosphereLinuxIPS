@@ -67,9 +67,6 @@ class NetworkDiscovery(Module, multiprocessing.Process):
         confidence = 1 / (255 - 5) * (hosts_scanned - 255) + 1
         threat_level = 'medium'
         category = 'Recon.Scanning'
-        # attacker_direction is set to dstip even though the srcip is the one performing the scan
-        # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
-        # to generate an alert every 5,10,15,.. scans #todo test this
         attacker_direction = 'srcip'
         # this is the last dip scanned
         attacker = profileid.split('_')[1]
@@ -230,16 +227,19 @@ class NetworkDiscovery(Module, multiprocessing.Process):
                             f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
                             f'Confidence: {confidence}. by Slips'
                         )
+            victim = scanned_ip
         else:
             description = (
                 f'ICMP scanning {number_of_scanned_ips} different IPs. ICMP scan type: {attack}. '
                 f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
                 f'Confidence: {confidence}. by Slips'
             )
+            # not a single victim, there are many
+            victim = ''
 
         self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
-                                 proto=protocol, profileid=profileid, twid=twid, uid=icmp_flows_uids)
+                                 proto=protocol, profileid=profileid, twid=twid, uid=icmp_flows_uids, victim=victim)
 
 
     def set_evidence_dhcp_scan(
