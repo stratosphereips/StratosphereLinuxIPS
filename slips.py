@@ -99,12 +99,11 @@ class Main:
                 if (self.cpuProfilerMultiprocess):
                     args = sys.argv
                     if (args[-1] != "--no-recurse"):
-                        viz_args = ['viztracer', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
+                        viz_args = ['viztracer','--max_stack_depth', '10', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
                         viz_args.extend(args)
                         viz_args.append("--no-recurse")
                         print("Starting multiprocess profiling recursive subprocess")
-                        print(viz_args)
-                        # subprocess.run(viz_args)
+                        subprocess.run(viz_args)
                         exit(0)
                 else:
                     self.cpuProfiler = CPUProfiler(
@@ -550,11 +549,7 @@ class Main:
             if not self.args.db:
                 # update local files before starting modules
                 self.update_local_TI_files()
-                args = sys.argv
-                if (args[-1] != "--no-recurse"):
-                    self.proc_man.load_modules()
-                else:
-                    print("Modules are not compatible with cpu profiling, running as disabled")
+                self.proc_man.load_modules()
 
             if self.args.webinterface:
                 self.ui_man.start_webinterface()
