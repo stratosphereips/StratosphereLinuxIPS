@@ -8,7 +8,7 @@ import subprocess
 import json
 import shutil
 
-class Module(Module, multiprocessing.Process):
+class LeakDetector(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Leak Detector'
     description = 'Detect leaks of data in the traffic'
@@ -43,10 +43,6 @@ class Module(Module, multiprocessing.Process):
         # elif returncode == 32512:
         self.print("yara is not installed. install it using:\nsudo apt-get install yara")
         return False
-
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
 
     def fix_json_packet(self, json_packet):

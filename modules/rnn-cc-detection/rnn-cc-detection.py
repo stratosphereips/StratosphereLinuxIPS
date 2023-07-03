@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
-class Module(Module, multiprocessing.Process):
+class CCDetection(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'RNN C&C Detection'
     description = 'Detect C&C channels based on behavioral letters'
@@ -104,10 +104,6 @@ class Module(Module, multiprocessing.Process):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
-        return True
     def pre_main(self):
         utils.drop_root_privs()
         # TODO: set the decision threshold in the function call

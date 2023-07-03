@@ -11,7 +11,7 @@ import validators
 import traceback
 
 
-class Module(Module, multiprocessing.Process):
+class CESNET(Module, multiprocessing.Process):
     name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
@@ -262,10 +262,6 @@ class Module(Module, multiprocessing.Process):
                 src_ips.update({srcip: json.dumps(event_info)})
 
         self.db.add_ips_to_IoC(src_ips)
-
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()

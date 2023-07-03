@@ -64,7 +64,7 @@ class FileEventHandler(RegexMatchingEventHandler):
                     while line := f.readline():
                         if 'termination' in line:
                             # this is how modules tell slips to terminate
-                            self.db.publish('finished_modules', 'stop_slips')
+                            self.db.publish('control_channel', 'stop_slips')
                             break
         elif 'whitelist' in filename:
             self.db.publish('reload_whitelist', 'reload')

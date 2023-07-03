@@ -13,7 +13,7 @@ import threading
 import time
 
 
-class Module(Module, multiprocessing.Process, URLhaus):
+class ThreatIntel(Module, multiprocessing.Process, URLhaus):
     name = 'Threat Intelligence'
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia, Alya Gomaa']
@@ -569,11 +569,6 @@ class Module(Module, multiprocessing.Process, URLhaus):
         a blacklisted IP or not.
         """
         return protocol == 'ICMP' and ip_state == 'dstip'
-
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
-        return True
 
     def spamhaus(self, ip):
         """

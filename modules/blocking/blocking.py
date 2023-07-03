@@ -7,7 +7,7 @@ import json
 import subprocess
 import time
 
-class Module(Module, multiprocessing.Process):
+class Blocking(Module, multiprocessing.Process):
     """Data should be passed to this module as a json encoded python dict,
     by default this module flushes all slipsBlocking chains before it starts"""
 
@@ -320,10 +320,6 @@ class Module(Module, multiprocessing.Process):
             self.print(f'Unblocked: {ip_to_unblock}')
             return True
         return False
-
-    def shutdown_gracefully(self):
-        self.db.publish('finished_modules', self.name)
-
 
     def check_for_ips_to_unblock(self):
             unblocked_ips = set()

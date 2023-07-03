@@ -11,7 +11,7 @@ import threading
 import validators
 
 
-class Module(Module, multiprocessing.Process):
+class VT(Module, multiprocessing.Process):
     name = 'Virustotal'
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = [
@@ -505,9 +505,6 @@ class Module(Module, multiprocessing.Process):
 
         return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
 
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
         if not self.read_api_key() or self.key in ('', None):

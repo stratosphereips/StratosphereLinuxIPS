@@ -1512,6 +1512,7 @@ class ProfileHandler():
         data[module] = label
         data = json.dumps(data)
         self.r.hset(profileid, 'modules_labels', data)
+
     def check_TW_to_close(self, close_all=False):
         """
         Check if we should close some TW

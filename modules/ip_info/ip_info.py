@@ -17,7 +17,7 @@ import time
 import asyncio
 
 
-class Module(Module, multiprocessing.Process):
+class IPInfo(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'IP Info'
     description = 'Get different info about an IP/MAC address'
@@ -382,8 +382,6 @@ class Module(Module, multiprocessing.Process):
             self.country_db.close()
         if hasattr(self, 'mac_db'):
             self.mac_db.close()
-        # confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
     # GW
     def get_gateway_ip(self):

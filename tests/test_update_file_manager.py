@@ -1,4 +1,4 @@
-"""Unit test for modules/update_manager/update_file_manager.py"""
+"""Unit test for modules/update_manager/update_manager.py"""
 from tests.module_factory import ModuleFactory
 import json
 
@@ -18,7 +18,7 @@ def test_check_if_update_based_on_update_period(mock_db):
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     url = 'abc.com/x'
     # update period hasn't passed
-    assert update_manager._UpdateFileManager__check_if_update(url, float('inf')) is False
+    assert update_manager.check_if_update(url, float('inf')) is False
 
 def test_check_if_update_based_on_e_tag(mocker, mock_db):
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
@@ -32,7 +32,7 @@ def test_check_if_update_based_on_e_tag(mocker, mock_db):
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'ETag': '1234'}
     mock_requests.return_value.text = ""
-    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is False
+    assert update_manager.check_if_update(url, float('-inf')) is False
 
 
     # period passed, etag different
@@ -43,7 +43,7 @@ def test_check_if_update_based_on_e_tag(mocker, mock_db):
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'ETag': '2222'}
     mock_requests.return_value.text = ""
-    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is True
+    assert update_manager.check_if_update(url, float('-inf')) is True
 
 def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
@@ -57,7 +57,7 @@ def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     mock_requests.return_value.headers = {'Last-Modified': 10.0}
     mock_requests.return_value.text = ""
 
-    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is False
+    assert update_manager.check_if_update(url, float('-inf')) is False
 
     # period passed, no etag, last modified changed
     url = 'google.com/photos'
@@ -68,7 +68,7 @@ def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     mock_requests.return_value.headers = {'Last-Modified': 11}
     mock_requests.return_value.text = ""
 
-    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is True
+    assert update_manager.check_if_update(url, float('-inf')) is True
 
 
 def test_read_ports_info():

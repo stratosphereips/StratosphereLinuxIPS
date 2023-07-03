@@ -7,9 +7,9 @@ import os
 
 
 class Whitelist:
-    def __init__(self, outputqueue, db):
+    def __init__(self, output_queue, db):
         self.name = 'whitelist'
-        self.outputqueue = outputqueue
+        self.output_queue = output_queue
         self.read_configuration()
         self.org_info_path = 'slips_files/organizations_info/'
         self.ignored_flow_types = ('arp')
@@ -33,7 +33,7 @@ class Whitelist:
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
+        self.output_queue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
         conf = ConfigParser()

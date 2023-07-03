@@ -8,7 +8,7 @@ import time
 import json
 
 
-class Module(Module, multiprocessing.Process):
+class Timeline(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Timeline'
     description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
@@ -360,10 +360,6 @@ class Module(Module, multiprocessing.Process):
             )
             self.print(traceback.print_exc(),0,1)
             return True
-
-    def shutdown_gracefully(self):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()

@@ -4,7 +4,7 @@ import urllib
 import requests
 
 
-class Module(Module, multiprocessing.Process):
+class HTTPAnalyzer(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'HTTP Analyzer'
     description = 'Analyze HTTP flows'
@@ -451,10 +451,6 @@ class Module(Module, multiprocessing.Process):
             return True
 
 
-
-
-    def shutdown_gracefully(self):
-        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
 
