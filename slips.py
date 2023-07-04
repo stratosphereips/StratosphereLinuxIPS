@@ -93,10 +93,11 @@ class Main:
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
+        self.cpuProfilerMode = slips.conf.get_cpu_profiler_mode()
         self.cpuProfilerMultiprocess = slips.conf.get_cpu_profiler_multiprocess() == 'yes'
         if self.cpuProfilerEnabled:
             try:
-                if (self.cpuProfilerMultiprocess):
+                if (self.cpuProfilerMultiprocess and self.cpuProfilerMode == "dev"):
                     args = sys.argv
                     if (args[-1] != "--no-recurse"):
                         viz_args = ['viztracer','--max_stack_depth', '10', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
