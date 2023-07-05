@@ -1017,7 +1017,13 @@ and ICMP-AddressMaskScan based on the icmp type
 We detect a scan every threshold. So we generate an evidence when there is 
 5,10,15, .. etc. ICMP established connections to different IPs.
 
-
+### CPU Profiling
+Options to enable cpu profiling can be found under the [Profiling] section of the ```slips.conf``` file.
+```cpu_profiler_enable``` set to "yes" enables cpu profiling.
+```cpu_profiler_mode``` can be set to "live" or "dev". Setting to "live" mode publishes updates during the runtime of the program to the redis channel 'cpu_profile'. Setting to "dev" mode outputs a json file of the cpu usage at the end of the program run. It is recommended to only use dev mode for static file inputs because longer runs result in data loss of the usage, so not everything will get recorded.
+```cpu_profiler_multiprocess``` can be set to "yes" or "no" and only affects the dev mode profiling. If set to "yes" then all processes will be profiled. If set to "no" then only the main process will be profiled.
+```cpu_profiler_output_limit``` is set to an integer value and only affects the live mode profiling. This option sets the limit on the number of processes output for live mode profiling updates.
+```cpu_profiler_sampling_interval``` is set to an integer value and only affects the live mode profiling. This option sets the duration in seconds of live mode sampling intervals. It is recommended to set this option greater than 10 seconds otherwise there won't be much useful information captured during sampling.
 
 
 ---
