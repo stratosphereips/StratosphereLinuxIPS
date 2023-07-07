@@ -185,6 +185,7 @@ class Whitelist:
                 return True
 
 
+
         if whitelisted_IPs := self.db.get_whitelist('IPs'):
             # self.print('Check the IPs')
             # Check if the IPs are whitelisted
@@ -209,6 +210,18 @@ class Whitelist:
                 ):
                     # self.print(f"Whitelisting the dst IP {column_values['daddr']}")
                     return True
+
+            if flow_type == 'dns':
+                # check all answers
+                for answer in flow.answers:
+                    if answer in ips_to_whitelist:
+                        # #TODO the direction doesn't matter here right?
+                        # direction = whitelisted_IPs[daddr]['from']
+                        what_to_ignore = whitelisted_IPs[answer]['what_to_ignore']
+                        if self.should_ignore_flows(what_to_ignore):
+                            # self.print(f"Whitelisting the IP {answer} due to its presence in a dns answer")
+                            return True
+
 
         if whitelisted_macs := self.db.get_whitelist('mac'):
             # try to get the mac address of the current flow
