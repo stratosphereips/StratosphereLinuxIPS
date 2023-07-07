@@ -164,7 +164,7 @@ class Main:
         """
         if self.mode == 'daemonized':
             self.daemon.stop()
-        if not self.conf.get_cpu_profiler_enable():
+        if self.conf.get_cpu_profiler_enable() != "yes":
             sys.exit(0)
 
     def update_local_TI_files(self):
