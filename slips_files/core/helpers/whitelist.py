@@ -176,6 +176,9 @@ class Whitelist:
             domains_to_check.append(flow.subject.replace(
                 'CN=', ''
             ))
+        elif flow_type == 'dns':
+            domains_to_check.append(flow.query)
+
 
         for domain in domains_to_check:
             if self.is_whitelisted_domain(domain, saddr, daddr, 'flows'):
