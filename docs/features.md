@@ -1031,6 +1031,11 @@ The main purpose of this mode it to show live CPU stats in the web interface.
 
  Setting the mode to "dev" outputs a JSON file of the CPU usage at the end of the program run.
  It is recommended to only use dev mode for static file inputs (pcaps, suricata files, binetflows, etc.) instead of interface and growing zeek dirs, because longer runs result in profiling data loss and not everything will get recorded.
+The JSON file created in this mode is placed in the output dir of the current run and can be viewed by running the following command
+
+```vizviewer results.json``` 
+
+then going to http://127.0.0.1:9001/ in your browser for seeing the visualizations of the CPU usage
 
 
 Options to enable cpu profiling can be found under the [Profiling] section of the ```slips.conf``` file.
@@ -1039,6 +1044,8 @@ Options to enable cpu profiling can be found under the [Profiling] section of th
 ```cpu_profiler_multiprocess``` can be set to "yes" or "no" and only affects the dev mode profiling. If set to "yes" then all processes will be profiled. If set to "no" then only the main process (slips.py) will be profiled.
 ```cpu_profiler_output_limit``` is set to an integer value and only affects the live mode profiling. This option sets the limit on the number of processes output for live mode profiling updates.
 ```cpu_profiler_sampling_interval``` is set to an integer value and only affects the live mode profiling. This option sets the duration in seconds of live mode sampling intervals. It is recommended to set this option greater than 10 seconds otherwise there won't be much useful information captured during sampling.
+
+
 
 
 ---
