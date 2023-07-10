@@ -9,6 +9,7 @@ import platform
 import os
 import sys
 import ipaddress
+import communityid
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -59,6 +60,7 @@ class Utils(object):
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
         self.local_tz = self.get_local_timezone()
+        self.community_id = communityid.CommunityID()
 
     def get_cidr_of_ip(self, ip):
         """
@@ -424,6 +426,22 @@ class Utils(object):
 
         return units[return_type]
 
+    def get_community_id(self, flow):
+            """
+            calculates the flow community id based of the protocol
+            """
+            proto = flow.proto.lower()
+            cases = {
+                'tcp': communityid.FlowTuple.make_tcp,
+                'udp': communityid.FlowTuple.make_udp,
+                'icmp': communityid.FlowTuple.make_icmp,
+            }
+            try:
+                tpl = cases[proto](flow.saddr, flow.daddr, flow.sport, flow.dport)
+                return self.community_id.calc(tpl)
+            except KeyError:
+                # proto doesn't have a community_id.FlowTuple  method
+                return ''
 
     def IDEA_format(
         self,
