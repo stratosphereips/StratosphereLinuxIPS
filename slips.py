@@ -100,7 +100,8 @@ class Main:
                 if (self.cpuProfilerMultiprocess and self.cpuProfilerMode == "dev"):
                     args = sys.argv
                     if (args[-1] != "--no-recurse"):
-                        viz_args = ['viztracer','--max_stack_depth', '10', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
+                        tracer_entries = str(slips.conf.get_cpu_profiler_dev_mode_entries())
+                        viz_args = ['viztracer', '--tracer_entries', tracer_entries, '--max_stack_depth', '10', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
                         viz_args.extend(args)
                         viz_args.append("--no-recurse")
                         print("Starting multiprocess profiling recursive subprocess")

@@ -758,3 +758,6 @@ class ConfigParser(object):
     
     def get_cpu_profiler_sampling_interval(self) -> int:
         return int(self.read_configuration('Profiling', 'cpu_profiler_sampling_interval', 5))
+    
+    def get_cpu_profiler_dev_mode_entries(self) -> int:
+        return int(self.read_configuration('Profiling', 'cpu_profiler_dev_mode_entries', 1000000))
