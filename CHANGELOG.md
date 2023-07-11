@@ -1,3 +1,6 @@
+-1.0.6.1 (July 7th 2023):
+- Improved description of Slips in the README.md
+
 -1.0.6 (June 2023):
 - Store flows in SQLite database in the output directory instead of redis.
 - 55% RAM usage decrease.
