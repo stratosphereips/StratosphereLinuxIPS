@@ -21,6 +21,7 @@ import contextlib
 import multiprocessing
 from slips_files.common.imports import *
 from slips_files.common.cpu_profiler import CPUProfiler
+from slips_files.common.memory_profiler import MemoryProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -682,6 +683,12 @@ class Main:
 ####################
 if __name__ == '__main__':
     slips = Main()
+    memoryProfilerEnabled = slips.conf.get_memory_profiler_enable() == "yes"
+    memoryProfilerMode = slips.conf.get_memory_profiler_mode()
+    memoryProfilerMultiprocess = slips.conf.get_memory_profiler_multiprocess() == "yes"
+    if memoryProfilerEnabled:
+        memoryProfiler = MemoryProfiler("memraytest/output.bin", mode=memoryProfilerMode)
+        memoryProfiler.start()
     if slips.args.stopdaemon:
         # -S is provided
         daemon = Daemon(slips)
@@ -707,3 +714,6 @@ if __name__ == '__main__':
         # interactive mode
         slips.start()
     slips.cpu_profiler_release()
+    
+    if memoryProfilerEnabled:
+        memoryProfiler.stop()

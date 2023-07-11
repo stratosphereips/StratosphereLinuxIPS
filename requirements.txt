@@ -40,3 +40,4 @@ termcolor
 viztracer
 yappi
 pytest-sugar
+memray

@@ -761,3 +761,12 @@ class ConfigParser(object):
     
     def get_cpu_profiler_dev_mode_entries(self) -> int:
         return int(self.read_configuration('Profiling', 'cpu_profiler_dev_mode_entries', 1000000))
+    
+    def get_memory_profiler_enable(self):
+        return self.read_configuration('Profiling', 'memory_profiler_enable', 'no')
+    
+    def get_memory_profiler_mode(self):
+        return self.read_configuration('Profiling', 'memory_profiler_mode', 'dev')
+    
+    def get_memory_profiler_multiprocess(self):
+        return self.read_configuration('Profiling', 'memory_profiler_multiprocess', 'yes')
