@@ -70,6 +70,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         'check_jarm_hash',
         'control_channel',
         'new_module_flow'
+        'control_module',
+        'cpu_profile'
         }
     # The name is used to print in the outputprocess
     name = 'DB'

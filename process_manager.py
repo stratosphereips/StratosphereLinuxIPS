@@ -223,10 +223,6 @@ class ProcessManager:
         modules_to_call = self.get_modules(to_ignore)[0]
         loaded_modules = []
         for module_name in modules_to_call:
-            # delete later
-            # if module_name != 'CPU Profiler':
-            #     continue
-            # end
             if module_name in to_ignore:
                 continue
 
@@ -505,6 +501,5 @@ class ProcessManager:
                 else:
                     f.write(f"[Process Manager] Slips didn't shutdown gracefully - {reason}\n")
 
-            exit()
         except KeyboardInterrupt:
             return False

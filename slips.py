@@ -20,6 +20,7 @@
 import contextlib
 import multiprocessing
 from slips_files.common.imports import *
+from slips_files.common.cpu_profiler import CPUProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -27,6 +28,14 @@ from process_manager import ProcessManager
 from ui_manager import UIManager
 from checker import Checker
 from style import green
+
+
+from slips_files.core.inputProcess import InputProcess
+from slips_files.core.outputProcess import OutputProcess
+from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.evidenceProcess import EvidenceProcess
+from slips_files.core.database.database_manager import DBManager
+
 
 import signal
 import sys
@@ -82,6 +91,40 @@ class Main:
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
 
+    def cpu_profiler_init(self):
+        self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
+        self.cpuProfilerMode = slips.conf.get_cpu_profiler_mode()
+        self.cpuProfilerMultiprocess = slips.conf.get_cpu_profiler_multiprocess() == 'yes'
+        if self.cpuProfilerEnabled:
+            try:
+                if (self.cpuProfilerMultiprocess and self.cpuProfilerMode == "dev"):
+                    args = sys.argv
+                    if (args[-1] != "--no-recurse"):
+                        tracer_entries = str(slips.conf.get_cpu_profiler_dev_mode_entries())
+                        viz_args = ['viztracer', '--tracer_entries', tracer_entries, '--max_stack_depth', '10', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
+                        viz_args.extend(args)
+                        viz_args.append("--no-recurse")
+                        print("Starting multiprocess profiling recursive subprocess")
+                        subprocess.run(viz_args)
+                        exit(0)
+                else:
+                    self.cpuProfiler = CPUProfiler(
+                        db=self.db,
+                        output=self.args.output,
+                        mode=slips.conf.get_cpu_profiler_mode(),
+                        limit=slips.conf.get_cpu_profiler_output_limit(),
+                        interval=slips.conf.get_cpu_profiler_sampling_interval()
+                        )
+                    self.cpuProfiler.start()
+            except Exception as e:
+                print(e)
+                self.cpuProfilerEnabled = False
+    
+    def cpu_profiler_release(self):
+        if self.cpuProfilerEnabled and not self.cpuProfilerMultiprocess:
+            self.cpuProfiler.stop()
+            self.cpuProfiler.print()
+
     def get_slips_version(self):
         version_file = 'VERSION'
         with open(version_file, 'r') as f:
@@ -122,7 +165,8 @@ class Main:
         """
         if self.mode == 'daemonized':
             self.daemon.stop()
-        sys.exit(0)
+        if self.conf.get_cpu_profiler_enable() != "yes":
+            sys.exit(0)
 
     def update_local_TI_files(self):
         from modules.update_manager.update_manager import UpdateManager
@@ -455,6 +499,8 @@ class Main:
                     'commit': self.commit,
                     'branch': self.branch,
                 })
+            
+            self.cpu_profiler_init()
 
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
@@ -660,3 +706,4 @@ if __name__ == '__main__':
     else:
         # interactive mode
         slips.start()
+    slips.cpu_profiler_release()

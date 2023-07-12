@@ -175,3 +175,20 @@ class Core(Module, Process):
             self.print(traceback.format_exc(), 0, 1)
 
         return True
+
+class ProfilerInterface(ABC):
+    @abstractmethod
+    def _create_profiler(self):
+        pass
+
+    @abstractmethod
+    def start(self):
+        pass
+
+    @abstractmethod
+    def stop(self):
+        pass
+
+    @abstractmethod
+    def print(self):
+        pass
