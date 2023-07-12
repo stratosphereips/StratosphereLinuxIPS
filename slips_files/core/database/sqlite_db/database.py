@@ -28,7 +28,7 @@ class SQLiteDB():
     def init_tables(cls):
         """creates the tables we're gonna use"""
         table_schema = {
-            'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT",
+            'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, community_id TEXT",
             'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT"
             }
         for table_name, schema in table_schema.items():
@@ -41,17 +41,19 @@ class SQLiteDB():
         """
         open(cls._flows_db,'w').close()
 
+    @classmethod
+    def create_table(cls, table_name, schema):
+        query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
+        cls.cursor.execute(query)
+        cls.conn.commit()
+
+
     def get_db_path(self) -> str:
         """
         returns the path of the sqlite flows db placed in the output dir
         """
         return self._flows_db
 
-    @classmethod
-    def create_table(cls, table_name, schema):
-        query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
-        cls.cursor.execute(query)
-        cls.conn.commit()
 
     def get_altflow_from_uid(self, profileid, twid, uid) -> dict:
         """ Given a uid, get the alternative flow associated with it """
@@ -207,14 +209,21 @@ class SQLiteDB():
     def add_flow(
             self, flow, profileid: str, twid:str, label='benign'
             ):
+        if hasattr(flow, 'community_id'):
+            parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label, flow.community_id)
+            self.execute(
+                'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label, community_id) '
+                'VALUES (?, ?, ?, ?, ?, ?);',
+                parameters,
+            )
+        else:
+            parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
 
-        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
-
-        self.execute(
-            'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) '
-            'VALUES (?, ?, ?, ?, ?);',
-            parameters,
-        )
+            self.execute(
+                'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) '
+                'VALUES (?, ?, ?, ?, ?);',
+                parameters,
+            )
 
     def get_flows_count(self, profileid, twid) -> int:
         """
