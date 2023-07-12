@@ -4,6 +4,7 @@ Data classes for all types of zeek flows
 from dataclasses import dataclass
 from typing import List
 from datetime import datetime, timedelta
+from slips_files.common.slips_utils import utils
 import json
 
 @dataclass
@@ -32,7 +33,6 @@ class Conn:
 
     state: str
     history: str
-
     type_: str = 'conn'
     dir_: str = '->'
 
@@ -42,6 +42,8 @@ class Conn:
         self.pkts: int = self.spkts + self.dpkts
         self.bytes: int = self.sbytes + self.dbytes
         self.state_hist: str = self.history or self.state
+        # community IDs are for conn.log flows only
+        self.community_id = utils.get_community_id(self)
 
 @dataclass
 class DNS:
