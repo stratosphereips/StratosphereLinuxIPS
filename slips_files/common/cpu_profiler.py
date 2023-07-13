@@ -12,7 +12,7 @@ class CPUProfiler(ProfilerInterface):
     def __init__(self, db, output, mode="dev", limit=20, interval=20):
         valid_modes = ["dev", "live"]
         if mode not in valid_modes:
-            raise Exception("cpu_profiler_mode = " + mode + " is invalid, must be one of " +
+            print("cpu_profiler_mode = " + mode + " is invalid, must be one of " +
                             str(valid_modes) + ", CPU Profiling will be disabled")
         if mode == "dev":
             self.profiler = DevProfiler(output)
