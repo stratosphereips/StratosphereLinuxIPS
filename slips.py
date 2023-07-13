@@ -687,7 +687,10 @@ if __name__ == '__main__':
     memoryProfilerMode = slips.conf.get_memory_profiler_mode()
     memoryProfilerMultiprocess = slips.conf.get_memory_profiler_multiprocess() == "yes"
     if memoryProfilerEnabled:
-        memoryProfiler = MemoryProfiler("memraytest/output.bin", mode=memoryProfilerMode)
+        output_dir = slips.args.output+'memoryprofile/'
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        memoryProfiler = MemoryProfiler(output_dir+'memory_profile.bin', mode=memoryProfilerMode)
         memoryProfiler.start()
     if slips.args.stopdaemon:
         # -S is provided
@@ -712,6 +715,7 @@ if __name__ == '__main__':
             daemon.start()
     else:
         # interactive mode
+        pass
         slips.start()
     slips.cpu_profiler_release()
     
