@@ -95,11 +95,14 @@ class LiveProfiler(ProfilerInterface):
 
 class LiveSingleProcessProfiler(ProfilerInterface):
     profiler = None
-    port = 1234
+    port = 5000
     def __init__(self):
         self.profiler = self._create_profiler()
     def _create_profiler(self):
-        print("start: " + str(self.port))
+        print("Memory profiling running on port " + str(self.port))
+        print("Connect to continue")
+        with open(os.devnull, 'w') as devnull:
+            subprocess.Popen(["memray", "live", str(self.port)], stdout=devnull)
         dest = memray.SocketDestination(server_port=self.port, address='127.0.0.1')
         return memray.Tracker(destination=dest)
 
