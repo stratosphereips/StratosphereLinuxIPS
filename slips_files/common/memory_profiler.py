@@ -4,16 +4,20 @@ import os
 import subprocess
 from termcolor import colored
 from slips_files.common.abstracts import ProfilerInterface
+import socket
+import multiprocessing
 
 class MemoryProfiler(ProfilerInterface):
     profiler = None
-    def __init__(self, output, mode="dev"):
+    def __init__(self, output, mode="dev", multiprocess=True):
         valid_modes = ["dev", "live"]
         if mode not in valid_modes:
             print("memory_profiler_mode = " + mode + " is invalid, must be one of " +
                             str(valid_modes) + ", Memory Profiling will be disabled")
         if mode == "dev":
-            self.profiler = DevProfiler(output)
+            self.profiler = DevProfiler(output, multiprocess)
+        elif mode == "live":
+            self.profiler = LiveProfiler(multiprocess)
 
     def _create_profiler(self):
         self.profiler._create_profiler()
@@ -32,12 +36,14 @@ class MemoryProfiler(ProfilerInterface):
 class DevProfiler(ProfilerInterface):
     output = None
     profiler = None
-    def __init__(self, output):
+    multiprocess = None
+    def __init__(self, output, multiprocess):
         self.output = output
+        self.multiprocess = multiprocess
         self.profiler = self._create_profiler()
 
     def _create_profiler(self):
-        return memray.Tracker(file_name=self.output, follow_fork=True)
+        return memray.Tracker(file_name=self.output, follow_fork=self.multiprocess)
 
     def start(self):
         self.profiler.__enter__()
@@ -62,3 +68,70 @@ class DevProfiler(ProfilerInterface):
 
     def print(self):
         pass
+
+class LiveProfiler(ProfilerInterface):
+    multiprocess = None
+    profiler = None
+    def __init__(self, multiprocess=False):
+        self.multiprocess = multiprocess
+        if multiprocess:
+            self.profiler=LiveMultiprocessProfiler()
+        else:
+            self.profiler=LiveSingleProcessProfiler()
+    def _create_profiler(self):
+        self.profiler._create_profiler()
+
+    def start(self):
+        self.profiler.start()
+
+    def stop(self):
+        self.profiler.stop()
+
+    def print(self):
+        self.profiler.print()
+
+class LiveSingleProcessProfiler(ProfilerInterface):
+    profiler = None
+    port = 1234
+    def __init__(self):
+        self.profiler = self._create_profiler()
+    def _create_profiler(self):
+        print("start: " + str(self.port))
+        dest = memray.SocketDestination(server_port=self.port, address='127.0.0.1')
+        return memray.Tracker(destination=dest)
+
+    def start(self):
+        self.profiler.__enter__()
+
+    def stop(self):
+        self.profiler.__exit__(None, None, None)
+
+    def print(self):
+        pass
+
+class LiveMultiprocessProfiler(ProfilerInterface):
+    original_process_class = None
+    profiler = None
+    def __init__(self):
+        self.original_process_class = multiprocessing.Process
+
+    def _create_profiler(self):
+        pass
+
+    def start(self):
+        multiprocessing.Process = MultiprocessPatch
+
+    def stop(self):
+        multiprocessing.Process = self.original_process_class
+
+    def print(self):
+        pass
+
+class MultiprocessPatch(multiprocessing.Process):
+    def start(self):
+        print("hello this is a new process")
+        super().start()
+    
+    def join(self):
+        print("This is the end of the process")
+        super.join()

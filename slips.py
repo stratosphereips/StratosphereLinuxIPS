@@ -693,7 +693,7 @@ if __name__ == '__main__':
         output_dir = slips.args.output+'memoryprofile/'
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        memoryProfiler = MemoryProfiler(output_dir+'memory_profile.bin', mode=memoryProfilerMode)
+        memoryProfiler = MemoryProfiler(output_dir+'memory_profile.bin', mode=memoryProfilerMode, multiprocess=memoryProfilerMultiprocess)
         memoryProfiler.start()
     if slips.args.stopdaemon:
         # -S is provided
