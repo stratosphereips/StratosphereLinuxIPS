@@ -6,7 +6,7 @@ from termcolor import colored
 from slips_files.common.abstracts import ProfilerInterface
 import time
 import multiprocessing
-from multiprocessing.managers import DictProxy, SyncManager
+from multiprocessing.managers import SyncManager
 from multiprocessing.synchronize import Lock
 import threading
 from typing import Dict
