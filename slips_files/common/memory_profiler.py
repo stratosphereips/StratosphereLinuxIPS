@@ -9,7 +9,7 @@ import multiprocessing
 from multiprocessing.managers import SyncManager
 from multiprocessing.synchronize import Lock
 import threading
-from typing import Dict
+from typing import List
 class MemoryProfiler(ProfilerInterface):
     profiler = None
     def __init__(self, output, mode="dev", multiprocess=True):
@@ -122,10 +122,10 @@ class LiveMultiprocessProfiler(ProfilerInterface):
         mp_manager = multiprocessing.Manager()
         global tracker_lock_global
         tracker_lock_global = mp_manager.Lock()
-        global pid_mapping_global
-        pid_mapping_global = mp_manager.dict()
-        global pid_mapping_lock_global
-        pid_mapping_lock_global = mp_manager.Lock()
+        global proc_array_global
+        proc_array_global = {}
+        global proc_array_lock_global
+        proc_array_lock_global = mp_manager.Lock()
 
     def _create_profiler(self):
         pass
@@ -134,19 +134,14 @@ class LiveMultiprocessProfiler(ProfilerInterface):
         while True:
             # check redis channel
             # poll for signal
-            global pid_mapping_global
-            while not len(pid_mapping_global):
-                print(colored("handle signal", 'red'), os.getpid())
-                time.sleep(1)
-                continue
-            for key in pid_mapping_global.keys():
-                print("Key:", key)
-                pid_mapping_global[key].set_start_signal()
+            global proc_array_global
+            print(proc_array_global)
+            time.sleep(3)
 
     def start(self):
-        # self.signal_handler_thread = threading.Thread(target=self._handle_signal, daemon=True)
-        # self.signal_handler_thread.start()
         multiprocessing.Process = MultiprocessPatch
+        self.signal_handler_thread = threading.Thread(target=self._handle_signal, daemon=True)
+        self.signal_handler_thread.start()
 
     def stop(self):
         multiprocessing.Process = self.original_process_class
@@ -161,10 +156,17 @@ class MultiprocessPatch(multiprocessing.Process):
     signal_interval = 1
     port = 1234
     def __init__(self, *args, **kwargs):
-        print(colored("multiprocessPatch", "red"))
         super(MultiprocessPatch, self).__init__(*args, **kwargs)
         self.tracker_start = multiprocessing.Event()
         self.tracker_end = multiprocessing.Event()
+    
+    def start(self):
+        print("Start of new process")
+        super().start()
+    
+    def join(self):
+        print("This is the end of the process")
+        super.join()
     
     def set_start_signal(self):
         self.tracker_start.set()
@@ -182,6 +184,7 @@ class MultiprocessPatch(multiprocessing.Process):
         self.tracker.__exit__(None, None, None)
 
     def _check_start_signal(self):
+        global tracker_lock_global
         while True:
             while not self.tracker_start.is_set():
                 time.sleep(self.signal_interval)
@@ -206,14 +209,14 @@ class MultiprocessPatch(multiprocessing.Process):
         start_signal_thread.start()
         end_signal_thread = threading.Thread(target=self._check_end_signal, daemon=True)
         end_signal_thread.start()
-        global pid_mapping_global
-        global pid_mapping_global
-        pid_mapping_lock_global.acquire()
-        pid_mapping_global[os.getpid()] = self
-        pid_mapping_lock_global.release()
+        global proc_array_global
+        global proc_array_global
+        proc_array_lock_global.acquire()
+        proc_array_global[os.getpid()] = self
+        proc_array_lock_global.release()
         super().run()
 
 mp_manager: SyncManager = None
 tracker_lock_global: Lock = None # process holds when running profiling
-pid_mapping_global: Dict[int, MultiprocessPatch] = None # port to process object mapping
-pid_mapping_lock_global: Lock = None
+proc_array_global: List[MultiprocessPatch] = None # port to process object mapping
+proc_array_lock_global: Lock = None
