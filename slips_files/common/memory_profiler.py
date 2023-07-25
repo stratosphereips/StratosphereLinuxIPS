@@ -9,7 +9,7 @@ import multiprocessing
 from multiprocessing.managers import SyncManager
 from multiprocessing.synchronize import Lock
 import threading
-from typing import List
+from typing import Set
 class MemoryProfiler(ProfilerInterface):
     profiler = None
     def __init__(self, output, mode="dev", multiprocess=True):
@@ -126,7 +126,7 @@ class LiveMultiprocessProfiler(ProfilerInterface):
         global tracker_lock_global
         tracker_lock_global = mp_manager.Lock()
         global proc_array_global
-        proc_array_global = {}
+        proc_array_global = set()
         global proc_array_lock_global
         proc_array_lock_global = mp_manager.Lock()
 
@@ -137,8 +137,6 @@ class LiveMultiprocessProfiler(ProfilerInterface):
         while True:
             # check redis channel
             # poll for signal
-            global proc_array_global
-            print(proc_array_global)
             time.sleep(3)
 
     def start(self):
@@ -163,13 +161,28 @@ class MultiprocessPatch(multiprocessing.Process):
         self.tracker_start = multiprocessing.Event()
         self.tracker_end = multiprocessing.Event()
     
-    def start(self):
-        print("Start of new process")
-        super().start()
+    def start(self) -> None:
+        print("Start of new process", os.getpid())
+        global proc_array_global
+        global proc_array_lock_global
+        proc_array_lock_global.acquire()
+        proc_array_global.add(self)
+        proc_array_lock_global.release()
+        print("Start:", proc_array_global)
+        return super().start()
     
-    def join(self):
+    def join(self, timeout: "float | None" = None) -> None:
         print("This is the end of the process")
-        super.join()
+        global proc_array_global
+        global proc_array_lock_global
+        proc_array_lock_global.acquire()
+        proc_array_global.remove(self)
+        proc_array_lock_global.release()
+        print("End:", proc_array_global)
+        return super().join(timeout)
+    
+    def terminate(self) -> None:
+        return super().terminate()
     
     def set_start_signal(self):
         self.tracker_start.set()
@@ -206,20 +219,20 @@ class MultiprocessPatch(multiprocessing.Process):
                 self.end_tracker()
                 tracker_lock_global.release()
             self.tracker_end.clear()
-
-    def run(self):
+    
+    def run(self) -> None:
         start_signal_thread = threading.Thread(target=self._check_start_signal, daemon=True)
         start_signal_thread.start()
         end_signal_thread = threading.Thread(target=self._check_end_signal, daemon=True)
         end_signal_thread.start()
         global proc_array_global
-        global proc_array_global
+        global proc_array_lock_global
         proc_array_lock_global.acquire()
         proc_array_global[os.getpid()] = self
         proc_array_lock_global.release()
-        super().run()
+        return super().run()
 
 mp_manager: SyncManager = None
 tracker_lock_global: Lock = None # process holds when running profiling
-proc_array_global: List[MultiprocessPatch] = None # port to process object mapping
+proc_array_global: Set[MultiprocessPatch] = None # port to process object mapping
 proc_array_lock_global: Lock = None
