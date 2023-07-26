@@ -12,7 +12,7 @@ import threading
 from typing import Dict
 class MemoryProfiler(ProfilerInterface):
     profiler = None
-    def __init__(self, output, mode="dev", multiprocess=True):
+    def __init__(self, output, db=None, mode="dev", multiprocess=True):
         valid_modes = ["dev", "live"]
         if mode not in valid_modes:
             print("memory_profiler_mode = " + mode + " is invalid, must be one of " +
@@ -20,7 +20,7 @@ class MemoryProfiler(ProfilerInterface):
         if mode == "dev":
             self.profiler = DevProfiler(output, multiprocess)
         elif mode == "live":
-            self.profiler = LiveProfiler(multiprocess)
+            self.profiler = LiveProfiler(multiprocess, db=db)
 
     def _create_profiler(self):
         self.profiler._create_profiler()
@@ -75,10 +75,10 @@ class DevProfiler(ProfilerInterface):
 class LiveProfiler(ProfilerInterface):
     multiprocess = None
     profiler = None
-    def __init__(self, multiprocess=False):
+    def __init__(self, multiprocess=False, db=None):
         self.multiprocess = multiprocess
         if multiprocess:
-            self.profiler=LiveMultiprocessProfiler()
+            self.profiler=LiveMultiprocessProfiler(db=db)
         else:
             self.profiler=LiveSingleProcessProfiler()
     def _create_profiler(self):
@@ -119,16 +119,21 @@ class LiveMultiprocessProfiler(ProfilerInterface):
     original_process_class: multiprocessing.Process
     signal_handler_thread: threading.Thread
     tracker_possessor: int
-    def __init__(self):
+    db = None
+    def __init__(self, db=None):
         self.original_process_class = multiprocessing.Process
         global mp_manager
         mp_manager = multiprocessing.Manager()
         global tracker_lock_global
         tracker_lock_global = mp_manager.Lock()
+        
         global proc_map_global
         proc_map_global = {}
         global proc_map_lock_global
         proc_map_lock_global = mp_manager.Lock()
+        self.db = db
+        self.pid_channel = self.db.subscribe('memory_profile')
+        self.db.publish('memory_profile', "Hello")
 
     def _create_profiler(self):
         pass
@@ -138,11 +143,13 @@ class LiveMultiprocessProfiler(ProfilerInterface):
         while True:
             # check redis channel
             # poll for signal
-            # if len(proc_map_global) != 0:
-            #     print(proc_map_global)
-            #     print(colored("handle signal", "red"))
+            msg = self.pid_channel.get_message(timeout=1)
+            if msg:
+                print(msg['data'])
             time.sleep(0.1)
-
+    
+    def _test_thread(self):
+        pass
     def start(self):
         multiprocessing.Process = MultiprocessPatch
         self.signal_handler_thread = threading.Thread(target=self._handle_signal, daemon=True)
@@ -181,9 +188,6 @@ class MultiprocessPatch(multiprocessing.Process):
         proc_map_lock_global.release()
         return super().join(timeout)
     
-    def terminate(self) -> None:
-        return super().terminate()
-    
     def set_start_signal(self):
         self.tracker_start.set()
     
@@ -191,13 +195,22 @@ class MultiprocessPatch(multiprocessing.Process):
         self.tracker_end.set()
     
     def start_tracker(self):
-        dest = memray.SocketDestination(server_port=self.port, address='127.0.0.1')
-        self.tracker = memray.Tracker(destination=dest)
+        global tracker_lock_global
+        global tracker_lock_holder
+        if not self.tracker and not tracker_lock_global.locked():
+            tracker_lock_global.acquire()
+            tracker_lock_holder = self
+            dest = memray.SocketDestination(server_port=self.port, address='127.0.0.1')
+            self.tracker = memray.Tracker(destination=dest)
     
     def end_tracker(self):
-        if self.tracker:
+        global tracker_lock_global
+        global tracker_lock_holder
+        if self.tracker and tracker_lock_global.locked():
             self.tracker.__exit__(None, None, None)
             self.tracker = None
+            tracker_lock_holder = None
+            tracker_lock_global.release()
 
     def _check_start_signal(self):
         global tracker_lock_global
@@ -205,19 +218,16 @@ class MultiprocessPatch(multiprocessing.Process):
             while not self.tracker_start.is_set():
                 time.sleep(self.signal_interval)
                 continue
-            if not self.tracker and not tracker_lock_global.locked():
-                tracker_lock_global.acquire()
-                self.start_tracker()
+            self.start_tracker()
             self.tracker_start.clear()
     
     def _check_end_signal(self):
+        global tracker_lock_global
         while True:
             while not self.tracker_end.is_set():
                 time.sleep(self.signal_interval)
                 continue
-            if self.tracker:
-                self.end_tracker()
-                tracker_lock_global.release()
+            self.end_tracker()
             self.tracker_end.clear()
     
     def run(self) -> None:
@@ -234,5 +244,6 @@ class MultiprocessPatch(multiprocessing.Process):
 
 mp_manager: SyncManager = None
 tracker_lock_global: Lock = None # process holds when running profiling
+tracker_lock_holder: MultiprocessPatch = None # process that holds the lock
 proc_map_global: Dict[int, MultiprocessPatch] = None # port to process object mapping
-proc_map_lock_global: Lock = None
+proc_map_lock_global: Lock = None # hold when modifying proc_map_global

@@ -125,6 +125,21 @@ class Main:
         if self.cpuProfilerEnabled and not self.cpuProfilerMultiprocess:
             self.cpuProfiler.stop()
             self.cpuProfiler.print()
+    
+    def memory_profiler_init(self):
+        self.memoryProfilerEnabled = slips.conf.get_memory_profiler_enable() == "yes"
+        memoryProfilerMode = slips.conf.get_memory_profiler_mode()
+        memoryProfilerMultiprocess = slips.conf.get_memory_profiler_multiprocess() == "yes"
+        if self.memoryProfilerEnabled:
+            output_dir = slips.args.output+'memoryprofile/'
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            self.memoryProfiler = MemoryProfiler(output_dir+'memory_profile.bin', db=self.db, mode=memoryProfilerMode, multiprocess=memoryProfilerMultiprocess)
+            self.memoryProfiler.start()
+    
+    def memory_profiler_release(self):
+        if self.memoryProfilerEnabled:
+            self.memoryProfiler.stop()
 
     def get_slips_version(self):
         version_file = 'VERSION'
@@ -502,6 +517,7 @@ class Main:
                 })
             
             self.cpu_profiler_init()
+            self.memory_profiler_init()
 
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
@@ -683,15 +699,6 @@ class Main:
 ####################
 if __name__ == '__main__':
     slips = Main()
-    memoryProfilerEnabled = slips.conf.get_memory_profiler_enable() == "yes"
-    memoryProfilerMode = slips.conf.get_memory_profiler_mode()
-    memoryProfilerMultiprocess = slips.conf.get_memory_profiler_multiprocess() == "yes"
-    if memoryProfilerEnabled:
-        output_dir = slips.args.output+'memoryprofile/'
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        memoryProfiler = MemoryProfiler(output_dir+'memory_profile.bin', mode=memoryProfilerMode, multiprocess=memoryProfilerMultiprocess)
-        memoryProfiler.start()
     if slips.args.stopdaemon:
         # -S is provided
         daemon = Daemon(slips)
@@ -718,6 +725,4 @@ if __name__ == '__main__':
         pass
         slips.start()
     slips.cpu_profiler_release()
-    
-    if memoryProfilerEnabled:
-        memoryProfiler.stop()
+    slips.memory_profiler_release()
