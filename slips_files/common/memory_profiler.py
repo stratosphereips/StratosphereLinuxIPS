@@ -9,7 +9,7 @@ import multiprocessing
 from multiprocessing.managers import SyncManager
 from multiprocessing.synchronize import Lock
 import threading
-from typing import Set
+from typing import Dict
 class MemoryProfiler(ProfilerInterface):
     profiler = None
     def __init__(self, output, mode="dev", multiprocess=True):
@@ -125,19 +125,23 @@ class LiveMultiprocessProfiler(ProfilerInterface):
         mp_manager = multiprocessing.Manager()
         global tracker_lock_global
         tracker_lock_global = mp_manager.Lock()
-        global proc_array_global
-        proc_array_global = set()
-        global proc_array_lock_global
-        proc_array_lock_global = mp_manager.Lock()
+        global proc_map_global
+        proc_map_global = {}
+        global proc_map_lock_global
+        proc_map_lock_global = mp_manager.Lock()
 
     def _create_profiler(self):
         pass
 
     def _handle_signal(self):
+        global proc_map_global
         while True:
             # check redis channel
             # poll for signal
-            time.sleep(3)
+            # if len(proc_map_global) != 0:
+            #     print(proc_map_global)
+            #     print(colored("handle signal", "red"))
+            time.sleep(0.1)
 
     def start(self):
         multiprocessing.Process = MultiprocessPatch
@@ -162,23 +166,19 @@ class MultiprocessPatch(multiprocessing.Process):
         self.tracker_end = multiprocessing.Event()
     
     def start(self) -> None:
-        print("Start of new process", os.getpid())
-        global proc_array_global
-        global proc_array_lock_global
-        proc_array_lock_global.acquire()
-        proc_array_global.add(self)
-        proc_array_lock_global.release()
-        print("Start:", proc_array_global)
-        return super().start()
+        super().start()
+        global proc_map_global
+        global proc_map_lock_global
+        proc_map_lock_global.acquire()
+        proc_map_global[self.pid] = self
+        proc_map_lock_global.release()
     
     def join(self, timeout: "float | None" = None) -> None:
-        print("This is the end of the process")
-        global proc_array_global
-        global proc_array_lock_global
-        proc_array_lock_global.acquire()
-        proc_array_global.remove(self)
-        proc_array_lock_global.release()
-        print("End:", proc_array_global)
+        global proc_map_global
+        global proc_map_lock_global
+        proc_map_lock_global.acquire()
+        proc_map_global.pop(self.pid)
+        proc_map_lock_global.release()
         return super().join(timeout)
     
     def terminate(self) -> None:
@@ -191,13 +191,13 @@ class MultiprocessPatch(multiprocessing.Process):
         self.tracker_end.set()
     
     def start_tracker(self):
-        print(f"Memory profiler starting on {os.getpid()}, connect on port {self.port}")
         dest = memray.SocketDestination(server_port=self.port, address='127.0.0.1')
         self.tracker = memray.Tracker(destination=dest)
     
     def end_tracker(self):
-        print(f"Memory profiler ending on {os.getpid()}")
-        self.tracker.__exit__(None, None, None)
+        if self.tracker:
+            self.tracker.__exit__(None, None, None)
+            self.tracker = None
 
     def _check_start_signal(self):
         global tracker_lock_global
@@ -225,14 +225,14 @@ class MultiprocessPatch(multiprocessing.Process):
         start_signal_thread.start()
         end_signal_thread = threading.Thread(target=self._check_end_signal, daemon=True)
         end_signal_thread.start()
-        global proc_array_global
-        global proc_array_lock_global
-        proc_array_lock_global.acquire()
-        proc_array_global[os.getpid()] = self
-        proc_array_lock_global.release()
+        global proc_map_global
+        global proc_map_lock_global
+        proc_map_lock_global.acquire()
+        proc_map_global[os.getpid()] = self
+        proc_map_lock_global.release()
         return super().run()
 
 mp_manager: SyncManager = None
 tracker_lock_global: Lock = None # process holds when running profiling
-proc_array_global: Set[MultiprocessPatch] = None # port to process object mapping
-proc_array_lock_global: Lock = None
+proc_map_global: Dict[int, MultiprocessPatch] = None # port to process object mapping
+proc_map_lock_global: Lock = None
