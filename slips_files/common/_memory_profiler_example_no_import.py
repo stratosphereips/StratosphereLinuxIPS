@@ -289,10 +289,11 @@ def mem_function():
             array.append(i)
 
 if __name__ == "__main__":
-    # mp_manager = multiprocessing.Manager()
-    # tracker_lock_global = mp_manager.Lock()
-    # proc_map_global = {}
-    # proc_map_lock_global = mp_manager.Lock()
+    # Notes
+    # set signal start and end are non-blocking, only sends the signal but doesn't guarantee success
+    # start_tracker will block until lock is acquired and memray is connected, can change later
+    # end_tracker works even if memray client quits
+
 
     db = multiprocessing.Queue()
     profiler = LiveMultiprocessProfiler(db=db)
