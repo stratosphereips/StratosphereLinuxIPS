@@ -1,6 +1,4 @@
 import memray
-import glob
-import os
 import subprocess
 from termcolor import colored
 import time
@@ -27,65 +25,6 @@ class LiveMultiprocessProfiler:
     signal_handler_thread: threading.Thread
     tracker_possessor: int
     db = None
-    # def __init__(self, db=None):
-    #     self.original_process_class = multiprocessing.Process
-    #     global mp_manager
-    #     mp_manager = multiprocessing.Manager()
-    #     global tracker_lock_global
-    #     tracker_lock_global = mp_manager.Lock()
-        
-    #     global proc_map_global
-    #     proc_map_global = {}
-    #     global proc_map_lock_global
-    #     proc_map_lock_global = mp_manager.Lock()
-    #     self.db = db
-    #     self.pid_channel = self.db.subscribe('memory_profile')
-    #     self.db.publish('memory_profile', 5)
-    #     self.db.publish('memory_profile', "Hello")
-
-    # def _create_profiler(self):
-    #     pass
-
-    # def _handle_signal(self):
-    #     global proc_map_global
-    #     global tracker_lock_holder_pid
-    #     while True:
-    #         # check redis channel
-    #         # poll for signal
-    #         timeout = 0.01
-    #         msg = self.pid_channel.get_message(timeout=timeout)
-    #         pid_to_profile: int = None
-    #         while msg:
-    #             pid: int = None
-    #             try:
-    #                 pid = int(msg['data'])
-    #             except ValueError:
-    #                 msg = self.pid_channel.get_message(timeout=timeout)
-    #                 continue
-    #             if pid in proc_map_global.keys():
-    #                 print(colored(f"Handle signal {pid}"))
-    #                 if proc_is_running(pid):
-    #                     pid_to_profile = pid
-    #                 else:
-    #                     try:
-    #                         proc_map_global.pop(pid)
-    #                     except KeyError:
-    #                         pass
-    #             msg = self.pid_channel.get_message(timeout=timeout)
-            
-    #         if pid_to_profile:
-    #             time.sleep(5)
-    #             print(colored(f"Sending end signal {tracker_lock_holder_pid}", "red"))
-    #             if tracker_lock_holder_pid in proc_map_global.keys():
-    #                 proc_map_global[tracker_lock_holder_pid].set_end_signal()
-    #             print(colored(f"Sending start signal {pid_to_profile}", "red"))
-    #             print(proc_map_global[pid_to_profile])
-
-    #             proc_map_global[pid_to_profile].set_start_signal()
-    #             #send stop first, send start new process
-            
-    #         time.sleep(1)
-    
     def __init__(self, db=None):
         self.original_process_class = multiprocessing.Process
         global mp_manager
@@ -197,7 +136,7 @@ class MultiprocessPatch(multiprocessing.Process):
     def start_tracker(self):
         global tracker_lock_global
         global tracker_lock_holder_pid
-        print(colored(f"start_tracker lock {self.pid}", "red"))
+        print(colored(f"start_tracker lock {self.pid}, current lock {tracker_lock_holder_pid.value}", "red"))
         if not self.tracker and tracker_lock_global.acquire(blocking=False):
             print(colored(f"start_tracker memray at PID {self.pid} started {self.port}", "red"))
             tracker_lock_holder_pid.value = self.pid
@@ -309,6 +248,7 @@ if __name__ == "__main__":
     
     # Message passing
     db.put(processes[1].pid) # successful
+    subprocess.Popen(["memray", "live", "1234"])
     time.sleep(5) # target_function will timeout and tracker will be cleared
     db.put(processes[0].pid) # end but maybe don't start
     time.sleep(5) # mem_function will get tracker started

@@ -192,12 +192,11 @@ class LiveMultiprocessProfiler(ProfilerInterface):
     def _test_thread(self):
         global proc_map_global
         while True:
-            print("Test thread:", proc_map_global)
+            print("Test thread:", tracker_lock_holder_pid)
             if len(proc_map_global):
                 pid = random.choice(list(proc_map_global.keys()))
-                self.db.put(pid)
+                self.db.publish("memory_profile", pid)
                 print(colored(f"Published {pid}", "red"))
-                break
             time.sleep(1)
 
     def start(self):
@@ -238,6 +237,7 @@ class MultiprocessPatch(multiprocessing.Process):
         if self.tracker_end:
             self.tracker_end.set()
             while block and self.tracker_start.is_set():
+                print("end signal is set")
                 time.sleep(self.poll_interval)
     
     def execute_tracker(self, destination):
@@ -282,7 +282,7 @@ class MultiprocessPatch(multiprocessing.Process):
             self.end_tracker()
             self.tracker_end.clear()
     
-    def start(self) -> None:
+    def start(self):
         super().start()
         global proc_map_global
         global proc_map_lock_global
@@ -317,6 +317,14 @@ class MultiprocessPatch(multiprocessing.Process):
         end_signal_thread = threading.Thread(target=self._check_end_signal, daemon=True)
         end_signal_thread.start()
         super().run()
+        self._cleanup()
+    
+    def join(self, *args):
+        super().join(*args)
+        self._cleanup()
+    
+    def terminate(self):
+        super().terminate()
         self._cleanup()
 
 mp_manager: SyncManager = None
