@@ -1045,8 +1045,19 @@ Options to enable cpu profiling can be found under the [Profiling] section of th
 ```cpu_profiler_output_limit``` is set to an integer value and only affects the live mode profiling. This option sets the limit on the number of processes output for live mode profiling updates.
 ```cpu_profiler_sampling_interval``` is set to an integer value and only affects the live mode profiling. This option sets the duration in seconds of live mode sampling intervals. It is recommended to set this option greater than 10 seconds otherwise there won't be much useful information captured during sampling.
 
+### Memory Profiling
+Memory profiling can be found in ```slips_files/common/memory_profiler.py```
 
+Just like CPU profiling, it also has supports live and development mode.
+Set ```memory_profiler_enable``` to ```yes``` to enable this feature.
+Set ```memory_profiler_mode``` to ```live``` to use live mode or ```dev``` to use development mode profiling.
 
+#### Live Mode
+This mode shows memory usage stats during the runtime of the program.
+```memory_profiler_multiprocess``` controls whether live mode tracks all processes or only the main process. If set to no, the program will wait for you to connect from a different terminal using the command ```memray live <port_number>```, where port_number is 5000 by default. After connection, the program will continue with its run and the terminal that is connected will receive a feed of the memory statistics. If set to yes, the redis channel "memory_profile" can be used to set pid of the process to be tracked. Only a single process can be tracked at a time. The interface is cumbersome to use from the command line so multiprocess live profiling is intended to be used primarily from the web interface.
+
+#### Development Mode
+When enabled, the profiler will output the profile data into the output directory. The data will be in the ```memoryprofile``` directory of the output directory of the run. Each process during the run of the program will have an associated binary file. Each of the generated binaries will automatically be converted to viewable html files, with each process converted to a flamegraph and table format. All generated files will be denoted by their PID.
 
 ---
 
