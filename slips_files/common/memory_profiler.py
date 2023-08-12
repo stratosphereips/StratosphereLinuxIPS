@@ -129,9 +129,10 @@ def proc_is_running(pid):
         return False
 
 class LiveMultiprocessProfiler(ProfilerInterface):
+    # restores the original process behavior once profiler is stopped
     original_process_class: multiprocessing.Process
+    # thread checks redis db for which process to start profiling
     signal_handler_thread: threading.Thread
-    tracker_possessor: int
     db = None
     def __init__(self, db=None):
         self.original_process_class = multiprocessing.Process
@@ -150,7 +151,7 @@ class LiveMultiprocessProfiler(ProfilerInterface):
 
     def _create_profiler(self):
         pass
-
+    # on signal received, check if pid is valid and stop currently profiled process. Then start new pid profiling.
     def _handle_signal(self):
         global proc_map_global
         global tracker_lock_holder_pid
@@ -188,7 +189,7 @@ class LiveMultiprocessProfiler(ProfilerInterface):
                 #send stop first, send start new process
             
             time.sleep(1)
-    
+    # set pid in redis channel for testing
     def _test_thread(self):
         global proc_map_global
         while True:
@@ -217,21 +218,21 @@ class MultiprocessPatch(multiprocessing.Process):
     tracker: memray.Tracker = None
     tracker_start: Event = None
     tracker_end: Event = None
-    signal_interval: int = 1 # sleep time for checking start and end signals to process
-    poll_interval: int = 1 # sleep time for checking if signal has finished processing
+    signal_interval: int = 1 # sleep time in sec for checking start and end signals to process
+    poll_interval: int = 1 # sleep time in sec for checking if signal has finished processing
     port = 1234
     def __init__(self, *args, **kwargs):
         super(MultiprocessPatch, self).__init__(*args, **kwargs)
         self.tracker_start = multiprocessing.Event()
         self.tracker_end = multiprocessing.Event()
-    
+    # synchonous signal processing, block until event is processed. Then returns.
     def set_start_signal(self, block=False):
         print(f"set start signal {self.pid}")
         if self.tracker_start:
             self.tracker_start.set()
             while block and self.tracker_start.is_set():
                 time.sleep(self.poll_interval)
-    
+    # synchonous signal as well. 
     def set_end_signal(self, block=False):
         print(f"set end signal {self.pid}")
         if self.tracker_end:
@@ -239,7 +240,7 @@ class MultiprocessPatch(multiprocessing.Process):
             while block and self.tracker_start.is_set():
                 print("end signal is set")
                 time.sleep(self.poll_interval)
-    
+    # start profiling current process. Profiles current process context.
     def execute_tracker(self, destination):
         self.tracker = memray.Tracker(destination=destination)
         
@@ -265,7 +266,7 @@ class MultiprocessPatch(multiprocessing.Process):
             self.tracker = None
             tracker_lock_holder_pid.value = 0
             tracker_lock_global.release()
-            
+    # checks if the start signal is set. Runs in a different thread.
     def _check_start_signal(self):
         while True:
             while not self.tracker_start.is_set():
@@ -273,7 +274,7 @@ class MultiprocessPatch(multiprocessing.Process):
                 continue
             self.start_tracker()
             self.tracker_start.clear()
-    
+    # checks if the end signal is set. Runs in a different thread.
     def _check_end_signal(self):
         while True:
             while not self.tracker_end.is_set():
@@ -281,7 +282,7 @@ class MultiprocessPatch(multiprocessing.Process):
                 continue
             self.end_tracker()
             self.tracker_end.clear()
-    
+    # Sets up data before running. super() starts first to set initialize pid. Then adds itself to proc_map_global
     def start(self):
         super().start()
         global proc_map_global
@@ -289,7 +290,7 @@ class MultiprocessPatch(multiprocessing.Process):
         proc_map_lock_global.acquire()
         proc_map_global[self.pid] = self
         proc_map_lock_global.release()
-    
+    # Removes itself from the proc_map_global. Intended to run when process stops.
     def _pop_map(self):
         global proc_map_global
         global proc_map_lock_global
@@ -299,7 +300,7 @@ class MultiprocessPatch(multiprocessing.Process):
         except KeyError:
             print(f"_pop_map {self.pid} no longer in memory profile map, continuing...")
         proc_map_lock_global.release()
-    
+    # release tracker_lock_global, which must be acquired while profiling.
     def _release_lock(self):
         global tracker_lock_global
         global tracker_lock_holder_pid
@@ -318,7 +319,12 @@ class MultiprocessPatch(multiprocessing.Process):
         end_signal_thread.start()
         super().run()
         self._cleanup()
-
+# All the following should have a shared state between all instances of MultiprocessPatch
+# and be accessible from the separate processes.
+# proc_map_global only needs to be accessible from the main process. This is because
+# adding a processes pid as a key creates a pickle error.
+# tracker_lock_global must be possessed by the process currently being profiled and released
+# when profiling is completed so another process can be profiled.
 mp_manager: SyncManager = None
 tracker_lock_global: Lock = None # process holds when running profiling
 tracker_lock_holder_pid: SynchronizedBase = None # process that holds the lock
