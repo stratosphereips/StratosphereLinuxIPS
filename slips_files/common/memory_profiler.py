@@ -290,6 +290,7 @@ class MultiprocessPatch(multiprocessing.Process):
         proc_map_lock_global.acquire()
         proc_map_global[self.pid] = self
         proc_map_lock_global.release()
+        print(f"{self.pid} start: {proc_map_global}")
     # Removes itself from the proc_map_global. Intended to run when process stops.
     def _pop_map(self):
         global proc_map_global
