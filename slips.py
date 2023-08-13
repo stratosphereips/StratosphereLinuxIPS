@@ -140,6 +140,35 @@ class Main:
     def memory_profiler_release(self):
         if self.memoryProfilerEnabled:
             self.memoryProfiler.stop()
+    
+    def memory_profiler_multiproc_test(self):
+        def target_function():
+            print("Target function started")
+            time.sleep(5)
+
+        def mem_function():
+            print("Mem function started")
+            while True:
+                time.sleep(1)
+                array = []
+                for i in range(1000000):
+                    array.append(i)
+        processes = []
+        num_processes = 3
+        
+        for _ in range(num_processes):
+            process = multiprocessing.Process(target=target_function if _%2 else mem_function)
+            process.start()
+            processes.append(process)
+        
+        # Message passing
+        self.db.publish("memory_profile", processes[1].pid) # successful
+        # subprocess.Popen(["memray", "live", "1234"])
+        time.sleep(5) # target_function will timeout and tracker will be cleared
+        self.db.publish("memory_profile", processes[0].pid) # end but maybe don't start
+        time.sleep(5) # mem_function will get tracker started
+        self.db.publish("memory_profile", processes[0].pid) # start successfully
+        input()
 
     def get_slips_version(self):
         version_file = 'VERSION'
@@ -518,6 +547,8 @@ class Main:
             
             self.cpu_profiler_init()
             self.memory_profiler_init()
+            # uncomment line to see that memory profiler works correctly
+            # self.memory_profiler_multiproc_test()
 
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
