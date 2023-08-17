@@ -548,7 +548,8 @@ class Main:
             self.cpu_profiler_init()
             self.memory_profiler_init()
             # uncomment line to see that memory profiler works correctly
-            # self.memory_profiler_multiproc_test()
+            # Should print out red text if working properly
+            self.memory_profiler_multiproc_test()
 
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
