@@ -131,10 +131,12 @@ class Main:
         memoryProfilerMode = slips.conf.get_memory_profiler_mode()
         memoryProfilerMultiprocess = slips.conf.get_memory_profiler_multiprocess() == "yes"
         if self.memoryProfilerEnabled:
-            output_dir = slips.args.output+'memoryprofile/'
+            output_dir = os.path.join(slips.args.output,'memoryprofile/')
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
-            self.memoryProfiler = MemoryProfiler(output_dir+'memory_profile.bin', db=self.db, mode=memoryProfilerMode, multiprocess=memoryProfilerMultiprocess)
+            print(output_dir)
+            output_file = os.path.join(output_dir, 'memory_profile.bin')
+            self.memoryProfiler = MemoryProfiler(output_file, db=self.db, mode=memoryProfilerMode, multiprocess=memoryProfilerMultiprocess)
             self.memoryProfiler.start()
     
     def memory_profiler_release(self):
