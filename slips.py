@@ -134,7 +134,6 @@ class Main:
             output_dir = os.path.join(slips.args.output,'memoryprofile/')
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
-            print(output_dir)
             output_file = os.path.join(output_dir, 'memory_profile.bin')
             self.memoryProfiler = MemoryProfiler(output_file, db=self.db, mode=memoryProfilerMode, multiprocess=memoryProfilerMultiprocess)
             self.memoryProfiler.start()
