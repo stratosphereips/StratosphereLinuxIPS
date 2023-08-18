@@ -426,6 +426,17 @@ class Utils(object):
 
         return units[return_type]
 
+    def expand(self, ip: str):
+        """
+        adds leading zeros to ipv6
+        """
+        if not validators.ipv6(ip):
+            return ip
+
+        # format the IPv6 address with leading zeros
+        return ipaddress.ip_address(ip).exploded
+
+
     def get_community_id(self, flow):
             """
             calculates the flow community id based of the protocol
@@ -436,8 +447,10 @@ class Utils(object):
                 'udp': communityid.FlowTuple.make_udp,
                 'icmp': communityid.FlowTuple.make_icmp,
             }
+
+            saddr, daddr = self.expand(flow.saddr), self.expand(flow.daddr)
             try:
-                tpl = cases[proto](flow.saddr, flow.daddr, flow.sport, flow.dport)
+                tpl = cases[proto](saddr, daddr, flow.sport, flow.dport)
                 return self.community_id.calc(tpl)
             except KeyError:
                 # proto doesn't have a community_id.FlowTuple  method

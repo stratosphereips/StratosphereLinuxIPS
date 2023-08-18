@@ -44,7 +44,6 @@ class Conn:
         self.state_hist: str = self.history or self.state
         # community IDs are for conn.log flows only
         self.community_id = utils.get_community_id(self)
-
 @dataclass
 class DNS:
     starttime: str
