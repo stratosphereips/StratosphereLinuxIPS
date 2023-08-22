@@ -198,6 +198,8 @@ class LiveMultiprocessProfiler(ProfilerInterface):
                 pid = random.choice(list(proc_map_global.keys()))
                 self.db.publish("memory_profile", pid)
                 print(colored(f"Published {pid}", "red"))
+                time.sleep(5)
+                subprocess.Popen(["memray", "live", "1234"])
                 break
             time.sleep(1)
 
@@ -219,7 +221,6 @@ class MultiprocessPatchMeta(ABCMeta):
     def __new__(cls, name, bases, dct):
         new_cls = super().__new__(cls, name, bases, dct)
         new_cls.tracker: memray.Tracker = None
-        new_cls.tracker_start: Event = None
         new_cls.signal_interval: int = 1 # sleep time in sec for checking start and end signals to process
         new_cls.poll_interval: int = 1 # sleep time in sec for checking if signal has finished processing
         new_cls.port = 1234
