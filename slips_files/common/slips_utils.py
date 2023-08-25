@@ -10,6 +10,9 @@ import os
 import sys
 import ipaddress
 import communityid
+from hashlib import sha1
+from base64 import b64encode
+
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -426,22 +429,50 @@ class Utils(object):
 
         return units[return_type]
 
+    def remove_milliseconds_decimals(self, ts: str) -> str:
+        """
+        remove the milliseconds from the given ts
+        :param ts: time in unix format
+        """
+        ts = str(ts)
+        if '.' not in ts:
+            return ts
+
+        return ts.split('.')[0]
+
+    def get_aid(self, flow):
+        """
+        calculates the flow SHA1(cid+ts) aka All-ID of the flow
+        because we need the flow ids to be unique to be able to compare them
+        """
+        #TODO document this
+        community_id = self.get_community_id(flow)
+        ts: str = self.remove_milliseconds_decimals(flow.starttime)
+
+        aid = f"{community_id}-{ts}"
+
+        # convert the input string to bytes (since hashlib works with bytes)
+        aid: str = sha1(aid.encode('utf-8')).hexdigest()
+
+        return b64encode(aid.encode('utf-8')).decode()
+
+
     def get_community_id(self, flow):
-            """
-            calculates the flow community id based of the protocol
-            """
-            proto = flow.proto.lower()
-            cases = {
-                'tcp': communityid.FlowTuple.make_tcp,
-                'udp': communityid.FlowTuple.make_udp,
-                'icmp': communityid.FlowTuple.make_icmp,
-            }
-            try:
-                tpl = cases[proto](flow.saddr, flow.daddr, flow.sport, flow.dport)
-                return self.community_id.calc(tpl)
-            except KeyError:
-                # proto doesn't have a community_id.FlowTuple  method
-                return ''
+        """
+        calculates the flow community id based of the protocol
+        """
+        proto = flow.proto.lower()
+        cases = {
+            'tcp': communityid.FlowTuple.make_tcp,
+            'udp': communityid.FlowTuple.make_udp,
+            'icmp': communityid.FlowTuple.make_icmp,
+        }
+        try:
+            tpl = cases[proto](flow.saddr, flow.daddr, flow.sport, flow.dport)
+            return self.community_id.calc(tpl)
+        except KeyError:
+            # proto doesn't have a community_id.FlowTuple  method
+            return ''
 
     def IDEA_format(
         self,
