@@ -43,7 +43,7 @@ class Conn:
         self.bytes: int = self.sbytes + self.dbytes
         self.state_hist: str = self.history or self.state
         # community IDs are for conn.log flows only
-        self.community_id = utils.get_community_id(self)
+        self.aid = utils.get_aid(self)
 
 @dataclass
 class DNS:
