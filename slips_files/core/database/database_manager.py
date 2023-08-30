@@ -857,6 +857,10 @@ class DBManager:
     def get_branch(self, *args, **kwargs):
         return self.rdb.get_branch(*args, **kwargs)
 
+    def add_alert(self, alert: dict):
+        # TODO self.rdb.getTimeTW()
+        return self.sqlite.add_alert(alert)
+
     def close(self, *args, **kwargs):
         self.rdb.r.close()
         self.rdb.rcache.close()

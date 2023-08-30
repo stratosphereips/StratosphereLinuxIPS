@@ -29,7 +29,8 @@ class SQLiteDB():
         """creates the tables we're gonna use"""
         table_schema = {
             'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, aid TEXT",
-            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT"
+            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT",
+            'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
             }
         for table_name, schema in table_schema.items():
             cls.create_table(table_name, schema)
@@ -246,6 +247,23 @@ class SQLiteDB():
             parameters,
         )
 
+    def add_alert(self, alert: dict):
+        """
+        adds an alert to the alerts table
+        alert param should contain alert_id, alert_ts, ip_alerted, twid, tw_start, tw_end, label
+        """
+        print(f"@@@@@@@@@@@@@@@@ add_alert is called { alert}")
+        self.execute(
+            'INSERT OR REPLACE INTO alerts (alert_id, ip_alerted, twid, tw_start, tw_end, label, alert_time) '
+            'VALUES (?, ?, ?, ?, ?, ?);',
+            (alert['alert_ID'],
+             alert['profileid'].split()[-1],
+             alert['twid'],
+             alert['tw_start'],
+             alert['tw_end'],
+             alert['label'],
+             alert['time_detected'])
+        )
 
 
     def insert(self, table_name, values):
