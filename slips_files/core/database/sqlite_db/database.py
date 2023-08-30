@@ -8,13 +8,16 @@ from time import sleep
 
 class SQLiteDB():
     """Stores all the flows slips reads and handles labeling them"""
+    name = "SQLiteDB"
     _obj = None
     # used to lock each call to commit()
     cursor_lock = Lock()
+    trial = 0
 
-    def __new__(cls, output_dir):
+    def __new__(cls, output_dir, output_queue):
         # To treat the db as a singelton
         if cls._obj is None or not isinstance(cls._obj, cls):
+            cls.output_queue = output_queue
             cls._obj = super(SQLiteDB, cls).__new__(SQLiteDB)
             cls._flows_db = os.path.join(output_dir, 'flows.sqlite')
             cls._init_db()
@@ -48,6 +51,27 @@ class SQLiteDB():
         cls.cursor.execute(query)
         cls.conn.commit()
 
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
+        """
+        levels = f'{verbose}{debug}'
+        try:
+            self.output_queue.put(f'{levels}|{self.name}|{text}')
+        except AttributeError:
+            pass
 
     def get_db_path(self) -> str:
         """
@@ -265,6 +289,7 @@ class SQLiteDB():
         )
 
 
+
     def insert(self, table_name, values):
         query = f"INSERT INTO {table_name} VALUES ({values})"
         self.execute(query)
@@ -331,7 +356,6 @@ class SQLiteDB():
         since sqlite is terrible with multi-process applications
         this should be used instead of all calls to commit() and execute()
         """
-
         try:
             self.cursor_lock.acquire(True)
             #start a transaction
@@ -341,31 +365,30 @@ class SQLiteDB():
                 self.cursor.execute(query)
             else:
                 self.cursor.execute(query, params)
-
             self.conn.commit()
-
             self.cursor_lock.release()
             # counter for the number of times we tried executing a tx and failed
             self.trial = 0
 
         except sqlite3.Error as e:
+            self.cursor_lock.release()
             if self.trial >= 2:
                 # tried 2 times to exec a query and it's still failing
                 self.trial = 0
                 # discard query
                 self.conn.rollback()
-                print(f"Error executing query: {query} - {e}. Query discarded")
+                self.print(f"Error executing query: {query} - {e}. Query discarded", 0, 1)
 
             elif "database is locked" in str(e):
                 # keep track of failed trials
                 self.trial += 1
-                self.cursor_lock.release()
+
                 # Retry after a short delay
                 sleep(0.1)
                 self.execute(query, params=params)
             else:
-                self.conn.rollback()
                 # An error occurred during execution
+                self.conn.rollback()
                 # print(f"Re-trying to execute query ({query}). reason: {e}")
                 # keep track of failed trials
                 self.trial += 1

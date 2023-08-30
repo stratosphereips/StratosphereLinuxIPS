@@ -37,7 +37,7 @@ class DBManager:
             # we just want to connect to redis to get the PIDs
             cls.sqlite = None
             if start_sqlite:
-                cls.sqlite = SQLiteDB(output_dir)
+                cls.sqlite = SQLiteDB(output_dir, output_queue)
 
             cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
         return cls._instances[redis_port]
