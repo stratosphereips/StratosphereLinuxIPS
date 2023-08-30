@@ -11,6 +11,7 @@ class SQLiteDB():
     _obj = None
     # used to lock each call to commit()
     cursor_lock = Lock()
+    trial = 0
 
     def __new__(cls, output_dir):
         # To treat the db as a singelton
