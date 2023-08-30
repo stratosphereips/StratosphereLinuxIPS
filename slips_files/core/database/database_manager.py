@@ -1,6 +1,6 @@
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
-
+from slips_files.common.config_parser import ConfigParser
 
 class DBManager:
     """
@@ -41,6 +41,11 @@ class DBManager:
 
             cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
         return cls._instances[redis_port]
+
+    @classmethod
+    def read_configuration(cls):
+        conf = ConfigParser()
+        cls.width = conf.get_tw_width_as_float()
 
     def get_sqlite_db_path(self) -> str:
         return self.sqlite.get_db_path()
@@ -858,7 +863,9 @@ class DBManager:
         return self.rdb.get_branch(*args, **kwargs)
 
     def add_alert(self, alert: dict):
-        # TODO self.rdb.getTimeTW()
+        twid_starttime: float = self.rdb.getTimeTW(alert['profileid'], alert['twid'])
+        twid_endtime: float = twid_starttime + RedisDB.width
+        alert.update({'tw_start': twid_starttime, 'tw_end': twid_endtime})
         return self.sqlite.add_alert(alert)
 
     def close(self, *args, **kwargs):
