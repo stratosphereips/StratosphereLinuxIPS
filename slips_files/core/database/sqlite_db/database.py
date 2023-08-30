@@ -276,9 +276,10 @@ class SQLiteDB():
         adds an alert to the alerts table
         alert param should contain alert_id, alert_ts, ip_alerted, twid, tw_start, tw_end, label
         """
+        # 'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
         self.execute(
-            'INSERT OR REPLACE INTO alerts (alert_id, ip_alerted, twid, tw_start, tw_end, label, alert_time) '
-            'VALUES (?, ?, ?, ?, ?, ?);',
+            'INSERT OR REPLACE INTO alerts (alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?);',
             (alert['alert_ID'],
              alert['profileid'].split()[-1],
              alert['twid'],

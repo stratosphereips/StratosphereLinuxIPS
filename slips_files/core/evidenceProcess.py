@@ -556,7 +556,7 @@ class EvidenceProcess(Core):
         self.db.publish('new_alert', json.dumps(alert_details))
         #store the alerts in the alerts table
         alert_details.update(
-            {'time_detected': datetime.now(),
+            {'time_detected': utils.convert_format(datetime.now(), 'unixtimestamp'),
              'label': 'malicious'})
         self.db.add_alert(alert_details)
         self.label_flows_causing_alert()
