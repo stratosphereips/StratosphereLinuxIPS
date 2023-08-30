@@ -536,6 +536,33 @@ class EvidenceProcess(Core):
             uids: list = self.db.get_flows_causing_evidence(evidence_id)
             self.db.set_flow_label(uids, 'malicious')
 
+    def handle_new_alert(self, alert_ID: str, tw_evidence: dict):
+        """
+        saves alert details in the db and informs exporting modules about it
+        """
+        profile, srcip, twid, _ = alert_ID.split('_')
+        profileid = f'{profile}_{srcip}'
+        self.db.set_evidence_causing_alert(
+            profileid,
+            twid,
+            alert_ID,
+            self.IDs_causing_an_alert
+        )
+        alert_details = {
+            'alert_ID': alert_ID,
+            'profileid': profileid,
+            'twid': twid,
+        }
+        self.db.publish('new_alert', json.dumps(alert_details))
+        #store the alerts in the alerts table
+        alert_details.update(
+            {'time_detected': datetime.now(),
+             'label': 'malicious'})
+        self.db.add_alert(alert_details)
+        self.label_flows_causing_alert()
+        self.send_to_exporting_module(tw_evidence)
+
+
     def main(self):
         while not self.should_stop():
             if msg := self.get_msg('evidence_added'):
@@ -646,20 +673,8 @@ class EvidenceProcess(Core):
                         # store the alert in our database
                         # the alert ID is profileid_twid + the ID of the last evidence causing this alert
                         alert_ID = f'{profileid}_{twid}_{ID}'
-                        self.db.set_evidence_causing_alert(
-                            profileid,
-                            twid,
-                            alert_ID,
-                            self.IDs_causing_an_alert
-                        )
-                        to_send = {
-                            'alert_ID': alert_ID,
-                            'profileid': profileid,
-                            'twid': twid,
-                        }
-                        self.db.publish('new_alert', json.dumps(to_send))
-                        self.label_flows_causing_alert()
-                        self.send_to_exporting_module(tw_evidence)
+
+                        self.handle_new_alert(alert_ID, tw_evidence)
 
                         # print the alert
                         alert_to_print = (
