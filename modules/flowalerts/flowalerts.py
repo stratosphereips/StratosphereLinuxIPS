@@ -290,10 +290,9 @@ class FlowAlerts(Module, multiprocessing.Process):
         """
         Set evidence when 1 flow is sending >= the flow_upload_threshold bytes
         """
-
-
         if (
-            self.is_ignored_ip_data_upload(daddr)
+            not daddr
+            or self.is_ignored_ip_data_upload(daddr)
             or not sbytes
         ):
             return False
