@@ -143,9 +143,9 @@ class Core(Module, Process):
 
     def __init__(
             self,
-            db,
             output_queue,
             output_dir,
+            redis_port,
             termination_event,
             **kwargs
             ):
@@ -155,12 +155,11 @@ class Core(Module, Process):
         in this file
         """
         Process.__init__(self)
-
         self.output_queue = output_queue
         self.output_dir = output_dir
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
-        self.db = db
+        self.db = DBManager(output_dir, output_queue, redis_port)
         self.msg_received = False
         self.init(**kwargs)
 
