@@ -9,26 +9,30 @@ from time import sleep
 class SQLiteDB():
     """Stores all the flows slips reads and handles labeling them"""
     name = "SQLiteDB"
-    _obj = None
     # used to lock each call to commit()
     cursor_lock = Lock()
     trial = 0
 
-    def __new__(cls, output_dir, output_queue):
-        # To treat the db as a singelton
-        if cls._obj is None or not isinstance(cls._obj, cls):
-            cls.output_queue = output_queue
-            cls._obj = super(SQLiteDB, cls).__new__(SQLiteDB)
-            cls._flows_db = os.path.join(output_dir, 'flows.sqlite')
-            cls._init_db()
-            cls.conn = sqlite3.connect(cls._flows_db, check_same_thread=False)
-            cls.cursor = cls.conn.cursor()
-            cls.init_tables()
-        return cls._obj
+    def __init__(self,  output_dir, output_queue):
+        self.output_queue = output_queue
+        self._flows_db = os.path.join(output_dir, 'flows.sqlite')
+        self._init_db()
+        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False)
+        self.cursor = self.conn.cursor()
+        if self.get_number_of_tables() > 0:
+            self.init_tables()
 
 
-    @classmethod
-    def init_tables(cls):
+    def get_number_of_tables(self):
+        """
+        returns the number of tables in the current db
+        """
+        query = f"SELECT count(*) FROM sqlite_master WHERE type='table';"
+        self.execute(query)
+        x = self.fetchone()
+        return x[0]
+
+    def init_tables(self):
         """creates the tables we're gonna use"""
         table_schema = {
             'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, aid TEXT",
@@ -36,20 +40,18 @@ class SQLiteDB():
             'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
             }
         for table_name, schema in table_schema.items():
-            cls.create_table(table_name, schema)
+            self.create_table(table_name, schema)
 
-    @classmethod
-    def _init_db(cls):
+    def _init_db(self):
         """
         creates the db if it doesn't exist and clears it if it exists
         """
-        open(cls._flows_db,'w').close()
+        open(self._flows_db,'w').close()
 
-    @classmethod
-    def create_table(cls, table_name, schema):
+    def create_table(self, table_name, schema):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
-        cls.cursor.execute(query)
-        cls.conn.commit()
+        self.cursor.execute(query)
+        self.conn.commit()
 
     def print(self, text, verbose=1, debug=0):
         """
