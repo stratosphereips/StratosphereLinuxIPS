@@ -13,15 +13,27 @@ class SQLiteDB():
     cursor_lock = Lock()
     trial = 0
 
-    def __init__(self,  output_dir, output_queue):
+    def __init__(self, output_dir, output_queue):
         self.output_queue = output_queue
         self._flows_db = os.path.join(output_dir, 'flows.sqlite')
-        self._init_db()
-        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False)
-        self.cursor = self.conn.cursor()
-        if self.get_number_of_tables() > 0:
-            self.init_tables()
+        self.connect()
 
+    def connect(self):
+        """
+        Creates the db if it doesn't exist and connects to it
+        """
+        db_newly_created = False
+        if not os.path.exists(self._flows_db):
+            # db not created, mark it as first time accessing it so we can init tables once we connect
+            db_newly_created = True
+            self._init_db()
+
+        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False)
+
+        self.cursor = self.conn.cursor()
+        if db_newly_created:
+            # only init tables if the db is newly created
+            self.init_tables()
 
     def get_number_of_tables(self):
         """
