@@ -229,7 +229,8 @@ class ProcessManager:
             module_class = modules_to_call[module_name]["obj"]
             module = module_class(
                 self.main.output_queue,
-                self.main.db,
+                self.main.args.output,
+                self.main.redis_port,
                 self.termination_event,
             )
             module.start()

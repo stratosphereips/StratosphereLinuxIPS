@@ -25,6 +25,10 @@ class DBManager:
         cls.output_dir = output_dir
         cls.output_queue = output_queue
         cls.redis_port = redis_port
+
+        if start_sqlite:
+            cls.sqlite = SQLiteDB(output_dir, output_queue)
+
         if cls.redis_port not in cls._instances:
             cls._instances[redis_port] = super().__new__(cls)
             # these args will only be passed by slips.py
@@ -36,9 +40,6 @@ class DBManager:
             # like when using -S
             # we just want to connect to redis to get the PIDs
             cls.sqlite = None
-            if start_sqlite:
-                cls.sqlite = SQLiteDB(output_dir, output_queue)
-
             cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
         return cls._instances[redis_port]
 
