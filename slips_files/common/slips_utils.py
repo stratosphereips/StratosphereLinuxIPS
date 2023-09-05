@@ -1,5 +1,6 @@
 import hashlib
 from datetime import datetime, timedelta
+from re import findall
 import validators
 from git import Repo
 import socket
@@ -440,6 +441,27 @@ class Utils(object):
 
         return ts.split('.')[0]
 
+
+
+    def assert_microseconds(self, ts: str):
+        """
+        adds microseconds to the given ts if not present
+        :param ts: unix ts
+        :return: ts
+        """
+        ts = self.convert_format(ts, 'unixtimestamp')
+
+        ts = str(ts)
+        # pattern of unix ts with microseconds
+        pattern = r'\b\d+\.\d{6}\b'
+        matches = findall(pattern, ts)
+
+        if not matches:
+            # fill the missing microseconds and milliseconds with 0
+            # 6 is the decimals we need after the . in the unix ts
+            ts = ts + "0" * (6 - len(ts.split('.')[-1]))
+        return ts
+
     def get_aid(self, flow):
         """
         calculates the flow SHA1(cid+ts) aka All-ID of the flow
@@ -447,7 +469,8 @@ class Utils(object):
         """
         #TODO document this
         community_id = self.get_community_id(flow)
-        ts: str = self.remove_milliseconds_decimals(flow.starttime)
+        ts = flow.starttime
+        ts: str = self.assert_microseconds(ts)
 
         aid = f"{community_id}-{ts}"
 
