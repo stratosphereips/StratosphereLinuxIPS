@@ -20,8 +20,8 @@ def get_random_MAC():
 
 
 
-def test_check_suspicious_user_agents(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_check_suspicious_user_agents(mock_rdb):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
     # create a flow with suspicious user agent
     host = '147.32.80.7'
     uri = '/wpad.dat'
@@ -31,8 +31,8 @@ def test_check_suspicious_user_agents(mock_db):
     )
 
 
-def test_check_multiple_google_connections(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_check_multiple_google_connections(mock_rdb):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
     # {"ts":1635765765.435485,"uid":"C7mv0u4M1zqJBHydgj",
     # "id.orig_h":"192.168.1.28","id.orig_p":52102,"id.resp_h":"216.58.198.78",
     # "id.resp_p":80,"trans_depth":1,"method":"GET","host":"google.com","uri":"/",
@@ -48,16 +48,16 @@ def test_check_multiple_google_connections(mock_db):
         )
     assert found_detection is True
 
-def test_parsing_online_ua_info(mock_db, mocker):
+def test_parsing_online_ua_info(mock_rdb, mocker):
     """
     tests the parsing and processing the ua found by the online query
     """
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
     # use a different profile for this unit test to make sure we don't already have info about
     # it in the db
     profileid = 'profile_192.168.99.99'
 
-    mock_db.get_user_agent_from_profile.return_value = None
+    mock_rdb.get_user_agent_from_profile.return_value = None
     # mock the function that gets info about the given ua from an online db
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
@@ -73,8 +73,8 @@ def test_parsing_online_ua_info(mock_db, mocker):
     assert ua_info['browser'] == 'Safari'
 
 
-def test_get_user_agent_info(mock_db, mocker):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_get_user_agent_info(mock_rdb, mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
     # mock the function that gets info about the
     # given ua from an online db: get_ua_info_online()
     mock_requests = mocker.patch("requests.get")
@@ -85,8 +85,8 @@ def test_get_user_agent_info(mock_db, mocker):
         "os_name":"OS X"
     }"""
 
-    mock_db.add_all_user_agent_to_profile.return_value = True
-    mock_db.get_user_agent_from_profile.return_value = None
+    mock_rdb.add_all_user_agent_to_profile.return_value = True
+    mock_rdb.get_user_agent_from_profile.return_value = None
 
     expected_ret_value = {'browser': 'Safari',
                           'os_name': 'OS X',
@@ -98,27 +98,27 @@ def test_get_user_agent_info(mock_db, mocker):
     # assert ua_added_to_db is not None, 'Error getting UA info online'
     # assert ua_added_to_db is not False, 'We already have UA info about this profile in the db'
 
-def test_check_incompatible_user_agent(mock_db):
+def test_check_incompatible_user_agent(mock_rdb):
 
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
     # use a different profile for this unit test to make sure we don't already have info about
     # it in the db. it has to be a private IP for its' MAC to not be marked as the gw MAC
     profileid = 'profile_192.168.77.254'
 
     # Mimic an intel mac vendor using safari
-    mock_db.get_mac_vendor_from_profile.return_value = 'Intel Corp'
-    mock_db.get_user_agent_from_profile.return_value = {'browser': 'safari'}
+    mock_rdb.get_mac_vendor_from_profile.return_value = 'Intel Corp'
+    mock_rdb.get_user_agent_from_profile.return_value = {'browser': 'safari'}
 
     assert (
         http_analyzer.check_incompatible_user_agent('google.com', '/images', timestamp, profileid, twid, uid) is True
     )
 
 
-def test_extract_info_from_UA(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_extract_info_from_UA(mock_rdb):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
     # use another profile, because the default
     # one already has a ua in the db
-    mock_db.get_user_agent_from_profile.return_value = None
+    mock_rdb.get_user_agent_from_profile.return_value = None
     profileid = 'profile_192.168.1.2'
     server_bag_ua = 'server-bag[macOS,11.5.1,20G80,MacBookAir10,1]'
     assert (
@@ -127,8 +127,8 @@ def test_extract_info_from_UA(mock_db):
     )
 
 
-def test_check_multiple_UAs(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_check_multiple_UAs(mock_rdb):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
     mozilla_ua = 'Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) Gecko/20100101 Firefox/60.0'
     # old ua
     cached_ua = {'os_type': 'Fedora', 'os_name': 'Linux'}
