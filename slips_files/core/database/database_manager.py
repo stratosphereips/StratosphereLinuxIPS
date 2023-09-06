@@ -26,22 +26,26 @@ class DBManager:
         cls.output_queue = output_queue
         cls.redis_port = redis_port
 
+        # in some rare cases we don't wanna start sqlite,
+        # like when using -S
+        # we just want to connect to redis to get the PIDs
+        cls.sqlite = None
         if start_sqlite:
-            cls.sqlite = SQLiteDB(output_dir, output_queue)
+            cls.sqlite = cls.create_sqlite_db(output_dir, output_queue)
 
         if cls.redis_port not in cls._instances:
-            cls._instances[redis_port] = super().__new__(cls)
+            # there's no already created redis db with this port
+            cls._obj = super().__new__(cls)
+            cls._instances[redis_port] = cls._obj
             # these args will only be passed by slips.py
             # the rest of the modules can create an obj of this class without these args,
             # and will get the same obj instatiated by slips.py
-            # cls._instances[redis_port] = super().__new__(cls)
-            cls._obj = super().__new__(DBManager)
-            # in some rare cases we don't wanna start sqlite,
-            # like when using -S
-            # we just want to connect to redis to get the PIDs
-            cls.sqlite = None
             cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
         return cls._instances[redis_port]
+
+    @classmethod
+    def create_sqlite_db(cls, output_dir, output_queue):
+        return SQLiteDB(output_dir, output_queue)
 
     @classmethod
     def read_configuration(cls):
