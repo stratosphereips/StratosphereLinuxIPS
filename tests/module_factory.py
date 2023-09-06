@@ -21,7 +21,9 @@ from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event
 from modules.arp.arp import ARP
 import shutil
+from unittest.mock import patch, Mock, MagicMock
 import os
+
 
 
 def read_configuration():
@@ -67,14 +69,20 @@ class ModuleFactory:
         return main
 
 
-    def create_http_analyzer_obj(self, mock_db):
-        http_analyzer = HTTPAnalyzer(self.output_queue, mock_db, self.dummy_termination_event)
+    def create_http_analyzer_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            http_analyzer = HTTPAnalyzer(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            http_analyzer.db.rdb = mock_rdb
+
         # override the self.print function to avoid broken pipes
         http_analyzer.print = do_nothing
         return http_analyzer
 
-    def create_virustotal_obj(self, mock_db):
-        virustotal = VT(self.output_queue, mock_db, self.dummy_termination_event)
+    def create_virustotal_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            virustotal = VT(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            virustotal.db.rdb = mock_rdb
+
         # override the self.print function to avoid broken pipes
         virustotal.print = do_nothing
         virustotal.__read_configuration = read_configuration
@@ -83,43 +91,52 @@ class ModuleFactory:
         )
         return virustotal
 
-    def create_arp_obj(self, mock_db):
-        arp = ARP(self.output_queue, mock_db, self.dummy_termination_event)
+    def create_arp_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            arp = ARP(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            arp.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         arp.print = do_nothing
         return arp
 
-    def create_blocking_obj(self, mock_db):
-        blocking = Blocking(self.output_queue, mock_db, self.dummy_termination_event)
+    def create_blocking_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            blocking = Blocking(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            blocking.db.rdb = mock_rdb
+
         # override the print function to avoid broken pipes
         blocking.print = do_nothing
         return blocking
 
-    def create_flowalerts_obj(self, mock_db):
-        flowalerts = FlowAlerts(self.output_queue, mock_db, self.dummy_termination_event)
+    def create_flowalerts_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            flowalerts = FlowAlerts(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            flowalerts.db.rdb = mock_rdb
+
         # override the self.print function to avoid broken pipes
         flowalerts.print = do_nothing
         return flowalerts
 
     def create_inputProcess_obj(
-            self, input_information, input_type, mock_db
+            self, input_information, input_type, mock_rdb
             ):
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
-
-        inputProcess = InputProcess(
-            mock_db,
-            self.output_queue,
-            'output/',
-            self.dummy_termination_event,
-            profiler_queue=self.profiler_queue,
-            input_type=input_type,
-            input_information=input_information,
-            cli_packet_filter= None,
-            zeek_or_bro=check_zeek_or_bro(),
-            zeek_dir=zeek_tmp_dir,
-            line_type=False,
-        )
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            inputProcess = InputProcess(
+                self.output_queue,
+                'dummy_output_dir', 6379,
+                # 'output/',
+                self.dummy_termination_event,
+                profiler_queue=self.profiler_queue,
+                input_type=input_type,
+                input_information=input_information,
+                cli_packet_filter= None,
+                zeek_or_bro=check_zeek_or_bro(),
+                zeek_dir=zeek_tmp_dir,
+                line_type=False,
+            )
+            inputProcess.db.rdb = mock_rdb
 
         inputProcess.bro_timeout = 1
         # override the print function to avoid broken pipes
@@ -130,8 +147,10 @@ class ModuleFactory:
         return inputProcess
 
 
-    def create_ip_info_obj(self, db):
-        ip_info = IPInfo(self.output_queue, db, self.dummy_termination_event)
+    def create_ip_info_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            ip_info = IPInfo(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            ip_info.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         ip_info.print = do_nothing
         return ip_info
@@ -139,13 +158,15 @@ class ModuleFactory:
     def create_asn_obj(self, db):
         return ASN(db)
 
-    def create_leak_detector_obj(self, mock_db):
+    def create_leak_detector_obj(self, mock_rdb):
         # this file will be used for storing the module output
         # and deleted when the tests are done
         test_pcap = 'dataset/test7-malicious.pcap'
         yara_rules_path = 'tests/yara_rules_for_testing/rules/'
         compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
-        leak_detector = LeakDetector(self.output_queue, mock_db, self.dummy_termination_event)
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            leak_detector = LeakDetector(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            leak_detector.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         leak_detector.print = do_nothing
         # this is the path containing 1 yara rule for testing, it matches every pcap
@@ -155,11 +176,10 @@ class ModuleFactory:
         return leak_detector
 
 
-    def create_profilerProcess_obj(self, mock_db):
+    def create_profilerProcess_obj(self):
         profilerProcess = ProfilerProcess(
-            mock_db,
             self.output_queue,
-            'output/',
+            'output/', 6377,
             self.dummy_termination_event,
             profiler_queue=self.input_queue,
         )
@@ -178,20 +198,29 @@ class ModuleFactory:
     def create_utils_obj(self):
         return utils
 
-    def create_threatintel_obj(self, mock_db):
-        threatintel = ThreatIntel(self.output_queue, mock_db, self.dummy_termination_event)
+    def create_threatintel_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            threatintel = ThreatIntel(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            threatintel.db.rdb = mock_rdb
+
         # override the self.print function to avoid broken pipes
         threatintel.print = do_nothing
         return threatintel
 
-    def create_update_manager_obj(self, mock_db):
-        update_manager = UpdateManager(self.output_queue, mock_db, self.dummy_termination_event)
+    def create_update_manager_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            update_manager = UpdateManager(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            update_manager.db.rdb = mock_rdb
+
         # override the self.print function to avoid broken pipes
         update_manager.print = do_nothing
         return update_manager
 
-    def create_whitelist_obj(self, mock_db):
-        whitelist = Whitelist(self.output_queue, mock_db)
+    def create_whitelist_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            whitelist = Whitelist(self.output_queue, mock_rdb)
+            whitelist.db.rdb = mock_rdb
+
         # override the self.print function to avoid broken pipes
         whitelist.print = do_nothing
         whitelist.whitelist_path = 'tests/test_whitelist.conf'

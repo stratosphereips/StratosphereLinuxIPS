@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 # common imports for all modules
+from slips_files.core.database.database_manager import DBManager
 from multiprocessing import Event
 from slips_files.common.slips_utils import utils
 from multiprocessing import Process
@@ -11,10 +12,15 @@ class Module(ABC):
     name = ''
     description = 'Template module'
     authors = ['Template Author']
-    def __init__(self, output_queue, db, termination_event, **kwargs):
+    def __init__(self,
+                 output_queue,
+                 output_dir,
+                 redis_port,
+                 termination_event,
+                 **kwargs):
         Process.__init__(self)
         self.output_queue = output_queue
-        self.db = db
+        self.db = DBManager(output_dir, output_queue, redis_port)
         self.msg_received = False
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
@@ -136,7 +142,12 @@ class Core(Module, Process):
     authors = ['Name of the author creating the class']
 
     def __init__(
-            self, db, output_queue, output_dir, termination_event, **kwargs
+            self,
+            output_queue,
+            output_dir,
+            redis_port,
+            termination_event,
+            **kwargs
             ):
         """
         contains common initializations in all core files in  slips_files/core/
@@ -144,12 +155,11 @@ class Core(Module, Process):
         in this file
         """
         Process.__init__(self)
-
         self.output_queue = output_queue
         self.output_dir = output_dir
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
-        self.db = db
+        self.db = DBManager(output_dir, output_queue, redis_port)
         self.msg_received = False
         self.init(**kwargs)
 

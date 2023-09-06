@@ -175,7 +175,10 @@ class Main:
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to update orgs and ports info
-                update_manager = UpdateManager(self.output_queue, self.db, multiprocessing.Event())
+                update_manager = UpdateManager(self.output_queue,
+                                               self.args.output,
+                                               self.redis_port,
+                                               multiprocessing.Event())
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
