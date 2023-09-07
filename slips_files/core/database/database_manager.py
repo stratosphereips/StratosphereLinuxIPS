@@ -8,43 +8,29 @@ class DBManager:
     each method added to any of the dbs should have a
     handler in here
     """
-    _obj = None
-    # Stores instances per port
-    # this class is a singelton per redis port.meaning that each redis port will only be allowed to use
-    # exactly 1 instance
-    _instances = {}
-
-    def __new__(
-            cls,
+    def __init__(
+            self,
             output_dir,
             output_queue,
             redis_port,
             start_sqlite=True,
             **kwargs
     ):
-        cls.output_dir = output_dir
-        cls.output_queue = output_queue
-        cls.redis_port = redis_port
+        self.output_dir = output_dir
+        self.output_queue = output_queue
+        self.redis_port = redis_port
+
+        self.rdb = RedisDB(redis_port, output_queue, **kwargs)
 
         # in some rare cases we don't wanna start sqlite,
         # like when using -S
         # we just want to connect to redis to get the PIDs
-        cls.sqlite = None
+        self.sqlite = None
         if start_sqlite:
-            cls.sqlite = cls.create_sqlite_db(output_dir, output_queue)
+            self.sqlite = self.create_sqlite_db(output_dir, output_queue)
 
-        if cls.redis_port not in cls._instances:
-            # there's no already created redis db with this port
-            cls._obj = super().__new__(cls)
-            cls._instances[redis_port] = cls._obj
-            # these args will only be passed by slips.py
-            # the rest of the modules can create an obj of this class without these args,
-            # and will get the same obj instatiated by slips.py
-            cls.rdb = RedisDB(redis_port, output_queue, **kwargs)
-        return cls._instances[redis_port]
 
-    @classmethod
-    def create_sqlite_db(cls, output_dir, output_queue):
+    def create_sqlite_db(self, output_dir, output_queue):
         return SQLiteDB(output_dir, output_queue)
 
     @classmethod
