@@ -133,6 +133,10 @@ class Module(ABC):
 
         return True
 
+    def __del__(self):
+        self.db.close()
+
+
 class Core(Module, Process):
     """
     Interface for all Core files placed in slips_files/core/
@@ -185,6 +189,10 @@ class Core(Module, Process):
             self.print(traceback.format_exc(), 0, 1)
 
         return True
+
+    def __del__(self):
+        self.db.close()
+
 
 class ProfilerInterface(ABC):
     @abstractmethod
