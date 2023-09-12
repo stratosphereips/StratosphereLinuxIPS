@@ -28,7 +28,7 @@ class SQLiteDB():
             db_newly_created = True
             self._init_db()
 
-        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False)#, timeout=20)
+        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False, timeout=20)
 
         self.cursor = self.conn.cursor()
         if db_newly_created:
