@@ -380,18 +380,22 @@ class SQLiteDB():
                 self.cursor.execute(query)
             else:
                 self.cursor.execute(query, params)
-            self.conn.commit()
+
+            if 'SELECT' not in query:
+                self.conn.commit()
+
             self.cursor_lock.release()
             # counter for the number of times we tried executing a tx and failed
             self.trial = 0
 
         except sqlite3.Error as e:
             self.cursor_lock.release()
+            self.conn.rollback()
             if self.trial >= 2:
                 # tried 2 times to exec a query and it's still failing
                 self.trial = 0
                 # discard query
-                self.conn.rollback()
+
                 self.print(f"Error executing query: {query} - {e}. Query discarded", 0, 1)
 
             elif "database is locked" in str(e):
@@ -399,7 +403,7 @@ class SQLiteDB():
                 self.trial += 1
 
                 # Retry after a short delay
-                sleep(0.1)
+                sleep(5)
                 self.execute(query, params=params)
             else:
                 # An error occurred during execution
