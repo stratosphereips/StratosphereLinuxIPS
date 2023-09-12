@@ -62,8 +62,8 @@ class SQLiteDB():
 
     def create_table(self, table_name, schema):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
-        self.cursor.execute(query)
-        self.conn.commit()
+        self.execute(query)
+
 
     def print(self, text, verbose=1, debug=0):
         """
