@@ -28,7 +28,7 @@ class SQLiteDB():
             db_newly_created = True
             self._init_db()
 
-        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False)
+        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False, timeout=20)
 
         self.cursor = self.conn.cursor()
         if db_newly_created:
@@ -62,8 +62,7 @@ class SQLiteDB():
 
     def create_table(self, table_name, schema):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
-        self.cursor.execute(query)
-        self.conn.commit()
+        self.execute(query)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -380,18 +379,20 @@ class SQLiteDB():
                 self.cursor.execute(query)
             else:
                 self.cursor.execute(query, params)
+
             self.conn.commit()
+
             self.cursor_lock.release()
             # counter for the number of times we tried executing a tx and failed
             self.trial = 0
 
         except sqlite3.Error as e:
             self.cursor_lock.release()
+            self.conn.rollback()
             if self.trial >= 2:
                 # tried 2 times to exec a query and it's still failing
                 self.trial = 0
                 # discard query
-                self.conn.rollback()
                 self.print(f"Error executing query: {query} - {e}. Query discarded", 0, 1)
 
             elif "database is locked" in str(e):
@@ -399,7 +400,7 @@ class SQLiteDB():
                 self.trial += 1
 
                 # Retry after a short delay
-                sleep(0.1)
+                sleep(5)
                 self.execute(query, params=params)
             else:
                 # An error occurred during execution
