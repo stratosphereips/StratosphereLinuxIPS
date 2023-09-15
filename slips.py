@@ -21,6 +21,7 @@ import contextlib
 import multiprocessing
 from slips_files.common.imports import *
 from slips_files.common.cpu_profiler import CPUProfiler
+from slips_files.common.memory_profiler import MemoryProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -124,6 +125,51 @@ class Main:
         if self.cpuProfilerEnabled and not self.cpuProfilerMultiprocess:
             self.cpuProfiler.stop()
             self.cpuProfiler.print()
+    
+    def memory_profiler_init(self):
+        self.memoryProfilerEnabled = slips.conf.get_memory_profiler_enable() == "yes"
+        memoryProfilerMode = slips.conf.get_memory_profiler_mode()
+        memoryProfilerMultiprocess = slips.conf.get_memory_profiler_multiprocess() == "yes"
+        if self.memoryProfilerEnabled:
+            output_dir = os.path.join(slips.args.output,'memoryprofile/')
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            output_file = os.path.join(output_dir, 'memory_profile.bin')
+            self.memoryProfiler = MemoryProfiler(output_file, db=self.db, mode=memoryProfilerMode, multiprocess=memoryProfilerMultiprocess)
+            self.memoryProfiler.start()
+    
+    def memory_profiler_release(self):
+        if self.memoryProfilerEnabled:
+            self.memoryProfiler.stop()
+    
+    def memory_profiler_multiproc_test(self):
+        def target_function():
+            print("Target function started")
+            time.sleep(5)
+
+        def mem_function():
+            print("Mem function started")
+            while True:
+                time.sleep(1)
+                array = []
+                for i in range(1000000):
+                    array.append(i)
+        processes = []
+        num_processes = 3
+        
+        for _ in range(num_processes):
+            process = multiprocessing.Process(target=target_function if _%2 else mem_function)
+            process.start()
+            processes.append(process)
+        
+        # Message passing
+        self.db.publish("memory_profile", processes[1].pid) # successful
+        # subprocess.Popen(["memray", "live", "1234"])
+        time.sleep(5) # target_function will timeout and tracker will be cleared
+        self.db.publish("memory_profile", processes[0].pid) # end but maybe don't start
+        time.sleep(5) # mem_function will get tracker started
+        self.db.publish("memory_profile", processes[0].pid) # start successfully
+        input()
 
     def get_slips_version(self):
         version_file = 'VERSION'
@@ -504,6 +550,10 @@ class Main:
                 })
             
             self.cpu_profiler_init()
+            self.memory_profiler_init()
+            # uncomment line to see that memory profiler works correctly
+            # Should print out red text if working properly
+            # self.memory_profiler_multiproc_test()
 
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
@@ -708,5 +758,7 @@ if __name__ == '__main__':
             daemon.start()
     else:
         # interactive mode
+        pass
         slips.start()
     slips.cpu_profiler_release()
+    slips.memory_profiler_release()
