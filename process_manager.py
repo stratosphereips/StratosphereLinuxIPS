@@ -193,7 +193,7 @@ class ProcessManager:
             for member_name, member_object in inspect.getmembers(module):
                 # Check if current member is a class.
                 if inspect.isclass(member_object) and (
-                    issubclass(member_object, Module) and member_object is not Module
+                        issubclass(member_object, IModule) and member_object is not IModule
                 ):
                     plugins[member_object.name] = dict(
                         obj=member_object,

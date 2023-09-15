@@ -1,4 +1,4 @@
-from slips_files.common.abstracts._module import Module
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 import json
 import ipaddress
@@ -6,7 +6,7 @@ import time
 import threading
 from multiprocessing import Queue
 
-class ARP(Module, multiprocessing.Process):
+class ARP(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'ARP'
     description = 'Detect arp attacks'

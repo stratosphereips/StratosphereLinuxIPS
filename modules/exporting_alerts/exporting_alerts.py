@@ -1,4 +1,4 @@
-from slips_files.common.abstracts._module import Module
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 from slack import WebClient
 from slack.errors import SlackApiError
@@ -11,7 +11,7 @@ import threading
 import sys
 import datetime
 
-class ExportingAlerts(Module, multiprocessing.Process):
+class ExportingAlerts(IModule, multiprocessing.Process):
     """
     Module to export alerts to slack and/or STIX
     You need to have the token in your environment variables to use this module

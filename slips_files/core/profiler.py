@@ -35,14 +35,11 @@ import os
 import binascii
 import base64
 from re import split
-from slips_files.common.abstracts.core import Core
+from slips_files.common.abstracts.core import ICore
 from pprint import pp
 
 
-
-
-# Profiler Process
-class ProfilerProcess(Core):
+class ProfilerProcess(ICore):
     """A class to create the profiles for IPs and the rest of data"""
     name = 'Profiler'
 

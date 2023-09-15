@@ -2,11 +2,11 @@ import sys
 import traceback
 from multiprocessing import Process, Event
 
-from slips_files.common.abstracts._module import Module
+from slips_files.common.abstracts._module import IModule
 from slips_files.core.database.database_manager import DBManager
 
 
-class Core(Module, Process):
+class ICore(IModule, Process):
     """
     Interface for all Core files placed in slips_files/core/
     """

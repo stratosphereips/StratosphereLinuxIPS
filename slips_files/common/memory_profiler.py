@@ -3,7 +3,7 @@ import glob
 import os
 import subprocess
 from termcolor import colored
-from slips_files.common.abstracts.profiler import ProfilerInterface
+from slips_files.common.abstracts.performance_profiler import IPerformanceProfiler
 import time
 import multiprocessing
 from multiprocessing.managers import SyncManager
@@ -15,7 +15,7 @@ import psutil
 import random
 from abc import ABCMeta
 
-class MemoryProfiler(ProfilerInterface):
+class MemoryProfiler(IPerformanceProfiler):
     profiler = None
     def __init__(self, output, db=None, mode="dev", multiprocess=True):
         valid_modes = ["dev", "live"]
@@ -41,7 +41,7 @@ class MemoryProfiler(ProfilerInterface):
     def print(self):
         pass
 
-class DevProfiler(ProfilerInterface):
+class DevProfiler(IPerformanceProfiler):
     output = None
     profiler = None
     multiprocess = None
@@ -77,7 +77,7 @@ class DevProfiler(ProfilerInterface):
     def print(self):
         pass
 
-class LiveProfiler(ProfilerInterface):
+class LiveProfiler(IPerformanceProfiler):
     multiprocess = None
     profiler = None
     def __init__(self, multiprocess=False, db=None):
@@ -98,7 +98,7 @@ class LiveProfiler(ProfilerInterface):
     def print(self):
         self.profiler.print()
 
-class LiveSingleProcessProfiler(ProfilerInterface):
+class LiveSingleProcessProfiler(IPerformanceProfiler):
     profiler = None
     port = 5000
     def __init__(self):
@@ -129,7 +129,7 @@ def proc_is_running(pid):
     except psutil.NoSuchProcess:
         return False
 
-class LiveMultiprocessProfiler(ProfilerInterface):
+class LiveMultiprocessProfiler(IPerformanceProfiler):
     # restores the original process behavior once profiler is stopped
     original_process_class: multiprocessing.Process
     # thread checks redis db for which process to start profiling

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class ProfilerInterface(ABC):
+class IPerformanceProfiler(ABC):
     @abstractmethod
     def _create_profiler(self):
         pass

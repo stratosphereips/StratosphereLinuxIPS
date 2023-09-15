@@ -1,11 +1,11 @@
-from slips_files.common.abstracts._module import Module
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 import json
 import urllib
 import requests
 
 
-class HTTPAnalyzer(Module, multiprocessing.Process):
+class HTTPAnalyzer(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'HTTP Analyzer'
     description = 'Analyze HTTP flows'

@@ -1,4 +1,4 @@
-from slips_files.common.abstracts._module import Module
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
@@ -20,7 +20,7 @@ import warnings
 warnings.warn = warn
 
 
-class FlowMLDetection(Module, multiprocessing.Process):
+class FlowMLDetection(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Flow ML Detection'
     description = (

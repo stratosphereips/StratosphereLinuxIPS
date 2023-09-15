@@ -1,4 +1,4 @@
-"""Unit test for slips_files/core/profiler.py"""
+"""Unit test for slips_files/core/performance_profiler.py"""
 from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing
 import subprocess

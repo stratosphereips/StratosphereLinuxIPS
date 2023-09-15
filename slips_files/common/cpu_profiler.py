@@ -6,10 +6,10 @@ import io
 import pstats
 import os
 
-from slips_files.common.abstracts.profiler import ProfilerInterface
+from slips_files.common.abstracts.performance_profiler import IPerformanceProfiler
 
 
-class CPUProfiler(ProfilerInterface):
+class CPUProfiler(IPerformanceProfiler):
     def __init__(self, db, output, mode="dev", limit=20, interval=20):
         valid_modes = ["dev", "live"]
         if mode not in valid_modes:
@@ -34,7 +34,7 @@ class CPUProfiler(ProfilerInterface):
     def print(self):
         self.profiler.print()
 
-class DevProfiler(ProfilerInterface):
+class DevProfiler(IPerformanceProfiler):
     def __init__(self, output):
         self.profiler = self._create_profiler()
         self.output = output
@@ -52,7 +52,7 @@ class DevProfiler(ProfilerInterface):
         result_path = os.path.join(self.output, 'cpu_profiling_result.json' )
         self.profiler.save(result_path)
 
-class LiveProfiler(ProfilerInterface):
+class LiveProfiler(IPerformanceProfiler):
     def __init__(self, db, limit=20, interval=20):
         self.profiler = self._create_profiler()
         self.limit = limit

@@ -1,7 +1,7 @@
-from slips_files.common.abstracts._module import Module
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 
-class Ensembling(Module, multiprocessing.Process):
+class Ensembling(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Ensembling'
     description = 'The module to assign '

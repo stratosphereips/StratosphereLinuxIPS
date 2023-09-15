@@ -7,7 +7,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 
 
-class Module(ABC):
+class IModule(ABC):
     name = ''
     description = 'Template module'
     authors = ['Template Author']

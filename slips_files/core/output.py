@@ -23,10 +23,10 @@ from datetime import datetime
 import os
 import traceback
 from tqdm.auto import tqdm
-from slips_files.common.abstracts.core import Core
+from slips_files.common.abstracts.core import ICore
 
 
-class OutputProcess(Core):
+class OutputProcess(ICore):
     """
     A class to process the output of everything Slips need. Manages all the output
     If any Slips module or process needs to output anything to screen, or logs,

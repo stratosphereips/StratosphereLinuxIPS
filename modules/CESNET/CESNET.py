@@ -1,4 +1,4 @@
-from slips_files.common.abstracts._module import Module
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 from ..CESNET.warden_client import Client, read_cfg
 import os
@@ -10,7 +10,7 @@ import ipaddress
 import validators
 
 
-class CESNET(Module, multiprocessing.Process):
+class CESNET(IModule, multiprocessing.Process):
     name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
