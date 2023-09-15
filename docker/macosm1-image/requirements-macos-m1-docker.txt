@@ -38,3 +38,6 @@ tld
 tqdm
 communityid
 termcolor
+memray
+viztracer
+yappi
