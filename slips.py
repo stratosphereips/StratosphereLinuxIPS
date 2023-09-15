@@ -20,6 +20,8 @@
 import contextlib
 import multiprocessing
 from slips_files.common.imports import *
+from slips_files.common.cpu_profiler import CPUProfiler
+from slips_files.common.memory_profiler import MemoryProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -27,6 +29,14 @@ from process_manager import ProcessManager
 from ui_manager import UIManager
 from checker import Checker
 from style import green
+
+
+from slips_files.core.inputProcess import InputProcess
+from slips_files.core.outputProcess import OutputProcess
+from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.evidenceProcess import EvidenceProcess
+from slips_files.core.database.database_manager import DBManager
+
 
 import signal
 import sys
@@ -82,6 +92,86 @@ class Main:
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
 
+    def cpu_profiler_init(self):
+        self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
+        self.cpuProfilerMode = slips.conf.get_cpu_profiler_mode()
+        self.cpuProfilerMultiprocess = slips.conf.get_cpu_profiler_multiprocess() == 'yes'
+        if self.cpuProfilerEnabled:
+            try:
+                if (self.cpuProfilerMultiprocess and self.cpuProfilerMode == "dev"):
+                    args = sys.argv
+                    if (args[-1] != "--no-recurse"):
+                        tracer_entries = str(slips.conf.get_cpu_profiler_dev_mode_entries())
+                        viz_args = ['viztracer', '--tracer_entries', tracer_entries, '--max_stack_depth', '10', '-o', str(os.path.join(self.args.output, 'cpu_profiling_result.json'))]
+                        viz_args.extend(args)
+                        viz_args.append("--no-recurse")
+                        print("Starting multiprocess profiling recursive subprocess")
+                        subprocess.run(viz_args)
+                        exit(0)
+                else:
+                    self.cpuProfiler = CPUProfiler(
+                        db=self.db,
+                        output=self.args.output,
+                        mode=slips.conf.get_cpu_profiler_mode(),
+                        limit=slips.conf.get_cpu_profiler_output_limit(),
+                        interval=slips.conf.get_cpu_profiler_sampling_interval()
+                        )
+                    self.cpuProfiler.start()
+            except Exception as e:
+                print(e)
+                self.cpuProfilerEnabled = False
+    
+    def cpu_profiler_release(self):
+        if hasattr(self, 'cpuProfilerEnabled' ):
+            if self.cpuProfilerEnabled and not self.cpuProfilerMultiprocess:
+                self.cpuProfiler.stop()
+                self.cpuProfiler.print()
+    
+    def memory_profiler_init(self):
+        self.memoryProfilerEnabled = slips.conf.get_memory_profiler_enable() == "yes"
+        memoryProfilerMode = slips.conf.get_memory_profiler_mode()
+        memoryProfilerMultiprocess = slips.conf.get_memory_profiler_multiprocess() == "yes"
+        if self.memoryProfilerEnabled:
+            output_dir = os.path.join(slips.args.output,'memoryprofile/')
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            output_file = os.path.join(output_dir, 'memory_profile.bin')
+            self.memoryProfiler = MemoryProfiler(output_file, db=self.db, mode=memoryProfilerMode, multiprocess=memoryProfilerMultiprocess)
+            self.memoryProfiler.start()
+    
+    def memory_profiler_release(self):
+        if self.memoryProfilerEnabled:
+            self.memoryProfiler.stop()
+    
+    def memory_profiler_multiproc_test(self):
+        def target_function():
+            print("Target function started")
+            time.sleep(5)
+
+        def mem_function():
+            print("Mem function started")
+            while True:
+                time.sleep(1)
+                array = []
+                for i in range(1000000):
+                    array.append(i)
+        processes = []
+        num_processes = 3
+        
+        for _ in range(num_processes):
+            process = multiprocessing.Process(target=target_function if _%2 else mem_function)
+            process.start()
+            processes.append(process)
+        
+        # Message passing
+        self.db.publish("memory_profile", processes[1].pid) # successful
+        # subprocess.Popen(["memray", "live", "1234"])
+        time.sleep(5) # target_function will timeout and tracker will be cleared
+        self.db.publish("memory_profile", processes[0].pid) # end but maybe don't start
+        time.sleep(5) # mem_function will get tracker started
+        self.db.publish("memory_profile", processes[0].pid) # start successfully
+        input()
+
     def get_slips_version(self):
         version_file = 'VERSION'
         with open(version_file, 'r') as f:
@@ -122,7 +212,8 @@ class Main:
         """
         if self.mode == 'daemonized':
             self.daemon.stop()
-        sys.exit(0)
+        if self.conf.get_cpu_profiler_enable() != "yes":
+            sys.exit(0)
 
     def update_local_TI_files(self):
         from modules.update_manager.update_manager import UpdateManager
@@ -131,7 +222,10 @@ class Main:
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to update orgs and ports info
-                update_manager = UpdateManager(self.output_queue, self.db, multiprocessing.Event())
+                update_manager = UpdateManager(self.output_queue,
+                                               self.args.output,
+                                               self.redis_port,
+                                               multiprocessing.Event())
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -455,6 +549,12 @@ class Main:
                     'commit': self.commit,
                     'branch': self.branch,
                 })
+            
+            self.cpu_profiler_init()
+            self.memory_profiler_init()
+            # uncomment line to see that memory profiler works correctly
+            # Should print out red text if working properly
+            # self.memory_profiler_multiproc_test()
 
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
@@ -659,4 +759,7 @@ if __name__ == '__main__':
             daemon.start()
     else:
         # interactive mode
+        pass
         slips.start()
+    slips.cpu_profiler_release()
+    slips.memory_profiler_release()

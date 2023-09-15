@@ -1,5 +1,6 @@
 import hashlib
 from datetime import datetime, timedelta
+from re import findall
 import validators
 from git import Repo
 import socket
@@ -9,6 +10,10 @@ import platform
 import os
 import sys
 import ipaddress
+import communityid
+from hashlib import sha1
+from base64 import b64encode
+
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -59,6 +64,7 @@ class Utils(object):
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
         self.local_tz = self.get_local_timezone()
+        self.community_id = communityid.CommunityID()
 
     def get_cidr_of_ip(self, ip):
         """
@@ -424,6 +430,72 @@ class Utils(object):
 
         return units[return_type]
 
+    def remove_milliseconds_decimals(self, ts: str) -> str:
+        """
+        remove the milliseconds from the given ts
+        :param ts: time in unix format
+        """
+        ts = str(ts)
+        if '.' not in ts:
+            return ts
+
+        return ts.split('.')[0]
+
+
+
+    def assert_microseconds(self, ts: str):
+        """
+        adds microseconds to the given ts if not present
+        :param ts: unix ts
+        :return: ts
+        """
+        ts = self.convert_format(ts, 'unixtimestamp')
+
+        ts = str(ts)
+        # pattern of unix ts with microseconds
+        pattern = r'\b\d+\.\d{6}\b'
+        matches = findall(pattern, ts)
+
+        if not matches:
+            # fill the missing microseconds and milliseconds with 0
+            # 6 is the decimals we need after the . in the unix ts
+            ts = ts + "0" * (6 - len(ts.split('.')[-1]))
+        return ts
+
+    def get_aid(self, flow):
+        """
+        calculates the flow SHA1(cid+ts) aka All-ID of the flow
+        because we need the flow ids to be unique to be able to compare them
+        """
+        #TODO document this
+        community_id = self.get_community_id(flow)
+        ts = flow.starttime
+        ts: str = self.assert_microseconds(ts)
+
+        aid = f"{community_id}-{ts}"
+
+        # convert the input string to bytes (since hashlib works with bytes)
+        aid: str = sha1(aid.encode('utf-8')).hexdigest()
+        aid: str = b64encode(aid.encode()).decode()
+        return aid
+
+
+    def get_community_id(self, flow):
+        """
+        calculates the flow community id based of the protocol
+        """
+        proto = flow.proto.lower()
+        cases = {
+            'tcp': communityid.FlowTuple.make_tcp,
+            'udp': communityid.FlowTuple.make_udp,
+            'icmp': communityid.FlowTuple.make_icmp,
+        }
+        try:
+            tpl = cases[proto](flow.saddr, flow.daddr, flow.sport, flow.dport)
+            return self.community_id.calc(tpl)
+        except KeyError:
+            # proto doesn't have a community_id.FlowTuple  method
+            return ''
 
     def IDEA_format(
         self,

@@ -283,6 +283,11 @@ class ArgumentParser(argparse.ArgumentParser):
             required=False,
             help='Read flows from a module other than input process.',
         )
+        self.add_argument(
+            '--no-recurse',
+            action='store_true',
+            help='Internal use only, prevents infinite recursion for cpu profiler dev mode multiprocess tracking'
+        )
         try:
             self.add_argument(
                 '-h', '--help', action='store_true', help='command line help',

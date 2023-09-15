@@ -6,6 +6,7 @@ import redis
 import os
 import time
 import socket
+import subprocess
 
 class RedisManager:
     def __init__(self, main):
@@ -197,9 +198,10 @@ class RedisManager:
         Returns str(port) or false if there's no redis-server running on this port
         """
         cmd = 'ps aux | grep redis-server'
-        cmd_output = os.popen(cmd).read()
+        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        cmd_output, _ = process.communicate()
         for line in cmd_output.splitlines():
-            if str(port) in line:
+            if str(port).encode() in line:
                 pid = line.split()[1]
                 return pid
         return False
@@ -269,9 +271,10 @@ class RedisManager:
         returns the port of the redis running on this pid
         """
         cmd = 'ps aux | grep redis-server'
-        cmd_output = os.popen(cmd).read()
+        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        cmd_output, _ = process.communicate()
         for line in cmd_output.splitlines():
-            if str(pid) in line:
+            if str(pid).encode() in line:
                 port = line.split(':')[-1]
                 return port
         return False

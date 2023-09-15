@@ -29,9 +29,9 @@ class ProcessManager:
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         output_process = OutputProcess(
-            self.main.db,
             self.main.output_queue,
             self.main.args.output,
+            self.main.redis_port,
             self.termination_event,
             verbose=self.main.args.verbose,
             debug=self.main.args.debug,
@@ -46,9 +46,9 @@ class ProcessManager:
 
     def start_profiler_process(self):
         profiler_process = ProfilerProcess(
-            self.main.db,
             self.main.output_queue,
             self.main.args.output,
+            self.main.redis_port,
             self.termination_event,
             profiler_queue=self.profiler_queue,
         )
@@ -64,9 +64,9 @@ class ProcessManager:
 
     def start_evidence_process(self):
         evidence_process = EvidenceProcess(
-            self.main.db,
             self.main.output_queue,
             self.main.args.output,
+            self.main.redis_port,
             self.termination_event,
         )
         evidence_process.start()
@@ -81,9 +81,9 @@ class ProcessManager:
 
     def start_input_process(self):
         input_process = InputProcess(
-            self.main.db,
             self.main.output_queue,
             self.main.args.output,
+            self.main.redis_port,
             self.termination_event,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -223,17 +223,14 @@ class ProcessManager:
         modules_to_call = self.get_modules(to_ignore)[0]
         loaded_modules = []
         for module_name in modules_to_call:
-            # delete later
-            # if module_name != 'CPU Profiler':
-            #     continue
-            # end
             if module_name in to_ignore:
                 continue
 
             module_class = modules_to_call[module_name]["obj"]
             module = module_class(
                 self.main.output_queue,
-                self.main.db,
+                self.main.args.output,
+                self.main.redis_port,
                 self.termination_event,
             )
             module.start()
@@ -505,6 +502,5 @@ class ProcessManager:
                 else:
                     f.write(f"[Process Manager] Slips didn't shutdown gracefully - {reason}\n")
 
-            exit()
         except KeyboardInterrupt:
             return False

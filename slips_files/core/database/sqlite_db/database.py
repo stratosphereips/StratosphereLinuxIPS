@@ -8,38 +8,83 @@ from time import sleep
 
 class SQLiteDB():
     """Stores all the flows slips reads and handles labeling them"""
-    _obj = None
+    name = "SQLiteDB"
     # used to lock each call to commit()
     cursor_lock = Lock()
+    trial = 0
 
-    def __new__(cls, output_dir):
-        # To treat the db as a singelton
-        if cls._obj is None or not isinstance(cls._obj, cls):
-            cls._obj = super(SQLiteDB, cls).__new__(SQLiteDB)
-            cls._flows_db = os.path.join(output_dir, 'flows.sqlite')
-            cls._init_db()
-            cls.conn = sqlite3.connect(cls._flows_db, check_same_thread=False)
-            cls.cursor = cls.conn.cursor()
-            cls.init_tables()
-        return cls._obj
+    def __init__(self, output_dir, output_queue):
+        self.output_queue = output_queue
+        self._flows_db = os.path.join(output_dir, 'flows.sqlite')
+        self.connect()
 
+    def connect(self):
+        """
+        Creates the db if it doesn't exist and connects to it
+        """
+        db_newly_created = False
+        if not os.path.exists(self._flows_db):
+            # db not created, mark it as first time accessing it so we can init tables once we connect
+            db_newly_created = True
+            self._init_db()
 
-    @classmethod
-    def init_tables(cls):
+        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False, timeout=20)
+
+        self.cursor = self.conn.cursor()
+        if db_newly_created:
+            # only init tables if the db is newly created
+            self.init_tables()
+
+    def get_number_of_tables(self):
+        """
+        returns the number of tables in the current db
+        """
+        query = f"SELECT count(*) FROM sqlite_master WHERE type='table';"
+        self.execute(query)
+        x = self.fetchone()
+        return x[0]
+
+    def init_tables(self):
         """creates the tables we're gonna use"""
         table_schema = {
-            'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT",
-            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT"
+            'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, aid TEXT",
+            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT",
+            'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
             }
         for table_name, schema in table_schema.items():
-            cls.create_table(table_name, schema)
+            self.create_table(table_name, schema)
 
-    @classmethod
-    def _init_db(cls):
+    def _init_db(self):
         """
         creates the db if it doesn't exist and clears it if it exists
         """
-        open(cls._flows_db,'w').close()
+        open(self._flows_db,'w').close()
+
+    def create_table(self, table_name, schema):
+        query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
+        self.execute(query)
+
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
+        """
+        levels = f'{verbose}{debug}'
+        try:
+            self.output_queue.put(f'{levels}|{self.name}|{text}')
+        except AttributeError:
+            pass
 
     def get_db_path(self) -> str:
         """
@@ -47,11 +92,6 @@ class SQLiteDB():
         """
         return self._flows_db
 
-    @classmethod
-    def create_table(cls, table_name, schema):
-        query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
-        cls.cursor.execute(query)
-        cls.conn.commit()
 
     def get_altflow_from_uid(self, profileid, twid, uid) -> dict:
         """ Given a uid, get the alternative flow associated with it """
@@ -207,14 +247,21 @@ class SQLiteDB():
     def add_flow(
             self, flow, profileid: str, twid:str, label='benign'
             ):
+        if hasattr(flow, 'aid'):
+            parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label, flow.aid)
+            self.execute(
+                'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label, aid) '
+                'VALUES (?, ?, ?, ?, ?, ?);',
+                parameters,
+            )
+        else:
+            parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
 
-        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
-
-        self.execute(
-            'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) '
-            'VALUES (?, ?, ?, ?, ?);',
-            parameters,
-        )
+            self.execute(
+                'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) '
+                'VALUES (?, ?, ?, ?, ?);',
+                parameters,
+            )
 
     def get_flows_count(self, profileid, twid) -> int:
         """
@@ -235,6 +282,24 @@ class SQLiteDB():
             'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label, flow_type) '
             'VALUES (?, ?, ?, ?, ?, ?);',
             parameters,
+        )
+
+    def add_alert(self, alert: dict):
+        """
+        adds an alert to the alerts table
+        alert param should contain alert_id, alert_ts, ip_alerted, twid, tw_start, tw_end, label
+        """
+        # 'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
+        self.execute(
+            'INSERT OR REPLACE INTO alerts (alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?);',
+            (alert['alert_ID'],
+             alert['profileid'].split()[-1],
+             alert['twid'],
+             alert['tw_start'],
+             alert['tw_end'],
+             alert['label'],
+             alert['time_detected'])
         )
 
 
@@ -305,26 +370,46 @@ class SQLiteDB():
         since sqlite is terrible with multi-process applications
         this should be used instead of all calls to commit() and execute()
         """
-
         try:
             self.cursor_lock.acquire(True)
+            #start a transaction
+            self.cursor.execute('BEGIN')
 
             if not params:
                 self.cursor.execute(query)
             else:
                 self.cursor.execute(query, params)
+
             self.conn.commit()
 
             self.cursor_lock.release()
+            # counter for the number of times we tried executing a tx and failed
+            self.trial = 0
+
         except sqlite3.Error as e:
-            if "database is locked" in str(e):
-                self.cursor_lock.release()
+            self.cursor_lock.release()
+            self.conn.rollback()
+            if self.trial >= 2:
+                # tried 2 times to exec a query and it's still failing
+                self.trial = 0
+                # discard query
+                self.print(f"Error executing query: {query} - {e}. Query discarded", 0, 1)
+
+            elif "database is locked" in str(e):
+                # keep track of failed trials
+                self.trial += 1
+
                 # Retry after a short delay
-                sleep(0.1)
+                sleep(5)
                 self.execute(query, params=params)
             else:
                 # An error occurred during execution
-                print(f"Error executing query ({query}): {e}")
+                self.conn.rollback()
+                # print(f"Re-trying to execute query ({query}). reason: {e}")
+                # keep track of failed trials
+                self.trial += 1
+                self.execute(query, params=params)
+
 
 
         

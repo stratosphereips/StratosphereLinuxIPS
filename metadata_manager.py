@@ -148,7 +148,7 @@ class MetadataManager:
 
     def check_if_port_is_in_use(self, port):
         if port == 6379:
-            # even if it's already in use, slips will override it
+            # even if it's already in use, slips should override it
             return False
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -1,3 +1,11 @@
+-1.0.7 (September 2023):
+- CPU and memory profilers thanks to @danieltherealyang
+- Check dns queries and answers for whitelisted IPs and domains
+- Add AID flow hash to all conn.log flows, which is a combination of community_id and the flow's timestamp
+- Sqlite database improvements and better error handling
+- Add support for exporting Slips alerts to a sqlite db 
+
+
 -1.0.6 (June 2023):
 - Store flows in SQLite database in the output directory instead of redis.
 - 55% RAM usage decrease.

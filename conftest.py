@@ -19,7 +19,7 @@ sys.path.insert(0, parent_dir)
 
 
 @pytest.fixture
-def mock_db():
+def mock_rdb():
     # Create a mock version of the database object
     with patch('slips_files.core.database.database_manager.DBManager') as mock:
         yield mock.return_value

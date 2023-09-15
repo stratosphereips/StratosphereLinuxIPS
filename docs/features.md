@@ -1017,8 +1017,47 @@ and ICMP-AddressMaskScan based on the icmp type
 We detect a scan every threshold. So we generate an evidence when there is 
 5,10,15, .. etc. ICMP established connections to different IPs.
 
+### CPU Profiling
+
+Slips is shipped with its own tool for CPU Profiling, it can be found it ```slips_files/common/cpu_profiler.py```
+
+CPU Profiling supports 2 modes: live and development mode
+
+#### Live mode:
+The main purpose of this mode it to show live CPU stats in the web interface.
+"live" mode publishes updates during the runtime of the program to the redis channel 'cpu_profile' so that the web interface can use them
+
+#### Development mode:
+
+ Setting the mode to "dev" outputs a JSON file of the CPU usage at the end of the program run.
+ It is recommended to only use dev mode for static file inputs (pcaps, suricata files, binetflows, etc.) instead of interface and growing zeek dirs, because longer runs result in profiling data loss and not everything will get recorded.
+The JSON file created in this mode is placed in the output dir of the current run and can be viewed by running the following command
+
+```vizviewer results.json``` 
+
+then going to http://127.0.0.1:9001/ in your browser for seeing the visualizations of the CPU usage
 
 
+Options to enable cpu profiling can be found under the [Profiling] section of the ```slips.conf``` file.
+```cpu_profiler_enable``` set to "yes" enables cpu profiling, or "no" to disable it.
+```cpu_profiler_mode``` can be set to "live" or "dev". Setting to 
+```cpu_profiler_multiprocess``` can be set to "yes" or "no" and only affects the dev mode profiling. If set to "yes" then all processes will be profiled. If set to "no" then only the main process (slips.py) will be profiled.
+```cpu_profiler_output_limit``` is set to an integer value and only affects the live mode profiling. This option sets the limit on the number of processes output for live mode profiling updates.
+```cpu_profiler_sampling_interval``` is set to an integer value and only affects the live mode profiling. This option sets the duration in seconds of live mode sampling intervals. It is recommended to set this option greater than 10 seconds otherwise there won't be much useful information captured during sampling.
+
+### Memory Profiling
+Memory profiling can be found in ```slips_files/common/memory_profiler.py```
+
+Just like CPU profiling, it also has supports live and development mode.
+Set ```memory_profiler_enable``` to ```yes``` to enable this feature.
+Set ```memory_profiler_mode``` to ```live``` to use live mode or ```dev``` to use development mode profiling.
+
+#### Live Mode
+This mode shows memory usage stats during the runtime of the program.
+```memory_profiler_multiprocess``` controls whether live mode tracks all processes or only the main process. If set to no, the program will wait for you to connect from a different terminal using the command ```memray live <port_number>```, where port_number is 5000 by default. After connection, the program will continue with its run and the terminal that is connected will receive a feed of the memory statistics. If set to yes, the redis channel "memory_profile" can be used to set pid of the process to be tracked. Only a single process can be tracked at a time. The interface is cumbersome to use from the command line so multiprocess live profiling is intended to be used primarily from the web interface.
+
+#### Development Mode
+When enabled, the profiler will output the profile data into the output directory. The data will be in the ```memoryprofile``` directory of the output directory of the run. Each process during the run of the program will have an associated binary file. Each of the generated binaries will automatically be converted to viewable html files, with each process converted to a flamegraph and table format. All generated files will be denoted by their PID.
 
 ---
 

@@ -743,7 +743,30 @@ class ConfigParser(object):
             to_ignore.append('CYST')
 
         return to_ignore
+    
+    def get_cpu_profiler_enable(self):
+        return self.read_configuration('Profiling', 'cpu_profiler_enable', 'no')
 
-
-
-
+    def get_cpu_profiler_mode(self):
+        return self.read_configuration('Profiling', 'cpu_profiler_mode', 'dev')
+    
+    def get_cpu_profiler_multiprocess(self):
+        return self.read_configuration('Profiling', 'cpu_profiler_multiprocess', 'yes')
+    
+    def get_cpu_profiler_output_limit(self) -> int:
+        return int(self.read_configuration('Profiling', 'cpu_profiler_output_limit', 20))
+    
+    def get_cpu_profiler_sampling_interval(self) -> int:
+        return int(self.read_configuration('Profiling', 'cpu_profiler_sampling_interval', 5))
+    
+    def get_cpu_profiler_dev_mode_entries(self) -> int:
+        return int(self.read_configuration('Profiling', 'cpu_profiler_dev_mode_entries', 1000000))
+    
+    def get_memory_profiler_enable(self):
+        return self.read_configuration('Profiling', 'memory_profiler_enable', 'no')
+    
+    def get_memory_profiler_mode(self):
+        return self.read_configuration('Profiling', 'memory_profiler_mode', 'dev')
+    
+    def get_memory_profiler_multiprocess(self):
+        return self.read_configuration('Profiling', 'memory_profiler_multiprocess', 'yes')

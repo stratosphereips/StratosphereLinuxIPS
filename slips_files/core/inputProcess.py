@@ -804,7 +804,7 @@ class InputProcess(Core):
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,
             cwd=self.zeek_dir,
-            preexec_fn=detach_child,
+            start_new_session=True
         )
         # you have to get the pid before communicate()
         self.zeek_pid = zeek.pid
