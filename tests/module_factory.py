@@ -1,5 +1,3 @@
-import multiprocessing
-
 from slips import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
@@ -15,13 +13,13 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist import Whitelist
 from tests.common_test_utils import do_nothing
 from modules.virustotal.virustotal import VT
-from process_manager import ProcessManager
-from redis_manager import RedisManager
+from managers.process_manager import ProcessManager
+from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event
 from modules.arp.arp import ARP
 import shutil
-from unittest.mock import patch, Mock, MagicMock
+from unittest.mock import patch, Mock
 import os
 
 

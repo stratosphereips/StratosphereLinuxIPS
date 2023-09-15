@@ -22,11 +22,11 @@ from slips_files.common.imports import *
 from slips_files.common.profilers.cpu_profiler import CPUProfiler
 from slips_files.common.profilers.memory_profiler import MemoryProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
-from redis_manager import RedisManager
-from metadata_manager import MetadataManager
-from process_manager import ProcessManager
-from ui_manager import UIManager
-from checker import Checker
+from managers.redis_manager import RedisManager
+from managers.metadata_manager import MetadataManager
+from managers.process_manager import ProcessManager
+from managers.ui_manager import UIManager
+from slips_files.core.helpers.checker import Checker
 from style import green
 
 from slips_files.core.database.database_manager import DBManager
