@@ -24,7 +24,7 @@ class ProcessManager:
         # this is the queue that will be used by the input proces to pass flows
         # to the profiler
         self.profiler_queue = Queue()
-        self.termination_event: Event = multiprocessing.Event()
+        self.termination_event: Event = Event()
         self.stopped_modules = []
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):

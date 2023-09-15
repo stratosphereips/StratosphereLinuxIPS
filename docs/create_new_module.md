@@ -1,4 +1,4 @@
-from slips_files.common.abstracts.module import Module
+from slips_files.common.abstracts.module import IModule
 
 # How to Create a New Slips Module
 
