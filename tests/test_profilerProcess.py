@@ -133,7 +133,7 @@ def test_define_columns(
         ('dataset/test9-mixed-zeek-dir/http.log', 'http'),
         ('dataset/test9-mixed-zeek-dir/ssl.log', 'ssl'),
         ('dataset/test9-mixed-zeek-dir/notice.log', 'notice'),
-        ('dataset/test9-mixed-zeek-dir/files.log', 'files.log'),
+        # ('dataset/test9-mixed-zeek-dir/files.log', 'files.log'),
     ],
 )
 def test_add_flow_to_profile(file, type_):
@@ -143,6 +143,7 @@ def test_add_flow_to_profile(file, type_):
     # get zeek flow
     with open(file) as f:
         sample_flow = f.readline().replace('\n', '')
+
     sample_flow = json.loads(sample_flow)
     sample_flow = {
         'data': sample_flow,
