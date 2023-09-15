@@ -6,7 +6,7 @@ from slips_files.core.input import InputProcess
 from multiprocessing import Queue, Event, Process
 from collections import OrderedDict
 from typing import List, Tuple
-from style import green
+from slips_files.common.style import green
 import signal
 import time
 import pkgutil
@@ -14,7 +14,6 @@ import inspect
 import modules
 import importlib
 import os
-from sys import exit
 
 
 class ProcessManager:

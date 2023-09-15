@@ -1,4 +1,4 @@
-from style import green
+from slips_files.common.style import green
 
 import subprocess
 import os

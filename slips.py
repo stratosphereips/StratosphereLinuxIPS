@@ -27,7 +27,7 @@ from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
 from managers.ui_manager import UIManager
 from slips_files.core.helpers.checker import Checker
-from style import green
+from slips_files.common.style import green
 
 from slips_files.core.database.database_manager import DBManager
 
