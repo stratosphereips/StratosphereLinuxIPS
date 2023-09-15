@@ -31,10 +31,10 @@ from checker import Checker
 from style import green
 
 
-from slips_files.core.inputProcess import InputProcess
-from slips_files.core.outputProcess import OutputProcess
-from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.evidenceProcess import EvidenceProcess
+from slips_files.core.input import InputProcess
+from slips_files.core.output import OutputProcess
+from slips_files.core.profiler import ProfilerProcess
+from slips_files.core.evidence import EvidenceProcess
 from slips_files.core.database.database_manager import DBManager
 
 
@@ -557,7 +557,7 @@ class Main:
             # self.memory_profiler_multiproc_test()
 
             # if stdout is redirected to a file,
-            # tell outputProcess.py to redirect it's output as well
+            # tell output.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
 
             # outputprocess should be created first because it handles

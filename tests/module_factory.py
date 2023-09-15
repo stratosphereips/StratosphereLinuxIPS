@@ -4,10 +4,10 @@ from slips import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
 from slips_files.core.database.database_manager import DBManager
-from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.profiler import ProfilerProcess
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 from modules.flowalerts.flowalerts import FlowAlerts
-from slips_files.core.inputProcess import InputProcess
+from slips_files.core.input import InputProcess
 from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
 from modules.ip_info.ip_info import IPInfo

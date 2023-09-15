@@ -1,8 +1,8 @@
 from slips_files.common.imports import *
-from slips_files.core.outputProcess import OutputProcess
-from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.evidenceProcess import EvidenceProcess
-from slips_files.core.inputProcess import InputProcess
+from slips_files.core.output import OutputProcess
+from slips_files.core.profiler import ProfilerProcess
+from slips_files.core.evidence import EvidenceProcess
+from slips_files.core.input import InputProcess
 from multiprocessing import Queue, Event, Process
 from collections import OrderedDict
 from typing import List, Tuple
