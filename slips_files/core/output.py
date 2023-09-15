@@ -23,7 +23,8 @@ from datetime import datetime
 import os
 import traceback
 from tqdm.auto import tqdm
-from slips_files.common.abstracts import Core
+from slips_files.common.abstracts.core import Core
+
 
 class OutputProcess(Core):
     """

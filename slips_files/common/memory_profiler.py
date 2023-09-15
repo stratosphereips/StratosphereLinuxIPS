@@ -3,7 +3,7 @@ import glob
 import os
 import subprocess
 from termcolor import colored
-from slips_files.common.abstracts import ProfilerInterface
+from slips_files.common.abstracts.profiler import ProfilerInterface
 import time
 import multiprocessing
 from multiprocessing.managers import SyncManager

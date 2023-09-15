@@ -18,7 +18,7 @@
 from slips_files.common.imports import *
 from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
-from slips_files.common.abstracts import Core
+from slips_files.common.abstracts.core import Core
 import json
 from datetime import datetime
 from os import path

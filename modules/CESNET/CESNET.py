@@ -1,5 +1,5 @@
+from slips_files.common.abstracts._module import Module
 from slips_files.common.imports import *
-import sys
 from ..CESNET.warden_client import Client, read_cfg
 import os
 import json
@@ -8,7 +8,6 @@ import threading
 import queue
 import ipaddress
 import validators
-import traceback
 
 
 class CESNET(Module, multiprocessing.Process):

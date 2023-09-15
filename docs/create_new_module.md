@@ -1,3 +1,5 @@
+from slips_files.common.abstracts.module import Module
+
 # How to Create a New Slips Module
 
 

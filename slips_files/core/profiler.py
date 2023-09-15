@@ -35,8 +35,11 @@ import os
 import binascii
 import base64
 from re import split
-from slips_files.common.abstracts import Core
+from slips_files.common.abstracts.core import Core
 from pprint import pp
+
+
+
 
 # Profiler Process
 class ProfilerProcess(Core):

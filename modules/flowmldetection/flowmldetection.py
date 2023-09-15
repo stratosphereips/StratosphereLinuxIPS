@@ -1,3 +1,4 @@
+from slips_files.common.abstracts._module import Module
 from slips_files.common.imports import *
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler

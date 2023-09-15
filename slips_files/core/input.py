@@ -20,7 +20,7 @@ from re import split
 import signal
 import sys
 import os
-from slips_files.common.abstracts import Core
+from slips_files.common.abstracts.core import Core
 from datetime import datetime
 from watchdog.observers import Observer
 from slips_files.core.helpers.filemonitor import FileEventHandler

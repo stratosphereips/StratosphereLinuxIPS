@@ -1,6 +1,6 @@
+from slips_files.common.abstracts._module import Module
 from slips_files.common.imports import *
 import json
-import sys
 import ipaddress
 import time
 import threading

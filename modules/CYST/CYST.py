@@ -1,4 +1,4 @@
-from slips_files.common.abstracts import Module
+from slips_files.common.abstracts._module import Module
 import multiprocessing
 import socket
 import json

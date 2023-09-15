@@ -6,7 +6,8 @@ import io
 import pstats
 import os
 
-from slips_files.common.abstracts import ProfilerInterface
+from slips_files.common.abstracts.profiler import ProfilerInterface
+
 
 class CPUProfiler(ProfilerInterface):
     def __init__(self, db, output, mode="dev", limit=20, interval=20):

@@ -1,3 +1,4 @@
+from slips_files.common.abstracts._module import Module
 from slips_files.common.imports import *
 
 class Ensembling(Module, multiprocessing.Process):
