@@ -18,10 +18,9 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import contextlib
-import multiprocessing
 from slips_files.common.imports import *
 from slips_files.common.cpu_profiler import CPUProfiler
-from slips_files.common.memory_profiler import MemoryProfiler
+from slips_files.common.profilers.memory_profiler import MemoryProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -30,11 +29,6 @@ from ui_manager import UIManager
 from checker import Checker
 from style import green
 
-
-from slips_files.core.input import InputProcess
-from slips_files.core.output import OutputProcess
-from slips_files.core.profiler import ProfilerProcess
-from slips_files.core.evidence import EvidenceProcess
 from slips_files.core.database.database_manager import DBManager
 
 
