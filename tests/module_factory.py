@@ -2,10 +2,10 @@ from slips import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
 from slips_files.core.database.database_manager import DBManager
-from slips_files.core.profiler import ProfilerProcess
+from slips_files.core.profiler import Profiler
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 from modules.flowalerts.flowalerts import FlowAlerts
-from slips_files.core.input import InputProcess
+from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
 from modules.ip_info.ip_info import IPInfo
@@ -121,7 +121,7 @@ class ModuleFactory:
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            inputProcess = InputProcess(
+            inputProcess = Input(
                 self.output_queue,
                 'dummy_output_dir', 6379,
                 # 'output/',
@@ -175,7 +175,7 @@ class ModuleFactory:
 
 
     def create_profilerProcess_obj(self):
-        profilerProcess = ProfilerProcess(
+        profilerProcess = Profiler(
             self.output_queue,
             'output/', 6377,
             self.dummy_termination_event,

@@ -39,8 +39,8 @@ from slips_files.common.abstracts.core import ICore
 from pprint import pp
 
 
-class ProfilerProcess(ICore):
-    """A class to create the profiles for IPs and the rest of data"""
+class Profiler(ICore):
+    """A class to create the profiles for IPs"""
     name = 'Profiler'
 
     def init(self, profiler_queue=None):

@@ -31,7 +31,7 @@ import threading
 import subprocess
 
 # Input Process
-class InputProcess(ICore):
+class Input(ICore):
     """ A class process to run the process of the flows """
 
     name = 'Input'

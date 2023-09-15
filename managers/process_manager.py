@@ -1,8 +1,8 @@
 from slips_files.common.imports import *
-from slips_files.core.output import OutputProcess
-from slips_files.core.profiler import ProfilerProcess
-from slips_files.core.evidence import EvidenceProcess
-from slips_files.core.input import InputProcess
+from slips_files.core.output import Output
+from slips_files.core.profiler import Profiler
+from slips_files.core.evidence import Evidence
+from slips_files.core.input import Input
 from multiprocessing import Queue, Event, Process
 from collections import OrderedDict
 from typing import List, Tuple
@@ -27,7 +27,7 @@ class ProcessManager:
         self.stopped_modules = []
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
-        output_process = OutputProcess(
+        output_process = Output(
             self.main.output_queue,
             self.main.args.output,
             self.main.redis_port,
@@ -44,7 +44,7 @@ class ProcessManager:
         return output_process
 
     def start_profiler_process(self):
-        profiler_process = ProfilerProcess(
+        profiler_process = Profiler(
             self.main.output_queue,
             self.main.args.output,
             self.main.redis_port,
@@ -62,7 +62,7 @@ class ProcessManager:
         return profiler_process
 
     def start_evidence_process(self):
-        evidence_process = EvidenceProcess(
+        evidence_process = Evidence(
             self.main.output_queue,
             self.main.args.output,
             self.main.redis_port,
@@ -79,7 +79,7 @@ class ProcessManager:
         return evidence_process
 
     def start_input_process(self):
-        input_process = InputProcess(
+        input_process = Input(
             self.main.output_queue,
             self.main.args.output,
             self.main.redis_port,

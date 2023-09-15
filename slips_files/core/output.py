@@ -26,7 +26,7 @@ from tqdm.auto import tqdm
 from slips_files.common.abstracts.core import ICore
 
 
-class OutputProcess(ICore):
+class Output(ICore):
     """
     A class to process the output of everything Slips need. Manages all the output
     If any Slips module or process needs to output anything to screen, or logs,
