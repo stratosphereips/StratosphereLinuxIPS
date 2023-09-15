@@ -122,9 +122,10 @@ class Main:
                 self.cpuProfilerEnabled = False
     
     def cpu_profiler_release(self):
-        if self.cpuProfilerEnabled and not self.cpuProfilerMultiprocess:
-            self.cpuProfiler.stop()
-            self.cpuProfiler.print()
+        if hasattr(self, 'cpuProfilerEnabled' ):
+            if self.cpuProfilerEnabled and not self.cpuProfilerMultiprocess:
+                self.cpuProfiler.stop()
+                self.cpuProfiler.print()
     
     def memory_profiler_init(self):
         self.memoryProfilerEnabled = slips.conf.get_memory_profiler_enable() == "yes"
