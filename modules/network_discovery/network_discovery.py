@@ -3,6 +3,20 @@ import json
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 
+
+def calculate_confidence(pkts_sent):
+    """
+    calculates the evidence confidence based on the pkts sent
+    """
+    if pkts_sent > 10:
+        confidence = 1
+    elif pkts_sent == 0:
+        return 0.3
+    else:
+        # Between threshold and 10 pkts compute a kind of linear grow
+        confidence = pkts_sent / 10.0
+    return confidence
+
 class NetworkDiscovery(IModule, multiprocessing.Process):
     """
     A class process to find port scans
@@ -212,7 +226,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             attack,
             scanned_ip=False
     ):
-        confidence = self.calculate_confidence(pkts_sent)
+        confidence = calculate_confidence(pkts_sent)
         attacker_direction = 'srcip'
         evidence_type = attack
         source_target_tag = 'Recon'
