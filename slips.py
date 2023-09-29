@@ -19,8 +19,8 @@
 
 import contextlib
 from slips_files.common.imports import *
-from slips_files.common.profilers.cpu_profiler import CPUProfiler
-from slips_files.common.profilers.memory_profiler import MemoryProfiler
+from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
+from slips_files.common.performance_profilers.memory_profiler import MemoryProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
 from managers.redis_manager import RedisManager
 from managers.metadata_manager import MetadataManager
