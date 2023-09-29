@@ -153,6 +153,18 @@ class Utils(object):
         else:
             # invalid ip
             return
+    def calculate_confidence(self, pkts_sent):
+        """
+        calculates the evidence confidence based on the pkts sent
+        """
+        if pkts_sent > 10:
+            confidence = 1
+        elif pkts_sent == 0:
+            return 0.3
+        else:
+            # Between threshold and 10 pkts compute a kind of linear grow
+            confidence = pkts_sent / 10.0
+        return confidence
 
 
     def drop_root_privs(self):

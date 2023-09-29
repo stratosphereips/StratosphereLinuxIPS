@@ -1,4 +1,3 @@
-from modules.network_discovery.network_discovery import calculate_confidence
 from slips_files.common.imports import *
 import ipaddress
 
@@ -191,7 +190,7 @@ class HorizontalPortscan():
         portproto = f'{dport}/{protocol}'
         port_info = self.db.get_port_info(portproto)
         port_info = port_info or ""
-        confidence = calculate_confidence(pkts_sent)
+        confidence = utils.calculate_confidence(pkts_sent)
         description = (
             f'horizontal port scan to port {port_info} {portproto}. '
             f'From {srcip} to {amount_of_dips} unique dst IPs. '

@@ -1,4 +1,4 @@
-from modules.network_discovery.network_discovery import calculate_confidence
+from slips_files.common.slips_utils import utils
 
 
 class VerticalPortscan():
@@ -69,7 +69,7 @@ class VerticalPortscan():
         category = 'Recon.Scanning'
         srcip = profileid.split('_')[-1]
         attacker = srcip
-        confidence = calculate_confidence(pkts_sent)
+        confidence = utils.calculate_confidence(pkts_sent)
         description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
                         f'Total {amount_of_dports} dst {protocol} ports were scanned. '
