@@ -32,6 +32,7 @@ class ICore(IModule, Process):
         self.output_dir = output_dir
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
+        self.redis_port = redis_port
         self.db = DBManager(output_dir, output_queue, redis_port)
         self.msg_received = False
         self.init(**kwargs)
@@ -59,5 +60,3 @@ class ICore(IModule, Process):
 
         return True
 
-    def __del__(self):
-        self.db.close()
