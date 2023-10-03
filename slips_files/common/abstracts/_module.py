@@ -8,6 +8,9 @@ from slips_files.core.database.database_manager import DBManager
 
 
 class IModule(ABC):
+    """
+    An interface for all slips modules
+    """
     name = ''
     description = 'Template module'
     authors = ['Template Author']
@@ -131,6 +134,3 @@ class IModule(ABC):
             self.print(traceback.format_exc(), 0, 1)
 
         return True
-
-    def __del__(self):
-        self.db.close()
