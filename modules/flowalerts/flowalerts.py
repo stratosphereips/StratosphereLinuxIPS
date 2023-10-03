@@ -1510,7 +1510,7 @@ class FlowAlerts(Module, multiprocessing.Process):
             description = f'SSH password guessing to IP {daddr}'
             uids = self.password_guessing_cache[cache_key]
             self.helper.set_evidence_pw_guessing(
-                description, timestamp, profileid, twid, uids, profileid.split('_')[-1], by='Slips'
+                description, timestamp, profileid, twid, uids, by='Slips'
             )
 
             #reset the counter
