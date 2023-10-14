@@ -41,6 +41,7 @@ class SymbolHandler:
         original stratosphere ips model of letters
         Here we do not apply any detection model, we just create the letters
         as one more feature twid is the starttime of the flow
+        :param tuple_key: can be InTuples or OutTuples
         """
         daddr_as_obj = ip_address(flow.daddr)
         profileid = f"profile_{flow.saddr}"

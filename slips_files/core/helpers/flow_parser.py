@@ -132,7 +132,7 @@ class FlowParser():
         tupleid = f'{daddr_as_obj}-{self.flow.dport}-{self.flow.proto}'
         # Compute the symbol for this flow, for this TW, for this profile.
         # The symbol is based on the 'letters' of the original Startosphere ips tool
-        symbol = self.symbol.compute(self.flow, self.twid, tupleid)
+        symbol = self.symbol.compute(self.flow, self.twid, 'OutTuples')
         # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
         # Add the out tuple
         self.db.add_tuple(

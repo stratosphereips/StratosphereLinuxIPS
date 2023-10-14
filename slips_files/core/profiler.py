@@ -330,7 +330,7 @@ class Profiler(ICore):
             and 'nfdump' not in self.flow.type_
         ):
             return
-        symbol = self.symbol.compute(self.flow, 'InTuples')
+        symbol = self.symbol.compute(self.flow, self.twid, 'InTuples')
 
         # Add the src tuple using the src ip, and dst port
         tupleid = f'{self.saddr_as_obj}-{self.flow.dport}-{self.flow.proto}'
