@@ -207,13 +207,11 @@ class Profiler(ICore):
         try:
             if not hasattr(self, 'flow'):
                 #TODO this is a quick fix
-                print(f"@@@@@@@@@@@@@@@@ no flow")
                 return False
 
             self.flow_parser = FlowParser(self.db, self.symbol, self.flow)
 
             if not self.flow_parser.is_supported_flow():
-                print(f"@@@@@@@@@@@@@@@@ not a suported flow!")
                 return False
 
             self.flow_parser.make_sure_theres_a_uid()
@@ -227,7 +225,6 @@ class Profiler(ICore):
                 # Its a mac
                 if self.flow.type_ not in ('software', 'weird'):
                     # software and weird.log flows are allowed to not have a daddr
-                    print(f"@@@@@@@@@@@@@@@@ no saddr no daddr")
                     return False
 
             # Check if the flow is whitelisted and we should not process

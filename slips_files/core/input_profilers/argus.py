@@ -8,7 +8,6 @@ from slips_files.core.flows.argus import ArgusConn
 
 
 class Argus(IInputType):
-    separator = ','
 
     def __init__(self):
         self.from_stdin = self.reading_flows_from_stdin()
@@ -17,10 +16,13 @@ class Argus(IInputType):
         """returns true if we're reading argus flows from stdin"""
         return '-f' in sys.argv and 'argus' in sys.argv
 
-    def process_line(self, new_line):
+    def process_line(self, new_line: dict):
         """
         Process the line and extract columns for argus
         """
+
+        self.separator = ',' if new_line['data'].count(',') > 5 else '\t'
+
         # make sure we have a map of each field and its' index
         if not hasattr(self, 'column_idx'):
             self.define_columns(new_line)
@@ -33,6 +35,7 @@ class Argus(IInputType):
             """field_name is used to get the index of
              the field from the column_idx dict"""
             try:
+
                 val = nline[self.column_idx[field_name]]
                 return val or default_
             except (IndexError, KeyError):
@@ -77,7 +80,7 @@ class Argus(IInputType):
              'spkts': 14
             }
 
-    def define_columns(self, new_line) -> dict:
+    def define_columns(self, new_line: dict) -> dict:
         """
         Define the columns for Argus  from the line received
         sets teh self.column_idx var
@@ -86,7 +89,6 @@ class Argus(IInputType):
         if self.from_stdin:
             # reading argus flows from stdin, we have a pre-defined indices map for this
             self.column_idx = self.get_predefined_argus_column_indices()
-            self.separator = ','
             return self.column_idx
 
         # These are the indices for later fast processing
@@ -113,7 +115,7 @@ class Argus(IInputType):
                 'dstpkts': 'dpkts',
             }
         try:
-            nline = line.strip().split(self.separator)
+            nline = line.strip().split()
             # parse the given nline, and try to map the fields we find to the fields slips
             # undertsands from the dict above.
             for field in nline:

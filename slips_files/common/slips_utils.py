@@ -242,7 +242,6 @@ class Utils(object):
             return ts
 
         given_format = self.define_time_format(ts)
-
         return (
             datetime.fromtimestamp(float(ts))
             if given_format == 'unixtimestamp'
