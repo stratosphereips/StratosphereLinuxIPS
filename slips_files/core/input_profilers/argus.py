@@ -60,6 +60,7 @@ class Argus(IInputType):
             int(get_value_of('sbytes')),
             int(get_value_of('dbytes')),
         )
+
         return self.flow
 
     def get_predefined_argus_column_indices(self):
@@ -94,7 +95,8 @@ class Argus(IInputType):
         # These are the indices for later fast processing
         line = new_line['data']
         self.column_idx = {}
-        # these are the fields as slips understands them {original_field_name: slips_field_name}
+        # these are the fields as slips understands them
+        # {original_argus_field_name: slips_field_name}
         supported_fields = {
                 'time': 'starttime',
                 'endtime': 'endtime',
@@ -115,7 +117,7 @@ class Argus(IInputType):
                 'dstpkts': 'dpkts',
             }
         try:
-            nline = line.strip().split()
+            nline = line.strip().split(self.separator)
             # parse the given nline, and try to map the fields we find to the fields slips
             # undertsands from the dict above.
             for field in nline:

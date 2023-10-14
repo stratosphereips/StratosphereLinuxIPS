@@ -347,7 +347,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
         """
-
         data = self.rcache.hget('IPsInfo', ip)
         return json.loads(data) if data else False
 

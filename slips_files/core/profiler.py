@@ -204,81 +204,81 @@ class Profiler(ICore):
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each column
         """
+        # try:
+        if not hasattr(self, 'flow'):
+            #TODO this is a quick fix
+            return False
+
+        self.flow_parser = FlowParser(self.db, self.symbol, self.flow)
+
+        if not self.flow_parser.is_supported_flow():
+            return False
+
+        self.flow_parser.make_sure_theres_a_uid()
+        self.profileid = f'profile_{self.flow.saddr}'
+        self.flow_parser.profileid = self.profileid
+
         try:
-            if not hasattr(self, 'flow'):
-                #TODO this is a quick fix
+            self.saddr_as_obj = ipaddress.ip_address(self.flow.saddr)
+            self.daddr_as_obj = ipaddress.ip_address(self.flow.daddr)
+        except (ipaddress.AddressValueError, ValueError):
+            # Its a mac
+            if self.flow.type_ not in ('software', 'weird'):
+                # software and weird.log flows are allowed to not have a daddr
                 return False
 
-            self.flow_parser = FlowParser(self.db, self.symbol, self.flow)
+        # Check if the flow is whitelisted and we should not process
+        if self.whitelist.is_whitelisted_flow(self.flow):
+            if 'conn' in self.flow.type_:
+                self.whitelisted_flows_ctr +=1
+            return True
 
-            if not self.flow_parser.is_supported_flow():
-                return False
+        # 5th. Store the data according to the paremeters
+        # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
+        self.print(f'Storing data in the profile: {self.profileid}', 3, 0)
+        self.convert_starttime_to_epoch()
+        # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
+        self.twid = self.db.get_timewindow(self.flow.starttime, self.profileid)
+        self.flow_parser.twid = self.twid
 
-            self.flow_parser.make_sure_theres_a_uid()
-            self.profileid = f'profile_{self.flow.saddr}'
-            self.flow_parser.profileid = self.profileid
+        if self.home_net:
+            # Home network is defined in slips.conf. Create profiles for home IPs only
+            for network in self.home_net:
+                if self.saddr_as_obj in network:
+                    # if a new profile is added for this saddr
+                    self.db.addProfile(
+                        self.profileid, self.flow.starttime, self.width
+                    )
+                    self.store_features_going_out()
 
-            try:
-                self.saddr_as_obj = ipaddress.ip_address(self.flow.saddr)
-                self.daddr_as_obj = ipaddress.ip_address(self.flow.daddr)
-            except (ipaddress.AddressValueError, ValueError):
-                # Its a mac
-                if self.flow.type_ not in ('software', 'weird'):
-                    # software and weird.log flows are allowed to not have a daddr
-                    return False
-
-            # Check if the flow is whitelisted and we should not process
-            if self.whitelist.is_whitelisted_flow(self.flow):
-                if 'conn' in self.flow.type_:
-                    self.whitelisted_flows_ctr +=1
-                return True
-
-            # 5th. Store the data according to the paremeters
-            # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-            self.print(f'Storing data in the profile: {self.profileid}', 3, 0)
-            self.convert_starttime_to_epoch()
-            # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
-            self.twid = self.db.get_timewindow(self.flow.starttime, self.profileid)
-            self.flow_parser.twid = self.twid
-
-            if self.home_net:
-                # Home network is defined in slips.conf. Create profiles for home IPs only
-                for network in self.home_net:
-                    if self.saddr_as_obj in network:
-                        # if a new profile is added for this saddr
-                        self.db.addProfile(
-                            self.profileid, self.flow.starttime, self.width
-                        )
-                        self.store_features_going_out()
-
-                    if (
-                        self.analysis_direction == 'all'
-                        and self.daddr_as_obj in network
-                    ):
-                        self.handle_in_flows()
-
-            else:
-                # home_network param wasn't set in slips.conf
-                # Create profiles for all ips we see
-                self.db.addProfile(self.profileid, self.flow.starttime, self.width)
-                self.store_features_going_out()
-                if self.analysis_direction == 'all':
-                    # No home. Store all
+                if (
+                    self.analysis_direction == 'all'
+                    and self.daddr_as_obj in network
+                ):
                     self.handle_in_flows()
 
-            if self.db.is_cyst_enabled():
-                # print the added flow as a form of debugging feedback for
-                # the user to know that slips is working
-                self.print(pp(asdict(self.flow)))
+        else:
+            # home_network param wasn't set in slips.conf
+            # Create profiles for all ips we see
+            self.db.addProfile(self.profileid, self.flow.starttime, self.width)
+            self.store_features_going_out()
+            if self.analysis_direction == 'all':
+                # No home. Store all
+                self.handle_in_flows()
 
-            return True
-        except Exception:
-            # For some reason we can not use the output queue here.. check
-            self.print(
-                f'Error in add_flow_to_profile Profiler Process. {traceback.format_exc()}'
-            ,0,1)
-            self.print(traceback.print_exc(),0,1)
-            return False
+        if self.db.is_cyst_enabled():
+            # print the added flow as a form of debugging feedback for
+            # the user to know that slips is working
+            self.print(pp(asdict(self.flow)))
+
+        return True
+        # except Exception:
+        #     # For some reason we can not use the output queue here.. check
+        #     self.print(
+        #         f'Error in Profiler Process add_flow_to_profile (). {traceback.format_exc()}'
+        #     ,0,1)
+        #     self.print(traceback.print_exc(),0,1)
+        #     return False
 
     def store_features_going_out(self):
         """
