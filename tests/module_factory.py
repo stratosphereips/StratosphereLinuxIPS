@@ -174,7 +174,7 @@ class ModuleFactory:
         return leak_detector
 
 
-    def create_profilerProcess_obj(self):
+    def create_profiler_obj(self):
         profilerProcess = Profiler(
             self.output_queue,
             'output/', 6377,
