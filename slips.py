@@ -646,14 +646,10 @@ class Main:
 
             hostIP = self.metadata_man.store_host_ip()
 
-            # Check every 5 secs if we should stop slips or not
-            sleep_time = 5
-
             # In each interval we check if there has been any modifications to
             # the database by any module.
             # If not, wait this amount of intervals and then stop slips.
-            max_intervals_to_wait = 4
-            intervals_to_wait = max_intervals_to_wait
+            intervals_to_wait = 4
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
             self.is_interface: bool = self.args.interface or self.db.is_growing_zeek_dir()
@@ -668,8 +664,8 @@ class Main:
                     self.proc_man.shutdown_gracefully()
                     break
 
-                # Sleep some time to do routine checks
-                time.sleep(sleep_time)
+                # Sleep some time to do routine checks and give time for more traffic to come
+                time.sleep(5)
 
                 # if you remove the below logic anywhere before the above sleep() statement
                 # it will try to get the return value very quickly before
@@ -717,8 +713,8 @@ class Main:
                     # then start counting down
                     intervals_to_wait -= 1
 
-
                 self.db.check_health()
+
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while the system call was in progress
             # comes here if zeek terminates while slips is still working
