@@ -1,10 +1,5 @@
-from slips_files.common.imports import *
-import sys
-import traceback
-import time
-import ipaddress
-import json
-import threading
+from slips_files.common.slips_utils import utils
+
 
 class VerticalPortscan():
     def __init__(self, db):
@@ -74,7 +69,7 @@ class VerticalPortscan():
         category = 'Recon.Scanning'
         srcip = profileid.split('_')[-1]
         attacker = srcip
-        confidence = self.calculate_confidence(pkts_sent)
+        confidence = utils.calculate_confidence(pkts_sent)
         description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
                         f'Total {amount_of_dports} dst {protocol} ports were scanned. '
@@ -86,15 +81,7 @@ class VerticalPortscan():
                                  proto=protocol, profileid=profileid, twid=twid, uid=uid, victim=dstip)
 
 
-    def calculate_confidence(self, pkts_sent):
-        if pkts_sent > 10:
-            confidence = 1
-        elif pkts_sent == 0:
-            return 0.3
-        else:
-            # Between threshold and 10 pkts compute a kind of linear grow
-            confidence = pkts_sent / 10.0
-        return confidence
+
 
     def check(self, profileid, twid):
         # Get the list of dstips that we connected as client using TCP not

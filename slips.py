@@ -18,23 +18,17 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import contextlib
-import multiprocessing
 from slips_files.common.imports import *
-from slips_files.common.cpu_profiler import CPUProfiler
-from slips_files.common.memory_profiler import MemoryProfiler
+from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
+from slips_files.common.performance_profilers.memory_profiler import MemoryProfiler
 from exclusiveprocess import Lock, CannotAcquireLock
-from redis_manager import RedisManager
-from metadata_manager import MetadataManager
-from process_manager import ProcessManager
-from ui_manager import UIManager
-from checker import Checker
-from style import green
+from managers.redis_manager import RedisManager
+from managers.metadata_manager import MetadataManager
+from managers.process_manager import ProcessManager
+from managers.ui_manager import UIManager
+from slips_files.core.helpers.checker import Checker
+from slips_files.common.style import green
 
-
-from slips_files.core.inputProcess import InputProcess
-from slips_files.core.outputProcess import OutputProcess
-from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.evidenceProcess import EvidenceProcess
 from slips_files.core.database.database_manager import DBManager
 
 
@@ -557,7 +551,7 @@ class Main:
             # self.memory_profiler_multiproc_test()
 
             # if stdout is redirected to a file,
-            # tell outputProcess.py to redirect it's output as well
+            # tell output.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
 
             # outputprocess should be created first because it handles
@@ -652,14 +646,10 @@ class Main:
 
             hostIP = self.metadata_man.store_host_ip()
 
-            # Check every 5 secs if we should stop slips or not
-            sleep_time = 5
-
             # In each interval we check if there has been any modifications to
             # the database by any module.
             # If not, wait this amount of intervals and then stop slips.
-            max_intervals_to_wait = 4
-            intervals_to_wait = max_intervals_to_wait
+            intervals_to_wait = 4
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
             self.is_interface: bool = self.args.interface or self.db.is_growing_zeek_dir()
@@ -674,8 +664,8 @@ class Main:
                     self.proc_man.shutdown_gracefully()
                     break
 
-                # Sleep some time to do routine checks
-                time.sleep(sleep_time)
+                # Sleep some time to do routine checks and give time for more traffic to come
+                time.sleep(5)
 
                 # if you remove the below logic anywhere before the above sleep() statement
                 # it will try to get the return value very quickly before
@@ -723,8 +713,8 @@ class Main:
                     # then start counting down
                     intervals_to_wait -= 1
 
-
                 self.db.check_health()
+
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while the system call was in progress
             # comes here if zeek terminates while slips is still working

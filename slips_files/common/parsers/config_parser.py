@@ -2,7 +2,7 @@ from datetime import timedelta
 import sys
 import ipaddress
 import configparser
-from slips_files.common.argparse import ArgumentParser
+from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
 
 

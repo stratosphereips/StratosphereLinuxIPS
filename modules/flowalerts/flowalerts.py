@@ -1,4 +1,6 @@
 import contextlib
+
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 from .TimerThread import TimerThread
 from .set_evidence import Helper
@@ -15,7 +17,7 @@ import math
 import time
 
 
-class FlowAlerts(Module, multiprocessing.Process):
+class FlowAlerts(IModule, multiprocessing.Process):
     name = 'Flow Alerts'
     description = (
         'Alerts about flows: long connection, successful ssh, '

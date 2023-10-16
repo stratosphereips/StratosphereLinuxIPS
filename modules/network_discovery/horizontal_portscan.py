@@ -1,6 +1,7 @@
 from slips_files.common.imports import *
 import ipaddress
 
+
 class HorizontalPortscan():
     def __init__(self, db):
         self.db = db
@@ -17,16 +18,6 @@ class HorizontalPortscan():
         # we should alert once we find 1 horizontal ps evidence then combine the rest of evidence every x seconds
         # format is { scanned_port: True/False , ...}
         self.alerted_once_horizontal_ps = {}
-
-    def calculate_confidence(self, pkts_sent):
-        if pkts_sent > 10:
-            confidence = 1
-        elif pkts_sent == 0:
-            return 0.3
-        else:
-            # Between threshold and 10 pkts compute a kind of linear grow
-            confidence = pkts_sent / 10.0
-        return confidence
 
     def combine_evidence(self):
         """
@@ -199,7 +190,7 @@ class HorizontalPortscan():
         portproto = f'{dport}/{protocol}'
         port_info = self.db.get_port_info(portproto)
         port_info = port_info or ""
-        confidence = self.calculate_confidence(pkts_sent)
+        confidence = utils.calculate_confidence(pkts_sent)
         description = (
             f'horizontal port scan to port {port_info} {portproto}. '
             f'From {srcip} to {amount_of_dips} unique dst IPs. '

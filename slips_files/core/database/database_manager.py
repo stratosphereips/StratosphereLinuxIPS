@@ -1,6 +1,6 @@
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
-from slips_files.common.config_parser import ConfigParser
+from slips_files.common.parsers.config_parser import ConfigParser
 
 class DBManager:
     """

@@ -287,7 +287,8 @@ class SQLiteDB():
     def add_alert(self, alert: dict):
         """
         adds an alert to the alerts table
-        alert param should contain alert_id, alert_ts, ip_alerted, twid, tw_start, tw_end, label
+        :param alert: should contain alert_id, alert_ts, ip_alerted, twid, tw_start, tw_end, label
+            alert_time is the local time slips detected this alert, not the network time
         """
         # 'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
         self.execute(

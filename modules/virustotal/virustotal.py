@@ -11,7 +11,7 @@ import threading
 import validators
 
 
-class VT(Module, multiprocessing.Process):
+class VT(IModule, multiprocessing.Process):
     name = 'Virustotal'
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = [

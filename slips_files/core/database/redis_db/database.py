@@ -1,6 +1,5 @@
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
-from slips_files.core.database.sqlite_db.database import SQLiteDB
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
@@ -348,7 +347,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
         """
-
         data = self.rcache.hget('IPsInfo', ip)
         return json.loads(data) if data else False
 

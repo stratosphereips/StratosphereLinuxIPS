@@ -1,3 +1,5 @@
+from slips_files.common.abstracts.module import IModule
+
 # How to Create a New Slips Module
 
 
@@ -278,7 +280,7 @@ import ipaddress
 import json
 
 
-class Module(Module, multiprocessing.Process):
+class Module(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'local_connection_detector'
     description = 'detects connections to other devices in your local network'
@@ -296,7 +298,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = self.db.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1,
-            }
+        }
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -345,7 +347,7 @@ class Module(Module, multiprocessing.Process):
                     evidence_type, attacker_direction, attacker, threat_level,
                     confidence, description, timestamp, category, profileid=profileid,
                     twid=twid
-                    )
+                )
 
 ```
 

@@ -15,7 +15,7 @@ import asyncio
 import datetime
 
 
-class UpdateManager(Module, multiprocessing.Process):
+class UpdateManager(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Update Manager'
     description = 'Update Threat Intelligence files'

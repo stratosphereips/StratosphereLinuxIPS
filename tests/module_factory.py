@@ -1,13 +1,11 @@
-import multiprocessing
-
 from slips import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
 from slips_files.core.database.database_manager import DBManager
-from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.profiler import Profiler
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 from modules.flowalerts.flowalerts import FlowAlerts
-from slips_files.core.inputProcess import InputProcess
+from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
 from modules.ip_info.ip_info import IPInfo
@@ -15,13 +13,13 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist import Whitelist
 from tests.common_test_utils import do_nothing
 from modules.virustotal.virustotal import VT
-from process_manager import ProcessManager
-from redis_manager import RedisManager
+from managers.process_manager import ProcessManager
+from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event
 from modules.arp.arp import ARP
 import shutil
-from unittest.mock import patch, Mock, MagicMock
+from unittest.mock import patch, Mock
 import os
 
 
@@ -123,7 +121,7 @@ class ModuleFactory:
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            inputProcess = InputProcess(
+            inputProcess = Input(
                 self.output_queue,
                 'dummy_output_dir', 6379,
                 # 'output/',
@@ -176,8 +174,8 @@ class ModuleFactory:
         return leak_detector
 
 
-    def create_profilerProcess_obj(self):
-        profilerProcess = ProfilerProcess(
+    def create_profiler_obj(self):
+        profilerProcess = Profiler(
             self.output_queue,
             'output/', 6377,
             self.dummy_termination_event,
