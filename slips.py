@@ -30,6 +30,8 @@ from slips_files.core.helpers.checker import Checker
 from slips_files.common.style import green
 
 from slips_files.core.database.database_manager import DBManager
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
 
 import signal
@@ -55,7 +57,7 @@ warnings.filterwarnings('ignore')
 # ---------------------
 
 
-class Main:
+class Main(IObservable):
     def __init__(self, testing=False):
         self.name = 'Main'
         self.alerts_default_path = 'output/'
@@ -85,6 +87,7 @@ class Main:
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
+                IObservable.__init__(self)
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
@@ -216,8 +219,7 @@ class Main:
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to update orgs and ports info
-                update_manager = UpdateManager(self.output_queue,
-                                               self.args.output,
+                update_manager = UpdateManager(self.args.output,
                                                self.redis_port,
                                                multiprocessing.Event())
                 update_manager.update_ports_info()
@@ -356,9 +358,14 @@ class Main:
         :param text: text to print. Can include format like f'Test {here}'
         """
 
-        levels = f'{verbose}{debug}'
-        self.output_queue.put(f'{levels}|{self.name}|{text}')
-
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
     def handle_flows_from_stdin(self, input_information):
         """
         Make sure the stdin line type is valid (argus, suricata, or zeek)
@@ -514,8 +521,6 @@ class Main:
 
             self.setup_print_levels()
 
-            # this is used in get_random_redis_port(), don't move this line
-            self.output_queue = Queue()
 
 
             # get the port that is going to be used for this instance of slips
@@ -534,10 +539,15 @@ class Main:
             else:
                 # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
-                # self.check_if_port_is_in_use(self.redis_port)
 
+            self.logger = Output(
+                    self.args.output,
+                    self.redis_port,
+                )
+            print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
+            self.add_observer(self.logger)
 
-            self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
+            self.db = DBManager(self.args.output, self.redis_port)
             self.db.set_input_metadata({
                     'output_dir': self.args.output,
                     'commit': self.commit,
@@ -553,12 +563,6 @@ class Main:
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
-
-            # outputprocess should be created first because it handles
-            # the output of the rest of the threads.
-            output_process = self.proc_man.start_output_process(
-                current_stdout, stderr, slips_logfile
-                )
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':
@@ -593,7 +597,6 @@ class Main:
 
             self.print(f'Using redis server on port: {green(self.redis_port)}', 1, 0)
             self.print(f'Started {green("Main")} process [PID {green(self.pid)}]', 1, 0)
-            self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
