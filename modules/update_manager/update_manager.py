@@ -43,7 +43,9 @@ class UpdateManager(IModule, multiprocessing.Process):
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(self.output_queue, self.db)
+        self.whitelist = Whitelist(self.output_dir,
+                                   self.redis_port,
+                                   self.db)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line
@@ -168,7 +170,15 @@ class UpdateManager(IModule, multiprocessing.Process):
         """
         sends the text to output process to log it to slips.log without outputting to the terminal
         """
-        self.output_queue.put(f'01|{self.name}|{text}log-only')
+        self.notify_observers(
+            {
+                'from': self.name,
+                'log_to_logfiles_only': True,
+                'txt': text,
+                'verbose': 0,
+                'debug': 1
+           }
+        )
 
     def read_ports_info(self, ports_info_filepath) -> int:
         """

@@ -1,13 +1,21 @@
 from datetime import timedelta
 from ipaddress import ip_address
 import traceback
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
-class SymbolHandler:
+class SymbolHandler(IObservable):
     name = 'SymbolHandler'
 
-    def __init__(self, db, output_queue):
-        self.output_queue = output_queue
+    def __init__(self, output_dir, redis_port, db):
+        IObservable.__init__(self)
         self.db = db
+        self.logger = Output(
+            output_dir,
+            redis_port,
+        )
+        print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
+        self.add_observer(self.logger)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -26,10 +34,14 @@ class SymbolHandler:
         :param text: text to print. Can include format like f'Test {here}'
         """
 
-        levels = f'{verbose}{debug}'
-        self.output_queue.put(f'{levels}|{self.name}|{text}')
-
-
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
     def compute(
         self,
         flow,

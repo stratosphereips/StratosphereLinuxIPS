@@ -41,7 +41,9 @@ class Evidence(ICore):
     name = 'Evidence'
 
     def init(self):
-        self.whitelist = Whitelist(self.output_queue, self.db)
+        self.whitelist = Whitelist(self.output_dir,
+                                   self.redis_port,
+                                   self.db)
         self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
