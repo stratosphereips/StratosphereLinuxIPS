@@ -23,10 +23,12 @@ from datetime import datetime
 import os
 import traceback
 from tqdm.auto import tqdm
-from slips_files.common.abstracts.core import ICore
+from slips_files.common.abstracts.observer import IObserver
+from slips_files.core.database.database_manager import DBManager
 
+from threading import Lock, Event
 
-class Output(ICore):
+class Output(IObserver):
     """
     A class to process the output of everything Slips need. Manages all the output
     If any Slips module or process needs to output anything to screen, or logs,
@@ -34,58 +36,67 @@ class Output(ICore):
     """
 
     name = 'Output'
+    obj = None
 
-    def init(
-        self,
+
+    def __new__(
+        cls,
+        output_dir,
+        redis_port,
         verbose=None,
         debug=None,
         stdout='',
         stderr='output/errors.log',
         slips_logfile='output/slips.log'
     ):
-        self.verbose = verbose
-        self.debug = debug
-        ####### create the log files
-        self.read_configuration()
-        self.errors_logfile = stderr
-        self.slips_logfile = slips_logfile
+        if not cls.obj:
+            cls.obj = super().__new__(cls)
+            cls.output_dir = output_dir
+            cls.redis_port = redis_port
+            # TODO this module shouldn't have access to the db
+            cls.db = DBManager(output_dir, redis_port)
+            # when running slips using -e , this var is set and we only print all msgs with debug lvl less than it
+            cls.verbose = verbose
+            cls.debug = debug
+            ####### create the log files
+            cls._read_configuration()
+            cls.errors_logfile = stderr
+            cls.slips_logfile = slips_logfile
 
-        # set in the Core interface
-        self.queue = self.output_queue
+            cls.create_logfile(cls.errors_logfile)
+            cls.create_logfile(cls.slips_logfile)
+            utils.change_logfiles_ownership(cls.errors_logfile, cls.UID, cls.GID)
+            utils.change_logfiles_ownership(cls.slips_logfile, cls.UID, cls.GID)
 
-        self.create_logfile(self.errors_logfile)
-        self.create_logfile(self.slips_logfile)
-        utils.change_logfiles_ownership(self.errors_logfile, self.UID, self.GID)
-        utils.change_logfiles_ownership(self.slips_logfile, self.UID, self.GID)
+            cls.stdout = stdout
+            if stdout != '':
+                cls.change_stdout(cls.stdout)
+            if cls.verbose > 2:
+                print(
+                    f'Verbosity: {str(cls.verbose)}. Debugging: {str(cls.debug)}'
+                )
+            cls.done_reading_flows = False
+            # are we in daemon of interactive mode
+            cls.slips_mode = cls.db.get_slips_mode()
+            # we update the stats printed by slips every 5seconds
+            # this is the last time the stats was printed
+            cls.last_updated_stats_time = float("-inf")
 
-        # self.quiet manages if we should really print stuff or not
-        self.quiet = False
-
-        self.stdout = stdout
-        if stdout != '':
-            self.change_stdout(self.stdout)
-        if self.verbose > 2:
-            print(
-                f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
-            )
-        self.done_reading_flows = False
-        # are we in daemon of interactive mode
-        self.slips_mode = self.db.get_slips_mode()
-        # we update the stats printed by slips every 5seconds
-        # this is the last time the stats was printed
-        self.last_updated_stats_time = float("-inf")
+        return cls.obj
 
 
-    def read_configuration(self):
+    @classmethod
+    def _read_configuration(cls):
         conf = ConfigParser()
-        self.printable_twid_width = conf.get_tw_width()
-        self.GID = conf.get_GID()
-        self.UID = conf.get_UID()
+        cls.printable_twid_width = conf.get_tw_width()
+        cls.GID = conf.get_GID()
+        cls.UID = conf.get_UID()
 
-    def log_branch_info(self, logfile):
+    @classmethod
+    def log_branch_info(cls, logfile):
         # both will be False when we're in docker because there's no .git/ there
-        branch = self.db.get_branch()
-        commit = self.db.get_commit()
+        branch = cls.db.get_branch()
+        commit = cls.db.get_commit()
         if branch == 'None' and commit == 'None':
             return
 
@@ -99,7 +110,8 @@ class Output(ICore):
         with open(logfile, 'a') as f:
             f.write(f'Using {branch_info} - {now}\n\n')
 
-    def create_logfile(self, path):
+    @classmethod
+    def create_logfile(cls, path):
         """
         creates slips.log and errors.log if they don't exist
         """
@@ -110,13 +122,14 @@ class Output(ICore):
             p.mkdir(parents=True, exist_ok=True)
             open(path, 'w').close()
 
-        self.log_branch_info(path)
+        cls.log_branch_info(path)
 
 
-    def log_line(self, sender, msg):
+    def log_line(self, msg: dict):
         """
-        Log error line to slips.log
+        Logs line to slips.log
         """
+        sender, msg = msg['from'], msg['txt']
         # don't log in daemon mode, all printed
         # lines are redirected to slips.log by default
         if "-D" in sys.argv and 'update'.lower() not in sender and 'stopping' not in sender:
@@ -127,6 +140,7 @@ class Output(ICore):
             date_time = datetime.now()
             date_time = utils.convert_format(date_time, utils.alerts_format)
             slips_logfile.write(f'{date_time} {sender}{msg}\n')
+
 
 
 
@@ -223,52 +237,45 @@ class Output(ICore):
         with open(self.errors_logfile, 'a') as errors_logfile:
             date_time = datetime.now()
             date_time = utils.convert_format(date_time, utils.alerts_format)
-            errors_logfile.write(f'{date_time} {sender}{msg}\n')
+            errors_logfile.write(f'{date_time} {msg["from"]}{msg["txt"]}\n')
 
-    def output_line(self, level, sender, msg):
+    def output_line(self, msg: dict):
         """
-        Print depending on the debug and verbose levels
+        Prints to terminal and logfiles depending on the debug and verbose levels
         """
-        # (level, sender, msg) = self.process_line(line)
-        verbose_level, debug_level = int(level[0]), int(level[1])
+        verbose, debug = msg.get('verbose', self.verbose), msg.get('debug', self.debug)
+        sender, txt = msg['from'], msg['txt']
+
         # if verbosity level is 3 make it red
-        if debug_level == 3:
+        if debug == 3:
             msg = f'\033[0;35;40m{msg}\033[00m'
 
         # There should be a level 0 that we never print. So its >, and not >=
         if ((
-            verbose_level > 0 and verbose_level <= 3
-            and verbose_level <= self.verbose
+                0 < verbose <= 3
+                and verbose <= self.verbose
         ) or (
-            debug_level > 0 and debug_level <= 3
-            and debug_level <= self.debug
+                0 < debug <= 3
+                and debug <= self.debug
         )):
-            if 'Start' in msg:
+            if 'Start' in txt:
                 # we use tqdm.write() instead of print() to make sure we
                 # don't get progress bar duplicates in the cli
-                tqdm.write(f'{msg}')
+                tqdm.write(f'{txt}')
                 return
 
-            # when the pbar reaches 100% aka we're done_reading_flows
-            # we print alerts at the very botttom of the screen using print
-            # instead of printing alerts at the top of the pbar using tqdm
-            if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
-                print(f'{sender}{msg}')
-            else:
-                tqdm.write(f'{sender}{msg}')
-
-            # print(f'{sender}{msg}')
-            self.log_line(sender, msg)
+            self.print(sender, txt)
+            self.log_line(msg)
 
         # if the line is an error and we're running slips without -e 1 , we should log the error to output/errors.log
         # make sure the msg is an error. debug_level==1 is the one printing errors
-        if debug_level == 1:
-            self.log_error(sender, msg)
+        if debug == 1:
+            self.log_error(msg)
 
     def unknown_total_flows(self) -> bool:
         """
         When running on a pcap, interface, or taking flows from an
-        external module, the total amount of flows are unknown
+        external module, the total amount of flows is unknown
         """
         if self.db.get_input_type() in ('pcap', 'interface', 'stdin'):
             return True
@@ -333,11 +340,15 @@ class Output(ICore):
             self.done_reading_flows = True
         # self.progress_bar.refresh()
 
-
     def shutdown_gracefully(self):
-        self.log_line('[Output Process]', ' Stopping output process. '
-                                        'Further evidence may be missing. '
-                                        'Check alerts.log for full evidence list.')
+        self.log_line(
+            {
+                'from': self.name,
+                'txt': 'Stopping output process. '
+                       'Further evidence may be missing. '
+                       'Check alerts.log for full evidence list.'
+            }
+        )
 
     def remove_stats_from_progress_bar(self):
         # remove the stats from the progress bar
@@ -380,31 +391,28 @@ class Output(ICore):
                 refresh=True
             )
 
-    def main(self):
-        while not self.should_stop():
-            self.update_stats()
-            line = self.queue.get()
-            if line == 'quiet':
-                self.quiet = True
-            elif 'initialize progress bar' in line:
-                self.init_progress_bar()
-            elif 'update progress bar' in line:
-                self.update_progress_bar()
-            elif 'stop_process' in line or line == 'stop':
-                self.shutdown_gracefully()
-                return True
-            elif not self.quiet:
-                # output to terminal and logs or logs only?
+    def update(self, msg: dict):
+        """
+        gets called whenever any module need to print something
+        each msg shhould be in the following format
+        {
+            bar: 'update' or 'init'
+            log_to_logfiles_only: bool that indicates wheteher we wanna log the text to all logfiles or the cli only?
+            txt: text to log to the logfiles and/or the cli
+        }
+        """
+        self.update_stats()
 
-                if 'log-only' in line:
-                    line = line.replace('log-only', '')
-                    (level, sender, msg) = self.process_line(line)
-                    self.log_line(sender, msg)
-                else:
-                    (level, sender, msg) = self.process_line(line)
-                    # output to terminal
-                    self.output_line(level, sender, msg)
+        if 'init' in msg.get('bar',''):
+            self.init_progress_bar()
 
+        elif 'update' in msg.get('bar', ''):
+            self.update_progress_bar()
+
+        else:
+            # output to terminal and logs or logs only?
+            if msg.get('log_to_logfiles_only', False):
+                self.log_line(msg)
             else:
                 # Here we should still print the lines coming in
                 # the input for a while after receiving a 'stop'.
@@ -413,5 +421,3 @@ class Output(ICore):
                 self.shutdown_gracefully()
                 return True
 
-        self.shutdown_gracefully()
-        return True
