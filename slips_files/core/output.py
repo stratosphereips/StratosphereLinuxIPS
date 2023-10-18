@@ -152,7 +152,17 @@ class Output(IObserver):
         sys.stdout = io.TextIOWrapper(open(file, 'wb', 0), write_through=True)
         return
 
-
+    def print(self, sender: str, txt: str):
+        """
+        prints the given txt whether using tqdm or using print()
+        """
+        # when the pbar reaches 100% aka we're done_reading_flows
+        # we print alerts at the very botttom of the screen using print
+        # instead of printing alerts at the top of the pbar using tqdm
+        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
+            print(f'{sender}{txt}')
+        else:
+            tqdm.write(f'{sender}{txt}')
 
 
     def log_error(self, msg: dict):
