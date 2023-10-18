@@ -89,6 +89,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     first_flow = True
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
+    # in case of redis ConnectionErrors, this is how long we'll wait in seconds before retrying.
+    # this will increase exponentially each retry
+    backoff = 15
+    # try to reconnect to redis 3 times in case of connection errors before terminating
+    max_retries = 3
+    # to keep track of connection retries. once it reaches max_retries, slips will terminate
+    connection_retry = 0
 
     def __new__(cls, redis_port, output_queue, flush_db=True):
         """
@@ -248,7 +255,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 # we shouldn't close it because this is what kalipso will
                 # use to view the loaded the db
                 cls.close_redis_server(cls.redis_port)
-
             return False
 
     @classmethod
@@ -290,7 +296,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
         self.pubsub = self.r.pubsub()
         self.pubsub.subscribe(
-            channel, ignore_subscribe_messages=ignore_subscribe_messages
+            channel,
+            ignore_subscribe_messages=ignore_subscribe_messages
             )
         return self.pubsub
 
@@ -310,11 +317,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         try:
             return channel.get_message(timeout=timeout)
         except redis.exceptions.ConnectionError as ex:
+            # make sure we log the error only once
             if not self.is_connection_error_logged():
-                self.publish_stop()
-                self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 0, 1)
-                # make sure we publish the stop msg and log the error only once
                 self.mark_connection_error_as_logged()
+
+            if self.connection_retry >= self.max_retries:
+                self.publish_stop()
+                self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 1, 1)
+            else:
+                # retry to connect after backing off for a while
+                self.print(f"redis.exceptions.ConnectionError: "
+                           f"retrying to connect in {self.backoff}s. "
+                           f"Retries to far: {self.connection_retry}", 0, 1)
+                time.sleep(self.backoff)
+                self.backoff = self.backoff * 2
+                self.connection_retry += 1
+                self.get_message(channel, timeout)
+
 
     def print(self, text, verbose=1, debug=0):
         """
