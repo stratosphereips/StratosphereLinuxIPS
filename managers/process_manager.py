@@ -28,7 +28,6 @@ class ProcessManager:
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         output_process = Output(
-            self.main.output_queue,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
@@ -45,7 +44,6 @@ class ProcessManager:
 
     def start_profiler_process(self):
         profiler_process = Profiler(
-            self.main.output_queue,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
@@ -63,7 +61,6 @@ class ProcessManager:
 
     def start_evidence_process(self):
         evidence_process = Evidence(
-            self.main.output_queue,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
@@ -80,7 +77,6 @@ class ProcessManager:
 
     def start_input_process(self):
         input_process = Input(
-            self.main.output_queue,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
@@ -227,7 +223,6 @@ class ProcessManager:
 
             module_class = modules_to_call[module_name]["obj"]
             module = module_class(
-                self.main.output_queue,
                 self.main.args.output,
                 self.main.redis_port,
                 self.termination_event,
@@ -332,8 +327,6 @@ class ProcessManager:
         # go through all processes to kill and see which
         # of them still need time
         for process in pids_to_kill:
-            if 'output' in process.name.lower():
-                self.main.output_queue.put('stop')
             # wait 3s for it to stop
             process.join(3)
 
@@ -423,7 +416,8 @@ class ProcessManager:
 
             # close all tws
             self.main.db.check_TW_to_close(close_all=True)
-
+            print(f"@@@@@@@@@@@@@@@@ lien sread by the input proc {self.main.input_process.lines}")
+            print(f"@@@@@@@@@@@@@@@@ lien sread by the profiler proc {self.main.profiler_process.rec_lines}")
             analysis_time = self.get_analysis_time()
             print(f"\n[Main] Analysis of {self.main.input_information} finished in {analysis_time:.2f} minutes")
 
@@ -489,11 +483,6 @@ class ProcessManager:
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
             self.main.db.close()
-
-            # when using -S, the main has no output_queue
-            if hasattr(self.main, 'output_queue'):
-                self.main.output_queue.close()
-                self.main.output_queue.cancel_join_thread()
 
             with open(self.slips_logfile, 'a') as f:
                 if graceful_shutdown:
