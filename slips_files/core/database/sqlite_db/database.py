@@ -13,8 +13,9 @@ class SQLiteDB():
     cursor_lock = Lock()
     trial = 0
 
-    def __init__(self, output_dir, output_queue):
-        self.output_queue = output_queue
+    def __init__(self, output_dir, redis_port):
+        # TODO having access to redis_port is so wrong, will fix it once we fix
+        # TODO the observer Output to not use the db
         self._flows_db = os.path.join(output_dir, 'flows.sqlite')
         self.connect()
 
@@ -80,9 +81,15 @@ class SQLiteDB():
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
-        levels = f'{verbose}{debug}'
         try:
-            self.output_queue.put(f'{levels}|{self.name}|{text}')
+            self.notify_observers(
+                {
+                    'from': self.name,
+                    'txt': text,
+                    'verbose': verbose,
+                    'debug': debug
+               }
+            )
         except AttributeError:
             pass
 

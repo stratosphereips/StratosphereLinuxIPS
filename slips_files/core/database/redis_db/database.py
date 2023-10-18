@@ -3,6 +3,8 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
 import os
 import signal
@@ -18,7 +20,7 @@ import validators
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 
-class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
+class RedisDB(IObservable, IoCHandler, AlertHandler, ProfileHandler):
     """Main redis db class."""
     # this db should be a singelton per port. meaning no 2 instances should be created for the same port at the same
     # time
@@ -97,12 +99,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     # to keep track of connection retries. once it reaches max_retries, slips will terminate
     connection_retry = 0
 
-    def __new__(cls, redis_port, output_queue, flush_db=True):
+    def __new__(cls, redis_port, flush_db=True):
         """
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
         """
-        cls.redis_port, cls.outputqueue = redis_port, output_queue
+        cls.redis_port, cls.outputqueue = redis_port
         cls.flush_db = flush_db
         if cls.redis_port not in cls._instances:
             cls._instances[cls.redis_port] = super().__new__(cls)
@@ -115,6 +117,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 cls._set_slips_start_time()
             # useful for debugging using 'CLIENT LIST' redis cmd
             cls.r.client_setname(f"Slips-DB")
+            cls.logger = Output(
+                cls.output_dir,
+                cls.redis_port,
+            )
+            IObservable.__init__(cls)
+            print(f"@@@@@@@@@@@@@@@@ self.logger for {cls.name} "
+                  f"is {cls.logger}")
+            cls.add_observer(cls.logger)
 
         return cls._instances[cls.redis_port]
 
