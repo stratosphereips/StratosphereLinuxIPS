@@ -113,12 +113,11 @@ class Input(ICore):
     def stop_queues(self):
         """Stops the profiler and output queues"""
         now = utils.convert_format(datetime.now(), utils.alerts_format)
-        self.output_queue.put(
+        self.notify_observers(
             f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
         )
 
         self.profiler_queue.put('stop')
-        self.output_queue.cancel_join_thread()
         self.profiler_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:
@@ -664,7 +663,7 @@ class Input(ICore):
         # Stop the observer
         try:
             self.event_observer.stop()
-            self.event_observer.join()
+            self.event_observer.join(10)
         except AttributeError:
             # In the case of nfdump, there is no observer
             pass
@@ -714,7 +713,7 @@ class Input(ICore):
                 lock.release()
 
     def shutdown_gracefully(self):
-        self.print(f"Stopping. Total lines read: {self.lines}", 0, 1)
+        self.print(f"Stopping. Total lines read: {self.lines}")
         self.stop_observer()
         self.stop_queues()
         try:
