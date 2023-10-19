@@ -78,7 +78,7 @@ class Profiler(ICore):
             'reload_whitelist': self.c1,
         }
 
-        
+
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -388,7 +388,9 @@ class Profiler(ICore):
     def main(self):
         while not self.should_stop():
             try:
-                line = self.profiler_queue.get(timeout=3)
+                msg: dict = self.profiler_queue.get(timeout=3)
+                line: str = msg['line']
+                total_flows: int = msg.get('total_flows', 0)
             except Exception as e:
                 # the queue is empty, which means input proc
                 # is done reading flows
@@ -416,8 +418,15 @@ class Profiler(ICore):
             if not self.input_type:
                 # Find the type of input received
                 self.define_type(line)
+
                 # Find the number of flows we're going to receive of input received
-                self.notify_observers({'bar': 'init'})
+                self.notify_observers({
+                    'bar': 'init',
+                    'bar_info': {
+                        'input_type': self.input_type,
+                        'total_flows': total_flows
+                    }
+                })
 
             # What type of input do we have?
             if not self.input_type:
@@ -446,4 +455,3 @@ class Profiler(ICore):
                 self.whitelist.read_whitelist()
 
         return 1
-

@@ -30,6 +30,26 @@ import json
 import threading
 import subprocess
 
+# these are the files that slips doesn't read
+IGNORED_FILES = {
+    'capture_loss',
+    'loaded_scripts',
+    'packet_filter',
+    'stats',
+    'ocsp',
+    'reporter',
+    'x509',
+    'pe',
+    'mqtt_publish',
+    'mqtt_subscribe',
+    'mqtt_connect',
+    'analyzer',
+    'ntp',
+    'radiuss',
+    'sip',
+    'syslog'
+}
+
 # Input Process
 class Input(ICore):
     """ A class process to run the process of the flows """
@@ -66,25 +86,7 @@ class Input(ICore):
         self.testing = False
         # number of lines read
         self.lines = 0
-        # these are the files that slips doesn't read
-        self.ignored_files = {
-            'capture_loss',
-            'loaded_scripts',
-            'packet_filter',
-            'stats',
-            'ocsp',
-            'reporter',
-            'x509',
-            'pe',
-            'mqtt_publish',
-            'mqtt_subscribe',
-            'mqtt_connect',
-            'analyzer',
-            'ntp',
-            'radiuss',
-            'sip',
-            'syslog'
-        }
+
         # create the remover thread
         self.remover_thread = threading.Thread(
             target=self.remove_old_zeek_files, daemon=True
@@ -99,6 +101,9 @@ class Input(ICore):
             target=self.run_zeek,
             daemon=True
         )
+        # used to give the profiler the total amount of flows to read with the first flow only
+        self.is_first_flow = True
+
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -117,7 +122,7 @@ class Input(ICore):
             f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
         )
 
-        self.profiler_queue.put('stop')
+        self.give_profiler('stop')
         self.profiler_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:
@@ -129,8 +134,8 @@ class Input(ICore):
             # The nfdump command returned nothing
             self.print('Error reading nfdump output ', 1, 3)
         else:
-            total_flows = len(self.nfdump_output.splitlines())
-            self.db.set_input_metadata({'total_flows': total_flows})
+            self.total_flows = len(self.nfdump_output.splitlines())
+            self.db.set_input_metadata({'total_flows': self.total_flows})
 
             for nfdump_line in self.nfdump_output.splitlines():
                 # this line is taken from stdout we need to remove whitespaces
@@ -144,10 +149,10 @@ class Input(ICore):
                     'type': 'nfdump',
                     'data': nfdump_line
                 }
-                self.profiler_queue.put(line)
+                self.give_profiler(line)
                 if self.testing: break
 
-        return total_flows
+        return self.total_flows
 
     def check_if_time_to_del_rotated_files(self):
         """
@@ -178,7 +183,7 @@ class Input(ICore):
         :param filepath: full path to a zeek log file
         """
         filename_without_ext = Path(filepath).stem
-        if filename_without_ext in self.ignored_files:
+        if filename_without_ext in IGNORED_FILES:
             return True
 
     def get_file_handle(self, filename):
@@ -357,7 +362,7 @@ class Input(ICore):
                 continue
 
             # self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
-            self.profiler_queue.put(earliest_line)
+            self.give_profiler(earliest_line)
             self.lines += 1
             print(f"@@@@@@@@@@@@@@@@ ok? {self.lines}")
             # when testing, no need to read the whole file!
@@ -440,13 +445,13 @@ class Input(ICore):
             # that this function is working correctly
             if self.testing:
                 break
+        self.total_flows = total_flows
         self.db.set_input_metadata({'total_flows': total_flows})
         self.lines = self.read_zeek_files()
         self.print(
             f'\nWe read everything from the folder.'
             f' No more input. Stopping input process. Sent {self.lines} lines', 2, 0,
         )
-        print(f"@@@@@@@@@@@@@@@@  No more input. Stopping input process. Sent {self.lines} lines")
 
         return True
 
@@ -476,7 +481,7 @@ class Input(ICore):
                 'data' : line
             }
             self.print(f'	> Sent Line: {line_info}', 0, 3)
-            self.profiler_queue.put(line_info)
+            self.give_profiler(line_info)
             self.lines += 1
             self.print('Done reading 1 flow.\n ', 0, 3)
 
@@ -484,8 +489,8 @@ class Input(ICore):
 
     def handle_binetflow(self):
         # the number of flows returned by get_flows_number contains the header, so subtract that
-        total_flows = self.get_flows_number(self.given_path) -1
-        self.db.set_input_metadata({'total_flows': total_flows})
+        self.total_flows = self.get_flows_number(self.given_path) -1
+        self.db.set_input_metadata({'total_flows': self.total_flows})
 
         self.lines = 0
         with open(self.given_path) as file_stream:
@@ -496,7 +501,7 @@ class Input(ICore):
                 'type': type_,
                 'data': t_line
             }
-            self.profiler_queue.put(line)
+            self.give_profiler(line)
             self.lines += 1
 
             # go through the rest of the file
@@ -507,15 +512,15 @@ class Input(ICore):
                 }
                 # argus files are either tab separated orr comma separated
                 if len(t_line.strip()) != 0:
-                    self.profiler_queue.put(line)
+                    self.give_profiler(line)
 
                 self.lines += 1
                 if self.testing: break
         return True
 
     def handle_suricata(self):
-        total_flows = self.get_flows_number(self.given_path)
-        self.db.set_input_metadata({'total_flows': total_flows})
+        self.total_flows = self.get_flows_number(self.given_path)
+        self.db.set_input_metadata({'total_flows': self.total_flows})
         with open(self.given_path) as file_stream:
             for t_line in file_stream:
                 line = {
@@ -524,7 +529,7 @@ class Input(ICore):
                 }
                 self.print(f'	> Sent Line: {line}', 0, 3)
                 if len(t_line.strip()) != 0:
-                    self.profiler_queue.put(line)
+                    self.give_profiler(line)
                 self.lines += 1
                 if self.testing:
                     break
@@ -567,6 +572,7 @@ class Input(ICore):
                 # subtract the comments from the flows number
                 total_flows -= 9
             self.db.set_input_metadata({'total_flows': total_flows})
+            self.total_flows = total_flows
 
         file_path_without_extension = os.path.splitext(self.given_path)[0]
         # Add log file to database
@@ -687,7 +693,7 @@ class Input(ICore):
                     '.'
                 )[0]
                 # ignored files have no open handle, so we should only delete them from disk
-                if new_logfile_without_path in self.ignored_files:
+                if new_logfile_without_path in IGNORED_FILES:
                     # just delete the old file
                     os.remove(old_log_file)
                     continue
@@ -849,13 +855,22 @@ class Input(ICore):
                     'data': flow
                 }
                 self.print(f'   > Sent Line: {line_info}', 0, 3)
-                self.profiler_queue.put(line_info)
+                self.give_profiler(line_info)
                 self.lines += 1
                 self.print('Done reading 1 CYST flow.\n ', 0, 3)
 
                 time.sleep(2)
 
-
+    def give_profiler(self, line):
+        """
+        sends the given txt/dict to the profilerqueue for process
+        sends the total amount of flows to process with the first flow only
+        """
+        to_send = {'line': line}
+        if self.is_first_flow:
+            self.is_first_flow = False
+            to_send.update({'total_flows': self.total_flows})
+        self.profiler_queue.put(to_send)
 
     def main(self):
         utils.drop_root_privs()

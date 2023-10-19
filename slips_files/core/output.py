@@ -47,7 +47,8 @@ class Output(IObserver):
         debug=None,
         stdout='',
         stderr='output/errors.log',
-        slips_logfile='output/slips.log'
+        slips_logfile='output/slips.log',
+        slips_mode='interactive',
     ):
         if not cls.obj:
             cls.obj = super().__new__(cls)
@@ -62,7 +63,6 @@ class Output(IObserver):
             cls._read_configuration()
             cls.errors_logfile = stderr
             cls.slips_logfile = slips_logfile
-
             cls.create_logfile(cls.errors_logfile)
             cls.create_logfile(cls.slips_logfile)
             utils.change_logfiles_ownership(cls.errors_logfile, cls.UID, cls.GID)
@@ -76,11 +76,11 @@ class Output(IObserver):
                     f'Verbosity: {str(cls.verbose)}. Debugging: {str(cls.debug)}'
                 )
             cls.done_reading_flows = False
-            # are we in daemon of interactive mode
-            cls.slips_mode = cls.db.get_slips_mode()
             # we update the stats printed by slips every 5seconds
             # this is the last time the stats was printed
             cls.last_updated_stats_time = float("-inf")
+            #TODO test this when daemonized
+            cls.slips_mode = slips_mode
 
         return cls.obj
 
@@ -93,22 +93,26 @@ class Output(IObserver):
         cls.UID = conf.get_UID()
 
     @classmethod
-    def log_branch_info(cls, logfile):
+    def log_branch_info(cls, logfile: str):
+        """
+        logs the branch and commit to the given logfile
+        """
         # both will be False when we're in docker because there's no .git/ there
-        branch = cls.db.get_branch()
-        commit = cls.db.get_commit()
-        if branch == 'None' and commit == 'None':
+        branch_info = utils.get_branch_info()
+        if not branch_info:
             return
+        commit, branch = branch_info
 
-        branch_info = ''
+
+        git_info = ''
         if branch:
-            branch_info += branch
+            git_info += branch
         if commit:
-            branch_info += f' ({commit})'
+            git_info += f' ({commit})'
 
         now = datetime.now()
         with open(logfile, 'a') as f:
-            f.write(f'Using {branch_info} - {now}\n\n')
+            f.write(f'Using {git_info} - {now}\n\n')
 
     @classmethod
     def create_logfile(cls, path):
@@ -207,12 +211,12 @@ class Output(IObserver):
         if debug == 1:
             self.log_error(msg)
 
-    def unknown_total_flows(self) -> bool:
+    def unknown_total_flows(self, input_type: str) -> bool:
         """
         When running on a pcap, interface, or taking flows from an
         external module, the total amount of flows is unknown
         """
-        if self.db.get_input_type() in ('pcap', 'interface', 'stdin'):
+        if input_type in ('pcap', 'interface', 'stdin'):
             return True
 
         # whenever any of those is present, slips won't be able to get the
@@ -222,12 +226,13 @@ class Output(IObserver):
             if param in sys.argv:
                 return True
 
-    def init_progress_bar(self):
+    def init_progress_bar(self, bar: dict):
         """
         initializes the progress bar when slips is runnning on a file or a zeek dir
         ignores pcaps, interface and dirs given to slips if -g is enabled
+        :param bar: dict with input type, total_flows, etc.
         """
-        if self.unknown_total_flows():
+        if self.unknown_total_flows(bar['input_type']):
             # we don't know how to get the total number of flows slips is going to process,
             # because they're growing
             return
@@ -237,7 +242,7 @@ class Output(IObserver):
             # no need to print the progress bar
             return
 
-        self.total_flows = int(self.db.get_total_flows())
+        self.total_flows = int(bar['total_flows'])
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
@@ -263,7 +268,6 @@ class Output(IObserver):
             # this module wont have the progress_bar set if it's running on pcap or interface
             return
 
-        # todo profile slips with and without the bar !
         if self.slips_mode == 'daemonized':
             return
 
@@ -334,12 +338,16 @@ class Output(IObserver):
             bar: 'update' or 'init'
             log_to_logfiles_only: bool that indicates wheteher we wanna log the text to all logfiles or the cli only?
             txt: text to log to the logfiles and/or the cli
+            bar_info: {
+                input_type: only given when we send bar:'init', specifies the type of the input file given to slips
+                    eg zeek, argus, etc
+                total_flows: int,
         }
         """
         self.update_stats()
 
         if 'init' in msg.get('bar',''):
-            self.init_progress_bar()
+            self.init_progress_bar(msg['bar_info'])
 
         elif 'update' in msg.get('bar', ''):
             self.update_progress_bar()
