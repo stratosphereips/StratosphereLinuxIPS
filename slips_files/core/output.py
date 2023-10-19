@@ -117,7 +117,6 @@ class Output(IObserver):
             p = Path(os.path.dirname(path))
             p.mkdir(parents=True, exist_ok=True)
             open(path, 'w').close()
-
         cls.log_branch_info(path)
 
 

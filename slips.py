@@ -572,11 +572,10 @@ class Main(IObservable):
                 # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
 
-            self.logger = Output(
-                verbose=self.args.verbose,
-                debug=self.args.debug,
-                slips_mode=self.mode
-            )
+            # if stdout is redirected to a file,
+            # tell output.py to redirect it's output as well
+            current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
+            self.logger = self.proc_man.start_output_process(current_stdout, stderr, slips_logfile)
             self.add_observer(self.logger)
 
             self.db = DBManager(self.args.output, self.redis_port)
@@ -592,9 +591,7 @@ class Main(IObservable):
             # Should print out red text if working properly
             # self.memory_profiler_multiproc_test()
 
-            # if stdout is redirected to a file,
-            # tell output.py to redirect it's output as well
-            current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
+
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':

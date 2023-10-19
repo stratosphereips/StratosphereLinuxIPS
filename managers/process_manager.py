@@ -26,17 +26,18 @@ class ProcessManager:
         self.termination_event: Event = Event()
         self.stopped_modules = []
 
+
     def start_output_process(self, current_stdout, stderr, slips_logfile):
+        # only in this instance we'll have to specify the verbose, debug and std files
+        # since the output is a singelton, the same params will be set everywhere, no need to pass them everytime
         output_process = Output(
-            self.termination_event,
-            verbose=self.main.args.verbose,
-            debug=self.main.args.debug,
             stdout=current_stdout,
             stderr=stderr,
             slips_logfile=slips_logfile,
+            verbose=self.main.args.verbose,
+            debug=self.main.args.debug,
+            slips_mode=self.main.mode
         )
-        output_process.start()
-        self.main.db.store_process_PID('Output', int(output_process.pid))
         self.slips_logfile = output_process.slips_logfile
         return output_process
 
