@@ -30,8 +30,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         self.read_configuration()
         # Retrieve the labels
         self.subscribe_to_channels()
-        # todo make the whitelist and observable and use the logger there
-        self.whitelist = Whitelist(self.output_dir, self.redis_port, self.db)
+        self.whitelist = Whitelist(self.db)
         self.conn_counter = 0
         # helper contains all functions used to set evidence
         self.helper = Helper(self.db)

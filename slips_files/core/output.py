@@ -24,8 +24,6 @@ import os
 import traceback
 from tqdm.auto import tqdm
 from slips_files.common.abstracts.observer import IObserver
-from slips_files.core.database.database_manager import DBManager
-
 from threading import Lock, Event
 
 class Output(IObserver):
@@ -41,8 +39,6 @@ class Output(IObserver):
 
     def __new__(
         cls,
-        output_dir,
-        redis_port,
         verbose=None,
         debug=None,
         stdout='',
@@ -52,10 +48,6 @@ class Output(IObserver):
     ):
         if not cls.obj:
             cls.obj = super().__new__(cls)
-            cls.output_dir = output_dir
-            cls.redis_port = redis_port
-            # TODO this module shouldn't have access to the db
-            cls.db = DBManager(output_dir, redis_port)
             # when running slips using -e , this var is set and we only print all msgs with debug lvl less than it
             cls.verbose = verbose
             cls.debug = debug

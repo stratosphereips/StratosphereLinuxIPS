@@ -34,10 +34,7 @@ class ICore(IObservable, IModule, Process):
         self.redis_port = redis_port
         self.db = DBManager(output_dir, redis_port)
         self.msg_received = False
-        self.logger = Output(
-            self.output_dir,
-            self.redis_port,
-        )
+        self.logger = Output()
         IObservable.__init__(self)
         print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
         self.add_observer(self.logger)

@@ -117,10 +117,7 @@ class RedisDB(IObservable, IoCHandler, AlertHandler, ProfileHandler):
                 cls._set_slips_start_time()
             # useful for debugging using 'CLIENT LIST' redis cmd
             cls.r.client_setname(f"Slips-DB")
-            cls.logger = Output(
-                cls.output_dir,
-                cls.redis_port,
-            )
+            cls.logger = Output()
             IObservable.__init__(cls)
             print(f"@@@@@@@@@@@@@@@@ self.logger for {cls.name} "
                   f"is {cls.logger}")

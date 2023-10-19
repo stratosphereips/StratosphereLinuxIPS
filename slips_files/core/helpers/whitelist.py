@@ -9,12 +9,9 @@ import os
 
 
 class Whitelist(IObservable):
-    def __init__(self, output_dir, redis_port, db):
+    def __init__(self, db):
         IObservable.__init__(self)
-        self.logger = Output(
-            output_dir,
-            redis_port,
-        )
+        self.logger = Output()
         self.add_observer(self.logger)
         self.name = 'whitelist'
         self.read_configuration()

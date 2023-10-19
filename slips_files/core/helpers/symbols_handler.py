@@ -10,10 +10,7 @@ class SymbolHandler(IObservable):
     def __init__(self, output_dir, redis_port, db):
         IObservable.__init__(self)
         self.db = db
-        self.logger = Output(
-            output_dir,
-            redis_port,
-        )
+        self.logger = Output()
         print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
         self.add_observer(self.logger)
 

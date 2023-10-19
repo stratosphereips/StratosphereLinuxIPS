@@ -28,8 +28,6 @@ class ProcessManager:
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         output_process = Output(
-            self.main.args.output,
-            self.main.redis_port,
             self.termination_event,
             verbose=self.main.args.verbose,
             debug=self.main.args.debug,

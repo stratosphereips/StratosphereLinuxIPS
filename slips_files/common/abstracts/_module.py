@@ -27,10 +27,7 @@ class IModule(IObservable, ABC):
         self.msg_received = False
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
-        self.logger = Output(
-            self.output_dir,
-            self.redis_port,
-        )
+        self.logger = Output()
         IObservable.__init__(self)
         print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
         self.add_observer(self.logger)

@@ -571,13 +571,7 @@ class Main(IObservable):
                 # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
 
-            self.logger = Output(
-                    self.args.output,
-                    self.redis_port,
-                    slips_mode=self.mode,
-                    branch=self.branch,
-                    commit=self.commit,
-                )
+            self.logger = Output(slips_mode=self.mode)
             print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
             self.add_observer(self.logger)
 
