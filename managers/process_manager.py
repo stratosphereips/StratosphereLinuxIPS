@@ -414,8 +414,6 @@ class ProcessManager:
 
             # close all tws
             self.main.db.check_TW_to_close(close_all=True)
-            print(f"@@@@@@@@@@@@@@@@ lien sread by the input proc {self.main.input_process.lines}")
-            print(f"@@@@@@@@@@@@@@@@ lien sread by the profiler proc {self.main.profiler_process.rec_lines}")
             analysis_time = self.get_analysis_time()
             print(f"\n[Main] Analysis of {self.main.input_information} finished in {analysis_time:.2f} minutes")
 

@@ -21,7 +21,6 @@ import io
 from pathlib import Path
 from datetime import datetime
 import os
-import traceback
 from tqdm.auto import tqdm
 from slips_files.common.abstracts.observer import IObserver
 from threading import Lock, Event
@@ -155,10 +154,11 @@ class Output(IObserver):
         # when the pbar reaches 100% aka we're done_reading_flows
         # we print alerts at the very botttom of the screen using print
         # instead of printing alerts at the top of the pbar using tqdm
+        to_print = f'[{sender}] {txt}'
         if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
-            print(f'{sender}{txt}')
+            print(to_print)
         else:
-            tqdm.write(f'{sender}{txt}')
+            tqdm.write(to_print)
 
 
     def log_error(self, msg: dict):

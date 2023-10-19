@@ -359,7 +359,6 @@ class Main(IObservable):
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like f'Test {here}'
         """
-
         self.notify_observers(
             {
                 'from': self.name,
@@ -571,8 +570,11 @@ class Main(IObservable):
                 # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
 
-            self.logger = Output(slips_mode=self.mode)
-            print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
+            self.logger = Output(
+                verbose=self.args.verbose,
+                debug=self.args.debug,
+                slips_mode=self.mode
+            )
             self.add_observer(self.logger)
 
             self.db = DBManager(self.args.output, self.redis_port)

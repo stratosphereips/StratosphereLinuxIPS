@@ -11,7 +11,6 @@ class SymbolHandler(IObservable):
         IObservable.__init__(self)
         self.db = db
         self.logger = Output()
-        print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
         self.add_observer(self.logger)
 
     def print(self, text, verbose=1, debug=0):
