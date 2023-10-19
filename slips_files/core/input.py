@@ -866,7 +866,11 @@ class Input(ICore):
         sends the total amount of flows to process with the first flow only
         """
         to_send = {'line': line}
-        if self.is_first_flow:
+        # send the total flows slips is going to read to the profiler
+        # the profiler will give it to output() for initialising the progress bar
+        # in case of interface and pcaps, we don't know the total_flows beforehand
+        # and we don't print a pbar
+        if self.is_first_flow and hasattr(self, 'total_flows'):
             self.is_first_flow = False
             to_send.update({'total_flows': self.total_flows})
         self.profiler_queue.put(to_send)
