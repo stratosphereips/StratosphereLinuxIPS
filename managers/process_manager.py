@@ -34,7 +34,7 @@ class ProcessManager:
             stdout=current_stdout,
             stderr=stderr,
             slips_logfile=slips_logfile,
-            verbose=self.main.args.verbose,
+            verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
             slips_mode=self.main.mode
         )

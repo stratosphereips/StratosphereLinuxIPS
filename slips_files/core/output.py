@@ -62,11 +62,9 @@ class Output(IObserver):
 
             cls.stdout = stdout
             if stdout != '':
-                cls.change_stdout(cls.stdout)
+                cls.change_stdout()
             if cls.verbose > 2:
-                print(
-                    f'Verbosity: {str(cls.verbose)}. Debugging: {str(cls.debug)}'
-                )
+                print(f'Verbosity: {cls.verbose}. Debugging: {cls.debug}')
             cls.done_reading_flows = False
             # we update the stats printed by slips every 5seconds
             # this is the last time the stats was printed
@@ -138,13 +136,16 @@ class Output(IObserver):
 
 
 
-
-    def change_stdout(self, file):
+    @classmethod
+    def change_stdout(cls):
         # io.TextIOWrapper creates a file object of this file
         # Pass 0 to open() to switch output buffering off (only allowed in binary mode)
         # write_through= True, to flush the buffer to disk, from there the file can read it.
         # without it, the file writer keeps the information in a local buffer that's not accessible to the file.
-        sys.stdout = io.TextIOWrapper(open(file, 'wb', 0), write_through=True)
+        sys.stdout = io.TextIOWrapper(
+            open(cls.stdout, 'wb', 0),
+            write_through=True
+        )
         return
 
     def print(self, sender: str, txt: str):

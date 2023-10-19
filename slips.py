@@ -59,6 +59,7 @@ warnings.filterwarnings('ignore')
 
 class Main(IObservable):
     def __init__(self, testing=False):
+        IObservable.__init__(self)
         self.name = 'Main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
@@ -80,6 +81,7 @@ class Main(IObservable):
             self.args = self.conf.get_args()
             self.pid = os.getpid()
             self.checker.check_given_flags()
+
             if not self.args.stopdaemon:
                 # Check the type of input
                 self.input_type, self.input_information, self.line_type = self.checker.check_input_type()
@@ -89,7 +91,7 @@ class Main(IObservable):
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
-                IObservable.__init__(self)
+
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
@@ -139,7 +141,7 @@ class Main(IObservable):
             self.memoryProfiler.start()
     
     def memory_profiler_release(self):
-        if self.memoryProfilerEnabled:
+        if hasattr(self, 'memoryProfilerEnabled') and self.memoryProfilerEnabled:
             self.memoryProfiler.stop()
     
     def memory_profiler_multiproc_test(self):
@@ -552,8 +554,6 @@ class Main(IObservable):
             print('-' * 27)
 
             self.setup_print_levels()
-
-
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:

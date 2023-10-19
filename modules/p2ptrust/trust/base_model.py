@@ -1,7 +1,5 @@
-from modules.p2ptrust.trust.model import Model
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
-from modules.p2ptrust.trust.trustdb import TrustDB
 
 
 
