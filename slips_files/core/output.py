@@ -170,10 +170,17 @@ class Output(IObserver):
             date_time = utils.convert_format(date_time, utils.alerts_format)
             errors_logfile.write(f'{date_time} {msg["from"]}{msg["txt"]}\n')
 
+    def has_pbar(self):
+        """returns false when pbar wasnt initialised or is done 100%"""
+        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
+            return False
+        elif hasattr(self, 'progress_bar'):
+            return True
+
     def handle_printing_stats(self, stats: str):
         # if we're done reading flows, aka pbar reached 100%
         # we print the stats in a new line, instead of next to the pbar
-        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
+        if not self.has_pbar():
             print(stats, end='\r')
         else:
             # print the stats next to the bar
@@ -225,8 +232,7 @@ class Output(IObserver):
         When running on a pcap, interface, or taking flows from an
         external module, the total amount of flows is unknown
         """
-        if input_type in ('pcap', 'interface', 'stdin'):
-            return True
+
 
         # whenever any of those is present, slips won't be able to get the
         # total flows when starting, nor init the progress bar
@@ -241,6 +247,7 @@ class Output(IObserver):
         ignores pcaps, interface and dirs given to slips if -g is enabled
         :param bar: dict with input type, total_flows, etc.
         """
+        print(f"@@@@@@@@@@@@@@@@ init_progress_bar is called!")
         if self.unknown_total_flows(bar['input_type']):
             # we don't know how to get the total number of flows slips is going to process,
             # because they're growing

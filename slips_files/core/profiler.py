@@ -416,15 +416,17 @@ class Profiler(ICore):
             if not self.input_type:
                 # Find the type of input received
                 self.define_type(line)
-
-                # Find the number of flows we're going to receive of input received
-                self.notify_observers({
-                    'bar': 'init',
-                    'bar_info': {
-                        'input_type': self.input_type,
-                        'total_flows': total_flows
-                    }
-                })
+                # don't init the pbar when given the following input types because
+                # we don't know the total flows beforehand
+                if self.db.get_input_type() not in ('pcap', 'interface', 'stdin'):
+                    # Find the number of flows we're going to receive of input received
+                    self.notify_observers({
+                        'bar': 'init',
+                        'bar_info': {
+                            'input_type': self.input_type,
+                            'total_flows': total_flows
+                        }
+                    })
 
             # What type of input do we have?
             if not self.input_type:
@@ -442,7 +444,7 @@ class Profiler(ICore):
             if self.flow:
                 self.add_flow_to_profile()
 
-            self.notify_observers("update progress bar")
+            self.notify_observers({'bar': 'update'})
 
             # listen on this channel in case whitelist.conf is changed,
             # we need to process the new changes
