@@ -343,7 +343,7 @@ class Main(IObservable):
         with open(self.daemon.stdout, 'a') as f:
             f.write(f'{txt}\n')
 
-    def print(self, text, verbose=1, debug=0):
+    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
         """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
@@ -364,9 +364,11 @@ class Main(IObservable):
                 'from': self.name,
                 'txt': text,
                 'verbose': verbose,
-                'debug': debug
+                'debug': debug,
+                'log_to_logfiles_only': True if log_to_logfiles_only else False
            }
         )
+
     def handle_flows_from_stdin(self, input_information):
         """
         Make sure the stdin line type is valid (argus, suricata, or zeek)
@@ -531,7 +533,7 @@ class Main(IObservable):
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
         profilesLen = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
-        msg = f'Analyzed IPs: ' \
+        msg = f'Total analyzed IPs so far: ' \
               f'{profilesLen}. ' \
               f'Evidence Added: {evidence_number}. ' \
               f'IPs sending traffic in the last ' \

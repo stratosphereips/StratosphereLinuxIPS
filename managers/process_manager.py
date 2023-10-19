@@ -480,11 +480,12 @@ class ProcessManager:
             self.main.delete_zeek_files()
             self.main.db.close()
 
-            with open(self.slips_logfile, 'a') as f:
-                if graceful_shutdown:
-                    f.write("[Process Manager] Slips shutdown gracefully\n")
-                else:
-                    f.write(f"[Process Manager] Slips didn't shutdown gracefully - {reason}\n")
+            if graceful_shutdown:
+                self.main.print("[Process Manager] Slips shutdown gracefully\n",
+                                log_to_logfiles_only=True)
+            else:
+                self.main.print(f"[Process Manager] Slips didn't shutdown gracefully - {reason}\n",
+                                log_to_logfiles_only=True)
 
         except KeyboardInterrupt:
             return False
