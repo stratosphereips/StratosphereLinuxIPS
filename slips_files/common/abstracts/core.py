@@ -49,11 +49,9 @@ class ICore(IModule, Process):
             error: bool = self.main()
             if error or self.should_stop():
                 # finished with some error
-                print(f"@@@@@@@@@@@@@@@@ {self.name} finished with some error")
                 self.shutdown_gracefully()
 
         except KeyboardInterrupt:
-            print(f"@@@@@@@@@@@@@@@@ {self.name} got a keyboard interrupt")
             self.shutdown_gracefully()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno

@@ -251,7 +251,7 @@ class ProcessManager:
 
         # to vertically align them when printing
         module += " " * (20 - len(module))
-        print(f"\t{green(module)} \tStopped. " f"{green(modules_left)} left.")
+        self.main.print(f"\t{green(module)} \tStopped. " f"{green(modules_left)} left.")
 
     def warn_about_pending_modules(self, pending_modules: List[Process]):
         """
@@ -262,7 +262,7 @@ class ProcessManager:
             return
 
         pending_module_names: List[str] = [proc.name for proc in pending_modules]
-        print(
+        self.main.print(
             f"\n[Main] The following modules are busy working on your data."
             f"\n\n{pending_module_names}\n\n"
             "You can wait for them to finish, or you can "
@@ -271,7 +271,7 @@ class ProcessManager:
 
         # check if update manager is still alive
         if "Update Manager" in pending_module_names:
-            print(
+            self.main.print(
                 f"[Main] Update Manager may take several minutes "
                 f"to finish updating 45+ TI files."
             )
@@ -404,7 +404,7 @@ class ProcessManager:
         try:
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
-            print("Stopping Slips")
+            self.main.print("Stopping Slips")
 
             # by default, 15 mins from this time, all modules should be killed
             method_start_time = time.time()
@@ -416,7 +416,8 @@ class ProcessManager:
             # close all tws
             self.main.db.check_TW_to_close(close_all=True)
             analysis_time = self.get_analysis_time()
-            print(f"\n[Main] Analysis of {self.main.input_information} finished in {analysis_time:.2f} minutes")
+            self.main.print(f"\n[Main] Analysis of {self.main.input_information} "
+                            f"finished in {analysis_time:.2f} minutes")
 
             graceful_shutdown = True
             if self.main.mode == 'daemonized':
@@ -459,7 +460,7 @@ class ProcessManager:
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
                     reason = f"Killing modules that took more than {timeout} mins to finish."
-                    print(reason)
+                    self.main.print(reason)
                     graceful_shutdown = False
 
                 self.kill_all_children()

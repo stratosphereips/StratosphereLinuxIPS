@@ -134,7 +134,7 @@ class Output(IObserver):
         with open(self.slips_logfile, 'a') as slips_logfile:
             date_time = datetime.now()
             date_time = utils.convert_format(date_time, utils.alerts_format)
-            slips_logfile.write(f'{date_time} {sender}{msg}\n')
+            slips_logfile.write(f'{date_time} [{sender}] {msg}\n')
 
 
 
@@ -246,7 +246,6 @@ class Output(IObserver):
         ignores pcaps, interface and dirs given to slips if -g is enabled
         :param bar: dict with input type, total_flows, etc.
         """
-        print(f"@@@@@@@@@@@@@@@@ init_progress_bar is called!")
         if self.unknown_total_flows(bar['input_type']):
             # we don't know how to get the total number of flows slips is going to process,
             # because they're growing
