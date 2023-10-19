@@ -20,7 +20,7 @@ import validators
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 
-class RedisDB(IObservable, IoCHandler, AlertHandler, ProfileHandler):
+class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     """Main redis db class."""
     # this db should be a singelton per port. meaning no 2 instances should be created for the same port at the same
     # time
@@ -104,7 +104,7 @@ class RedisDB(IObservable, IoCHandler, AlertHandler, ProfileHandler):
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
         """
-        cls.redis_port, cls.outputqueue = redis_port
+        cls.redis_port = redis_port
         cls.flush_db = flush_db
         if cls.redis_port not in cls._instances:
             cls._instances[cls.redis_port] = super().__new__(cls)
@@ -117,13 +117,13 @@ class RedisDB(IObservable, IoCHandler, AlertHandler, ProfileHandler):
                 cls._set_slips_start_time()
             # useful for debugging using 'CLIENT LIST' redis cmd
             cls.r.client_setname(f"Slips-DB")
-            cls.logger = Output()
-            IObservable.__init__(cls)
-            print(f"@@@@@@@@@@@@@@@@ self.logger for {cls.name} "
-                  f"is {cls.logger}")
-            cls.add_observer(cls.logger)
-
         return cls._instances[cls.redis_port]
+
+    def __init__(self, redis_port, flush_db=True):
+        # the main purpose of this init is to call the parent's __init__
+        IObservable.__init__(self)
+        self.add_observer(Output())
+        self.observer_added = True
 
     @classmethod
     def _set_redis_options(cls):
@@ -358,11 +358,17 @@ class RedisDB(IObservable, IoCHandler, AlertHandler, ProfileHandler):
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
-        levels = f'{verbose}{debug}'
-        try:
-            self.outputqueue.put(f'{levels}|{self.name}|{text}')
-        except AttributeError:
-            pass
+
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
+
+
 
     def getIPData(self, ip: str) -> dict:
         """

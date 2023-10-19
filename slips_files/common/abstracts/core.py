@@ -7,7 +7,7 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
 
-class ICore(IObservable, IModule, Process):
+class ICore(IModule, Process):
     """
     Interface for all Core files placed in slips_files/core/
     """
@@ -36,7 +36,6 @@ class ICore(IObservable, IModule, Process):
         self.msg_received = False
         self.logger = Output()
         IObservable.__init__(self)
-        print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
         self.add_observer(self.logger)
         self.init(**kwargs)
 

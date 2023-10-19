@@ -364,7 +364,6 @@ class Input(ICore):
             # self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
             self.give_profiler(earliest_line)
             self.lines += 1
-            print(f"@@@@@@@@@@@@@@@@ ok? {self.lines}")
             # when testing, no need to read the whole file!
             if self.lines == 10 and self.testing:
                 break

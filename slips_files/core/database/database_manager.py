@@ -22,7 +22,6 @@ class DBManager(IObservable):
         self.redis_port = redis_port
         self.logger = Output()
         IObservable.__init__(self)
-        print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
         self.add_observer(self.logger)
         self.rdb = RedisDB(redis_port, **kwargs)
         # in some rare cases we don't wanna start sqlite,

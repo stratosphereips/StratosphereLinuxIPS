@@ -5,17 +5,20 @@ import csv
 from dataclasses import asdict
 from threading import Lock
 from time import sleep
+from slips_files.core.output import Output
+from slips_files.common.abstracts.observer import IObservable
 
-class SQLiteDB():
+class SQLiteDB(IObservable):
     """Stores all the flows slips reads and handles labeling them"""
     name = "SQLiteDB"
     # used to lock each call to commit()
     cursor_lock = Lock()
     trial = 0
 
-    def __init__(self, output_dir, redis_port):
-        # TODO having access to redis_port is so wrong, will fix it once we fix
-        # TODO the observer Output to not use the db
+    def __init__(self, output_dir):
+        IObservable.__init__(self)
+        self.logger = Output()
+        self.add_observer(self.logger)
         self._flows_db = os.path.join(output_dir, 'flows.sqlite')
         self.connect()
 

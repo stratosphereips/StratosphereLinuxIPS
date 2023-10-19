@@ -20,7 +20,7 @@ class IModule(IObservable, ABC):
                  redis_port,
                  termination_event,
                  **kwargs):
-        Process.__init__()
+        Process.__init__(self)
         self.redis_port = redis_port
         self.output_dir = output_dir
         self.db = DBManager(self.output_dir, self.redis_port)
@@ -29,7 +29,6 @@ class IModule(IObservable, ABC):
         self.termination_event: Event = termination_event
         self.logger = Output()
         IObservable.__init__(self)
-        print(f"@@@@@@@@@@@@@@@@ self.logger for {self.name} is {self.logger}")
         self.add_observer(self.logger)
 
         self.init(**kwargs)
