@@ -533,7 +533,7 @@ class Main(IObservable):
         evidence_number = self.db.get_evidence_number() or 0
         msg = f'Analyzed IPs: ' \
               f'{profilesLen}. ' \
-              f'Evidence Added: {evidence_number} ' \
+              f'Evidence Added: {evidence_number}. ' \
               f'IPs sending traffic in the last ' \
               f'{self.twid_width}: {modified_ips_in_the_last_tw}. ' \
               f'({now})'
