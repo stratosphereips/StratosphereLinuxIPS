@@ -23,6 +23,7 @@ from datetime import datetime
 import os
 from tqdm.auto import tqdm
 from slips_files.common.abstracts.observer import IObserver
+from slips_files.common.style import green
 from threading import Lock, Event
 
 class Output(IObserver):
@@ -154,11 +155,10 @@ class Output(IObserver):
         # when the pbar reaches 100% aka we're done_reading_flows
         # we print alerts at the very botttom of the screen using print
         # instead of printing alerts at the top of the pbar using tqdm
-        to_print = f'[{sender}] {txt}'
         if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
-            print(to_print)
+            print(f'[{green(sender)}] {txt}')
         else:
-            tqdm.write(to_print)
+            tqdm.write(f'[{sender}] {txt}')
 
 
     def log_error(self, msg: dict):
@@ -200,7 +200,7 @@ class Output(IObserver):
         if debug == 3:
             msg = f'\033[0;35;40m{msg}\033[00m'
 
-        if 'Analyzed IPs' in txt:
+        if 'analyzed IPs' in txt:
             self.handle_printing_stats(txt)
             return
 

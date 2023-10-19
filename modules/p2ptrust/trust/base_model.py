@@ -1,7 +1,13 @@
 from modules.p2ptrust.trust.model import Model
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
+from modules.p2ptrust.trust.trustdb import TrustDB
 
 
-class BaseModel(Model):
+
+
+
+class BaseModel(IObservable):
     """
     This class implements a set of methods that get data from the database and compute a reputation based on that. Methods
     from this class are requested by the main module process on behalf on SLIPS, when SLIPS wants to know the network's
@@ -9,9 +15,38 @@ class BaseModel(Model):
     This class only uses data that is already inserted in the database. It doesn't issue any requests to other peers.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, trustdb):
+        self.trustdb = trustdb
+        self.logger = Output()
+        IObservable.__init__(self)
+        self.add_observer(self.logger)
         self.reliability_weight = 0.7
+
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
+        """
+
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
 
     def get_opinion_on_ip(self, ipaddr: str) -> (float, float, float):
         """

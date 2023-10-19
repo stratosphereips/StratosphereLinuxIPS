@@ -2,6 +2,8 @@ import base64
 import binascii
 import json
 from typing import Dict
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
 from modules.p2ptrust.utils.utils import (
     validate_ip_address,
@@ -15,7 +17,7 @@ from slips_files.common.imports import *
 import time
 
 
-class GoDirector:
+class GoDirector(IObservable):
     """Class that deals with requests and reports from the go part of p2ptrust
 
     The reports from other peers are processed and inserted into the database directly.
@@ -27,7 +29,6 @@ class GoDirector:
         self,
         trustdb: TrustDB,
         db,
-        output_queue,
         storage_name: str,
         override_p2p: bool = False,
         report_func=None,
@@ -36,13 +37,14 @@ class GoDirector:
         pygo_channel: str = 'p2p_pygo',
         p2p_reports_logfile: str = 'p2p_reports.log',
     ):
-
+        self.logger = Output()
+        IObservable.__init__(self)
+        self.add_observer(self.logger)
         # todo what is override_p2p
         if override_p2p and not (report_func and request_func):
             raise Exception(
                 'Override_p2p set but not provided appropriate functions'
             )
-        self.output_queue = output_queue
         self.trustdb = trustdb
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
@@ -77,9 +79,14 @@ class GoDirector:
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
-
-        levels = f'{verbose}{debug}'
-        self.output_queue.put(f'{levels}|{self.name}|{text}')
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+            }
+        )
 
     def read_configuration(self):
         conf = ConfigParser()

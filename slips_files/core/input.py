@@ -118,9 +118,8 @@ class Input(ICore):
     def stop_queues(self):
         """Stops the profiler and output queues"""
         now = utils.convert_format(datetime.now(), utils.alerts_format)
-        self.notify_observers(
-            f'No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
-        , 0, 1)
+        self.print(
+            f'No more input. Stopping input process. Sent {self.lines} lines ({now}).\n', 0, 1)
         self.profiler_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:
