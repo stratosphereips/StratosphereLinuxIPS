@@ -178,6 +178,18 @@ class Output(IObserver):
             date_time = utils.convert_format(date_time, utils.alerts_format)
             errors_logfile.write(f'{date_time} {msg["from"]}{msg["txt"]}\n')
 
+    def handle_printing_stats(self, stats: str):
+        # if we're done reading flows, aka pbar reached 100%
+        # we print the stats in a new line, instead of next to the pbar
+        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
+            print(stats, end='\r')
+        else:
+            # print the stats next to the bar
+            self.progress_bar.set_postfix_str(
+                stats,
+                refresh=True
+            )
+
     def output_line(self, msg: dict):
         """
         Prints to terminal and logfiles depending on the debug and verbose levels
@@ -188,6 +200,11 @@ class Output(IObserver):
         # if verbosity level is 3 make it red
         if debug == 3:
             msg = f'\033[0;35;40m{msg}\033[00m'
+
+        if 'Analyzed IPs' in txt:
+            self.handle_printing_stats(txt)
+            return
+
 
         # There should be a level 0 that we never print. So its >, and not >=
         if ((
@@ -296,39 +313,7 @@ class Output(IObserver):
             refresh=True
         )
 
-    def update_stats(self):
-        """
-        updates the statistics shown next to the progress bar or shown in a new line
-        """
-        if not hasattr(self, 'progress_bar'):
-            return
 
-        now = datetime.now()
-        if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') < 5:
-            return
-
-        # only update the stats if 5 seconds passed
-        self.last_updated_stats_time = now
-        now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
-        modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
-        profilesLen = self.db.get_profiles_len()
-        evidence_number = self.db.get_evidence_number() or 0
-        msg = f'Analyzed IPs: ' \
-              f'{profilesLen}. ' \
-              f'Evidence Added: {evidence_number} ' \
-              f'IPs sending traffic in the last ' \
-              f'{self.printable_twid_width}: {modified_ips_in_the_last_tw}. ' \
-              f'({now})'
-        # if we're done reading flows, aka pbar reached 100%
-        # we print the stats in a new line, instead of next to the pbar
-        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
-            print(msg, end='\r')
-        else:
-            # print the stats in a the bar
-            self.progress_bar.set_postfix_str(
-                msg,
-                refresh=True
-            )
 
     def update(self, msg: dict):
         """
@@ -344,8 +329,6 @@ class Output(IObserver):
                 total_flows: int,
         }
         """
-        self.update_stats()
-
         if 'init' in msg.get('bar',''):
             self.init_progress_bar(msg['bar_info'])
 

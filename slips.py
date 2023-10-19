@@ -73,6 +73,8 @@ class Main(IObservable):
         # will be filled later
         self.commit = 'None'
         self.branch = 'None'
+        self.last_updated_stats_time = datetime.now()
+
         # in testing mode we manually set the following params
         if not testing:
             self.args = self.conf.get_args()
@@ -495,6 +497,8 @@ class Main(IObservable):
             slips_version += f' ({self.commit[:8]})'
         print(slips_version)
 
+
+
     def should_run_non_stop(self) -> bool:
         """
         determines if slips shouldn't terminate because by default,
@@ -510,6 +514,33 @@ class Main(IObservable):
         ):
             return True
         return False
+
+    def update_stats(self):
+        """
+        updates the statistics shown next to the progress bar or shown in a new line
+        """
+        # if not hasattr(self, 'progress_bar'):
+        #     return
+
+        now = datetime.now()
+        if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') < 5:
+            return
+
+        # only update the stats if 5 seconds passed
+        self.last_updated_stats_time = now
+        now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
+        modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
+        profilesLen = self.db.get_profiles_len()
+        evidence_number = self.db.get_evidence_number() or 0
+        msg = f'Analyzed IPs: ' \
+              f'{profilesLen}. ' \
+              f'Evidence Added: {evidence_number} ' \
+              f'IPs sending traffic in the last ' \
+              f'{self.twid_width}: {modified_ips_in_the_last_tw}. ' \
+              f'({now})'
+
+        self.print(msg)
+
 
     def start(self):
         """Main Slips Function"""
@@ -682,18 +713,7 @@ class Main(IObservable):
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
                 # for other files, we print a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
-                    # How many profiles we have?
-                    profilesLen = self.db.get_profiles_len()
-                    now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
-                    evidence_number = self.db.get_evidence_number() or 0
-                    print(
-                        f'Total analyzed IPs so '
-                        f'far: {profilesLen}. '
-                        f'Evidence added: {evidence_number}. '
-                        f'IPs sending traffic in the last {self.twid_width}: {modified_ips_in_the_last_tw}. '
-                        f'({now})',
-                        end='\r',
-                    )
+                    self.update_stats()
 
                 # Check if we need to close any TWs
                 self.db.check_TW_to_close()
