@@ -444,12 +444,15 @@ class Input(ICore):
         self.total_flows = total_flows
         self.db.set_input_metadata({'total_flows': total_flows})
         self.lines = self.read_zeek_files()
+        self.print_lines_read()
+        return True
+
+    def print_lines_read(self):
         self.print(
-            f'\nWe read everything from the folder.'
-            f' No more input. Stopping input process. Sent {self.lines} lines', 2, 0,
+            f'We read everything. No more input. '
+            f'Stopping input process. Sent {self.lines} lines'
         )
 
-        return True
 
     def read_from_stdin(self):
         self.print('Receiving flows from stdin.')
@@ -589,9 +592,7 @@ class Input(ICore):
         # Get command output
         self.nfdump_output = result.stdout.decode('utf-8')
         self.lines = self.read_nfdump_output()
-        self.print(
-            f'We read everything. No more input. Stopping input process. Sent {self.lines} lines'
-        )
+        self.print_lines_read()
         return True
 
 
@@ -651,9 +652,7 @@ class Input(ICore):
         if not hasattr(self, 'is_zeek_tabs'):
             self.is_zeek_tabs = False
         self.lines = self.read_zeek_files()
-        self.print(
-            f'We read everything. No more input. Stopping input process. Sent {self.lines} lines'
-        )
+        self.print_lines_read()
         connlog_path = os.path.join(self.zeek_dir, 'conn.log')
 
         self.print(f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}", 2, 0)

@@ -273,14 +273,21 @@ class SQLiteDB(IObservable):
                 parameters,
             )
 
-    def get_flows_count(self, profileid, twid) -> int:
+    def get_flows_count(self, profileid=None, twid=None) -> int:
         """
-        returns the total number of flows AND altflows
-         in the db for this profileid and twid
-         """
-        condition = f'profileid="{profileid}" AND twid= "{twid}"'
+        returns the total number of flows
+         in the db for this profileid and twid if given
+        """
+        condition = ''
+        if profileid:
+            condition = f'profileid="{profileid}"'
+        elif twid and not profileid:
+            condition += f'twid= "{twid}"'
+        elif profileid and twid:
+            condition += f'AND twid= "{twid}"'
+
         flows = self.get_count('flows', condition=condition)
-        flows += self.get_count('altflows', condition=condition)
+        # flows += self.get_count('altflows', condition=condition)
         return flows
 
 
