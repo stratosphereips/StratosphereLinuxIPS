@@ -373,7 +373,7 @@ class Profiler(ICore):
         self.store_features_going_in(rev_profileid, rev_twid)
 
     def shutdown_gracefully(self):
-        self.print(f"Stopping. Total lines read: {self.rec_lines}", 0, 1, log_to_logfiles_only=True)
+        self.print(f"Stopping. Total lines read: {self.rec_lines}", log_to_logfiles_only=True)
         # By default if a process(profiler) is not the creator of the queue(profiler_queue) then on
         # exit it will attempt to join the queue’s background thread.
         # this causes a deadlock

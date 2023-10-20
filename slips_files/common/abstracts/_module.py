@@ -86,6 +86,7 @@ class IModule(IObservable, ABC):
         done processing and does necessary cleanup
         """
         pass
+
     @abstractmethod
     def main(self):
         """
