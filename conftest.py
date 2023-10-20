@@ -29,14 +29,6 @@ def do_nothing(*arg):
     pass
 
 @pytest.fixture
-def output_queue():
-    """This output_queue will be passed to all module constructors that need it"""
-    output_queue = Queue()
-    output_queue.put = do_nothing
-    return Queue()
-
-
-@pytest.fixture
 def input_queue():
     """This input_queue will be passed to all module constructors that need it"""
     input_queue = Queue()
@@ -53,7 +45,7 @@ def profiler_queue():
 
 
 @pytest.fixture
-def database(output_queue):
-    db = DBManager('output/', output_queue, 6379)
+def database():
+    db = DBManager('output/', 6379)
     db.print = do_nothing
     return db

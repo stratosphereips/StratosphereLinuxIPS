@@ -42,7 +42,7 @@ def run_slips(cmd):
     ],
 )
 def test_pcap(
-    pcap_path, expected_profiles, output_dir, expected_evidence, redis_port, output_queue
+    pcap_path, expected_profiles, output_dir, expected_evidence, redis_port
 ):
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
@@ -100,7 +100,6 @@ def test_pcap(
     ],
 )
 def test_binetflow(
-    output_queue,
     binetflow_path,
     expected_profiles,
     expected_evidence,
@@ -186,7 +185,6 @@ def test_binetflow(
     ],
 )
 def test_zeek_dir(
-    output_queue,
     zeek_dir_path,
     expected_profiles,
     expected_evidence,
@@ -236,7 +234,6 @@ def test_zeek_dir(
     ],
 )
 def test_zeek_conn_log(
-    output_queue,
     conn_log_path,
     expected_profiles,
     expected_evidence,
@@ -279,7 +276,6 @@ def test_zeek_conn_log(
     ],
 )
 def test_suricata(
-        output_queue,
         suricata_path,
         output_dir,
         redis_port,
@@ -318,7 +314,6 @@ def test_suricata(
     [('dataset/test1-normal.nfdump', 'test1/', 6656)],
 )
 def test_nfdump(
-        output_queue,
         nfdump_path,
         output_dir,
         redis_port

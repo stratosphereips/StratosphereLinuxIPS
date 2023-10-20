@@ -15,16 +15,17 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.common.imports import *
+from slips_files.common.abstracts.observer import IObserver
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.style import green, red
+from threading import Lock
 import sys
 import io
 from pathlib import Path
 from datetime import datetime
 import os
 from tqdm.auto import tqdm
-from slips_files.common.abstracts.observer import IObserver
-from slips_files.common.style import green
-from threading import Lock
 
 class Output(IObserver):
     """
@@ -42,8 +43,8 @@ class Output(IObserver):
 
     def __new__(
         cls,
-        verbose=None,
-        debug=None,
+        verbose=1,
+        debug=0,
         stdout='',
         stderr='output/errors.log',
         slips_logfile='output/slips.log',
@@ -199,6 +200,19 @@ class Output(IObserver):
                 refresh=True
             )
 
+
+    def enough_verbose(self, verbose: int):
+        """
+        checks if the given verbose level is enough to print
+        """
+        return 0 < verbose <= 3 and verbose <= self.verbose
+
+    def enough_debug(self, debug: int):
+        """
+        checks if the given debug level is enough to print
+        """
+        return 0 < debug <= 3 and debug <= self.debug
+
     def output_line(self, msg: dict):
         """
         Prints to terminal and logfiles depending on the debug and verbose levels
@@ -206,9 +220,9 @@ class Output(IObserver):
         verbose, debug = msg.get('verbose', self.verbose), msg.get('debug', self.debug)
         sender, txt = msg['from'], msg['txt']
 
-        # if verbosity level is 3 make it red
+        # if debug level is 3 make it red
         if debug == 3:
-            msg = f'\033[0;35;40m{msg}\033[00m'
+            msg = red(msg)
 
         if 'analyzed IPs' in txt:
             self.handle_printing_stats(txt)
@@ -216,13 +230,7 @@ class Output(IObserver):
 
 
         # There should be a level 0 that we never print. So its >, and not >=
-        if ((
-                0 < verbose <= 3
-                and verbose <= self.verbose
-        ) or (
-                0 < debug <= 3
-                and debug <= self.debug
-        )):
+        if self.enough_verbose(verbose) or self.enough_debug(debug):
             if 'Start' in txt:
                 # we use tqdm.write() instead of print() to make sure we
                 # don't get progress bar duplicates in the cli
@@ -232,18 +240,17 @@ class Output(IObserver):
             self.print(sender, txt)
             self.log_line(msg)
 
-        # if the line is an error and we're running slips without -e 1 , we should log the error to output/errors.log
+        # if the line is an error and we're running slips without -e 1 ,
+        # we should log the error to output/errors.log
         # make sure the msg is an error. debug_level==1 is the one printing errors
         if debug == 1:
             self.log_error(msg)
 
-    def unknown_total_flows(self, input_type: str) -> bool:
+    def unknown_total_flows(self) -> bool:
         """
         When running on a pcap, interface, or taking flows from an
         external module, the total amount of flows is unknown
         """
-
-
         # whenever any of those is present, slips won't be able to get the
         # total flows when starting, nor init the progress bar
         params = ('-g', '--growing', '-im', '--input_module')
@@ -257,7 +264,7 @@ class Output(IObserver):
         ignores pcaps, interface and dirs given to slips if -g is enabled
         :param bar: dict with input type, total_flows, etc.
         """
-        if self.unknown_total_flows(bar['input_type']):
+        if self.unknown_total_flows():
             # we don't know how to get the total number of flows slips is going to process,
             # because they're growing
             return
