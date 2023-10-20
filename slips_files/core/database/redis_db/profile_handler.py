@@ -7,14 +7,46 @@ import traceback
 import ipaddress
 import sys
 import validators
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
-class ProfileHandler():
+class ProfileHandler(IObservable):
     """
     Helper class for the Redis class in database.py
     Contains all the logic related to flows, profiles and timewindows
     """
     name = 'DB'
+    
+    def __init__(self):
+        self.logger = Output()
+        self.add_observer(self.logger)
+        
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like f'Test {here}'
+        """
 
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
+        
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
             """
@@ -29,10 +61,9 @@ class ProfileHandler():
             return value
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}'
-            )
-            self.outputqueue.put(f'01|database|[DB] {traceback.print_exc()}')
+            self.print(f'Error in getDataFromProfileTW in '
+                       f'database.py line {exception_line}', 0, 1)
+            self.print(f'{traceback.print_exc()}',0,1)
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""
@@ -177,7 +208,7 @@ class ProfileHandler():
             return twid
         except Exception as e:
             self.print('Error in get_timewindow().', 0, 1)
-            self.print(f'{e}', 0, 1)
+            self.print(e, 0, 1)
 
     def add_out_http(
         self,
@@ -440,7 +471,6 @@ class ProfileHandler():
         We receive the pakets to distinguish some Reset connections
         """
         try:
-            # self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
             pre = state.split('_')[0]
             try:
                 # Try suricata states
@@ -573,10 +603,10 @@ class ProfileHandler():
             return None
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}'
-            )
-            self.outputqueue.put(f'01|database|[DB] Inst: {traceback.print_exc()}')
+            self.print(
+                f'Error in getFinalStateFromFlags() in database.py line {exception_line}'
+            ,0,1)
+            self.print(traceback.print_exc(), 0, 1)
 
     def getDataFromProfileTW(
         self,
@@ -621,10 +651,10 @@ class ProfileHandler():
             return value
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}'
-            )
-            self.outputqueue.put(f'01|database|[DB] Inst: {traceback.print_exc()}')
+            self.print(
+                f'Error in getDataFromProfileTW database.py line {exception_line}'
+            ,0,1)
+            self.print(traceback.print_exc(), 0, 1)
 
     def add_ips(self, profileid, twid, flow, role):
         """
@@ -1052,11 +1082,9 @@ class ProfileHandler():
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
-            self.outputqueue.put(
-                '00|database|error in addprofileidfromip in database.py'
-            )
-            self.outputqueue.put(f'00|database|{type(inst)}')
-            self.outputqueue.put(f'00|database|{inst}')
+            self.print('error in addprofileidfromip in database.py', 0, 1)
+            self.print(type(inst), 0, 1)
+            self.print(inst, 0, 1)
 
     def getProfiles(self):
         """Get a list of all the profiles"""
@@ -1109,15 +1137,10 @@ class ProfileHandler():
                 return False, False
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getT2ForProfileTW in database.py line {exception_line}'
-            )
-
-            self.outputqueue.put(f'01|database|[DB] {type(e)}')
-            self.outputqueue.put(f'01|database|[DB] {e}')
-            self.outputqueue.put(
-                f'01|profiler|[Profile] {traceback.format_exc()}'
-            )
+            self.print(f'Error in getT2ForProfileTW in database.py line {exception_line}',0,1)
+            self.print(type(e), 0, 1)
+            self.print(e, 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
@@ -1197,18 +1220,16 @@ class ProfileHandler():
             # Add the new TW to the index of TW
             data = {str(twid): float(startoftw)}
             self.r.zadd(f'tws{profileid}', data)
-            self.outputqueue.put(
-                f'04|database|[DB]: Created and added to DB the new older TW with id {twid}. Time: {startoftw} '
-            )
+            self.print(f'Created and added to DB the new older '
+                       f'TW with id {twid}. Time: {startoftw} '
+                       ,0,4)
 
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
         except redis.exceptions.ResponseError as e:
-            self.outputqueue.put(
-                '01|database|error in addNewOlderTW in database.py', 0, 1
-            )
-            self.outputqueue.put(f'01|database|{type(e)}', 0, 1)
-            self.outputqueue.put(f'01|database|{e}', 0, 1)
+            self.print('error in addNewOlderTW in database.py', 0, 1)
+            self.print(type(e), 0, 1)
+            self.print(e, 0, 1)
 
     def addNewTW(self, profileid, startoftw):
         try:
@@ -1232,9 +1253,8 @@ class ProfileHandler():
             # Add the new TW to the index of TW
             data = {twid: float(startoftw)}
             self.r.zadd(f'tws{profileid}', data)
-            self.outputqueue.put(
-                f'04|database|[DB]: Created and added to DB for profile {profileid} on TW with id {twid}. Time: {startoftw} '
-            )
+            self.print(f'Created and added to DB for profile '
+                       f'{profileid} on TW with id {twid}. Time: {startoftw} ', 0, 4)
 
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
 
@@ -1243,8 +1263,8 @@ class ProfileHandler():
             self.update_threat_level(profileid, 'info',  0.5)
             return twid
         except redis.exceptions.ResponseError as e:
-            self.outputqueue.put('01|database|Error in addNewTW')
-            self.outputqueue.put(f'01|database|{e}')
+            self.print('Error in addNewTW', 0, 1)
+            self.print(e, 0, 1)
 
     def getTimeTW(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
@@ -1509,11 +1529,9 @@ class ProfileHandler():
             self.publish('new_profile', ip)
             return True
         except redis.exceptions.ResponseError as inst:
-            self.outputqueue.put(
-                '00|database|Error in addProfile in database.py'
-            )
-            self.outputqueue.put(f'00|database|{type(inst)}')
-            self.outputqueue.put(f'00|database|{inst}')
+            self.print('Error in addProfile in database.py', 0, 1)
+            self.print(type(inst), 0, 1)
+            self.print(inst, 0, 1)
 
     def set_profile_module_label(self, profileid, module, label):
         """
@@ -1675,10 +1693,8 @@ class ProfileHandler():
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(
-                f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
-            )
-            self.print(f'01|database|[DB] {traceback.format_exc()}')
+            self.print(f'Error in add_tuple in database.py line {exception_line}', 0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def get_tws_to_search(self, go_back):
         tws_to_search = float('inf')

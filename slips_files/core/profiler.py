@@ -63,10 +63,12 @@ class Profiler(ICore):
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
-        self.whitelist = Whitelist(self.output_queue, self.db)
+        self.whitelist = Whitelist(self.db)
         # Read the configuration
         self.read_configuration()
-        self.symbol = SymbolHandler(self.db, self.output_queue)
+        self.symbol = SymbolHandler(self.output_dir,
+                                    self.redis_port,
+                                    self.db)
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = self.db.subscribe('reload_whitelist')
@@ -74,7 +76,7 @@ class Profiler(ICore):
             'reload_whitelist': self.c1,
         }
 
-        
+
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -371,6 +373,7 @@ class Profiler(ICore):
         self.store_features_going_in(rev_profileid, rev_twid)
 
     def shutdown_gracefully(self):
+        self.print(f"Stopping. Total lines read: {self.rec_lines}", log_to_logfiles_only=True)
         # By default if a process(profiler) is not the creator of the queue(profiler_queue) then on
         # exit it will attempt to join the queue’s background thread.
         # this causes a deadlock
@@ -383,7 +386,9 @@ class Profiler(ICore):
     def main(self):
         while not self.should_stop():
             try:
-                line = self.profiler_queue.get(timeout=3)
+                msg: dict = self.profiler_queue.get(timeout=3)
+                line: str = msg['line']
+                total_flows: int = msg.get('total_flows', 0)
             except Exception as e:
                 # the queue is empty, which means input proc
                 # is done reading flows
@@ -400,9 +405,7 @@ class Profiler(ICore):
                 self.shutdown_gracefully()
                 self.print(
                     f'Stopping Profiler Process. Received {self.rec_lines} lines '
-                    f'({utils.convert_format(datetime.now(), utils.alerts_format)})',
-                    2,
-                    0,
+                    f'({utils.convert_format(datetime.now(), utils.alerts_format)})', 2, 0,
                 )
                 return 1
 
@@ -413,8 +416,17 @@ class Profiler(ICore):
             if not self.input_type:
                 # Find the type of input received
                 self.define_type(line)
-                # Find the number of flows we're going to receive of input received
-                self.output_queue.put("initialize progress bar")
+                # don't init the pbar when given the following input types because
+                # we don't know the total flows beforehand
+                if self.db.get_input_type() not in ('pcap', 'interface', 'stdin'):
+                    # Find the number of flows we're going to receive of input received
+                    self.notify_observers({
+                        'bar': 'init',
+                        'bar_info': {
+                            'input_type': self.input_type,
+                            'total_flows': total_flows
+                        }
+                    })
 
             # What type of input do we have?
             if not self.input_type:
@@ -432,7 +444,7 @@ class Profiler(ICore):
             if self.flow:
                 self.add_flow_to_profile()
 
-            self.output_queue.put("update progress bar")
+            self.notify_observers({'bar': 'update'})
 
             # listen on this channel in case whitelist.conf is changed,
             # we need to process the new changes
@@ -443,4 +455,3 @@ class Profiler(ICore):
                 self.whitelist.read_whitelist()
 
         return 1
-

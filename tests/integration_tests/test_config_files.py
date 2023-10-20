@@ -37,7 +37,7 @@ def create_Main_instance(input_information):
     ],
 )
 def test_conf_file(
-    pcap_path, expected_profiles, output_dir, redis_port, output_queue
+    pcap_path, expected_profiles, output_dir, redis_port
 ):
     """
     In this test we're using tests/test.conf
@@ -107,7 +107,7 @@ def test_conf_file(
     ],
 )
 def test_conf_file2(
-    pcap_path, expected_profiles, output_dir, redis_port, output_queue
+    pcap_path, expected_profiles, output_dir, redis_port
 ):
     """
     In this test we're using tests/test2.conf

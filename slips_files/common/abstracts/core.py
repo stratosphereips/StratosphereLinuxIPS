@@ -4,7 +4,8 @@ from multiprocessing import Process, Event
 
 from slips_files.common.abstracts._module import IModule
 from slips_files.core.database.database_manager import DBManager
-
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
 class ICore(IModule, Process):
     """
@@ -16,7 +17,6 @@ class ICore(IModule, Process):
 
     def __init__(
             self,
-            output_queue,
             output_dir,
             redis_port,
             termination_event,
@@ -28,13 +28,15 @@ class ICore(IModule, Process):
         in this file
         """
         Process.__init__(self)
-        self.output_queue = output_queue
         self.output_dir = output_dir
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.redis_port = redis_port
-        self.db = DBManager(output_dir, output_queue, redis_port)
+        self.db = DBManager(output_dir, redis_port)
         self.msg_received = False
+        self.logger = Output()
+        IObservable.__init__(self)
+        self.add_observer(self.logger)
         self.init(**kwargs)
 
     def run(self):
@@ -47,11 +49,9 @@ class ICore(IModule, Process):
             error: bool = self.main()
             if error or self.should_stop():
                 # finished with some error
-                self.output_queue.cancel_join_thread()
                 self.shutdown_gracefully()
 
         except KeyboardInterrupt:
-            # self.output_queue.cancel_join_thread()
             self.shutdown_gracefully()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno

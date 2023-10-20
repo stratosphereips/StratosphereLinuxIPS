@@ -30,6 +30,8 @@ from slips_files.core.helpers.checker import Checker
 from slips_files.common.style import green
 
 from slips_files.core.database.database_manager import DBManager
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
 
 import signal
@@ -55,8 +57,9 @@ warnings.filterwarnings('ignore')
 # ---------------------
 
 
-class Main:
+class Main(IObservable):
     def __init__(self, testing=False):
+        IObservable.__init__(self)
         self.name = 'Main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
@@ -71,11 +74,14 @@ class Main:
         # will be filled later
         self.commit = 'None'
         self.branch = 'None'
+        self.last_updated_stats_time = datetime.now()
+
         # in testing mode we manually set the following params
         if not testing:
             self.args = self.conf.get_args()
             self.pid = os.getpid()
             self.checker.check_given_flags()
+
             if not self.args.stopdaemon:
                 # Check the type of input
                 self.input_type, self.input_information, self.line_type = self.checker.check_input_type()
@@ -85,6 +91,7 @@ class Main:
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
+
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
@@ -134,7 +141,7 @@ class Main:
             self.memoryProfiler.start()
     
     def memory_profiler_release(self):
-        if self.memoryProfilerEnabled:
+        if hasattr(self, 'memoryProfilerEnabled') and self.memoryProfilerEnabled:
             self.memoryProfiler.stop()
     
     def memory_profiler_multiproc_test(self):
@@ -216,8 +223,7 @@ class Main:
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to update orgs and ports info
-                update_manager = UpdateManager(self.output_queue,
-                                               self.args.output,
+                update_manager = UpdateManager(self.args.output,
                                                self.redis_port,
                                                multiprocessing.Event())
                 update_manager.update_ports_info()
@@ -339,7 +345,7 @@ class Main:
         with open(self.daemon.stdout, 'a') as f:
             f.write(f'{txt}\n')
 
-    def print(self, text, verbose=1, debug=0):
+    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
         """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
@@ -355,9 +361,15 @@ class Main:
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like f'Test {here}'
         """
-
-        levels = f'{verbose}{debug}'
-        self.output_queue.put(f'{levels}|{self.name}|{text}')
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug,
+                'log_to_logfiles_only': log_to_logfiles_only
+           }
+        )
 
     def handle_flows_from_stdin(self, input_information):
         """
@@ -488,6 +500,8 @@ class Main:
             slips_version += f' ({self.commit[:8]})'
         print(slips_version)
 
+
+
     def should_run_non_stop(self) -> bool:
         """
         determines if slips shouldn't terminate because by default,
@@ -504,6 +518,33 @@ class Main:
             return True
         return False
 
+    def update_stats(self):
+        """
+        updates the statistics shown next to the progress bar or shown in a new line
+        """
+        # if not hasattr(self, 'progress_bar'):
+        #     return
+
+        now = datetime.now()
+        if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') < 5:
+            return
+
+        # only update the stats if 5 seconds passed
+        self.last_updated_stats_time = now
+        now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
+        modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
+        profilesLen = self.db.get_profiles_len()
+        evidence_number = self.db.get_evidence_number() or 0
+        msg = f'Total analyzed IPs so far: ' \
+              f'{profilesLen}. ' \
+              f'Evidence Added: {evidence_number}. ' \
+              f'IPs sending traffic in the last ' \
+              f'{self.twid_width}: {modified_ips_in_the_last_tw}. ' \
+              f'({now})'
+
+        self.print(msg)
+
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -513,10 +554,6 @@ class Main:
             print('-' * 27)
 
             self.setup_print_levels()
-
-            # this is used in get_random_redis_port(), don't move this line
-            self.output_queue = Queue()
-
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -534,10 +571,14 @@ class Main:
             else:
                 # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
-                # self.check_if_port_is_in_use(self.redis_port)
 
+            # if stdout is redirected to a file,
+            # tell output.py to redirect it's output as well
+            current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
+            self.logger = self.proc_man.start_output_process(current_stdout, stderr, slips_logfile)
+            self.add_observer(self.logger)
 
-            self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
+            self.db = DBManager(self.args.output, self.redis_port)
             self.db.set_input_metadata({
                     'output_dir': self.args.output,
                     'commit': self.commit,
@@ -550,15 +591,7 @@ class Main:
             # Should print out red text if working properly
             # self.memory_profiler_multiproc_test()
 
-            # if stdout is redirected to a file,
-            # tell output.py to redirect it's output as well
-            current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
 
-            # outputprocess should be created first because it handles
-            # the output of the rest of the threads.
-            output_process = self.proc_man.start_output_process(
-                current_stdout, stderr, slips_logfile
-                )
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':
@@ -593,7 +626,6 @@ class Main:
 
             self.print(f'Using redis server on port: {green(self.redis_port)}', 1, 0)
             self.print(f'Started {green("Main")} process [PID {green(self.pid)}]', 1, 0)
-            self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
@@ -676,18 +708,7 @@ class Main:
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
                 # for other files, we print a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
-                    # How many profiles we have?
-                    profilesLen = self.db.get_profiles_len()
-                    now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
-                    evidence_number = self.db.get_evidence_number() or 0
-                    print(
-                        f'Total analyzed IPs so '
-                        f'far: {profilesLen}. '
-                        f'Evidence added: {evidence_number}. '
-                        f'IPs sending traffic in the last {self.twid_width}: {modified_ips_in_the_last_tw}. '
-                        f'({now})',
-                        end='\r',
-                    )
+                    self.update_stats()
 
                 # Check if we need to close any TWs
                 self.db.check_TW_to_close()

@@ -2,14 +2,18 @@ import json
 import ipaddress
 import validators
 from slips_files.common.imports import *
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 import tld
 import os
 
 
-class Whitelist:
-    def __init__(self, output_queue, db):
+class Whitelist(IObservable):
+    def __init__(self, db):
+        IObservable.__init__(self)
+        self.logger = Output()
+        self.add_observer(self.logger)
         self.name = 'whitelist'
-        self.output_queue = output_queue
         self.read_configuration()
         self.org_info_path = 'slips_files/organizations_info/'
         self.ignored_flow_types = ('arp')
@@ -32,8 +36,16 @@ class Whitelist:
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        levels = f'{verbose}{debug}'
-        self.output_queue.put(f'{levels}|{self.name}|{text}')
+        # the only observer we have for now in the output.
+        # used for logging the msgs too cli and slips log files
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
 
     def read_configuration(self):
         conf = ConfigParser()

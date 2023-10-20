@@ -3,11 +3,12 @@ import traceback
 from abc import ABC, abstractmethod
 from multiprocessing import Process, Event
 
+from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
+from slips_files.common.abstracts.observer import IObservable
 
-
-class IModule(ABC):
+class IModule(IObservable, ABC):
     """
     An interface for all slips modules
     """
@@ -15,17 +16,21 @@ class IModule(ABC):
     description = 'Template module'
     authors = ['Template Author']
     def __init__(self,
-                 output_queue,
                  output_dir,
                  redis_port,
                  termination_event,
                  **kwargs):
         Process.__init__(self)
-        self.output_queue = output_queue
-        self.db = DBManager(output_dir, output_queue, redis_port)
+        self.redis_port = redis_port
+        self.output_dir = output_dir
+        self.db = DBManager(self.output_dir, self.redis_port)
         self.msg_received = False
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
+        self.logger = Output()
+        IObservable.__init__(self)
+        self.add_observer(self.logger)
+
         self.init(**kwargs)
 
     @abstractmethod
@@ -49,7 +54,7 @@ class IModule(ABC):
             return False
         return True
 
-    def print(self, text, verbose=1, debug=0):
+    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
         """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
@@ -66,15 +71,22 @@ class IModule(ABC):
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        levels = f'{verbose}{debug}'
-        self.output_queue.put(f'{levels}|{self.name}|{text}')
-
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug,
+                'log_to_logfiles_only': log_to_logfiles_only
+           }
+        )
     def shutdown_gracefully(self):
         """
         Tells slips.py that this module is
         done processing and does necessary cleanup
         """
         pass
+
     @abstractmethod
     def main(self):
         """
@@ -102,11 +114,9 @@ class IModule(ABC):
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():
-                self.output_queue.cancel_join_thread()
                 self.shutdown_gracefully()
                 return True
         except KeyboardInterrupt:
-            self.output_queue.cancel_join_thread()
             self.shutdown_gracefully()
             return True
         except Exception:
@@ -122,11 +132,9 @@ class IModule(ABC):
                 # if a module's main() returns 1, it means there's an error and it needs to stop immediately
                 error: bool = self.main()
                 if error:
-                    self.output_queue.cancel_join_thread()
                     self.shutdown_gracefully()
 
         except KeyboardInterrupt:
-            self.output_queue.cancel_join_thread()
             self.shutdown_gracefully()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno

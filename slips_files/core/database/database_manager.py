@@ -1,37 +1,39 @@
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
-class DBManager:
+class DBManager(IObservable):
     """
     This class will be calling methods from the appropriate db.
     each method added to any of the dbs should have a
     handler in here
     """
+    name = "DBManager"
     def __init__(
             self,
             output_dir,
-            output_queue,
             redis_port,
             start_sqlite=True,
             **kwargs
     ):
         self.output_dir = output_dir
-        self.output_queue = output_queue
         self.redis_port = redis_port
-
-        self.rdb = RedisDB(redis_port, output_queue, **kwargs)
-
+        self.logger = Output()
+        IObservable.__init__(self)
+        self.add_observer(self.logger)
+        self.rdb = RedisDB(redis_port, **kwargs)
         # in some rare cases we don't wanna start sqlite,
         # like when using -S
         # we just want to connect to redis to get the PIDs
         self.sqlite = None
         if start_sqlite:
-            self.sqlite = self.create_sqlite_db(output_dir, output_queue)
+            self.sqlite = self.create_sqlite_db(output_dir)
 
 
-    def create_sqlite_db(self, output_dir, output_queue):
-        return SQLiteDB(output_dir, output_queue)
+    def create_sqlite_db(self, output_dir):
+        return SQLiteDB(output_dir)
 
     @classmethod
     def read_configuration(cls):

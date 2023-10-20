@@ -5,16 +5,20 @@ import csv
 from dataclasses import asdict
 from threading import Lock
 from time import sleep
+from slips_files.core.output import Output
+from slips_files.common.abstracts.observer import IObservable
 
-class SQLiteDB():
+class SQLiteDB(IObservable):
     """Stores all the flows slips reads and handles labeling them"""
     name = "SQLiteDB"
     # used to lock each call to commit()
     cursor_lock = Lock()
     trial = 0
 
-    def __init__(self, output_dir, output_queue):
-        self.output_queue = output_queue
+    def __init__(self, output_dir):
+        IObservable.__init__(self)
+        self.logger = Output()
+        self.add_observer(self.logger)
         self._flows_db = os.path.join(output_dir, 'flows.sqlite')
         self.connect()
 
@@ -80,9 +84,15 @@ class SQLiteDB():
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
-        levels = f'{verbose}{debug}'
         try:
-            self.output_queue.put(f'{levels}|{self.name}|{text}')
+            self.notify_observers(
+                {
+                    'from': self.name,
+                    'txt': text,
+                    'verbose': verbose,
+                    'debug': debug
+               }
+            )
         except AttributeError:
             pass
 
@@ -263,14 +273,21 @@ class SQLiteDB():
                 parameters,
             )
 
-    def get_flows_count(self, profileid, twid) -> int:
+    def get_flows_count(self, profileid=None, twid=None) -> int:
         """
-        returns the total number of flows AND altflows
-         in the db for this profileid and twid
-         """
-        condition = f'profileid="{profileid}" AND twid= "{twid}"'
+        returns the total number of flows
+         in the db for this profileid and twid if given
+        """
+        condition = ''
+        if profileid:
+            condition = f'profileid="{profileid}"'
+        elif twid and not profileid:
+            condition += f'twid= "{twid}"'
+        elif profileid and twid:
+            condition += f'AND twid= "{twid}"'
+
         flows = self.get_count('flows', condition=condition)
-        flows += self.get_count('altflows', condition=condition)
+        # flows += self.get_count('altflows', condition=condition)
         return flows
 
 
