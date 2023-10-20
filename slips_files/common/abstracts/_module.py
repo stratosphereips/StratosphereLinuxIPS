@@ -54,7 +54,7 @@ class IModule(IObservable, ABC):
             return False
         return True
 
-    def print(self, text, verbose=1, debug=0):
+    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
         """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
@@ -76,7 +76,8 @@ class IModule(IObservable, ABC):
                 'from': self.name,
                 'txt': text,
                 'verbose': verbose,
-                'debug': debug
+                'debug': debug,
+                'log_to_logfiles_only': log_to_logfiles_only
            }
         )
     def shutdown_gracefully(self):

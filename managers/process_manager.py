@@ -263,7 +263,7 @@ class ProcessManager:
 
         pending_module_names: List[str] = [proc.name for proc in pending_modules]
         self.main.print(
-            f"\n[Main] The following modules are busy working on your data."
+            f"\nThe following modules are busy working on your data."
             f"\n\n{pending_module_names}\n\n"
             "You can wait for them to finish, or you can "
             "press CTRL-C again to force-kill.\n"
@@ -272,7 +272,7 @@ class ProcessManager:
         # check if update manager is still alive
         if "Update Manager" in pending_module_names:
             self.main.print(
-                f"[Main] Update Manager may take several minutes "
+                f"Update Manager may take several minutes "
                 f"to finish updating 45+ TI files."
             )
 
@@ -416,7 +416,7 @@ class ProcessManager:
             # close all tws
             self.main.db.check_TW_to_close(close_all=True)
             analysis_time = self.get_analysis_time()
-            self.main.print(f"\n[Main] Analysis of {self.main.input_information} "
+            self.main.print(f"\nAnalysis of {self.main.input_information} "
                             f"finished in {analysis_time:.2f} minutes")
 
             graceful_shutdown = True

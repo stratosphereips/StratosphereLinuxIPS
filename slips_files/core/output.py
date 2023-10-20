@@ -24,7 +24,7 @@ import os
 from tqdm.auto import tqdm
 from slips_files.common.abstracts.observer import IObserver
 from slips_files.common.style import green
-from threading import Lock, Event
+from threading import Lock
 
 class Output(IObserver):
     """
@@ -35,6 +35,9 @@ class Output(IObserver):
 
     name = 'Output'
     obj = None
+    slips_logfile_lock = Lock()
+    errors_logfile_lock = Lock()
+    cli_lock = Lock()
 
 
     def __new__(
@@ -129,11 +132,13 @@ class Output(IObserver):
             # if the sender is the update manager, always log
             return
 
-        with open(self.slips_logfile, 'a') as slips_logfile:
-            date_time = datetime.now()
-            date_time = utils.convert_format(date_time, utils.alerts_format)
-            slips_logfile.write(f'{date_time} [{sender}] {msg}\n')
+        date_time = datetime.now()
+        date_time = utils.convert_format(date_time, utils.alerts_format)
 
+        self.slips_logfile_lock.acquire()
+        with open(self.slips_logfile, 'a') as slips_logfile:
+            slips_logfile.write(f'{date_time} [{sender}] {msg}\n')
+        self.slips_logfile_lock.release()
 
 
     @classmethod
@@ -152,6 +157,7 @@ class Output(IObserver):
         """
         prints the given txt whether using tqdm or using print()
         """
+        self.cli_lock.acquire()
         # when the pbar reaches 100% aka we're done_reading_flows
         # we print alerts at the very botttom of the screen using print
         # instead of printing alerts at the top of the pbar using tqdm
@@ -159,16 +165,20 @@ class Output(IObserver):
             print(f'[{green(sender)}] {txt}')
         else:
             tqdm.write(f'[{sender}] {txt}')
+        self.cli_lock.release()
 
 
     def log_error(self, msg: dict):
         """
         Log error line to errors.log
         """
+        date_time = datetime.now()
+        date_time = utils.convert_format(date_time, utils.alerts_format)
+
+        self.errors_logfile_lock.acquire()
         with open(self.errors_logfile, 'a') as errors_logfile:
-            date_time = datetime.now()
-            date_time = utils.convert_format(date_time, utils.alerts_format)
             errors_logfile.write(f'{date_time} {msg["from"]}{msg["txt"]}\n')
+        self.errors_logfile_lock.release()
 
     def has_pbar(self):
         """returns false when pbar wasnt initialised or is done 100%"""

@@ -367,7 +367,7 @@ class Main(IObservable):
                 'txt': text,
                 'verbose': verbose,
                 'debug': debug,
-                'log_to_logfiles_only': True if log_to_logfiles_only else False
+                'log_to_logfiles_only': log_to_logfiles_only
            }
         )
 
