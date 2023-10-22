@@ -11,6 +11,7 @@ import dns
 import requests
 import threading
 import time
+from slips_files.common.slips_utils import utils
 
 
 class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
@@ -338,7 +339,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                     ip_obj = ipaddress.ip_address(net_addr)
                     if (
                         ip_obj.is_multicast
-                        or ip_obj.is_private
+                        or utils.is_private_ip(ip_obj)
                         or ip_obj.is_link_local
                         or net_addr in utils.home_networks
                     ):
