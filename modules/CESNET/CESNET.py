@@ -8,6 +8,7 @@ import threading
 import queue
 import ipaddress
 import validators
+from slips_files.common.slips_utils import utils
 
 
 class CESNET(IModule, multiprocessing.Process):
@@ -65,13 +66,13 @@ class CESNET(IModule, multiprocessing.Process):
 
                     if ip_version == 'IP4' and (
                         validators.ipv4(ip)
-                        and ipaddress.IPv4Address(ip).is_private
+                        and utils.is_private_ip(ipaddress.IPv4Address(ip))
                     ):
                         # private ipv4
                         evidence_in_IDEA[type_].remove(dict_)
                     elif (
                         validators.ipv6(ip)
-                        and ipaddress.IPv6Address(ip).is_private
+                        and utils.is_private_ip(ipaddress.IPv6Address(ip))
                     ):
                         # private ipv6
                         evidence_in_IDEA[type_].remove(dict_)
