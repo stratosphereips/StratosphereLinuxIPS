@@ -13,6 +13,7 @@ import requests
 import sys
 import asyncio
 import datetime
+from slips_files.common.slips_utils import utils
 
 
 class UpdateManager(IModule, multiprocessing.Process):
@@ -1229,7 +1230,7 @@ class UpdateManager(IModule, multiprocessing.Process):
                         # make sure we're not blacklisting a private ip
                         ip_obj = ipaddress.ip_address(data)
                         if (
-                            ip_obj.is_private
+                            utils.is_private_ip(ip_obj)
                             or ip_obj.is_multicast
                             or ip_obj.is_link_local
                         ):
@@ -1299,7 +1300,7 @@ class UpdateManager(IModule, multiprocessing.Process):
                         ip_obj = ipaddress.ip_address(net_addr)
                         if (
                             ip_obj.is_multicast
-                            or ip_obj.is_private
+                            or utils.is_private_ip(ip_obj)
                             or ip_obj.is_link_local
                             or net_addr in utils.home_networks
                         ):
