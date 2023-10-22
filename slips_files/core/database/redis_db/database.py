@@ -530,6 +530,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def set_local_network(self, saddr):
         # set the local network used in the db
+        # For now the local network is only ipv4, but it could be ipv6 in the future. Todo.
+
         if self.is_localnet_set:
             return
 
@@ -538,7 +540,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
         if not (
                 validators.ipv4(saddr)
-                and ipaddress.ip_address(saddr).is_private
+                and utils.is_private_ip(ipaddress.ip_address(saddr))
         ):
             return
         # get the local network of this saddr
@@ -944,7 +946,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
         # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
-        if not ip_obj.is_private:
+        if not utils.is_private_ip(ip_obj):
             # now we're given a public ip and a MAC that's supposedly belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db
