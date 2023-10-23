@@ -530,15 +530,15 @@ class Input(ICore):
         """
         with open(filepath,'r') as f:
             line = f.readline()
-            if '\t' in line:
-                return True
-            if line.startswith("#separator"):
-                return True
-            try:
-                json.loads(line)
-                return False
-            except json.decoder.JSONDecodeError:
-                return True
+        if '\t' in line:
+            return True
+        if line.startswith("#separator"):
+            return True
+        try:
+            json.loads(line)
+            return False
+        except json.decoder.JSONDecodeError:
+            return True
 
     def handle_zeek_log_file(self):
         """
@@ -555,10 +555,6 @@ class Input(ICore):
             # in case of CYST flows, the given path is cyst and there's no way to get the total flows
             total_flows = self.get_flows_number(self.given_path)
             self.is_zeek_tabs = self.is_zeek_tabs_file(self.given_path)
-            if self.is_zeek_tabs:
-                # zeek tab files contain many comments at the begging of the file and at the end
-                # subtract the comments from the flows number
-                total_flows -= 9
             self.db.set_input_metadata({'total_flows': total_flows})
             self.total_flows = total_flows
 
@@ -673,11 +669,9 @@ class Input(ICore):
                 # new log file should be dns.log without the ts
                 old_log_file = changed_files['old_file']
                 new_log_file = changed_files['new_file']
-                new_logfile_without_path = new_log_file.split('/')[-1].split(
-                    '.'
-                )[0]
+                new_logfile_without_path = new_log_file.split('/')[-1].split('.')[0]
                 # ignored files have no open handle, so we should only delete them from disk
-                if new_logfile_without_path in IGNORED_FILES:
+                if new_logfile_without_path not in SUPPORTED_LOGFILES:
                     # just delete the old file
                     os.remove(old_log_file)
                     continue
