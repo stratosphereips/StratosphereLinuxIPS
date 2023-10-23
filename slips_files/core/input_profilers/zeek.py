@@ -271,7 +271,6 @@ class ZeekJSON(IInputType):
             return False
         return self.flow
 
-
 class ZeekTabs(IInputType):
     separator = '\t'
     def __init__(self): pass
