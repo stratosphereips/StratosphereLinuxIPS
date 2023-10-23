@@ -30,25 +30,25 @@ import json
 import threading
 import subprocess
 
-# these are the files that slips doesn't read
-IGNORED_FILES = {
-    'capture_loss',
-    'loaded_scripts',
-    'packet_filter',
-    'stats',
-    'ocsp',
-    'reporter',
-    'x509',
-    'pe',
-    'mqtt_publish',
-    'mqtt_subscribe',
-    'mqtt_connect',
-    'analyzer',
-    'ntp',
-    'radiuss',
-    'sip',
-    'syslog'
-}
+
+SUPPORTED_LOGFILES = (
+    'conn',
+    'dns',
+    'http',
+    'ssl',
+    'ssh',
+    'dhcp',
+    'ftp',
+    'smtp',
+    'tunnel',
+    'notice',
+    'files',
+    'arp',
+    'software',
+    'weird'
+)
+
+
 
 # Input Process
 class Input(ICore):
@@ -175,12 +175,11 @@ class Input(ICore):
 
     def is_ignored_file(self, filepath: str) -> bool:
         """
-        Ignore the files that do not contain data.
-        These are the zeek log files that we don't use
+        Ignore zeek log files that we don't use
         :param filepath: full path to a zeek log file
         """
         filename_without_ext = Path(filepath).stem
-        if filename_without_ext in IGNORED_FILES:
+        if filename_without_ext not in SUPPORTED_LOGFILES:
             return True
 
     def get_file_handle(self, filename):
@@ -341,6 +340,7 @@ class Input(ICore):
             for filename in self.zeek_files:
                 # filename is the log file name with .log extension in case of interface or pcap
                 # and without the ext in case of zeek files
+                #TODO make sure we dont cont anythign that doesn't end with .log
                 if not filename.endswith('.log'):
                     filename += '.log'
 
@@ -391,6 +391,11 @@ class Input(ICore):
 
         with open(file, "rb") as f:
             count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+
+        if self.is_zeek_tabs:
+            # subtract comment lines in zeek tab files,
+            # they shouldn't be considered flows
+            count -= 9
         return count
 
     def read_zeek_folder(self):
@@ -423,10 +428,7 @@ class Input(ICore):
             if not self.db.is_growing_zeek_dir():
                 # get the total number of flows slips is going to read (used later for the progress bar)
                 total_flows += self.get_flows_number(full_path)
-                if self.is_zeek_tabs:
-                    # subtract comment lines in zeek tab files,
-                    # they shouldn't be considered flows
-                    total_flows -= 9
+
 
             # Remove .log extension and add file name to database.
             filename, file_extension = os.path.splitext(file)
