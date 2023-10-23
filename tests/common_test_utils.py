@@ -66,17 +66,22 @@ def has_errors(output_dir):
     error_files = ('slips_output.txt', 'errors.log')
     error_files = [os.path.join(output_dir, file) for file in error_files]
 
+    error_keywords = ('<class', 'error', 'Error', 'Traceback')
+    # these are keywords that we ignore when found in slips.log or errors.log because
+    # connection errors shouldn't fail the integration tests
+    ignored_error_keywords = ('Connection error', 'while downloading', 'Error while reading the TI file')
+
     # we can't redirect stderr to a file and check it because we catch all exceptions in slips
     for file in error_files:
         with open(file, 'r') as f:
             for line in f:
-                if '<class' in line or 'error' in line or 'Error' in line or 'Traceback' in line:
-                    # connection errors shouldn't fail the integration tests
-                    if (
-                            'Connection error' in line
-                            or 'while downloading' in line
-                    ):
-                        continue
-                    return True
+                for ignored_keyword in ignored_error_keywords:
+                   if ignored_keyword in line:
+                       continue
+
+
+                for keyword in error_keywords:
+                    if keyword in line:
+                        return True
 
     return False
