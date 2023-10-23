@@ -15,6 +15,7 @@ import validators
 import collections
 import math
 import time
+from slips_files.common.slips_utils import utils
 
 
 class FlowAlerts(IModule, multiprocessing.Process):
@@ -138,8 +139,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         # make sure the 2 ips are private
         if not (
-                ipaddress.ip_address(saddr).is_private
-                and ipaddress.ip_address(daddr).is_private
+                utils.is_private_ip(ipaddress.ip_address(saddr))
+                and utils.is_private_ip(ipaddress.ip_address(daddr))
         ):
             return
 
@@ -1669,7 +1670,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             # any msg is published in the new_flow channel
             return
 
-        if not (validators.ipv4(ip_to_check) and ip_obj.is_private):
+        if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
             return
 
         # if it's a private ipv4 addr, it should belong to our local network
@@ -1716,7 +1717,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         if not (
                 validators.ipv4(saddr)
-                and ipaddress.ip_address(saddr).is_private
+                and utils.is_private_ip(ipaddress.ip_address(saddr))
         ):
             return
 

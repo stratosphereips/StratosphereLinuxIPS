@@ -15,6 +15,7 @@ import subprocess
 import re
 import time
 import asyncio
+from slips_files.common.slips_utils import utils
 
 
 class IPInfo(IModule, multiprocessing.Process):
@@ -196,7 +197,7 @@ class IPInfo(IModule, multiprocessing.Process):
         """
         if not hasattr(self, 'country_db'):
             return False
-        if ipaddress.ip_address(ip).is_private:
+        if utils.is_private_ip(ipaddress.ip_address(ip)):
             # Try to find if it is a local/private IP
             data = {'geocountry': 'Private'}
         elif geoinfo := self.country_db.get(ip):

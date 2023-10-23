@@ -178,7 +178,7 @@ class Output(IObserver):
 
         self.errors_logfile_lock.acquire()
         with open(self.errors_logfile, 'a') as errors_logfile:
-            errors_logfile.write(f'{date_time} {msg["from"]}{msg["txt"]}\n')
+            errors_logfile.write(f'{date_time} [{msg["from"]}] {msg["txt"]}\n')
         self.errors_logfile_lock.release()
 
     def has_pbar(self):
