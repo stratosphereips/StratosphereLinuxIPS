@@ -69,7 +69,6 @@ def check_error_keywords(line):
     error_keywords = ('<class', 'error', 'Error', 'Traceback')
     for keyword in error_keywords:
         if keyword in line:
-            print(f"@@@@@@@@@@@@@@@@ error : {keyword} is found.. line: {line} !!")
             return True
     return False
 
