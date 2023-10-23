@@ -69,7 +69,11 @@ def has_errors(output_dir):
     error_keywords = ('<class', 'error', 'Error', 'Traceback')
     # these are keywords that we ignore when found in slips.log or errors.log because
     # connection errors shouldn't fail the integration tests
-    ignored_error_keywords = ('Connection error', 'while downloading', 'Error while reading the TI file')
+    ignored_error_keywords = ('Connection error',
+                              'while downloading',
+                              'Error while reading the TI file',
+                              'Error parsing feed'
+                              )
 
     # we can't redirect stderr to a file and check it because we catch all exceptions in slips
     for file in error_files:
