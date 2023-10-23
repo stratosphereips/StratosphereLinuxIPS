@@ -61,31 +61,49 @@ def check_for_text(txt, output_dir):
     return False
 
 
-def has_errors(output_dir):
-    """function to parse slips_output file and check for errors"""
-    error_files = ('slips_output.txt', 'errors.log')
-    error_files = [os.path.join(output_dir, file) for file in error_files]
-
+def check_error_keywords(line):
+    """
+    these keywords indicate that an error needs to
+    be fixed and should fail the integration tests when found
+    """
     error_keywords = ('<class', 'error', 'Error', 'Traceback')
-    # these are keywords that we ignore when found in slips.log or errors.log because
-    # connection errors shouldn't fail the integration tests
+    for keyword in error_keywords:
+        if keyword in line:
+            print(f"@@@@@@@@@@@@@@@@ error : {keyword} is found.. line: {line} !!")
+            return True
+    return False
+
+
+def check_for_ignored_errors(line):
+    """
+    These are connection errors, empty feeds, download errors etc that don't
+    indicate that something is wrong with slips code
+    we shouldn't fail integration tests bc of them
+    """
     ignored_error_keywords = ('Connection error',
                               'while downloading',
                               'Error while reading the TI file',
                               'Error parsing feed'
                               )
+    for ignored_keyword in ignored_error_keywords:
+       if ignored_keyword in line:
+           return True
+
+
+
+def has_errors(output_dir):
+    """function to parse slips_output file and check for errors"""
+    error_files = ('slips_output.txt', 'errors.log')
+    error_files = [os.path.join(output_dir, file) for file in error_files]
 
     # we can't redirect stderr to a file and check it because we catch all exceptions in slips
     for file in error_files:
         with open(file, 'r') as f:
             for line in f:
-                for ignored_keyword in ignored_error_keywords:
-                   if ignored_keyword in line:
-                       continue
+                if check_for_ignored_errors(line):
+                    continue
 
-
-                for keyword in error_keywords:
-                    if keyword in line:
-                        return True
+                if check_error_keywords(line):
+                    return True
 
     return False
