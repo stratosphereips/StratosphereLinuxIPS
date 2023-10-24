@@ -37,8 +37,8 @@ from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 
 SUPPORTED_INPUT_TYPES = {
     'zeek': ZeekJSON,
-    'argus': Argus,
-    'argus-tabs': Argus,
+    'binetflow': Argus,
+    'binetflow-tabs': Argus,
     'suricata': Suricata,
     'zeek-tabs': ZeekTabs,
     'nfdump': Nfdump,
@@ -47,9 +47,9 @@ SEPARATORS = {
     'zeek': '',
     'suricata': '',
     'nfdump': ',',
-    'argus': ',',
+    'binetflow': ',',
     'zeek-tabs': '\t',
-    'argus-tabs': '\t'
+    'binetflow-tabs': '\t'
 }
 
 class Profiler(ICore):
@@ -86,84 +86,6 @@ class Profiler(ICore):
         self.label = conf.label()
         self.home_net = conf.get_home_network()
         self.width = conf.get_tw_width_as_float()
-
-    def define_type(self, line):
-        """
-        Try to define the type of input
-        Heuristic detection: dict (zeek from pcap of int), json (suricata),
-        or csv (argus), or TAB separated (conn.log only from zeek)?
-        Bro actually gives us json, but it was already coverted into a dict
-        in inputProcess
-        Outputs can be: zeek, suricata, argus, zeek-tabs
-        """
-        try:
-
-            # All lines come as a dict, specifying the name of file and data.
-            # Take the data
-            try:
-                # is data in json format?
-                data = line['data']
-                file_type = line['type']
-            except KeyError:
-                self.print('\tData did is not in json format ', 0, 1)
-                self.print('\tProblem in define_type()', 0, 1)
-                return False
-
-            if file_type in ('stdin', 'external_module'):
-                # don't determine the type of line given using define_type(),
-                # the type of line is taken directly from the user or from an external module like CYST
-                # because define_type expects zeek lines in a certain format and the user won't reformat the zeek line
-                # before giving it to slips
-                # input type should be defined in the external module
-                self.input_type = line['line_type']
-                self.separator = SEPARATORS[self.input_type]
-                return self.input_type
-
-            # In the case of Zeek from an interface or pcap,
-            # the structure is a JSON
-            # So try to convert into a dict
-            if type(data) == dict:
-                try:
-                    _ = data['data']
-                    # self.separator = '	'
-                    self.input_type = 'zeek-tabs'
-                except KeyError:
-                    self.input_type = 'zeek'
-
-            else:
-                # data is a str
-                try:
-                    # data is a serialized json dict
-                    # suricata lines have 'event_type' key, either flow, dns, etc..
-                    data = json.loads(data)
-                    if data['event_type']:
-                        # found the key, is suricata
-                        self.input_type = 'suricata'
-                except (ValueError, KeyError):
-                    data = str(data)
-                    # not suricata, data is a tab or comma separated str
-                    nr_commas = data.count(',')
-                    if nr_commas > 3:
-                        # we have 2 files where Commas is the separator
-                        # argus comma-separated files, or nfdump lines
-                        # in argus, the ts format has a space
-                        # in nfdump lines, the ts format doesn't
-                        self.input_type = 'nfdump' if ' ' in data.split(',')[0] else 'argus'
-                    elif '->' in data or 'StartTime' in data:
-                        self.input_type = 'argus-tabs'
-                    else:
-                        self.input_type = 'zeek-tabs'
-
-            self.separator = SEPARATORS[self.input_type]
-            return self.input_type
-
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(
-                f'\tProblem in define_type() line {exception_line}', 0, 1
-            )
-            self.print(traceback.print_exc(),0,1)
-            sys.exit(1)
 
     def convert_starttime_to_epoch(self):
         try:
@@ -372,6 +294,29 @@ class Profiler(ICore):
         rev_profileid, rev_twid = self.get_rev_profile()
         self.store_features_going_in(rev_profileid, rev_twid)
 
+    def define_separator(self, line: dict, input_type: str):
+        """
+        :param line: dict with the line as read from the input file/dir
+        given to slips using -f and the name of the logfile this line was read from
+        :the input_type: as determined by slips.py
+        this function determines the line separator
+        for example if the input_type is zeek_folder
+        this function determines if it's tab or json
+        etc
+        """
+        if input_type in ('zeek_folder', 'zeek_log_file', 'pcap', 'interface'):
+            # is it tab separated or comma separated?
+            actual_line = line['data']
+            if type(actual_line) == dict:
+                return 'zeek'
+            return 'zeek-tabs'
+
+        # if it's none of the above cases
+        # it's probably one of a kind
+        # pcap, binetflow, binetflow tabs, nfdump, etc
+        return input_type
+
+
     def shutdown_gracefully(self):
         self.print(f"Stopping. Total lines read: {self.rec_lines}", log_to_logfiles_only=True)
         # By default if a process(profiler) is not the creator of the queue(profiler_queue) then on
@@ -387,9 +332,10 @@ class Profiler(ICore):
         while not self.should_stop():
             try:
                 msg: dict = self.profiler_queue.get(timeout=3)
-                line: str = msg['line']
+                line: dict = msg['line']
+                input_type: str = msg['input_type']
                 total_flows: int = msg.get('total_flows', 0)
-            except Exception as e:
+            except Exception:
                 # the queue is empty, which means input proc
                 # is done reading flows
                 continue
@@ -413,12 +359,15 @@ class Profiler(ICore):
             self.print(f'< Received Line: {line}', 2, 0)
             self.rec_lines += 1
 
+            # self.input_type is set only once by define_separator
+            # once we know the type, no need to check each line for it
             if not self.input_type:
                 # Find the type of input received
-                self.define_type(line)
-                # don't init the pbar when given the following input types because
-                # we don't know the total flows beforehand
-                if self.db.get_input_type() not in ('pcap', 'interface', 'stdin'):
+                self.input_type = self.define_separator(line, input_type)
+                # don't init the pbar when given the following
+                # input types because we don't
+                # know the total flows beforehand
+                if input_type not in ('pcap', 'interface', 'stdin'):
                     # Find the number of flows we're going to receive of input received
                     self.notify_observers({
                         'bar': 'init',

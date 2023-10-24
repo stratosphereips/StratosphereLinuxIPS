@@ -512,7 +512,7 @@ class Main(IObservable):
         # this module should handle the stopping of slips
         if (
                 self.is_debugger_active()
-                or self.input_type in ('stdin','CYST')
+                or self.input_type in ('stdin', 'CYST')
                 or self.is_interface
         ):
             return True

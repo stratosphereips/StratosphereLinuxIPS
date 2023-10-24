@@ -118,8 +118,6 @@ class Input(ICore):
     def stop_queues(self):
         """Stops the profiler and output queues"""
         now = utils.convert_format(datetime.now(), utils.alerts_format)
-        self.print(
-            f'No more input. Stopping input process. Sent {self.lines} lines ({now}).\n', 0, 1)
         self.profiler_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:
@@ -861,14 +859,20 @@ class Input(ICore):
         sends the given txt/dict to the profilerqueue for process
         sends the total amount of flows to process with the first flow only
         """
-        to_send = {'line': line}
+        to_send = {
+            'line': line,
+            'input_type': self.input_type
+        }
         # send the total flows slips is going to read to the profiler
         # the profiler will give it to output() for initialising the progress bar
         # in case of interface and pcaps, we don't know the total_flows beforehand
         # and we don't print a pbar
         if self.is_first_flow and hasattr(self, 'total_flows'):
             self.is_first_flow = False
-            to_send.update({'total_flows': self.total_flows})
+            to_send.update({
+                'total_flows': self.total_flows,
+
+            })
         self.profiler_queue.put(to_send)
 
     def main(self):
