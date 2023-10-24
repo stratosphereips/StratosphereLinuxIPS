@@ -9,9 +9,10 @@ from slips_files.core.profiler import SUPPORTED_INPUT_TYPES, SEPARATORS
 
 
 @pytest.mark.parametrize(
-    'file,expected_value', [('dataset/test6-malicious.suricata.json', 'suricata')]
+    'file,input_type,expected_value',
+    [('dataset/test6-malicious.suricata.json', 'suricata', 'suricata')]
 )
-def test_define_type_suricata(file, expected_value, mock_rdb):
+def test_define_separator_suricata(file, input_type, expected_value, mock_rdb):
     profilerProcess = ModuleFactory().create_profiler_obj()
     with open(file) as f:
         while True:
@@ -19,18 +20,19 @@ def test_define_type_suricata(file, expected_value, mock_rdb):
             # get the first line that isn't a comment
             if not sample_flow.startswith('#'):
                 break
+
     sample_flow = {
         'data': sample_flow,
-        'type': expected_value
     }
-    assert profilerProcess.define_type(sample_flow) == expected_value
+    profiler_detected_type: str = profilerProcess.define_separator(sample_flow, input_type)
+    assert profiler_detected_type == expected_value
 
 
 @pytest.mark.parametrize(
-    'file,expected_value',
-    [('dataset/test10-mixed-zeek-dir/conn.log', 'zeek-tabs')],
+    'file,input_type,expected_value',
+    [('dataset/test10-mixed-zeek-dir/conn.log', 'zeek_log_file', 'zeek-tabs')],
 )
-def test_define_type_zeek_tab(file, expected_value, mock_rdb):
+def test_define_separator_zeek_tab(file, input_type, expected_value, mock_rdb):
     profilerProcess = ModuleFactory().create_profiler_obj()
     with open(file) as f:
         while True:
@@ -38,14 +40,23 @@ def test_define_type_zeek_tab(file, expected_value, mock_rdb):
             # get the first line that isn't a comment
             if not sample_flow.startswith('#'):
                 break
-    sample_flow = {'data': sample_flow, 'type': expected_value}
-    assert profilerProcess.define_type(sample_flow) == expected_value
+
+    sample_flow = {
+        'data': sample_flow,
+    }
+    profiler_detected_type: str = profilerProcess.define_separator(sample_flow, input_type)
+    assert profiler_detected_type == expected_value
 
 
 @pytest.mark.parametrize(
-    'file,expected_value', [('dataset/test9-mixed-zeek-dir/conn.log', 'zeek')]
+    'file, input_type,expected_value',
+    [('dataset/test9-mixed-zeek-dir/conn.log', 'zeek_log_file', 'zeek')]
 )
-def test_define_type_zeek_dict(file, expected_value, mock_rdb):
+def test_define_separator_zeek_dict(file, input_type, expected_value, mock_rdb):
+    """
+    :param input_type: as determined by slips.py
+    """
+
     profilerProcess = ModuleFactory().create_profiler_obj()
     with open(file) as f:
         sample_flow = f.readline().replace('\n', '')
@@ -53,30 +64,36 @@ def test_define_type_zeek_dict(file, expected_value, mock_rdb):
     sample_flow = json.loads(sample_flow)
     sample_flow = {
         'data': sample_flow,
-        'type': expected_value
     }
-    assert profilerProcess.define_type(sample_flow) == expected_value
+    profiler_detected_type: str = profilerProcess.define_separator(sample_flow, input_type)
+    assert profiler_detected_type == expected_value
 
 
 @pytest.mark.parametrize('nfdump_file', [('dataset/test1-normal.nfdump')])
-def test_define_type_nfdump(nfdump_file, mock_rdb):
+def test_define_separator_nfdump(nfdump_file, mock_rdb):
     # nfdump files aren't text files so we need to process them first
     command = f'nfdump -b -N -o csv -q -r {nfdump_file}'
     # Execute command
     result = subprocess.run(command.split(), stdout=subprocess.PIPE)
     # Get command output
     nfdump_output = result.stdout.decode('utf-8')
-    line = {'type': 'nfdump'}
+    input_type = 'nfdump'
     for nfdump_line in nfdump_output.splitlines():
         # this line is taken from stdout we need to remove whitespaces
         nfdump_line.replace(' ', '')
         ts = nfdump_line.split(',')[0]
         if not ts[0].isdigit():
             continue
-        line['data'] = nfdump_line
-        break
+        else:
+            break
+
     profilerProcess = ModuleFactory().create_profiler_obj()
-    assert profilerProcess.define_type(line) == 'nfdump'
+    sample_flow = {
+        'data': nfdump_line,
+    }
+    profiler_detected_type: str = profilerProcess.define_separator(sample_flow, input_type)
+    assert profiler_detected_type == 'nfdump'
+
 
 
 # @pytest.mark.parametrize(
@@ -112,7 +129,7 @@ def test_define_type_nfdump(nfdump_file, mock_rdb):
 
 # pcaps are treated as zeek files in slips, no need to test twice
 # @pytest.mark.parametrize("pcap_file",[('dataset/test7-malicious.pcap')])
-# def test_define_type_pcap(pcap_file):
+# def test_define_separator_pcap(pcap_file):
 #     # ('dataset/test7-malicious.pcap','zeek')
 #     profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
 #
@@ -123,7 +140,7 @@ def test_define_type_nfdump(nfdump_file, mock_rdb):
 #     # Give Zeek some time to generate at least 1 file.
 #     time.sleep(3)
 #
-#     assert profilerProcess.define_type(line) == 'zeek'
+#     assert profilerProcess.define_separator(line) == 'zeek'
 
 
 @pytest.mark.parametrize(
