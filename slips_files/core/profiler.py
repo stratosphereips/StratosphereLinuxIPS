@@ -367,8 +367,7 @@ class Profiler(ICore):
                 # don't init the pbar when given the following
                 # input types because we don't
                 # know the total flows beforehand
-                #TODO why are we getting it from the db?????
-                if self.db.get_input_type() not in ('pcap', 'interface', 'stdin'):
+                if input_type not in ('pcap', 'interface', 'stdin'):
                     # Find the number of flows we're going to receive of input received
                     self.notify_observers({
                         'bar': 'init',
