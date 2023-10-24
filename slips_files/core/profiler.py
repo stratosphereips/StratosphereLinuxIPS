@@ -294,6 +294,29 @@ class Profiler(ICore):
         rev_profileid, rev_twid = self.get_rev_profile()
         self.store_features_going_in(rev_profileid, rev_twid)
 
+    def define_separator(self, line: dict, input_type: str):
+        """
+        :param line: dict with the line as read from the input file/dir
+        given to slips using -f and the name of the logfile this line was read from
+        :the input_type: as determined by slips.py
+        this function determines the line separator
+        for example if the input_type is zeek_folder
+        this function determines if it's tab or json
+        etc
+        """
+        if input_type in ('zeek_folder', 'zeek_log_file', 'pcap', 'interface'):
+            # is it tab separated or comma separated?
+            actual_line = line['data']
+            if type(actual_line) == dict:
+                return 'zeek'
+            return 'zeek-tabs'
+
+        # if it's none of the above cases
+        # it's probably one of a kind
+        # pcap, binetflow, binetflow tabs, nfdump, etc
+        return input_type
+
+
     def shutdown_gracefully(self):
         self.print(f"Stopping. Total lines read: {self.rec_lines}", log_to_logfiles_only=True)
         # By default if a process(profiler) is not the creator of the queue(profiler_queue) then on
@@ -340,9 +363,11 @@ class Profiler(ICore):
             # once we know the type, no need to check each line for it
             if not self.input_type:
                 # Find the type of input received
-                self.define_type(line)
-                # don't init the pbar when given the following input types because
-                # we don't know the total flows beforehand
+                self.input_type = self.define_separator(line, input_type)
+                # don't init the pbar when given the following
+                # input types because we don't
+                # know the total flows beforehand
+                #TODO why are we getting it from the db?????
                 if self.db.get_input_type() not in ('pcap', 'interface', 'stdin'):
                     # Find the number of flows we're going to receive of input received
                     self.notify_observers({
