@@ -314,11 +314,14 @@ class Profiler(ICore):
             if type(actual_line) == dict:
                 return 'zeek'
             return 'zeek-tabs'
-
-        # if it's none of the above cases
-        # it's probably one of a kind
-        # pcap, binetflow, binetflow tabs, nfdump, etc
-        return input_type
+        elif input_type in ('stdin'):
+            # ok we're reading flows from stdin, but what type of flows?
+            return line['line_type']
+        else:
+            # if it's none of the above cases
+            # it's probably one of a kind
+            # pcap, binetflow, binetflow tabs, nfdump, etc
+            return input_type
 
 
     def shutdown_gracefully(self):
