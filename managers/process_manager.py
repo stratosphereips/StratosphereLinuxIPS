@@ -270,7 +270,7 @@ class ProcessManager:
 
         pending_module_names: List[str] = [proc.name for proc in pending_modules]
         self.main.print(
-            f"\nThe following modules are busy working on your data."
+            f"The following modules are busy working on your data."
             f"\n\n{pending_module_names}\n\n"
             "You can wait for them to finish, or you can "
             "press CTRL-C again to force-kill.\n"
@@ -292,12 +292,12 @@ class ProcessManager:
         returns a list of PIDs that slips should terminate first, and pids that should be killed last
         """
         # all modules that deal with evidence, blocking and alerts should be killed last
-        # so we don't miss reporting, exporting or blocking any malicious IoC
+        # so we don't miss exporting or blocking any malicious IoC
+        # input and profiler are not in this list because they
+        # indicate that they're done processing using a semaphore
+        # slips won't reach this function unless they are done already. so no need to kill them last
         pids_to_kill_last = [
             self.main.db.get_pid_of("Evidence"),
-            self.main.db.get_pid_of("Input"),
-            self.main.db.get_pid_of("Output"),
-            self.main.db.get_pid_of("Profiler"),
         ]
 
         if self.main.args.blocking:
