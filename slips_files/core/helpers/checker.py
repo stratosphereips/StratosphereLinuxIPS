@@ -39,9 +39,10 @@ class Checker:
         if not self.main.args.filepath:
             print('[Main] You need to define an input source.')
             sys.exit(-1)
+
         # -f file/stdin-type
         input_information = self.main.args.filepath
-        if os.path.exists(input_information):
+        if os.path.isfile(input_information):
             input_type = self.main.get_input_file_type(input_information)
         else:
             input_type, line_type = self.main.handle_flows_from_stdin(
