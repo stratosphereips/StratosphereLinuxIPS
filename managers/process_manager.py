@@ -14,7 +14,7 @@ import inspect
 import modules
 import importlib
 import os
-
+import sys
 
 class ProcessManager:
     def __init__(self, main):
@@ -349,6 +349,40 @@ class ProcessManager:
             start_time, end_date, return_type="minutes"
         )
 
+    def should_stop(self):
+        """
+        returns true if the channel received the stop msg
+        :param msg: msgs receive  in the control chanel
+        """
+        message = self.main.c1.get_message(timeout=0.01)
+        if (
+                message
+                and utils.is_msg_intended_for(message, 'control_channel')
+                and message['data'] == 'stop_slips'
+        ):
+            return True
+
+
+    def is_debugger_active(self) -> bool:
+        """Returns true if the debugger is currently active"""
+        gettrace = getattr(sys, 'gettrace', lambda: None)
+        return gettrace() is not None
+
+    def should_run_non_stop(self) -> bool:
+        """
+        determines if slips shouldn't terminate because by default,
+        it terminates when there's no more incoming flows
+        """
+        # these are the cases where slips should be running non-stop
+        # when slips is reading from a special module other than the input process
+        # this module should handle the stopping of slips
+        if (
+                self.is_debugger_active()
+                or self.main.input_type in ('stdin','CYST')
+                or self.main.is_interface
+        ):
+            return True
+        return False
 
     def shutdown_interactive(self, to_kill_first, to_kill_last):
         """
