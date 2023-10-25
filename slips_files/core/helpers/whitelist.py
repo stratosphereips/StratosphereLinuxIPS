@@ -9,9 +9,11 @@ import os
 
 
 class Whitelist(IObservable):
-    def __init__(self, db):
+    def __init__(self,
+                 logger: Output,
+                 db):
         IObservable.__init__(self)
-        self.logger = Output()
+        self.logger = logger
         self.add_observer(self.logger)
         self.name = 'whitelist'
         self.read_configuration()

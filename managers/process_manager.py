@@ -42,13 +42,13 @@ class ProcessManager:
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
             slips_mode=self.main.mode,
-            input_type=self.main.input_type
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
 
     def start_profiler_process(self):
         profiler_process = Profiler(
+            self.main.logger,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
@@ -67,6 +67,7 @@ class ProcessManager:
 
     def start_evidence_process(self):
         evidence_process = Evidence(
+            self.main.logger,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
@@ -83,6 +84,7 @@ class ProcessManager:
 
     def start_input_process(self):
         input_process = Input(
+            self.main.logger,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
@@ -230,6 +232,7 @@ class ProcessManager:
 
             module_class = modules_to_call[module_name]["obj"]
             module = module_class(
+                self.main.logger,
                 self.main.args.output,
                 self.main.redis_port,
                 self.termination_event,
@@ -242,8 +245,7 @@ class ProcessManager:
                 f"\t\tStarting the module {green(module_name)} "
                 f"({description}) "
                 f"[PID {green(module.pid)}]",
-                1,
-                0,
+                1, 0,
             )
             loaded_modules.append(module_name)
         # give outputprocess time to print all the started modules

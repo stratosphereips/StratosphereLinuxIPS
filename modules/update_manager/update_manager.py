@@ -44,7 +44,7 @@ class UpdateManager(IModule, multiprocessing.Process):
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(self.db)
+        self.whitelist = Whitelist(self.logger, self.db)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line

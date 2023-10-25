@@ -67,19 +67,16 @@ class Profiler(ICore):
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
-        self.whitelist = Whitelist(self.db)
+        self.whitelist = Whitelist(self.logger, self.db)
         # Read the configuration
         self.read_configuration()
-        self.symbol = SymbolHandler(self.output_dir,
-                                    self.redis_port,
-                                    self.db)
+        self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = self.db.subscribe('reload_whitelist')
         self.channels = {
             'reload_whitelist': self.c1,
         }
-
 
 
     def read_configuration(self):

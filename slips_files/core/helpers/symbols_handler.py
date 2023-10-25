@@ -7,10 +7,12 @@ from slips_files.core.output import Output
 class SymbolHandler(IObservable):
     name = 'SymbolHandler'
 
-    def __init__(self, output_dir, redis_port, db):
+    def __init__(self,
+                 logger:Output,
+                 db):
         IObservable.__init__(self)
         self.db = db
-        self.logger = Output()
+        self.logger = logger
         self.add_observer(self.logger)
 
     def print(self, text, verbose=1, debug=0):

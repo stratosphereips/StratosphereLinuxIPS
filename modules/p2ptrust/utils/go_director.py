@@ -27,6 +27,7 @@ class GoDirector(IObservable):
     name = 'P2P Go Director'
     def __init__(
         self,
+        logger: Output,
         trustdb: TrustDB,
         db,
         storage_name: str,
@@ -37,7 +38,7 @@ class GoDirector(IObservable):
         pygo_channel: str = 'p2p_pygo',
         p2p_reports_logfile: str = 'p2p_reports.log',
     ):
-        self.logger = Output()
+        self.logger = logger
         IObservable.__init__(self)
         self.add_observer(self.logger)
         # todo what is override_p2p

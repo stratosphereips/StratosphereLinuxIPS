@@ -16,6 +16,7 @@ class IModule(IObservable, ABC):
     description = 'Template module'
     authors = ['Template Author']
     def __init__(self,
+                 logger: Output,
                  output_dir,
                  redis_port,
                  termination_event,
@@ -23,14 +24,13 @@ class IModule(IObservable, ABC):
         Process.__init__(self)
         self.redis_port = redis_port
         self.output_dir = output_dir
-        self.db = DBManager(self.output_dir, self.redis_port)
         self.msg_received = False
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
-        self.logger = Output()
+        self.logger = logger
+        self.db = DBManager(self.logger, self.output_dir, self.redis_port)
         IObservable.__init__(self)
         self.add_observer(self.logger)
-
         self.init(**kwargs)
 
     @abstractmethod

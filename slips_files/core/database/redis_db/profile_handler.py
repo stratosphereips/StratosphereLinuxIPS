@@ -17,8 +17,8 @@ class ProfileHandler(IObservable):
     """
     name = 'DB'
     
-    def __init__(self):
-        self.logger = Output()
+    def __init__(self, logger: Output):
+        self.logger = logger
         self.add_observer(self.logger)
         
     def print(self, text, verbose=1, debug=0):

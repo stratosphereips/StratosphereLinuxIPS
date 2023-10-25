@@ -178,12 +178,14 @@ class Trust(IModule, multiprocessing.Process):
     def _configure(self):
         # TODO: do not drop tables on startup
         self.trust_db = trustdb.TrustDB(
+            self.logger,
             self.sql_db_name,
             drop_tables_on_startup=True
         )
-        self.reputation_model = reputation_model.BaseModel(self.trust_db)
+        self.reputation_model = reputation_model.BaseModel(self.logger, self.trust_db)
         # print(f"[DEBUGGING] Starting godirector with pygo_channel: {self.pygo_channel}")
         self.go_director = GoDirector(
+            self.logger,
             self.trust_db,
             self.db,
             self.storage_name,

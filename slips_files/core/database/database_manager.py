@@ -13,6 +13,7 @@ class DBManager(IObservable):
     name = "DBManager"
     def __init__(
             self,
+            logger: Output,
             output_dir,
             redis_port,
             start_sqlite=True,
@@ -20,10 +21,10 @@ class DBManager(IObservable):
     ):
         self.output_dir = output_dir
         self.redis_port = redis_port
-        self.logger = Output()
+        self.logger = logger
         IObservable.__init__(self)
         self.add_observer(self.logger)
-        self.rdb = RedisDB(redis_port, **kwargs)
+        self.rdb = RedisDB(self.logger, redis_port, **kwargs)
         # in some rare cases we don't wanna start sqlite,
         # like when using -S
         # we just want to connect to redis to get the PIDs
@@ -33,7 +34,7 @@ class DBManager(IObservable):
 
 
     def create_sqlite_db(self, output_dir):
-        return SQLiteDB(output_dir)
+        return SQLiteDB(self.logger, output_dir)
 
     @classmethod
     def read_configuration(cls):

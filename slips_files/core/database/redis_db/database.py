@@ -4,7 +4,6 @@ from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
 from slips_files.common.abstracts.observer import IObservable
-from slips_files.core.output import Output
 
 import os
 import signal
@@ -99,7 +98,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     # to keep track of connection retries. once it reaches max_retries, slips will terminate
     connection_retry = 0
 
-    def __new__(cls, redis_port, flush_db=True):
+    def __new__(cls, logger, redis_port, flush_db=True):
         """
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
@@ -119,10 +118,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             cls.r.client_setname(f"Slips-DB")
         return cls._instances[cls.redis_port]
 
-    def __init__(self, redis_port, flush_db=True):
+    def __init__(self, logger, redis_port, flush_db=True):
         # the main purpose of this init is to call the parent's __init__
         IObservable.__init__(self)
-        self.add_observer(Output())
+        self.add_observer(logger)
         self.observer_added = True
 
     @classmethod

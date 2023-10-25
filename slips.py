@@ -224,9 +224,12 @@ class Main(IObservable):
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to update orgs and ports info
-                update_manager = UpdateManager(self.args.output,
-                                               self.redis_port,
-                                               multiprocessing.Event())
+                update_manager = UpdateManager(
+                    self.logger,
+                    self.args.output,
+                    self.redis_port,
+                    multiprocessing.Event()
+                )
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -496,9 +499,6 @@ class Main(IObservable):
         print(slips_version)
 
 
-
-
-
     def update_stats(self):
         """
         updates the statistics shown next to the progress bar or shown in a new line
@@ -519,12 +519,11 @@ class Main(IObservable):
         profilesLen = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         msg = f'Total analyzed IPs so far: ' \
-              f'{profilesLen}. ' \
-              f'Evidence Added: {evidence_number}. ' \
+              f'{green(profilesLen)}. ' \
+              f'Evidence Added: {green(evidence_number)}. ' \
               f'IPs sending traffic in the last ' \
-              f'{self.twid_width}: {modified_ips_in_the_last_tw}. ' \
+              f'{self.twid_width}: {green(modified_ips_in_the_last_tw)}. ' \
               f'({now})'
-
         self.print(msg)
 
     def update_host_ip(self, hostIP, modified_profiles) -> str:
@@ -570,7 +569,7 @@ class Main(IObservable):
             self.logger = self.proc_man.start_output_process(current_stdout, stderr, slips_logfile)
             self.add_observer(self.logger)
 
-            self.db = DBManager(self.args.output, self.redis_port)
+            self.db = DBManager(self.logger, self.args.output, self.redis_port)
             self.db.set_input_metadata({
                     'output_dir': self.args.output,
                     'commit': self.commit,
