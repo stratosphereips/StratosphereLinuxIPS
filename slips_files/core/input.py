@@ -447,7 +447,6 @@ class Input(ICore):
             f'Stopping input process. Sent {self.lines} lines'
         )
 
-
     def read_from_stdin(self):
         self.print('Receiving flows from stdin.')
         # By default read the stdin
@@ -870,7 +869,6 @@ class Input(ICore):
             self.is_first_flow = False
             to_send.update({
                 'total_flows': self.total_flows,
-
             })
         self.profiler_queue.put(to_send)
 

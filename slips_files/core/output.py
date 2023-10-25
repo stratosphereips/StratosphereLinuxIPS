@@ -49,6 +49,7 @@ class Output(IObserver):
         stderr='output/errors.log',
         slips_logfile='output/slips.log',
         slips_mode='interactive',
+        input_type='',
     ):
         if not cls.obj:
             cls.obj = super().__new__(cls)
@@ -75,8 +76,17 @@ class Output(IObserver):
             cls.last_updated_stats_time = float("-inf")
             #TODO test this when daemonized
             cls.slips_mode = slips_mode
+            cls.pbar_supported = cls.is_pbar_supported(input_type)
 
         return cls.obj
+
+    @classmethod
+    def is_pbar_supported(cls, input_type: str) -> bool:
+        """
+        it's only supported when given a file that we
+        can open and get the total flows of before starting slips
+        """
+        return input_type in ('interface', 'stdin', 'input_module', 'pcap')
 
 
     @classmethod
@@ -162,8 +172,8 @@ class Output(IObserver):
         # when the pbar reaches 100% aka we're done_reading_flows
         # we print alerts at the very botttom of the screen using print
         # instead of printing alerts at the top of the pbar using tqdm
-        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
-            print(f'[{green(sender)}] {txt}')
+        if not self.has_pbar():
+            print(f'[{sender}] {txt}')
         else:
             tqdm.write(f'[{sender}] {txt}')
         self.cli_lock.release()
@@ -183,9 +193,12 @@ class Output(IObserver):
 
     def has_pbar(self):
         """returns false when pbar wasnt initialised or is done 100%"""
-        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
+        if (
+                not self.pbar_supported
+                or (hasattr(self, 'done_reading_flows') and self.done_reading_flows)
+        ):
             return False
-        elif hasattr(self, 'progress_bar'):
+        elif hasattr(self, 'progress_bar') and self.pbar_supported:
             return True
 
     def handle_printing_stats(self, stats: str):
@@ -285,7 +298,7 @@ class Output(IObserver):
             mininterval=0, # defines how long to wait between each refresh.
             unit=' flow',
             smoothing=1,
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} {postfix}",
             position=0,
             initial=0, #initial value of the flows processed
             file=sys.stdout

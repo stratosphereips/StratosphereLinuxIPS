@@ -322,7 +322,6 @@ class Main(IObservable):
 
         os.makedirs(self.args.output)
 
-        print(f'[Main] Storing Slips logs in {self.args.output}')
 
     def set_mode(self, mode, daemon=''):
         """
