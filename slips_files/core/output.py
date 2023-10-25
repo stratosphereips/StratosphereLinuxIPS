@@ -49,7 +49,6 @@ class Output(IObserver):
         stderr='output/errors.log',
         slips_logfile='output/slips.log',
         slips_mode='interactive',
-        input_type='',
     ):
         if not cls.obj:
             cls.obj = super().__new__(cls)
@@ -76,18 +75,16 @@ class Output(IObserver):
             cls.last_updated_stats_time = float("-inf")
             #TODO test this when daemonized
             cls.slips_mode = slips_mode
-            cls.pbar_supported = cls.is_pbar_supported(input_type)
-
+            # will initialize it later if it's supported
+            cls.progress_bar = None
         return cls.obj
 
-    @classmethod
-    def is_pbar_supported(cls, input_type: str) -> bool:
-        """
-        it's only supported when given a file that we
-        can open and get the total flows of before starting slips
-        """
-        return input_type in ('interface', 'stdin', 'input_module', 'pcap')
+    def set_progress_bar(self, pbar: tqdm):
+        self.progress_bar = pbar
+        Output.progress_bar = pbar
 
+    def get_progress_bar(self) -> tqdm:
+        return self.progress_bar
 
     @classmethod
     def _read_configuration(cls):
@@ -191,28 +188,36 @@ class Output(IObserver):
             errors_logfile.write(f'{date_time} [{msg["from"]}] {msg["txt"]}\n')
         self.errors_logfile_lock.release()
 
+    def is_pbar_done(self) -> bool:
+        """returns true if the pbar has reached 100%"""
+        return hasattr(self, 'done_reading_flows') and self.done_reading_flows
+
     def has_pbar(self):
-        """returns false when pbar wasnt initialised or is done 100%"""
-        if (
-                not self.pbar_supported
-                or (hasattr(self, 'done_reading_flows') and self.done_reading_flows)
-        ):
+        """returns false when pbar wasn't initialized or is done 100%"""
+        if self.is_pbar_done() or self.progress_bar is None:
             return False
-        elif hasattr(self, 'progress_bar') and self.pbar_supported:
+        else:
             return True
 
     def handle_printing_stats(self, stats: str):
-        # if we're done reading flows, aka pbar reached 100%
+        # if we're done reading flows, aka pbar reached 100% or we dont have a pbar
         # we print the stats in a new line, instead of next to the pbar
-        if not self.has_pbar():
-            print(stats, end='\r')
-        else:
-            # print the stats next to the bar
-            self.progress_bar.set_postfix_str(
-                stats,
-                refresh=True
-            )
+        # if not self.has_pbar() or (self.has_pbar() and self.is_pbar_done()):
+        # TODO fix this later, not all instacnes ha access to the pbar to
+        # TODO add the stats as a postfix and in order to do that output.py
+        # TODO needs to be separate oprocess
+        if not self.has_pbar() or  self.is_pbar_done():
+            self.cli_lock.acquire()
+            tqdm.write(stats, end="\r")
+            self.cli_lock.release()
 
+        # elif self.has_pbar() and not self.is_pbar_done():
+        #     # pbar is still there,
+        #     # print the stats next to the bar
+        #     self.get_progress_bar().set_postfix_str(
+        #         stats,
+        #         refresh=True
+        #     )
 
     def enough_verbose(self, verbose: int):
         """
@@ -301,7 +306,7 @@ class Output(IObserver):
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} {postfix}",
             position=0,
             initial=0, #initial value of the flows processed
-            file=sys.stdout
+            file=sys.stdout,
         )
 
     def update_progress_bar(self):
@@ -319,7 +324,7 @@ class Output(IObserver):
         self.progress_bar.update(1)
         if self.progress_bar.n == self.total_flows:
             self.remove_stats_from_progress_bar()
-            print(f"Done reading all flows. Slips is now processing them.")
+            self.print(f"Done reading all flows. Slips is now processing them.")
             # remove it from the bar because we'll be prining it in a new line
             self.done_reading_flows = True
         # self.progress_bar.refresh()
