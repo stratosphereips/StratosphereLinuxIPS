@@ -1,5 +1,6 @@
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
+import multiprocessing
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -56,7 +57,10 @@ class Profiler(ICore):
     """A class to create the profiles for IPs"""
     name = 'Profiler'
 
-    def init(self, profiler_queue=None):
+    def init(self,
+             is_profiler_done: multiprocessing.Semaphore = None,
+             profiler_queue=None):
+        self.done_processing: multiprocessing.Semaphore = is_profiler_done
         # every line put in this queue should be profiled
         self.profiler_queue = profiler_queue
         self.timeformat = None
@@ -380,6 +384,11 @@ class Profiler(ICore):
         # to avoid this behaviour we should call cancel_join_thread
         self.profiler_queue.cancel_join_thread()
 
+    def is_done_processing(self):
+        """is called to mark this process as done processing so slips.py would know when to terminate"""
+        # signal slips.py that this process is done
+        self.done_processing.release()
+
     def pre_main(self):
         utils.drop_root_privs()
 
@@ -389,25 +398,15 @@ class Profiler(ICore):
                 msg: dict = self.profiler_queue.get(timeout=3)
                 line: str = msg['line']
                 total_flows: int = msg.get('total_flows', 0)
-            except Exception as e:
+            except Exception:
                 # the queue is empty, which means input proc
                 # is done reading flows
+                self.is_done_processing()
                 continue
 
             # TODO who is putting this True here?
             if line == True:
                 continue
-
-            if 'stop' in line:
-                self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
-                           f"{self.whitelisted_flows_ctr}", 2, 0)
-
-                self.shutdown_gracefully()
-                self.print(
-                    f'Stopping Profiler Process. Received {self.rec_lines} lines '
-                    f'({utils.convert_format(datetime.now(), utils.alerts_format)})', 2, 0,
-                )
-                return 1
 
             # Received new input data
             self.print(f'< Received Line: {line}', 2, 0)
@@ -435,7 +434,8 @@ class Profiler(ICore):
                 return False
 
 
-            # only create the input obj once
+            # only create the input obj once,
+            # the rest of the flows will use the same input handler
             if not hasattr(self, 'input'):
                 self.input = SUPPORTED_INPUT_TYPES[self.input_type]()
 
@@ -450,8 +450,10 @@ class Profiler(ICore):
             # we need to process the new changes
             if self.get_msg('reload_whitelist'):
                 # if whitelist.conf is edited using pycharm
-                # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
-                # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
+                # a msg will be sent to this channel on every keypress,
+                # because pycharm saves file automatically
+                # otherwise this channel will get a msg only when
+                # whitelist.conf is modified and saved to disk
                 self.whitelist.read_whitelist()
 
         return 1
