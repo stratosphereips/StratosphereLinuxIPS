@@ -506,11 +506,7 @@ class Main(IObservable):
         """
         # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
         # for other files, we print a progress bar + the stats using outputprocess
-        if not (
-                self.mode == 'interactive'
-                and (self.input_type in ('pcap', 'interface')
-                     or self.args.growing)
-        ):
+        if not self.mode == 'interactive':
             return
 
         # only update the stats every 5s
