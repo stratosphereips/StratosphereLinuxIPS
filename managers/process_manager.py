@@ -3,7 +3,7 @@ from slips_files.core.output import Output
 from slips_files.core.profiler import Profiler
 from slips_files.core.evidence import Evidence
 from slips_files.core.input import Input
-from multiprocessing import Queue, Event, Process
+from multiprocessing import Queue, Event, Process, Semaphore
 from collections import OrderedDict
 from typing import List, Tuple
 from slips_files.common.style import green
@@ -25,6 +25,11 @@ class ProcessManager:
         self.profiler_queue = Queue()
         self.termination_event: Event = Event()
         self.stopped_modules = []
+        # used to stop slips when these 2 are done
+        # since the semaphore count is zero, slips.py will wait until another thread (input and profiler)
+        # release the semaphore. Once having the semaphore, then slips.py can terminate slips.
+        self.is_input_done = Semaphore(0)
+        self.is_profiler_done = Semaphore(0)
 
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
@@ -46,6 +51,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
         )
         profiler_process.start()
@@ -79,6 +85,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            is_input_done = self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
             input_information=self.main.input_information,
@@ -416,6 +423,25 @@ class ProcessManager:
             return to_kill_first, to_kill_last
         # all of them are killed
         return None, None
+
+
+    def slips_is_done_receiving_new_flows(self) -> bool:
+        """
+        Slips won't be receiving new flows when
+        the input and profiler release the semaphores signaling that they're done
+        that's when this method will return True.
+        If they're still processing it will return False
+        """
+        # try to acquire the semaphore without blocking
+        input_done_processing: bool = self.is_input_done.acquire(block=False)
+        profiler_done_processing: bool = self.is_profiler_done.acquire(block=False)
+
+        if input_done_processing and profiler_done_processing:
+            return True
+        else:
+            # can't acquire the semaphore, processes are still running
+            return False
+
 
     def shutdown_daemon(self):
         """
