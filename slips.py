@@ -78,6 +78,7 @@ class Main(IObservable):
 
         # in testing mode we manually set the following params
         if not testing:
+
             self.args = self.conf.get_args()
             self.pid = os.getpid()
             self.checker.check_given_flags()
@@ -674,10 +675,7 @@ class Main(IObservable):
 
             hostIP = self.metadata_man.store_host_ip()
 
-            # In each interval we check if there has been any modifications to
-            # the database by any module.
-            # If not, wait this amount of intervals and then stop slips.
-            intervals_to_wait = 4
+
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
             self.is_interface: bool = self.args.interface or self.db.is_growing_zeek_dir()
@@ -708,18 +706,9 @@ class Main(IObservable):
                 if self.proc_man.should_run_non_stop():
                     continue
 
-                # Reaches this point if we're running Slips on a file.
-                # countdown until slips stops if no
-                # TW modifications are happening
-                if modified_ips_in_the_last_tw == 0:
-                    # waited enough. stop slips
-                    if intervals_to_wait == 0:
-                        self.proc_man.shutdown_gracefully()
-                        break
-
-                    # If there were no modified TWs in the last timewindow time,
-                    # then start counting down
-                    intervals_to_wait -= 1
+                if self.proc_man.slips_is_done_receiving_new_flows():
+                    self.proc_man.shutdown_gracefully()
+                    break
 
                 self.db.check_health()
 
