@@ -57,6 +57,7 @@ class Input(ICore):
     name = 'Input'
     def init(
             self,
+            is_input_done: multiprocessing.Semaphore = None,
             profiler_queue=None,
             input_type=None,
             input_information=None,
@@ -69,13 +70,13 @@ class Input(ICore):
         self.profiler_queue = profiler_queue
         # in case of reading from stdin, the user mst tell slips what
         # type of lines is the input
-        self.line_type = line_type
+        self.line_type: str = line_type
         # entire path
-        self.given_path = input_information
-        self.zeek_dir = zeek_dir
-        self.zeek_or_bro = zeek_or_bro
+        self.given_path: str = input_information
+        self.zeek_dir: str = zeek_dir
+        self.zeek_or_bro: str = zeek_or_bro
         self.read_lines_delay = 0
-
+        self.done_processing: multiprocessing.Semaphore = is_input_done
         self.packet_filter = False
         if cli_packet_filter:
             self.packet_filter = f"'{cli_packet_filter}'"
@@ -104,6 +105,10 @@ class Input(ICore):
         # used to give the profiler the total amount of flows to read with the first flow only
         self.is_first_flow = True
 
+    def is_done_processing(self):
+        """marks this process as done processing so slips.py would know when to terminate"""
+        # signal slips.py that this process is done
+        self.done_processing.release()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -169,7 +174,6 @@ class Input(ICore):
                 except FileNotFoundError:
                     pass
             self.to_be_deleted = []
-
 
     def is_ignored_file(self, filepath: str) -> bool:
         """
@@ -434,6 +438,7 @@ class Input(ICore):
         self.db.set_input_metadata({'total_flows': total_flows})
         self.lines = self.read_zeek_files()
         self.print_lines_read()
+        self.is_done_processing()
         return True
 
     def print_lines_read(self):
@@ -504,6 +509,8 @@ class Input(ICore):
 
                 self.lines += 1
                 if self.testing: break
+
+        self.is_done_processing()
         return True
 
     def handle_suricata(self):
@@ -521,6 +528,7 @@ class Input(ICore):
                 self.lines += 1
                 if self.testing:
                     break
+        self.is_done_processing()
         return True
 
     def is_zeek_tabs_file(self, filepath) -> bool:
@@ -568,6 +576,7 @@ class Input(ICore):
         # as we're running on an interface
         self.bro_timeout = 30
         self.lines = self.read_zeek_files()
+        self.is_done_processing()
         return True
 
     def handle_nfdump(self):
@@ -578,6 +587,7 @@ class Input(ICore):
         self.nfdump_output = result.stdout.decode('utf-8')
         self.lines = self.read_nfdump_output()
         self.print_lines_read()
+        self.is_done_processing()
         return True
 
 
@@ -638,6 +648,8 @@ class Input(ICore):
             self.is_zeek_tabs = False
         self.lines = self.read_zeek_files()
         self.print_lines_read()
+        self.is_done_processing()
+
         connlog_path = os.path.join(self.zeek_dir, 'conn.log')
 
         self.print(f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}", 2, 0)
@@ -718,8 +730,9 @@ class Input(ICore):
             # proc_man:shutdown_gracefully()
             try:
                 os.kill(self.zeek_pid, signal.SIGKILL)
-            except Exception as e:
+            except Exception:
                 pass
+
         return True
 
     def run_zeek(self):
@@ -838,6 +851,7 @@ class Input(ICore):
                 self.print('Done reading 1 CYST flow.\n ', 0, 3)
 
                 time.sleep(2)
+        self.is_done_processing()
 
     def give_profiler(self, line):
         """
@@ -894,4 +908,8 @@ class Input(ICore):
                 f'Unrecognized file type "{self.input_type}". Stopping.'
             )
             return False
+
+        # no logic should be put here
+        # because some of the above handlers never return
+        # e.g. interface, stdin, cyst etc.
 
