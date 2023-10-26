@@ -14,8 +14,144 @@ on:
             - '!master'
 
 jobs:
+    pcap_integration_tests:
+        # specify the host OS
+        runs-on: ubuntu-latest
+        # 2 hours timeout
+        timeout-minutes: 7200
+        # start a container using slips dependencies image
+        container:
+            image: stratosphereips/slips_dependencies:latest
 
-    run_tests:
+        steps:
+            - name: PCAP integration tests
+              run: python3 -m pytest -s tests/integration_tests/test_pcap.py -p no:warnings -vv
+
+            - name: Upload Artifact
+              # run this job whether the above jobs failed or passed
+              if: success() || failure()
+              uses: actions/upload-artifact@v3
+              with:
+                name: pcap-integration-tests-output
+                path: |
+                  output/integration_tests
+
+    binetflow_integration_tests:
+        # specify the host OS
+        runs-on: ubuntu-latest
+        # 2 hours timeout
+        timeout-minutes: 7200
+        # start a container using slips dependencies image
+        container:
+            image: stratosphereips/slips_dependencies:latest
+
+        steps:
+            - name: Binetflow integration tests
+              run: python3 -m pytest -s tests/integration_tests/test_binetflow.py -p no:warnings -vv
+
+            - name: Upload Artifact
+              # run this job whether the above jobs failed or passed
+              if: success() || failure()
+              uses: actions/upload-artifact@v3
+              with:
+                name: binetflow-integration-tests-output
+                path: |
+                  output/integration_tests
+    
+    suricata_integration_tests:
+        # specify the host OS
+        runs-on: ubuntu-latest
+        # 2 hours timeout
+        timeout-minutes: 7200
+        # start a container using slips dependencies image
+        container:
+            image: stratosphereips/slips_dependencies:latest
+
+        steps:
+            - name: Suricata integration tests
+              run: python3 -m pytest -s tests/integration_tests/test_suricata.py -p no:warnings -vv
+
+            - name: Upload Artifact
+              # run this job whether the above jobs failed or passed
+              if: success() || failure()
+              uses: actions/upload-artifact@v3
+              with:
+                name: suricata-integration-tests-output
+                path: |
+                  output/integration_tests
+
+    zeek_dir_integration_tests:
+        # specify the host OS
+        runs-on: ubuntu-latest
+        # 2 hours timeout
+        timeout-minutes: 7200
+        # start a container using slips dependencies image
+        container:
+            image: stratosphereips/slips_dependencies:latest
+
+        steps:
+            - name: Zeek dir integration tests
+              run: python3 -m pytest -s tests/integration_tests/test_zeek_dir.py -p no:warnings -vv
+
+            - name: Upload Artifact
+              # run this job whether the above jobs failed or passed
+              if: success() || failure()
+              uses: actions/upload-artifact@v3
+              with:
+                name: zeek-dir-integration-tests-output
+                path: |
+                  output/integration_tests
+                  
+                  
+
+    zeek_conn_log_integration_tests:
+        # specify the host OS
+        runs-on: ubuntu-latest
+        # 2 hours timeout
+        timeout-minutes: 7200
+        # start a container using slips dependencies image
+        container:
+            image: stratosphereips/slips_dependencies:latest
+
+        steps:
+            - name: Zeek conn.log integration tests
+              run: python3 -m pytest -s tests/integration_tests/test_zeek_conn_log.py -p no:warnings -vv
+
+            - name: Upload Artifact
+              # run this job whether the above jobs failed or passed
+              if: success() || failure()
+              uses: actions/upload-artifact@v3
+              with:
+                name: zeek-conn-log-integration-tests-output
+                path: |
+                  output/integration_tests
+
+    nfdump_integration_tests:
+        # specify the host OS
+        runs-on: ubuntu-latest
+        # 2 hours timeout
+        timeout-minutes: 7200
+        # start a container using slips dependencies image
+        container:
+            image: stratosphereips/slips_dependencies:latest
+
+        steps:
+            - name: Nfdump integration tests
+              run: python3 -m pytest -s tests/integration_tests/test_nfdump.py -p no:warnings -vv
+
+            - name: Upload Artifact
+              # run this job whether the above jobs failed or passed
+              if: success() || failure()
+              uses: actions/upload-artifact@v3
+              with:
+                name: nfdump-integration-tests-output
+                path: |
+                  output/integration_tests
+                  
+
+
+
+    run_unit_tests:
         # specify the host OS
         runs-on: ubuntu-latest
         # 2 hours timeout
@@ -36,17 +172,15 @@ jobs:
             - name: Run database unit tests
               run: python3  -m pytest tests/test_database.py -p no:warnings -vv
 
-            - name: Run daemon unit tests
-              run: python3  -m pytest tests/test_daemon.py -p no:warnings -vv
-
             - name: Clear redis cache
               run: ./slips.py -cc
 
-            - name: Integration tests
-              run: python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
 
             - name: Config file tests
               run: python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
+
+            - name: Integration tests
+              run: python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
 
             - name: Upload Artifact
               # run this job whether the above jobs failed or passed
