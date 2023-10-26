@@ -22,6 +22,9 @@ from modules.arp.arp import ARP
 import shutil
 from unittest.mock import patch, Mock
 import os
+def do_nothing(*arg):
+    """Used to override the print function because using the self.print causes broken pipes"""
+    pass
 
 
 
@@ -154,8 +157,9 @@ class ModuleFactory:
                 line_type=False,
                 is_profiler_done_event=self.dummy_termination_event,
             )
-            inputProcess.db.rdb = mock_rdb
-
+        inputProcess.db.rdb = mock_rdb
+        inputProcess.is_done_processing = do_nothing
+        inputProcess.get_flows_number = do_nothing
         inputProcess.bro_timeout = 1
         # override the print function to avoid broken pipes
         inputProcess.print = do_nothing

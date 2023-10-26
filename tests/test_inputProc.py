@@ -1,6 +1,7 @@
 import pytest
 from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing
+from unittest.mock import patch
 import shutil
 import os
 
@@ -15,7 +16,7 @@ def test_handle_pcap_and_interface(
     # no need to test interfaces because in that case read_zeek_files runs in a loop and never returns
     inputProcess = ModuleFactory().create_inputProcess_obj(input_information, input_type, mock_rdb)
     inputProcess.zeek_pid = 'False'
-    inputProcess.is_zeek_tabs = True
+    inputProcess.is_zeek_tabs = False
     assert inputProcess.handle_pcap_and_interface() is True
     # delete the zeek logs created
     shutil.rmtree(inputProcess.zeek_dir)
@@ -80,8 +81,9 @@ def test_handle_nfdump(
 def test_handle_binetflow(
     input_type, input_information, mock_rdb
 ):
-    inputProcess = ModuleFactory().create_inputProcess_obj(input_information, input_type, mock_rdb)
-    assert inputProcess.handle_binetflow() is True
+    input = ModuleFactory().create_inputProcess_obj(input_information, input_type, mock_rdb)
+    with patch.object(input, 'get_flows_number', return_value=5):
+        assert input.handle_binetflow() is True
 
 
 @pytest.mark.parametrize(
