@@ -57,7 +57,13 @@ class Profiler(ICore):
 
     def init(self,
              is_profiler_done: multiprocessing.Semaphore = None,
-             profiler_queue=None):
+             profiler_queue=None,
+             is_profiler_done_event : multiprocessing.Event =None
+             ):
+        # when profiler is done processing, it releases this semaphore,
+        # that's how the process_manager knows it's done
+        # when both the input and the profiler are done,
+        # the input process signals the rest of the modules to stop
         self.done_processing: multiprocessing.Semaphore = is_profiler_done
         # every line put in this queue should be profiled
         self.profiler_queue = profiler_queue
@@ -75,6 +81,9 @@ class Profiler(ICore):
         self.channels = {
             'reload_whitelist': self.c1,
         }
+        # is set by this proc to tell input proc that we are dne processing and it can exit no issue
+        self.is_profiler_done_event = is_profiler_done_event
+
 
 
     def read_configuration(self):
@@ -331,6 +340,7 @@ class Profiler(ICore):
         """is called to mark this process as done processing so slips.py would know when to terminate"""
         # signal slips.py that this process is done
         self.done_processing.release()
+        self.is_profiler_done_event.set()
 
 
     def check_for_stop_msg(self, msg: str)-> bool:
@@ -350,6 +360,7 @@ class Profiler(ICore):
             f'Stopping Profiler Process. Received {self.rec_lines} lines '
             f'({utils.convert_format(datetime.now(), utils.alerts_format)})', 2, 0,
         )
+        self.is_done_processing()
         return True
 
     def pre_main(self):
@@ -368,10 +379,10 @@ class Profiler(ICore):
                 line: dict = msg['line']
                 input_type: str = msg['input_type']
                 total_flows: int = msg.get('total_flows', 0)
-            except Exception:
-                # the queue is empty, which means input proc
-                # is done reading flows
-                self.is_done_processing()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                # ValueError is raised when the queue is closed
                 continue
 
             # TODO who is putting this True here?
