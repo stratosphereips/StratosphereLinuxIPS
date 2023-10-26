@@ -3,6 +3,7 @@ from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.profiler import Profiler
+from slips_files.core.output import Output
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 from modules.flowalerts.flowalerts import FlowAlerts
 from slips_files.core.input import Input
@@ -16,7 +17,7 @@ from modules.virustotal.virustotal import VT
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
-from multiprocessing import Queue, Event
+from multiprocessing import Queue, Event, Semaphore
 from modules.arp.arp import ARP
 import shutil
 from unittest.mock import patch, Mock
@@ -43,6 +44,7 @@ class ModuleFactory:
         self.profiler_queue = Queue()
         self.input_queue = Queue()
         self.dummy_termination_event = Event()
+        self.logger = Output()
 
 
     def get_default_db(self):
@@ -50,7 +52,7 @@ class ModuleFactory:
         return self.create_db_manager_obj(6379)
 
     def create_db_manager_obj(self, port, output_dir='output/', flush_db=False):
-        db = DBManager(output_dir, port, flush_db=flush_db)
+        db = DBManager(self.logger, output_dir, port, flush_db=flush_db)
         db.r = db.rdb.r
         db.print = do_nothing
         assert db.get_used_redis_port() == port
@@ -68,7 +70,10 @@ class ModuleFactory:
 
     def create_http_analyzer_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            http_analyzer = HTTPAnalyzer('dummy_output_dir', 6379, self.dummy_termination_event)
+            http_analyzer = HTTPAnalyzer(self.logger,
+                                         'dummy_output_dir',
+                                         6379,
+                                         self.dummy_termination_event)
             http_analyzer.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -77,7 +82,10 @@ class ModuleFactory:
 
     def create_virustotal_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            virustotal = VT('dummy_output_dir', 6379, self.dummy_termination_event)
+            virustotal = VT(self.logger,
+                            'dummy_output_dir',
+                            6379,
+                            self.dummy_termination_event)
             virustotal.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -90,7 +98,11 @@ class ModuleFactory:
 
     def create_arp_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            arp = ARP('dummy_output_dir', 6379, self.dummy_termination_event)
+            arp = ARP(self.logger,
+                      'dummy_output_dir',
+                      6379,
+                      self.dummy_termination_event
+                      )
             arp.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         arp.print = do_nothing
@@ -98,7 +110,10 @@ class ModuleFactory:
 
     def create_blocking_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            blocking = Blocking('dummy_output_dir', 6379, self.dummy_termination_event)
+            blocking = Blocking(self.logger,
+                                'dummy_output_dir',
+                                6379,
+                                self.dummy_termination_event)
             blocking.db.rdb = mock_rdb
 
         # override the print function to avoid broken pipes
@@ -107,7 +122,10 @@ class ModuleFactory:
 
     def create_flowalerts_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            flowalerts = FlowAlerts('dummy_output_dir', 6379, self.dummy_termination_event)
+            flowalerts = FlowAlerts(self.logger,
+                                    'dummy_output_dir',
+                                    6379,
+                                    self.dummy_termination_event)
             flowalerts.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -119,11 +137,14 @@ class ModuleFactory:
             ):
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
+        dummy_semaphore = Semaphore(0)
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             inputProcess = Input(
-                'dummy_output_dir', 6379,
-                # 'output/',
+                Output(),
+                'dummy_output_dir',
+                6379,
                 self.dummy_termination_event,
+                is_input_done=dummy_semaphore,
                 profiler_queue=self.profiler_queue,
                 input_type=input_type,
                 input_information=input_information,
@@ -131,6 +152,7 @@ class ModuleFactory:
                 zeek_or_bro=check_zeek_or_bro(),
                 zeek_dir=zeek_tmp_dir,
                 line_type=False,
+                is_profiler_done_event=self.dummy_termination_event,
             )
             inputProcess.db.rdb = mock_rdb
 
@@ -145,7 +167,11 @@ class ModuleFactory:
 
     def create_ip_info_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            ip_info = IPInfo('dummy_output_dir', 6379, self.dummy_termination_event)
+            ip_info = IPInfo(self.logger,
+                             'dummy_output_dir',
+                             6379,
+                             self.dummy_termination_event
+                             )
             ip_info.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         ip_info.print = do_nothing
@@ -161,7 +187,10 @@ class ModuleFactory:
         yara_rules_path = 'tests/yara_rules_for_testing/rules/'
         compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            leak_detector = LeakDetector('dummy_output_dir', 6379, self.dummy_termination_event)
+            leak_detector = LeakDetector(self.logger,
+                                         'dummy_output_dir',
+                                         6379,
+                                         self.dummy_termination_event)
             leak_detector.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         leak_detector.print = do_nothing
@@ -173,10 +202,15 @@ class ModuleFactory:
 
 
     def create_profiler_obj(self):
+        dummy_semaphore = Semaphore(0)
         profilerProcess = Profiler(
-            'output/', 6377,
+            self.logger,
+            'output/',
+            6377,
             self.dummy_termination_event,
+            is_profiler_done=dummy_semaphore,
             profiler_queue=self.input_queue,
+            is_profiler_done_event=self.dummy_termination_event,
         )
 
         # override the self.print function to avoid broken pipes
@@ -195,7 +229,10 @@ class ModuleFactory:
 
     def create_threatintel_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            threatintel = ThreatIntel('dummy_output_dir', 6379, self.dummy_termination_event)
+            threatintel = ThreatIntel(self.logger,
+                                      'dummy_output_dir',
+                                      6379,
+                                      self.dummy_termination_event)
             threatintel.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -204,7 +241,11 @@ class ModuleFactory:
 
     def create_update_manager_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            update_manager = UpdateManager('dummy_output_dir', 6379, self.dummy_termination_event)
+            update_manager = UpdateManager(self.logger,
+                                           'dummy_output_dir',
+                                           6379,
+                                           self.dummy_termination_event)
+
             update_manager.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -213,7 +254,7 @@ class ModuleFactory:
 
     def create_whitelist_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            whitelist = Whitelist(mock_rdb)
+            whitelist = Whitelist(self.logger, mock_rdb)
             whitelist.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
