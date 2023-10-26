@@ -24,10 +24,8 @@ from slips_files.core.helpers.symbols_handler import SymbolHandler
 from datetime import datetime
 from slips_files.core.helpers.whitelist import Whitelist
 from dataclasses import asdict
-import json
-import sys
+import queue
 import ipaddress
-import traceback
 from slips_files.common.abstracts.core import ICore
 from pprint import pp
 
@@ -327,12 +325,32 @@ class Profiler(ICore):
         # exit it will attempt to join the queue’s background thread.
         # this causes a deadlock
         # to avoid this behaviour we should call cancel_join_thread
-        self.profiler_queue.cancel_join_thread()
+        # self.profiler_queue.cancel_join_thread()
 
     def is_done_processing(self):
         """is called to mark this process as done processing so slips.py would know when to terminate"""
         # signal slips.py that this process is done
         self.done_processing.release()
+
+
+    def check_for_stop_msg(self, msg: str)-> bool:
+        """
+        this 'stop' msg is the last msg ever sent by the input process
+        to indicate that no more flows are coming
+        """
+
+        if msg != 'stop':
+            return False
+
+        self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
+                   f"{self.whitelisted_flows_ctr}", 2, 0)
+
+        self.shutdown_gracefully()
+        self.print(
+            f'Stopping Profiler Process. Received {self.rec_lines} lines '
+            f'({utils.convert_format(datetime.now(), utils.alerts_format)})', 2, 0,
+        )
+        return True
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -340,7 +358,13 @@ class Profiler(ICore):
     def main(self):
         while not self.should_stop():
             try:
-                msg: dict = self.profiler_queue.get(timeout=3)
+                # this msg can be a str only when it's a 'stop' msg indicating that this module should stop
+                msg: dict = self.profiler_queue.get(timeout=1, block=False)
+                # ALYA, DO NOT REMOVE THIS CHECK
+                # without it, there's no way thi module will know it's time to
+                # stop and no new fows are coming
+                if self.check_for_stop_msg(msg):
+                    return 1
                 line: dict = msg['line']
                 input_type: str = msg['input_type']
                 total_flows: int = msg.get('total_flows', 0)
