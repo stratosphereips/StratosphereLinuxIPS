@@ -24,6 +24,7 @@ jobs:
             image: stratosphereips/slips_dependencies:latest
 
         steps:
+            - uses: actions/checkout@v2
             - name: PCAP integration tests
               run: python3 -m pytest -s tests/integration_tests/test_pcap.py -p no:warnings -vv
 
@@ -46,6 +47,7 @@ jobs:
             image: stratosphereips/slips_dependencies:latest
 
         steps:
+            - uses: actions/checkout@v2
             - name: Binetflow integration tests
               run: python3 -m pytest -s tests/integration_tests/test_binetflow.py -p no:warnings -vv
 
@@ -58,6 +60,7 @@ jobs:
                 path: |
                   output/integration_tests
     
+
     suricata_integration_tests:
         # specify the host OS
         runs-on: ubuntu-latest
@@ -68,6 +71,7 @@ jobs:
             image: stratosphereips/slips_dependencies:latest
 
         steps:
+            - uses: actions/checkout@v2
             - name: Suricata integration tests
               run: python3 -m pytest -s tests/integration_tests/test_suricata.py -p no:warnings -vv
 
@@ -80,6 +84,7 @@ jobs:
                 path: |
                   output/integration_tests
 
+
     zeek_dir_integration_tests:
         # specify the host OS
         runs-on: ubuntu-latest
@@ -90,6 +95,7 @@ jobs:
             image: stratosphereips/slips_dependencies:latest
 
         steps:
+            - uses: actions/checkout@v2
             - name: Zeek dir integration tests
               run: python3 -m pytest -s tests/integration_tests/test_zeek_dir.py -p no:warnings -vv
 
@@ -114,6 +120,7 @@ jobs:
             image: stratosphereips/slips_dependencies:latest
 
         steps:
+            - uses: actions/checkout@v2
             - name: Zeek conn.log integration tests
               run: python3 -m pytest -s tests/integration_tests/test_zeek_conn_log.py -p no:warnings -vv
 
@@ -136,6 +143,7 @@ jobs:
             image: stratosphereips/slips_dependencies:latest
 
         steps:
+            - uses: actions/checkout@v2
             - name: Nfdump integration tests
               run: python3 -m pytest -s tests/integration_tests/test_nfdump.py -p no:warnings -vv
 
