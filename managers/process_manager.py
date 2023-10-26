@@ -30,6 +30,10 @@ class ProcessManager:
         # release the semaphore. Once having the semaphore, then slips.py can terminate slips.
         self.is_input_done = Semaphore(0)
         self.is_profiler_done = Semaphore(0)
+        # is set by the profiler process to indicat ethat it's done so that input can shutdown no issue
+        # now without this event, input process doesn't know that profiler is still waiting for the queue to stop
+        # and inout stops and renders the profiler queue useless and profiler cant get more lines anymore!
+        self.is_profiler_done_event = Event()
 
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
@@ -54,6 +58,7 @@ class ProcessManager:
             self.termination_event,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
+            is_profiler_done_event= self.is_profiler_done_event
         )
         profiler_process.start()
         self.main.print(
@@ -88,7 +93,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
-            is_input_done = self.is_input_done,
+            is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
             input_information=self.main.input_information,
@@ -96,6 +101,7 @@ class ProcessManager:
             zeek_or_bro=self.main.zeek_bro,
             zeek_dir=self.main.zeek_dir,
             line_type=self.main.line_type,
+            is_profiler_done_event=self.is_profiler_done_event,
         )
         input_process.start()
         self.main.print(
@@ -500,7 +506,6 @@ class ProcessManager:
                 hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
                 to_kill_first: List[Process] = hitlist[0]
                 to_kill_last: List[Process] = hitlist[1]
-
                 self.termination_event.set()
 
                 # to make sure we only warn the user once about hte pending modules
