@@ -363,6 +363,28 @@ class Profiler(ICore):
         self.is_done_processing()
         return True
 
+    def init_pbar(self, input_type: str, total_flows:int):
+        """
+        sends the output.py a msg with the pbar details for initialization
+        """
+        # don't init the pbar when given the following
+        # input types because we don't
+        # know the total flows beforehand
+        if input_type in ('pcap', 'interface', 'stdin'):
+            # pbar not supported
+            self.supported_pbar = False
+            return
+
+        # Find the number of flows we're going to receive of input received
+        self.notify_observers({
+            'bar': 'init',
+            'bar_info': {
+                'input_type': self.input_type,
+                'total_flows': total_flows
+            }
+        })
+        self.supported_pbar = True
+
     def pre_main(self):
         utils.drop_root_privs()
 
@@ -398,18 +420,7 @@ class Profiler(ICore):
             if not self.input_type:
                 # Find the type of input received
                 self.input_type = self.define_separator(line, input_type)
-                # don't init the pbar when given the following
-                # input types because we don't
-                # know the total flows beforehand
-                if input_type not in ('pcap', 'interface', 'stdin'):
-                    # Find the number of flows we're going to receive of input received
-                    self.notify_observers({
-                        'bar': 'init',
-                        'bar_info': {
-                            'input_type': self.input_type,
-                            'total_flows': total_flows
-                        }
-                    })
+                self.init_pbar(input_type, total_flows)
 
             # What type of input do we have?
             if not self.input_type:
@@ -428,7 +439,10 @@ class Profiler(ICore):
             if self.flow:
                 self.add_flow_to_profile()
 
-            self.notify_observers({'bar': 'update'})
+
+            # now that one flow is processed tell output.py to update the bar
+            if self.supported_pbar:
+                self.notify_observers({'bar': 'update'})
 
             # listen on this channel in case whitelist.conf is changed,
             # we need to process the new changes
