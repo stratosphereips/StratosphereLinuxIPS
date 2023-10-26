@@ -324,7 +324,7 @@ class Output(IObserver):
         self.progress_bar.update(1)
         if self.progress_bar.n == self.total_flows:
             self.remove_stats_from_progress_bar()
-            self.print(f"Done reading all flows. Slips is now processing them.")
+            self.print(self.name, f"Done reading all flows. Slips is now processing them.")
             # remove it from the bar because we'll be prining it in a new line
             self.done_reading_flows = True
         # self.progress_bar.refresh()
