@@ -26,6 +26,7 @@ from watchdog.observers import Observer
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.common.imports import *
 import time
+import queue
 import json
 import threading
 import subprocess
@@ -65,6 +66,7 @@ class Input(ICore):
             zeek_or_bro=None,
             zeek_dir=None,
             line_type=None,
+            is_profiler_done_event : multiprocessing.Event =None
     ):
         self.input_type = input_type
         self.profiler_queue = profiler_queue
@@ -76,6 +78,8 @@ class Input(ICore):
         self.zeek_dir: str = zeek_dir
         self.zeek_or_bro: str = zeek_or_bro
         self.read_lines_delay = 0
+        # when input is done processing, it reeleases this semaphore, that's how the process_manager knows it's done
+        # when both the input and the profiler are done, the input process signals the rest of the modules to stop
         self.done_processing: multiprocessing.Semaphore = is_input_done
         self.packet_filter = False
         if cli_packet_filter:
@@ -104,10 +108,16 @@ class Input(ICore):
         )
         # used to give the profiler the total amount of flows to read with the first flow only
         self.is_first_flow = True
+        # is set by the profiler to tell this proc that we it is done processing
+        # the input process and shut down and close the profiler queue no issue
+        self.is_profiler_done_event = is_profiler_done_event
 
     def is_done_processing(self):
         """marks this process as done processing so slips.py would know when to terminate"""
         # signal slips.py that this process is done
+        # tell profiler that this process is done and no kmore flows are arriving
+        self.profiler_queue.put('stop')
+        self.is_profiler_done_event.wait()
         self.done_processing.release()
 
     def read_configuration(self):
@@ -121,8 +131,9 @@ class Input(ICore):
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
     def stop_queues(self):
-        """Stops the profiler and output queues"""
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
+        """Stops the profiler queue"""
+        # By default if a process is not the creator of the queue then on exit it
+        # will attempt to join the queue’s background thread. The process can call cancel_join_thread() to make join_thread() do nothing.
         self.profiler_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:
@@ -276,7 +287,7 @@ class Input(ICore):
         }
         return True
 
-    def should_stop_zeek(self):
+    def reached_timeout(self):
         # If we don't have any cached lines to send,
         # it may mean that new lines are not arriving. Check
         if not self.cache_lines:
@@ -328,7 +339,6 @@ class Input(ICore):
         return earliest_line, file_with_earliest_flow
 
     def read_zeek_files(self) -> int:
-        # Get the zeek files in the folder now
         self.zeek_files = self.db.get_all_zeek_file()
         self.open_file_handlers = {}
         self.file_time = {}
@@ -347,7 +357,7 @@ class Input(ICore):
                 # from in self.cache_lines
                 self.cache_nxt_line_in_file(filename)
 
-            if self.should_stop_zeek():
+            if self.reached_timeout():
                 break
 
             earliest_line, file_with_earliest_flow = self.get_earliest_line()
@@ -355,6 +365,7 @@ class Input(ICore):
                 continue
 
             # self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
+
             self.give_profiler(earliest_line)
             self.lines += 1
             # when testing, no need to read the whole file!
@@ -369,6 +380,7 @@ class Input(ICore):
 
         self.close_all_handles()
         return self.lines
+
 
     def get_flows_number(self, file) -> int:
         """
@@ -870,6 +882,7 @@ class Input(ICore):
             to_send.update({
                 'total_flows': self.total_flows,
             })
+        # when the queue is full, the default behaviour is to block if necessary until a free slot is available
         self.profiler_queue.put(to_send)
 
     def main(self):
@@ -906,8 +919,8 @@ class Input(ICore):
                 f'Unrecognized file type "{self.input_type}". Stopping.'
             )
             return False
-
         # no logic should be put here
         # because some of the above handlers never return
         # e.g. interface, stdin, cyst etc.
+        return 1
 
