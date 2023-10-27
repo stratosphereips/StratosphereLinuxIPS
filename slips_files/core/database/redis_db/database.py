@@ -507,7 +507,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         return old_profileid_twid_data
 
     def getSlipsInternalTime(self):
-        return self.r.get('slips_internal_time')
+        return self.r.get('slips_internal_time') or 0
 
     def get_redis_keys_len(self) -> int:
         """returns the length of all keys in the db"""

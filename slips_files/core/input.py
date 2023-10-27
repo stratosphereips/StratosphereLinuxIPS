@@ -400,7 +400,7 @@ class Input(ICore):
         with open(file, "rb") as f:
             count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
 
-        if self.is_zeek_tabs:
+        if hasattr(self, 'is_zeek_tabs') and self.is_zeek_tabs:
             # subtract comment lines in zeek tab files,
             # they shouldn't be considered flows
             count -= 9
