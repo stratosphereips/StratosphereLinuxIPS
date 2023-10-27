@@ -133,12 +133,13 @@ class Output(IObserver):
         """
         Logs line to slips.log
         """
-        sender, msg = msg['from'], msg['txt']
+
         # don't log in daemon mode, all printed
         # lines are redirected to slips.log by default
-        if "-D" in sys.argv and 'update'.lower() not in sender and 'stopping' not in sender:
-            # if the sender is the update manager, always log
+        if "-D" in sys.argv:
             return
+
+        sender, msg = msg['from'], msg['txt']
 
         date_time = datetime.now()
         date_time = utils.convert_format(date_time, utils.alerts_format)
