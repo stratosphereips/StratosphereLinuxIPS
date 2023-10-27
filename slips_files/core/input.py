@@ -249,6 +249,7 @@ class Input(ICore):
     def cache_nxt_line_in_file(self, filename):
         """
         reads 1 line of the given file and stores in queue for sending to the profiler
+        :param: full path to the file. includes the .log extension
         """
         file_handle = self.get_file_handle(filename)
         if not file_handle:
@@ -570,16 +571,16 @@ class Input(ICore):
         ):
             # unsupported file
             return False
+
         if os.path.exists(self.given_path):
-            # in case of CYST flows, the given path is cyst and there's no way to get the total flows
+            # in case of CYST flows, the given path is 'cyst' and there's no way to get the total flows
             total_flows = self.get_flows_number(self.given_path)
             self.is_zeek_tabs = self.is_zeek_tabs_file(self.given_path)
             self.db.set_input_metadata({'total_flows': total_flows})
             self.total_flows = total_flows
 
-        file_path_without_extension = os.path.splitext(self.given_path)[0]
         # Add log file to database
-        self.db.add_zeek_file(file_path_without_extension)
+        self.db.add_zeek_file(self.given_path)
 
         # this timeout is the only thing that
         # makes the read_zeek_files() return
