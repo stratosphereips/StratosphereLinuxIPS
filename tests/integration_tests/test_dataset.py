@@ -35,10 +35,17 @@ def run_slips(cmd):
             'dataset/test7-malicious.pcap',
             15,
             'test7/',
+            # Detected A device changing IPs. IP 192.168.2.12 was found with MAC address
+            # 68:5b:35:b1:55:93 but the MAC belongs originally to IP: 169.254.242.182
             'A device changing IPs',
             6666,
         ),
-        ('dataset/test8-malicious.pcap', 3, 'test8/', 'performing an arp scan', 6665),
+        ('dataset/test8-malicious.pcap',
+         3,
+         'test8/',
+         'performing an arp scan',
+         6665
+         ),
     ],
 )
 def test_pcap(
