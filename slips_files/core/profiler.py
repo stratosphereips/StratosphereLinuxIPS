@@ -339,8 +339,11 @@ class Profiler(ICore):
     def is_done_processing(self):
         """is called to mark this process as done processing so slips.py would know when to terminate"""
         # signal slips.py that this process is done
+        self.print(f"Marking Profiler as done processing.", log_to_logfiles_only=True)
         self.done_processing.release()
+        self.print(f"Profiler is done processing.", log_to_logfiles_only=True)
         self.is_profiler_done_event.set()
+        self.print(f"Profiler is done telling input.py that it's done processing.", log_to_logfiles_only=True)
 
 
     def check_for_stop_msg(self, msg: str)-> bool:

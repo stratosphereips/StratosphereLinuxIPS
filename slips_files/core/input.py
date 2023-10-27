@@ -116,8 +116,11 @@ class Input(ICore):
         """marks this process as done processing so slips.py would know when to terminate"""
         # signal slips.py that this process is done
         # tell profiler that this process is done and no kmore flows are arriving
+        self.print(f"Telling Profiler to stop because no more input is arriving.", log_to_logfiles_only=True)
         self.profiler_queue.put('stop')
+        self.print(f"Waiting for Profiler to stop.", log_to_logfiles_only=True)
         self.is_profiler_done_event.wait()
+        self.print(f"Input is done processing.", log_to_logfiles_only=True)
         self.done_processing.release()
 
     def read_configuration(self):
