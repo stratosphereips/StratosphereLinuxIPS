@@ -399,11 +399,18 @@ class Input(ICore):
                 yield b
 
         with open(file, "rb") as f:
+            # counts the occurances of \n in a file
             count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+
 
         if hasattr(self, 'is_zeek_tabs') and self.is_zeek_tabs:
             # subtract comment lines in zeek tab files,
             # they shouldn't be considered flows
+
+            # NOTE: the counting of \n returns the actual lines-1 bc the
+            # very last line of a zeek tab log file doesn't contain a \n
+            # so instead of subtracting the 9 comment lines, we'll subtract
+            # 8 bc the very last comment line isn't even included in count
             count -= 9
         return count
 
@@ -562,7 +569,8 @@ class Input(ICore):
 
     def handle_zeek_log_file(self):
         """
-        Handles conn.log files given to slips directly, and conn.log flows given to slips through CYST unix socket.
+        Handles conn.log files given to slips directly,
+         and conn.log flows given to slips through CYST unix socket.
         """
         if (
                 (not self.given_path.endswith(".log")
@@ -574,8 +582,8 @@ class Input(ICore):
 
         if os.path.exists(self.given_path):
             # in case of CYST flows, the given path is 'cyst' and there's no way to get the total flows
-            total_flows = self.get_flows_number(self.given_path)
             self.is_zeek_tabs = self.is_zeek_tabs_file(self.given_path)
+            total_flows = self.get_flows_number(self.given_path)
             self.db.set_input_metadata({'total_flows': total_flows})
             self.total_flows = total_flows
 
