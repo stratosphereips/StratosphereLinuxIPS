@@ -472,7 +472,7 @@ the channel, make sure that:
 Slips has 2 kinds of tests, unit tests and integration tests.
 
 integration tests are done by testing all files in our ```dataset/``` dir and 
-are done in ```tests/test_dataset.py```
+are done by the test files in ```tests/integration_tests/```
 
 Before pushing, run the unit tests and integration tests by:
 

@@ -8,7 +8,7 @@ on:
 
 jobs:
 
-  test_slips_locally:
+  unit_tests_for_slips_locally:
     # runs the tests on a GH VM
     runs-on: ubuntu-20.04
     # 2 hours timeout
@@ -57,9 +57,6 @@ jobs:
 
     - name: Clear redis cache
       run: ./slips.py -cc
-
-    - name: Integration tests
-      run: python3 -m pytest -s tests/integration_tests/test_dataset.py  -p no:warnings -vv
 
     - name: Config file tests
       run: python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
@@ -144,7 +141,7 @@ jobs:
           redis-server --daemonize yes
           python3  -m pytest tests/test_daemon.py -p no:warnings -vv
 
-    - name: Run integration tests inside docker
+    - name: Run binetflow integration tests inside docker
       uses: addnab/docker-run-action@v3
       with:
         image: stratosphereips/slips:latest
@@ -155,7 +152,72 @@ jobs:
           git reset --hard
           git pull & git checkout origin/develop
           redis-server --daemonize yes
-          python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
+          python3 -m pytest -s tests/integration_tests/test_binetflow.py -p no:warnings -vv
+
+    - name: Run nfdump integration tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        # mount the host's output/ dir to docker's output/ dir, the goal is to access integration
+        # tests output in docker from the host to upload it later
+        options: -v ${{ github.workspace }}/output:/StratosphereLinuxIPS/output
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
+          python3 -m pytest -s tests/integration_tests/test_nfdump.py -p no:warnings -vv
+
+    - name: Run PCAP integration tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        # mount the host's output/ dir to docker's output/ dir, the goal is to access integration
+        # tests output in docker from the host to upload it later
+        options: -v ${{ github.workspace }}/output:/StratosphereLinuxIPS/output
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
+          python3 -m pytest -s tests/integration_tests/test_pcap.py -p no:warnings -vv
+
+    - name: Run suricata integration tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        # mount the host's output/ dir to docker's output/ dir, the goal is to access integration
+        # tests output in docker from the host to upload it later
+        options: -v ${{ github.workspace }}/output:/StratosphereLinuxIPS/output
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
+          python3 -m pytest -s tests/integration_tests/test_suricata.py -p no:warnings -vv
+
+    - name: Run zeek conn.log files integration tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        # mount the host's output/ dir to docker's output/ dir, the goal is to access integration
+        # tests output in docker from the host to upload it later
+        options: -v ${{ github.workspace }}/output:/StratosphereLinuxIPS/output
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
+          python3 -m pytest -s tests/integration_tests/test_zeek_conn_log.py -p no:warnings -vv
+
+    - name: Run Zeek directories integration tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        # mount the host's output/ dir to docker's output/ dir, the goal is to access integration
+        # tests output in docker from the host to upload it later
+        options: -v ${{ github.workspace }}/output:/StratosphereLinuxIPS/output
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
+          python3 -m pytest -s tests/integration_tests/test_zeek_dir.py -p no:warnings -vv
 
     - name: Run config file integration tests inside docker
       uses: addnab/docker-run-action@v3
