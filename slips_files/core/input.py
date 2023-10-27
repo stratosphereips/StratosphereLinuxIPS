@@ -164,7 +164,8 @@ class Input(ICore):
                     'data': nfdump_line
                 }
                 self.give_profiler(line)
-                if self.testing: break
+                if self.testing:
+                    break
 
         return self.total_flows
 

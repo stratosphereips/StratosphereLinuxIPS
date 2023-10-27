@@ -79,12 +79,6 @@ class Output(IObserver):
             cls.progress_bar = None
         return cls.obj
 
-    def set_progress_bar(self, pbar: tqdm):
-        self.progress_bar = pbar
-        Output.progress_bar = pbar
-
-    def get_progress_bar(self) -> tqdm:
-        return self.progress_bar
 
     @classmethod
     def _read_configuration(cls):
@@ -315,8 +309,9 @@ class Output(IObserver):
         wrapper for tqdm.update()
         adds 1 to the number of flows processed
         """
-        if not hasattr(self, 'progress_bar'):
+        if not self.progress_bar:
             # this module wont have the progress_bar set if it's running on pcap or interface
+            # or if the output is redirected to a file!
             return
 
         if self.slips_mode == 'daemonized':

@@ -408,6 +408,7 @@ class Profiler(ICore):
                 continue
             except Exception as e:
                 # ValueError is raised when the queue is closed
+
                 continue
 
             # TODO who is putting this True here?
