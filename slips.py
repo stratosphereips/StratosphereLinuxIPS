@@ -78,6 +78,7 @@ class Main(IObservable):
 
         # in testing mode we manually set the following params
         if not testing:
+
             self.args = self.conf.get_args()
             self.pid = os.getpid()
             self.checker.check_given_flags()
@@ -223,9 +224,12 @@ class Main(IObservable):
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to update orgs and ports info
-                update_manager = UpdateManager(self.args.output,
-                                               self.redis_port,
-                                               multiprocessing.Event())
+                update_manager = UpdateManager(
+                    self.logger,
+                    self.args.output,
+                    self.redis_port,
+                    multiprocessing.Event()
+                )
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -278,11 +282,6 @@ class Main(IObservable):
         if self.conf.delete_zeek_files():
             shutil.rmtree(self.zeek_dir)
 
-    def is_debugger_active(self) -> bool:
-        """Return if the debugger is currently active"""
-        gettrace = getattr(sys, 'gettrace', lambda: None)
-        return gettrace() is not None
-
     def prepare_output_dir(self):
         """
         Clears the output dir if it already exists , or creates a new one if it doesn't exist
@@ -326,7 +325,6 @@ class Main(IObservable):
 
         os.makedirs(self.args.output)
 
-        print(f'[Main] Storing Slips logs in {self.args.output}')
 
     def set_mode(self, mode, daemon=''):
         """
@@ -501,49 +499,42 @@ class Main(IObservable):
         print(slips_version)
 
 
-
-    def should_run_non_stop(self) -> bool:
-        """
-        determines if slips shouldn't terminate because by default,
-        it terminates when there's no more incoming flows
-        """
-        # these are the cases where slips should be running non-stop
-        # when slips is reading from a special module other than the input process
-        # this module should handle the stopping of slips
-        if (
-                self.is_debugger_active()
-                or self.input_type in ('stdin', 'CYST')
-                or self.is_interface
-        ):
-            return True
-        return False
-
     def update_stats(self):
         """
         updates the statistics shown next to the progress bar or shown in a new line
         """
-        # if not hasattr(self, 'progress_bar'):
-        #     return
+        # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
+        # for other files, we print a progress bar + the stats using outputprocess
+        if not self.mode == 'interactive':
+            return
 
+        # only update the stats every 5s
         now = datetime.now()
         if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') < 5:
             return
 
-        # only update the stats if 5 seconds passed
         self.last_updated_stats_time = now
         now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
         profilesLen = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         msg = f'Total analyzed IPs so far: ' \
-              f'{profilesLen}. ' \
-              f'Evidence Added: {evidence_number}. ' \
+              f'{green(profilesLen)}. ' \
+              f'Evidence Added: {green(evidence_number)}. ' \
               f'IPs sending traffic in the last ' \
-              f'{self.twid_width}: {modified_ips_in_the_last_tw}. ' \
+              f'{self.twid_width}: {green(modified_ips_in_the_last_tw)}. ' \
               f'({now})'
-
         self.print(msg)
 
+    def update_host_ip(self, hostIP, modified_profiles) -> str:
+        """
+        when running on an interface we keep track of the host IP. If there was no
+        # modified TWs in the host IP, we check if the network was changed.
+        """
+        if self.is_interface and hostIP not in modified_profiles:
+            if hostIP := self.metadata_man.get_host_ip():
+                self.db.set_host_ip(hostIP)
+        return hostIP
 
     def start(self):
         """Main Slips Function"""
@@ -578,7 +569,7 @@ class Main(IObservable):
             self.logger = self.proc_man.start_output_process(current_stdout, stderr, slips_logfile)
             self.add_observer(self.logger)
 
-            self.db = DBManager(self.args.output, self.redis_port)
+            self.db = DBManager(self.logger, self.args.output, self.redis_port)
             self.db.set_input_metadata({
                     'output_dir': self.args.output,
                     'commit': self.commit,
@@ -650,7 +641,7 @@ class Main(IObservable):
 
             self.metadata_man.enable_metadata()
 
-            self.proc_man.start_input_process()
+            self.input_process = self.proc_man.start_input_process()
 
             # obtain the list of active processes
             self.proc_man.processes = multiprocessing.active_children()
@@ -678,21 +669,14 @@ class Main(IObservable):
 
             hostIP = self.metadata_man.store_host_ip()
 
-            # In each interval we check if there has been any modifications to
-            # the database by any module.
-            # If not, wait this amount of intervals and then stop slips.
-            intervals_to_wait = 4
+
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
             self.is_interface: bool = self.args.interface or self.db.is_growing_zeek_dir()
 
             while True:
-                message = self.c1.get_message(timeout=0.01)
-                if (
-                    message
-                    and utils.is_msg_intended_for(message, 'control_channel')
-                    and message['data'] == 'stop_slips'
-                ):
+                # check for the stop msg
+                if self.proc_man.should_stop():
                     self.proc_man.shutdown_gracefully()
                     break
 
@@ -701,38 +685,24 @@ class Main(IObservable):
 
                 # if you remove the below logic anywhere before the above sleep() statement
                 # it will try to get the return value very quickly before
-                # the webinterface thread sets it
+                # the webinterface thread sets it. so don't
                 self.ui_man.check_if_webinterface_started()
 
-                modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
-                # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
-                # for other files, we print a progress bar + the stats using outputprocess
-                if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
-                    self.update_stats()
+                self.update_stats()
 
                 # Check if we need to close any TWs
                 self.db.check_TW_to_close()
 
-                if self.is_interface and hostIP not in modified_profiles:
-                    # In interface we keep track of the host IP. If there was no
-                    # modified TWs in the host IP, we check if the network was changed.
-                    if hostIP := self.metadata_man.get_host_ip():
-                        self.db.set_host_ip(hostIP)
+                modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
+                hostIP: str = self.update_host_ip(hostIP, modified_profiles)
 
-                if self.should_run_non_stop():
+                # don't move this up because we still need to print the stats and check tws anyway
+                if self.proc_man.should_run_non_stop():
                     continue
 
-                # Reaches this point if we're running Slips on a file.
-                # countdown until slips stops if no TW modifications are happening
-                if modified_ips_in_the_last_tw == 0:
-                    # waited enough. stop slips
-                    if intervals_to_wait == 0:
-                        self.proc_man.shutdown_gracefully()
-                        break
-
-                    # If there were no modified TWs in the last timewindow time,
-                    # then start counting down
-                    intervals_to_wait -= 1
+                if self.proc_man.slips_is_done_receiving_new_flows():
+                    self.proc_man.shutdown_gracefully()
+                    break
 
                 self.db.check_health()
 
@@ -740,6 +710,7 @@ class Main(IObservable):
             # the EINTR error code happens if a signal occurred while the system call was in progress
             # comes here if zeek terminates while slips is still working
             self.proc_man.shutdown_gracefully()
+
 
 
 ####################

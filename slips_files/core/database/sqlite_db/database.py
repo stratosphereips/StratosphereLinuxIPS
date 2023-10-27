@@ -15,9 +15,11 @@ class SQLiteDB(IObservable):
     cursor_lock = Lock()
     trial = 0
 
-    def __init__(self, output_dir):
+    def __init__(self,
+                 logger: Output,
+                 output_dir: str):
         IObservable.__init__(self)
-        self.logger = Output()
+        self.logger = logger
         self.add_observer(self.logger)
         self._flows_db = os.path.join(output_dir, 'flows.sqlite')
         self.connect()

@@ -3,12 +3,13 @@ from pathlib import Path
 import os
 import shutil
 import binascii
+import subprocess
 import base64
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 integration_tests_dir = 'output/integration_tests/'
-
+alerts_file = 'alerts.log'
 
 #create the integration tests dir
 if not os.path.exists(integration_tests_dir):
@@ -106,3 +107,19 @@ def has_errors(output_dir):
                     return True
 
     return False
+
+
+
+alerts_file = 'alerts.log'
+
+
+
+def run_slips(cmd):
+    """runs slips and waits for it to end"""
+    slips = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        shell=True
+    )
+    return_code = slips.wait()
+    return return_code

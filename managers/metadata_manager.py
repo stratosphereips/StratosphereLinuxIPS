@@ -92,7 +92,7 @@ class MetadataManager:
                     f'Slips start date: {now}\n'
                     )
 
-        print(f'[Main] Metadata added to {metadata_dir}')
+        self.main.print(f'Metadata added to {metadata_dir}')
         return self.info_path
 
     def set_analysis_end_date(self):

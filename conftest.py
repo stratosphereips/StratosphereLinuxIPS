@@ -7,6 +7,7 @@ import os, sys, inspect
 from multiprocessing import Queue
 from unittest.mock import patch
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.output import Output
 
 
 # add parent dir to path for imports to work
@@ -46,6 +47,6 @@ def profiler_queue():
 
 @pytest.fixture
 def database():
-    db = DBManager('output/', 6379)
+    db = DBManager(Output(), 'output/', 6379)
     db.print = do_nothing
     return db

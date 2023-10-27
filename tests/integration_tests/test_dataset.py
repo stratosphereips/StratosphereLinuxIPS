@@ -35,10 +35,17 @@ def run_slips(cmd):
             'dataset/test7-malicious.pcap',
             15,
             'test7/',
+            # Detected A device changing IPs. IP 192.168.2.12 was found with MAC address
+            # 68:5b:35:b1:55:93 but the MAC belongs originally to IP: 169.254.242.182
             'A device changing IPs',
             6666,
         ),
-        ('dataset/test8-malicious.pcap', 3, 'test8/', 'performing an arp scan', 6665),
+        ('dataset/test8-malicious.pcap',
+         3,
+         'test8/',
+         'performing an arp scan',
+         6665
+         ),
     ],
 )
 def test_pcap(
@@ -46,7 +53,7 @@ def test_pcap(
 ):
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py  -e 1 -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     run_slips(command)
     assert has_errors(output_dir) is False
@@ -109,7 +116,7 @@ def test_binetflow(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -t -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
+    command = f'./slips.py  -e 1 -t -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     run_slips(command)
 
@@ -195,7 +202,7 @@ def test_zeek_dir(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py  -e 1 -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     run_slips(command)
     assert has_errors(output_dir) is False
@@ -243,7 +250,7 @@ def test_zeek_conn_log(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py  -e 1 -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     run_slips(command)
     assert has_errors(output_dir) is False
@@ -269,9 +276,7 @@ def test_zeek_conn_log(
                     'vertical port scan',
                     'Connecting to private IP',
                     'non-HTTP established connection'
-
                 ]
-
         )
     ],
 )
@@ -290,7 +295,7 @@ def test_suricata(
     # ,"age":0,"state":"established","reason":"shutdown","alerted":false},"host":"stratosphere.org"}
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -t -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py  -e 1 -t -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     run_slips(command)
 
@@ -327,7 +332,7 @@ def test_nfdump(
     # expected_evidence = 'Connection to unknown destination port 902/TCP'
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -t -f {nfdump_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -e 1 -t -f {nfdump_path}  -o {output_dir} -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     run_slips(command)
 

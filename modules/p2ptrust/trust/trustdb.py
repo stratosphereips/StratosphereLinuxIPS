@@ -9,11 +9,12 @@ class TrustDB(IObservable):
 
     def __init__(
         self,
+        logger: Output,
         db_file: str,
         drop_tables_on_startup: bool = False,
     ):
         """create a database connection to a SQLite database"""
-        self.logger = Output()
+        self.logger = logger
         IObservable.__init__(self)
         self.add_observer(self.logger)
 

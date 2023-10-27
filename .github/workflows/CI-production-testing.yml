@@ -178,4 +178,3 @@ jobs:
         name: test_slips_in_docker-integration-tests-output
         path: |
           ${{ github.workspace }}/output/integration_tests
-

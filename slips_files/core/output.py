@@ -75,7 +75,8 @@ class Output(IObserver):
             cls.last_updated_stats_time = float("-inf")
             #TODO test this when daemonized
             cls.slips_mode = slips_mode
-
+            # will initialize it later if it's supported
+            cls.progress_bar = None
         return cls.obj
 
 
@@ -126,12 +127,13 @@ class Output(IObserver):
         """
         Logs line to slips.log
         """
-        sender, msg = msg['from'], msg['txt']
+
         # don't log in daemon mode, all printed
         # lines are redirected to slips.log by default
-        if "-D" in sys.argv and 'update'.lower() not in sender and 'stopping' not in sender:
-            # if the sender is the update manager, always log
+        if "-D" in sys.argv:
             return
+
+        sender, msg = msg['from'], msg['txt']
 
         date_time = datetime.now()
         date_time = utils.convert_format(date_time, utils.alerts_format)
@@ -162,8 +164,8 @@ class Output(IObserver):
         # when the pbar reaches 100% aka we're done_reading_flows
         # we print alerts at the very botttom of the screen using print
         # instead of printing alerts at the top of the pbar using tqdm
-        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
-            print(f'[{green(sender)}] {txt}')
+        if not self.has_pbar():
+            print(f'[{sender}] {txt}')
         else:
             tqdm.write(f'[{sender}] {txt}')
         self.cli_lock.release()
@@ -181,25 +183,36 @@ class Output(IObserver):
             errors_logfile.write(f'{date_time} [{msg["from"]}] {msg["txt"]}\n')
         self.errors_logfile_lock.release()
 
+    def is_pbar_done(self) -> bool:
+        """returns true if the pbar has reached 100%"""
+        return hasattr(self, 'done_reading_flows') and self.done_reading_flows
+
     def has_pbar(self):
-        """returns false when pbar wasnt initialised or is done 100%"""
-        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
+        """returns false when pbar wasn't initialized or is done 100%"""
+        if self.is_pbar_done() or self.progress_bar is None:
             return False
-        elif hasattr(self, 'progress_bar'):
+        else:
             return True
 
     def handle_printing_stats(self, stats: str):
-        # if we're done reading flows, aka pbar reached 100%
+        # if we're done reading flows, aka pbar reached 100% or we dont have a pbar
         # we print the stats in a new line, instead of next to the pbar
-        if not self.has_pbar():
-            print(stats, end='\r')
-        else:
-            # print the stats next to the bar
-            self.progress_bar.set_postfix_str(
-                stats,
-                refresh=True
-            )
+        # if not self.has_pbar() or (self.has_pbar() and self.is_pbar_done()):
+        # TODO fix this later, not all instacnes ha access to the pbar to
+        # TODO add the stats as a postfix and in order to do that output.py
+        # TODO needs to be separate oprocess
+        if not self.has_pbar() or  self.is_pbar_done():
+            self.cli_lock.acquire()
+            tqdm.write(stats, end="\r")
+            self.cli_lock.release()
 
+        # elif self.has_pbar() and not self.is_pbar_done():
+        #     # pbar is still there,
+        #     # print the stats next to the bar
+        #     self.get_progress_bar().set_postfix_str(
+        #         stats,
+        #         refresh=True
+        #     )
 
     def enough_verbose(self, verbose: int):
         """
@@ -285,10 +298,10 @@ class Output(IObserver):
             mininterval=0, # defines how long to wait between each refresh.
             unit=' flow',
             smoothing=1,
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} {postfix}",
             position=0,
             initial=0, #initial value of the flows processed
-            file=sys.stdout
+            file=sys.stdout,
         )
 
     def update_progress_bar(self):
@@ -296,8 +309,9 @@ class Output(IObserver):
         wrapper for tqdm.update()
         adds 1 to the number of flows processed
         """
-        if not hasattr(self, 'progress_bar'):
+        if not self.progress_bar:
             # this module wont have the progress_bar set if it's running on pcap or interface
+            # or if the output is redirected to a file!
             return
 
         if self.slips_mode == 'daemonized':
@@ -306,7 +320,7 @@ class Output(IObserver):
         self.progress_bar.update(1)
         if self.progress_bar.n == self.total_flows:
             self.remove_stats_from_progress_bar()
-            print(f"Done reading all flows. Slips is now processing them.")
+            self.print(self.name, f"Done reading all flows. Slips is now processing them.")
             # remove it from the bar because we'll be prining it in a new line
             self.done_reading_flows = True
         # self.progress_bar.refresh()

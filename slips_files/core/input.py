@@ -26,29 +26,30 @@ from watchdog.observers import Observer
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.common.imports import *
 import time
+import queue
 import json
 import threading
 import subprocess
 
-# these are the files that slips doesn't read
-IGNORED_FILES = {
-    'capture_loss',
-    'loaded_scripts',
-    'packet_filter',
-    'stats',
-    'ocsp',
-    'reporter',
-    'x509',
-    'pe',
-    'mqtt_publish',
-    'mqtt_subscribe',
-    'mqtt_connect',
-    'analyzer',
-    'ntp',
-    'radiuss',
-    'sip',
-    'syslog'
-}
+
+SUPPORTED_LOGFILES = (
+    'conn',
+    'dns',
+    'http',
+    'ssl',
+    'ssh',
+    'dhcp',
+    'ftp',
+    'smtp',
+    'tunnel',
+    'notice',
+    'files',
+    'arp',
+    'software',
+    'weird'
+)
+
+
 
 # Input Process
 class Input(ICore):
@@ -57,6 +58,7 @@ class Input(ICore):
     name = 'Input'
     def init(
             self,
+            is_input_done: multiprocessing.Semaphore = None,
             profiler_queue=None,
             input_type=None,
             input_information=None,
@@ -64,18 +66,21 @@ class Input(ICore):
             zeek_or_bro=None,
             zeek_dir=None,
             line_type=None,
+            is_profiler_done_event : multiprocessing.Event =None
     ):
         self.input_type = input_type
         self.profiler_queue = profiler_queue
         # in case of reading from stdin, the user mst tell slips what
         # type of lines is the input
-        self.line_type = line_type
+        self.line_type: str = line_type
         # entire path
-        self.given_path = input_information
-        self.zeek_dir = zeek_dir
-        self.zeek_or_bro = zeek_or_bro
+        self.given_path: str = input_information
+        self.zeek_dir: str = zeek_dir
+        self.zeek_or_bro: str = zeek_or_bro
         self.read_lines_delay = 0
-
+        # when input is done processing, it reeleases this semaphore, that's how the process_manager knows it's done
+        # when both the input and the profiler are done, the input process signals the rest of the modules to stop
+        self.done_processing: multiprocessing.Semaphore = is_input_done
         self.packet_filter = False
         if cli_packet_filter:
             self.packet_filter = f"'{cli_packet_filter}'"
@@ -103,7 +108,20 @@ class Input(ICore):
         )
         # used to give the profiler the total amount of flows to read with the first flow only
         self.is_first_flow = True
+        # is set by the profiler to tell this proc that we it is done processing
+        # the input process and shut down and close the profiler queue no issue
+        self.is_profiler_done_event = is_profiler_done_event
 
+    def is_done_processing(self):
+        """marks this process as done processing so slips.py would know when to terminate"""
+        # signal slips.py that this process is done
+        # tell profiler that this process is done and no kmore flows are arriving
+        self.print(f"Telling Profiler to stop because no more input is arriving.", log_to_logfiles_only=True)
+        self.profiler_queue.put('stop')
+        self.print(f"Waiting for Profiler to stop.", log_to_logfiles_only=True)
+        self.is_profiler_done_event.wait()
+        self.print(f"Input is done processing.", log_to_logfiles_only=True)
+        self.done_processing.release()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -116,8 +134,9 @@ class Input(ICore):
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
     def stop_queues(self):
-        """Stops the profiler and output queues"""
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
+        """Stops the profiler queue"""
+        # By default if a process is not the creator of the queue then on exit it
+        # will attempt to join the queue’s background thread. The process can call cancel_join_thread() to make join_thread() do nothing.
         self.profiler_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:
@@ -145,7 +164,8 @@ class Input(ICore):
                     'data': nfdump_line
                 }
                 self.give_profiler(line)
-                if self.testing: break
+                if self.testing:
+                    break
 
         return self.total_flows
 
@@ -170,15 +190,13 @@ class Input(ICore):
                     pass
             self.to_be_deleted = []
 
-
     def is_ignored_file(self, filepath: str) -> bool:
         """
-        Ignore the files that do not contain data.
-        These are the zeek log files that we don't use
+        Ignore zeek log files that we don't use
         :param filepath: full path to a zeek log file
         """
         filename_without_ext = Path(filepath).stem
-        if filename_without_ext in IGNORED_FILES:
+        if filename_without_ext not in SUPPORTED_LOGFILES:
             return True
 
     def get_file_handle(self, filename):
@@ -235,6 +253,7 @@ class Input(ICore):
     def cache_nxt_line_in_file(self, filename):
         """
         reads 1 line of the given file and stores in queue for sending to the profiler
+        :param: full path to the file. includes the .log extension
         """
         file_handle = self.get_file_handle(filename)
         if not file_handle:
@@ -273,7 +292,7 @@ class Input(ICore):
         }
         return True
 
-    def should_stop_zeek(self):
+    def reached_timeout(self):
         # If we don't have any cached lines to send,
         # it may mean that new lines are not arriving. Check
         if not self.cache_lines:
@@ -325,7 +344,6 @@ class Input(ICore):
         return earliest_line, file_with_earliest_flow
 
     def read_zeek_files(self) -> int:
-        # Get the zeek files in the folder now
         self.zeek_files = self.db.get_all_zeek_file()
         self.open_file_handlers = {}
         self.file_time = {}
@@ -337,11 +355,6 @@ class Input(ICore):
             # Go to all the files generated by Zeek and read 1
             # line from each of them
             for filename in self.zeek_files:
-                # filename is the log file name with .log extension in case of interface or pcap
-                # and without the ext in case of zeek files
-                if not filename.endswith('.log'):
-                    filename += '.log'
-
                 if self.is_ignored_file(filename):
                     continue
 
@@ -349,7 +362,7 @@ class Input(ICore):
                 # from in self.cache_lines
                 self.cache_nxt_line_in_file(filename)
 
-            if self.should_stop_zeek():
+            if self.reached_timeout():
                 break
 
             earliest_line, file_with_earliest_flow = self.get_earliest_line()
@@ -357,6 +370,7 @@ class Input(ICore):
                 continue
 
             # self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
+
             self.give_profiler(earliest_line)
             self.lines += 1
             # when testing, no need to read the whole file!
@@ -371,6 +385,7 @@ class Input(ICore):
 
         self.close_all_handles()
         return self.lines
+
 
     def get_flows_number(self, file) -> int:
         """
@@ -388,7 +403,19 @@ class Input(ICore):
                 yield b
 
         with open(file, "rb") as f:
+            # counts the occurances of \n in a file
             count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+
+
+        if hasattr(self, 'is_zeek_tabs') and self.is_zeek_tabs:
+            # subtract comment lines in zeek tab files,
+            # they shouldn't be considered flows
+
+            # NOTE: the counting of \n returns the actual lines-1 bc the
+            # very last line of a zeek tab log file doesn't contain a \n
+            # so instead of subtracting the 9 comment lines, we'll subtract
+            # 8 bc the very last comment line isn't even included in count
+            count -= 9
         return count
 
     def read_zeek_folder(self):
@@ -421,28 +448,21 @@ class Input(ICore):
             if not self.db.is_growing_zeek_dir():
                 # get the total number of flows slips is going to read (used later for the progress bar)
                 total_flows += self.get_flows_number(full_path)
-                if self.is_zeek_tabs:
-                    # subtract comment lines in zeek tab files,
-                    # they shouldn't be considered flows
-                    total_flows -= 9
 
-            # Remove .log extension and add file name to database.
-            filename, file_extension = os.path.splitext(file)
-            if file_extension == '.log':
-                # Add log file without ext to the database
-                self.db.add_zeek_file(
-                    full_path[:-4]
-                )
+            # Add log file to the database
+            self.db.add_zeek_file(full_path)
 
 
             # in testing mode, we only need to read one zeek file to know
             # that this function is working correctly
             if self.testing:
                 break
+
         self.total_flows = total_flows
         self.db.set_input_metadata({'total_flows': total_flows})
         self.lines = self.read_zeek_files()
         self.print_lines_read()
+        self.is_done_processing()
         return True
 
     def print_lines_read(self):
@@ -450,7 +470,6 @@ class Input(ICore):
             f'We read everything. No more input. '
             f'Stopping input process. Sent {self.lines} lines'
         )
-
 
     def read_from_stdin(self):
         self.print('Receiving flows from stdin.')
@@ -513,6 +532,8 @@ class Input(ICore):
 
                 self.lines += 1
                 if self.testing: break
+
+        self.is_done_processing()
         return True
 
     def handle_suricata(self):
@@ -530,6 +551,7 @@ class Input(ICore):
                 self.lines += 1
                 if self.testing:
                     break
+        self.is_done_processing()
         return True
 
     def is_zeek_tabs_file(self, filepath) -> bool:
@@ -539,19 +561,20 @@ class Input(ICore):
         """
         with open(filepath,'r') as f:
             line = f.readline()
-            if '\t' in line:
-                return True
-            if line.startswith("#separator"):
-                return True
-            try:
-                json.loads(line)
-                return False
-            except json.decoder.JSONDecodeError:
-                return True
+        if '\t' in line:
+            return True
+        if line.startswith("#separator"):
+            return True
+        try:
+            json.loads(line)
+            return False
+        except json.decoder.JSONDecodeError:
+            return True
 
     def handle_zeek_log_file(self):
         """
-        Handles conn.log files given to slips directly, and conn.log flows given to slips through CYST unix socket.
+        Handles conn.log files given to slips directly,
+         and conn.log flows given to slips through CYST unix socket.
         """
         if (
                 (not self.given_path.endswith(".log")
@@ -560,20 +583,16 @@ class Input(ICore):
         ):
             # unsupported file
             return False
+
         if os.path.exists(self.given_path):
-            # in case of CYST flows, the given path is cyst and there's no way to get the total flows
-            total_flows = self.get_flows_number(self.given_path)
+            # in case of CYST flows, the given path is 'cyst' and there's no way to get the total flows
             self.is_zeek_tabs = self.is_zeek_tabs_file(self.given_path)
-            if self.is_zeek_tabs:
-                # zeek tab files contain many comments at the begging of the file and at the end
-                # subtract the comments from the flows number
-                total_flows -= 9
+            total_flows = self.get_flows_number(self.given_path)
             self.db.set_input_metadata({'total_flows': total_flows})
             self.total_flows = total_flows
 
-        file_path_without_extension = os.path.splitext(self.given_path)[0]
         # Add log file to database
-        self.db.add_zeek_file(file_path_without_extension)
+        self.db.add_zeek_file(self.given_path)
 
         # this timeout is the only thing that
         # makes the read_zeek_files() return
@@ -581,6 +600,7 @@ class Input(ICore):
         # as we're running on an interface
         self.bro_timeout = 30
         self.lines = self.read_zeek_files()
+        self.is_done_processing()
         return True
 
     def handle_nfdump(self):
@@ -591,6 +611,7 @@ class Input(ICore):
         self.nfdump_output = result.stdout.decode('utf-8')
         self.lines = self.read_nfdump_output()
         self.print_lines_read()
+        self.is_done_processing()
         return True
 
 
@@ -651,6 +672,8 @@ class Input(ICore):
             self.is_zeek_tabs = False
         self.lines = self.read_zeek_files()
         self.print_lines_read()
+        self.is_done_processing()
+
         connlog_path = os.path.join(self.zeek_dir, 'conn.log')
 
         self.print(f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}", 2, 0)
@@ -682,11 +705,9 @@ class Input(ICore):
                 # new log file should be dns.log without the ts
                 old_log_file = changed_files['old_file']
                 new_log_file = changed_files['new_file']
-                new_logfile_without_path = new_log_file.split('/')[-1].split(
-                    '.'
-                )[0]
+                new_logfile_without_path = new_log_file.split('/')[-1].split('.')[0]
                 # ignored files have no open handle, so we should only delete them from disk
-                if new_logfile_without_path in IGNORED_FILES:
+                if new_logfile_without_path not in SUPPORTED_LOGFILES:
                     # just delete the old file
                     os.remove(old_log_file)
                     continue
@@ -733,8 +754,9 @@ class Input(ICore):
             # proc_man:shutdown_gracefully()
             try:
                 os.kill(self.zeek_pid, signal.SIGKILL)
-            except Exception as e:
+            except Exception:
                 pass
+
         return True
 
     def run_zeek(self):
@@ -853,6 +875,7 @@ class Input(ICore):
                 self.print('Done reading 1 CYST flow.\n ', 0, 3)
 
                 time.sleep(2)
+        self.is_done_processing()
 
     def give_profiler(self, line):
         """
@@ -871,8 +894,8 @@ class Input(ICore):
             self.is_first_flow = False
             to_send.update({
                 'total_flows': self.total_flows,
-
             })
+        # when the queue is full, the default behaviour is to block if necessary until a free slot is available
         self.profiler_queue.put(to_send)
 
     def main(self):
@@ -887,39 +910,30 @@ class Input(ICore):
             # delete old zeek-date.log files
             self.remover_thread.start()
 
-
-        # Process the file that was given
-        # If the type of file is 'file (-f) and the name of the
-        # file is '-' then read from stdin
-        if self.input_type == 'stdin':
-            self.read_from_stdin()
-        elif self.input_type == 'zeek_folder':
-            # is a zeek folder
-            self.read_zeek_folder()
-        elif self.input_type == 'zeek_log_file':
-            # Is a zeek.log file
-            file_name = self.given_path.split('/')[-1]
-            if 'log' in file_name:
-                self.handle_zeek_log_file()
-            else:
-                return False
-        elif self.input_type == 'nfdump':
-            # binary nfdump file
-            self.handle_nfdump()
-        elif self.input_type == 'binetflow' or 'binetflow-tabs' in self.input_type:
-            # argus or binetflow
-            self.handle_binetflow()
-        elif self.input_type in ['pcap', 'interface']:
-            self.handle_pcap_and_interface()
-        elif self.input_type == 'suricata':
-            self.handle_suricata()
-        elif self.input_type == 'CYST':
-            self.handle_cyst()
-        else:
-            # if self.input_type is 'file':
-            # default value
+        input_handlers = {
+            'stdin': self.read_from_stdin,
+            'zeek_folder': self.read_zeek_folder,
+            'zeek_log_file': self.handle_zeek_log_file,
+            'nfdump': self.handle_nfdump,
+            'binetflow': self.handle_binetflow,
+            'binetflow-tabs': self.handle_binetflow,
+            'pcap': self.handle_pcap_and_interface,
+            'interface': self.handle_pcap_and_interface,
+            'suricata': self.handle_suricata,
+            'CYST': self.handle_cyst,
+        }
+        try:
+            # Process the file that was given
+            # If the type of file is 'file (-f) and the name of the
+            # file is '-' then read from stdin
+            input_handlers[self.input_type]()
+        except KeyError:
             self.print(
                 f'Unrecognized file type "{self.input_type}". Stopping.'
             )
             return False
+        # no logic should be put here
+        # because some of the above handlers never return
+        # e.g. interface, stdin, cyst etc.
+        return 1
 

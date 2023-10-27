@@ -17,6 +17,7 @@ class ICore(IModule, Process):
 
     def __init__(
             self,
+            logger: Output,
             output_dir,
             redis_port,
             termination_event,
@@ -29,12 +30,12 @@ class ICore(IModule, Process):
         """
         Process.__init__(self)
         self.output_dir = output_dir
+        self.logger = logger
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.redis_port = redis_port
-        self.db = DBManager(output_dir, redis_port)
+        self.db = DBManager(self.logger, output_dir, redis_port)
         self.msg_received = False
-        self.logger = Output()
         IObservable.__init__(self)
         self.add_observer(self.logger)
         self.init(**kwargs)

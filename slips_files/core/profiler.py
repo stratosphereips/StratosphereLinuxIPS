@@ -1,5 +1,6 @@
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
+import multiprocessing
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -23,10 +24,8 @@ from slips_files.core.helpers.symbols_handler import SymbolHandler
 from datetime import datetime
 from slips_files.core.helpers.whitelist import Whitelist
 from dataclasses import asdict
-import json
-import sys
+import queue
 import ipaddress
-import traceback
 from slips_files.common.abstracts.core import ICore
 from pprint import pp
 
@@ -56,25 +55,34 @@ class Profiler(ICore):
     """A class to create the profiles for IPs"""
     name = 'Profiler'
 
-    def init(self, profiler_queue=None):
+    def init(self,
+             is_profiler_done: multiprocessing.Semaphore = None,
+             profiler_queue=None,
+             is_profiler_done_event : multiprocessing.Event =None
+             ):
+        # when profiler is done processing, it releases this semaphore,
+        # that's how the process_manager knows it's done
+        # when both the input and the profiler are done,
+        # the input process signals the rest of the modules to stop
+        self.done_processing: multiprocessing.Semaphore = is_profiler_done
         # every line put in this queue should be profiled
         self.profiler_queue = profiler_queue
         self.timeformat = None
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
-        self.whitelist = Whitelist(self.db)
+        self.whitelist = Whitelist(self.logger, self.db)
         # Read the configuration
         self.read_configuration()
-        self.symbol = SymbolHandler(self.output_dir,
-                                    self.redis_port,
-                                    self.db)
+        self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = self.db.subscribe('reload_whitelist')
         self.channels = {
             'reload_whitelist': self.c1,
         }
+        # is set by this proc to tell input proc that we are dne processing and it can exit no issue
+        self.is_profiler_done_event = is_profiler_done_event
 
 
 
@@ -310,11 +318,14 @@ class Profiler(ICore):
             if type(actual_line) == dict:
                 return 'zeek'
             return 'zeek-tabs'
-
-        # if it's none of the above cases
-        # it's probably one of a kind
-        # pcap, binetflow, binetflow tabs, nfdump, etc
-        return input_type
+        elif input_type in ('stdin'):
+            # ok we're reading flows from stdin, but what type of flows?
+            return line['line_type']
+        else:
+            # if it's none of the above cases
+            # it's probably one of a kind
+            # pcap, binetflow, binetflow tabs, nfdump, etc
+            return input_type
 
 
     def shutdown_gracefully(self):
@@ -323,7 +334,59 @@ class Profiler(ICore):
         # exit it will attempt to join the queue’s background thread.
         # this causes a deadlock
         # to avoid this behaviour we should call cancel_join_thread
-        self.profiler_queue.cancel_join_thread()
+        # self.profiler_queue.cancel_join_thread()
+
+    def is_done_processing(self):
+        """is called to mark this process as done processing so slips.py would know when to terminate"""
+        # signal slips.py that this process is done
+        self.print(f"Marking Profiler as done processing.", log_to_logfiles_only=True)
+        self.done_processing.release()
+        self.print(f"Profiler is done processing.", log_to_logfiles_only=True)
+        self.is_profiler_done_event.set()
+        self.print(f"Profiler is done telling input.py that it's done processing.", log_to_logfiles_only=True)
+
+
+    def check_for_stop_msg(self, msg: str)-> bool:
+        """
+        this 'stop' msg is the last msg ever sent by the input process
+        to indicate that no more flows are coming
+        """
+
+        if msg != 'stop':
+            return False
+
+        self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
+                   f"{self.whitelisted_flows_ctr}", 2, 0)
+
+        self.shutdown_gracefully()
+        self.print(
+            f'Stopping Profiler Process. Received {self.rec_lines} lines '
+            f'({utils.convert_format(datetime.now(), utils.alerts_format)})', 2, 0,
+        )
+        self.is_done_processing()
+        return True
+
+    def init_pbar(self, input_type: str, total_flows:int):
+        """
+        sends the output.py a msg with the pbar details for initialization
+        """
+        # don't init the pbar when given the following
+        # input types because we don't
+        # know the total flows beforehand
+        if input_type in ('pcap', 'interface', 'stdin'):
+            # pbar not supported
+            self.supported_pbar = False
+            return
+
+        # Find the number of flows we're going to receive of input received
+        self.notify_observers({
+            'bar': 'init',
+            'bar_info': {
+                'input_type': self.input_type,
+                'total_flows': total_flows
+            }
+        })
+        self.supported_pbar = True
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -331,29 +394,26 @@ class Profiler(ICore):
     def main(self):
         while not self.should_stop():
             try:
-                msg: dict = self.profiler_queue.get(timeout=3)
+                # this msg can be a str only when it's a 'stop' msg indicating that this module should stop
+                msg: dict = self.profiler_queue.get(timeout=1, block=False)
+                # ALYA, DO NOT REMOVE THIS CHECK
+                # without it, there's no way thi module will know it's time to
+                # stop and no new fows are coming
+                if self.check_for_stop_msg(msg):
+                    return 1
                 line: dict = msg['line']
                 input_type: str = msg['input_type']
                 total_flows: int = msg.get('total_flows', 0)
-            except Exception:
-                # the queue is empty, which means input proc
-                # is done reading flows
+            except queue.Empty:
+                continue
+            except Exception as e:
+                # ValueError is raised when the queue is closed
+
                 continue
 
             # TODO who is putting this True here?
             if line == True:
                 continue
-
-            if 'stop' in line:
-                self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
-                           f"{self.whitelisted_flows_ctr}", 2, 0)
-
-                self.shutdown_gracefully()
-                self.print(
-                    f'Stopping Profiler Process. Received {self.rec_lines} lines '
-                    f'({utils.convert_format(datetime.now(), utils.alerts_format)})', 2, 0,
-                )
-                return 1
 
             # Received new input data
             self.print(f'< Received Line: {line}', 2, 0)
@@ -364,18 +424,7 @@ class Profiler(ICore):
             if not self.input_type:
                 # Find the type of input received
                 self.input_type = self.define_separator(line, input_type)
-                # don't init the pbar when given the following
-                # input types because we don't
-                # know the total flows beforehand
-                if input_type not in ('pcap', 'interface', 'stdin'):
-                    # Find the number of flows we're going to receive of input received
-                    self.notify_observers({
-                        'bar': 'init',
-                        'bar_info': {
-                            'input_type': self.input_type,
-                            'total_flows': total_flows
-                        }
-                    })
+                self.init_pbar(input_type, total_flows)
 
             # What type of input do we have?
             if not self.input_type:
@@ -384,7 +433,8 @@ class Profiler(ICore):
                 return False
 
 
-            # only create the input obj once
+            # only create the input obj once,
+            # the rest of the flows will use the same input handler
             if not hasattr(self, 'input'):
                 self.input = SUPPORTED_INPUT_TYPES[self.input_type]()
 
@@ -393,14 +443,19 @@ class Profiler(ICore):
             if self.flow:
                 self.add_flow_to_profile()
 
-            self.notify_observers({'bar': 'update'})
+
+            # now that one flow is processed tell output.py to update the bar
+            if self.supported_pbar:
+                self.notify_observers({'bar': 'update'})
 
             # listen on this channel in case whitelist.conf is changed,
             # we need to process the new changes
             if self.get_msg('reload_whitelist'):
                 # if whitelist.conf is edited using pycharm
-                # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
-                # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
+                # a msg will be sent to this channel on every keypress,
+                # because pycharm saves file automatically
+                # otherwise this channel will get a msg only when
+                # whitelist.conf is modified and saved to disk
                 self.whitelist.read_whitelist()
 
         return 1

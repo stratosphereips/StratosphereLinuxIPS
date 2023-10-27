@@ -3,7 +3,7 @@ from slips_files.core.output import Output
 from slips_files.core.profiler import Profiler
 from slips_files.core.evidence import Evidence
 from slips_files.core.input import Input
-from multiprocessing import Queue, Event, Process
+from multiprocessing import Queue, Event, Process, Semaphore
 from collections import OrderedDict
 from typing import List, Tuple
 from slips_files.common.style import green
@@ -14,7 +14,7 @@ import inspect
 import modules
 import importlib
 import os
-
+import sys
 
 class ProcessManager:
     def __init__(self, main):
@@ -25,28 +25,40 @@ class ProcessManager:
         self.profiler_queue = Queue()
         self.termination_event: Event = Event()
         self.stopped_modules = []
+        # used to stop slips when these 2 are done
+        # since the semaphore count is zero, slips.py will wait until another thread (input and profiler)
+        # release the semaphore. Once having the semaphore, then slips.py can terminate slips.
+        self.is_input_done = Semaphore(0)
+        self.is_profiler_done = Semaphore(0)
+        # is set by the profiler process to indicat ethat it's done so that input can shutdown no issue
+        # now without this event, input process doesn't know that profiler is still waiting for the queue to stop
+        # and inout stops and renders the profiler queue useless and profiler cant get more lines anymore!
+        self.is_profiler_done_event = Event()
 
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
-        # only in this instance we'll have to specify the verbose, debug and std files
-        # since the output is a singelton, the same params will be set everywhere, no need to pass them everytime
+        # only in this instance we'll have to specify the verbose, debug, std files and input type
+        # since the output is a singleton, the same params will be set everywhere, no need to pass them everytime
         output_process = Output(
             stdout=current_stdout,
             stderr=stderr,
             slips_logfile=slips_logfile,
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
-            slips_mode=self.main.mode
+            slips_mode=self.main.mode,
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
 
     def start_profiler_process(self):
         profiler_process = Profiler(
+            self.main.logger,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
+            is_profiler_done_event= self.is_profiler_done_event
         )
         profiler_process.start()
         self.main.print(
@@ -60,6 +72,7 @@ class ProcessManager:
 
     def start_evidence_process(self):
         evidence_process = Evidence(
+            self.main.logger,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
@@ -76,9 +89,11 @@ class ProcessManager:
 
     def start_input_process(self):
         input_process = Input(
+            self.main.logger,
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
             input_information=self.main.input_information,
@@ -86,6 +101,7 @@ class ProcessManager:
             zeek_or_bro=self.main.zeek_bro,
             zeek_dir=self.main.zeek_dir,
             line_type=self.main.line_type,
+            is_profiler_done_event=self.is_profiler_done_event,
         )
         input_process.start()
         self.main.print(
@@ -222,6 +238,7 @@ class ProcessManager:
 
             module_class = modules_to_call[module_name]["obj"]
             module = module_class(
+                self.main.logger,
                 self.main.args.output,
                 self.main.redis_port,
                 self.termination_event,
@@ -234,8 +251,7 @@ class ProcessManager:
                 f"\t\tStarting the module {green(module_name)} "
                 f"({description}) "
                 f"[PID {green(module.pid)}]",
-                1,
-                0,
+                1, 0,
             )
             loaded_modules.append(module_name)
         # give outputprocess time to print all the started modules
@@ -263,7 +279,7 @@ class ProcessManager:
 
         pending_module_names: List[str] = [proc.name for proc in pending_modules]
         self.main.print(
-            f"\nThe following modules are busy working on your data."
+            f"The following modules are busy working on your data."
             f"\n\n{pending_module_names}\n\n"
             "You can wait for them to finish, or you can "
             "press CTRL-C again to force-kill.\n"
@@ -285,12 +301,12 @@ class ProcessManager:
         returns a list of PIDs that slips should terminate first, and pids that should be killed last
         """
         # all modules that deal with evidence, blocking and alerts should be killed last
-        # so we don't miss reporting, exporting or blocking any malicious IoC
+        # so we don't miss exporting or blocking any malicious IoC
+        # input and profiler are not in this list because they
+        # indicate that they're done processing using a semaphore
+        # slips won't reach this function unless they are done already. so no need to kill them last
         pids_to_kill_last = [
             self.main.db.get_pid_of("Evidence"),
-            self.main.db.get_pid_of("Input"),
-            self.main.db.get_pid_of("Output"),
-            self.main.db.get_pid_of("Profiler"),
         ]
 
         if self.main.args.blocking:
@@ -349,6 +365,40 @@ class ProcessManager:
             start_time, end_date, return_type="minutes"
         )
 
+    def should_stop(self):
+        """
+        returns true if the channel received the stop msg
+        :param msg: msgs receive  in the control chanel
+        """
+        message = self.main.c1.get_message(timeout=0.01)
+        if (
+                message
+                and utils.is_msg_intended_for(message, 'control_channel')
+                and message['data'] == 'stop_slips'
+        ):
+            return True
+
+
+    def is_debugger_active(self) -> bool:
+        """Returns true if the debugger is currently active"""
+        gettrace = getattr(sys, 'gettrace', lambda: None)
+        return gettrace() is not None
+
+    def should_run_non_stop(self) -> bool:
+        """
+        determines if slips shouldn't terminate because by default,
+        it terminates when there's no more incoming flows
+        """
+        # these are the cases where slips should be running non-stop
+        # when slips is reading from a special module other than the input process
+        # this module should handle the stopping of slips
+        if (
+                self.is_debugger_active()
+                or self.main.input_type in ('stdin','CYST')
+                or self.main.is_interface
+        ):
+            return True
+        return False
 
     def shutdown_interactive(self, to_kill_first, to_kill_last):
         """
@@ -382,6 +432,25 @@ class ProcessManager:
             return to_kill_first, to_kill_last
         # all of them are killed
         return None, None
+
+
+    def slips_is_done_receiving_new_flows(self) -> bool:
+        """
+        Slips won't be receiving new flows when
+        the input and profiler release the semaphores signaling that they're done
+        that's when this method will return True.
+        If they're still processing it will return False
+        """
+        # try to acquire the semaphore without blocking
+        input_done_processing: bool = self.is_input_done.acquire(block=False)
+        profiler_done_processing: bool = self.is_profiler_done.acquire(block=False)
+
+        if input_done_processing and profiler_done_processing:
+            return True
+        else:
+            # can't acquire the semaphore, processes are still running
+            return False
+
 
     def shutdown_daemon(self):
         """
@@ -437,7 +506,6 @@ class ProcessManager:
                 hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
                 to_kill_first: List[Process] = hitlist[0]
                 to_kill_last: List[Process] = hitlist[1]
-
                 self.termination_event.set()
 
                 # to make sure we only warn the user once about hte pending modules

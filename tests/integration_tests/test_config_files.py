@@ -47,7 +47,7 @@ def test_conf_file(
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py ' \
-              f'-t ' \
+              f'-t  -e 1 ' \
               f'-f {pcap_path} ' \
               f'-o {output_dir} ' \
               f'-c tests/integration_tests/test.conf  ' \
@@ -116,7 +116,7 @@ def test_conf_file2(
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py ' \
-              f'-t ' \
+              f'-t  -e 1 ' \
               f'-f {pcap_path} ' \
               f'-o {output_dir} ' \
               f'-c tests/integration_tests/test2.conf ' \

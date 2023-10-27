@@ -13,9 +13,9 @@ class BaseModel(IObservable):
     This class only uses data that is already inserted in the database. It doesn't issue any requests to other peers.
     """
 
-    def __init__(self, trustdb):
+    def __init__(self, logger: Output, trustdb):
         self.trustdb = trustdb
-        self.logger = Output()
+        self.logger = logger
         IObservable.__init__(self)
         self.add_observer(self.logger)
         self.reliability_weight = 0.7
