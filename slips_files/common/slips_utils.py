@@ -491,7 +491,9 @@ class Utils(object):
         """
         #TODO document this
         proto = flow.proto.lower()
-        ts = flow.starttime
+
+        # aid_hash lib only accepts unix ts
+        ts = utils.convert_format(flow.starttime, 'unixtimestamp')
         ts: str = self.assert_microseconds(ts)
 
         cases = {
