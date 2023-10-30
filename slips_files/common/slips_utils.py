@@ -580,11 +580,12 @@ class Utils(object):
             try:
                 hostname = description.split('rDNS: ')[1]
             except IndexError:
-                pass
+                ...
             try:
                 hostname = description.split('SNI: ')[1]
             except IndexError:
                 pass
+
             if hostname:
                 IDEA_dict['Target'][0].update({'Hostname': [hostname]})
 
