@@ -71,7 +71,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         'check_jarm_hash',
         'control_channel',
         'new_module_flow'
-        'control_module',
         'cpu_profile',
         'memory_profile'
         }
