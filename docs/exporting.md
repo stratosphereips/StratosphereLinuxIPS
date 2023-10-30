@@ -147,6 +147,10 @@ By default, the output of Slips is stored in the ```output/``` directory in two 
 Slips supports exporting all the labeled flows and altflows stored in the sqlite database
 the sqlite database can be exported to json or tsv format. 
 
+Each labeled flow has an [AID fingerprint](https://pypi.org/project/aid-hash/), which is used to identify the flow based on the ts,
+source and destination address, source and destination port and protocol.
+
+
 this can be done by setting the ```export_labeled_flows``` parameter to ```yes``` in slips.conf and changing 
 the ```export_format``` parameter to your desired format. 
 for now, the ```export_format``` parameter supports tsv or json formats only.

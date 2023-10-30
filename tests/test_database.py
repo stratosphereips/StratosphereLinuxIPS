@@ -12,7 +12,7 @@ profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 test_ip = '192.168.1.1'
 flow = Conn(
-    5,
+    '1601998398.945854',
     '1234',
     test_ip,
     '8.8.8.8',
