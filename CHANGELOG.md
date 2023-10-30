@@ -1,3 +1,6 @@
+-1.0.8 (November 2023)
+- Use All-ID hash to fingerprint flows stored in the flows database
+
 -1.0.7 (September 2023):
 - CPU and memory profilers thanks to @danieltherealyang
 - Check dns queries and answers for whitelisted IPs and domains
