@@ -518,6 +518,14 @@ class ConfigParser(object):
             'modules/threat_intelligence/local_data_files/'
         )
 
+    def wait_for_TI_to_finish(self) -> bool:
+        wait = self.read_configuration(
+            'threatintelligence',
+            'wait_for_TI_to_finish',
+            'no'
+        )
+        return 'yes' in wait
+
 
     def remote_ti_data_path(self):
         path = self.read_configuration(
