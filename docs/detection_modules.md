@@ -470,14 +470,21 @@ The 24 hours interval can be changed by changing the ```TI_files_update_period``
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
 
-
 By default, local slips files (organization_info, ports_info, etc.) are 
 cached to avoid loading and parsing
 
-them everytime we start slips. However, they are updated automatically by 
+then everytime we start slips. However, they are updated automatically by 
 the update manager if they were changed on disk.
 
 Only one slips instance is allowed to be using the update manager at a time to avoid race conditions.
+
+By default, slips starts without the TI files, and runs the Update Manager in the background
+ if the ```wait_for_TI_to_finish``` option in slips.conf is set to yes, slips will not start until the update manager is done
+ and all TI files are loaded successfully, 
+this is useful if you want to ensure that slips doesn't miss
+the detection of any blacklisted IPs, but it adds some time to the startup of slips
+since it will be downloading, parsing, and caching 45+ different TI feeds.
+
 
 ## IP Info Module
 
