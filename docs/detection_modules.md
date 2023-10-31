@@ -716,7 +716,7 @@ This module is responsible for detecting scans such as:
 
 ### Vertical port scans
 
-Slips considers an IP performing a vertical port scan if it contacts 5 or more different destination ports to the same destination IP in at least one time window (usually 1hs). The flows can be TCP or UDP, and both Established or Not Established. On each arriving flow this check is performed.
+Slips considers an IP performing a vertical port scan if it contacts 5 or more different destination ports to the same destination IP in at least one time window (usually 1hs). The flows can be both, Non-Established TCP or UDP flows. On each arriving flow this check is performed.
 
 After detecting a vertical port scan for the first time, if Slips detects new flows to 5 destination ports, then it triggers a waiting process to find out how many packets to new ports will arrive. For this it waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one alert 'port scan' per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
@@ -727,9 +727,12 @@ The total number of _packets_ in all flows in the scan give us the confidence of
 
 ### Horizontal port scans
 
-Slips considers an IP performing a horizontal port scan if it contacted more than 6 destination IPs on the same specific port with not established connections. Slips checks both TCP and UDP connections for horizontal port scans. The initial threshold is now 6 destination IPs using the same destination ports. 
+Slips considers an IP performing a horizontal port scan if it contacted more than 6 destination IPs on the same
+specific port with not established connections. Slips checks both TCP and UDP connections for horizontal port scans.
+The initial threshold is now 6 destination IPs using the same destination ports. 
 
-After detecting a horizontal port scan, Slips waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
+After detecting a horizontal port scan, Slips waits 10 seconds to see if more flows arrive,
+since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
 If one alert was generated (Slips waited 10 seconds and no more flows arrived to new IPs) then the counter resets and the same attacker needs to do _again_ more than threshold destinations IPs in the same port to be detected. This avoids the problem that after 6 flows that generated an alert, the 7 flow also generates an alert.
 

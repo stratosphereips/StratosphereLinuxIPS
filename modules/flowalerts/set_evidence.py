@@ -348,7 +348,7 @@ class Helper:
     ):
         # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
         confidence = 1
-        threat_level = 'medium'
+        threat_level = 'high'
         description = f'horizontal port scan by Zeek engine. {msg}'
         evidence_type = 'HorizontalPortscan'
         attacker_direction = 'srcip'
@@ -436,7 +436,7 @@ class Helper:
         """
         # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
         confidence = 1
-        threat_level = 'medium'
+        threat_level = 'high'
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
         description = f'vertical port scan by Zeek engine. {msg}'
         evidence_type = 'VerticalPortscan'

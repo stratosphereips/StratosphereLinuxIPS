@@ -227,14 +227,14 @@ def test_zeek_dir(
         (
             'dataset/test9-mixed-zeek-dir/conn.log',
             4,
-            'horizontal port scan',
+            'non-HTTP established connection',
             'test9-conn_log_only/',
             6659,
         ),
         (
             'dataset/test10-mixed-zeek-dir/conn.log',
             5,
-            'horizontal port scan',
+            'non-SSL established connection',
             'test10-conn_log_only/',
             6658,
         ),
