@@ -65,7 +65,7 @@ class VerticalPortscan():
         attacker_direction = 'srcip'
         evidence_type = 'VerticalPortscan'
         source_target_tag = 'Recon'
-        threat_level = 'medium'
+        threat_level = 'high'
         category = 'Recon.Scanning'
         srcip = profileid.split('_')[-1]
         attacker = srcip
@@ -92,59 +92,66 @@ class VerticalPortscan():
         # self.print('Vertical Portscan check. Amount of dports: {}.
         # Threshold=3'.format(amount_of_dports), 3, 0)
         evidence_type = 'VerticalPortscan'
-        for state in ('Not Established', 'Established'):
-            for protocol in ('TCP', 'UDP'):
-                dstips = self.db.getDataFromProfileTW(
-                    profileid, twid, direction, state, protocol, role, type_data
-                )
-                # For each dstip, see if the amount of ports connections is over the threshold
-                for dstip in dstips.keys():
-                    ### PortScan Type 1. Direction OUT
-                    dstports: dict = dstips[dstip]['dstports']
-                    amount_of_dports = len(dstports)
-                    cache_key = f'{profileid}:{twid}:dstip:{dstip}:{evidence_type}'
-                    prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
 
-                    # we make sure the amount of dports reported each evidence is higher than the previous one +5
-                    # so the first alert will always report 5 dport, and then 10+,15+,20+ etc
-                    # the goal is to never get an evidence that's 1 or 2 ports more than the previous one so we dont
-                    # have so many portscan evidence
-                    if (
-                            amount_of_dports >= self.port_scan_minimum_dports
-                            and prev_amount_dports+5 <= amount_of_dports
-                    ):
-                        # Get the total amount of pkts sent different ports on the same host
-                        pkts_sent = sum(dstports[dport] for dport in dstports)
-                        uid = dstips[dstip]['uid']
-                        timestamp = dstips[dstip]['stime']
+        # if you're portscaning a port that is open it's gonna be established
+        # the amount of open ports we find is gonna be so small
+        # theoretically this is incorrect bc we'll be ignoring established evidence,
+        # but usually open ports are very few compared to the whole range
+        # so, practically this is correct to avoid FP
+        state = 'Not Established'
 
-                        # Store in our local cache how many dips were there:
-                        self.cache_det_thresholds[cache_key] = amount_of_dports
-                        if not self.alerted_once_vertical_ps.get(cache_key, False):
-                            # now from now on, we will be combining the next vertical ps evidence targetting this dport
-                            self.alerted_once_vertical_ps[cache_key] = True
-                            self.set_evidence_vertical_portscan(
-                                timestamp,
-                                pkts_sent,
-                                protocol,
-                                profileid,
-                                twid,
-                                uid,
-                                amount_of_dports,
-                                dstip
-                            )
-                        else:
-                             # we will be combining further alerts to avoid alerting
-                             # many times every portscan
-                            evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
-                            # for all the combined alerts, the following params should be equal
-                            key = f'{profileid}-{twid}-{state}-{protocol}-{dstip}'
-                            try:
-                                self.pending_vertical_ps_evidence[key].append(evidence_details)
-                            except KeyError:
-                                # first time seeing this key
-                                self.pending_vertical_ps_evidence[key] = [evidence_details]
+        for protocol in ('TCP', 'UDP'):
+            dstips = self.db.getDataFromProfileTW(
+                profileid, twid, direction, state, protocol, role, type_data
+            )
+            # For each dstip, see if the amount of ports connections is over the threshold
+            for dstip in dstips.keys():
+                ### PortScan Type 1. Direction OUT
+                dstports: dict = dstips[dstip]['dstports']
+                amount_of_dports = len(dstports)
+                cache_key = f'{profileid}:{twid}:dstip:{dstip}:{evidence_type}'
+                prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
 
-                            # combine evidence every x new portscans to the same ip
-                            if len(self.pending_vertical_ps_evidence[key]) == 3:
-                                self.combine_evidence()
+                # we make sure the amount of dports reported each evidence is higher than the previous one +5
+                # so the first alert will always report 5 dport, and then 10+,15+,20+ etc
+                # the goal is to never get an evidence that's 1 or 2 ports more than the previous one so we dont
+                # have so many portscan evidence
+                if (
+                        amount_of_dports >= self.port_scan_minimum_dports
+                        and prev_amount_dports+5 <= amount_of_dports
+                ):
+                    # Get the total amount of pkts sent different ports on the same host
+                    pkts_sent = sum(dstports[dport] for dport in dstports)
+                    uid = dstips[dstip]['uid']
+                    timestamp = dstips[dstip]['stime']
+
+                    # Store in our local cache how many dips were there:
+                    self.cache_det_thresholds[cache_key] = amount_of_dports
+                    if not self.alerted_once_vertical_ps.get(cache_key, False):
+                        # now from now on, we will be combining the next vertical ps evidence targetting this dport
+                        self.alerted_once_vertical_ps[cache_key] = True
+                        self.set_evidence_vertical_portscan(
+                            timestamp,
+                            pkts_sent,
+                            protocol,
+                            profileid,
+                            twid,
+                            uid,
+                            amount_of_dports,
+                            dstip
+                        )
+                    else:
+                         # we will be combining further alerts to avoid alerting
+                         # many times every portscan
+                        evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
+                        # for all the combined alerts, the following params should be equal
+                        key = f'{profileid}-{twid}-{state}-{protocol}-{dstip}'
+                        try:
+                            self.pending_vertical_ps_evidence[key].append(evidence_details)
+                        except KeyError:
+                            # first time seeing this key
+                            self.pending_vertical_ps_evidence[key] = [evidence_details]
+
+                        # combine evidence every x new portscans to the same ip
+                        if len(self.pending_vertical_ps_evidence[key]) == 3:
+                            self.combine_evidence()
