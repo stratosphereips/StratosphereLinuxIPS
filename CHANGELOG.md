@@ -1,5 +1,8 @@
 -1.0.8 (November 2023)
 - Use All-ID hash to fingerprint flows stored in the flows database
+- Increase the weight of port scan alerts by increasing its' threat level 
+- Fix False positive port scan alerts 
+
 
 -1.0.7 (September 2023):
 - CPU and memory profilers thanks to @danieltherealyang
