@@ -21,7 +21,6 @@ import contextlib
 from slips_files.common.imports import *
 from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
 from slips_files.common.performance_profilers.memory_profiler import MemoryProfiler
-from exclusiveprocess import Lock, CannotAcquireLock
 from managers.redis_manager import RedisManager
 from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
@@ -31,7 +30,6 @@ from slips_files.common.style import green
 
 from slips_files.core.database.database_manager import DBManager
 from slips_files.common.abstracts.observer import IObservable
-from slips_files.core.output import Output
 
 
 import signal
@@ -216,25 +214,6 @@ class Main(IObservable):
             self.daemon.stop()
         if self.conf.get_cpu_profiler_enable() != "yes":
             sys.exit(0)
-
-    def update_local_TI_files(self):
-        from modules.update_manager.update_manager import UpdateManager
-        try:
-            # only one instance of slips should be able to update ports and orgs at a time
-            # so this function will only be allowed to run from 1 slips instance.
-            with Lock(name="slips_ports_and_orgs"):
-                # pass a dummy termination event for update manager to update orgs and ports info
-                update_manager = UpdateManager(
-                    self.logger,
-                    self.args.output,
-                    self.redis_port,
-                    multiprocessing.Event()
-                )
-                update_manager.update_ports_info()
-                update_manager.update_org_files()
-        except CannotAcquireLock:
-            # another instance of slips is updating ports and orgs
-            return
 
     def save_the_db(self):
         # save the db to the output dir of this analysis
@@ -622,7 +601,13 @@ class Main(IObservable):
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
                 # update local files before starting modules
-                self.update_local_TI_files()
+                # if wait_for_TI_to_finish is set to true in the config file,
+                # slips will wait untill all TI files are updated before
+                # starting the rest of the modules
+                self.proc_man.start_update_manager(
+                    local_files=True,
+                    TI_feeds=self.conf.wait_for_TI_to_finish()
+                )
                 self.proc_man.load_modules()
 
             if self.args.webinterface:
