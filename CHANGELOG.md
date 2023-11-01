@@ -1,8 +1,8 @@
 -1.0.8 (November 2023)
 - Use All-ID hash to fingerprint flows stored in the flows database
 - Increase the weight of port scan alerts by increasing its' threat level 
-- Fix False positive port scan alerts 
-
+- Fix False positive port scan alerts
+- Add an option in slips.conf to wait for the update manager to update all TI feeds before starting the rest of Slips to avoid missing any blacklisted IPs .
 
 -1.0.7 (September 2023):
 - CPU and memory profilers thanks to @danieltherealyang

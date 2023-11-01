@@ -4,9 +4,12 @@ from slips_files.core.profiler import Profiler
 from slips_files.core.evidence import Evidence
 from slips_files.core.input import Input
 from multiprocessing import Queue, Event, Process, Semaphore
+from modules.update_manager.update_manager import UpdateManager
+from exclusiveprocess import Lock, CannotAcquireLock
 from collections import OrderedDict
 from typing import List, Tuple
 from slips_files.common.style import green
+import asyncio
 import signal
 import time
 import pkgutil
@@ -268,6 +271,39 @@ class ProcessManager:
         # to vertically align them when printing
         module += " " * (20 - len(module))
         self.main.print(f"\t{green(module)} \tStopped. " f"{green(modules_left)} left.")
+
+
+    def start_update_manager(self, local_files=False, TI_feeds=False):
+        """
+        starts the update manager process
+        PS; this function is blocking, slips.py will not start the rest of the
+         module unless this functionis done
+        :kwarg local_files: if true, updates the local ports and org files from disk
+        :kwarg TI_feeds: if true, updates the remote TI feeds, this takes time
+        """
+        try:
+            # only one instance of slips should be able to update ports and orgs at a time
+            # so this function will only be allowed to run from 1 slips instance.
+            with Lock(name="slips_ports_and_orgs"):
+                # pass a dummy termination event for update manager to update orgs and ports info
+                update_manager = UpdateManager(
+                    self.main.logger,
+                    self.main.args.output,
+                    self.main.redis_port,
+                    multiprocessing.Event()
+                )
+
+                if local_files:
+                    update_manager.update_ports_info()
+                    update_manager.update_org_files()
+
+                if TI_feeds:
+                    update_manager.print(f"Updating TI feeds")
+                    asyncio.run(update_manager.update_ti_files())
+
+        except CannotAcquireLock:
+            # another instance of slips is updating ports and orgs
+            return
 
     def warn_about_pending_modules(self, pending_modules: List[Process]):
         """
