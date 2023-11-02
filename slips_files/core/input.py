@@ -553,15 +553,17 @@ class Input(ICore):
         self.is_done_processing()
         return True
 
-    def is_zeek_tabs_file(self, filepath) -> bool:
+    def is_zeek_tabs_file(self, filepath: str) -> bool:
         """
         returns true if the given path is a zeek tab separated file
         :param filepath: full log file path with the .log extension
         """
         with open(filepath,'r') as f:
             line = f.readline()
+
         if '\t' in line:
             return True
+
         if line.startswith("#separator"):
             return True
         try:
