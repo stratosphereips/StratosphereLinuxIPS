@@ -167,6 +167,30 @@ def test_handle_nfdump(
     assert input.handle_nfdump() is True
 
 
+def test_get_earliest_line(mock_rdb):
+    input = ModuleFactory().create_inputProcess_obj(
+        '', 'zeek_log_file', mock_rdb
+        )
+    input.file_time = {
+        'software.log': 3,
+         'ssh.log': 2,
+         'notice.log': 1,
+         'dhcp.log': 4,
+         'arp.log': 5,
+         'conn.log': 5,
+         'dns.log': 6,
+    }
+    input.cache_lines = {
+        'software.log': 'line3',
+         'ssh.log': 'line2',
+         'notice.log': 'line1',
+         'dhcp.log': 'line4',
+         'arp.log': 'line5',
+         'conn.log': 'line5',
+         'dns.log': 'line6',
+        }
+    assert input.get_earliest_line() == ('line1' , 'notice.log')
+
 
 @pytest.mark.parametrize(
     'input_type,input_information',
