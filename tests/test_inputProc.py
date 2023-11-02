@@ -78,7 +78,8 @@ def test_handle_zeek_log_file(
     ],
 )
 
-def test_cache_nxt_line_in_file(path: str, is_tabs: str, line_cached: bool , mock_rdb):
+def test_cache_nxt_line_in_file(
+        path: str, is_tabs: str, line_cached: bool , mock_rdb):
     """
     :param line_cached: should slips cache  the first line of this file or not
     """
@@ -93,8 +94,39 @@ def test_cache_nxt_line_in_file(path: str, is_tabs: str, line_cached: bool , moc
         # make sure it did read 1 line from the file
         assert input.cache_lines[path]['data']
 
+@pytest.mark.parametrize(
+    'path, is_tabs, zeek_line, expected_val',
+    [
+        (
+            'dataset/test10-mixed-zeek-dir/conn.log',
+             True,
+             '1601998375.703087       ClqdMB11qLHjikB6bd      2001:718:2:1663:dc58:6d9:ef13:51a5      63580   2a00:1450:4014:80c::200a443     udp     -       30.131973       6224    10110   SF      -       -       0       Dd      14      6896    15     10830    -',
+             1601998375.703087
+         ),
+        (
+            'dataset/test9-mixed-zeek-dir/conn.log',
+            False,
+            '{"ts":271.102532,"uid":"CsYeNL1xflv3dW9hvb","id.orig_h":"10.0.2.15","id.orig_p":59393,'
+            '"id.resp_h":"216.58.201.98","id.resp_p":443,"proto":"udp","duration":0.5936019999999758,"orig_bytes":5219,"resp_bytes":5685,"conn_state":"SF","missed_bytes":0,"history":"Dd","orig_pkts":9,"orig_ip_bytes":5471,"resp_pkts":10,"resp_ip_bytes":5965}',
+            271.102532
+        ),
 
 
+        # this scenario is corrupted and should fail
+        (
+            'dataset/test9-mixed-zeek-dir/conn.log',
+            False,
+            '{"ts":"corrupted","uid":"CsYeNL1xflv3dW9hvb","id.orig_h":"10.0.2.15","id.orig_p":59393,'
+            '"id.resp_h":"216.58.201.98","id.resp_p":443,"proto":"udp","duration":0.5936019999999758,"orig_bytes":5219,"resp_bytes":5685,"conn_state":"SF","missed_bytes":0,"history":"Dd","orig_pkts":9,"orig_ip_bytes":5471,"resp_pkts":10,"resp_ip_bytes":5965}',
+            (False, False)
+        )
+    ],
+)
+def test_get_ts_from_line(
+        path: str, is_tabs: str,zeek_line: str, expected_val:float, mock_rdb):
+    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_log_file', mock_rdb)
+    input.is_zeek_tabs = is_tabs
+    input.get_ts_from_line(zeek_line)
 
 
 
