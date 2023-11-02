@@ -75,7 +75,7 @@ class Publisher():
 
 
 
-class FlowParser():
+class FlowHandler:
     def __init__(self, db, symbol_handler, flow):
         self.db = db
         self.publisher = Publisher(self.db)

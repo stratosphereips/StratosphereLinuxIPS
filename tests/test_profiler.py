@@ -131,19 +131,6 @@ def test_define_separator_nfdump(nfdump_file, mock_rdb):
 
 
 # pcaps are treated as zeek files in slips, no need to test twice
-# @pytest.mark.parametrize("pcap_file",[('dataset/test7-malicious.pcap')])
-# def test_define_separator_pcap(pcap_file):
-#     # ('dataset/test7-malicious.pcap','zeek')
-#     profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
-#
-#     # pcap files aren't text files so we need to process them first
-#     bro_parameter = '-r "' + pcap_file + '"'
-#     command =  "zeek -C " + bro_parameter + "  tcp_inactivity_timeout=60mins local -e 'redef LogAscii::use_json=T;' -f 2>&1 > /dev/null &"
-#     os.system(command)
-#     # Give Zeek some time to generate at least 1 file.
-#     time.sleep(3)
-#
-#     assert profilerProcess.define_separator(line) == 'zeek'
 
 
 @pytest.mark.parametrize(
