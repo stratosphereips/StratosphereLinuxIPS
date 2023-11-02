@@ -70,8 +70,8 @@ class Input(ICore):
     ):
         self.input_type = input_type
         self.profiler_queue = profiler_queue
-        # in case of reading from stdin, the user mst tell slips what
-        # type of lines is the input
+        # in case of reading from stdin, the user must tell slips what
+        # type of lines is the input using -f <type>
         self.line_type: str = line_type
         # entire path
         self.given_path: str = input_information
@@ -150,15 +150,12 @@ class Input(ICore):
         else:
             self.total_flows = len(self.nfdump_output.splitlines())
             self.db.set_input_metadata({'total_flows': self.total_flows})
-
             for nfdump_line in self.nfdump_output.splitlines():
+
                 # this line is taken from stdout we need to remove whitespaces
                 nfdump_line.replace(' ', '')
                 ts = nfdump_line.split(',')[0]
-                if not ts[0].isdigit():
-                    # The first letter is not digit -> not valid line.
-                    # TODO: What is this valid line check?? explain
-                    continue
+
                 line = {
                     'type': 'nfdump',
                     'data': nfdump_line
@@ -471,19 +468,22 @@ class Input(ICore):
             f'Stopping input process. Sent {self.lines} lines'
         )
 
-    def read_from_stdin(self):
-        self.print('Receiving flows from stdin.')
-        # By default read the stdin
+    def stdin(self):
+        """opens the stdin in read mode"""
         sys.stdin.close()
         sys.stdin = os.fdopen(0, 'r')
-        file_stream = sys.stdin
-        # tell profilerprocess the type of line the user gave slips
+        return sys.stdin
 
-        for line in file_stream:
+
+    def read_from_stdin(self) -> bool:
+        self.print('Receiving flows from stdin.')
+        for line in self.stdin():
             if line == '\n':
                 continue
-
-            # slips supports reading zeek json conn.log only using stdin, tabs aren't supported
+            if line == 'done':
+                break
+            # slips supports reading zeek json conn.log only using stdin,
+            # tabs aren't supported
             if self.line_type == 'zeek':
                 try:
                     line = json.loads(line)
@@ -494,13 +494,12 @@ class Input(ICore):
             line_info = {
                 'type': 'stdin',
                 'line_type': self.line_type,
-                'data' : line
+                'data': line
             }
             self.print(f'	> Sent Line: {line_info}', 0, 3)
             self.give_profiler(line_info)
             self.lines += 1
             self.print('Done reading 1 flow.\n ', 0, 3)
-
         return True
 
     def handle_binetflow(self):
@@ -873,8 +872,8 @@ class Input(ICore):
                 self.give_profiler(line_info)
                 self.lines += 1
                 self.print('Done reading 1 CYST flow.\n ', 0, 3)
-
                 time.sleep(2)
+
         self.is_done_processing()
 
     def give_profiler(self, line):
@@ -922,16 +921,16 @@ class Input(ICore):
             'suricata': self.handle_suricata,
             'CYST': self.handle_cyst,
         }
+
         try:
             # Process the file that was given
-            # If the type of file is 'file (-f) and the name of the
-            # file is '-' then read from stdin
             input_handlers[self.input_type]()
         except KeyError:
             self.print(
                 f'Unrecognized file type "{self.input_type}". Stopping.'
             )
             return False
+
         # no logic should be put here
         # because some of the above handlers never return
         # e.g. interface, stdin, cyst etc.
