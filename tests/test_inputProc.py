@@ -164,8 +164,6 @@ def test_reached_timeout(
 def test_handle_nfdump(
     path, mock_rdb
 ):
-    input = ModuleFactory().create_inputProcess_obj(input_information, 'nfdump', mock_rdb)
-    assert input.handle_nfdump() is True
     input = ModuleFactory().create_inputProcess_obj(path, 'nfdump', mock_rdb)
     assert input.handle_nfdump() is True
 
