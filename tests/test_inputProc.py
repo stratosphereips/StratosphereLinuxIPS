@@ -158,12 +158,12 @@ def test_reached_timeout(
     'nfdump' not in shutil.which('nfdump'), reason='nfdump is not installed'
 )
 @pytest.mark.parametrize(
-    'input_information', [('dataset/test1-normal.nfdump')]
+    'path', [('dataset/test1-normal.nfdump')]
 )
 def test_handle_nfdump(
-    input_information, mock_rdb
+    path, mock_rdb
 ):
-    input = ModuleFactory().create_inputProcess_obj(input_information, 'nfdump', mock_rdb)
+    input = ModuleFactory().create_inputProcess_obj(path, 'nfdump', mock_rdb)
     assert input.handle_nfdump() is True
 
 
@@ -190,6 +190,23 @@ def test_get_earliest_line(mock_rdb):
          'dns.log': 'line6',
         }
     assert input.get_earliest_line() == ('line1' , 'notice.log')
+
+
+
+@pytest.mark.parametrize(
+    'path, is_tabs, expected_val',
+    [
+        ('dataset/test1-normal.nfdump', False, 4646),
+        ('dataset/test9-mixed-zeek-dir/conn.log', False, 577 ),
+        ('dataset/test10-mixed-zeek-dir/conn.log', True, 116)
+     ]
+)
+def test_get_flows_number(
+        path: str, is_tabs: bool, expected_val: int, mock_rdb):
+    input = ModuleFactory().create_inputProcess_obj(path, 'nfdump', mock_rdb)
+    input.is_zeek_tabs = is_tabs
+    assert input.get_flows_number(path) == expected_val
+
 
 
 @pytest.mark.parametrize(
@@ -244,7 +261,7 @@ def test_read_from_stdin(line_type: str, line: str, mock_rdb):
         assert input.read_from_stdin()
         line_sent : dict = input.profiler_queue.get()
         # in case it's a zeek line, it gets sent as a dict
-        expected_received_line = json.loads(line) if line_type is 'zeek' else line
+        expected_received_line = json.loads(line) if line_type == 'zeek' else line
         assert line_sent['line']['data'] == expected_received_line
         assert line_sent['line']['line_type'] == line_type
         assert line_sent['input_type'] == 'stdin'
