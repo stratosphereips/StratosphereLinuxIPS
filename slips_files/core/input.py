@@ -247,7 +247,7 @@ class Input(ICore):
 
         return timestamp, nline
 
-    def cache_nxt_line_in_file(self, filename):
+    def cache_nxt_line_in_file(self, filename: str):
         """
         reads 1 line of the given file and stores in queue for sending to the profiler
         :param: full path to the file. includes the .log extension
