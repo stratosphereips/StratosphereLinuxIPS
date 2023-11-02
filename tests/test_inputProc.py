@@ -261,7 +261,7 @@ def test_read_from_stdin(line_type: str, line: str, mock_rdb):
         assert input.read_from_stdin()
         line_sent : dict = input.profiler_queue.get()
         # in case it's a zeek line, it gets sent as a dict
-        expected_received_line = json.loads(line) if line_type is 'zeek' else line
+        expected_received_line = json.loads(line) if line_type == 'zeek' else line
         assert line_sent['line']['data'] == expected_received_line
         assert line_sent['line']['line_type'] == line_type
         assert line_sent['input_type'] == 'stdin'
