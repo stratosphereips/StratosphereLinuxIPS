@@ -1,8 +1,7 @@
 import pytest
 from tests.module_factory import ModuleFactory
-from io import StringIO
 from unittest.mock import patch
-from slips_files.core.input import Input
+
 import shutil
 import os
 import json
