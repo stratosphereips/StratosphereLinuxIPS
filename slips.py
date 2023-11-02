@@ -515,6 +515,20 @@ class Main(IObservable):
                 self.db.set_host_ip(hostIP)
         return hostIP
 
+    def is_total_flows_unknown(self) -> bool:
+        """
+        Determines if slips knows the total flows it's gonna be
+        reading beforehand or not
+        for example, we dont know the total flows when running on an interface,
+         a pcap, an input module like cyst, etc.
+        """
+        return (
+            self.args.input_module
+            or self.args.growing
+            or self.input_type in ('stdin', 'pcap', 'interface')
+        )
+
+
     def start(self):
         """Main Slips Function"""
         try:
