@@ -69,6 +69,35 @@ def test_handle_zeek_log_file(
     assert input.handle_zeek_log_file() == expected_output
 
 
+@pytest.mark.parametrize(
+    'path, is_tabs, line_cached',
+    [
+        # sllips shouldn't be able to cache teh first line as it's a comment
+        ('dataset/test10-mixed-zeek-dir/conn.log', True, False),
+        ('dataset/test9-mixed-zeek-dir/conn.log', False, True),
+    ],
+)
+
+def test_cache_nxt_line_in_file(path: str, is_tabs: str, line_cached: bool , mock_rdb):
+    """
+    :param line_cached: should slips cache  the first line of this file or not
+    """
+    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_log_file', mock_rdb)
+    input.cache_lines = {}
+    input.file_time = {}
+    input.is_zeek_tabs = is_tabs
+
+    assert input.cache_nxt_line_in_file(path) == line_cached
+    if line_cached:
+        assert input.cache_lines[path]['type'] == path
+        # make sure it did read 1 line from the file
+        assert input.cache_lines[path]['data']
+
+
+
+
+
+
 @pytest.mark.skipif(
     'nfdump' not in shutil.which('nfdump'), reason='nfdump is not installed'
 )
