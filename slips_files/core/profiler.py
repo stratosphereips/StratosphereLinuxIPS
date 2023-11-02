@@ -18,7 +18,7 @@ import multiprocessing
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.imports import *
 
-from slips_files.core.helpers.flow_parser import FlowHandler
+from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 
 from datetime import datetime

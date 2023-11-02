@@ -103,7 +103,6 @@ class FlowHandler:
             'weird',
             'tunnel'
         )
-
         return bool(
             self.flow.starttime is not None
             and self.flow.type_ in supported_types

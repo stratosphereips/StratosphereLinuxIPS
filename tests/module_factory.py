@@ -18,6 +18,8 @@ from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event, Semaphore
+from slips_files.core.helpers.flow_handler import FlowHandler
+from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.arp.arp import ARP
 import shutil
 from unittest.mock import patch, Mock
@@ -265,3 +267,9 @@ class ModuleFactory:
         whitelist.whitelist_path = 'tests/test_whitelist.conf'
         return whitelist
 
+
+    def create_flow_handler_obj(self, flow ,mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            symbol = SymbolHandler(self.logger, mock_rdb)
+            flow_handler = FlowHandler(mock_rdb, symbol, flow)
+            return flow_handler
