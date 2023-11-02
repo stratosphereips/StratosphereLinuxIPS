@@ -18,7 +18,7 @@ import multiprocessing
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.imports import *
 
-from slips_files.core.helpers.flow_parser import FlowParser
+from slips_files.core.helpers.flow_parser import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 
 from datetime import datetime
@@ -133,7 +133,7 @@ class Profiler(ICore):
             #TODO this is a quick fix
             return False
 
-        self.flow_parser = FlowParser(self.db, self.symbol, self.flow)
+        self.flow_parser = FlowHandler(self.db, self.symbol, self.flow)
 
         if not self.flow_parser.is_supported_flow():
             return False
