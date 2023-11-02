@@ -18,7 +18,7 @@
 from slips_files.common.abstracts.observer import IObserver
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import green, red
+from slips_files.common.style import red
 from threading import Lock
 import sys
 import io
@@ -50,6 +50,7 @@ class Output(IObserver):
         slips_logfile='output/slips.log',
         slips_mode='interactive',
         unknown_total_flows: bool = True,
+        input_type: str='',
     ):
         if not cls.obj:
             cls.obj = super().__new__(cls)
@@ -60,6 +61,9 @@ class Output(IObserver):
             # if the total flows are unknown to slips at start time, then
             # we're not gonna be having  a pbar,
             cls.unknown_total_flows = unknown_total_flows
+            # determined by slips.py, used to avoid printing pbar and stats
+            # in some cases like input from stdin
+            cls.input_type = input_type
             ####### create the log files
             cls._read_configuration()
             cls.errors_logfile = stderr
@@ -206,7 +210,13 @@ class Output(IObserver):
         # TODO fix this later, not all instacnes ha access to the pbar to
         # TODO add the stats as a postfix and in order to do that output.py
         # TODO needs to be separate oprocess
-        if not self.has_pbar() or self.is_pbar_done():
+        if (
+                (
+                        not self.has_pbar()
+                        or self.is_pbar_done()
+                )
+                and self.input_type != 'stdin'
+        ):
             self.cli_lock.acquire()
             tqdm.write(stats, end="\r")
             self.cli_lock.release()
