@@ -159,7 +159,6 @@ class ModuleFactory:
             )
         inputProcess.db.rdb = mock_rdb
         inputProcess.is_done_processing = do_nothing
-        inputProcess.get_flows_number = do_nothing
         inputProcess.bro_timeout = 1
         # override the print function to avoid broken pipes
         inputProcess.print = do_nothing
