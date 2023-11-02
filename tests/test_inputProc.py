@@ -1,8 +1,7 @@
 import pytest
 from tests.module_factory import ModuleFactory
-from io import StringIO
 from unittest.mock import patch
-from slips_files.core.input import Input
+
 import shutil
 import os
 import json
@@ -127,6 +126,31 @@ def test_get_ts_from_line(
     input = ModuleFactory().create_inputProcess_obj(path, 'zeek_log_file', mock_rdb)
     input.is_zeek_tabs = is_tabs
     input.get_ts_from_line(zeek_line)
+
+
+@pytest.mark.parametrize(
+    'last_updated_file_time, now, bro_timeout, expected_val, ',
+    [
+        (0, 20, 10, True),
+        (0, 10, 10, True),
+        (0, 5, 10, False),
+        (0, 5, float('inf'), False),
+    ]
+    )
+def test_reached_timeout(
+        last_updated_file_time, now, bro_timeout, expected_val, mock_rdb
+        ):
+    input = ModuleFactory().create_inputProcess_obj(
+        '', 'zeek_log_file', mock_rdb
+        )
+    input.last_updated_file_time = last_updated_file_time
+    input.bro_timeout = bro_timeout
+    # make it seem as we don't have cache lines anymore to be able to check the timeout
+    input.cache_lines = False
+    with patch('datetime.datetime') as dt:
+        dt.now.return_value = now
+        assert input.reached_timeout() == expected_val
+
 
 
 
