@@ -136,7 +136,7 @@ class ModuleFactory:
         return flowalerts
 
     def create_inputProcess_obj(
-            self, input_information, input_type, mock_rdb
+            self, input_information, input_type, mock_rdb, line_type=False
             ):
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
@@ -154,7 +154,7 @@ class ModuleFactory:
                 cli_packet_filter= None,
                 zeek_or_bro=check_zeek_or_bro(),
                 zeek_dir=zeek_tmp_dir,
-                line_type=False,
+                line_type=line_type,
                 is_profiler_done_event=self.dummy_termination_event,
             )
         inputProcess.db.rdb = mock_rdb
