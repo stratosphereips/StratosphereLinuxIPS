@@ -1,10 +1,13 @@
 """Unit test for slips_files/core/performance_profiler.py"""
+import ipaddress
+
 from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing
 import subprocess
 import pytest
 import json
 from slips_files.core.profiler import SUPPORTED_INPUT_TYPES, SEPARATORS
+from slips_files.core.flows.zeek import Conn
 
 
 
@@ -194,3 +197,45 @@ def test_process_line(file, flow_type):
             profiler.db.get_altflow_from_uid(profileid, twid, uid) is not None
         )
     assert added_flow is not None
+
+
+
+def test_get_rev_profile(mock_rdb):
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.flow = Conn(
+                '1.0',
+                '1234',
+                '192.168.1.1',
+                '8.8.8.8',
+                5,
+                'TCP',
+                'dhcp',
+                80,88,
+                20,20,
+                20,20,
+                '','',
+                'Established',''
+            )
+    profiler.daddr_as_obj = ipaddress.ip_address(profiler.flow.daddr)
+    mock_rdb.getProfileIdFromIP.return_value =  None
+    assert profiler.get_rev_profile() == ('profile_8.8.8.8', 'timewindow1')
+
+def test_get_rev_profile_no_daddr():
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.flow = Conn(
+                '1601998398.945854',
+                '1234',
+                '192.168.1.1',
+                None,
+                5,
+                'TCP',
+                'dhcp',
+                80,88,
+                20,20,
+                20,20,
+                '','',
+                'Established',''
+            )
+    profiler.daddr_as_obj = ipaddress.ip_address(profiler.flow.daddr)
+    assert profiler.get_rev_profile() == (False, False)
+
