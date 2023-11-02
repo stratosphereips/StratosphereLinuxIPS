@@ -222,8 +222,9 @@ class Input(ICore):
         return file_handler
 
 
-    def get_ts_from_line(self, zeek_line):
+    def get_ts_from_line(self, zeek_line: str):
         """
+        used only by zeek log files
         :param line: can be a json or a json serialized dict
         """
         if self.is_zeek_tabs:
