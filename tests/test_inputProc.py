@@ -34,12 +34,24 @@ def test_handle_pcap_and_interface(
 def test_is_growing_zeek_dir(
      zeek_dir: str, is_tabs: bool,  mock_rdb
 ):
-    input = ModuleFactory().create_inputProcess_obj(input_information, 'zeek_folder', mock_rdb)
-    # no need to get the total flows in this test, skip this part
-    mock_rdb.is_growing_zeek_dir.return_value = True
-    mock_rdb.get_all_zeek_file.return_value = [os.path.join(input_information, 'conn.log')]
+    input = ModuleFactory().create_inputProcess_obj(zeek_dir, 'zeek_folder', mock_rdb)
+    mock_rdb.get_all_zeek_file.return_value = [os.path.join(zeek_dir, 'conn.log')]
 
     assert input.read_zeek_folder() is True
+
+
+
+@pytest.mark.parametrize(
+    'path, expected_val',
+    [
+        ('dataset/test10-mixed-zeek-dir/conn.log', True), # tabs
+        ('dataset/test9-mixed-zeek-dir/conn.log', False), # json
+    ],
+)
+def test_is_zeek_tabs_file(path: str, expected_val: bool, mock_rdb):
+    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_folder', mock_rdb)
+    assert input.is_zeek_tabs_file(path) == expected_val
+
 
 @pytest.mark.parametrize(
     'input_information,expected_output',
