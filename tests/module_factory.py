@@ -209,7 +209,7 @@ class ModuleFactory:
         profilerProcess = Profiler(
             self.logger,
             'output/',
-            6377,
+            6379,
             self.dummy_termination_event,
             is_profiler_done=dummy_semaphore,
             profiler_queue=self.input_queue,

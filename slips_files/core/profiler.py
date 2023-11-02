@@ -110,20 +110,12 @@ class Profiler(ICore):
         if not self.flow.daddr:
             # some flows don't have a daddr like software.log flows
             return False, False
+
         rev_profileid = self.db.getProfileIdFromIP(self.daddr_as_obj)
         if not rev_profileid:
-            self.print(
-                'The dstip profile was not here... create', 3, 0
-            )
-            # Create a reverse profileid for managing the data going to the dstip.
+            # the profileid is not present in the db, create it
             rev_profileid = f'profile_{self.flow.daddr}'
-            self.db.addProfile(
-                rev_profileid, self.flow.starttime, self.width
-            )
-            # Try again
-            rev_profileid = self.db.getProfileIdFromIP(
-                self.daddr_as_obj
-            )
+            self.db.addProfile(rev_profileid, self.flow.starttime, self.width)
 
         # in the database, Find the id of the tw where the flow belongs.
         rev_twid = self.db.get_timewindow(self.flow.starttime, rev_profileid)
@@ -408,7 +400,6 @@ class Profiler(ICore):
                 continue
             except Exception as e:
                 # ValueError is raised when the queue is closed
-
                 continue
 
             # TODO who is putting this True here?
