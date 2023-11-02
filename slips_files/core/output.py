@@ -49,12 +49,17 @@ class Output(IObserver):
         stderr='output/errors.log',
         slips_logfile='output/slips.log',
         slips_mode='interactive',
+        unknown_total_flows: bool = True,
     ):
         if not cls.obj:
             cls.obj = super().__new__(cls)
-            # when running slips using -e , this var is set and we only print all msgs with debug lvl less than it
+            # when running slips using -e , this var is set and we only
+            # print all msgs with debug lvl less than it
             cls.verbose = verbose
             cls.debug = debug
+            # if the total flows are unknown to slips at start time, then
+            # we're not gonna be having  a pbar,
+            cls.unknown_total_flows = unknown_total_flows
             ####### create the log files
             cls._read_configuration()
             cls.errors_logfile = stderr
@@ -201,7 +206,7 @@ class Output(IObserver):
         # TODO fix this later, not all instacnes ha access to the pbar to
         # TODO add the stats as a postfix and in order to do that output.py
         # TODO needs to be separate oprocess
-        if not self.has_pbar() or  self.is_pbar_done():
+        if not self.has_pbar() or self.is_pbar_done():
             self.cli_lock.acquire()
             tqdm.write(stats, end="\r")
             self.cli_lock.release()
@@ -259,25 +264,13 @@ class Output(IObserver):
         if debug == 1:
             self.log_error(msg)
 
-    def unknown_total_flows(self) -> bool:
-        """
-        When running on a pcap, interface, or taking flows from an
-        external module, the total amount of flows is unknown
-        """
-        # whenever any of those is present, slips won't be able to get the
-        # total flows when starting, nor init the progress bar
-        params = ('-g', '--growing', '-im', '--input_module')
-        for param in params:
-            if param in sys.argv:
-                return True
-
     def init_progress_bar(self, bar: dict):
         """
         initializes the progress bar when slips is runnning on a file or a zeek dir
         ignores pcaps, interface and dirs given to slips if -g is enabled
         :param bar: dict with input type, total_flows, etc.
         """
-        if self.unknown_total_flows():
+        if self.unknown_total_flows:
             # we don't know how to get the total number of flows slips is going to process,
             # because they're growing
             return
