@@ -4,7 +4,7 @@ import ipaddress
 import json
 import os
 from dataclasses import asdict
-
+from typing import Tuple
 from slips_files.core.flows.suricata import SuricataFile
 from slips_files.core.flows.zeek import DHCP
 from slips_files.common.slips_utils import utils
@@ -128,20 +128,30 @@ class FlowHandler:
     def handle_conn(self):
         role = 'Client'
         daddr_as_obj = ipaddress.ip_address(self.flow.daddr)
+        # this identified the tuple, it's a combination of daddr, dport and proto
+        # this is legacy code and refactoring it will break many things, so i wont:D
         tupleid = f'{daddr_as_obj}-{self.flow.dport}-{self.flow.proto}'
+
         # Compute the symbol for this flow, for this TW, for this profile.
-        # The symbol is based on the 'letters' of the original Startosphere ips tool
-        symbol = self.symbol.compute(self.flow, self.twid, 'OutTuples')
+        # The symbol is based on the 'letters' of the original Startosphere IPS tool
+        symbol: Tuple = self.symbol.compute(self.flow, self.twid, 'OutTuples')
+
         # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
         # Add the out tuple
         self.db.add_tuple(
-            self.profileid, self.twid, tupleid, symbol, role, self.flow
-        )
+            self.profileid,
+            self.twid,
+            tupleid,
+            symbol,
+            role,
+            self.flow)
+
         # Add the dstip
         self.db.add_ips(self.profileid, self.twid, self.flow, role)
         # Add the dstport
         port_type = 'Dst'
         self.db.add_port(self.profileid, self.twid, self.flow, role, port_type)
+
         # Add the srcport
         port_type = 'Src'
         self.db.add_port(self.profileid, self.twid, self.flow, role, port_type)
