@@ -5,7 +5,7 @@ import redis
 import os
 import json
 import time
-
+import pytest
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -29,11 +29,11 @@ flow = Conn(
 # this should always be the first unit test in this file
 # because we don't want another unit test adding the same flow before this one
 
-database = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
 
 
 def add_flow():
-    database.add_flow(flow, '', profileid, twid, label='benign')
+    db.add_flow(flow, '', profileid, twid, label='benign')
 
 
 def test_getProfileIdFromIP():
@@ -43,22 +43,22 @@ def test_getProfileIdFromIP():
     os.system('./slips.py -c slips.conf -cc')
 
     # add a profile
-    database.addProfile('profile_192.168.1.1', '00:00', '1')
+    db.addProfile('profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
-    assert database.getProfileIdFromIP(test_ip) is not False
+    assert db.getProfileIdFromIP(test_ip) is not False
 
 
 def test_timewindows():
     """unit tests for addNewTW ,getLastTWforProfile and getFirstTWforProfile"""
     profileid = 'profile_192.168.1.1'
     # add a profile
-    database.addProfile(profileid, '00:00', '1')
+    db.addProfile(profileid, '00:00', '1')
     # add a tw to that profile (first tw)
-    database.addNewTW(profileid, 0.0)
+    db.addNewTW(profileid, 0.0)
     # add  a new tw (last tw)
-    database.addNewTW(profileid, 5.0)
-    assert database.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
-    assert database.get_last_twid_of_profile(profileid) == [('timewindow2', 5.0)]
+    db.addNewTW(profileid, 5.0)
+    assert db.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
+    assert db.get_last_twid_of_profile(profileid) == [('timewindow2', 5.0)]
 
 
 def getSlipsInternalTime():
@@ -68,9 +68,9 @@ def getSlipsInternalTime():
 
 def test_add_ips():
     # add a profile
-    database.addProfile(profileid, '00:00', '1')
+    db.addProfile(profileid, '00:00', '1')
     # add a tw to that profile
-    database.addNewTW(profileid, 0.0)
+    db.addNewTW(profileid, 0.0)
     columns = {
         'dport': 80,
         'sport': 80,
@@ -88,19 +88,19 @@ def test_add_ips():
     }
     # make sure ip is added
     assert (
-        database.add_ips(profileid, twid, flow, 'Server') is True
+        db.add_ips(profileid, twid, flow, 'Server') is True
     )
     hash_id = f'{profileid}_{twid}'
-    stored_dstips = database.r.hget(hash_id, 'SrcIPs')
+    stored_dstips = db.r.hget(hash_id, 'SrcIPs')
     assert stored_dstips == '{"192.168.1.1": 1}'
 
 
 def test_add_port():
     new_flow = flow
     new_flow.state = 'Not Established'
-    database.add_port(profileid, twid, flow, 'Server', 'Dst')
+    db.add_port(profileid, twid, flow, 'Server', 'Dst')
     hash_key = f'{profileid}_{twid}'
-    added_ports = database.r.hgetall(hash_key)
+    added_ports = db.r.hgetall(hash_key)
     assert 'DstPortsServerTCPNot Established' in added_ports.keys()
     assert flow.daddr in added_ports['DstPortsServerTCPNot Established']
 
@@ -115,11 +115,11 @@ def test_setEvidence():
     timestamp = time.time()
     category = 'Infomation'
     uid = '123'
-    database.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+    db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                          timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
-    added_evidence = database.r.hget(f'evidence{profileid}', twid)
-    added_evidence2 = database.r.hget(f'{profileid}_{twid}', 'Evidence')
+    added_evidence = db.r.hget(f'evidence{profileid}', twid)
+    added_evidence2 = db.r.hget(f'{profileid}_{twid}', 'Evidence')
     assert added_evidence2 == added_evidence
 
     added_evidence = json.loads(added_evidence)
@@ -133,10 +133,10 @@ def test_setEvidence():
 
 def test_deleteEvidence():
     description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
-    database.deleteEvidence(profileid, twid, description)
-    added_evidence = json.loads(database.r.hget(f'evidence{profileid}', twid))
+    db.deleteEvidence(profileid, twid, description)
+    added_evidence = json.loads(db.r.hget(f'evidence{profileid}', twid))
     added_evidence2 = json.loads(
-        database.r.hget(f'{profileid}_{twid}', 'Evidence')
+        db.r.hget(f'{profileid}_{twid}', 'Evidence')
     )
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
@@ -147,26 +147,26 @@ def test_setInfoForDomains():
     """ tests setInfoForDomains, setNewDomain and getDomainData """
     domain = 'www.google.com'
     domain_data = {'threatintelligence': 'sample data'}
-    database.setInfoForDomains(domain, domain_data)
+    db.setInfoForDomains(domain, domain_data)
 
-    stored_data = database.getDomainData(domain)
+    stored_data = db.getDomainData(domain)
     assert 'threatintelligence' in stored_data
     assert stored_data['threatintelligence'] == 'sample data'
 
 
 def test_subscribe():
     # invalid channel
-    assert database.subscribe('invalid_channel') is False
+    assert db.subscribe('invalid_channel') is False
     # valid channel, shoud return a pubsub object
-    assert type(database.subscribe('tw_modified')) == redis.client.PubSub
+    assert type(db.subscribe('tw_modified')) == redis.client.PubSub
 
 
 def test_profile_moddule_labels():
     """ tests set and get_profile_module_label """
     module_label = 'malicious'
     module_name = 'test'
-    database.set_profile_module_label(profileid, module_name, module_label)
-    labels = database.get_profile_modules_labels(profileid)
+    db.set_profile_module_label(profileid, module_name, module_label)
+    labels = db.get_profile_modules_labels(profileid)
     assert 'test' in labels
     assert labels['test'] == 'malicious'
 
@@ -176,36 +176,48 @@ def test_add_mac_addr_to_profile():
     profileid_ipv4 = f'profile_{ipv4}'
     MAC_info = {'MAC': '00:00:5e:00:53:af'}
     # first associate this ip with some mac
-    assert database.add_mac_addr_to_profile(profileid_ipv4, MAC_info) is True
-    assert ipv4 in str(database.r.hget('MAC', MAC_info['MAC']))
+    assert db.add_mac_addr_to_profile(profileid_ipv4, MAC_info) is True
+    assert ipv4 in str(db.r.hget('MAC', MAC_info['MAC']))
 
     # now claim that we found another profile
     # that has the same mac as this one
     # both ipv4
     profileid = 'profile_192.168.1.6'
-    assert database.add_mac_addr_to_profile(profileid, MAC_info) is False
+    assert db.add_mac_addr_to_profile(profileid, MAC_info) is False
     # this ip shouldnt be added to the profile as they're both ipv4
-    assert '192.168.1.6' not in database.r.hget('MAC', MAC_info['MAC'])
+    assert '192.168.1.6' not in db.r.hget('MAC', MAC_info['MAC'])
 
     # now claim that another ipv6 has this mac
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     profileid_ipv6 = f'profile_{ipv6}'
-    database.add_mac_addr_to_profile(profileid_ipv6, MAC_info)
+    db.add_mac_addr_to_profile(profileid_ipv6, MAC_info)
     # make sure the mac is associated with his ipv6
-    assert ipv6 in database.r.hget('MAC', MAC_info['MAC'])
+    assert ipv6 in db.r.hget('MAC', MAC_info['MAC'])
     # make sure the ipv4 is associated with this
     # ipv6 profile
-    assert ipv4 in str(database.r.hmget(profileid_ipv6, 'IPv4'))
+    assert ipv4 in str(db.r.hmget(profileid_ipv6, 'IPv4'))
 
     # make sure the ipv6 is associated with the
     # profile that has the same ipv4 as the mac
-    assert ipv6 in str(database.r.hmget(profileid_ipv4, 'IPv6'))
+    assert ipv6 in str(db.r.hmget(profileid_ipv4, 'IPv6'))
 
 
 def test_get_the_other_ip_version():
     # profileid is ipv4
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
-    database.set_ipv6_of_profile(profileid, ipv6)
+    db.set_ipv6_of_profile(profileid, ipv6)
     # the other ip version is ipv6
-    other_ip = json.loads(database.get_the_other_ip_version(profileid))
+    other_ip = json.loads(db.get_the_other_ip_version(profileid))
     assert other_ip == ipv6
+
+@pytest.mark.parametrize(
+    'tupleid, symbol, role, expected_direction',
+    [
+        # no prev_symbols will be found for this
+        ('8.8.8.8-5-tcp', ('1', (False, 1601998366.785668)), 'Client', 'OutTuples'),
+        ('8.8.8.8-5-tcp', ('8.888123..1', (1601998366.806331, 1601998366.958409)), 'Server', 'InTuples'),
+    ],
+)
+def test_add_tuple(tupleid: str, symbol, expected_direction, role, flow):
+    db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
+    assert symbol[0] in db.r.hget(f'profile_{flow.saddr}_{twid}', expected_direction)
