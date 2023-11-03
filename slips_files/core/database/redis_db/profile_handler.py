@@ -1756,7 +1756,7 @@ class ProfileHandler(IObservable):
 
             try:
                 # Get the last symbols of letters in the DB
-                prev_symbols = prev_symbols[tupleid][0]
+                prev_symbol: str = prev_symbols[tupleid][0]
 
                 # Separate the symbol to add and the previous data
                 (symbol_to_add, previous_two_timestamps) = symbol
@@ -1768,7 +1768,7 @@ class ProfileHandler(IObservable):
                 )
 
                 # Add it to form the string of letters
-                new_symbol = f'{prev_symbols}{symbol_to_add}'
+                new_symbol = f'{prev_symbol}{symbol_to_add}'
 
                 self.publish_new_letter(
                     new_symbol,
@@ -1798,7 +1798,7 @@ class ProfileHandler(IObservable):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Error in add_tuple in database.py line {exception_line}', 0,1)
-            self.print(traceback.format_exc(),0,1)
+            self.print(traceback.format_exc(), 0, 1)
 
     def get_tws_to_search(self, go_back):
         tws_to_search = float('inf')
