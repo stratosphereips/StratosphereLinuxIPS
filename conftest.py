@@ -8,6 +8,7 @@ from multiprocessing import Queue
 from unittest.mock import patch
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
+from slips_files.core.flows.zeek import Conn
 
 
 # add parent dir to path for imports to work
@@ -50,3 +51,21 @@ def database():
     db = DBManager(Output(), 'output/', 6379)
     db.print = do_nothing
     return db
+
+@pytest.fixture
+def flow():
+    """returns a dummy flow for testing"""
+    return Conn(
+        '1601998398.945854',
+        '1234',
+        '192.168.1.1',
+        '8.8.8.8',
+        5,
+        'TCP',
+        'dhcp',
+        80,88,
+        20,20,
+        20,20,
+        '','',
+        'Established',''
+    )
