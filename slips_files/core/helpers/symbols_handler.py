@@ -48,10 +48,14 @@ class SymbolHandler(IObservable):
     ):
         """
         This function computes the new symbol for the tuple according to the
-        original stratosphere ips model of letters
+        original stratosphere IPS model of letters
         Here we do not apply any detection model, we just create the letters
         as one more feature twid is the starttime of the flow
-        :param tuple_key: can be InTuples or OutTuples
+        :param tuple_key: can be 'InTuples' or 'OutTuples'
+        return the following tuple (symbol_to_add, (previous_two_timestamps))
+        previous_two_timestamps is a tuple with the ts of the last flow, and th ets
+        of the flow before the last flow
+
         """
         daddr_as_obj = ip_address(flow.daddr)
         profileid = f"profile_{flow.saddr}"
@@ -65,7 +69,8 @@ class SymbolHandler(IObservable):
             current_size = int(current_size)
             now_ts = float(flow.starttime)
             self.print(
-                'Starting compute symbol. Profileid: {}, Tupleid {}, time:{} ({}), dur:{}, size:{}'.format(
+                'Starting compute symbol. Profileid: {}, '
+                'Tupleid {}, time:{} ({}), dur:{}, size:{}'.format(
                     profileid,
                     tupleid,
                     twid,
@@ -108,14 +113,17 @@ class SymbolHandler(IObservable):
                     # Time diff between the past flow and the past-past flow.
                     T1 = last_ts - last_last_ts
                     # Time diff between the current flow and the past flow.
-                    # We already computed this before, but we can do it here again just in case
+                    # We already computed this before, but we can do it here
+                    # again just in case
                     T2 = now_ts - last_ts
 
-                    # We have a time out of 1hs. After that, put 1 number 0 for each hs
+                    # We have a time out of 1hs. After that, put 1 number 0
+                    # for each hs
                     # It should not happen that we also check T1... right?
                     if T2 >= tto.total_seconds():
                         t2_in_hours = T2 / tto.total_seconds()
-                        # Shoud round it. Because we need the time to pass to really count it
+                        # Shoud round it. Because we need the time to pass to
+                        # really count it
                         # For example:
                         # 7100 / 3600 =~ 1.972  ->  int(1.972) = 1
                         for i in range(int(t2_in_hours)):
@@ -142,7 +150,8 @@ class SymbolHandler(IObservable):
                         # Strongly not periodicity
                         TD = 4
                 self.print(
-                    'Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, T2={}, TD={}'.format(
+                    'Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, '
+                    'T2={}, TD={}'.format(
                         profileid, tupleid, T1, T2, TD
                     ),
                     3,
@@ -211,7 +220,8 @@ class SymbolHandler(IObservable):
 
             def compute_timechar():
                 """Function to compute the timechar"""
-                # self.print(f'Compute timechar. Profileid: {profileid} T2: {T2}', 0, 5)
+                # self.print(f'Compute timechar. Profileid: {profileid} T2:
+                # {T2}', 0, 5)
                 if not isinstance(T2, bool):
                     if T2 <= timedelta(seconds=5).total_seconds():
                         return '.'
@@ -234,10 +244,12 @@ class SymbolHandler(IObservable):
                 # Are flows sorted?
                 if T2 < 0:
                     # Flows are not sorted!
-                    # What is going on here when the flows are not ordered?? Are we losing flows?
+                    # What is going on here when the flows are not
+                    # ordered?? Are we losing flows?
                     # Put a warning
                     self.print(
-                        'Warning: Coming flows are not sorted -> Some time diff are less than zero.',
+                        'Warning: Coming flows are not sorted -> '
+                        'Some time diff are less than zero.',
                         0,
                         2,
                     )
@@ -258,7 +270,8 @@ class SymbolHandler(IObservable):
             timechar = compute_timechar()
             # self.print("TimeChar: {}".format(timechar), 0, 1)
             self.print(
-                'Profileid: {}, Tuple: {}, Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}'.format(
+                'Profileid: {}, Tuple: {}, Periodicity: {}, '
+                'Duration: {}, Size: {}, Letter: {}. TimeChar: {}'.format(
                     profileid,
                     tupleid,
                     periodicity,
