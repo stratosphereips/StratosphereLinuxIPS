@@ -1611,84 +1611,108 @@ class ProfileHandler(IObservable):
         # Check if we should close some TW
         self.check_TW_to_close()
 
+    def publish_new_letter(self, new_symbol:str, profileid:str, twid:str, tupleid:str, flow):
+        """
+        analyze behavioral model with lstm model if
+        the length is divided by 3 -
+        so we send when there is 3 more characters added
+        """
+        if len(new_symbol) % 3 != 0:
+            return
 
-    def add_tuple(
-        self, profileid, twid, tupleid, data_tuple, role, flow
-    ):
+        to_send = {
+            'new_symbol': new_symbol,
+            'profileid': profileid,
+            'twid': twid,
+            'tupleid': str(tupleid),
+            'uid': flow.uid,
+            'flow': asdict(flow)
+        }
+        to_send = json.dumps(to_send)
+        self.publish('new_letters', to_send)
+
+    #
+    # def get_previous_symbols(self, profileid: str, twid: str, direction: str, tupleid: str):
+    #     """
+    #     returns all the InTuples or OutTuples for this profileid in this TW
+    #     """
+    #     profileid_twid = f'{profileid}{self.separator}{twid}'
+    #
+    #     tuples = self.r.hget(profileid_twid, direction) or '{}'
+    #     tuples = json.loads(tuples)
+    #
+    #     # Get the last symbols of letters in the DB
+    #     prev_symbols = tuples[tupleid][0]
+    #     return prev_symbols
+    #
+
+    def add_tuple(self,
+                  profileid: str, twid: str, tupleid: str, symbol: Tuple,
+                  role: str, flow):
         """
         Add the tuple going in or out for this profile
-        :param tupleid: daddr:dport:proto
-        role: 'Client' or 'Server'
+        and if there was previous symbols for this profile, append the new symbol to it
+        before adding the tuple to the db
+
+        :param tupleid:  a dash separated str with the following format daddr-dport-proto
+        :param symbol:  (symbol, (symbol_to_add, previous_two_timestamps))
+        T1: is the time diff between the past flow and the past-past flow.
+        last_ts: the timestamp of the last flow
+        :param role: 'Client' or 'Server'
         """
-        # If the traffic is going out it is part of our outtuples, if not, part of our intuples
+        # If the traffic is going out it is part of our outtuples,
+        # if not, part of our intuples
         if role == 'Client':
             direction = 'OutTuples'
         elif role == 'Server':
             direction = 'InTuples'
 
         try:
-            self.print(
-                f'Add_tuple called with profileid {profileid}, '
-                f'twid {twid}, '
-                f'tupleid {tupleid}, '
-                f'data {data_tuple}',
-                3, 0
-            )
-            # Get all the InTuples or OutTuples for this profileid in this TW
             profileid_twid = f'{profileid}{self.separator}{twid}'
-            tuples = self.r.hget(profileid_twid, direction)
-            # Separate the symbold to add and the previous data
-            (symbol_to_add, previous_two_timestamps) = data_tuple
-            if not tuples:
-                # Must be str so we can convert later
-                tuples = '{}'
-            # Convert the json str to a dictionary
-            tuples = json.loads(tuples)
+
+            # prev_symbols is a dict with {tulpeid: ['symbols_so_far', [timestamps]]}
+            prev_symbols: str = self.r.hget(profileid_twid, direction) or '{}'
+            prev_symbols: dict = json.loads(prev_symbols)
+
             try:
-                tuples[tupleid]
-                # Disasemble the input
+                # Get the last symbols of letters in the DB
+                prev_symbols = prev_symbols[tupleid][0]
+
+                # Separate the symbol to add and the previous data
+                (symbol_to_add, previous_two_timestamps) = symbol
                 self.print(
                     f'Not the first time for tuple {tupleid} as an {direction} for '
                     f'{profileid} in TW {twid}. Add the symbol: {symbol_to_add}. '
-                    f'Store previous_times: {previous_two_timestamps}. Prev Data: {tuples}',
+                    f'Store previous_times: {previous_two_timestamps}. Prev Data: {prev_symbols}',
                     3, 0,
                 )
-                # Get the last symbols of letters in the DB
-                prev_symbols = tuples[tupleid][0]
+
                 # Add it to form the string of letters
                 new_symbol = f'{prev_symbols}{symbol_to_add}'
-                # analyze behavioral model with lstm model if the length is divided by 3 -
-                # so we send when there is 3 more characters added
-                if len(new_symbol) % 3 == 0:
-                    to_send = {
-                        'new_symbol': new_symbol,
-                        'profileid': profileid,
-                        'twid': twid,
-                        'tupleid': str(tupleid),
-                        'uid': flow.uid,
-                        'flow': asdict(flow)
-                    }
-                    to_send = json.dumps(to_send)
-                    self.publish('new_letters', to_send)
 
-                tuples[tupleid] = (new_symbol, previous_two_timestamps)
+                self.publish_new_letter(
+                    new_symbol,
+                    profileid,
+                    twid,
+                    tupleid,
+                    flow
+                )
+
+                prev_symbols[tupleid] = (new_symbol, previous_two_timestamps)
                 self.print(f'\tLetters so far for tuple {tupleid}: {new_symbol}', 3, 0)
-                tuples = json.dumps(tuples)
             except (TypeError, KeyError):
                 # TODO check that this condition is triggered correctly
                 #  only for the first case and not the rest after...
-                # There was no previous data stored in the DB
+                # There was no previous data stored in the DB to append the given symbol to.
                 self.print(
-                    f'First time for tuple {tupleid} as an {direction} for {profileid} in TW {twid}',
+                    f'First time for tuple {tupleid} as an'
+                    f' {direction} for {profileid} in TW {twid}',
                     3, 0,
                 )
-                # Here get the info from the ipinfo key
-                tuples[tupleid] = (symbol_to_add, previous_two_timestamps)
-                # Convet the dictionary to json
-                tuples = json.dumps(tuples)
-            # Store the new data on the db
-            self.r.hset(profileid_twid, direction, str(tuples))
-            # Mark the tw as modified
+                prev_symbols[tupleid] = symbol
+
+            prev_symbols = json.dumps(prev_symbols)
+            self.r.hset(profileid_twid, direction, prev_symbols)
             self.markProfileTWAsModified(profileid, twid, flow.starttime)
 
         except Exception:

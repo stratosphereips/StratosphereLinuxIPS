@@ -261,8 +261,7 @@ class Profiler(ICore):
         role = 'Server'
         # create the intuple
         self.db.add_tuple(
-            profileid, twid, tupleid, symbol, role, self.flow
-        )
+            profileid, twid, tupleid, symbol, role, self.flow)
 
         # Add the srcip and srcport
         self.db.add_ips(profileid, twid, self.flow, role)
