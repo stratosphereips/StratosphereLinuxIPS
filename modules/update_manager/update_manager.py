@@ -61,7 +61,8 @@ class UpdateManager(IModule, multiprocessing.Process):
             '#fields',
             'number',
             'atom_type',
-            'attacker'
+            'attacker',
+            'score'
         )
         self.ignored_IoCs = ('email', 'url', 'file_hash', 'file')
         # to track how many times an ip is present in different blacklists
@@ -1004,7 +1005,7 @@ class UpdateManager(IModule, multiprocessing.Process):
         return amount_of_columns, line_fields, sep
 
 
-    def get_data_column(self, amount_of_columns, line_fields, file_path):
+    def get_data_column(self, amount_of_columns: int, line_fields: list, file_path: str):
         """
         Get the first column that is an IPv4, IPv6 or domain
         :param file_path: path of the ti file that contains the given fields
@@ -1122,6 +1123,7 @@ class UpdateManager(IModule, multiprocessing.Process):
                 line = line.replace('\n', '').replace('"', '')
 
                 amount_of_columns, line_fields, separator = self.parse_line(line, ti_file_path)
+
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
