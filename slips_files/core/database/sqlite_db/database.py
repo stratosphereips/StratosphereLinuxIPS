@@ -34,6 +34,7 @@ class SQLiteDB(IObservable):
             db_newly_created = True
             self._init_db()
 
+        # you can get multithreaded access on a single pysqlite connection by passing "check_same_thread=False"
         self.conn = sqlite3.connect(self._flows_db, check_same_thread=False, timeout=20)
 
         self.cursor = self.conn.cursor()
