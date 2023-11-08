@@ -365,10 +365,6 @@ class Helper:
             self, proto, daddr, dport, saddr, profileid, twid, uid, timestamp
     ):
 
-        if daddr in ['0.0.0.0', '255.255.255.255']:
-            return
-        if saddr in ['0.0.0.0', '255.255.255.255']:
-            return
 
         confidence = 1
         threat_level = 'info'
