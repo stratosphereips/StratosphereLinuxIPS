@@ -430,80 +430,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         })
         self.publish('p2p_data_request', json.dumps(data_to_send))
 
-    def update_times_contacted(self, ip, direction, profileid, twid):
-        """
-        :param ip: the ip that we want to update the times we contacted
-        """
-
-        # Get the hash of the timewindow
-        profileid_twid = f'{profileid}{self.separator}{twid}'
-
-        # Get the DstIPs data for this tw in this profile
-        # The format is {'1.1.1.1' :  3}
-        ips_contacted = self.r.hget(profileid_twid, f'{direction}IPs')
-        if not ips_contacted:
-            ips_contacted = {}
-
-        try:
-            ips_contacted = json.loads(ips_contacted)
-            # Add 1 because we found this ip again
-            ips_contacted[ip] += 1
-        except (TypeError, KeyError):
-            # There was no previous data stored in the DB
-            ips_contacted[ip] = 1
-
-        ips_contacted = json.dumps(ips_contacted)
-        self.r.hset(profileid_twid, f'{direction}IPs', str(ips_contacted))
 
 
-    def update_ip_info(
-        self,
-        old_profileid_twid_data,
-        pkts,
-        dport,
-        spkts,
-        totbytes,
-        ip,
-        starttime,
-        uid
-    ):
-        """
-        #  Updates how many times each individual DstPort was contacted,
-        the total flows sent by this ip and their uids,
-        the total packets sent by this ip,
-        total bytes sent by this ip
-        """
-        dport = str(dport)
-        spkts = int(spkts)
-        pkts = int(pkts)
-        totbytes = int(totbytes)
 
-        try:
-            # update info about an existing ip
-            ip_data = old_profileid_twid_data[ip]
-            ip_data['totalflows'] += 1
-            ip_data['totalpkt'] += pkts
-            ip_data['totalbytes'] += totbytes
-            ip_data['uid'].append(uid)
-            if dport in ip_data['dstports']:
-                ip_data['dstports'][dport] += spkts
-            else:
-                ip_data['dstports'][dport] = spkts
 
-        except KeyError:
-            # First time seeing this ip
-            ip_data = {
-                'totalflows': 1,
-                'totalpkt': pkts,
-                'totalbytes': totbytes,
-                'stime': starttime,
-                'uid': [uid],
-                'dstports': {dport: spkts}
-
-            }
-
-        old_profileid_twid_data[ip] = ip_data
-        return old_profileid_twid_data
 
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time') or 0

@@ -18,6 +18,7 @@ class ProfileHandler(IObservable):
     name = 'DB'
     
     def __init__(self, logger: Output):
+        IObservable.__init__(self)
         self.logger = logger
         self.add_observer(self.logger)
         
@@ -600,7 +601,6 @@ class ProfileHandler(IObservable):
                     SRPA_
                     """
                     return 'Not Established'
-            return None
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
@@ -622,39 +622,122 @@ class ProfileHandler(IObservable):
         Get the info about a certain role (Client or Server),
         for a particular protocol (TCP, UDP, ICMP, etc.) for a
         particular State (Established, etc.)
-        direction: 'Dst' or 'Src'. This is used to know if you
+
+        :param direction: 'Dst' or 'Src'. This is used to know if you
         want the data of the src ip or ports, or the data from
         the dst ips or ports
-        state: can be 'Established' or 'NotEstablished'
-        protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
-        role: can be 'Client' or 'Server'
-        type_data: can be 'Ports' or 'IPs'
+        :param state: can be 'Established' or 'NotEstablished'
+        :param protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
+
+        :param role: can be 'Client' or 'Server'
+        Depending if the traffic is going out or not, we are Client or Server
+        Client role means: the traffic is done by the given profile
+        Server role means:the traffic is going to the given profile
+
+        :param type_data: can be 'Ports' or 'IPs'
         """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
+
         try:
-            key = direction + type_data + role + protocol + state
-            # self.print('Asked Key: {}'.format(key))
+            key = direction + type_data + role + protocol.upper() + state
             data = self.r.hget(f'{profileid}{self.separator}{twid}', key)
-            value = {}
+
             if data:
-                portdata = json.loads(data)
-                value = portdata
-            else:
-                self.print(
-                    f'There is no data for Key: {key}. Profile {profileid} TW {twid}',
-                    3,
-                    0,
-                )
-            return value
-        except Exception:
+                return json.loads(data)
+
+            self.print(
+                f'There is no data for Key: {key}. Profile {profileid} TW {twid}',
+                3,
+                0,
+            )
+            return {}
+        except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Error in getDataFromProfileTW database.py line {exception_line}'
             ,0,1)
             self.print(traceback.print_exc(), 0, 1)
+
+
+    def update_ip_info(
+        self,
+        old_profileid_twid_data: dict,
+        pkts,
+        dport,
+        spkts,
+        totbytes,
+        ip,
+        starttime,
+        uid
+    ) -> dict:
+        """
+        #  Updates how many times each individual DstPort was contacted,
+        the total flows sent by this ip and their uids,
+        the total packets sent by this ip,
+        and total bytes sent by this ip
+        """
+        dport = str(dport)
+        spkts = int(spkts)
+        pkts = int(pkts)
+        totbytes = int(totbytes)
+        if ip in old_profileid_twid_data:
+            # update info about an existing ip
+            ip_data = old_profileid_twid_data[ip]
+            ip_data['totalflows'] += 1
+            ip_data['totalpkt'] += pkts
+            ip_data['totalbytes'] += totbytes
+            ip_data['uid'].append(uid)
+
+            ip_data['dstports']: dict
+
+            if dport in ip_data['dstports']:
+                ip_data['dstports'][dport] += spkts
+            else:
+                ip_data['dstports'].update({
+                   dport: spkts
+                })
+        else:
+            # First time seeing this ip
+            ip_data = {
+                'totalflows': 1,
+                'totalpkt': pkts,
+                'totalbytes': totbytes,
+                'stime': starttime,
+                'uid': [uid],
+                'dstports': {dport: spkts}
+
+            }
+        old_profileid_twid_data.update({ip: ip_data})
+
+        return old_profileid_twid_data
+
+    def update_times_contacted(self, ip, direction, profileid, twid):
+        """
+        :param ip: the ip that we want to update the times we contacted
+        """
+
+        # Get the hash of the timewindow
+        profileid_twid = f'{profileid}{self.separator}{twid}'
+
+        # Get the DstIPs data for this tw in this profile
+        # The format is {'1.1.1.1' :  3}
+        ips_contacted = self.r.hget(profileid_twid, f'{direction}IPs')
+        if not ips_contacted:
+            ips_contacted = {}
+
+        try:
+            ips_contacted = json.loads(ips_contacted)
+            # Add 1 because we found this ip again
+            ips_contacted[ip] += 1
+        except (TypeError, KeyError):
+            # There was no previous data stored in the DB
+            ips_contacted[ip] = 1
+
+        ips_contacted = json.dumps(ips_contacted)
+        self.r.hset(profileid_twid, f'{direction}IPs', str(ips_contacted))
 
     def add_ips(self, profileid, twid, flow, role):
         """
@@ -722,7 +805,9 @@ class ProfileHandler(IObservable):
 
         # Get the state. Established, NotEstablished
         summaryState = self.getFinalStateFromFlags(flow.state, flow.pkts)
-
+        key_name = (
+            f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
+        )
         # Get the previous data about this key
         old_profileid_twid_data = self.getDataFromProfileTW(
             profileid,
@@ -733,8 +818,7 @@ class ProfileHandler(IObservable):
             role,
             'IPs',
         )
-
-        profileid_twid_data = self.update_ip_info(
+        profileid_twid_data: dict = self.update_ip_info(
             old_profileid_twid_data,
             flow.pkts,
             flow.dport,
@@ -745,10 +829,6 @@ class ProfileHandler(IObservable):
             uid
         )
 
-
-        key_name = (
-            f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
-        )
         # Store this data in the profile hash
         self.r.hset(
             f'{profileid}{self.separator}{twid}',
