@@ -84,14 +84,12 @@ class VerticalPortscan():
 
 
     def check(self, profileid, twid):
+
         # Get the list of dstips that we connected as client using TCP not
         # established, and their ports
         direction = 'Dst'
         role = 'Client'
         type_data = 'IPs'
-        # self.print('Vertical Portscan check. Amount of dports: {}.
-        # Threshold=3'.format(amount_of_dports), 3, 0)
-        evidence_type = 'VerticalPortscan'
 
         # if you're portscaning a port that is open it's gonna be established
         # the amount of open ports we find is gonna be so small
@@ -101,7 +99,24 @@ class VerticalPortscan():
         state = 'Not Established'
 
         for protocol in ('TCP', 'UDP'):
-            dstips = self.db.getDataFromProfileTW(
+            #  these unknowns are the info this function retrieves
+            #  profileid -> unknown_dstip:unknown_dstports
+            #
+            # here, the profileid given is the client.
+            # returns the following
+            # {
+            #     dst_ip: {
+            #         totalflows: total flows seen by the profileid
+            #         totalpkt: total packets seen by the profileid
+            #         totalbytes: total bytes sent by the profileid
+            #         stime: timestamp of the first flow seen from this profileid -> this dstip
+            #         uid: list of uids where the given profileid was contacting the dst_ip on this dstport
+            #         dstports: dst ports seen in all flows where the given profileid was srcip
+            #             {
+            #                 <str port>: < int spkts sent to this port>
+            #             }
+            #     }
+            dstips: dict = self.db.getDataFromProfileTW(
                 profileid, twid, direction, state, protocol, role, type_data
             )
             # For each dstip, see if the amount of ports connections is over the threshold
@@ -109,7 +124,7 @@ class VerticalPortscan():
                 ### PortScan Type 1. Direction OUT
                 dstports: dict = dstips[dstip]['dstports']
                 amount_of_dports = len(dstports)
-                cache_key = f'{profileid}:{twid}:dstip:{dstip}:{evidence_type}'
+                cache_key = f'{profileid}:{twid}:dstip:{dstip}:VerticalPortscan'
                 prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
 
                 # we make sure the amount of dports reported each evidence is higher than the previous one +5
