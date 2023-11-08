@@ -636,10 +636,12 @@ class Helper:
 
         # append daddr identification to the description
         ip_identification = self.db.get_ip_identification(ip)
-        description += (
-            f'{ip_identification} description: {ja3_description} {tags}'
-        )
+        description += f'{ip_identification}  '
 
+        if ja3_description != 'None':
+            description += f'description: {ja3_description} '
+
+        description += f'tags: {tags}'
         attacker = ip
         confidence = 1
 
