@@ -1,10 +1,13 @@
 """Unit test for slips_files/core/performance_profiler.py"""
+import ipaddress
+
 from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing
 import subprocess
 import pytest
 import json
 from slips_files.core.profiler import SUPPORTED_INPUT_TYPES, SEPARATORS
+from slips_files.core.flows.zeek import Conn
 
 
 
@@ -128,19 +131,6 @@ def test_define_separator_nfdump(nfdump_file, mock_rdb):
 
 
 # pcaps are treated as zeek files in slips, no need to test twice
-# @pytest.mark.parametrize("pcap_file",[('dataset/test7-malicious.pcap')])
-# def test_define_separator_pcap(pcap_file):
-#     # ('dataset/test7-malicious.pcap','zeek')
-#     profilerProcess = ModuleFactory().create_profilerProcess_obj(mock_db)
-#
-#     # pcap files aren't text files so we need to process them first
-#     bro_parameter = '-r "' + pcap_file + '"'
-#     command =  "zeek -C " + bro_parameter + "  tcp_inactivity_timeout=60mins local -e 'redef LogAscii::use_json=T;' -f 2>&1 > /dev/null &"
-#     os.system(command)
-#     # Give Zeek some time to generate at least 1 file.
-#     time.sleep(3)
-#
-#     assert profilerProcess.define_separator(line) == 'zeek'
 
 
 @pytest.mark.parametrize(
@@ -194,3 +184,33 @@ def test_process_line(file, flow_type):
             profiler.db.get_altflow_from_uid(profileid, twid, uid) is not None
         )
     assert added_flow is not None
+
+
+
+def test_get_rev_profile(mock_rdb):
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.flow = Conn(
+                '1.0',
+                '1234',
+                '192.168.1.1',
+                '8.8.8.8',
+                5,
+                'TCP',
+                'dhcp',
+                80,88,
+                20,20,
+                20,20,
+                '','',
+                'Established',''
+            )
+    profiler.daddr_as_obj = ipaddress.ip_address(profiler.flow.daddr)
+    mock_rdb.getProfileIdFromIP.return_value =  None
+    assert profiler.get_rev_profile() == ('profile_8.8.8.8', 'timewindow1')
+
+def test_get_rev_profile_no_daddr(flow):
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.flow = flow
+    profiler.flow.daddr = None
+    profiler.daddr_as_obj = None
+    assert profiler.get_rev_profile() == (False, False)
+

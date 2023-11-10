@@ -18,6 +18,8 @@ from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event, Semaphore
+from slips_files.core.helpers.flow_handler import FlowHandler
+from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.arp.arp import ARP
 import shutil
 from unittest.mock import patch, Mock
@@ -136,7 +138,7 @@ class ModuleFactory:
         return flowalerts
 
     def create_inputProcess_obj(
-            self, input_information, input_type, mock_rdb
+            self, input_information, input_type, mock_rdb, line_type=False
             ):
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
@@ -154,12 +156,11 @@ class ModuleFactory:
                 cli_packet_filter= None,
                 zeek_or_bro=check_zeek_or_bro(),
                 zeek_dir=zeek_tmp_dir,
-                line_type=False,
+                line_type=line_type,
                 is_profiler_done_event=self.dummy_termination_event,
             )
         inputProcess.db.rdb = mock_rdb
         inputProcess.is_done_processing = do_nothing
-        inputProcess.get_flows_number = do_nothing
         inputProcess.bro_timeout = 1
         # override the print function to avoid broken pipes
         inputProcess.print = do_nothing
@@ -210,7 +211,7 @@ class ModuleFactory:
         profilerProcess = Profiler(
             self.logger,
             'output/',
-            6377,
+            6379,
             self.dummy_termination_event,
             is_profiler_done=dummy_semaphore,
             profiler_queue=self.input_queue,
@@ -266,3 +267,9 @@ class ModuleFactory:
         whitelist.whitelist_path = 'tests/test_whitelist.conf'
         return whitelist
 
+
+    def create_flow_handler_obj(self, flow ,mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            symbol = SymbolHandler(self.logger, mock_rdb)
+            flow_handler = FlowHandler(mock_rdb, symbol, flow)
+            return flow_handler

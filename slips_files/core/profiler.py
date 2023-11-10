@@ -18,7 +18,7 @@ import multiprocessing
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.imports import *
 
-from slips_files.core.helpers.flow_parser import FlowParser
+from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 
 from datetime import datetime
@@ -110,20 +110,12 @@ class Profiler(ICore):
         if not self.flow.daddr:
             # some flows don't have a daddr like software.log flows
             return False, False
+
         rev_profileid = self.db.getProfileIdFromIP(self.daddr_as_obj)
         if not rev_profileid:
-            self.print(
-                'The dstip profile was not here... create', 3, 0
-            )
-            # Create a reverse profileid for managing the data going to the dstip.
+            # the profileid is not present in the db, create it
             rev_profileid = f'profile_{self.flow.daddr}'
-            self.db.addProfile(
-                rev_profileid, self.flow.starttime, self.width
-            )
-            # Try again
-            rev_profileid = self.db.getProfileIdFromIP(
-                self.daddr_as_obj
-            )
+            self.db.addProfile(rev_profileid, self.flow.starttime, self.width)
 
         # in the database, Find the id of the tw where the flow belongs.
         rev_twid = self.db.get_timewindow(self.flow.starttime, rev_profileid)
@@ -141,7 +133,7 @@ class Profiler(ICore):
             #TODO this is a quick fix
             return False
 
-        self.flow_parser = FlowParser(self.db, self.symbol, self.flow)
+        self.flow_parser = FlowHandler(self.db, self.symbol, self.flow)
 
         if not self.flow_parser.is_supported_flow():
             return False
@@ -269,8 +261,7 @@ class Profiler(ICore):
         role = 'Server'
         # create the intuple
         self.db.add_tuple(
-            profileid, twid, tupleid, symbol, role, self.flow
-        )
+            profileid, twid, tupleid, symbol, role, self.flow)
 
         # Add the srcip and srcport
         self.db.add_ips(profileid, twid, self.flow, role)
@@ -408,7 +399,6 @@ class Profiler(ICore):
                 continue
             except Exception as e:
                 # ValueError is raised when the queue is closed
-
                 continue
 
             # TODO who is putting this True here?
