@@ -207,22 +207,10 @@ def test_get_rev_profile(mock_rdb):
     mock_rdb.getProfileIdFromIP.return_value =  None
     assert profiler.get_rev_profile() == ('profile_8.8.8.8', 'timewindow1')
 
-def test_get_rev_profile_no_daddr():
+def test_get_rev_profile_no_daddr(flow):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Conn(
-                '1601998398.945854',
-                '1234',
-                '192.168.1.1',
-                None,
-                5,
-                'TCP',
-                'dhcp',
-                80,88,
-                20,20,
-                20,20,
-                '','',
-                'Established',''
-            )
-    profiler.daddr_as_obj = ipaddress.ip_address(profiler.flow.daddr)
+    profiler.flow = flow
+    profiler.flow.daddr = None
+    profiler.daddr_as_obj = None
     assert profiler.get_rev_profile() == (False, False)
 
