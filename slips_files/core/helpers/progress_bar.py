@@ -74,6 +74,16 @@ class PBar(Process):
         )
 
 
+    def is_pbar_done(self) -> bool:
+        """returns true if the pbar has reached 100%"""
+        return hasattr(self, 'done_reading_flows') and self.done_reading_flows
+
+    def has_pbar(self):
+        """returns false when pbar wasn't initialized or is done 100%"""
+        if self.is_pbar_done() or self.progress_bar is None:
+            return False
+        else:
+            return True
 
     def update_bar(self):
         """
