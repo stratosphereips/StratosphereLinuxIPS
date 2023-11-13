@@ -43,6 +43,7 @@ class Output(IObserver):
     slips_logfile_lock = Lock()
     errors_logfile_lock = Lock()
     cli_lock = Lock()
+    has_pbar = False
 
     def __new__(
         cls,
@@ -80,6 +81,10 @@ class Output(IObserver):
             # recv_pipe used only for receiving,
             # send_pipe use donly for sending
             recv_pipe, cls.send_pipe = Pipe(False)
+            # using mp manager to be able to change this value
+            # from the PBar class and have it changed here
+            manager = Manager()
+            cls.has_bar = manager.Value("has_pbar", False)
             pbar = PBar(recv_pipe, cls.has_bar, cls.stdout)
             pbar.start()
 
@@ -275,6 +280,8 @@ class Output(IObserver):
                        'Check alerts.log for full evidence list.'
             }
         )
+
+
 
     def tell_pbar(self, msg: dict):
         """
