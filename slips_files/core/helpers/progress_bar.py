@@ -16,6 +16,26 @@ class PBar(Process):
             self.has_pbar.value = True
 
 
+
+    def terminate(self):
+        #TODO store the pid of this process somewhere
+        # and handle it's termination'
+        ...
+
+    def print(self, msg: dict):
+        """
+        prints using tqdm in order to avoid conflict with the pbar
+        """
+        tqdm.write(msg['txt'])
+
+
+    def update_stats(self, msg: dict):
+        """writes the stats sent in the msg as a pbar postfix"""
+        self.progress_bar.set_postfix_str(
+            msg['stats'],
+            refresh=True
+        )
+
     def run(self):
         while True and self.has_pbar.value:
             msg: dict = self.pipe.recv()
