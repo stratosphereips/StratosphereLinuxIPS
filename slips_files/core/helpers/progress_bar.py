@@ -40,7 +40,62 @@ class PBar(Process):
         )
 
 
+    def init(self, msg: dict):
+        """
+        initializes the progress bar when slips is runnning on a file or a zeek dir
+        ignores pcaps, interface and dirs given to slips if -g is enabled
+        :param bar: dict with input type, total_flows, etc.
+        """
+        if self.unknown_total_flows():
+            # we don't know how to get the total number of flows slips is going to process,
+            # because they're growing
+            return
 
+        if self.stdout != '':
+            # this means that stdout was redirected to a file,
+            # no need to print the progress bar
+            return
+
+        self.total_flows = int(msg['total_flows'])
+        # the bar_format arg is to disable ETA and unit display
+        # dont use ncols so tqdm will adjust the bar size according to the terminal size
+        self.progress_bar = tqdm(
+            total=self.total_flows,
+            leave=True,
+            colour="green",
+            desc="Flows read",
+            mininterval=0, # defines how long to wait between each refresh.
+            unit=' flow',
+            smoothing=1,
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} {postfix}",
+            position=0,
+            initial=0, #initial value of the flows processed
+            file=sys.stdout,
+        )
+
+
+
+    def update_bar(self):
+        """
+        wrapper for tqdm.update()
+        adds 1 to the number of flows processed
+        """
+        if not self.progress_bar:
+            # this module wont have the progress_bar set if it's running on pcap or interface
+            # or if the output is redirected to a file!
+            return
+
+        if self.slips_mode == 'daemonized':
+            return
+
+        self.progress_bar.update(1)
+        if self.progress_bar.n == self.total_flows:
+            self.remove_stats()
+            self.print(self.name,
+                       "Done reading all flows. Slips is now processing them.")
+            # remove it from the bar because we'll be prining it in a new line
+            self.done_reading_flows = True
+        # Output.progress_bar.refresh()
 
     def terminate(self):
         #TODO store the pid of this process somewhere
