@@ -85,7 +85,6 @@ class Profiler(ICore):
         self.is_profiler_done_event = is_profiler_done_event
 
 
-
     def read_configuration(self):
         conf = ConfigParser()
         self.whitelist_path = conf.whitelist_path()
@@ -385,7 +384,8 @@ class Profiler(ICore):
     def main(self):
         while not self.should_stop():
             try:
-                # this msg can be a str only when it's a 'stop' msg indicating that this module should stop
+                # this msg can be a str only when it's a 'stop' msg indicating
+                # that this module should stop
                 msg: dict = self.profiler_queue.get(timeout=1, block=False)
                 # ALYA, DO NOT REMOVE THIS CHECK
                 # without it, there's no way thi module will know it's time to
