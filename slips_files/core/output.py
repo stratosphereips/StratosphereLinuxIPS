@@ -72,7 +72,15 @@ class Output(IObserver):
             if stdout != '':
                 cls.change_stdout()
 
-            pbar = PBar()
+            # todo handle how we'll close this proc if pbar
+            #  is supported or not supported
+            # todo handle closing thwe pipe
+            # false means the pipe is unidirectional.
+            # only msgs can go from output -> pbar and not vice versa
+            # recv_pipe used only for receiving,
+            # send_pipe use donly for sending
+            recv_pipe, cls.send_pipe = Pipe(False)
+            pbar = PBar(recv_pipe, cls.has_bar, cls.stdout)
             pbar.start()
 
             if cls.verbose > 2:
@@ -267,8 +275,6 @@ class Output(IObserver):
                        'Check alerts.log for full evidence list.'
             }
         )
-
-
 
     def tell_pbar(self, msg: dict):
         """
