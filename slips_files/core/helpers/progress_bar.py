@@ -15,6 +15,31 @@ class PBar(Process):
         if not self.unknown_total_flows():
             self.has_pbar.value = True
 
+    @staticmethod
+    def unknown_total_flows() -> bool:
+        """
+        When running on a pcap, interface, or taking flows from an
+        external module, the total amount of flows is unknown
+        """
+        # todo add pcaps here!
+
+        # whenever any of those is present, slips won't be able to get the
+        # total flows when starting, nor init the progress bar
+        params = ('-g', '--growing',
+                  '-im', '--input_module',
+                  '-i', '--interface')
+        for param in params:
+            if param in sys.argv:
+                return True
+
+    def remove_stats(self):
+        # remove the stats from the progress bar
+        self.progress_bar.set_postfix_str(
+            '',
+            refresh=True
+        )
+
+
 
 
     def terminate(self):
