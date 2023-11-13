@@ -3,7 +3,7 @@ from tqdm.auto import tqdm
 import sys
 
 class PBar(Process):
-    def __init__(self, pipe: Pipe, stdout: str):
+    def __init__(self, pipe: Pipe, has_bar, stdout: str):
         self.pipe: Pipe = pipe
         self.stdout = stdout
         # this is a shared obj using mp Manager
@@ -11,10 +11,13 @@ class PBar(Process):
         # here and and have it changed in the Output.py
         Process.__init__(self)
 
+        self.has_pbar = has_bar
+        if not self.unknown_total_flows():
+            self.has_pbar.value = True
 
 
     def run(self):
-        while True:
+        while True and self.has_pbar.value:
             msg: dict = self.pipe.recv()
             event: str = msg['event']
             if event == "init":
