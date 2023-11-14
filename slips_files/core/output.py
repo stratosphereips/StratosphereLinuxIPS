@@ -83,9 +83,13 @@ class Output(IObserver):
             recv_pipe, cls.send_pipe = Pipe(False)
             # using mp manager to be able to change this value
             # from the PBar class and have it changed here
+            #TODO test this when daemonized
+            cls.slips_mode = slips_mode
+
             cls.manager = Manager()
-            cls.has_bar = cls.manager.Value("has_pbar", False)
-            pbar = PBar(recv_pipe, cls.has_bar, cls.stdout)
+            cls.has_pbar = cls.manager.Value("has_pbar", False)
+
+            pbar = PBar(recv_pipe, cls.has_pbar, cls.slips_mode, cls.stdout)
             pbar.start()
 
             if cls.verbose > 2:
@@ -97,8 +101,6 @@ class Output(IObserver):
             # this is the last time the stats was printed
             cls.last_updated_stats_time = float("-inf")
 
-            #TODO test this when daemonized
-            cls.slips_mode = slips_mode
 
         return cls._obj
 
@@ -192,7 +194,7 @@ class Output(IObserver):
         else:
             to_print = txt
 
-        if self.has_pbar:
+        if self.has_pbar.value:
             self.tell_pbar({
                 'event': 'print',
                 'txt': to_print
@@ -223,10 +225,10 @@ class Output(IObserver):
         """
         # if we're done reading flows, aka pbar reached 100% or we dont have a pbar
         # we print the stats in a new line, instead of next to the pbar
-        if self.has_pbar:
+        if self.has_pbar.value:
             self.tell_pbar({
                 'event': 'update_stats',
-                'txt': stats
+                'stats': stats
             })
         else:
             # print the stats with no sender
@@ -320,7 +322,6 @@ class Output(IObserver):
         }
         """
         if 'init' in msg.get('bar', ''):
-            self.has_pbar = True
             self.tell_pbar({
                 'event': 'init',
                 'total_flows': msg['bar_info']['total_flows'],
@@ -329,7 +330,7 @@ class Output(IObserver):
         elif 'update' in msg.get('bar', ''):
             # if pbar wasn't supported, inputproc won't send update msgs
             self.tell_pbar({
-                'event': 'update',
+                'event': 'update_bar',
             })
 
         else:
