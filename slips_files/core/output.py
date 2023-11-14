@@ -184,14 +184,14 @@ class Output(IObserver):
         prints the given txt whether using tqdm or using print()
         """
         self.cli_lock.acquire()
+        # when the pbar reaches 100% aka we're done_reading_flows
+        # we print alerts at the very botttom of the screen using print
+        # instead of printing alerts at the top of the pbar using tqdm
         if sender:
             to_print = f'[{sender}] {txt}'
         else:
             to_print = txt
 
-        # when the pbar reaches 100% aka we're done_reading_flows
-        # we print alerts at the very bottom of the screen using print
-        # instead of printing alerts at the top of the pbar using tqdm
         if self.has_pbar:
             self.tell_pbar({
                 'event': 'print',
@@ -323,7 +323,7 @@ class Output(IObserver):
             self.has_pbar = True
             self.tell_pbar({
                 'event': 'init',
-                'total_flows': msg['total_flows'],
+                'total_flows': msg['bar_info']['total_flows'],
             })
 
         elif 'update' in msg.get('bar', ''):
