@@ -3,6 +3,22 @@ from tqdm.auto import tqdm
 import sys
 
 class PBar(Process):
+    """
+    Here's why this class is run in a separate process
+    we need all modules to have access to the pbar.
+    so for example, profile is the one always initializing the pbar, when this class
+    isn't run as a proc, profiler would be the only proc that "knows" about the pbar
+    because it initialized it right?
+    now when any txt is sent to be print by the output proc by anyone other than the profiler
+    the output.py would print it on top of the pbar! and we'd get duplicate bars!
+
+    the solution to this is to make the pbar a separate proc
+    whenever it's supported, the output.py will forward all txt to be printed
+    to this class, and this class would handle the printing nicely
+    so that nothing will overlap with the pbar
+    once the pbar is done, this proc sets teh has_pbar shared var to Flase
+    and output.py would know about it and print txt normally
+    """
     def __init__(self, pipe: Pipe, has_bar, slips_mode: str, stdout: str):
         self.pipe: Pipe = pipe
         self.stdout = stdout
@@ -15,6 +31,7 @@ class PBar(Process):
         if not self.unknown_total_flows():
             self.has_pbar.value = True
         self.slips_mode: str = slips_mode
+        self.done_reading_flows = False
 
     @staticmethod
     def unknown_total_flows() -> bool:
@@ -75,17 +92,6 @@ class PBar(Process):
         )
 
 
-    def is_pbar_done(self) -> bool:
-        """returns true if the pbar has reached 100%"""
-        return hasattr(self, 'done_reading_flows') and self.done_reading_flows
-
-    def has_pbar(self):
-        """returns false when pbar wasn't initialized or is done 100%"""
-        if self.is_pbar_done() or self.progress_bar is None:
-            return False
-        else:
-            return True
-
     def update_bar(self):
         """
         wrapper for tqdm.update()
@@ -101,11 +107,12 @@ class PBar(Process):
 
         self.progress_bar.update(1)
         if self.progress_bar.n == self.total_flows:
+            # remove it from the bar because we'll be
+            # prining it in a new line
             self.remove_stats()
-            print("Done reading all flows. Slips is now processing them.")
-            # remove it from the bar because we'll be prining it in a new line
+            tqdm.write("Profiler is done reading all flows. Slips is now processing them.")
             self.done_reading_flows = True
-        # Output.progress_bar.refresh()
+            self.has_pbar.value = False
 
     def terminate(self):
         #TODO store the pid of this process somewhere
@@ -127,7 +134,8 @@ class PBar(Process):
         )
 
     def run(self):
-        while True and self.has_pbar.value:
+        """keeps receiving events until pbar reaches 100%"""
+        while True and not self.done_reading_flows:
             try:
                 msg: dict = self.pipe.recv()
             except KeyboardInterrupt:
