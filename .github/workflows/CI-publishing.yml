@@ -24,7 +24,7 @@ jobs:
           message: ""
 
   publish_image:
-    # runs the tests in a docker(built by this job) on stop of a GH VM
+    # runs the tests in a docker(built by this job) on top of a GH VM
     runs-on: ubuntu-20.04
 
     strategy:
@@ -61,7 +61,7 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
 
-    # build slips from target dockerfile, but don't push
+    # build slips from target dockerfile
     - name: Build our ${{ matrix.name }} from dockerfile
       id: docker_build_slips
       uses: docker/build-push-action@v2
