@@ -3,7 +3,7 @@ from tqdm.auto import tqdm
 import sys
 
 class PBar(Process):
-    def __init__(self, pipe: Pipe, has_bar, stdout: str):
+    def __init__(self, pipe: Pipe, has_bar, slips_mode: str, stdout: str):
         self.pipe: Pipe = pipe
         self.stdout = stdout
         # this is a shared obj using mp Manager
@@ -14,6 +14,7 @@ class PBar(Process):
         self.has_pbar = has_bar
         if not self.unknown_total_flows():
             self.has_pbar.value = True
+        self.slips_mode: str = slips_mode
 
     @staticmethod
     def unknown_total_flows() -> bool:
@@ -101,8 +102,7 @@ class PBar(Process):
         self.progress_bar.update(1)
         if self.progress_bar.n == self.total_flows:
             self.remove_stats()
-            self.print(self.name,
-                       "Done reading all flows. Slips is now processing them.")
+            print("Done reading all flows. Slips is now processing them.")
             # remove it from the bar because we'll be prining it in a new line
             self.done_reading_flows = True
         # Output.progress_bar.refresh()
@@ -128,7 +128,11 @@ class PBar(Process):
 
     def run(self):
         while True and self.has_pbar.value:
-            msg: dict = self.pipe.recv()
+            try:
+                msg: dict = self.pipe.recv()
+            except KeyboardInterrupt:
+                return
+
             event: str = msg['event']
             if event == "init":
                 self.init(msg)
