@@ -75,7 +75,7 @@ class Output(IObserver):
 
             # todo handle how we'll close this proc if pbar
             #  is supported or not supported
-            # todo handle closing thwe pipe
+            # todo handle closing the pipe
             # false means the pipe is unidirectional.
             # only msgs can go from output -> pbar and not vice versa
             # recv_pipe used only for receiving,
@@ -83,8 +83,8 @@ class Output(IObserver):
             recv_pipe, cls.send_pipe = Pipe(False)
             # using mp manager to be able to change this value
             # from the PBar class and have it changed here
-            manager = Manager()
-            cls.has_bar = manager.Value("has_pbar", False)
+            cls.manager = Manager()
+            cls.has_bar = cls.manager.Value("has_pbar", False)
             pbar = PBar(recv_pipe, cls.has_bar, cls.stdout)
             pbar.start()
 
@@ -211,20 +211,23 @@ class Output(IObserver):
 
 
     def handle_printing_stats(self, stats: str):
+        """
+        slips prints the stats as a pbar postfix,
+        or in a separate line if pbar isn't supported
+        this method handles the 2 cases depending on the availability of the pbar
+        """
         # if we're done reading flows, aka pbar reached 100% or we dont have a pbar
         # we print the stats in a new line, instead of next to the pbar
         if self.has_pbar:
-            self.cli_lock.acquire()
-            tqdm.write(stats, end="\r")
-            self.cli_lock.release()
-
-        else:
-            # pbar is still there,
-            # print the stats next to the bar
             self.tell_pbar({
                 'event': 'update_stats',
-                'stats': stats
+                'txt': stats
             })
+        else:
+            # print the stats with no sender
+            self.print('', stats, end="\r")
+
+
 
     def enough_verbose(self, verbose: int):
         """
@@ -259,7 +262,10 @@ class Output(IObserver):
             if 'Start' in txt:
                 # we use tqdm.write() instead of print() to make sure we
                 # don't get progress bar duplicates in the cli
-                tqdm.write(f'{txt}')
+                self.tell_pbar({
+                    'event': 'print',
+                    'txt': txt
+                })
                 return
 
             self.print(sender, txt)
@@ -272,6 +278,8 @@ class Output(IObserver):
             self.log_error(msg)
 
     def shutdown_gracefully(self):
+        self.manager.shutdown()
+
         self.log_line(
             {
                 'from': self.name,
@@ -318,7 +326,6 @@ class Output(IObserver):
             self.tell_pbar({
                 'event': 'update',
             })
-
 
         else:
             # output to terminal and logs or logs only?
