@@ -157,6 +157,8 @@ class PBar(Process):
             try:
                 msg: dict = self.pipe.recv()
             except KeyboardInterrupt:
+                # to tell output.py to no longer send prints here
+                self.has_pbar.value = False
                 return
 
             event: str = msg['event']
