@@ -39,9 +39,6 @@ class PBar(Process):
         self.supported: bool = self.is_pbar_supported(input_type)
         if self.supported:
             self.has_pbar.value = True
-        else:
-            #todo close proc
-            ...
 
         self.slips_mode: str = slips_mode
         self.done_reading_flows = False
@@ -116,17 +113,15 @@ class PBar(Process):
 
         self.progress_bar.update(1)
         if self.progress_bar.n == self.total_flows:
-            # remove it from the bar because we'll be
-            # prining it in a new line
-            self.remove_stats()
-            tqdm.write("Profiler is done reading all flows. Slips is now processing them.")
-            self.done_reading_flows = True
-            self.has_pbar.value = False
+            self.terminate()
 
     def terminate(self):
-        #TODO store the pid of this process somewhere
-        # and handle it's termination'
-        ...
+        # remove it from the bar because we'll be
+        # prining it in a new line
+        self.remove_stats()
+        tqdm.write("Profiler is done reading all flows. Slips is now processing them.")
+        self.done_reading_flows = True
+        self.has_pbar.value = False
 
     def print(self, msg: dict):
         """
