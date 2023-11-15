@@ -40,8 +40,10 @@ class ProcessManager:
 
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
-        # only in this instance we'll have to specify the verbose, debug, std files and input type
-        # since the output is a singleton, the same params will be set everywhere, no need to pass them everytime
+        # only in this instance we'll have to specify the verbose,
+        # debug, std files and input type
+        # since the output is a singleton, the same params will
+        # be set everywhere, no need to pass them everytime
         output_process = Output(
             stdout=current_stdout,
             stderr=stderr,

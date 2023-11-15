@@ -73,7 +73,7 @@ class Main(IObservable):
         self.commit = 'None'
         self.branch = 'None'
         self.last_updated_stats_time = datetime.now()
-
+        self.input_type = False
         # in testing mode we manually set the following params
         if not testing:
 
