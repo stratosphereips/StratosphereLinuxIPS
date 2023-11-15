@@ -75,10 +75,10 @@ def flow():
 def setup_teardown_before_each_test(request):
     # Code to run before each test
     print(f"\nSetting up for test: {request.node.name}")
-
-    # Code to run after each test
-    yield
-
-    print(f"Tearing down after test: {request.node.name}")
-    # This is where you can perform any teardown actions needed for each test
-    ...
+    #
+    # # Code to run after each test
+    # yield
+    #
+    # print(f"Tearing down after test: {request.node.name}")
+    # # This is where you can perform any teardown actions needed for each test
+    # ...
