@@ -73,7 +73,7 @@ class Main(IObservable):
         self.commit = 'None'
         self.branch = 'None'
         self.last_updated_stats_time = datetime.now()
-
+        self.input_type = False
         # in testing mode we manually set the following params
         if not testing:
 
@@ -410,7 +410,21 @@ class Main(IObservable):
         elif 'CSV' in cmd_result and os.path.isfile(given_path):
             input_type = 'binetflow'
         elif 'directory' in cmd_result and os.path.isdir(given_path):
-            input_type = 'zeek_folder'
+            from slips_files.core.input import SUPPORTED_LOGFILES
+            for log_file in os.listdir(given_path):
+                # if there is at least 1 supported log file inside the
+                # given directory, start slips normally
+                # otherwise, stop slips
+                if log_file.replace('.log', '') in SUPPORTED_LOGFILES:
+                    input_type = 'zeek_folder'
+                    break
+            else:
+                # zeek dir filled with unsupported logs
+                # or .labeled logs that slips can't read.
+                print(f"Log files in {given_path} are not supported \n"
+                      f"Make sure all log files inside the given "
+                      f"directory end with .log .. Stopping.")
+                sys.exit(-1)
         else:
             # is it a zeek log file or suricata, binetflow tabs, or binetflow comma separated file?
             # use first line to determine

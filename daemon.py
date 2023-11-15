@@ -210,7 +210,7 @@ class Daemon:
                     is_daemon = bool(line[7])
                     if not is_daemon:
                         continue
-                    port, output_dir, slips_pid  = line[2], line[5], line[6]
+                    port, output_dir, slips_pid = line[2], line[5], line[6]
                     return (port, output_dir, slips_pid)
         except FileNotFoundError:
             # file removed after daemon started

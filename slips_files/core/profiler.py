@@ -25,14 +25,16 @@ from datetime import datetime
 from slips_files.core.helpers.whitelist import Whitelist
 from dataclasses import asdict
 import queue
+import sys
 import ipaddress
 from slips_files.common.abstracts.core import ICore
-from pprint import pp
-
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
+
+
+
 
 SUPPORTED_INPUT_TYPES = {
     'zeek': ZeekJSON,
@@ -83,7 +85,6 @@ class Profiler(ICore):
         }
         # is set by this proc to tell input proc that we are dne processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
-
 
 
     def read_configuration(self):
@@ -346,6 +347,7 @@ class Profiler(ICore):
         if msg != 'stop':
             return False
 
+
         self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
                    f"{self.whitelisted_flows_ctr}", 2, 0)
 
@@ -364,7 +366,11 @@ class Profiler(ICore):
         # don't init the pbar when given the following
         # input types because we don't
         # know the total flows beforehand
-        if input_type in ('pcap', 'interface', 'stdin'):
+        if (
+                input_type in ('pcap', 'interface', 'stdin')
+                or '-t' in sys.argv
+                or '--testing' in sys.argv
+        ):
             # pbar not supported
             self.supported_pbar = False
             return
@@ -385,7 +391,8 @@ class Profiler(ICore):
     def main(self):
         while not self.should_stop():
             try:
-                # this msg can be a str only when it's a 'stop' msg indicating that this module should stop
+                # this msg can be a str only when it's a 'stop' msg indicating
+                # that this module should stop
                 msg: dict = self.profiler_queue.get(timeout=1, block=False)
                 # ALYA, DO NOT REMOVE THIS CHECK
                 # without it, there's no way thi module will know it's time to
@@ -447,5 +454,4 @@ class Profiler(ICore):
                 # otherwise this channel will get a msg only when
                 # whitelist.conf is modified and saved to disk
                 self.whitelist.read_whitelist()
-
         return 1

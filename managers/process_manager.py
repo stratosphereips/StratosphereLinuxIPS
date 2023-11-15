@@ -40,8 +40,10 @@ class ProcessManager:
 
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
-        # only in this instance we'll have to specify the verbose, debug, std files and input type
-        # since the output is a singleton, the same params will be set everywhere, no need to pass them everytime
+        # only in this instance we'll have to specify the verbose,
+        # debug, std files and input type
+        # since the output is a singleton, the same params will
+        # be set everywhere, no need to pass them everytime
         output_process = Output(
             stdout=current_stdout,
             stderr=stderr,
@@ -49,7 +51,6 @@ class ProcessManager:
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
             slips_mode=self.main.mode,
-            unknown_total_flows=self.main.is_total_flows_unknown(),
             input_type=self.main.input_type,
         )
         self.slips_logfile = output_process.slips_logfile
@@ -365,6 +366,10 @@ class ProcessManager:
             if process.pid in pids_to_kill_last:
                 to_kill_last.append(process)
             else:
+                # skips the context manager of output.py, will close it manually later
+                # once all processes are closed
+                if type(process) == multiprocessing.context.ForkProcess:
+                    continue
                 to_kill_first.append(process)
 
         return to_kill_first, to_kill_last
@@ -548,12 +553,16 @@ class ProcessManager:
 
                 # to make sure we only warn the user once about hte pending modules
                 self.warning_printed_once = False
+
+
                 try:
                     # Wait timeout_seconds for all the processes to finish
                     while time.time() - method_start_time < timeout_seconds:
                         to_kill_first, to_kill_last = self.shutdown_interactive(to_kill_first, to_kill_last)
                         if not to_kill_first and not to_kill_last:
                             # all modules are done
+                            # now close the communication between output.py and the pbar
+                            self.main.logger.shutdown_gracefully()
                             break
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules (pressed ctrl +c again)

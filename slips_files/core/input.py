@@ -459,6 +459,10 @@ class Input(ICore):
             if self.testing:
                 break
 
+        if total_flows == 0:
+            self.is_done_processing()
+            return True
+
         self.total_flows = total_flows
         self.db.set_input_metadata({'total_flows': total_flows})
         self.lines = self.read_zeek_files()
