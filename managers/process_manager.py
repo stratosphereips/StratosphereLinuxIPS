@@ -49,7 +49,6 @@ class ProcessManager:
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
             slips_mode=self.main.mode,
-            unknown_total_flows=self.main.is_total_flows_unknown(),
             input_type=self.main.input_type,
         )
         self.slips_logfile = output_process.slips_logfile

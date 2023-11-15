@@ -19,36 +19,50 @@ class PBar(Process):
     once the pbar is done, this proc sets teh has_pbar shared var to Flase
     and output.py would know about it and print txt normally
     """
-    def __init__(self, pipe: Pipe, has_bar, slips_mode: str, stdout: str):
+    def __init__(
+            self,
+            pipe: Pipe,
+            has_bar,
+            slips_mode: str,
+            input_type: str,
+            stdout: str,
+         ):
+
+        Process.__init__(self)
         self.pipe: Pipe = pipe
         self.stdout = stdout
+
         # this is a shared obj using mp Manager
         # using mp manager to be able to change this value
         # here and and have it changed in the Output.py
-        Process.__init__(self)
-
         self.has_pbar = has_bar
-        if not self.unknown_total_flows():
+
+        if self.is_pbar_supported(input_type):
             self.has_pbar.value = True
+        else:
+            #todo close proc
+            ...
+
         self.slips_mode: str = slips_mode
         self.done_reading_flows = False
 
     @staticmethod
-    def unknown_total_flows() -> bool:
+    def is_pbar_supported(input_type: str) -> bool:
         """
         When running on a pcap, interface, or taking flows from an
         external module, the total amount of flows is unknown
+        so the pbar is not supported
         """
-        # todo add pcaps here!
+        if input_type in ('interface', 'pcap', 'stdin'):
+            return False
 
-        # whenever any of those is present, slips won't be able to get the
-        # total flows when starting, nor init the progress bar
         params = ('-g', '--growing',
-                  '-im', '--input_module',
-                  '-i', '--interface')
+                  '-im', '--input_module')
         for param in params:
             if param in sys.argv:
-                return True
+                return False
+
+        return True
 
     def remove_stats(self):
         # remove the stats from the progress bar
@@ -64,11 +78,6 @@ class PBar(Process):
         ignores pcaps, interface and dirs given to slips if -g is enabled
         :param bar: dict with input type, total_flows, etc.
         """
-        if self.unknown_total_flows():
-            # we don't know how to get the total number of flows slips is going to process,
-            # because they're growing
-            return
-
         if self.stdout != '':
             # this means that stdout was redirected to a file,
             # no need to print the progress bar
@@ -97,7 +106,7 @@ class PBar(Process):
         wrapper for tqdm.update()
         adds 1 to the number of flows processed
         """
-        if not self.progress_bar:
+        if not hasattr(self, 'progress_bar') :
             # this module wont have the progress_bar set if it's running on pcap or interface
             # or if the output is redirected to a file!
             return

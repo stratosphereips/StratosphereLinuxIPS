@@ -415,14 +415,15 @@ class Main(IObservable):
                 # if there is at least 1 supported log file inside the
                 # given directory, start slips normally
                 # otherwise, stop slips
-                if log_file in SUPPORTED_LOGFILES:
+                if log_file.replace('.log', '') in SUPPORTED_LOGFILES:
                     input_type = 'zeek_folder'
                     break
             else:
                 # zeek dir filled with unsupported logs
                 # or .labeled logs that slips can't read.
                 print(f"Log files in {given_path} are not supported \n"
-                      f"Make sure log files end with .log .. Stopping.")
+                      f"Make sure all log files inside the given "
+                      f"directory end with .log .. Stopping.")
                 sys.exit(-1)
         else:
             # is it a zeek log file or suricata, binetflow tabs, or binetflow comma separated file?
