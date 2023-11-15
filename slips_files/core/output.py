@@ -53,7 +53,7 @@ class Output(IObserver):
         stderr='output/errors.log',
         slips_logfile='output/slips.log',
         slips_mode='interactive',
-        input_type=''
+        input_type=False
     ):
         if not cls._obj:
             cls._obj = super().__new__(cls)

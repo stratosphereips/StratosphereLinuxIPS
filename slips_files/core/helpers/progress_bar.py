@@ -49,9 +49,10 @@ class PBar(Process):
         external module, the total amount of flows is unknown
         so the pbar is not supported
         """
-
+        # input type can be false -S or in unit tests
         if (
-                input_type in ('interface', 'pcap', 'stdin')
+                not input_type
+                or input_type in ('interface', 'pcap', 'stdin')
                 or self.slips_mode == 'daemonized'
         ):
             return False
