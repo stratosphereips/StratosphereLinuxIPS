@@ -81,7 +81,7 @@ class Output(IObserver):
             # only msgs can go from output -> pbar and not vice versa
             # recv_pipe used only for receiving,
             # send_pipe use donly for sending
-            recv_pipe, cls.send_pipe = Pipe(False)
+            cls.recv_pipe, cls.send_pipe = Pipe(False)
             # using mp manager to be able to change this value
             # from the PBar class and have it changed here
             #TODO test this when daemonized
@@ -91,7 +91,7 @@ class Output(IObserver):
             cls.has_pbar = cls.manager.Value("has_pbar", False)
 
             pbar = PBar(
-                recv_pipe,
+                cls.recv_pipe,
                 cls.has_pbar,
                 cls.slips_mode,
                 cls.input_type,
@@ -292,17 +292,10 @@ class Output(IObserver):
             self.log_error(msg)
 
     def shutdown_gracefully(self):
+        """closes all communications with the pbar process"""
         self.manager.shutdown()
-
-        self.log_line(
-            {
-                'from': self.name,
-                'txt': 'Stopping output process. '
-                       'Further evidence may be missing. '
-                       'Check alerts.log for full evidence list.'
-            }
-        )
-
+        self.send_pipe.close()
+        self.recv_pipe.close()
 
 
     def tell_pbar(self, msg: dict):
