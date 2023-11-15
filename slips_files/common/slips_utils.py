@@ -10,7 +10,6 @@ import platform
 import os
 import sys
 import ipaddress
-import communityid
 import aid_hash
 
 

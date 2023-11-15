@@ -37,4 +37,8 @@ flask
 tld
 tqdm
 termcolor
+viztracer
+yappi
+pytest-sugar
+memray
 aid_hash

@@ -42,7 +42,7 @@ class Conn:
         self.pkts: int = self.spkts + self.dpkts
         self.bytes: int = self.sbytes + self.dbytes
         self.state_hist: str = self.history or self.state
-        # community IDs are for conn.log flows only
+        # AIDs are for conn.log flows only
         self.aid = utils.get_aid(self)
 
 @dataclass
