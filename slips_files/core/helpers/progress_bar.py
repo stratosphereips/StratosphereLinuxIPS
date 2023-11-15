@@ -58,7 +58,9 @@ class PBar(Process):
             return False
 
         params = ('-g', '--growing',
-                  '-im', '--input_module')
+                  '-im', '--input_module',
+                  '-t', '--testing'
+                  )
         for param in params:
             if param in sys.argv:
                 return False
@@ -152,7 +154,7 @@ class PBar(Process):
 
     def run(self):
         """keeps receiving events until pbar reaches 100%"""
-        while True and self.pbar_supported():
+        while self.pbar_supported():
             try:
                 msg: dict = self.pipe.recv()
             except KeyboardInterrupt:
