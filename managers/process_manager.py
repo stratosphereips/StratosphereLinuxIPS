@@ -49,6 +49,7 @@ class ProcessManager:
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
             slips_mode=self.main.mode,
+            input_type=self.main.input_type,
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process

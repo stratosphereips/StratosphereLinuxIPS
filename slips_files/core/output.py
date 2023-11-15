@@ -53,6 +53,7 @@ class Output(IObserver):
         stderr='output/errors.log',
         slips_logfile='output/slips.log',
         slips_mode='interactive',
+        input_type=''
     ):
         if not cls._obj:
             cls._obj = super().__new__(cls)
@@ -60,6 +61,7 @@ class Output(IObserver):
             # print all msgs with debug lvl less than it
             cls.verbose = verbose
             cls.debug = debug
+            cls.input_type = input_type
             ####### create the log files
             cls._read_configuration()
             cls.errors_logfile = stderr
@@ -68,7 +70,6 @@ class Output(IObserver):
             cls.create_logfile(cls.slips_logfile)
             utils.change_logfiles_ownership(cls.errors_logfile, cls.UID, cls.GID)
             utils.change_logfiles_ownership(cls.slips_logfile, cls.UID, cls.GID)
-
             cls.stdout = stdout
             if stdout != '':
                 cls.change_stdout()
@@ -89,7 +90,13 @@ class Output(IObserver):
             cls.manager = Manager()
             cls.has_pbar = cls.manager.Value("has_pbar", False)
 
-            pbar = PBar(recv_pipe, cls.has_pbar, cls.slips_mode, cls.stdout)
+            pbar = PBar(
+                recv_pipe,
+                cls.has_pbar,
+                cls.slips_mode,
+                cls.input_type,
+                cls.stdout
+                        )
             pbar.start()
 
             if cls.verbose > 2:
