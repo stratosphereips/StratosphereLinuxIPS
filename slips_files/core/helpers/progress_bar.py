@@ -31,6 +31,7 @@ class PBar(Process):
         Process.__init__(self)
         self.pipe: Pipe = pipe
         self.stdout = stdout
+        self.slips_mode: str = slips_mode
 
         # this is a shared obj using mp Manager
         # using mp manager to be able to change this value
@@ -40,17 +41,19 @@ class PBar(Process):
         if self.supported:
             self.has_pbar.value = True
 
-        self.slips_mode: str = slips_mode
         self.done_reading_flows = False
 
-    @staticmethod
-    def is_pbar_supported(input_type: str) -> bool:
+    def is_pbar_supported(self, input_type: str) -> bool:
         """
         When running on a pcap, interface, or taking flows from an
         external module, the total amount of flows is unknown
         so the pbar is not supported
         """
-        if input_type in ('interface', 'pcap', 'stdin'):
+
+        if (
+                input_type in ('interface', 'pcap', 'stdin')
+                or self.slips_mode == 'daemonized'
+        ):
             return False
 
         params = ('-g', '--growing',

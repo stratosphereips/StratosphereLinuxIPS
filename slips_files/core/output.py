@@ -73,18 +73,13 @@ class Output(IObserver):
             cls.stdout = stdout
             if stdout != '':
                 cls.change_stdout()
-
-            # todo handle how we'll close this proc if pbar
-            #  is supported or not supported
-            # todo handle closing the pipe
-            # false means the pipe is unidirectional.
-            # only msgs can go from output -> pbar and not vice versa
+            # Pipe(False) means the pipe is unidirectional.
+            # aka only msgs can go from output -> pbar and not vice versa
             # recv_pipe used only for receiving,
             # send_pipe use donly for sending
             cls.recv_pipe, cls.send_pipe = Pipe(False)
             # using mp manager to be able to change this value
             # from the PBar class and have it changed here
-            #TODO test this when daemonized
             cls.slips_mode = slips_mode
 
             cls.manager = Manager()
