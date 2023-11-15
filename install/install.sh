@@ -50,8 +50,8 @@ sudo apt install -y --no-install-recommends \
 
 echo "[+] Executing 'python3 -m pip install --upgrade pip'\n"
 python3 -m pip install --upgrade pip
-echo "[+] Executing 'pip3 install -r requirements.txt'\n"
-pip3 install -r requirements.txt
+echo "[+] Executing 'pip3 install -r install/requirements.txt'\n"
+pip3 install -r install/requirements.txt
 echo "[+] Executing pip3 install --ignore-installed six\n"
 pip3 install --ignore-installed six
 

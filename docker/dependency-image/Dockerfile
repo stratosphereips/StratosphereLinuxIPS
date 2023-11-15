@@ -67,7 +67,7 @@ COPY install/requirements.txt ${SLIPS_DIR}/
 
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir -r ${SLIPS_DIR}/requirements.txt
+RUN pip3 install --no-cache-dir -r ${SLIPS_DIR}/install/requirements.txt
 
 
 CMD redis-server --daemonize yes && /bin/bash

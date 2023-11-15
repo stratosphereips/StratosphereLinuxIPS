@@ -49,7 +49,7 @@ RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir -r ${SLIPS_DIR}/requirements.txt
+RUN pip3 install --no-cache-dir -r ${SLIPS_DIR}/install/requirements.txt
 
 
 # For Kalipso:

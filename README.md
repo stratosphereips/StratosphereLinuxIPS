@@ -290,7 +290,7 @@ We recommend using [Conda](https://docs.conda.io/en/latest/) for the Python envi
 
 There's also a pip requirements.txt for pip users:
     
-    pip3 install -r requirements.txt
+    pip3 install -r install/requirements.txt
 
 ### Installing Zeek for pcap analysis
 
