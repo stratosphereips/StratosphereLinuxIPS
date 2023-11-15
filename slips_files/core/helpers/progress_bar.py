@@ -148,7 +148,10 @@ class PBar(Process):
         this proc should stop listening
         to events if the pbar reached 100% or if it's not supported
         """
-        if self.done_reading_flows or not self.supported:
+        if (
+                self.done_reading_flows
+                or not self.supported
+        ):
             return False
         return True
 
