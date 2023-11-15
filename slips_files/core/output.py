@@ -173,6 +173,9 @@ class Output(IObserver):
 
     @classmethod
     def change_stdout(cls):
+        """
+        to be able to print the stats to the output file
+        """
         # io.TextIOWrapper creates a file object of this file
         # Pass 0 to open() to switch output buffering off (only allowed in binary mode)
         # write_through= True, to flush the buffer to disk, from there the file can read it.
@@ -311,23 +314,25 @@ class Output(IObserver):
                 total_flows: int,
         }
         """
-        if 'init' in msg.get('bar', ''):
-            self.tell_pbar({
-                'event': 'init',
-                'total_flows': msg['bar_info']['total_flows'],
-            })
+        try:
+            if 'init' in msg.get('bar', ''):
+                self.tell_pbar({
+                    'event': 'init',
+                    'total_flows': msg['bar_info']['total_flows'],
+                })
 
-        elif 'update' in msg.get('bar', ''):
-            # if pbar wasn't supported, inputproc won't send update msgs
-            self.tell_pbar({
-                'event': 'update_bar',
-            })
+            elif 'update' in msg.get('bar', ''):
+                # if pbar wasn't supported, inputproc won't send update msgs
+                self.tell_pbar({
+                    'event': 'update_bar',
+                })
 
-        else:
-            # output to terminal and logs or logs only?
-            if msg.get('log_to_logfiles_only', False):
-                self.log_line(msg)
             else:
-                # output to terminal
-                self.output_line(msg)
-
+                # output to terminal and logs or logs only?
+                if msg.get('log_to_logfiles_only', False):
+                    self.log_line(msg)
+                else:
+                    # output to terminal
+                    self.output_line(msg)
+        except Exception as e:
+            print(f"Error in output.py: {e}")
