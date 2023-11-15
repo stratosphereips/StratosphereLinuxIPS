@@ -57,10 +57,15 @@ class PBar(Process):
         ):
             return False
 
+
+        if self.stdout != '':
+            # this means that stdout was redirected to a file,
+            # no need to print the progress bar
+            return False
+
         params = ('-g', '--growing',
                   '-im', '--input_module',
-                  '-t', '--testing'
-                  )
+                  '-t' , '--testing')
         for param in params:
             if param in sys.argv:
                 return False
@@ -81,10 +86,7 @@ class PBar(Process):
         ignores pcaps, interface and dirs given to slips if -g is enabled
         :param bar: dict with input type, total_flows, etc.
         """
-        if self.stdout != '':
-            # this means that stdout was redirected to a file,
-            # no need to print the progress bar
-            return
+
 
         self.total_flows = int(msg['total_flows'])
         # the bar_format arg is to disable ETA and unit display
@@ -109,6 +111,7 @@ class PBar(Process):
         wrapper for tqdm.update()
         adds 1 to the number of flows processed
         """
+
         if not hasattr(self, 'progress_bar') :
             # this module wont have the progress_bar set if it's running on pcap or interface
             # or if the output is redirected to a file!
@@ -156,29 +159,33 @@ class PBar(Process):
         return True
 
     def run(self):
-        """keeps receiving events until pbar reaches 100%"""
-        while self.pbar_supported():
-            try:
-                msg: dict = self.pipe.recv()
-            except KeyboardInterrupt:
-                # to tell output.py to no longer send prints here
-                self.has_pbar.value = False
-                return
+        try:
+            """keeps receiving events until pbar reaches 100%"""
+            while self.pbar_supported():
+                try:
+                    msg: dict = self.pipe.recv()
+                except KeyboardInterrupt:
+                    # to tell output.py to no longer send prints here
+                    self.has_pbar.value = False
+                    return
 
-            event: str = msg['event']
-            if event == "init":
-                self.init(msg)
+                event: str = msg['event']
+                if event == "init":
+                    self.init(msg)
 
-            if event == "update_bar":
-                self.update_bar()
+                if event == "update_bar":
+                    self.update_bar()
 
-            if event == "update_stats":
-                self.update_stats(msg)
+                if event == "update_stats":
+                    self.update_stats(msg)
 
 
-            if event == "terminate":
-                self.terminate()
+                if event == "terminate":
+                    self.terminate()
 
-            if event == "print":
-                # let tqdm do th eprinting to avoid conflicts with the pbar
-                self.print(msg)
+                if event == "print":
+                    # let tqdm do th eprinting to avoid conflicts with the pbar
+                    self.print(msg)
+        except Exception as e:
+            tqdm.write(f"PBar Error: {e}")
+
