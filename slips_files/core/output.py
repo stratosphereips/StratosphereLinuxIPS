@@ -90,14 +90,14 @@ class Output(IObserver):
             cls.manager = Manager()
             cls.has_pbar = cls.manager.Value("has_pbar", False)
 
-            pbar = PBar(
+            cls.pbar = PBar(
                 cls.recv_pipe,
                 cls.has_pbar,
                 cls.slips_mode,
                 cls.input_type,
                 cls.stdout
-                        )
-            pbar.start()
+            )
+            cls.pbar.start()
 
             if cls.verbose > 2:
                 print(f'Verbosity: {cls.verbose}. Debugging: {cls.debug}')
@@ -273,14 +273,9 @@ class Output(IObserver):
 
         # There should be a level 0 that we never print. So its >, and not >=
         if self.enough_verbose(verbose) or self.enough_debug(debug):
+            # when printing started processes, don't print a sender
             if 'Start' in txt:
-                # we use tqdm.write() instead of print() to make sure we
-                # don't get progress bar duplicates in the cli
-                self.tell_pbar({
-                    'event': 'print',
-                    'txt': txt
-                })
-                return
+                sender = ''
 
             self.print(sender, txt)
             self.log_line(msg)
