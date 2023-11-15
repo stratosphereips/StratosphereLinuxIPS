@@ -36,8 +36,8 @@ class PBar(Process):
         # using mp manager to be able to change this value
         # here and and have it changed in the Output.py
         self.has_pbar = has_bar
-
-        if self.is_pbar_supported(input_type):
+        self.supported: bool = self.is_pbar_supported(input_type)
+        if self.supported:
             self.has_pbar.value = True
         else:
             #todo close proc
@@ -142,9 +142,18 @@ class PBar(Process):
             refresh=True
         )
 
+    def pbar_supported(self) -> bool:
+        """
+        this proc should stop listening
+        to events if the pbar reached 100% or if it's not supported
+        """
+        if self.done_reading_flows or not self.supported:
+            return False
+        return True
+
     def run(self):
         """keeps receiving events until pbar reaches 100%"""
-        while True and not self.done_reading_flows:
+        while True and self.pbar_supported():
             try:
                 msg: dict = self.pipe.recv()
             except KeyboardInterrupt:
