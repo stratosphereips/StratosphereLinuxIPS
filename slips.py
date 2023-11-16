@@ -18,24 +18,18 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import contextlib
-import multiprocessing
 from slips_files.common.imports import *
-from slips_files.common.cpu_profiler import CPUProfiler
-from slips_files.common.memory_profiler import MemoryProfiler
-from exclusiveprocess import Lock, CannotAcquireLock
-from redis_manager import RedisManager
-from metadata_manager import MetadataManager
-from process_manager import ProcessManager
-from ui_manager import UIManager
-from checker import Checker
-from style import green
+from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
+from slips_files.common.performance_profilers.memory_profiler import MemoryProfiler
+from managers.redis_manager import RedisManager
+from managers.metadata_manager import MetadataManager
+from managers.process_manager import ProcessManager
+from managers.ui_manager import UIManager
+from slips_files.core.helpers.checker import Checker
+from slips_files.common.style import green
 
-
-from slips_files.core.inputProcess import InputProcess
-from slips_files.core.outputProcess import OutputProcess
-from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.evidenceProcess import EvidenceProcess
 from slips_files.core.database.database_manager import DBManager
+from slips_files.common.abstracts.observer import IObservable
 
 
 import signal
@@ -61,8 +55,9 @@ warnings.filterwarnings('ignore')
 # ---------------------
 
 
-class Main:
+class Main(IObservable):
     def __init__(self, testing=False):
+        IObservable.__init__(self)
         self.name = 'Main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
@@ -77,11 +72,15 @@ class Main:
         # will be filled later
         self.commit = 'None'
         self.branch = 'None'
+        self.last_updated_stats_time = datetime.now()
+        self.input_type = False
         # in testing mode we manually set the following params
         if not testing:
+
             self.args = self.conf.get_args()
             self.pid = os.getpid()
             self.checker.check_given_flags()
+
             if not self.args.stopdaemon:
                 # Check the type of input
                 self.input_type, self.input_information, self.line_type = self.checker.check_input_type()
@@ -91,6 +90,7 @@ class Main:
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
+
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = slips.conf.get_cpu_profiler_enable() == 'yes'
@@ -140,7 +140,7 @@ class Main:
             self.memoryProfiler.start()
     
     def memory_profiler_release(self):
-        if self.memoryProfilerEnabled:
+        if hasattr(self, 'memoryProfilerEnabled') and self.memoryProfilerEnabled:
             self.memoryProfiler.stop()
     
     def memory_profiler_multiproc_test(self):
@@ -215,23 +215,6 @@ class Main:
         if self.conf.get_cpu_profiler_enable() != "yes":
             sys.exit(0)
 
-    def update_local_TI_files(self):
-        from modules.update_manager.update_manager import UpdateManager
-        try:
-            # only one instance of slips should be able to update ports and orgs at a time
-            # so this function will only be allowed to run from 1 slips instance.
-            with Lock(name="slips_ports_and_orgs"):
-                # pass a dummy termination event for update manager to update orgs and ports info
-                update_manager = UpdateManager(self.output_queue,
-                                               self.args.output,
-                                               self.redis_port,
-                                               multiprocessing.Event())
-                update_manager.update_ports_info()
-                update_manager.update_org_files()
-        except CannotAcquireLock:
-            # another instance of slips is updating ports and orgs
-            return
-
     def save_the_db(self):
         # save the db to the output dir of this analysis
         # backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
@@ -278,11 +261,6 @@ class Main:
         if self.conf.delete_zeek_files():
             shutil.rmtree(self.zeek_dir)
 
-    def is_debugger_active(self) -> bool:
-        """Return if the debugger is currently active"""
-        gettrace = getattr(sys, 'gettrace', lambda: None)
-        return gettrace() is not None
-
     def prepare_output_dir(self):
         """
         Clears the output dir if it already exists , or creates a new one if it doesn't exist
@@ -326,7 +304,6 @@ class Main:
 
         os.makedirs(self.args.output)
 
-        print(f'[Main] Storing Slips logs in {self.args.output}')
 
     def set_mode(self, mode, daemon=''):
         """
@@ -345,7 +322,7 @@ class Main:
         with open(self.daemon.stdout, 'a') as f:
             f.write(f'{txt}\n')
 
-    def print(self, text, verbose=1, debug=0):
+    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
         """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
@@ -361,9 +338,15 @@ class Main:
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like f'Test {here}'
         """
-
-        levels = f'{verbose}{debug}'
-        self.output_queue.put(f'{levels}|{self.name}|{text}')
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug,
+                'log_to_logfiles_only': log_to_logfiles_only
+           }
+        )
 
     def handle_flows_from_stdin(self, input_information):
         """
@@ -427,7 +410,21 @@ class Main:
         elif 'CSV' in cmd_result and os.path.isfile(given_path):
             input_type = 'binetflow'
         elif 'directory' in cmd_result and os.path.isdir(given_path):
-            input_type = 'zeek_folder'
+            from slips_files.core.input import SUPPORTED_LOGFILES
+            for log_file in os.listdir(given_path):
+                # if there is at least 1 supported log file inside the
+                # given directory, start slips normally
+                # otherwise, stop slips
+                if log_file.replace('.log', '') in SUPPORTED_LOGFILES:
+                    input_type = 'zeek_folder'
+                    break
+            else:
+                # zeek dir filled with unsupported logs
+                # or .labeled logs that slips can't read.
+                print(f"Log files in {given_path} are not supported \n"
+                      f"Make sure all log files inside the given "
+                      f"directory end with .log .. Stopping.")
+                sys.exit(-1)
         else:
             # is it a zeek log file or suricata, binetflow tabs, or binetflow comma separated file?
             # use first line to determine
@@ -494,21 +491,57 @@ class Main:
             slips_version += f' ({self.commit[:8]})'
         print(slips_version)
 
-    def should_run_non_stop(self) -> bool:
+
+    def update_stats(self):
         """
-        determines if slips shouldn't terminate because by default,
-        it terminates when there's no more incoming flows
+        updates the statistics shown next to the progress bar or shown in a new line
         """
-        # these are the cases where slips should be running non-stop
-        # when slips is reading from a special module other than the input process
-        # this module should handle the stopping of slips
-        if (
-                self.is_debugger_active()
-                or self.input_type in ('stdin','CYST')
-                or self.is_interface
-        ):
-            return True
-        return False
+        # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
+        # for other files, we print a progress bar + the stats using outputprocess
+        if not self.mode == 'interactive':
+            return
+
+        # only update the stats every 5s
+        now = datetime.now()
+        if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') < 5:
+            return
+
+        self.last_updated_stats_time = now
+        now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
+        modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
+        profilesLen = self.db.get_profiles_len()
+        evidence_number = self.db.get_evidence_number() or 0
+        msg = f'Total analyzed IPs so far: ' \
+              f'{green(profilesLen)}. ' \
+              f'Evidence Added: {green(evidence_number)}. ' \
+              f'IPs sending traffic in the last ' \
+              f'{self.twid_width}: {green(modified_ips_in_the_last_tw)}. ' \
+              f'({now})'
+        self.print(msg)
+
+    def update_host_ip(self, hostIP, modified_profiles) -> str:
+        """
+        when running on an interface we keep track of the host IP. If there was no
+        # modified TWs in the host IP, we check if the network was changed.
+        """
+        if self.is_interface and hostIP not in modified_profiles:
+            if hostIP := self.metadata_man.get_host_ip():
+                self.db.set_host_ip(hostIP)
+        return hostIP
+
+    def is_total_flows_unknown(self) -> bool:
+        """
+        Determines if slips knows the total flows it's gonna be
+        reading beforehand or not
+        for example, we dont know the total flows when running on an interface,
+         a pcap, an input module like cyst, etc.
+        """
+        return (
+            self.args.input_module
+            or self.args.growing
+            or self.input_type in ('stdin', 'pcap', 'interface')
+        )
+
 
     def start(self):
         """Main Slips Function"""
@@ -519,10 +552,6 @@ class Main:
             print('-' * 27)
 
             self.setup_print_levels()
-
-            # this is used in get_random_redis_port(), don't move this line
-            self.output_queue = Queue()
-
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -540,10 +569,14 @@ class Main:
             else:
                 # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
-                # self.check_if_port_is_in_use(self.redis_port)
 
+            # if stdout is redirected to a file,
+            # tell output.py to redirect it's output as well
+            current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
+            self.logger = self.proc_man.start_output_process(current_stdout, stderr, slips_logfile)
+            self.add_observer(self.logger)
 
-            self.db = DBManager(self.args.output, self.output_queue, self.redis_port)
+            self.db = DBManager(self.logger, self.args.output, self.redis_port)
             self.db.set_input_metadata({
                     'output_dir': self.args.output,
                     'commit': self.commit,
@@ -556,15 +589,7 @@ class Main:
             # Should print out red text if working properly
             # self.memory_profiler_multiproc_test()
 
-            # if stdout is redirected to a file,
-            # tell outputProcess.py to redirect it's output as well
-            current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
 
-            # outputprocess should be created first because it handles
-            # the output of the rest of the threads.
-            output_process = self.proc_man.start_output_process(
-                current_stdout, stderr, slips_logfile
-                )
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':
@@ -599,13 +624,18 @@ class Main:
 
             self.print(f'Using redis server on port: {green(self.redis_port)}', 1, 0)
             self.print(f'Started {green("Main")} process [PID {green(self.pid)}]', 1, 0)
-            self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
                 # update local files before starting modules
-                self.update_local_TI_files()
+                # if wait_for_TI_to_finish is set to true in the config file,
+                # slips will wait untill all TI files are updated before
+                # starting the rest of the modules
+                self.proc_man.start_update_manager(
+                    local_files=True,
+                    TI_feeds=self.conf.wait_for_TI_to_finish()
+                )
                 self.proc_man.load_modules()
 
             if self.args.webinterface:
@@ -624,7 +654,7 @@ class Main:
 
             self.metadata_man.enable_metadata()
 
-            self.proc_man.start_input_process()
+            self.input_process = self.proc_man.start_input_process()
 
             # obtain the list of active processes
             self.proc_man.processes = multiprocessing.active_children()
@@ -652,83 +682,48 @@ class Main:
 
             hostIP = self.metadata_man.store_host_ip()
 
-            # Check every 5 secs if we should stop slips or not
-            sleep_time = 5
 
-            # In each interval we check if there has been any modifications to
-            # the database by any module.
-            # If not, wait this amount of intervals and then stop slips.
-            max_intervals_to_wait = 4
-            intervals_to_wait = max_intervals_to_wait
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
             self.is_interface: bool = self.args.interface or self.db.is_growing_zeek_dir()
 
             while True:
-                message = self.c1.get_message(timeout=0.01)
-                if (
-                    message
-                    and utils.is_msg_intended_for(message, 'control_channel')
-                    and message['data'] == 'stop_slips'
-                ):
+                # check for the stop msg
+                if self.proc_man.should_stop():
                     self.proc_man.shutdown_gracefully()
                     break
 
-                # Sleep some time to do routine checks
-                time.sleep(sleep_time)
+                # Sleep some time to do routine checks and give time for more traffic to come
+                time.sleep(5)
 
                 # if you remove the below logic anywhere before the above sleep() statement
                 # it will try to get the return value very quickly before
-                # the webinterface thread sets it
+                # the webinterface thread sets it. so don't
                 self.ui_man.check_if_webinterface_started()
 
-                modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
-                # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
-                # for other files, we print a progress bar + the stats using outputprocess
-                if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
-                    # How many profiles we have?
-                    profilesLen = self.db.get_profiles_len()
-                    now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
-                    evidence_number = self.db.get_evidence_number() or 0
-                    print(
-                        f'Total analyzed IPs so '
-                        f'far: {profilesLen}. '
-                        f'Evidence added: {evidence_number}. '
-                        f'IPs sending traffic in the last {self.twid_width}: {modified_ips_in_the_last_tw}. '
-                        f'({now})',
-                        end='\r',
-                    )
+                self.update_stats()
 
                 # Check if we need to close any TWs
                 self.db.check_TW_to_close()
 
-                if self.is_interface and hostIP not in modified_profiles:
-                    # In interface we keep track of the host IP. If there was no
-                    # modified TWs in the host IP, we check if the network was changed.
-                    if hostIP := self.metadata_man.get_host_ip():
-                        self.db.set_host_ip(hostIP)
+                modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
+                hostIP: str = self.update_host_ip(hostIP, modified_profiles)
 
-                if self.should_run_non_stop():
+                # don't move this up because we still need to print the stats and check tws anyway
+                if self.proc_man.should_run_non_stop():
                     continue
 
-                # Reaches this point if we're running Slips on a file.
-                # countdown until slips stops if no TW modifications are happening
-                if modified_ips_in_the_last_tw == 0:
-                    # waited enough. stop slips
-                    if intervals_to_wait == 0:
-                        self.proc_man.shutdown_gracefully()
-                        break
-
-                    # If there were no modified TWs in the last timewindow time,
-                    # then start counting down
-                    intervals_to_wait -= 1
-
+                if self.proc_man.slips_is_done_receiving_new_flows():
+                    self.proc_man.shutdown_gracefully()
+                    break
 
                 self.db.check_health()
+
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while the system call was in progress
             # comes here if zeek terminates while slips is still working
             self.proc_man.shutdown_gracefully()
+
 
 
 ####################

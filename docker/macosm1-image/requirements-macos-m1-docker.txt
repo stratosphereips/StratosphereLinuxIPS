@@ -36,8 +36,9 @@ wheel
 flask
 tld
 tqdm
-communityid
 termcolor
-memray
 viztracer
 yappi
+pytest-sugar
+memray
+aid_hash

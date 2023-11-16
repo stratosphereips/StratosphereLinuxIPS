@@ -1,19 +1,22 @@
 import sqlite3
 import datetime
 import time
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
-class TrustDB:
+class TrustDB(IObservable):
     name = 'P2P Trust DB'
 
     def __init__(
         self,
+        logger: Output,
         db_file: str,
-        output_queue,
         drop_tables_on_startup: bool = False,
     ):
         """create a database connection to a SQLite database"""
-
-        self.output_queue = output_queue
+        self.logger = logger
+        IObservable.__init__(self)
+        self.add_observer(self.logger)
 
         self.conn = sqlite3.connect(db_file)
         if drop_tables_on_startup:
@@ -44,8 +47,14 @@ class TrustDB:
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        levels = f'{verbose}{debug}'
-        self.output_queue.put(f'{levels}|{self.name}|{text}')
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
 
     def create_tables(self):
         self.conn.execute(
@@ -327,7 +336,7 @@ class TrustDB:
             )
             reliability = go_reliability_cur.fetchone()
             if reliability is None:
-                self.print('No reliability for ', reporter_peerid)
+                self.print(f'No reliability for {reporter_peerid}')
                 continue
             reliability = reliability[0]
 

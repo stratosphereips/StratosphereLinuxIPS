@@ -97,7 +97,7 @@ Even though we just installed pip3, the package installer for Python (3.8), we n
 
 Now that pip3 is upgraded, we can proceed to install all required packages via pip3 python packet manager:
 
-	sudo pip3 install -r requirements.txt
+	sudo pip3 install -r install/requirements.txt
 
 _Note: for those using a different base image, you need to also install tensorflow==2.2.0 via pip3._
 

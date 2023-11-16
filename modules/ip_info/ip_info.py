@@ -15,9 +15,10 @@ import subprocess
 import re
 import time
 import asyncio
+from slips_files.common.slips_utils import utils
 
 
-class IPInfo(Module, multiprocessing.Process):
+class IPInfo(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'IP Info'
     description = 'Get different info about an IP/MAC address'
@@ -196,7 +197,7 @@ class IPInfo(Module, multiprocessing.Process):
         """
         if not hasattr(self, 'country_db'):
             return False
-        if ipaddress.ip_address(ip).is_private:
+        if utils.is_private_ip(ipaddress.ip_address(ip)):
             # Try to find if it is a local/private IP
             data = {'geocountry': 'Private'}
         elif geoinfo := self.country_db.get(ip):
@@ -479,7 +480,8 @@ class IPInfo(Module, multiprocessing.Process):
         wait for update manager to finish updating the mac db and open the rest of dbs before starting this module
         """
         # this is the loop that controls te running on open_dbs
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         # run open_dbs in the background so we don't have
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())

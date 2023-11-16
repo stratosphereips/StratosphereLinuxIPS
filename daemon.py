@@ -1,9 +1,10 @@
 from slips_files.common.imports import *
+from slips_files.core.database.database_manager import DBManager
 import sys
 import os
 from signal import SIGTERM
 
-class Daemon():
+class Daemon:
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
@@ -209,7 +210,7 @@ class Daemon():
                     is_daemon = bool(line[7])
                     if not is_daemon:
                         continue
-                    port, output_dir, slips_pid  = line[2], line[5], line[6]
+                    port, output_dir, slips_pid = line[2], line[5], line[6]
                     return (port, output_dir, slips_pid)
         except FileNotFoundError:
             # file removed after daemon started
@@ -241,8 +242,10 @@ class Daemon():
         self.stdout = 'slips.log'
         self.logsfile = 'slips.log'
         self.prepare_std_streams(output_dir)
-        db = DBManager(output_dir,
-                       multiprocessing.Queue(),
+        self.logger = self.slips.proc_man.start_output_process(self.stdout, self.stderr, self.logsfile)
+        self.slips.add_observer(self.logger)
+        db = DBManager(self.slips.logger,
+                       output_dir,
                        port,
                        start_sqlite=False,
                        flush_db=False)

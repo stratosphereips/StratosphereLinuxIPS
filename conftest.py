@@ -7,6 +7,8 @@ import os, sys, inspect
 from multiprocessing import Queue
 from unittest.mock import patch
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.output import Output
+from slips_files.core.flows.zeek import Conn
 
 
 # add parent dir to path for imports to work
@@ -29,14 +31,6 @@ def do_nothing(*arg):
     pass
 
 @pytest.fixture
-def output_queue():
-    """This output_queue will be passed to all module constructors that need it"""
-    output_queue = Queue()
-    output_queue.put = do_nothing
-    return Queue()
-
-
-@pytest.fixture
 def input_queue():
     """This input_queue will be passed to all module constructors that need it"""
     input_queue = Queue()
@@ -53,7 +47,38 @@ def profiler_queue():
 
 
 @pytest.fixture
-def database(output_queue):
-    db = DBManager('output/', output_queue, 6379)
+def database():
+    db = DBManager(Output(), 'output/', 6379)
     db.print = do_nothing
     return db
+
+@pytest.fixture
+def flow():
+    """returns a dummy flow for testing"""
+    return Conn(
+        '1601998398.945854',
+        '1234',
+        '192.168.1.1',
+        '8.8.8.8',
+        5,
+        'TCP',
+        'dhcp',
+        80,88,
+        20,20,
+        20,20,
+        '','',
+        'Established',''
+    )
+
+# Define a fixture to run before each test
+@pytest.fixture(autouse=True)
+def setup_teardown_before_each_test(request):
+    # Code to run before each test
+    print(f"\nSetting up for test: {request.node.name}")
+    #
+    # # Code to run after each test
+    # yield
+    #
+    # print(f"Tearing down after test: {request.node.name}")
+    # # This is where you can perform any teardown actions needed for each test
+    # ...

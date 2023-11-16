@@ -13,9 +13,10 @@ import requests
 import sys
 import asyncio
 import datetime
+from slips_files.common.slips_utils import utils
 
 
-class UpdateManager(Module, multiprocessing.Process):
+class UpdateManager(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Update Manager'
     description = 'Update Threat Intelligence files'
@@ -43,7 +44,7 @@ class UpdateManager(Module, multiprocessing.Process):
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(self.output_queue, self.db)
+        self.whitelist = Whitelist(self.logger, self.db)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line
@@ -60,7 +61,8 @@ class UpdateManager(Module, multiprocessing.Process):
             '#fields',
             'number',
             'atom_type',
-            'attacker'
+            'attacker',
+            'score'
         )
         self.ignored_IoCs = ('email', 'url', 'file_hash', 'file')
         # to track how many times an ip is present in different blacklists
@@ -168,7 +170,15 @@ class UpdateManager(Module, multiprocessing.Process):
         """
         sends the text to output process to log it to slips.log without outputting to the terminal
         """
-        self.output_queue.put(f'01|{self.name}|{text}log-only')
+        self.notify_observers(
+            {
+                'from': self.name,
+                'log_to_logfiles_only': True,
+                'txt': text,
+                'verbose': 0,
+                'debug': 1
+           }
+        )
 
     def read_ports_info(self, ports_info_filepath) -> int:
         """
@@ -995,7 +1005,7 @@ class UpdateManager(Module, multiprocessing.Process):
         return amount_of_columns, line_fields, sep
 
 
-    def get_data_column(self, amount_of_columns, line_fields, file_path):
+    def get_data_column(self, amount_of_columns: int, line_fields: list, file_path: str):
         """
         Get the first column that is an IPv4, IPv6 or domain
         :param file_path: path of the ti file that contains the given fields
@@ -1113,6 +1123,7 @@ class UpdateManager(Module, multiprocessing.Process):
                 line = line.replace('\n', '').replace('"', '')
 
                 amount_of_columns, line_fields, separator = self.parse_line(line, ti_file_path)
+
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
@@ -1221,7 +1232,7 @@ class UpdateManager(Module, multiprocessing.Process):
                         # make sure we're not blacklisting a private ip
                         ip_obj = ipaddress.ip_address(data)
                         if (
-                            ip_obj.is_private
+                            utils.is_private_ip(ip_obj)
                             or ip_obj.is_multicast
                             or ip_obj.is_link_local
                         ):
@@ -1291,7 +1302,7 @@ class UpdateManager(Module, multiprocessing.Process):
                         ip_obj = ipaddress.ip_address(net_addr)
                         if (
                             ip_obj.is_multicast
-                            or ip_obj.is_private
+                            or utils.is_private_ip(ip_obj)
                             or ip_obj.is_link_local
                             or net_addr in utils.home_networks
                         ):

@@ -9,9 +9,10 @@ import time
 import ipaddress
 import threading
 import validators
+from slips_files.common.slips_utils import utils
 
 
-class VT(Module, multiprocessing.Process):
+class VT(IModule, multiprocessing.Process):
     name = 'Virustotal'
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = [
@@ -253,7 +254,7 @@ class VT(Module, multiprocessing.Process):
 
         try:
             addr = ipaddress.ip_address(ip)
-            if addr.is_private:
+            if utils.is_private_ip(addr):
                 self.print(f'[{ip}] is private, skipping', 0, 2)
                 scores = 0, 0, 0, 0
                 return scores, '', ''
@@ -541,7 +542,7 @@ class VT(Module, multiprocessing.Process):
             if (
                 'VirusTotal' not in cached_data
                 and not ip_addr.is_multicast
-                and not ip_addr.is_private
+                and not utils.is_private_ip(ip_addr)
             ):
                 self.set_vt_data_in_IPInfo(ip, cached_data)
 

@@ -1,6 +1,3 @@
-from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
-from slips_files.core.database.sqlite_db.database import SQLiteDB
 from dataclasses import asdict
 import redis
 import time
@@ -10,14 +7,47 @@ import traceback
 import ipaddress
 import sys
 import validators
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 
-class ProfileHandler():
+class ProfileHandler(IObservable):
     """
     Helper class for the Redis class in database.py
     Contains all the logic related to flows, profiles and timewindows
     """
     name = 'DB'
+    
+    def __init__(self, logger: Output):
+        IObservable.__init__(self)
+        self.logger = logger
+        self.add_observer(self.logger)
+        
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like f'Test {here}'
+        """
 
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
+        
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
             """
@@ -32,10 +62,9 @@ class ProfileHandler():
             return value
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}'
-            )
-            self.outputqueue.put(f'01|database|[DB] {traceback.print_exc()}')
+            self.print(f'Error in getDataFromProfileTW in '
+                       f'database.py line {exception_line}', 0, 1)
+            self.print(f'{traceback.print_exc()}',0,1)
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""
@@ -180,7 +209,7 @@ class ProfileHandler():
             return twid
         except Exception as e:
             self.print('Error in get_timewindow().', 0, 1)
-            self.print(f'{e}', 0, 1)
+            self.print(e, 0, 1)
 
     def add_out_http(
         self,
@@ -443,7 +472,6 @@ class ProfileHandler():
         We receive the pakets to distinguish some Reset connections
         """
         try:
-            # self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
             pre = state.split('_')[0]
             try:
                 # Try suricata states
@@ -573,13 +601,12 @@ class ProfileHandler():
                     SRPA_
                     """
                     return 'Not Established'
-            return None
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}'
-            )
-            self.outputqueue.put(f'01|database|[DB] Inst: {traceback.print_exc()}')
+            self.print(
+                f'Error in getFinalStateFromFlags() in database.py line {exception_line}'
+            ,0,1)
+            self.print(traceback.print_exc(), 0, 1)
 
     def getDataFromProfileTW(
         self,
@@ -595,39 +622,122 @@ class ProfileHandler():
         Get the info about a certain role (Client or Server),
         for a particular protocol (TCP, UDP, ICMP, etc.) for a
         particular State (Established, etc.)
-        direction: 'Dst' or 'Src'. This is used to know if you
+
+        :param direction: 'Dst' or 'Src'. This is used to know if you
         want the data of the src ip or ports, or the data from
         the dst ips or ports
-        state: can be 'Established' or 'NotEstablished'
-        protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
-        role: can be 'Client' or 'Server'
-        type_data: can be 'Ports' or 'IPs'
+        :param state: can be 'Established' or 'NotEstablished'
+        :param protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
+
+        :param role: can be 'Client' or 'Server'
+        Depending if the traffic is going out or not, we are Client or Server
+        Client role means: the traffic is done by the given profile
+        Server role means:the traffic is going to the given profile
+
+        :param type_data: can be 'Ports' or 'IPs'
         """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
+
         try:
-            key = direction + type_data + role + protocol + state
-            # self.print('Asked Key: {}'.format(key))
+            key = direction + type_data + role + protocol.upper() + state
             data = self.r.hget(f'{profileid}{self.separator}{twid}', key)
-            value = {}
+
             if data:
-                portdata = json.loads(data)
-                value = portdata
-            else:
-                self.print(
-                    f'There is no data for Key: {key}. Profile {profileid} TW {twid}',
-                    3,
-                    0,
-                )
-            return value
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}'
+                return json.loads(data)
+
+            self.print(
+                f'There is no data for Key: {key}. Profile {profileid} TW {twid}',
+                3,
+                0,
             )
-            self.outputqueue.put(f'01|database|[DB] Inst: {traceback.print_exc()}')
+            return {}
+        except Exception as e:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(
+                f'Error in getDataFromProfileTW database.py line {exception_line}'
+            ,0,1)
+            self.print(traceback.print_exc(), 0, 1)
+
+
+    def update_ip_info(
+        self,
+        old_profileid_twid_data: dict,
+        pkts,
+        dport,
+        spkts,
+        totbytes,
+        ip,
+        starttime,
+        uid
+    ) -> dict:
+        """
+        #  Updates how many times each individual DstPort was contacted,
+        the total flows sent by this ip and their uids,
+        the total packets sent by this ip,
+        and total bytes sent by this ip
+        """
+        dport = str(dport)
+        spkts = int(spkts)
+        pkts = int(pkts)
+        totbytes = int(totbytes)
+        if ip in old_profileid_twid_data:
+            # update info about an existing ip
+            ip_data = old_profileid_twid_data[ip]
+            ip_data['totalflows'] += 1
+            ip_data['totalpkt'] += pkts
+            ip_data['totalbytes'] += totbytes
+            ip_data['uid'].append(uid)
+
+            ip_data['dstports']: dict
+
+            if dport in ip_data['dstports']:
+                ip_data['dstports'][dport] += spkts
+            else:
+                ip_data['dstports'].update({
+                   dport: spkts
+                })
+        else:
+            # First time seeing this ip
+            ip_data = {
+                'totalflows': 1,
+                'totalpkt': pkts,
+                'totalbytes': totbytes,
+                'stime': starttime,
+                'uid': [uid],
+                'dstports': {dport: spkts}
+
+            }
+        old_profileid_twid_data.update({ip: ip_data})
+
+        return old_profileid_twid_data
+
+    def update_times_contacted(self, ip, direction, profileid, twid):
+        """
+        :param ip: the ip that we want to update the times we contacted
+        """
+
+        # Get the hash of the timewindow
+        profileid_twid = f'{profileid}{self.separator}{twid}'
+
+        # Get the DstIPs data for this tw in this profile
+        # The format is {'1.1.1.1' :  3}
+        ips_contacted = self.r.hget(profileid_twid, f'{direction}IPs')
+        if not ips_contacted:
+            ips_contacted = {}
+
+        try:
+            ips_contacted = json.loads(ips_contacted)
+            # Add 1 because we found this ip again
+            ips_contacted[ip] += 1
+        except (TypeError, KeyError):
+            # There was no previous data stored in the DB
+            ips_contacted[ip] = 1
+
+        ips_contacted = json.dumps(ips_contacted)
+        self.r.hset(profileid_twid, f'{direction}IPs', str(ips_contacted))
 
     def add_ips(self, profileid, twid, flow, role):
         """
@@ -695,7 +805,9 @@ class ProfileHandler():
 
         # Get the state. Established, NotEstablished
         summaryState = self.getFinalStateFromFlags(flow.state, flow.pkts)
-
+        key_name = (
+            f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
+        )
         # Get the previous data about this key
         old_profileid_twid_data = self.getDataFromProfileTW(
             profileid,
@@ -706,8 +818,7 @@ class ProfileHandler():
             role,
             'IPs',
         )
-
-        profileid_twid_data = self.update_ip_info(
+        profileid_twid_data: dict = self.update_ip_info(
             old_profileid_twid_data,
             flow.pkts,
             flow.dport,
@@ -718,10 +829,6 @@ class ProfileHandler():
             uid
         )
 
-
-        key_name = (
-            f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
-        )
         # Store this data in the profile hash
         self.r.hset(
             f'{profileid}{self.separator}{twid}',
@@ -1055,11 +1162,9 @@ class ProfileHandler():
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
-            self.outputqueue.put(
-                '00|database|error in addprofileidfromip in database.py'
-            )
-            self.outputqueue.put(f'00|database|{type(inst)}')
-            self.outputqueue.put(f'00|database|{inst}')
+            self.print('error in addprofileidfromip in database.py', 0, 1)
+            self.print(type(inst), 0, 1)
+            self.print(inst, 0, 1)
 
     def getProfiles(self):
         """Get a list of all the profiles"""
@@ -1112,15 +1217,10 @@ class ProfileHandler():
                 return False, False
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getT2ForProfileTW in database.py line {exception_line}'
-            )
-
-            self.outputqueue.put(f'01|database|[DB] {type(e)}')
-            self.outputqueue.put(f'01|database|[DB] {e}')
-            self.outputqueue.put(
-                f'01|profiler|[Profile] {traceback.format_exc()}'
-            )
+            self.print(f'Error in getT2ForProfileTW in database.py line {exception_line}',0,1)
+            self.print(type(e), 0, 1)
+            self.print(e, 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
@@ -1200,18 +1300,16 @@ class ProfileHandler():
             # Add the new TW to the index of TW
             data = {str(twid): float(startoftw)}
             self.r.zadd(f'tws{profileid}', data)
-            self.outputqueue.put(
-                f'04|database|[DB]: Created and added to DB the new older TW with id {twid}. Time: {startoftw} '
-            )
+            self.print(f'Created and added to DB the new older '
+                       f'TW with id {twid}. Time: {startoftw} '
+                       ,0,4)
 
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
         except redis.exceptions.ResponseError as e:
-            self.outputqueue.put(
-                '01|database|error in addNewOlderTW in database.py', 0, 1
-            )
-            self.outputqueue.put(f'01|database|{type(e)}', 0, 1)
-            self.outputqueue.put(f'01|database|{e}', 0, 1)
+            self.print('error in addNewOlderTW in database.py', 0, 1)
+            self.print(type(e), 0, 1)
+            self.print(e, 0, 1)
 
     def addNewTW(self, profileid, startoftw):
         try:
@@ -1235,9 +1333,8 @@ class ProfileHandler():
             # Add the new TW to the index of TW
             data = {twid: float(startoftw)}
             self.r.zadd(f'tws{profileid}', data)
-            self.outputqueue.put(
-                f'04|database|[DB]: Created and added to DB for profile {profileid} on TW with id {twid}. Time: {startoftw} '
-            )
+            self.print(f'Created and added to DB for profile '
+                       f'{profileid} on TW with id {twid}. Time: {startoftw} ', 0, 4)
 
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
 
@@ -1246,8 +1343,8 @@ class ProfileHandler():
             self.update_threat_level(profileid, 'info',  0.5)
             return twid
         except redis.exceptions.ResponseError as e:
-            self.outputqueue.put('01|database|Error in addNewTW')
-            self.outputqueue.put(f'01|database|{e}')
+            self.print('Error in addNewTW', 0, 1)
+            self.print(e, 0, 1)
 
     def getTimeTW(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
@@ -1512,11 +1609,9 @@ class ProfileHandler():
             self.publish('new_profile', ip)
             return True
         except redis.exceptions.ResponseError as inst:
-            self.outputqueue.put(
-                '00|database|Error in addProfile in database.py'
-            )
-            self.outputqueue.put(f'00|database|{type(inst)}')
-            self.outputqueue.put(f'00|database|{inst}')
+            self.print('Error in addProfile in database.py', 0, 1)
+            self.print(type(inst), 0, 1)
+            self.print(inst, 0, 1)
 
     def set_profile_module_label(self, profileid, module, label):
         """
@@ -1596,92 +1691,114 @@ class ProfileHandler():
         # Check if we should close some TW
         self.check_TW_to_close()
 
+    def publish_new_letter(self, new_symbol:str, profileid:str, twid:str, tupleid:str, flow):
+        """
+        analyze behavioral model with lstm model if
+        the length is divided by 3 -
+        so we send when there is 3 more characters added
+        """
+        if len(new_symbol) % 3 != 0:
+            return
 
-    def add_tuple(
-        self, profileid, twid, tupleid, data_tuple, role, flow
-    ):
+        to_send = {
+            'new_symbol': new_symbol,
+            'profileid': profileid,
+            'twid': twid,
+            'tupleid': str(tupleid),
+            'uid': flow.uid,
+            'flow': asdict(flow)
+        }
+        to_send = json.dumps(to_send)
+        self.publish('new_letters', to_send)
+
+    #
+    # def get_previous_symbols(self, profileid: str, twid: str, direction: str, tupleid: str):
+    #     """
+    #     returns all the InTuples or OutTuples for this profileid in this TW
+    #     """
+    #     profileid_twid = f'{profileid}{self.separator}{twid}'
+    #
+    #     tuples = self.r.hget(profileid_twid, direction) or '{}'
+    #     tuples = json.loads(tuples)
+    #
+    #     # Get the last symbols of letters in the DB
+    #     prev_symbols = tuples[tupleid][0]
+    #     return prev_symbols
+    #
+
+    def add_tuple(self,
+                  profileid: str, twid: str, tupleid: str, symbol: Tuple,
+                  role: str, flow):
         """
         Add the tuple going in or out for this profile
-        :param tupleid: daddr:dport:proto
-        role: 'Client' or 'Server'
+        and if there was previous symbols for this profile, append the new symbol to it
+        before adding the tuple to the db
+
+        :param tupleid:  a dash separated str with the following format daddr-dport-proto
+        :param symbol:  (symbol, (symbol_to_add, previous_two_timestamps))
+        T1: is the time diff between the past flow and the past-past flow.
+        last_ts: the timestamp of the last flow
+        :param role: 'Client' or 'Server'
         """
-        # If the traffic is going out it is part of our outtuples, if not, part of our intuples
+        # If the traffic is going out it is part of our outtuples,
+        # if not, part of our intuples
         if role == 'Client':
             direction = 'OutTuples'
         elif role == 'Server':
             direction = 'InTuples'
 
         try:
-            self.print(
-                f'Add_tuple called with profileid {profileid}, '
-                f'twid {twid}, '
-                f'tupleid {tupleid}, '
-                f'data {data_tuple}',
-                3, 0
-            )
-            # Get all the InTuples or OutTuples for this profileid in this TW
             profileid_twid = f'{profileid}{self.separator}{twid}'
-            tuples = self.r.hget(profileid_twid, direction)
-            # Separate the symbold to add and the previous data
-            (symbol_to_add, previous_two_timestamps) = data_tuple
-            if not tuples:
-                # Must be str so we can convert later
-                tuples = '{}'
-            # Convert the json str to a dictionary
-            tuples = json.loads(tuples)
+
+            # prev_symbols is a dict with {tulpeid: ['symbols_so_far', [timestamps]]}
+            prev_symbols: str = self.r.hget(profileid_twid, direction) or '{}'
+            prev_symbols: dict = json.loads(prev_symbols)
+
             try:
-                tuples[tupleid]
-                # Disasemble the input
+                # Get the last symbols of letters in the DB
+                prev_symbol: str = prev_symbols[tupleid][0]
+
+                # Separate the symbol to add and the previous data
+                (symbol_to_add, previous_two_timestamps) = symbol
                 self.print(
                     f'Not the first time for tuple {tupleid} as an {direction} for '
                     f'{profileid} in TW {twid}. Add the symbol: {symbol_to_add}. '
-                    f'Store previous_times: {previous_two_timestamps}. Prev Data: {tuples}',
+                    f'Store previous_times: {previous_two_timestamps}. Prev Data: {prev_symbols}',
                     3, 0,
                 )
-                # Get the last symbols of letters in the DB
-                prev_symbols = tuples[tupleid][0]
-                # Add it to form the string of letters
-                new_symbol = f'{prev_symbols}{symbol_to_add}'
-                # analyze behavioral model with lstm model if the length is divided by 3 -
-                # so we send when there is 3 more characters added
-                if len(new_symbol) % 3 == 0:
-                    to_send = {
-                        'new_symbol': new_symbol,
-                        'profileid': profileid,
-                        'twid': twid,
-                        'tupleid': str(tupleid),
-                        'uid': flow.uid,
-                        'flow': asdict(flow)
-                    }
-                    to_send = json.dumps(to_send)
-                    self.publish('new_letters', to_send)
 
-                tuples[tupleid] = (new_symbol, previous_two_timestamps)
+                # Add it to form the string of letters
+                new_symbol = f'{prev_symbol}{symbol_to_add}'
+
+                self.publish_new_letter(
+                    new_symbol,
+                    profileid,
+                    twid,
+                    tupleid,
+                    flow
+                )
+
+                prev_symbols[tupleid] = (new_symbol, previous_two_timestamps)
                 self.print(f'\tLetters so far for tuple {tupleid}: {new_symbol}', 3, 0)
-                tuples = json.dumps(tuples)
             except (TypeError, KeyError):
                 # TODO check that this condition is triggered correctly
                 #  only for the first case and not the rest after...
-                # There was no previous data stored in the DB
+                # There was no previous data stored in the DB to append the given symbol to.
                 self.print(
-                    f'First time for tuple {tupleid} as an {direction} for {profileid} in TW {twid}',
+                    f'First time for tuple {tupleid} as an'
+                    f' {direction} for {profileid} in TW {twid}',
                     3, 0,
                 )
-                # Here get the info from the ipinfo key
-                tuples[tupleid] = (symbol_to_add, previous_two_timestamps)
-                # Convet the dictionary to json
-                tuples = json.dumps(tuples)
-            # Store the new data on the db
-            self.r.hset(profileid_twid, direction, str(tuples))
-            # Mark the tw as modified
+                prev_symbols[tupleid] = symbol
+
+            prev_symbols = json.dumps(prev_symbols)
+            self.r.hset(profileid_twid, direction, prev_symbols)
             self.markProfileTWAsModified(profileid, twid, flow.starttime)
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(
-                f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
-            )
-            self.print(f'01|database|[DB] {traceback.format_exc()}')
+            self.print(f'Error in add_tuple in database.py line {exception_line}', 0,1)
+            self.print(traceback.format_exc(), 0, 1)
 
     def get_tws_to_search(self, go_back):
         tws_to_search = float('inf')

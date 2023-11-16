@@ -3,7 +3,9 @@ import json
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 
-class NetworkDiscovery(Module, multiprocessing.Process):
+
+
+class NetworkDiscovery(IModule, multiprocessing.Process):
     """
     A class process to find port scans
     This should be converted into a module that wakesup alone when a new alert arrives
@@ -212,7 +214,7 @@ class NetworkDiscovery(Module, multiprocessing.Process):
             attack,
             scanned_ip=False
     ):
-        confidence = self.calculate_confidence(pkts_sent)
+        confidence = calculate_confidence(pkts_sent)
         attacker_direction = 'srcip'
         evidence_type = attack
         source_target_tag = 'Recon'

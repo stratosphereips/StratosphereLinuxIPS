@@ -348,7 +348,7 @@ class Helper:
     ):
         # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
         confidence = 1
-        threat_level = 'medium'
+        threat_level = 'high'
         description = f'horizontal port scan by Zeek engine. {msg}'
         evidence_type = 'HorizontalPortscan'
         attacker_direction = 'srcip'
@@ -365,10 +365,6 @@ class Helper:
             self, proto, daddr, dport, saddr, profileid, twid, uid, timestamp
     ):
 
-        if daddr in ['0.0.0.0', '255.255.255.255']:
-            return
-        if saddr in ['0.0.0.0', '255.255.255.255']:
-            return
 
         confidence = 1
         threat_level = 'info'
@@ -436,7 +432,7 @@ class Helper:
         """
         # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
         confidence = 1
-        threat_level = 'medium'
+        threat_level = 'high'
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
         description = f'vertical port scan by Zeek engine. {msg}'
         evidence_type = 'VerticalPortscan'
@@ -640,10 +636,12 @@ class Helper:
 
         # append daddr identification to the description
         ip_identification = self.db.get_ip_identification(ip)
-        description += (
-            f'{ip_identification} description: {ja3_description} {tags}'
-        )
+        description += f'{ip_identification}  '
 
+        if ja3_description != 'None':
+            description += f'description: {ja3_description} '
+
+        description += f'tags: {tags}'
         attacker = ip
         confidence = 1
 

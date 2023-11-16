@@ -1,5 +1,5 @@
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
-import sys
 from ..CESNET.warden_client import Client, read_cfg
 import os
 import json
@@ -8,10 +8,10 @@ import threading
 import queue
 import ipaddress
 import validators
-import traceback
+from slips_files.common.slips_utils import utils
 
 
-class CESNET(Module, multiprocessing.Process):
+class CESNET(IModule, multiprocessing.Process):
     name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
@@ -66,13 +66,13 @@ class CESNET(Module, multiprocessing.Process):
 
                     if ip_version == 'IP4' and (
                         validators.ipv4(ip)
-                        and ipaddress.IPv4Address(ip).is_private
+                        and utils.is_private_ip(ipaddress.IPv4Address(ip))
                     ):
                         # private ipv4
                         evidence_in_IDEA[type_].remove(dict_)
                     elif (
                         validators.ipv6(ip)
-                        and ipaddress.IPv6Address(ip).is_private
+                        and utils.is_private_ip(ipaddress.IPv6Address(ip))
                     ):
                         # private ipv6
                         evidence_in_IDEA[type_].remove(dict_)

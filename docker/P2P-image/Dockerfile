@@ -65,7 +65,7 @@ RUN cd p2p4slips && go build && echo "export PATH=$PATH:/StratosphereLinuxIPS/p2
 WORKDIR ${SLIPS_DIR}
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
-RUN pip3 install -r requirements.txt
+RUN pip3 install -r install/requirements.txt
 
 
 # For Kalipso:

@@ -1,9 +1,9 @@
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
-from slips_files.core.database.sqlite_db.database import SQLiteDB
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
+from slips_files.common.abstracts.observer import IObservable
 
 import os
 import signal
@@ -19,7 +19,7 @@ import validators
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 
-class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
+class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     """Main redis db class."""
     # this db should be a singelton per port. meaning no 2 instances should be created for the same port at the same
     # time
@@ -70,7 +70,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         'check_jarm_hash',
         'control_channel',
         'new_module_flow'
-        'control_module',
         'cpu_profile',
         'memory_profile'
         }
@@ -90,13 +89,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     first_flow = True
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
+    # in case of redis ConnectionErrors, this is how long we'll wait in seconds before retrying.
+    # this will increase exponentially each retry
+    backoff = 15
+    # try to reconnect to redis 3 times in case of connection errors before terminating
+    max_retries = 3
+    # to keep track of connection retries. once it reaches max_retries, slips will terminate
+    connection_retry = 0
 
-    def __new__(cls, redis_port, output_queue, flush_db=True):
+    def __new__(cls, logger, redis_port, flush_db=True):
         """
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
         """
-        cls.redis_port, cls.outputqueue = redis_port, output_queue
+        cls.redis_port = redis_port
         cls.flush_db = flush_db
         if cls.redis_port not in cls._instances:
             cls._instances[cls.redis_port] = super().__new__(cls)
@@ -109,8 +115,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 cls._set_slips_start_time()
             # useful for debugging using 'CLIENT LIST' redis cmd
             cls.r.client_setname(f"Slips-DB")
-
         return cls._instances[cls.redis_port]
+
+    def __init__(self, logger, redis_port, flush_db=True):
+        # the main purpose of this init is to call the parent's __init__
+        IObservable.__init__(self)
+        self.add_observer(logger)
+        self.observer_added = True
 
     @classmethod
     def _set_redis_options(cls):
@@ -249,7 +260,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 # we shouldn't close it because this is what kalipso will
                 # use to view the loaded the db
                 cls.close_redis_server(cls.redis_port)
-
             return False
 
     @classmethod
@@ -291,7 +301,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
         self.pubsub = self.r.pubsub()
         self.pubsub.subscribe(
-            channel, ignore_subscribe_messages=ignore_subscribe_messages
+            channel,
+            ignore_subscribe_messages=ignore_subscribe_messages
             )
         return self.pubsub
 
@@ -311,11 +322,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         try:
             return channel.get_message(timeout=timeout)
         except redis.exceptions.ConnectionError as ex:
+            # make sure we log the error only once
             if not self.is_connection_error_logged():
-                self.publish_stop()
-                self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 0, 1)
-                # make sure we publish the stop msg and log the error only once
                 self.mark_connection_error_as_logged()
+
+            if self.connection_retry >= self.max_retries:
+                self.publish_stop()
+                self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 1, 1)
+            else:
+                # retry to connect after backing off for a while
+                self.print(f"redis.exceptions.ConnectionError: "
+                           f"retrying to connect in {self.backoff}s. "
+                           f"Retries to far: {self.connection_retry}", 0, 1)
+                time.sleep(self.backoff)
+                self.backoff = self.backoff * 2
+                self.connection_retry += 1
+                self.get_message(channel, timeout)
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -333,11 +356,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
-        levels = f'{verbose}{debug}'
-        try:
-            self.outputqueue.put(f'{levels}|{self.name}|{text}')
-        except AttributeError:
-            pass
+
+        self.notify_observers(
+            {
+                'from': self.name,
+                'txt': text,
+                'verbose': verbose,
+                'debug': debug
+           }
+        )
+
+
 
     def getIPData(self, ip: str) -> dict:
         """
@@ -348,7 +377,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
         """
-
         data = self.rcache.hget('IPsInfo', ip)
         return json.loads(data) if data else False
 
@@ -402,83 +430,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         })
         self.publish('p2p_data_request', json.dumps(data_to_send))
 
-    def update_times_contacted(self, ip, direction, profileid, twid):
-        """
-        :param ip: the ip that we want to update the times we contacted
-        """
-
-        # Get the hash of the timewindow
-        profileid_twid = f'{profileid}{self.separator}{twid}'
-
-        # Get the DstIPs data for this tw in this profile
-        # The format is {'1.1.1.1' :  3}
-        ips_contacted = self.r.hget(profileid_twid, f'{direction}IPs')
-        if not ips_contacted:
-            ips_contacted = {}
-
-        try:
-            ips_contacted = json.loads(ips_contacted)
-            # Add 1 because we found this ip again
-            ips_contacted[ip] += 1
-        except (TypeError, KeyError):
-            # There was no previous data stored in the DB
-            ips_contacted[ip] = 1
-
-        ips_contacted = json.dumps(ips_contacted)
-        self.r.hset(profileid_twid, f'{direction}IPs', str(ips_contacted))
 
 
-    def update_ip_info(
-        self,
-        old_profileid_twid_data,
-        pkts,
-        dport,
-        spkts,
-        totbytes,
-        ip,
-        starttime,
-        uid
-    ):
-        """
-        #  Updates how many times each individual DstPort was contacted,
-        the total flows sent by this ip and their uids,
-        the total packets sent by this ip,
-        total bytes sent by this ip
-        """
-        dport = str(dport)
-        spkts = int(spkts)
-        pkts = int(pkts)
-        totbytes = int(totbytes)
 
-        try:
-            # update info about an existing ip
-            ip_data = old_profileid_twid_data[ip]
-            ip_data['totalflows'] += 1
-            ip_data['totalpkt'] += pkts
-            ip_data['totalbytes'] += totbytes
-            ip_data['uid'].append(uid)
-            if dport in ip_data['dstports']:
-                ip_data['dstports'][dport] += spkts
-            else:
-                ip_data['dstports'][dport] = spkts
 
-        except KeyError:
-            # First time seeing this ip
-            ip_data = {
-                'totalflows': 1,
-                'totalpkt': pkts,
-                'totalbytes': totbytes,
-                'stime': starttime,
-                'uid': [uid],
-                'dstports': {dport: spkts}
-
-            }
-
-        old_profileid_twid_data[ip] = ip_data
-        return old_profileid_twid_data
 
     def getSlipsInternalTime(self):
-        return self.r.get('slips_internal_time')
+        return self.r.get('slips_internal_time') or 0
 
     def get_redis_keys_len(self) -> int:
         """returns the length of all keys in the db"""
@@ -500,6 +458,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
     def set_local_network(self, saddr):
         # set the local network used in the db
+        # For now the local network is only ipv4, but it could be ipv6 in the future. Todo.
+
         if self.is_localnet_set:
             return
 
@@ -508,7 +468,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
         if not (
                 validators.ipv4(saddr)
-                and ipaddress.ip_address(saddr).is_private
+                and utils.is_private_ip(ipaddress.ip_address(saddr))
         ):
             return
         # get the local network of this saddr
@@ -914,7 +874,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
         # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
-        if not ip_obj.is_private:
+        if not utils.is_private_ip(ip_obj):
             # now we're given a public ip and a MAC that's supposedly belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db

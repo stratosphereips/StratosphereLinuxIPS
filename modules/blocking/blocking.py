@@ -1,3 +1,4 @@
+from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 import platform
 import sys
@@ -7,7 +8,7 @@ import json
 import subprocess
 import time
 
-class Blocking(Module, multiprocessing.Process):
+class Blocking(IModule, multiprocessing.Process):
     """Data should be passed to this module as a json encoded python dict,
     by default this module flushes all slipsBlocking chains before it starts"""
 

@@ -1,4 +1,4 @@
-from slips_files.common.abstracts import Module
+from slips_files.common.abstracts._module import IModule
 import multiprocessing
 import socket
 import json
@@ -8,7 +8,7 @@ import sys
 from pprint import pp
 import contextlib
 
-class Module(Module, multiprocessing.Process):
+class Module(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'CYST'
     description = 'Communicates with CYST simulation framework'

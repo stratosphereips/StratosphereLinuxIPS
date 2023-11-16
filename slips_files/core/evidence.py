@@ -18,7 +18,7 @@
 from slips_files.common.imports import *
 from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
-from slips_files.common.abstracts import Core
+from slips_files.common.abstracts.core import ICore
 import json
 from datetime import datetime
 from os import path
@@ -32,7 +32,7 @@ import traceback
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 # Evidence Process
-class EvidenceProcess(Core):
+class Evidence(ICore):
     """
     A class to process the evidence from the alerts and update the threat level
     It only work on evidence for IPs that were profiled
@@ -41,7 +41,7 @@ class EvidenceProcess(Core):
     name = 'Evidence'
 
     def init(self):
-        self.whitelist = Whitelist(self.output_queue, self.db)
+        self.whitelist = Whitelist(self.logger, self.db)
         self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60

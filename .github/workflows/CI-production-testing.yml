@@ -41,7 +41,7 @@ jobs:
     - name: Install Python dependencies
       run:
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r install/requirements.txt
 
     - name: Start redis server
       run: redis-server --daemonize yes
@@ -178,4 +178,3 @@ jobs:
         name: test_slips_in_docker-integration-tests-output
         path: |
           ${{ github.workspace }}/output/integration_tests
-

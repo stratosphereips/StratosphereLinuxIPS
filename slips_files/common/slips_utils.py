@@ -10,9 +10,7 @@ import platform
 import os
 import sys
 import ipaddress
-import communityid
-from hashlib import sha1
-from base64 import b64encode
+import aid_hash
 
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
@@ -64,7 +62,7 @@ class Utils(object):
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
         self.local_tz = self.get_local_timezone()
-        self.community_id = communityid.CommunityID()
+        self.aid = aid_hash.AID()
 
     def get_cidr_of_ip(self, ip):
         """
@@ -153,6 +151,18 @@ class Utils(object):
         else:
             # invalid ip
             return
+    def calculate_confidence(self, pkts_sent):
+        """
+        calculates the evidence confidence based on the pkts sent
+        """
+        if pkts_sent > 10:
+            confidence = 1
+        elif pkts_sent == 0:
+            return 0.3
+        else:
+            # Between threshold and 10 pkts compute a kind of linear grow
+            confidence = pkts_sent / 10.0
+        return confidence
 
 
     def drop_root_privs(self):
@@ -230,7 +240,6 @@ class Utils(object):
             return ts
 
         given_format = self.define_time_format(ts)
-
         return (
             datetime.fromtimestamp(float(ts))
             if given_format == 'unixtimestamp'
@@ -310,6 +319,19 @@ class Utils(object):
     def convert_to_mb(self, bytes):
         return int(bytes)/(10**6)
 
+    def is_private_ip(self, ip_obj:ipaddress) -> bool:
+        """
+        This function replaces the ipaddress library 'is_private'
+        because it does not work correctly and it does not ignore
+        the ips 0.0.0.0 or 255.255.255.255
+        """
+        # Is it a well-formed ipv4 or ipv6?
+        r_value = False
+        if ip_obj and ip_obj.is_private:
+            if ip_obj != ipaddress.ip_address('0.0.0.0') and ip_obj != ipaddress.ip_address('255.255.255.255'):
+                r_value = True
+        return r_value
+
     def is_ignored_ip(self, ip) -> bool:
         """
         This function checks if an IP is a special list of IPs that
@@ -322,7 +344,7 @@ class Utils(object):
         return bool(
             (
                 ip_obj.is_multicast
-                or ip_obj.is_private
+                or self.is_private_ip(ip_obj)
                 or ip_obj.is_link_local
                 or ip_obj.is_reserved
                 or '.255' in ip_obj.exploded
@@ -384,7 +406,7 @@ class Utils(object):
             # add branch name and commit
             branch = repo.active_branch.name
             commit = repo.active_branch.commit.hexsha
-            return (commit, branch)
+            return commit, branch
         except Exception:
             # when in docker, we copy the repo instead of clone it so there's no .git files
             # we can't add repo metadata
@@ -464,38 +486,27 @@ class Utils(object):
 
     def get_aid(self, flow):
         """
-        calculates the flow SHA1(cid+ts) aka All-ID of the flow
-        because we need the flow ids to be unique to be able to compare them
+        calculates the  AID hash of the flow aka All-ID of the flow
         """
         #TODO document this
-        community_id = self.get_community_id(flow)
-        ts = flow.starttime
+        proto = flow.proto.lower()
+
+        # aid_hash lib only accepts unix ts
+        ts = utils.convert_format(flow.starttime, 'unixtimestamp')
         ts: str = self.assert_microseconds(ts)
 
-        aid = f"{community_id}-{ts}"
-
-        # convert the input string to bytes (since hashlib works with bytes)
-        aid: str = sha1(aid.encode('utf-8')).hexdigest()
-        aid: str = b64encode(aid.encode()).decode()
-        return aid
-
-
-    def get_community_id(self, flow):
-        """
-        calculates the flow community id based of the protocol
-        """
-        proto = flow.proto.lower()
         cases = {
-            'tcp': communityid.FlowTuple.make_tcp,
-            'udp': communityid.FlowTuple.make_udp,
-            'icmp': communityid.FlowTuple.make_icmp,
+            'tcp': aid_hash.FlowTuple.make_tcp,
+            'udp': aid_hash.FlowTuple.make_udp,
+            'icmp': aid_hash.FlowTuple.make_icmp,
         }
         try:
-            tpl = cases[proto](flow.saddr, flow.daddr, flow.sport, flow.dport)
-            return self.community_id.calc(tpl)
+            tpl = cases[proto](ts, flow.saddr, flow.daddr, flow.sport, flow.dport)
+            return self.aid.calc(tpl)
         except KeyError:
-            # proto doesn't have a community_id.FlowTuple  method
+            # proto doesn't have an aid.FlowTuple  method
             return ''
+
 
     def IDEA_format(
         self,
@@ -568,11 +579,12 @@ class Utils(object):
             try:
                 hostname = description.split('rDNS: ')[1]
             except IndexError:
-                pass
+                ...
             try:
                 hostname = description.split('SNI: ')[1]
             except IndexError:
                 pass
+
             if hostname:
                 IDEA_dict['Target'][0].update({'Hostname': [hostname]})
 

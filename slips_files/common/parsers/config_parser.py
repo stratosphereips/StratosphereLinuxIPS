@@ -2,7 +2,7 @@ from datetime import timedelta
 import sys
 import ipaddress
 import configparser
-from slips_files.common.argparse import ArgumentParser
+from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
 
 
@@ -517,6 +517,14 @@ class ConfigParser(object):
             'local_threat_intelligence_files',
             'modules/threat_intelligence/local_data_files/'
         )
+
+    def wait_for_TI_to_finish(self) -> bool:
+        wait = self.read_configuration(
+            'threatintelligence',
+            'wait_for_TI_to_finish',
+            'no'
+        )
+        return 'yes' in wait
 
 
     def remote_ti_data_path(self):

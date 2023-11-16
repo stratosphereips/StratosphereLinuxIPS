@@ -52,7 +52,7 @@ RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
 # Upgrade pip3 and install Slips requirements
 RUN pip3 install --upgrade pip
-RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
+RUN pip3 install -r ${SLIPS_DIR}/install/requirements.txt
 
 
 # manually install tensorflow==2.4.1
@@ -66,7 +66,7 @@ RUN cd StratosphereLinuxIPS && chmod 774 slips.py
 
 # Upgrade pip3 and install Slips requirements
 RUN pip3 install --upgrade pip
-RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
+RUN pip3 install -r ${SLIPS_DIR}/install/requirements.txt
 
 
 # For Kalipso:

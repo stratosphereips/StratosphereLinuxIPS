@@ -6,7 +6,7 @@ import json
 import requests
 from requests.auth import HTTPBasicAuth
 
-class RiskIQ(Module, multiprocessing.Process):
+class RiskIQ(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Risk IQ'
     description = 'Module to get passive DNS info about IPs from RiskIQ'

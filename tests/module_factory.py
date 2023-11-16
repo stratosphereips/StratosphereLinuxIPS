@@ -1,13 +1,12 @@
-import multiprocessing
-
 from slips import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
 from slips_files.core.database.database_manager import DBManager
-from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.profiler import Profiler
+from slips_files.core.output import Output
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 from modules.flowalerts.flowalerts import FlowAlerts
-from slips_files.core.inputProcess import InputProcess
+from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
 from modules.ip_info.ip_info import IPInfo
@@ -15,14 +14,19 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist import Whitelist
 from tests.common_test_utils import do_nothing
 from modules.virustotal.virustotal import VT
-from process_manager import ProcessManager
-from redis_manager import RedisManager
+from managers.process_manager import ProcessManager
+from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
-from multiprocessing import Queue, Event
+from multiprocessing import Queue, Event, Semaphore
+from slips_files.core.helpers.flow_handler import FlowHandler
+from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.arp.arp import ARP
 import shutil
-from unittest.mock import patch, Mock, MagicMock
+from unittest.mock import patch, Mock
 import os
+def do_nothing(*arg):
+    """Used to override the print function because using the self.print causes broken pipes"""
+    pass
 
 
 
@@ -42,10 +46,10 @@ def check_zeek_or_bro():
 class ModuleFactory:
     def __init__(self):
         # same db as in conftest
-        self.output_queue = Queue()
         self.profiler_queue = Queue()
         self.input_queue = Queue()
         self.dummy_termination_event = Event()
+        self.logger = Output()
 
 
     def get_default_db(self):
@@ -53,7 +57,7 @@ class ModuleFactory:
         return self.create_db_manager_obj(6379)
 
     def create_db_manager_obj(self, port, output_dir='output/', flush_db=False):
-        db = DBManager(output_dir, self.output_queue, port, flush_db=flush_db)
+        db = DBManager(self.logger, output_dir, port, flush_db=flush_db)
         db.r = db.rdb.r
         db.print = do_nothing
         assert db.get_used_redis_port() == port
@@ -71,7 +75,10 @@ class ModuleFactory:
 
     def create_http_analyzer_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            http_analyzer = HTTPAnalyzer(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            http_analyzer = HTTPAnalyzer(self.logger,
+                                         'dummy_output_dir',
+                                         6379,
+                                         self.dummy_termination_event)
             http_analyzer.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -80,7 +87,10 @@ class ModuleFactory:
 
     def create_virustotal_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            virustotal = VT(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            virustotal = VT(self.logger,
+                            'dummy_output_dir',
+                            6379,
+                            self.dummy_termination_event)
             virustotal.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -93,7 +103,11 @@ class ModuleFactory:
 
     def create_arp_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            arp = ARP(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            arp = ARP(self.logger,
+                      'dummy_output_dir',
+                      6379,
+                      self.dummy_termination_event
+                      )
             arp.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         arp.print = do_nothing
@@ -101,7 +115,10 @@ class ModuleFactory:
 
     def create_blocking_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            blocking = Blocking(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            blocking = Blocking(self.logger,
+                                'dummy_output_dir',
+                                6379,
+                                self.dummy_termination_event)
             blocking.db.rdb = mock_rdb
 
         # override the print function to avoid broken pipes
@@ -110,7 +127,10 @@ class ModuleFactory:
 
     def create_flowalerts_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            flowalerts = FlowAlerts(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            flowalerts = FlowAlerts(self.logger,
+                                    'dummy_output_dir',
+                                    6379,
+                                    self.dummy_termination_event)
             flowalerts.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -118,26 +138,29 @@ class ModuleFactory:
         return flowalerts
 
     def create_inputProcess_obj(
-            self, input_information, input_type, mock_rdb
+            self, input_information, input_type, mock_rdb, line_type=False
             ):
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
+        dummy_semaphore = Semaphore(0)
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            inputProcess = InputProcess(
-                self.output_queue,
-                'dummy_output_dir', 6379,
-                # 'output/',
+            inputProcess = Input(
+                Output(),
+                'dummy_output_dir',
+                6379,
                 self.dummy_termination_event,
+                is_input_done=dummy_semaphore,
                 profiler_queue=self.profiler_queue,
                 input_type=input_type,
                 input_information=input_information,
                 cli_packet_filter= None,
                 zeek_or_bro=check_zeek_or_bro(),
                 zeek_dir=zeek_tmp_dir,
-                line_type=False,
+                line_type=line_type,
+                is_profiler_done_event=self.dummy_termination_event,
             )
-            inputProcess.db.rdb = mock_rdb
-
+        inputProcess.db.rdb = mock_rdb
+        inputProcess.is_done_processing = do_nothing
         inputProcess.bro_timeout = 1
         # override the print function to avoid broken pipes
         inputProcess.print = do_nothing
@@ -149,7 +172,11 @@ class ModuleFactory:
 
     def create_ip_info_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            ip_info = IPInfo(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            ip_info = IPInfo(self.logger,
+                             'dummy_output_dir',
+                             6379,
+                             self.dummy_termination_event
+                             )
             ip_info.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         ip_info.print = do_nothing
@@ -165,7 +192,10 @@ class ModuleFactory:
         yara_rules_path = 'tests/yara_rules_for_testing/rules/'
         compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            leak_detector = LeakDetector(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            leak_detector = LeakDetector(self.logger,
+                                         'dummy_output_dir',
+                                         6379,
+                                         self.dummy_termination_event)
             leak_detector.db.rdb = mock_rdb
         # override the self.print function to avoid broken pipes
         leak_detector.print = do_nothing
@@ -176,12 +206,16 @@ class ModuleFactory:
         return leak_detector
 
 
-    def create_profilerProcess_obj(self):
-        profilerProcess = ProfilerProcess(
-            self.output_queue,
-            'output/', 6377,
+    def create_profiler_obj(self):
+        dummy_semaphore = Semaphore(0)
+        profilerProcess = Profiler(
+            self.logger,
+            'output/',
+            6379,
             self.dummy_termination_event,
+            is_profiler_done=dummy_semaphore,
             profiler_queue=self.input_queue,
+            is_profiler_done_event=self.dummy_termination_event,
         )
 
         # override the self.print function to avoid broken pipes
@@ -200,7 +234,10 @@ class ModuleFactory:
 
     def create_threatintel_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            threatintel = ThreatIntel(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            threatintel = ThreatIntel(self.logger,
+                                      'dummy_output_dir',
+                                      6379,
+                                      self.dummy_termination_event)
             threatintel.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -209,7 +246,11 @@ class ModuleFactory:
 
     def create_update_manager_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            update_manager = UpdateManager(self.output_queue, 'dummy_output_dir', 6379, self.dummy_termination_event)
+            update_manager = UpdateManager(self.logger,
+                                           'dummy_output_dir',
+                                           6379,
+                                           self.dummy_termination_event)
+
             update_manager.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -218,7 +259,7 @@ class ModuleFactory:
 
     def create_whitelist_obj(self, mock_rdb):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            whitelist = Whitelist(self.output_queue, mock_rdb)
+            whitelist = Whitelist(self.logger, mock_rdb)
             whitelist.db.rdb = mock_rdb
 
         # override the self.print function to avoid broken pipes
@@ -226,3 +267,9 @@ class ModuleFactory:
         whitelist.whitelist_path = 'tests/test_whitelist.conf'
         return whitelist
 
+
+    def create_flow_handler_obj(self, flow ,mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            symbol = SymbolHandler(self.logger, mock_rdb)
+            flow_handler = FlowHandler(mock_rdb, symbol, flow)
+            return flow_handler

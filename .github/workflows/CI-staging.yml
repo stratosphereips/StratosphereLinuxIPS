@@ -36,8 +36,6 @@ jobs:
             - name: Run database unit tests
               run: python3  -m pytest tests/test_database.py -p no:warnings -vv
 
-            - name: Run daemon unit tests
-              run: python3  -m pytest tests/test_daemon.py -p no:warnings -vv
 
             - name: Clear redis cache
               run: ./slips.py -cc

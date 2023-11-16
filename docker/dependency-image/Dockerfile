@@ -63,11 +63,11 @@ RUN apt update && apt install -y --no-install-recommends \
 # you should build the image using
 # docker build --no-cache -t slips_dependencies -f docker/dependency-image/Dockerfile .
 # or this step won't be able to find requirements.txt
-COPY requirements.txt ${SLIPS_DIR}/
+COPY install/requirements.txt ${SLIPS_DIR}/
 
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir -r ${SLIPS_DIR}/requirements.txt
+RUN pip3 install --no-cache-dir -r ${SLIPS_DIR}/install/requirements.txt
 
 
 CMD redis-server --daemonize yes && /bin/bash

@@ -1,5 +1,5 @@
 <h1 align="center"> 
-Slips v1.0.7
+Slips v1.0.8
 </h1>
 
 [Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](https://stratospherelinuxips.readthedocs.io/en/develop/features.html) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
@@ -290,7 +290,7 @@ We recommend using [Conda](https://docs.conda.io/en/latest/) for the Python envi
 
 There's also a pip requirements.txt for pip users:
     
-    pip3 install -r requirements.txt
+    pip3 install -r install/requirements.txt
 
 ### Installing Zeek for pcap analysis
 

@@ -1,6 +1,7 @@
 from slips_files.common.imports import *
 import ipaddress
 
+
 class HorizontalPortscan():
     def __init__(self, db):
         self.db = db
@@ -17,16 +18,6 @@ class HorizontalPortscan():
         # we should alert once we find 1 horizontal ps evidence then combine the rest of evidence every x seconds
         # format is { scanned_port: True/False , ...}
         self.alerted_once_horizontal_ps = {}
-
-    def calculate_confidence(self, pkts_sent):
-        if pkts_sent > 10:
-            confidence = 1
-        elif pkts_sent == 0:
-            return 0.3
-        else:
-            # Between threshold and 10 pkts compute a kind of linear grow
-            confidence = pkts_sent / 10.0
-        return confidence
 
     def combine_evidence(self):
         """
@@ -101,82 +92,87 @@ class HorizontalPortscan():
         direction = 'Dst'
         role = 'Client'
         type_data = 'Ports'
-        for state in ('Established', 'Not Established'):
-            for protocol in ('TCP', 'UDP'):
-                dports = self.db.getDataFromProfileTW(
-                    profileid, twid, direction, state, protocol, role, type_data
-                )
+        # if you're portscaning a port that is open it's gonna be established
+        # the amount of open ports we find is gonna be so small
+        # theoretically this is incorrect bc we'll be ignoring established evidence,
+        # but usually open ports are very few compared to the whole range
+        # so, practically this is correct to avoid FP
+        state = 'Not Established'
+        for protocol in ('TCP', 'UDP'):
+            dports = self.db.getDataFromProfileTW(
+                profileid, twid, direction, state, protocol, role, type_data
+            )
 
-                # For each port, see if the amount is over the threshold
-                for dport in dports.keys():
-                    # PortScan Type 2. Direction OUT
-                    dstips: dict = dports[dport]['dstips']
+            # For each port, see if the amount is over the threshold
+            for dport in dports.keys():
+                # PortScan Type 2. Direction OUT
+                dstips: dict = dports[dport]['dstips']
 
-                    # remove the resolved dstips from dstips dict
-                    for ip in self.get_resolved_ips(dstips):
-                        dstips.pop(ip)
+                # remove the resolved dstips from dstips dict
+                for ip in self.get_resolved_ips(dstips):
+                    dstips.pop(ip)
 
-                    amount_of_dips = len(dstips)
-                    # If we contacted more than 3 dst IPs on this port with not established
-                    # connections, we have evidence.
+                amount_of_dips = len(dstips)
+                # If we contacted more than 3 dst IPs on this port with not established
+                # connections, we have evidence.
 
-                    cache_key = f'{profileid}:{twid}:dport:{dport}:HorizontalPortscan'
-                    prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
-                    # We detect a scan every Threshold. So, if the threshold is 3,
-                    # we detect when there are 3, 6, 9, 12, etc. dips per port.
+                cache_key = f'{profileid}:{twid}:dport:{dport}:HorizontalPortscan'
+                prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
+                # We detect a scan every Threshold. So, if the threshold is 3,
+                # we detect when there are 3, 6, 9, 12, etc. dips per port.
 
-                    # we make sure the amount of dstips reported each evidence is higher than the previous one +5
-                    # so the first alert will always report 5 dstips, and then 10+,15+,20+ etc
-                    # the goal is to never get an evidence that's 1 or 2 ports more than the previous one so we dont
-                    # have so many portscan evidence
-                    if (
-                        amount_of_dips >= self.port_scan_minimum_dips
-                        and prev_amount_dips + 5 <= amount_of_dips
-                    ):
-                        # Get the total amount of pkts sent to the same port from all IPs
-                        pkts_sent = 0
-                        for dip in dstips:
-                            if 'spkts' not in dstips[dip]:
-                                # In argus files there are no src pkts, only pkts.
-                                # So it is better to have the total pkts than to have no packets count
-                                pkts_sent += int(dstips[dip]["pkts"])
-                            else:
-                                pkts_sent += int(dstips[dip]["spkts"])
-
-                        uids: list = get_uids()
-                        timestamp = next(iter(dstips.values()))['stime']
-
-                        self.cache_det_thresholds[cache_key] = amount_of_dips
-
-                        if not self.alerted_once_horizontal_ps.get(cache_key, False):
-                            #  from now on, we will be combining the next horizontal ps evidence targeting this
-                            # dport
-                            self.alerted_once_horizontal_ps[cache_key] = True
-                            self.set_evidence_horizontal_portscan(
-                                timestamp,
-                                pkts_sent,
-                                protocol,
-                                profileid,
-                                twid,
-                                uids,
-                                dport,
-                                amount_of_dips
-                            )
+                # we make sure the amount of dstips reported each evidence is higher than the previous one +5
+                # so the first alert will always report 5 dstips, and then 10+,15+,20+ etc
+                # the goal is to never get an evidence that's 1 or 2 ports more than the previous one so we dont
+                # have so many portscan evidence
+                if (
+                    amount_of_dips >= self.port_scan_minimum_dips
+                    and prev_amount_dips + 5 <= amount_of_dips
+                ):
+                    # Get the total amount of pkts sent to the same port from all IPs
+                    pkts_sent = 0
+                    for dip in dstips:
+                        if 'spkts' not in dstips[dip]:
+                            # In argus files there are no src pkts, only pkts.
+                            # So it is better to have the total pkts than to have no packets count
+                            pkts_sent += int(dstips[dip]["pkts"])
                         else:
-                            # we will be combining further alerts to avoid alerting many times every portscan
-                            evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
-                            # for all the combined alerts, the following params should be equal
-                            key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
+                            pkts_sent += int(dstips[dip]["spkts"])
 
-                            try:
-                                self.pending_horizontal_ps_evidence[key].append(evidence_details)
-                            except KeyError:
-                                # first time seeing this key
-                                self.pending_horizontal_ps_evidence[key] = [evidence_details]
+                    uids: list = get_uids()
+                    timestamp = next(iter(dstips.values()))['stime']
 
-                            # combine evidence every 3 new portscans to the same dport
-                            if len(self.pending_horizontal_ps_evidence[key]) == 3:
-                                self.combine_evidence()
+                    self.cache_det_thresholds[cache_key] = amount_of_dips
+
+                    if not self.alerted_once_horizontal_ps.get(cache_key, False):
+                        #  from now on, we will be combining the next horizontal ps evidence targeting this
+                        # dport
+                        self.alerted_once_horizontal_ps[cache_key] = True
+                        self.set_evidence_horizontal_portscan(
+                            timestamp,
+                            pkts_sent,
+                            protocol,
+                            profileid,
+                            twid,
+                            uids,
+                            dport,
+                            amount_of_dips
+                        )
+                    else:
+                        # we will be combining further alerts to avoid alerting many times every portscan
+                        evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
+                        # for all the combined alerts, the following params should be equal
+                        key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
+
+                        try:
+                            self.pending_horizontal_ps_evidence[key].append(evidence_details)
+                        except KeyError:
+                            # first time seeing this key
+                            self.pending_horizontal_ps_evidence[key] = [evidence_details]
+
+                        # combine evidence every 3 new portscans to the same dport
+                        if len(self.pending_horizontal_ps_evidence[key]) == 3:
+                            self.combine_evidence()
 
     def set_evidence_horizontal_portscan(
             self,
@@ -194,12 +190,12 @@ class HorizontalPortscan():
         source_target_tag = 'Recon'
         srcip = profileid.split('_')[-1]
         attacker = srcip
-        threat_level = 'medium'
+        threat_level = 'high'
         category = 'Recon.Scanning'
         portproto = f'{dport}/{protocol}'
         port_info = self.db.get_port_info(portproto)
         port_info = port_info or ""
-        confidence = self.calculate_confidence(pkts_sent)
+        confidence = utils.calculate_confidence(pkts_sent)
         description = (
             f'horizontal port scan to port {port_info} {portproto}. '
             f'From {srcip} to {amount_of_dips} unique dst IPs. '

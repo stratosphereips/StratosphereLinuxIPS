@@ -38,8 +38,6 @@ has_net_admin_cap = pytest.mark.skipif(
 )
 
 
-
-
 @linuxOS
 @isroot
 @has_net_admin_cap
@@ -56,12 +54,12 @@ def is_slipschain_initialized() -> bool:
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_initialize_chains_in_firewall(output_queue):
+def test_initialize_chains_in_firewall():
     blocking = ModuleFactory().create_blocking_obj()
     # manually set the firewall
     blocking.firewall = 'iptables'
     blocking.initialize_chains_in_firewall()
-    assert is_slipschain_initialized(output_queue) is True
+    assert is_slipschain_initialized() is True
 
 
 # todo
