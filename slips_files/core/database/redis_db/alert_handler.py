@@ -34,7 +34,9 @@ class AlertHandler:
             profileid_twid_alerts = json.dumps(alert)
 
 
-        self.r.hset(f'{profileid}{self.separator}{twid}', 'alerts', profileid_twid_alerts)
+        self.r.hset(f'{profileid}{self.separator}{twid}',
+                    'alerts',
+                    profileid_twid_alerts)
 
         # the structure of alerts key is
         # alerts {
@@ -47,7 +49,8 @@ class AlertHandler:
         # }
 
         profile_alerts = self.r.hget('alerts', profileid)
-        # alert ids look like this profile_192.168.131.2_timewindow1_92a3b9c2-330b-47ab-b73e-c5380af90439
+        # alert ids look like this
+        # profile_192.168.131.2_timewindow1_92a3b9c2-330b-47ab-b73e-c5380af90439
         alert_hash = alert_ID.split('_')[-1]
         alert = {
             twid: {
@@ -394,9 +397,11 @@ class AlertHandler:
             evidence = self.remove_whitelisted_evidence(evidence)
         return evidence
 
-    def update_threat_level(self, profileid, threat_level: str, confidence):
+    def update_threat_level(self, profileid: str, threat_level: str, confidence: int):
         """
         Update the threat level of a certain profile
+        Updates the profileid key and the IPsInfo key with the
+         new score and confidence of this profile
         :param threat_level: available options are 'low', 'medium' 'critical' etc
         """
 
@@ -430,7 +435,8 @@ class AlertHandler:
         past_threat_levels = json.dumps(past_threat_levels)
         self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
 
-        # set the score and confidence of the given ip in the db when it causes an evidence
+        # set the score and confidence of the given ip in the db
+        # when it causes an evidence
         # these 2 values will be needed when sharing with peers
         ip = profileid.split('_')[-1]
         # get the numerical value of this threat level
