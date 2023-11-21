@@ -1599,8 +1599,10 @@ class ProfileHandler(IObservable):
             # For now duration of the TW is fixed
             self.r.hset(profileid, 'duration', duration)
             # When a new profiled is created assign threat level = 0 and confidence = 0.05
-            self.r.hset(profileid, 'threat_level', 0)
-            self.r.hset(profileid, 'confidence', 0.05)
+            # self.r.hset(profileid, 'threat_level', 0)
+            confidence = 0.05
+            self.update_threat_level(profileid, 'info', confidence)
+            self.r.hset(profileid, 'confidence', confidence)
             # The IP of the profile should also be added as a new IP we know about.
             ip = profileid.split(self.separator)[1]
             # If the ip is new add it to the list of ips

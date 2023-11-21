@@ -531,6 +531,7 @@ class Evidence(ICore):
         return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
 
     def label_flows_causing_alert(self):
+        #todo should be moved to the db
         """Add the label "malicious" to all flows causing this alert in our db """
         for evidence_id in self.IDs_causing_an_alert:
             uids: list = self.db.get_flows_causing_evidence(evidence_id)
@@ -548,13 +549,20 @@ class Evidence(ICore):
             alert_ID,
             self.IDs_causing_an_alert
         )
+        # when an alert is generated , we should set the threat level of the
+        # attacker's profile to 1(critical) and confidence 1
+        # so that it gets reported to other peers with these numbers
+        self.db.update_threat_level(profileid, 'critical', 1)
+
         alert_details = {
             'alert_ID': alert_ID,
             'profileid': profileid,
             'twid': twid,
         }
         self.db.publish('new_alert', json.dumps(alert_details))
-        #store the alerts in the alerts table
+
+
+        #store the alerts in the alerts table in sqlite db
         alert_details.update(
             {'time_detected': utils.convert_format(datetime.now(), 'unixtimestamp'),
              'label': 'malicious'})
