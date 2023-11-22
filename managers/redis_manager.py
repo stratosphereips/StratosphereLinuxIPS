@@ -7,7 +7,9 @@ import socket
 import subprocess
 from typing import Dict, Union
 
+from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
+from slips_files.core.database.database_manager import DBManager
 
 
 
@@ -299,7 +301,7 @@ class RedisManager:
         return open_servers
 
 
-    def get_port_of_redis_server(self, pid: int) -> Union[int, False]:
+    def get_port_of_redis_server(self, pid: int) -> Union[int, bool]:
         """
         returns the port of the redis running on this pid
         """
@@ -331,35 +333,30 @@ class RedisManager:
         if not port and not pid:
             return False
 
-        # sometimes the redis port is given, no need to get it manually
-        if not port and pid:
+        # sometimes the redis port is given, get it manually
+        if pid:
             if not hasattr(self, 'open_servers_PIDs'):
                 self.get_open_redis_servers()
 
-            port = self.open_servers_pids.get(pid, False)
+            port: int = self.open_servers_pids.get(pid, False)
             if not port:
                 # try to get the port using a cmd
                 port: int = self.get_port_of_redis_server(pid)
                 if not port:
                     return False
 
-
         # clear the server opened on this port
         try:
-            #todo move this to the db
-            r = redis.StrictRedis(
-                    host='localhost',
-                    port=port,
-                    db=0,
-                    charset='utf-8',
-                    socket_keepalive=True,
-                    decode_responses=True,
-                    retry_on_timeout=True,
-                    health_check_interval=20,
-                    )
-            r.flushall()
-            r.flushdb()
-            r.script_flush()
+            db = DBManager(
+                Output(),
+                self.main.args.output,
+                port,
+                start_sqlite=False,
+                start_redis_server=False
+            )
+            db.rdb.r.flushall()
+            db.rdb.r.flushdb()
+            db.rdb.r.script_flush()
             return True
         except redis.exceptions.ConnectionError:
             # server already killed!

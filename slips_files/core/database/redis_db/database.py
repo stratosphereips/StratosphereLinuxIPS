@@ -97,13 +97,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     # to keep track of connection retries. once it reaches max_retries, slips will terminate
     connection_retry = 0
 
-    def __new__(cls, logger, redis_port, flush_db=True):
+    def __new__(
+            cls,
+            logger,
+            redis_port,
+            start_redis_server=True,
+            flush_db=True
+            ):
         """
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
         """
         cls.redis_port = redis_port
         cls.flush_db = flush_db
+        # start the redis server using cli if it's not started?
+        cls.start_server = start_redis_server
+
         if cls.redis_port not in cls._instances:
             cls._instances[cls.redis_port] = super().__new__(cls)
             cls._set_redis_options()
@@ -206,48 +215,50 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             print(f"[DB] Can't connect to redis on port {cls.redis_port}: {ex}")
             return False
 
-    @classmethod
-    def connect_to_redis_server(cls):
-        """Connects to the given port and Sets r and rcache"""
-        # start the redis server
-        os.system(
-            f'redis-server {cls._conf_file} --port {cls.redis_port}  > /dev/null 2>&1'
-        )
-        try:
-            # db 0 changes everytime we run slips
-            # set health_check_interval to avoid redis ConnectionReset errors:
-            # if the connection is idle for more than 30 seconds,
-            # a round trip PING/PONG will be attempted before next redis cmd.
-            # If the PING/PONG fails, the connection will reestablished
+    @staticmethod
+    def start_redis_instance(port: int, db: int) -> redis.StrictRedis:
+        # set health_check_interval to avoid redis ConnectionReset errors:
+        # if the connection is idle for more than 30 seconds,
+        # a round trip PING/PONG will be attempted before next redis cmd.
+        # If the PING/PONG fails, the connection will re-established
 
-            # retry_on_timeout=True after the command times out, it will be retried once,
-            # if the retry is successful, it will return normally; if it fails, an exception will be thrown
-            cls.r = redis.StrictRedis(
+        # retry_on_timeout=True after the command times out, it will be retried once,
+        # if the retry is successful, it will return normally; if it fails, an exception will be thrown
+
+        return redis.StrictRedis(
                 host='localhost',
-                port=cls.redis_port,
-                db=0,
+                port=port,
+                db=db,
                 charset='utf-8',
                 socket_keepalive=True,
                 decode_responses=True,
                 retry_on_timeout=True,
                 health_check_interval=20,
-            )  # password='password')
+        )
+
+    @classmethod
+    def connect_to_redis_server(cls):
+        """
+        Connects to the given port and Sets r and rcache
+        """
+        if cls.start_server:
+            #  starts the redis server using cli. we don't need that when using -k
+            os.system(
+                f'redis-server {cls._conf_file} --port {cls.redis_port}  > /dev/null 2>&1'
+            )
+        try:
+            # db 0 changes everytime we run slips
+            cls.r = cls.start_redis_instance(cls.redis_port, 0)
+
             # port 6379 db 0 is cache, delete it using -cc flag
-            cls.rcache = redis.StrictRedis(
-                host='localhost',
-                port=6379,
-                db=1,
-                charset='utf-8',
-                socket_keepalive=True,
-                retry_on_timeout=True,
-                decode_responses=True,
-                health_check_interval=30,
-            )  # password='password')
+            cls.rcache = cls.start_redis_instance(6379, 1)
+
+            # fix  ConnectionRefused error by giving redis time to open
+            time.sleep(1)
+
             # the connection to redis is only established
             # when you try to execute a command on the server.
             # so make sure it's established first
-            # fix  ConnectionRefused error by giving redis time to open
-            time.sleep(1)
             cls.r.client_list()
             return True
         except redis.exceptions.ConnectionError:

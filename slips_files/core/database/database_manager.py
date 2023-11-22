@@ -17,6 +17,7 @@ class DBManager(IObservable):
             output_dir,
             redis_port,
             start_sqlite=True,
+            start_redis_server=True,
             **kwargs
     ):
         self.output_dir = output_dir
