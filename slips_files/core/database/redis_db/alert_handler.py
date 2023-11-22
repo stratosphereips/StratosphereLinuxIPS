@@ -1,7 +1,8 @@
-from slips_files.common.slips_utils import utils
 import time
 import json
 from uuid import uuid4
+
+from slips_files.common.slips_utils import utils
 
 class AlertHandler:
     """
