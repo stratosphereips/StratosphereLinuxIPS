@@ -19,7 +19,7 @@ class RedisManager:
     def get_start_port(self):
         return self.start_port
 
-    def log_redis_server_PID(self, redis_port, redis_pid):
+    def log_redis_server_PID(self, redis_port: int, redis_pid: int):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         try:
             # used in case we need to remove the line using 6379 from running logfile
@@ -54,7 +54,7 @@ class RedisManager:
         # we shouldn't modify it as root
 
         self.main.input_information = os.path.basename(self.main.args.db)
-        redis_pid = self.get_pid_of_redis_server(redis_port)
+        redis_pid: int = self.get_pid_of_redis_server(redis_port)
         self.zeek_folder = '""'
         self.log_redis_server_PID(redis_port, redis_pid)
         self.remove_old_logline(redis_port)
@@ -192,7 +192,25 @@ class RedisManager:
         self.main.terminate_slips()
         return
 
-    def get_pid_of_redis_server(self, port: int) -> str:
+
+    def check_if_port_is_in_use(self, port: int) -> bool:
+        if port == 6379:
+            # even if it's already in use, slips should override it
+            return False
+
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("localhost", port))
+            return False
+        except OSError as e:
+            print(f"[Main] Port {port} is already in use by another process."
+                  f" Choose another port using -P <portnumber> \n"
+                  f"Or kill your open redis ports using: ./slips.py -k ")
+            self.main.terminate_slips()
+            return True
+
+
+    def get_pid_of_redis_server(self, port: int) -> int:
         """
         Gets the pid of the redis server running on this port
         Returns str(port) or false if there's no redis-server running on this port
@@ -204,6 +222,7 @@ class RedisManager:
             if str(port).encode() in line:
                 pid = line.split()[1]
                 return pid
+
         return False
 
     def get_open_redis_servers(self) -> dict:
@@ -284,7 +303,7 @@ class RedisManager:
         """
         Flush the redis server on this pid, only 1 param should be given, pid or port
         :param pid: can be False if port is given
-        Gets the pid of the port is not given
+        Gets the pid of the port if not given
         """
         if not port and not pid:
             return False
@@ -404,10 +423,18 @@ class RedisManager:
             if not open_servers:
                 self.main.terminate_slips()
 
-            server_to_close = input()
+            try:
+                server_to_close: str = int(input())
+            except ValueError:
+                print(f"Invalid input {server_to_close}")
+                self.main.terminate_slips()
+
+
             # close all ports in running_slips_logs.txt and in our supported range
-            if server_to_close == '0':
+            if server_to_close == 0:
                 self.close_all_ports()
+                self.main.terminate_slips()
+                return
 
             elif len(open_servers) > 0:
                 # close the given server number

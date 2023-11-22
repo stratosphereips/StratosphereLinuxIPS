@@ -557,7 +557,7 @@ class Main(IObservable):
             if self.args.port:
                 self.redis_port = int(self.args.port)
                 # close slips if port is in use
-                self.metadata_man.check_if_port_is_in_use(self.redis_port)
+                self.redis_man.check_if_port_is_in_use(self.redis_port)
             elif self.args.multiinstance:
                 self.redis_port = self.redis_man.get_random_redis_port()
                 if not self.redis_port:
