@@ -2,18 +2,79 @@
 
 There are two ways to install and run Slips: inside a Docker or in your own computer. We suggest to install and to run Slips inside a Docker since all dependencies are already installed in there. However, current version of docker with Slips does not allow to capture the traffic from the computer's interface. We will describe both ways of installation anyway. 
 
-## Slips in Docker.
 
-Slips can be run inside a Docker. There is a prepared docker image with Slips available in DockerHub and it is also possible to build a docker with Slips locally from the Dockerfile. But in both cases, you have to have the Docker platform installed in your computer. Instructions how to install Docker is https://docs.docker.com/get-docker/.
 
-### Running Slips from DockerHub
+# Table of Contents
+
+* [Docker](#slips-in-docker)
+  * Dockerhub (recommended)
+    * On a linux host
+      * With P2P support
+      * Without P2P support
+
+    * On MacOS M1 host
+      * With P2P support
+      * Without P2P support
+    
+    * On MacOS (non-M1 processor)
+      * With P2P support
+      * Without P2P support
+  * [Docker-compose](#running-slips-using-docker-compose)
+  * [Dockerfile](#building-slips-from-the-dockerfile)
+* Native
+  * [Using install.sh](#install-using-shell-script)
+  * [Manually](#installing-manually)
+* [on RPI (Beta)](#installing-slips-on-a-raspberry-pi)
+
+
+
+## Slips in Docker
+
+Slips can be run inside a Docker. Either using our docker image with from DockerHub (recommended)
+or building Slips image from the Dockerfile for more advanced users.
+
+In both cases, you need to have the Docker platform installed in your computer.
+Instructions how to install Docker is https://docs.docker.com/get-docker/.
+
+The recommended way of using slips would be to
+* [Run Slips from Dockerhub](#Running-Slips-from-DockerHub)
+
+For more advanced users, you can:
+* [Run Slips using docker compose](#Running-Slips-using-docker-compose)
+* [Build Slips using the dockerfile](#Running-Slips-using-the-dockerfile)
+
+
+#### Running Slips from DockerHub
+
+1. First, choose the correct image for your architecture
+#####  For linux
+
+    docker run -it --rm --net=host stratosphereips/slips:latest
+
+#####  For MacOS M1
+
+    docker run -it --rm --net=host stratosphereips/slips_macos_m1:latest
+
+
+#####  For p2p support on Linux or MacOS non-M1 architecture
+
+    docker run -it --rm --net=host stratosphereips/slips_p2p:latest
+
+
+Once your image is ready, you can run slips using the following command:
+
+    ./slips.py -f dataset/dataset/test7-malicious.pcap
+
+To analyze a your own file using slips, you can mount it to your docker using -v
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
 	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
-	./slips.py -c config/slips.conf -r dataset/myfile.pcap
+	./slips.py -f dataset/myfile.pcap
 
-### Running Slips using docker compose
+---
+
+#### Running Slips using docker compose
 
 
 Change enp1s0 to your current interface in docker/docker-compose.yml and start slips using
@@ -31,13 +92,50 @@ To run slips on a pcap instead of your interface you can do the following:
 3. restart slips using ```docker compose -f docker/docker-compose.yml up```
 
 
-### Building Slips from the Dockerfile
+---
+
+#### Building Slips from the Dockerfile
+
+
+First, you need to check which image is suitable for your architecture.
+
+```mermaid
+graph TD;
+    MacOS[MacOS] --> |M1| p2p_m1
+    p2p_m1 --> |yes| macosm1-P2P-image
+    p2p_m1 --> |no| macosm1-image
+
+    MacOS --> |Other Processor| p2p_other_processor
+    p2p_other_processor --> |yes| macos_other_processor_p2p
+    p2p_other_processor --> |no| macos_other_processor_nop2p
+
+    Windows --> linux_p2p
+    Linux --> linux_p2p
+    linux_p2p --> |yes| linux_p2p_image
+    linux_p2p --> |no| slips_image
+    
+    
+    p2p_other_processor{P2P Support}
+    linux_p2p_image[P2p-image]
+    
+    p2p_m1{P2P Support}
+    slips_image[ubuntu-image]
+
+    macos_other_processor_p2p[P2p-image]
+    macos_other_processor_nop2p[ubuntu-image]
+
+    linux_p2p{P2P Support}
+
+```
+
 
 Before building the docker locally from the Dockerfile, first you should clone Slips repo or download the code directly: 
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
 If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
+
+**NOTE: replace ubuntu-image with the image that fits your archiecture**
 
 	cd ~/code/StratosphereLinuxIPS/docker/ubunutu-image
 	docker build --no-cache -t slips -f Dockerfile .
@@ -52,14 +150,16 @@ You can also put your own files in the /dataset/ folder and analyze them with Sl
 
 	cp some-pcap-file.pcap ~/code/StratosphereLinuxIPS/dataset
 	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
-	./slips.py -c config/slips.conf -f dataset/some-pcap-file.pcap
+	./slips.py -f dataset/some-pcap-file.pcap
 
 
 Note that some GPUs don't support tensorflow in docker which may cause "Illegal instruction" errors when running slips.
 
 To fix this you can disable all machine learning based modules when running Slips in docker, or run Slips locally.
 
-## Installing Slips in your own computer.
+---
+
+## Installing Slips natively
 
 Slips is dependent on three major elements: 
 
@@ -67,21 +167,24 @@ Python 3.8
 Zeek
 Redis database 7.0.4
 
-To install these elements we will use APT package manager. Afterwards, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages. 
+To install these elements we will use APT package manager. After that, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages. 
+
+
+
 
 **Instructions to download everything for Slips are below.**
 <br>
 
-## Install using shell script
+### Install Slips using shell script
 You can install it using install.sh
 
 	sudo chmod +x install.sh
 	sudo ./install.sh
-	
-or install it manually
 
-## Installing manually
-### Installing Python, Redis, NodeJs, and required python and npm libraries.
+
+### Installing Slips manually
+#### Installing Python, Redis, NodeJs, and required python and npm libraries.
+
 Update the repository of packages so you see the latest versions:
 
 	apt-get update
@@ -106,7 +209,7 @@ As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs v19. 
     curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
     cd modules/kalipso &&  npm install
 
-###  Installing Zeek
+####  Installing Zeek
 
 The last requirement to run Slips is Zeek. Zeek is not directly available on Ubuntu or Debian. To install it, we will first add the repository source to our apt package manager source list. The following two commands are for Ubuntu, check the repositories for the correct version if you are using a different OS:
 
@@ -125,7 +228,7 @@ To make sure that zeek can be found in the system we will add its link to a know
 
 	ln -s /opt/zeek/bin/zeek /usr/local/bin
 
-### Running Slips for the First Time
+#### Running Slips for the First Time
 
 
 Once Redis is running it’s time to clone the Slips repository and run it:
@@ -134,32 +237,15 @@ Once Redis is running it’s time to clone the Slips repository and run it:
 	cd StratosphereLinuxIPS/
 	./slips.py -c config/slips.conf -f dataset/test7-malicious.pcap
 
-Run slips with sudo to enable blocking (Optional) 
+You need to run slips with sudo to enable blocking (Optional) 
 
-
-## Running Slips from Docker with P2P support
-You can use Slips with P2P directly in a special docker image by doing:
-
-```
-docker pull stratosphereips/slips_p2p
-docker run -it --rm --net=host stratosphereips/slips_p2p
-```
-
-## Build Slips in Docker with P2P support
-
-git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-
-If you cloned Slips in '~/StratosphereLinuxIPS', make sufe you are in slips root directory, then you can build the Docker image with P2P installed using:
-
-	cd ~/StratosphereLinuxIPS/
-	docker build --network=host --no-cache -t slips_p2p -f docker/P2P-image/Dockerfile .
-	docker run -it --rm --net=host slips_p2p
-
-Now you can edit config/slips.conf to enable p2p. [usage instructions here](https://stratospherelinuxips.readthedocs.io/en/develop/p2p.html#usage). then run Slips using your interface:
-
-	./slips.py -i wlp3s0
 
 ## Installing Slips on a Raspberry PI
+
+Slips on RPI is currently in beta and is actively under development. 
+While it is functional, please be aware that there may be occasional bugs or changes in functionality as we work to 
+improve and refine this feature. Your feedback and contributions are highly valuable during this stage!
+
 
 Instead of compiling zeek, you can grab the zeek binaries for your OS
 
