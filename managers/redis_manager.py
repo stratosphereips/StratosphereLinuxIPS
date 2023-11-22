@@ -28,7 +28,7 @@ class RedisManager:
                 if f.tell() == 0:
                     f.write(
                         '# This file contains a list of used redis ports.\n'
-                        '# Once a server is killed, it will be removed from this file.\n'
+                        '# Once a server is killed, it will be removed from this file.\n\n'
                         'Date, File or interface, Used port, Server PID,'
                         ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
                     )
@@ -87,7 +87,7 @@ class RedisManager:
 
     def get_end_port(self):
         return self.end_port
-    
+
     def check_redis_database(
         self, redis_host='localhost', redis_port=6379
     ) -> bool:
@@ -145,7 +145,7 @@ class RedisManager:
                "Unable to start slips.\n")
 
         return False
-    
+
     def clear_redis_cache_database(
         self, redis_host='localhost', redis_port=6379
     ) -> bool:
@@ -161,7 +161,7 @@ class RedisManager:
         )
         rcache.flushdb()
         return True
-    
+
     def close_all_ports(self):
         """
         Closes all the redis ports  in logfile and in slips supported range of ports
@@ -219,8 +219,10 @@ class RedisManager:
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         cmd_output, _ = process.communicate()
         for line in cmd_output.splitlines():
-            if str(port).encode() in line:
-                pid = line.split()[1]
+            line: bytes
+            line: str = line.decode()
+            if str(port) in line:
+                pid: int = int(line.split()[1])
                 return pid
 
         return False
@@ -272,7 +274,7 @@ class RedisManager:
                     file, port, pid = line[1], line[2], line[3]
                     there_are_ports_to_print = True
                     to_print += f"[{line_number}] {file} - port {port}\n"
-                    open_servers[line_number] = (port, pid)
+                    open_servers[line_number] = (int(port), int(pid))
         except FileNotFoundError:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
             return False
@@ -371,7 +373,7 @@ class RedisManager:
             # opened without root while he's root
             return False
         return True
-    
+
     def remove_old_logline(self, redis_port):
         """
         This function should be called after adding a new duplicate line with redis_port
@@ -436,19 +438,21 @@ class RedisManager:
                 self.main.terminate_slips()
                 return
 
-            elif len(open_servers) > 0:
-                # close the given server number
-                try:
-                    pid = open_servers[int(server_to_close)][1]
-                    port = open_servers[int(server_to_close)][0]
-                    if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
-                        print(f"Killed redis server on port {port}.")
-                    else:
-                        print(f"Redis server running on port {port} "
-                              f"is either already killed or you don't have "
-                              f"enough permission to kill it.")
-                    self.remove_server_from_log(port)
-                except (KeyError, ValueError):
-                    print(f"Invalid input {server_to_close}")
+            # close the given server number
+            try:
+                pid: int = open_servers[int(server_to_close)][1]
+                port: int = open_servers[int(server_to_close)][0]
+
+                if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
+                    print(f"Killed redis server on port {port}.")
+                else:
+                    # if you dont have permission, dont removei from logs
+                    print(f"Redis server running on port {port} "
+                          f"is either already killed or you don't have "
+                          f"permission to kill it.")
+
+                self.remove_server_from_log(port)
+            except (KeyError, ValueError):
+                print(f"Invalid input {server_to_close}")
 
         self.main.terminate_slips()
