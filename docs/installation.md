@@ -9,16 +9,15 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 * [Docker](#slips-in-docker)
   * Dockerhub (recommended)
     * On a linux host
-      * With P2P support
-      * Without P2P support
+      * Without P2P support #TODO
+      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux-or-macos-non-m1-architecture)
 
     * On MacOS M1 host
-      * With P2P support
-      * Without P2P support
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
     
     * On MacOS (non-M1 processor)
-      * With P2P support
-      * Without P2P support
+      * Without P2P support #TODO
+      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux-or-macos-non-m1-architecture)
   * [Docker-compose](#running-slips-using-docker-compose)
   * [Dockerfile](#building-slips-from-the-dockerfile)
 * Native
@@ -47,7 +46,8 @@ For more advanced users, you can:
 #### Running Slips from DockerHub
 
 1. First, choose the correct image for your architecture
-#####  For linux
+
+#####  For linux and MacOS non-m1 processors
 
     docker run -it --rm --net=host stratosphereips/slips:latest
 
