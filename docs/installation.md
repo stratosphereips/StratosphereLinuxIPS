@@ -9,20 +9,20 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 * [Docker](#slips-in-docker)
   * Dockerhub (recommended)
     * On a linux host
-      * Without P2P support #TODO
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux-or-macos-non-m1-architecture)
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors)
+      * [With P2P support](#for-p2p-support-on-linux-or-macos-non-m1-architecture)
 
     * On MacOS M1 host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
+      * [Without P2P support](#for-macos-m1)
     
     * On MacOS (non-M1 processor)
-      * Without P2P support #TODO
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux-or-macos-non-m1-architecture)
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors) 
+      * [With P2P support](#for-p2p-support-on-linux-or-macos-non-m1-architecture)
   * [Docker-compose](#running-slips-using-docker-compose)
   * [Dockerfile](#building-slips-from-the-dockerfile)
 * Native
-  * [Using install.sh](#install-using-shell-script)
-  * [Manually](#installing-manually)
+  * [Using install.sh](#install-slips-using-shell-script)
+  * [Manually](#installing-slips-manually)
 * [on RPI (Beta)](#installing-slips-on-a-raspberry-pi)
 
 
@@ -47,7 +47,7 @@ For more advanced users, you can:
 
 1. First, choose the correct image for your architecture
 
-#####  For linux and MacOS non-m1 processors
+#####  For linux and MacOS non-M1 processors
 
     docker run -it --rm --net=host stratosphereips/slips:latest
 
