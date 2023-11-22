@@ -1,3 +1,8 @@
+-1.0.9 (December 2023)
+- Fix using -k to kill opened redis servers.
+- 
+
+
 -1.0.8 (November 2023)
 - Use All-ID hash to fingerprint flows stored in the flows database
 - Increase the weight of port scan alerts by increasing its threat level 
