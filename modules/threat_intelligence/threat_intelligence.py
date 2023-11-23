@@ -870,6 +870,13 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         """
         :param flow_info: dict with uid, twid, ts, md5 etc.
         """
+        if not flow_info['flow']['md5']:
+            # some lines in the zeek files.log doesn't have a hash for example
+            # {"ts":293.713187,"fuid":"FpvjEj3U0Qoj1fVCQc","tx_hosts":["94.127.78.125"],"rx_hosts":["10.0.2.19"],
+            # "conn_uids":["CY7bgw3KI8QyV67jqa","CZEkWx4wAvHJv0HTw9","CmM1ggccDvwnwPCl3","CBwoAH2RcIueFH4eu9","CZVfkc4BGLqRR7wwD5"],
+            # "source":"HTTP","depth":0,"analyzers":["SHA1","SHA256","MD5"] .. }
+            return
+
         if blacklist_details := self.search_online_for_hash(flow_info):
             # the md5 appeared in a blacklist
             # update the blacklist_details dict with uid,
