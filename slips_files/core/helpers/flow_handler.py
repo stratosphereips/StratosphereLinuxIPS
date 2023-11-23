@@ -315,7 +315,10 @@ class FlowHandler:
 
 
     def handle_files(self):
-        """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
+        """
+        Send files.log data to new_downloaded_file channel in the TI module to see if it's malicious
+        """
+
         # files slips sees can be of 2 types: suricata or zeek
         to_send = {
             'flow': asdict(self.flow),

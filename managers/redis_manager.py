@@ -255,8 +255,16 @@ class RedisManager:
                         continue
 
                     line = line.split(',')
-                    pid, port = int(line[3]), int(line[2])
-                    self.open_servers_pids[pid] = port
+
+                    try:
+                        pid, port = int(line[3]), int(line[2])
+                        self.open_servers_pids[pid] = port
+                    except ValueError:
+                        # sometimes slips can't get the server pid and logs "False"
+                        # in the lofile instead of the PID
+                        # there's nothing we can do about it
+                        pass
+
 
             return self.open_servers_pids
 
