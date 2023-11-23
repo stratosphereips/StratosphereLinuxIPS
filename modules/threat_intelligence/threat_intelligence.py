@@ -650,9 +650,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
 
 
 
-    def set_evidence_malicious_hash(self,
-                                    file_info: dict
-                                    ):
+    def set_evidence_malicious_hash(self,file_info: dict):
         """
         :param file_info: dict with flow, profileid, twid, and confidence of file
         """
@@ -868,7 +866,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         )
         return True
 
-    def is_malicious_hash(self, flow_info):
+    def is_malicious_hash(self, flow_info: dict):
         """
         :param flow_info: dict with uid, twid, ts, md5 etc.
         """
@@ -1030,6 +1028,6 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                 )
 
         if msg:= self.get_msg('new_downloaded_file'):
-            file_info = json.loads(msg['data'])
+            file_info: dict = json.loads(msg['data'])
             if file_info['type'] == 'zeek':
                 self.is_malicious_hash(file_info)
