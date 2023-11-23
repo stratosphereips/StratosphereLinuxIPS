@@ -72,6 +72,15 @@ To analyze a your own file using slips, you can mount it to your docker using -v
 	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
 	./slips.py -f dataset/myfile.pcap
 
+
+In Linux OS, the Slips can be used to analyze and block network traffic on the host network interface. To allow the container to see the host interface traffic and block malicious connections, it needs to run with the option --cap-add=NET_ADMIN. This option enables the container to interact with the network stack of the host computer. To block malicious behavior, run Slips with the parameter -p.
+
+    # run a new Slips container with the option to interact with the network stack of the host
+    docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+    
+    # run Slips on the host interface `eno1` with active blocking `-p`
+    ./slips.py -c config/slips.conf -i eno1 -p
+
 ---
 
 #### Running Slips using docker compose
