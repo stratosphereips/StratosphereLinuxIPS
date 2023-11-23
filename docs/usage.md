@@ -551,7 +551,7 @@ Slips can export alerts to different systems.
 Refer to the [exporting section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html) for detailed instructions on how to export.
 
 
-### Logging
+## Logging
 
 To enable the creation of log files, there are two options:
 

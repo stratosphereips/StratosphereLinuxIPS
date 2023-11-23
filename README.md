@@ -2,9 +2,6 @@
 Slips v1.0.8
 </h1>
 
-[Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](https://stratospherelinuxips.readthedocs.io/en/develop/features.html) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
-
-
 
 [![License](https://img.shields.io/badge/license-GPLv2-blue)](./LICENSE)
 [![GitHub version](https://img.shields.io/github/v/tag/stratosphereips/StratosphereLinuxIPS?label=version)](https://github.com/stratosphereips/StratosphereLinuxIPS)
@@ -44,7 +41,6 @@ Slips v1.0.8
 - [Changelog](#changelog)
 - [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
 - [Roadmap](#roadmap)
-- [References](#references)
 - [Demos](#demos)
 - [Funding](#funding)
 
@@ -52,7 +48,7 @@ Slips v1.0.8
 # Slips: Behavioral Machine Learning-Based Intrusion Prevention System
 
 
-Slips is a powerful endpoint behavioral intrusion prevention and detection system that uses machine learning to detect malicious behaviors in network traffic. Slips can work with network traffic in real-time, pcap files, and network flows from popular tools like Suricata, Zeek/Bro, and Argus. Slips threat detection is based on a combination of machine learning models trained to detect malicious behaviors, 40+ threat intelligence feeds and expert heuristics. Slips gathers evidence of malicious behavior and uses extensively trained thresholds to trigger alerts when enough evidence is accumulated.
+Slips is a powerful endpoint behavioral intrusion prevention and detection system that uses machine learning to detect malicious behaviors in network traffic. Slips can work with network traffic in real-time, PCAP files, and network flows from popular tools like Suricata, Zeek/Bro, and Argus. Slips threat detection is based on a combination of machine learning models trained to detect malicious behaviors, 40+ threat intelligence feeds, and expert heuristics. Slips gathers evidence of malicious behavior and uses extensively trained thresholds to trigger alerts when enough evidence is accumulated.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" width="850px"
 title="Slips in action.">
@@ -65,16 +61,19 @@ Slips is the first free software behavioral machine learning-based IDS/IPS for e
 
 Slips is supported on Linux and MacOS only. The blocking features of Slips are only supported on Linux
 
-Slips is python-based and relies on [Zeek network analysis framework](https://zeek.org/get-zeek/) for capturing live traffic and analyzing PCAPs.
+Slips is Python-based and relies on [Zeek network analysis framework](https://zeek.org/get-zeek/) for capturing live traffic and analyzing PCAPs.
 
-Slips needs Redis >= 7.0.4 for interprocess communication. Redis can be installed directly in the host computer or in Docker.
+Slips needs Redis >= 7.0.4 for interprocess communication. Redis can be installed directly on the host computer or in Docker.
 
 # Contributing
-Explain how users can contribute to the tool's development. Provide guidelines for submitting bug reports, feature requests, or pull requests.
 
+We welcome contributions to improve the functionality and features of Slips.
 
-We welcome contributions to improve the functionality and features of this tool. 
 Please read carefully the [contributing guidelines](https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html) for contributing to the development of Slips
+
+You can run Slips and report bugs, make feature requests, and suggest ideas, open a pull request with a solved GitHub issue and new feature, or open a pull request with a new detection module. 
+
+The instructions to create a new detection module along with a template [here](https://stratospherelinuxips.readthedocs.io/en/develop/create_new_module.html).
 
 If you are a student, we encourage you to apply for the Google Summer of Code program that we participate in as a hosting organization. 
 
@@ -85,11 +84,8 @@ You can [join our conversations in Discord](https://discord.gg/zu5HwMFy5C) for q
 We appreciate your contributions and thank you for helping to improve Slips!
 
 # Installation
-Provide step-by-step instructions on how to install and set up the tool. 
-Include any necessary commands or configurations. 
-If applicable, specify any prerequisites or dependencies required for installation.
 
-Slips can be run on different platforms, the easiest and most recommended way if you're a linux user is to run Slips on docker.
+Slips can be run on different platforms, the easiest and most recommended way if you're a Linux user is to run Slips on Docker.
 
 ```
 docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
@@ -99,7 +95,7 @@ Check the installation guide for more Installation options:
 
 * [Docker](#slips-in-docker)
   * Dockerhub (recommended)
-    * On a linux host
+    * On a Linux host
       * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors)
       * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux-or-macos-non-m1-architecture)
 
@@ -118,19 +114,183 @@ Check the installation guide for more Installation options:
 
 
 
-# Features
+# Usage
 
+To analyze a PCAP with Slips you can run the following command
+
+    ./slips.py -c config/slips.conf -f dataset/test7-malicious.pcap -o my_output_dir/
+
+Here's what the above command does:
+* -c to run slips with the default configuration file at config/slips.conf 
+* -f to give slips a PCAP, a suricata file, an Argus file or a zeek file or directory.
+* -o to specify the output directory, if not present Slips will create it.
+
+For a detailed explanation of Slips parameters [check the docs here](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-parameters)
+
+You can view Slips output using kalipso in your terminal using:
+
+    ./kalipso.sh
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalipso.png" width="850px"
+title="Kalispo GUI">
+
+
+Or use Slips' web interface by using:
+
+    ./webinteface.sh
+
+Then navigate to ```http://localhost:55000/``` from your browser.
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
+title="Web Interface">
+
+All your evidence and alerts are stored in the output directory specified in the above command by using -o, here's how to check them
+
+    cat my_output_dir/alerts.json 
+    cat my_output_dir/alerts.txt
+
+
+You can enable [popup notifications](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications) of evidence, enable [blocking](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-permissions), [plug in your own zeek script](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#plug-in-a-zeek-script) and more.
+
+Check the usage docs for more details: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html
+
+
+# Configuration
+Slips has a [config/slips.conf](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/config/slips.conf) that contains user configurations for different modules and general execution.
+
+* You can change the timewindow width by modifying the ```time_window_width``` parameter
+* you can set your own home network to make sure you only see the analysis of your  local network by setting the home_network parameter
+* You can change the analysis direction to ```all```  if you want to see the attacks from and to your computer
+* You can also specify whether to ```train``` or ```test``` the ML models 
+
+
+More details about the config file options here https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#modifying-the-configuration-file
+
+# Features
 Slips key features are:
 
 * **Behavioral Intrusion Prevention**: Slips acts as a powerful system to prevent intrusions based on detecting malicious behaviors in network traffic using machine learning.
 * **Modularity**: Slips is written in Python and is highly modular with different modules performing specific detections in the network traffic.
 * **Targeted Attacks and Command & Control Detection**: It places a strong emphasis on identifying targeted attacks and command and control channels in network traffic.
-* **Traffic Analysis Flexibility**: Slips can analyze network traffic in real-time, pcap files, and network flows from popular tools like Suricata, Zeek/Bro, and Argus.
+* **Traffic Analysis Flexibility**: Slips can analyze network traffic in real-time, PCAP files, and network flows from popular tools like Suricata, Zeek/Bro, and Argus.
 * **Threat Intelligence Updates**: Slips continuously updates threat intelligence files and databases, providing relevant detections as updates occur.
 * **Integration with External Platforms**: Modules in Slips can look up IP addresses on external platforms such as VirusTotal and RiskIQ.
 * **Graphical User Interface**: Slips provides a console graphical user interface (Kalipso) and a web interface for displaying detection with graphs and tables.
 * **Peer-to-Peer (P2P) Module**: Slips includes a complex automatic system to find other peers in the network and share IoC data automatically in a balanced, trusted manner. The P2P module can be enabled as needed.
 * **Docker Implementation**: Running Slips through Docker on Linux systems is simplified, allowing real-time traffic analysis.
 * **Detailed Documentation**: Slips provides detailed documentation guiding users through usage instructions for efficient utilization of its features.
+
+
+
+# Documentation
+User documentation: https://stratospherelinuxips.readthedocs.io/en/develop/
+
+Code docs: https://stratospherelinuxips.readthedocs.io/en/develop/code_documentation.html 
+
+# Troubleshooting
+
+If you can't listen to an interface without sudo, 
+you can run the following command to let any user use Zeek to listen to an interface not just root.
+
+```
+sudo setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
+```
+
+You can [join our conversations in Discord](https://discord.gg/zu5HwMFy5C) for questions and discussions.
+
+Or email us at 
+* sebastian.garcia@agents.fel.cvut.cz 
+* eldraco@gmail.com, 
+* alyaggomaa@gmail.com
+
+# License
+
+ [GNU General Public License](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/master/LICENCE)
+
+# Credits
+
+Founder: [Sebastian Garcia](https://github.com/eldraco), sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com.
+
+Main authors: [Sebastian Garcia](https://github.com/eldraco), [Alya Gomaa](https://github.com/AlyaGomaa), [Kamila Babayeva](https://github.com/kamilababayeva)
+
+Contributors:
+
+* [Veronica Valeros](https://github.com/verovaleros)
+* [Frantisek Strasak](https://github.com/frenky-strasak)
+* [Dita Hollmannova](https://github.com/draliii)
+* [Ondrej Lukas](https://github.com/ondrej-lukas)
+* Elaheh Biglar Beigi
+* [Martin Řepa](https://github.com/HappyStoic)
+* [arkamar](https://github.com/arkamar)
+* [Maria Rigaki](https://github.com/MariaRigaki)
+* [Lukas Forst](https://github.com/LukasForst)
+* [Daniel Yang](https://github.com/danieltherealyang)
+
+# Changelog
+
+https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/CHANGELOG.md
+
+# Frequently Asked Questions (FAQ)
+
+##### Slips starting too slow in Docker
+
+Make sure you're not running many containers at the same time because they share kernel resources 
+even though they're isolated.
+
+
+##### Getting "Illegal instruction" error when running slips
+
+If the tensorflow version you're using isn't compatible with your architecture, 
+you will get the "Illegal instruction" error and slips will terminate.
+
+To fix this you can disable the modules that use tensorflow by adding
+```rnnccdetection, flowmldetection``` to the ```disable``` key in ```config/slips.conf```
+
+
+##### Docker time is not in sync with that of the host
+
+You can add your local /etc/localtime as volume in Slips Docker container by using:
+
+```
+docker run -it --rm --net=host --cap-add=NET_ADMIN -v /etc/localtime:/etc/localtime:ro --name slips stratosphereips/slips:latest 
+```
+
+
+# Roadmap
+
+Here are the future goals for Slips:
+* Easier installation with a package manager like snap or apt
+* Global P2P support
+* More ML detection models
+
+
+# Demos
+The following videos contain demos of Slips in action in various events:
+
+- 2022 BlackHat Europe Arsenal, Slips: A Machine-Learning Based, Free-Software, Network Intrusion Prevention System [[web](https://www.blackhat.com/eu-22/arsenal/schedule/index.html#slips-free-software-machine-learning-tool-for-network-intrusion-prevention-system-29599)]
+- 2022 BlackHat USA Arsenal, Slips: A Machine-Learning Based, Free-Software, Network Intrusion Prevention System [[web](https://www.blackhat.com/us-22/arsenal/schedule/index.html#slips-free-software-machine-learning-tool-for-network-intrusion-prevention-system-26687)]
+- 2021 BlackHat Europe Arsenal, Slips: A Machine-Learning Based, Free-Software, Network Intrusion Prevention System [[slides](https://mega.nz/file/EAIjWA5D#DoYhJknH1hpbqfS2ayVLwA7ewNT50jFQb7S3dVAKPko)] [[web](https://www.blackhat.com/eu-21/arsenal/schedule/#slips-a-machine-learning-based-free-software-network-intrusion-prevention-system-25116)]
+- 2021 BlackHat USA Arsenal, Slips: A Machine-Learning Based, Free-Software, Network Intrusion Prevention System [[web](https://www.blackhat.com/us-21/arsenal/schedule/#slips-a-machine-learning-based-free-software-network-intrusion-prevention-system-24105)]
+- 2021 BlackHat Asia Arsenal, Slips: A Machine-Learning Based, Free-Software, Network Intrusion Prevention System [[web](https://www.blackhat.com/asia-21/arsenal/schedule/#slips-a-machine-learning-based-free-software-network-intrusion-prevention-system-22576)]
+- 2020 Hack In The Box CyberWeek, Android RATs Detection With A Machine Learning-Based Python IDS [[video](https://www.youtube.com/watch?v=wx0V3qWdmyk)]
+- 2019 OpenAlt, Fantastic Attacks and How Kalipso can Find Them [[video](https://www.youtube.com/watch?v=p2FL2sECpS0&t=1s)]
+- 2016 Ekoparty, Stratosphere IPS. The free machine learning malware detection [[video](https://www.youtube.com/watch?v=IazEdK8R4YI)]
+
+
+
+# Funding
+We are grateful for the generous support and funding provided by the following organizations: 
+
+
+- NlNet Foundation, https://nlnet.nl/
+- Artificial Intelligence Centre at the Czech Technical University in Prague, https://www.aic.fel.cvut.cz/
+- Avast, https://www.avast.com/
+- CESNET, https://www.cesnet.cz/
+ 
+Their funding has played a crucial role in the development and success of this project. 
+We sincerely appreciate their commitment to advancing technology and their recognition of
+the value Slips brings to the community.
+
+
 
 
