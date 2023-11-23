@@ -29,11 +29,11 @@ Slips v1.0.8
 # Table of Contents
 
 - [Introduction](#introduction)
-- [Contributing](#contributing)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [Features](#features)
+- [Contributing](#contributing)
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
 - [License](#license)
@@ -64,24 +64,6 @@ Slips is supported on Linux and MacOS only. The blocking features of Slips are o
 Slips is Python-based and relies on [Zeek network analysis framework](https://zeek.org/get-zeek/) for capturing live traffic and analyzing PCAPs.
 
 Slips needs Redis >= 7.0.4 for interprocess communication. Redis can be installed directly on the host computer or in Docker.
-
-# Contributing
-
-We welcome contributions to improve the functionality and features of Slips.
-
-Please read carefully the [contributing guidelines](https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html) for contributing to the development of Slips
-
-You can run Slips and report bugs, make feature requests, and suggest ideas, open a pull request with a solved GitHub issue and new feature, or open a pull request with a new detection module. 
-
-The instructions to create a new detection module along with a template [here](https://stratospherelinuxips.readthedocs.io/en/develop/create_new_module.html).
-
-If you are a student, we encourage you to apply for the Google Summer of Code program that we participate in as a hosting organization. 
-
-Check [Slips in GSoC2023](https://github.com/stratosphereips/Google-Summer-of-Code-2023) for more information.
-
-
-You can [join our conversations in Discord](https://discord.gg/zu5HwMFy5C) for questions and discussions.
-We appreciate your contributions and thank you for helping to improve Slips!
 
 # Installation
 
@@ -166,6 +148,7 @@ Slips has a [config/slips.conf](https://github.com/stratosphereips/StratosphereL
 
 More details about the config file options here https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#modifying-the-configuration-file
 
+
 # Features
 Slips key features are:
 
@@ -180,6 +163,24 @@ Slips key features are:
 * **Docker Implementation**: Running Slips through Docker on Linux systems is simplified, allowing real-time traffic analysis.
 * **Detailed Documentation**: Slips provides detailed documentation guiding users through usage instructions for efficient utilization of its features.
 
+
+# Contributing
+
+We welcome contributions to improve the functionality and features of Slips.
+
+Please read carefully the [contributing guidelines](https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html) for contributing to the development of Slips
+
+You can run Slips and report bugs, make feature requests, and suggest ideas, open a pull request with a solved GitHub issue and new feature, or open a pull request with a new detection module. 
+
+The instructions to create a new detection module along with a template [here](https://stratospherelinuxips.readthedocs.io/en/develop/create_new_module.html).
+
+If you are a student, we encourage you to apply for the Google Summer of Code program that we participate in as a hosting organization. 
+
+Check [Slips in GSoC2023](https://github.com/stratosphereips/Google-Summer-of-Code-2023) for more information.
+
+
+You can [join our conversations in Discord](https://discord.gg/zu5HwMFy5C) for questions and discussions.
+We appreciate your contributions and thank you for helping to improve Slips!
 
 
 # Documentation
