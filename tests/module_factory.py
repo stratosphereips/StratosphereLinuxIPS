@@ -1,3 +1,8 @@
+import shutil
+from unittest.mock import patch, Mock
+import os
+
+
 from slips import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
@@ -20,10 +25,12 @@ from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event, Semaphore
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
+from modules.network_discovery.horizontal_portscan import HorizontalPortscan
+from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
-import shutil
-from unittest.mock import patch, Mock
-import os
+
+
+
 def do_nothing(*arg):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
@@ -273,3 +280,13 @@ class ModuleFactory:
             symbol = SymbolHandler(self.logger, mock_rdb)
             flow_handler = FlowHandler(mock_rdb, symbol, flow)
             return flow_handler
+
+    def create_horizontal_portscan_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            horizontal_ps = HorizontalPortscan(mock_rdb)
+            return horizontal_ps
+
+    def create_vertical_portscan_obj(self, mock_rdb):
+        with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
+            vertical_ps = VerticalPortscan(mock_rdb)
+            return vertical_ps

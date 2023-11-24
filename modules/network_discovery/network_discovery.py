@@ -214,7 +214,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             attack,
             scanned_ip=False
     ):
-        confidence = calculate_confidence(pkts_sent)
+        confidence = utils.calculate_confidence(pkts_sent)
         attacker_direction = 'srcip'
         evidence_type = attack
         source_target_tag = 'Recon'

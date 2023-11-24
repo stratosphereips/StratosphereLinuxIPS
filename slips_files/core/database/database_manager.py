@@ -522,6 +522,7 @@ class DBManager(IObservable):
 
     def setInfoForURLs(self, *args, **kwargs):
         return self.rdb.setInfoForURLs(*args, **kwargs)
+
     def get_data_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_data_from_profile_tw(*args, **kwargs)
 

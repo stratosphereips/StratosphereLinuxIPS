@@ -136,13 +136,14 @@ class VerticalPortscan():
             dstips: dict = self.db.get_data_from_profile_tw(
                 profileid, twid, direction, state, protocol, role, type_data
             )
+
             # For each dstip, see if the amount of ports connections is over the threshold
             for dstip in dstips.keys():
                 ### PortScan Type 1. Direction OUT
                 dstports: dict = dstips[dstip]['dstports']
                 amount_of_dports = len(dstports)
                 cache_key = f'{profileid}:{twid}:dstip:{dstip}:VerticalPortscan'
-                prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
+                prev_amount_dports: int = self.cache_det_thresholds.get(cache_key, 0)
 
                 # we make sure the amount of dports reported each evidence is higher than the previous one +5
                 # so the first alert will always report 5 dport, and then 10+,15+,20+ etc
@@ -150,11 +151,11 @@ class VerticalPortscan():
                 # have so many portscan evidence
                 if (
                         amount_of_dports >= self.port_scan_minimum_dports
-                        and prev_amount_dports+5 <= amount_of_dports
+                        and prev_amount_dports + 5 <= amount_of_dports
                 ):
                     # Get the total amount of pkts sent different ports on the same host
                     pkts_sent = sum(dstports[dport] for dport in dstports)
-                    uid = dstips[dstip]['uid']
+                    uid: list = dstips[dstip]['uid']
                     timestamp = dstips[dstip]['stime']
 
                     # Store in our local cache how many dips were there:
@@ -172,6 +173,8 @@ class VerticalPortscan():
                             amount_of_dports,
                             dstip
                         )
+                        #TODO split this into smaller functions 3shan we shouldn't return true, we should cont looping
+                        return True
                     else:
                          # we will be combining further alerts to avoid alerting
                          # many times every portscan
@@ -187,3 +190,5 @@ class VerticalPortscan():
                         # combine evidence every x new portscans to the same ip
                         if len(self.pending_vertical_ps_evidence[key]) == 3:
                             self.combine_evidence()
+                            return True
+            return False
