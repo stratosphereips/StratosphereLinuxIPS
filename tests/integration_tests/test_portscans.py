@@ -20,7 +20,7 @@ alerts_file = 'alerts.log'
     'path,  output_dir, redis_port',
     [
         (
-            'dataset/port-scans/horizontal_ps/conn.log',
+            'dataset/port-scans/horizontal/conn.log',
             'testing_horizontal_ps/',
             6659
         )
