@@ -4,6 +4,7 @@ It checks a random evidence and the total number of profiles in every file
 """
 from tests.common_test_utils import (
         get_total_profiles,
+        run_slips,
         is_evidence_present,
         create_output_dir,
         has_errors,
@@ -17,15 +18,7 @@ alerts_file = 'alerts.log'
 
 
 
-def run_slips(cmd):
-    """runs slips and waits for it to end"""
-    slips = subprocess.Popen(
-        cmd,
-        stdin=subprocess.PIPE,
-        shell=True
-    )
-    return_code = slips.wait()
-    return return_code
+
 
 
 @pytest.mark.parametrize(
