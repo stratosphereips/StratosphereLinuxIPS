@@ -48,23 +48,6 @@ class ProfileHandler(IObservable):
            }
         )
         
-    def get_data_from_profile_tw(self, hash_key: str, key_name: str):
-        try:
-            """
-            key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established, NotEstablihed]
-            Example: key_name = 'SrcPortClientTCPEstablished'
-            """
-            data = self.r.hget(hash_key, key_name)
-            value = {}
-            if data:
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Error in getDataFromProfileTW in '
-                       f'database.py line {exception_line}', 0, 1)
-            self.print(f'{traceback.print_exc()}',0,1)
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""
@@ -415,7 +398,7 @@ class ProfileHandler(IObservable):
         # Get the state. Established, NotEstablished
         summaryState = self.getFinalStateFromFlags(state, pkts)
 
-        old_profileid_twid_data = self.getDataFromProfileTW(
+        old_profileid_twid_data = self.get_data_from_profile_tw(
             profileid,
             twid,
             port_type,
@@ -485,27 +468,15 @@ class ProfileHandler(IObservable):
                     return 'Established'
                 elif 'closed' in state:
                     return 'Not Established'
+
                 # We have varius type of states depending on the type of flow.
                 # For Zeek
-                if (
-                    'S0' in state
-                    or 'REJ' in state
-                    or 'RSTOS0' in state
-                    or 'RSTRH' in state
-                    or 'SH' in state
-                    or 'SHR' in state
-                ):
+                if state in ('S0', 'REJ', 'RSTOS0', 'RSTRH', 'SH', 'SHR'):
                     return 'Not Established'
-                elif (
-                    'S1' in state
-                    or 'SF' in state
-                    or 'S2' in state
-                    or 'S3' in state
-                    or 'RSTO' in state
-                    or 'RSTP' in state
-                    or 'OTH' in state
-                ):
+                elif state in ('S1', 'SF', 'S2', 'S3', 'RSTO', 'RSTP', 'OTH'):
                     return 'Established'
+
+
                 # For Argus
                 suf = state.split('_')[1]
                 if 'S' in pre and 'A' in pre and 'S' in suf and 'A' in suf:
@@ -608,7 +579,7 @@ class ProfileHandler(IObservable):
             ,0,1)
             self.print(traceback.print_exc(), 0, 1)
 
-    def getDataFromProfileTW(
+    def get_data_from_profile_tw(
         self,
         profileid: str,
         twid: str,
@@ -642,6 +613,9 @@ class ProfileHandler(IObservable):
             return False
 
         try:
+            # key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established,
+            # Not Establihed]
+            # Example: key_name = 'SrcPortClientTCPEstablished'
             key = direction + type_data + role + protocol.upper() + state
             data = self.r.hget(f'{profileid}{self.separator}{twid}', key)
 
@@ -809,7 +783,7 @@ class ProfileHandler(IObservable):
             f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
         )
         # Get the previous data about this key
-        old_profileid_twid_data = self.getDataFromProfileTW(
+        old_profileid_twid_data = self.get_data_from_profile_tw(
             profileid,
             twid,
             direction,

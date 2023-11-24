@@ -121,7 +121,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
         type_data = 'Ports'
         protocol = 'ICMP'
         state = 'Established'
-        sports = self.db.getDataFromProfileTW(
+        sports = self.db.get_data_from_profile_tw(
                     profileid, twid, direction, state, protocol, role, type_data
                 )
         for sport, sport_info in sports.items():

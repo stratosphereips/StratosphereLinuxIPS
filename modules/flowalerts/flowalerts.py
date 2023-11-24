@@ -1335,7 +1335,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
             # get all the dst ips with established tcp connections
             daddrs = (
-                self.db.getDataFromProfileTW(
+                self.db.get_data_from_profile_tw(
                     profileid,
                     twid,
                     direction,
@@ -1381,7 +1381,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
             # get all the src ips with established tcp connections
             saddrs = (
-                self.db.getDataFromProfileTW(
+                self.db.get_data_from_profile_tw(
                     profileid,
                     twid,
                     direction,

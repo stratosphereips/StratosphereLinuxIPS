@@ -552,9 +552,6 @@ class DBManager(IObservable):
     def getFinalStateFromFlags(self, *args, **kwargs):
         return self.rdb.getFinalStateFromFlags(*args, **kwargs)
 
-    def getDataFromProfileTW(self, *args, **kwargs):
-        return self.rdb.getDataFromProfileTW(*args, **kwargs)
-
     def add_ips(self, *args, **kwargs):
         return self.rdb.add_ips(*args, **kwargs)
 

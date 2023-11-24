@@ -133,7 +133,7 @@ class VerticalPortscan():
             #                 <str port>: < int spkts sent to this port>
             #             }
             #     }
-            dstips: dict = self.db.getDataFromProfileTW(
+            dstips: dict = self.db.get_data_from_profile_tw(
                 profileid, twid, direction, state, protocol, role, type_data
             )
             # For each dstip, see if the amount of ports connections is over the threshold

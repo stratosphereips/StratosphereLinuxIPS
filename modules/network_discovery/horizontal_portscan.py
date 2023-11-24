@@ -99,7 +99,7 @@ class HorizontalPortscan():
         # so, practically this is correct to avoid FP
         state = 'Not Established'
         for protocol in ('TCP', 'UDP'):
-            dports = self.db.getDataFromProfileTW(
+            dports = self.db.get_data_from_profile_tw(
                 profileid, twid, direction, state, protocol, role, type_data
             )
 
