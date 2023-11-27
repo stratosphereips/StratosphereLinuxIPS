@@ -104,7 +104,6 @@ def not_enough_dports_to_combine_1_evidence(mock_rdb, key):
 
 
 
-
 @pytest.mark.parametrize(
     'get_test_conns, expected_return_val',
     [
@@ -136,35 +135,37 @@ def test_min_dports_threshold(
 
 
 @pytest.mark.parametrize(
-    'get_test_conns, expected_return_val',
+    'number_of_pending_evidence, expected_return_val',
     [
-        (not_enough_dports_to_combine_1_evidence, False),
-        # (enough_dports_to_combine_1_evidence, True),
+        (0, True),
+        (1, False),
+        (2, False),
+        (3, True),
+        (6, True),
     ]
 )
 def test_combining_evidence(
-        get_test_conns,
+        number_of_pending_evidence,
         expected_return_val: bool,
         mock_rdb
     ):
+    """
+    first evidence will be alerted, the rest will be combined
+
+    """
     profileid = 'profile_1.1.1.1'
     timewindow = 'timewindow0'
     dstip = '8.8.8.8'
 
     vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
     key: str = vertical_ps.get_cache_key(profileid, timewindow, dstip)
-
-    dstips:dict = get_test_conns(mock_rdb, key)
+    # get a random bunch of dstips, this dict is not important
+    dstips:dict = enough_dports_to_reach_the_threshold(mock_rdb)
     amount_of_dports = len(dstips[dstip]['dstports'])
 
-    # sum_of_pkts = 0
-    # for dport in dstips[dstip]['dstports']:
-    #     sum_of_pkts += dstips[dstip]['dstports'][dport]
     pkts_sent = sum(dstips[dstip]['dstports'].values())
 
-    number_of_pending_evidence = 3
-
-    for evidence_ctr in range(number_of_pending_evidence):
+    for evidence_ctr in range(number_of_pending_evidence+1):
         # as if there's 1 pending evience
         # module.pending_vertical_ps_evidence[key].append(1)
         # this will add 2 evidence to the pending evidence list
@@ -190,4 +191,5 @@ def test_combining_evidence(
 
         if evidence_ctr == 0:
             continue
-        assert enough_to_combine == expected_return_val
+
+    assert enough_to_combine == expected_return_val
