@@ -232,6 +232,13 @@ class VerticalPortscan:
             )
         return dstips
 
+    def get_cache_key(self, profileid: str, twid: str, dstip: str):
+        """
+        returns the key that identifies this vertical portscan in thhe
+        given tw
+        """
+        return f'{profileid}:{twid}:dstip:{dstip}:VerticalPortscan'
+
     def check(self, profileid, twid):
         """
         sets an evidence if a vertical portscan is detected
@@ -247,10 +254,10 @@ class VerticalPortscan:
             dstips: dict = self.get_not_established_dst_ips(
                 protocol, state, profileid, twid
                 )
+
             # For each dstip, see if the amount of ports connections is over the threshold
             for dstip in dstips.keys():
-
-                cache_key = f'{profileid}:{twid}:dstip:{dstip}:VerticalPortscan'
+                cache_key = self.get_cache_key(profileid, twid, dstip)
                 dstports: dict = dstips[dstip]['dstports']
                 # Get the total amount of pkts sent different
                 # ports on the same host
