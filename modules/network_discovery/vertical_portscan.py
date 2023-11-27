@@ -259,7 +259,7 @@ class VerticalPortscan:
             for dstip in dstips.keys():
                 cache_key = self.get_cache_key(profileid, twid, dstip)
                 dstports: dict = dstips[dstip]['dstports']
-                # Get the total amount of pkts sent different
+                # Get the total amount of pkts sent to all
                 # ports on the same host
                 pkts_sent = sum(dstports[dport] for dport in dstports)
                 amount_of_dports = len(dstports)
