@@ -75,40 +75,34 @@ class VerticalPortscan:
                 final_evidence_uids += evidence_uids
                 final_pkts_sent += pkts_sent
 
-            self.set_evidence_vertical_portscan(
-                timestamp,
-                final_pkts_sent,
-                protocol,
-                profileid,
-                twid,
-                final_evidence_uids,
-                amount_of_dports,
-                dstip
-                )
+            evidence = {
+                'timestamp': timestamp,
+                'pkts_sent': final_pkts_sent,
+                'protocol': protocol,
+                'profileid': profileid,
+                'twid': twid,
+                'uid': final_evidence_uids,
+                'amount_of_dports': amount_of_dports,
+                'dstip': dstip,
+            }
+
+            self.set_evidence_vertical_portscan(evidence)
         # reset the dict since we already combined
         self.pending_vertical_ps_evidence = {}
 
-    def set_evidence_vertical_portscan(
-            self,
-            timestamp,
-            pkts_sent,
-            protocol,
-            profileid,
-            twid,
-            uid,
-            amount_of_dports,
-            dstip
-            ):
+    def set_evidence_vertical_portscan(self, evidence: dict):
         """Sets the vertical portscan evidence in the db"""
         attacker_direction = 'srcip'
         threat_level = 'high'
         category = 'Recon.Scanning'
-        srcip = profileid.split('_')[-1]
-        confidence = utils.calculate_confidence(pkts_sent)
+        srcip = evidence['profileid'].split('_')[-1]
+        confidence = utils.calculate_confidence(evidence['pkts_sent'])
         description = (
-            f'new vertical port scan to IP {dstip} from {srcip}. '
-            f'Total {amount_of_dports} dst {protocol} ports were scanned. '
-            f'Total packets sent to all ports: {pkts_sent}. '
+            f'new vertical port scan to IP {evidence["dstip"]} from {srcip}. '
+            f'Total {evidence["amount_of_dports"]} '
+            f'dst {evidence["protocol"]} ports '
+            f'were scanned. '
+            f'Total packets sent to all ports: {evidence["pkts_sent"]}. '
             f'Confidence: {confidence}. by Slips'
         )
         self.db.setEvidence(
@@ -118,31 +112,26 @@ class VerticalPortscan:
             threat_level,
             confidence,
             description,
-            timestamp,
+            evidence['timestamp'],
             category,
             source_target_tag='Recon',
-            conn_count=pkts_sent,
-            proto=protocol,
-            profileid=profileid,
-            twid=twid, uid=uid,
-            victim=dstip
+            conn_count=evidence['pkts_sent'],
+            proto=evidence['protocol'],
+            profileid=evidence['profileid'],
+            twid=evidence['twid'],
+            uid=evidence['uid'],
+            victim=evidence['dstip']
             )
 
     def decide_if_time_to_set_evidence_or_combine(
             self,
-            cache_key,
-            timestamp,
-            pkts_sent,
-            protocol,
-            profileid,
-            twid,
-            uid,
-            amount_of_dports,
-            dstip,
-            state
-            ) -> bool:
+            evidence: dict,
+            cache_key: str
+        ) -> bool:
         """
-        sets the evidence immediately or combines past 3
+        sets the evidence immediately if it was the
+            first portscan evidence in this tw
+            or combines past 3
             evidence and then sets an evidence.
         :return: True if evidence was set/combined,
             False if evidence was queued for combining later
@@ -151,28 +140,29 @@ class VerticalPortscan:
             # now from now on, we will be combining the next vertical
             # ps evidence targetting this dport
             self.alerted_once_vertical_ps[cache_key] = True
-            self.set_evidence_vertical_portscan(
-                timestamp,
-                pkts_sent,
-                protocol,
-                profileid,
-                twid,
-                uid,
-                amount_of_dports,
-                dstip
-                )
+            self.set_evidence_vertical_portscan(evidence)
             return True
 
         # we will be combining further alerts to avoid alerting
         # many times every portscan
-        evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
+        evidence_to_combine = (
+            evidence["timestamp"],
+            evidence["pkts_sent"],
+            evidence["uid"],
+            evidence["amount_of_dports"]
+            )
+
         # for all the combined alerts, the following params should be equal
-        key = f'{profileid}-{twid}-{state}-{protocol}-{dstip}'
+        key = f'{evidence["profileid"]}-' \
+              f'{evidence["twid"]}-' \
+              f'{evidence["state"]}-' \
+              f'{evidence["protocol"]}-' \
+              f'{evidence["dstip"]}'
         try:
-            self.pending_vertical_ps_evidence[key].append(evidence_details)
+            self.pending_vertical_ps_evidence[key].append(evidence_to_combine)
         except KeyError:
             # first time seeing this key
-            self.pending_vertical_ps_evidence[key] = [evidence_details]
+            self.pending_vertical_ps_evidence[key] = [evidence_to_combine]
 
         # combine evidence every x new portscans to the same ip
         if len(self.pending_vertical_ps_evidence[key]) == 3:
@@ -266,21 +256,22 @@ class VerticalPortscan:
                 # ports on the same host
                 pkts_sent = sum(dstports[dport] for dport in dstports)
                 amount_of_dports = len(dstports)
-                uid: list = dstips[dstip]['uid']
-                timestamp = dstips[dstip]['stime']
 
                 if self.check_if_enough_dports_to_trigger_an_evidence(
                         cache_key, amount_of_dports
                         ):
+                    evidence_details = {
+                        'timestamp': dstips[dstip]['stime'],
+                        'pkts_sent': pkts_sent,
+                        'protocol': protocol,
+                        'profileid': profileid,
+                        'twid': twid,
+                        'uid': dstips[dstip]['uid'],
+                        'amount_of_dports': amount_of_dports,
+                        'dstip': dstip,
+                        'state': state,
+                    }
+
                     self.decide_if_time_to_set_evidence_or_combine(
-                        cache_key,
-                        timestamp,
-                        pkts_sent,
-                        protocol,
-                        profileid,
-                        twid,
-                        uid,
-                        amount_of_dports,
-                        dstip,
-                        state
-                        )
+                        evidence_details, cache_key
+                    )
