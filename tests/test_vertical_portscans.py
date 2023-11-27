@@ -102,8 +102,6 @@ def not_enough_dports_to_combine_1_evidence(mock_rdb, key):
 
 
 
-
-
 @pytest.mark.parametrize(
     'get_test_conns, expected_return_val',
     [
@@ -193,3 +191,37 @@ def test_combining_evidence(
             continue
 
     assert enough_to_combine == expected_return_val
+
+
+@pytest.mark.parametrize(
+    'prev_amount_of_dports, cur_amount_of_dports, expected_return_val',
+    [
+        (0, 5 , True),
+        (5, 6, False),
+        (5, 8, False),
+        (5, 15, True),
+        (15, 20, True),
+    ]
+)
+def test_number_of_dports_comparison(mock_rdb,
+                                   prev_amount_of_dports,
+                                   cur_amount_of_dports,
+                                   expected_return_val):
+    """
+    slip sdetects can based on the number of current dports scanned to the
+    number of the ports scanned before
+        we make sure the amount of dports reported each evidence
+        is higher than the previous one +5
+    """
+    profileid = 'profile_1.1.1.1'
+    timewindow = 'timewindow0'
+    dstip = '8.8.8.8'
+
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+
+    key: str = vertical_ps.get_cache_key(profileid, timewindow, dstip)
+    vertical_ps.cached_tw_thresholds[key] = prev_amount_of_dports
+
+    enough: bool = vertical_ps.check_if_enough_dports_to_trigger_an_evidence(
+        key, cur_amount_of_dports)
+    assert enough == expected_return_val
