@@ -4,3 +4,9 @@
 [submodule "iris"]
 	path = iris
 	url = https://github.com/stratosphereips/iris
+[submodule "fides"]
+	path = fides
+	url = https://github.com/stratosphereips/fides
+[submodule "feel_project"]
+	path = feel_project
+	url = https://github.com/stratosphereips/feel_project
