@@ -8,7 +8,6 @@ from tests.module_factory import ModuleFactory
 def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
 
-
 def not_enough_dports_to_reach_the_threshold(mock_rdb):
     """
     returns a dict with conns to dport that are not enough
@@ -31,22 +30,57 @@ def not_enough_dports_to_reach_the_threshold(mock_rdb):
 
     # Generate x random integers and append them to the list
     for _ in range(amount_of_dports):
-        random_int = random.randint(0, 65535)
-        res[ip]['dstports'].update({random_int: 1})
+        random_port = random.randint(0, 65535)
+        res[ip]['dstports'].update({random_port: 1})
 
     # Return the list of random integers
     return res
+
+def enough_dports_to_reach_the_threshold(mock_rdb):
+    """
+    returns conns to dport that are not enough
+    to reach the minimum dports to trigger the first scan
+    """
+    module = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+
+    # get a random list of ints(ports) that are below the threshold
+    # Generate a random number between 0 and threshold
+    amount_of_dports: int = random.randint(
+        module.port_scan_minimum_dports-1, 100)
+
+    ip: str = '8.8.8.8'
+    res = {
+        ip: {
+            'stime': '1700828217.314165',
+            'uid': [],
+            'dstports': {}
+        }
+    }
+
+    # Generate x random integers and append them to the list
+    for _ in range(amount_of_dports):
+        random_port = random.randint(0, 65535)
+        res[ip]['dstports'].update({random_port: 1})
+
+    # Return the list of random integers
+    return res
+
+
+
+
 
 @pytest.mark.parametrize(
     'get_test_conns, expected_return_val',
     [
         (not_enough_dports_to_reach_the_threshold, False),
-        # (enough_dports_to_reach_the_threshold, True),
+        (enough_dports_to_reach_the_threshold, True),
     ]
 )
-def test_vertical_portscan(get_test_conns,
-                           expected_return_val: bool,
-                           mock_rdb):
+def test_min_dports_threshold(
+        get_test_conns,
+        expected_return_val: bool,
+        mock_rdb
+    ):
     vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
 
     profileid = 'profile_1.1.1.1'
