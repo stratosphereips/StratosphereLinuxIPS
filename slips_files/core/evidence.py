@@ -94,9 +94,11 @@ class Evidence(ICore):
             self.popup_alerts = False
 
 
-    def format_evidence_string(self, ip, detection_module, attacker, description):
+    def format_evidence_string(self, ip, detection_module, attacker,
+                               description) -> str:
         """
-        Function to format each evidence and enrich it with more data, to be displayed according to each detection module.
+        Function to add the dns resolution of the src and dst ips of
+         each evidence
         :return : string with a correct evidence displacement
         """
         evidence_string = ''
@@ -113,14 +115,10 @@ class Evidence(ICore):
             dns_resolution_ip = dns_resolution_ip[0]
         elif len(dns_resolution_ip) == 0:
             dns_resolution_ip = ''
+
         # dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_attacker and len(
         #     dns_resolution_ip[:3]
         #     ) > 0 else '. '
-
-        if detection_module == 'SSHSuccessful':
-            evidence_string = f'Did a successful SSH. {description}'
-        else:
-            evidence_string = f'Detected {description}'
 
 
         return f'{evidence_string}'
@@ -305,15 +303,9 @@ class Evidence(ICore):
 
         for evidence in all_evidence.values():
             evidence = json.loads(evidence)
-            attacker = evidence.get('attacker')
-            evidence_type = evidence.get('evidence_type')
             description = evidence.get('description')
-            # evidence_ID = evidence.get('ID')
-            # attacker_direction = evidence.get('attacker_direction')
 
-            # format the string of this evidence only: for example Detected C&C
-            # channels detection, destination IP:xyz
-            evidence_string = self.format_evidence_string(srcip, evidence_type, attacker, description)
+            evidence_string = f'Detected {description}'
             evidence_string = self.line_wrap(evidence_string)
 
             alert_to_print += (
@@ -513,16 +505,7 @@ class Evidence(ICore):
             self.db.publish('export_evidence', evidence)
 
     def add_hostname_to_alert(self, alert_to_log, profileid, flow_datetime, evidence):
-        # sometimes slips tries to get the hostname of a profile before ip_info stores it in the db
-        # there's nothing we can do about it
-        if hostname := self.db.get_hostname_from_profile(profileid):
-            srcip = profileid.split("_")[-1]
-            srcip = f'{srcip} ({hostname})'
-            # fill the rest of the 26 characters with spaces to keep the alignment
-            srcip = f'{srcip}{" "*(26-len(srcip))}'
-            alert_to_log = (
-                f'{flow_datetime}: Src IP {srcip}. {evidence}'
-            )
+
         return alert_to_log
 
     def is_blocking_module_enabled(self) -> bool:
@@ -575,6 +558,33 @@ class Evidence(ICore):
         self.label_flows_causing_alert()
         self.send_to_exporting_module(tw_evidence)
 
+    def get_evidence_to_log(
+                self,
+                srcip: str,
+                description: str,
+                twid: str,
+                flow_datetime: str,
+                profileid: str,
+        ) -> str:
+
+            timewindow_number: int = twid.replace("timewindow", '')
+
+            # to keep the alignment of alerts.json ip + hostname
+            # combined should take no more than 26 chars
+            evidence = f'{flow_datetime} (TW {timewindow_number}): Src IP' \
+                       f' {srcip:26}. Detected {description}'
+
+            # sometimes slips tries to get the hostname of a
+            # profile before ip_info stores it in the db
+            # there's nothing we can do about it
+            hostname: str = self.db.get_hostname_from_profile(profileid)
+            if not hostname:
+                return evidence
+
+            # fill the rest of the 26 characters with spaces to keep the alignment
+            evidence = f'{flow_datetime}: Src IP {srcip} ({hostname}){" "*(26-len(srcip))}. {evidence}'
+
+            return evidence
 
     def main(self):
         while not self.should_stop():
@@ -597,9 +607,7 @@ class Evidence(ICore):
                 timestamp = data.get('stime')
                 # this is all the uids of the flows that cause this evidence
                 all_uids = data.get('uid')
-                # tags = data.get('tags', False)
                 confidence = data.get('confidence', False)
-                threat_level = data.get('threat_level', False)
                 category = data.get('category', False)
                 conn_count = data.get('conn_count', False)
                 port = data.get('port', False)
@@ -625,16 +633,6 @@ class Evidence(ICore):
                     )
                     continue
 
-
-                # Format the time to a common style given multiple type of time variables
-                if self.is_running_on_interface():
-                    timestamp: datetime = utils.convert_to_local_timezone(timestamp)
-                flow_datetime = utils.convert_format(timestamp, 'iso')
-
-                # prepare evidence for text log file
-                evidence_str = self.format_evidence_string(srcip, evidence_type, attacker, description)
-
-
                 # prepare evidence for json log file
                 IDEA_dict: dict = utils.IDEA_format(
                     srcip,
@@ -651,14 +649,22 @@ class Evidence(ICore):
                     evidence_ID
                 )
 
-                # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
-                alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence_str}'
-                alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence_str)
+                # Format the time to a common style given multiple type of time variables
+                if self.is_running_on_interface():
+                    timestamp: datetime = utils.convert_to_local_timezone(timestamp)
+                flow_datetime = utils.convert_format(timestamp, 'iso')
 
+                evidence_to_log = self.get_evidence_to_log(
+                    srcip,
+                    description,
+                    twid,
+                    flow_datetime,
+                    profileid
+                )
                 # Add the evidence to alerts.log
-                self.add_to_log_file(alert_to_log)
-                tw_evidence: dict = self.get_evidence_for_tw(profileid, twid)
+                self.add_to_log_file(evidence_to_log)
 
+                tw_evidence: dict = self.get_evidence_for_tw(profileid, twid)
                 # The accumulated threat level is for all the types of evidence for this profile
                 accumulated_threat_level: float = \
                     self.get_accumulated_threat_level(tw_evidence)
@@ -690,19 +696,18 @@ class Evidence(ICore):
                     ):
                         # store the alert in our database
                         # the alert ID is profileid_twid + the ID of the last evidence causing this alert
-                        alert_ID = f'{profileid}_{twid}_{id}'
+                        alert_id: str = f'{profileid}_{twid}_{id}'
 
-                        self.handle_new_alert(alert_ID, tw_evidence)
+                        self.handle_new_alert(alert_id, tw_evidence)
 
                         # print the alert
-                        alert_to_print = (
-                            self.format_evidence_causing_this_alert(
+                        alert_to_print = self.format_evidence_causing_this_alert(
                                 tw_evidence,
                                 profileid,
                                 twid,
                                 flow_datetime,
                             )
-                        )
+
                         self.print(f'{alert_to_print}', 1, 0)
 
                         if self.popup_alerts:
