@@ -156,15 +156,23 @@ class Evidence(ICore):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')
 
-    def add_to_json_log_file(self, IDEA_dict: dict, all_uids):
+    def add_to_json_log_file(
+             self,
+             IDEA_dict: dict,
+             all_uids,
+             accumulated_threat_level: float =0
+        ):
         """
-        Add a new evidence line to our alerts.json file in json IDEA format.
+        Add a new evidence line to our alerts.json file in json format.
         :param IDEA_dict: dict containing 1 alert
         :param all_uids: the uids of the flows causing this evidence
         """
         try:
             # we add extra fields to alerts.json that are not in the IDEA format
-            IDEA_dict['uids'] = all_uids
+            IDEA_dict.update({
+                'uids': all_uids,
+                'accumulated_threat_level': accumulated_threat_level
+            })
             json.dump(IDEA_dict, self.jsonfile)
             self.jsonfile.write('\n')
         except KeyboardInterrupt:
@@ -374,21 +382,18 @@ class Evidence(ICore):
         # log in alerts.log
         self.add_to_log_file(msg)
 
-        # log the alert
-        blocked_srcip_dict = {
-            'type': 'alert',
-            'profileid': profileid,
-            'twid': twid,
-            'threat_level': accumulated_threat_level,
-        }
         # Add a json field stating that this ip is blocked in alerts.json
-        # replace the evidence description with slip msg that this is a blocked profile
-
+        # replace the evidence description with slips msg that this is a
+        # blocked profile
         IDEA_dict['Format'] = 'Json'
         IDEA_dict['Category'] = 'Alert'
+        IDEA_dict['profileid'] = profileid
+        IDEA_dict['twid'] = twid
+        IDEA_dict['threat_level'] = accumulated_threat_level
         IDEA_dict['Attach'][0]['Content'] = msg
+
         # add to alerts.json
-        self.add_to_json_log_file(IDEA_dict, [])
+        self.add_to_json_log_file(IDEA_dict, [], accumulated_threat_level)
 
 
     def shutdown_gracefully(self):
@@ -500,7 +505,7 @@ class Evidence(ICore):
             )
         return accumulated_threat_level
 
-    def get_last_evidence_ID(self, tw_evidence):
+    def get_last_evidence_ID(self, tw_evidence) -> str:
         return list(tw_evidence.keys())[-1]
 
     def send_to_exporting_module(self, tw_evidence):
@@ -627,9 +632,11 @@ class Evidence(ICore):
                 flow_datetime = utils.convert_format(timestamp, 'iso')
 
                 # prepare evidence for text log file
-                evidence = self.format_evidence_string(srcip, evidence_type, attacker, description)
+                evidence_str = self.format_evidence_string(srcip, evidence_type, attacker, description)
+
+
                 # prepare evidence for json log file
-                IDEA_dict = utils.IDEA_format(
+                IDEA_dict: dict = utils.IDEA_format(
                     srcip,
                     evidence_type,
                     attacker_direction,
@@ -645,27 +652,30 @@ class Evidence(ICore):
                 )
 
                 # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
-                alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
-                alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
+                alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence_str}'
+                alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence_str)
 
                 # Add the evidence to alerts.log
                 self.add_to_log_file(alert_to_log)
+                tw_evidence: dict = self.get_evidence_for_tw(profileid, twid)
+
+                # The accumulated threat level is for all the types of evidence for this profile
+                accumulated_threat_level: float = \
+                    self.get_accumulated_threat_level(tw_evidence)
+
                 # add to alerts.json
-                self.add_to_json_log_file(IDEA_dict, all_uids)
+                self.add_to_json_log_file(IDEA_dict, all_uids, accumulated_threat_level)
 
                 self.db.set_evidence_for_profileid(IDEA_dict)
                 self.db.publish('report_to_peers', json.dumps(data))
 
-                if tw_evidence := self.get_evidence_for_tw(profileid, twid):
+                if tw_evidence:
                     # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
                     # profiles for attackers
 
-                    # The accumulated threat level is for all the types of evidence for this profile
-                    accumulated_threat_level = self.get_accumulated_threat_level(tw_evidence)
-
-                    ID = self.get_last_evidence_ID(tw_evidence)
+                    id: str = self.get_last_evidence_ID(tw_evidence)
 
                     # if the profile was already blocked in this twid, we shouldn't alert
                     profile_already_blocked = self.db.checkBlockedProfTW(profileid, twid)
@@ -680,7 +690,7 @@ class Evidence(ICore):
                     ):
                         # store the alert in our database
                         # the alert ID is profileid_twid + the ID of the last evidence causing this alert
-                        alert_ID = f'{profileid}_{twid}_{ID}'
+                        alert_ID = f'{profileid}_{twid}_{id}'
 
                         self.handle_new_alert(alert_ID, tw_evidence)
 
