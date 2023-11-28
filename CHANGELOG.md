@@ -1,5 +1,7 @@
 -1.0.9 (December 2023)
 - Fix using -k to kill opened redis servers.
+- Better README and docs.
+- Improve URLhaus detections.
 - 
 
 

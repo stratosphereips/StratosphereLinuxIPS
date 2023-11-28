@@ -259,9 +259,12 @@ docker run -it --rm --net=host --cap-add=NET_ADMIN -v /etc/localtime:/etc/localt
 
 # Roadmap
 
-Here are the future goals for Slips:
+**In Progress**:
+* Global P2P
+
+
+**Future goals for Slips**:
 * Easier installation with a package manager like snap or apt
-* Global P2P support
 * More ML detection models
 
 
