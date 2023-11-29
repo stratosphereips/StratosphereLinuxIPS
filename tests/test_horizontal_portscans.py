@@ -3,35 +3,102 @@ import random
 
 from tests.module_factory import ModuleFactory
 
-def enough_dports_to_reach_the_threshold(mock_rdb):
+random_ports = {
+    1234: 1,
+    2222: 1,
+    12234: 1,
+    5555: 1,
+}
+def generate_random_ip():
+    return ".".join(str(random.randint(0, 255)) for _ in range(4))
+
+def enough_dstips_to_reach_the_threshold(mock_rdb):
     """
     returns conns to dport that are not enough
     to reach the minimum dports to trigger the first scan
     """
     module = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
-
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(
-        module.port_scan_minimum_dips, 100)
+    amount_of_dstips: int = random.randint(
+        module.port_scan_minimum_dips,
+        module.port_scan_minimum_dips+100
+    )
+    dport = 5555
+    res = {
+            dport: {
+                'dstips': {'8.8.8.8': {'dstports': random_ports}}
+            }
+    }
+    
+    for _ in range(amount_of_dstips+1):
+        res[dport]['dstips'].update({
+            generate_random_ip() : {
+                'dstports': random_ports
+                }
+        })
 
+    return res
+
+
+
+def not_enough_dstips_to_reach_the_threshold(mock_rdb):
+    """
+    returns conns to dport that are not enough
+    to reach the minimum dports to trigger the first scan
+    """
+    module = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
+    # get a random list of ints(ports) that are below the threshold
+    # Generate a random number between 0 and threshold
+    amount_of_dstips: int = random.randint(
+        0,
+        module.port_scan_minimum_dips
+    )
     dport = 5555
     res = {
         dport: {
-            'dstips': {
-                '8.8.8.8': {
-                    'dstports': {
-                        1234: 1,
-                        2222: 1,
-                        12234: 1,
-                        5555: 1,
-                        }
-                    }
-                }
+            'dstips': {'8.8.8.8': {'dstports': random_ports}}
         }
     }
+    
+    for _ in range(amount_of_dstips+1):
+        res[dport]['dstips'].update({
+            generate_random_ip() : {
+                'dstports': random_ports
+                }
+        })
 
     return res
+
+@pytest.mark.parametrize(
+    'get_test_conns, expected_return_val',
+    [
+        (not_enough_dstips_to_reach_the_threshold, False),
+        (enough_dstips_to_reach_the_threshold, True),
+    ]
+)
+def test_min_dstips_threshold(
+        get_test_conns,
+        expected_return_val: bool,
+        mock_rdb
+    ):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+
+    profileid = 'profile_1.1.1.1'
+    timewindow = 'timewindow0'
+    dport = 5555
+
+    dports: dict = get_test_conns(mock_rdb)
+    mock_rdb.get_data_from_profile_tw.return_value = dports
+
+    cache_key = vertical_ps.get_cache_key(profileid, timewindow, dport)
+    amount_of_dips = len(dports[dport]['dstips'])
+
+    assert vertical_ps.check_if_enough_dports_to_trigger_an_evidence(
+        cache_key, amount_of_dips
+    ) == expected_return_val
+
+
 
 
 @pytest.mark.parametrize(
@@ -44,7 +111,7 @@ def enough_dports_to_reach_the_threshold(mock_rdb):
         (6, True),
     ]
 )
-def test_combining_evidence(
+def test_combine_evidence(
         number_of_pending_evidence,
         expected_return_val: bool,
         mock_rdb
@@ -59,11 +126,6 @@ def test_combining_evidence(
 
     horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
     key: str = horizontal_ps.get_cache_key(profileid, timewindow, dstip)
-
-    # get a random bunch of dstips, this dict is not important
-    dports: dict = enough_dports_to_reach_the_threshold(mock_rdb)
-    dstips: dict = dports[dport]['dstips']
-
 
     for evidence_ctr in range(number_of_pending_evidence+1):
         # as if there's 1 pending evience
