@@ -67,7 +67,7 @@ def enough_dports_to_reach_the_threshold(mock_rdb):
     return res
 
 
-def not_enough_dports_to_combine_1_evidence(mock_rdb, key):
+def not_enough_dports_to_combine_1_evidence(mock_rdb):
     """
     returns dports that are not enough to combine an evidence
     any number of dports within the range threshold -> threshold +15 is ok
@@ -75,8 +75,6 @@ def not_enough_dports_to_combine_1_evidence(mock_rdb, key):
     :param key:
     """
     module = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
-
-
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
@@ -149,7 +147,6 @@ def test_combining_evidence(
     ):
     """
     first evidence will be alerted, the rest will be combined
-
     """
     profileid = 'profile_1.1.1.1'
     timewindow = 'timewindow0'
@@ -203,7 +200,7 @@ def test_combining_evidence(
         (15, 20, True),
     ]
 )
-def test_number_of_dports_comparison(mock_rdb,
+def test_check_if_enough_dports_to_trigger_an_evidence(mock_rdb,
                                    prev_amount_of_dports,
                                    cur_amount_of_dports,
                                    expected_return_val):

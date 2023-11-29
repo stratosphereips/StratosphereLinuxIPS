@@ -8,7 +8,7 @@ class HorizontalPortscan():
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
-        self.cache_det_thresholds = {}
+        self.cached_tw_thresholds = {}
         # the separator used to separate the IP and the word profile
         self.fieldseparator = self.db.get_field_separator()
 
@@ -137,7 +137,7 @@ class HorizontalPortscan():
         evidence
         is higher than the previous one +5
         """
-        prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
+        prev_amount_dips = self.cached_tw_thresholds.get(cache_key, 0)
 
         # so the first alert will always report 5 dstips,
         # and then 10+,15+,20+ etc
@@ -148,7 +148,7 @@ class HorizontalPortscan():
             amount_of_dips >= self.port_scan_minimum_dips
             and prev_amount_dips + 5 <= amount_of_dips
         ):
-            self.cache_det_thresholds[cache_key] = amount_of_dips
+            self.cached_tw_thresholds[cache_key] = amount_of_dips
             return True
         return False
 
