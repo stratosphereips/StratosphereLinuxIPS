@@ -30,5 +30,6 @@ printf "0" | ./slips.py -k
 
 python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
 python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
+python3 -m pytest -s tests/integration_tests/test_portscans.py.py  -p no:warnings -vv
 printf "0" | ./slips.py -k
 ./slips.py -cc
