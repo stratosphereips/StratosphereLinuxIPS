@@ -40,15 +40,20 @@ class HorizontalPortscan():
                 final_evidence_uids += evidence_uids
                 final_pkts_sent += pkts_sent
 
+            evidence = {
+                        'protocol': protocol,
+                        'profileid': profileid,
+                        'twid': twid,
+                        'uid': final_evidence_uids,
+                        'dport':dport,
+                        'pkts_sent': final_pkts_sent,
+                        'timestamp': timestamp,
+                        'state': state,
+                        'amount_of_dips': amount_of_dips
+                        }
+
             self.set_evidence_horizontal_portscan(
-                timestamp,
-                final_pkts_sent,
-                protocol,
-                profileid,
-                twid,
-                final_evidence_uids,
-                dport,
-                amount_of_dips
+                evidence
             )
         # reset the dict since we already combined the evidence
         self.pending_horizontal_ps_evidence = {}
@@ -152,16 +157,18 @@ class HorizontalPortscan():
             return True
         return False
 
-    def check(self, profileid, twid):
-        def get_uids():
-            """
-            returns all the uids of flows to this port
-            """
-            uids = []
-            for dip in dstips:
-                for uid in dstips[dip]['uid']:
-                     uids.append(uid)
-            return uids
+
+    def get_uids(self, dstips: dict):
+        """
+        returns all the uids of flows sent on a sigle port ti different dstination IPs
+        """
+        uids = []
+        for dstip in dstips:
+            for uid in dstips[dstip]['uid']:
+                 uids.append(uid)
+        return uids
+
+    def check(self, profileid: str, twid: str):
 
         saddr = profileid.split(self.fieldseparator)[1]
         try:
@@ -205,7 +212,7 @@ class HorizontalPortscan():
                         'protocol': protocol,
                         'profileid': profileid,
                         'twid': twid,
-                        'uid': get_uids(),
+                        'uid': self.get_uids(dstips),
                         'dport':dport,
                         'pkts_sent':self.get_packets_sent(dstips),
                         'timestamp': next(iter(dstips.values()))['stime'],
@@ -246,7 +253,8 @@ class HorizontalPortscan():
                             evidence["amount_of_dips"])
         # for all the combined alerts, the following params should be equal
         key = f'{evidence["profileid"]}-{evidence["twid"]}-' \
-              f'{evidence["state"]}-{evidence["protocol"]}-{evidence["devidence"]["port"]}'
+              f'{evidence["state"]}-{evidence["protocol"]}-' \
+              f'{evidence["dport"]}'
 
         try:
             self.pending_horizontal_ps_evidence[key].append(evidence_details)
