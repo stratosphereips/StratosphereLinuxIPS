@@ -52,7 +52,7 @@ def not_enough_dstips_to_reach_the_threshold(mock_rdb):
     # Generate a random number between 0 and threshold
     amount_of_dstips: int = random.randint(
         0,
-        module.port_scan_minimum_dips
+        module.port_scan_minimum_dips - 1
     )
     dport = 5555
     res = {
