@@ -257,13 +257,14 @@ class VerticalPortscan:
 
             # For each dstip, see if the amount of ports connections is over the threshold
             for dstip in dstips.keys():
-                cache_key = self.get_cache_key(profileid, twid, dstip)
+
                 dstports: dict = dstips[dstip]['dstports']
                 # Get the total amount of pkts sent to all
                 # ports on the same host
                 pkts_sent = sum(dstports[dport] for dport in dstports)
                 amount_of_dports = len(dstports)
 
+                cache_key = self.get_cache_key(profileid, twid, dstip)
                 if self.check_if_enough_dports_to_trigger_an_evidence(
                         cache_key, amount_of_dports
                         ):
