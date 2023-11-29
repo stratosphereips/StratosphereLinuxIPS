@@ -158,6 +158,7 @@ class Evidence(ICore):
              self,
              IDEA_dict: dict,
              all_uids,
+             timewindow: str,
              accumulated_threat_level: float =0
         ):
         """
@@ -169,7 +170,8 @@ class Evidence(ICore):
             # we add extra fields to alerts.json that are not in the IDEA format
             IDEA_dict.update({
                 'uids': all_uids,
-                'accumulated_threat_level': accumulated_threat_level
+                'accumulated_threat_level': accumulated_threat_level,
+                'timewindow': int(timewindow.replace('timewindow', '')),
             })
             json.dump(IDEA_dict, self.jsonfile)
             self.jsonfile.write('\n')
@@ -380,12 +382,16 @@ class Evidence(ICore):
         IDEA_dict['Format'] = 'Json'
         IDEA_dict['Category'] = 'Alert'
         IDEA_dict['profileid'] = profileid
-        IDEA_dict['twid'] = twid
         IDEA_dict['threat_level'] = accumulated_threat_level
         IDEA_dict['Attach'][0]['Content'] = msg
 
         # add to alerts.json
-        self.add_to_json_log_file(IDEA_dict, [], accumulated_threat_level)
+        self.add_to_json_log_file(
+            IDEA_dict,
+            [],
+            twid,
+            accumulated_threat_level
+        )
 
 
     def shutdown_gracefully(self):
@@ -670,7 +676,12 @@ class Evidence(ICore):
                     self.get_accumulated_threat_level(tw_evidence)
 
                 # add to alerts.json
-                self.add_to_json_log_file(IDEA_dict, all_uids, accumulated_threat_level)
+                self.add_to_json_log_file(
+                      IDEA_dict,
+                      all_uids,
+                      twid,
+                      accumulated_threat_level,
+                    )
 
                 self.db.set_evidence_for_profileid(IDEA_dict)
                 self.db.publish('report_to_peers', json.dumps(data))
