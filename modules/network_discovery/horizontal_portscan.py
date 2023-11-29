@@ -44,7 +44,7 @@ class HorizontalPortscan():
                         'protocol': protocol,
                         'profileid': profileid,
                         'twid': twid,
-                        'uid': final_evidence_uids,
+                        'uids': final_evidence_uids,
                         'dport':dport,
                         'pkts_sent': final_pkts_sent,
                         'timestamp': timestamp,
@@ -212,7 +212,7 @@ class HorizontalPortscan():
                         'protocol': protocol,
                         'profileid': profileid,
                         'twid': twid,
-                        'uid': self.get_uids(dstips),
+                        'uids': self.get_uids(dstips),
                         'dport':dport,
                         'pkts_sent':self.get_packets_sent(dstips),
                         'timestamp': next(iter(dstips.values()))['stime'],
@@ -220,12 +220,15 @@ class HorizontalPortscan():
                         'amount_of_dips': amount_of_dips
                         }
 
-                    self.decide_if_time_to_set_evidence_or_combine(evidence, cache_key)
+                    self.decide_if_time_to_set_evidence_or_combine(
+                        evidence,
+                        cache_key
+                        )
 
     def decide_if_time_to_set_evidence_or_combine(
-        self,
-        evidence: dict,
-        cache_key: str
+            self,
+            evidence: dict,
+            cache_key: str
         ) -> bool:
         """
         sets the evidence immediately if it was the
@@ -307,5 +310,5 @@ class HorizontalPortscan():
             proto=evidence["protocol"],
             profileid=evidence["profileid"],
             twid=evidence["twid"],
-            uid=evidence["uid"]
+            uid=evidence["uids"]
             )
