@@ -82,7 +82,7 @@ def test_min_dstips_threshold(
         expected_return_val: bool,
         mock_rdb
     ):
-    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
 
     profileid = 'profile_1.1.1.1'
     timewindow = 'timewindow0'
@@ -91,10 +91,10 @@ def test_min_dstips_threshold(
     dports: dict = get_test_conns(mock_rdb)
     mock_rdb.get_data_from_profile_tw.return_value = dports
 
-    cache_key = vertical_ps.get_cache_key(profileid, timewindow, dport)
+    cache_key = horizontal_ps.get_cache_key(profileid, timewindow, dport)
     amount_of_dips = len(dports[dport]['dstips'])
 
-    assert vertical_ps.check_if_enough_dports_to_trigger_an_evidence(
+    assert horizontal_ps.check_if_enough_dstips_to_trigger_an_evidence(
         cache_key, amount_of_dips
     ) == expected_return_val
 
@@ -128,8 +128,6 @@ def test_combine_evidence(
     key: str = horizontal_ps.get_cache_key(profileid, timewindow, dstip)
 
     for evidence_ctr in range(number_of_pending_evidence+1):
-        # as if there's 1 pending evience
-        # module.pending_vertical_ps_evidence[key].append(1)
         # this will add 2 evidence to the pending evidence list
         evidence = {
                 'protocol': 'TCP',
@@ -169,7 +167,7 @@ def test_combine_evidence(
         (15, 20, True),
     ]
 )
-def test_check_if_enough_dports_to_trigger_an_evidence(mock_rdb,
+def test_check_if_enough_dstips_to_trigger_an_evidence(mock_rdb,
                                    prev_amount_of_dstips,
                                    cur_amount_of_dstips,
                                    expected_return_val):
