@@ -11,10 +11,8 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
     * On a linux host
       * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors)
       * [With P2P support](#for-p2p-support-on-linux-or-macos-non-m1-architecture)
-
     * On MacOS M1 host
       * [Without P2P support](#for-macos-m1)
-    
     * On MacOS (non-M1 processor)
       * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors) 
       * [With P2P support](#for-p2p-support-on-linux-or-macos-non-m1-architecture)
@@ -47,19 +45,65 @@ For more advanced users, you can:
 
 1. First, choose the correct image for your architecture
 
-#####  For linux and MacOS non-M1 processors
+#####  For linux 
 
-    docker run -it --rm --net=host stratosphereips/slips:latest
+1. Analyse your own traffic (without using p2p)
+	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
+    - Please change the name of the interface for your own. 
+    - Check the alerts slips generated
+      - ```tail -f output/eno1*/alerts.log ```
+      
+2. Analyze your pcap file 
+	- Prepare a dataset directory
+		- `mkdir dataset`
+		- `cp myfile.pcap dataset`
+	  - Run Slips
+		- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
+	  - Check the alerts slips generated
+		  - ```tail -f output/myfile*/alerts.log ```
+
 
 #####  For MacOS M1
 
     docker run -it --rm --net=host stratosphereips/slips_macos_m1:latest
 
+Docker with P2P is not supported for MacOS M1.
 
-#####  For p2p support on Linux or MacOS non-M1 architecture
+#### For MacOS Intel processors
 
-    docker run -it --rm --net=host stratosphereips/slips_p2p:latest
+1. Analyse your own traffic (without using p2p)
+	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
+    - Please change the name of the interface for your own. 
+    - Check the alerts slips generated
+      - ```tail -f output/eno1*/alerts.log ```
+      
+2. Analyze your pcap file 
+	- Prepare a dataset directory
+		- `mkdir dataset`
+		- `cp myfile.pcap dataset`
+	  - Run Slips
+		- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
+	  - Check the alerts slips generated
+		  - ```tail -f output/myfile*/alerts.log ```
 
+
+#####  For p2p support on Linux 
+
+To analyze your own traffic with p2p
+	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
+    - Please change the name of the interface for your own. 
+    - Check evidence
+      ```tail -f output_dir/alerts.log ```
+
+#### For P2P support on MacOS Intel architecture
+
+To analyze your own traffic with p2p
+	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
+    - Please change the name of the interface for your own. 
+    - Check evidence
+      ```tail -f output_dir/alerts.log ```
+
+---
 
 Once your image is ready, you can run slips using the following command:
 
@@ -144,6 +188,11 @@ To run slips on a pcap instead of your interface you can do the following:
 2. change the entrypoint in the docker compose file to
     ["python3","/StratosphereLinuxIPS/slips.py","-f","dataset/<pcapname>.pcap"]
 3. restart slips using ```docker compose -f docker/docker-compose.yml up```
+
+
+#### Limitations
+
+The main limitation of running Slips in a Docker is that every time the container stops, all files inside the container are deleted, including the Redis database of cached data, and you lose all your Threat Intelligence (TI) data and previous detections. Next time you run Slips, it will start making detections without all the TI data until downloading the data again. The only solution is to keep the container up between scans.
 
 
 ---
@@ -285,13 +334,36 @@ To make sure that zeek can be found in the system we will add its link to a know
 #### Running Slips for the First Time
 
 
-Once Redis is running it’s time to clone the Slips repository and run it:
+Be aware that the first time you run Slips it will start updating 
+all the databases and threat intelligence files in the background.
+However, it will give you as many detections as possible _while_ updating. 
+You may have more detections if you rerun Slips after the updates.
+Slips behaves like this, so you don't have to wait for the updates to 
+finish to have some detections. however, you can change that in the config file by setting ```wait_for_TI_to_finish``` to yes.
 
-	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-	cd StratosphereLinuxIPS/
-	./slips.py -c config/slips.conf -f dataset/test7-malicious.pcap
 
-You need to run slips with sudo to enable blocking (Optional) 
+Depending on the remote sites, downloading and updating the DB may take up to 4 minutes. 
+Slips stores this information in a cache Redis database, 
+which is kept in memory when Slips stops. Next time Slips runs, it will read from this database.
+The information in the DB is updated periodically according to the configuration file (usually one day).
+
+You can check if the DB is running this by looking at your processes:
+
+```
+    ps afx | grep redis
+    9078 ?        Ssl    1:25 redis-server *:6379
+```
+
+You can kill this redis database by running:
+
+```
+    ./slips.py -k
+    Choose which one to kill [0,1,2 etc..]
+    [0] Close all servers
+    [1] conn.log - port 6379
+```
+then choosing 1.
+
 
 
 ## Installing Slips on a Raspberry PI
