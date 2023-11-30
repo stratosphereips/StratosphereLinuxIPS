@@ -29,8 +29,10 @@ Slips v1.0.8
 # Table of Contents
 
 - [Introduction](#introduction)
-- [Installation](#installation)
 - [Usage](#usage)
+- [GUI](#graphical-user-interface)
+- [Installation](#installation)
+- [Extended Usage](#extended-usage)
 - [Configuration](#configuration)
 - [Features](#features)
 - [Contributing](#contributing)
@@ -39,7 +41,6 @@ Slips v1.0.8
 - [License](#license)
 - [Credits](#credits)
 - [Changelog](#changelog)
-- [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
 - [Roadmap](#roadmap)
 - [Demos](#demos)
 - [Funding](#funding)
@@ -65,17 +66,106 @@ Slips is Python-based and relies on [Zeek network analysis framework](https://ze
 
 Slips needs Redis >= 7.0.4 for interprocess communication. Redis can be installed directly on the host computer or in Docker.
 
+
+# Usage
+
+The recommended way to use Slips is on Docker.
+
+## Linux
+```
+docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+```
+
+``` 
+./slips.py -f dataset/test7-malicious.pcap -o output_dir
+```
+
+```
+cat output_dir/alerts.log
+```
+
+## Macos M1
+
+```
+docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
+```
+
+``` 
+./slips.py -f dataset/test7-malicious.pcap -o output_dir
+```
+
+```
+cat output_dir/alerts.log
+```
+
+
+## Macos Intel
+
+```
+docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+```
+
+``` 
+./slips.py -f dataset/test7-malicious.pcap -o output_dir
+```
+
+```
+cat output_dir/alerts.log
+```
+
+
+For more installation options: https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installation
+
+For a detailed explanation of Slips parameters: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-parameters
+
+
+
+# Graphical User Interface
+
+To check Slips output using a GUI you can use the web interface 
+or our command-line based interface Kalipso 
+
+### Web interface
+
+    ./webinteface.sh
+
+Then navigate to ```http://localhost:55000/``` from your browser.
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
+
+For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
+
+
+### Kalispo (CLI-Interface)
+
+    ./kalipso.sh
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalipso.png" width="850px"
+
+
+For more info about the Kalipso interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#kalipso
+
+---
+
+
+
 # Installation
+
 
 Slips can be run on different platforms, the easiest and most recommended way if you're a Linux user is to run Slips on Docker.
 
+
 ```
+
 docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+
 ```
+
 
 Check the installation guide for more Installation options:
 
-* [Docker](#slips-in-docker)
+
+* [Docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker)
   * Dockerhub (recommended)
     * On a Linux host
       * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors)
@@ -96,45 +186,12 @@ Check the installation guide for more Installation options:
 
 
 
-# Usage
+---
 
-To analyze a PCAP with Slips you can run the following command
-
-    ./slips.py -c config/slips.conf -f dataset/test7-malicious.pcap -o my_output_dir/
-
-Here's what the above command does:
-* -c to run slips with the default configuration file at config/slips.conf 
-* -f to give slips a PCAP, a suricata file, an Argus file or a zeek file or directory.
-* -o to specify the output directory, if not present Slips will create it.
-
-For a detailed explanation of Slips parameters [check the docs here](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-parameters)
-
-You can view Slips output using kalipso in your terminal using:
-
-    ./kalipso.sh
-
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalipso.png" width="850px"
-title="Kalispo GUI">
+# Extended Usage
 
 
-Or use Slips' web interface by using:
 
-    ./webinteface.sh
-
-Then navigate to ```http://localhost:55000/``` from your browser.
-
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
-title="Web Interface">
-
-All your evidence and alerts are stored in the output directory specified in the above command by using -o, here's how to check them
-
-    cat my_output_dir/alerts.json 
-    cat my_output_dir/alerts.txt
-
-
-You can enable [popup notifications](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications) of evidence, enable [blocking](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-permissions), [plug in your own zeek script](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#plug-in-a-zeek-script) and more.
-
-Check the usage docs for more details: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html
 
 
 # Configuration
@@ -144,6 +201,8 @@ Slips has a [config/slips.conf](https://github.com/stratosphereips/StratosphereL
 * you can set your own home network to make sure you only see the analysis of your  local network by setting the home_network parameter
 * You can change the analysis direction to ```all```  if you want to see the attacks from and to your computer
 * You can also specify whether to ```train``` or ```test``` the ML models 
+
+* You can enable [popup notifications](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications) of evidence, enable [blocking](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-permissions), [plug in your own zeek script](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#plug-in-a-zeek-script) and more.
 
 
 More details about the config file options here https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#modifying-the-configuration-file
@@ -231,31 +290,6 @@ Contributors:
 
 https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/CHANGELOG.md
 
-# Frequently Asked Questions (FAQ)
-
-##### Slips starting too slow in Docker
-
-Make sure you're not running many containers at the same time because they share kernel resources 
-even though they're isolated.
-
-
-##### Getting "Illegal instruction" error when running slips
-
-If the tensorflow version you're using isn't compatible with your architecture, 
-you will get the "Illegal instruction" error and slips will terminate.
-
-To fix this you can disable the modules that use tensorflow by adding
-```rnnccdetection, flowmldetection``` to the ```disable``` key in ```config/slips.conf```
-
-
-##### Docker time is not in sync with that of the host
-
-You can add your local /etc/localtime as volume in Slips Docker container by using:
-
-```
-docker run -it --rm --net=host --cap-add=NET_ADMIN -v /etc/localtime:/etc/localtime:ro --name slips stratosphereips/slips:latest 
-```
-
 
 # Roadmap
 
@@ -279,7 +313,6 @@ The following videos contain demos of Slips in action in various events:
 - 2020 Hack In The Box CyberWeek, Android RATs Detection With A Machine Learning-Based Python IDS [[video](https://www.youtube.com/watch?v=wx0V3qWdmyk)]
 - 2019 OpenAlt, Fantastic Attacks and How Kalipso can Find Them [[video](https://www.youtube.com/watch?v=p2FL2sECpS0&t=1s)]
 - 2016 Ekoparty, Stratosphere IPS. The free machine learning malware detection [[video](https://www.youtube.com/watch?v=IazEdK8R4YI)]
-
 
 
 # Funding
