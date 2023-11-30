@@ -4,7 +4,7 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 
 
 
-# Table of Contents
+## Table of Contents
 
 * [Docker](#slips-in-docker)
   * Dockerhub (recommended)
@@ -65,7 +65,7 @@ Once your image is ready, you can run slips using the following command:
 
     ./slips.py -f dataset/dataset/test7-malicious.pcap
 
-To analyze a your own file using slips, you can mount it to your docker using -v
+To analyze your own file using slips, you can mount it to your docker using -v
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
@@ -73,15 +73,60 @@ To analyze a your own file using slips, you can mount it to your docker using -v
 	./slips.py -f dataset/myfile.pcap
 
 
-In Linux OS, the Slips can be used to analyze and block network traffic on the host network interface. To allow the container to see the host interface traffic and block malicious connections, it needs to run with the option --cap-add=NET_ADMIN. This option enables the container to interact with the network stack of the host computer. To block malicious behavior, run Slips with the parameter -p.
 
+### Updating the image in case there is a new one
+
+	docker pull stratosphereips/slips:latest
+
+### Known Error in old GPUs
+If you happen to get the error `Illegal instruction (core dumped)` it means that tensorflow can not be run from inside Docker in your GPU. We recommend to  disable the modules using machine learning by modifying the `disable` line in the configuration to be like this
+	`disable = [template, ensembling, rnn-cc-detection, flowmldetection]`
+
+If you were running slips directly from the docker without cloning the repo, you can do this modification in two ways:
+1. Modify the container
+	1. Run the docker in background using the same command as above but with `-d`
+	2. Get into the docker with `docker exec -it slips /bin/bash`, and then modifying the configuration file in `config/slips.conf` to add the disabled modules
+	3. Run Slips from inside the docker
+			`./slips.py -i enp7s0`
+1. You can 
+	1. Clone the Slips repo (clone the same version as the docker you are downloading), 
+	2. Modify your local `config/slips.conf`
+	3. Run the docker command above but by mounting the volume of the config.
+		`docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/config:/StratosphereLinuxIPS/config/ -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
+
+---
+### Run Slips sharing files between the host and the container
+
+The following instructions will guide you on how to run a Slips docker container with file sharing between the host and the container.
+
+```bash
+    # create a directory to load pcaps in your host computer
+    mkdir ~/dataset
+    
+    # copy the pcap to analyze to the newly created folder
+    cp <some-place>/myfile.pcap ~/dataset
+    
+    # create a new Slips container mapping the folder in the host to a folder in the container
+    docker run -it --rm --net=host --name slips -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+    
+    # run Slips on the pcap file mapped to the container
+    ./slips.py -f dataset/myfile.pcap
+```
+
+### Run Slips with access to block traffic on the host network
+
+In Linux OS, the Slips can be used to analyze and **block** network traffic on the host network interface. To allow the container to see the host interface traffic and block malicious connections, it needs to run with the option `--cap-add=NET_ADMIN`. This option enables the container to interact with the network stack of the host computer. To block malicious behavior, run Slips with the parameter `-p`.
+
+Change eno1 in the command below to your own interface
+
+```bash
     # run a new Slips container with the option to interact with the network stack of the host
     docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
     
     # run Slips on the host interface `eno1` with active blocking `-p`
-    ./slips.py -c config/slips.conf -i eno1 -p
+    ./slips.py -i eno1 -p
+```
 
----
 
 #### Running Slips using docker compose
 

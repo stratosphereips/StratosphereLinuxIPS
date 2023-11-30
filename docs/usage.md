@@ -295,8 +295,7 @@ You can use Slips' web interface by running slips with ```-w``` or running:
 Then navigate to ```http://localhost:55000/``` from your browser.
 
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
-title="Web Interface">
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px" title="Web Interface">
 
 Just like kalipso, On the right column, you can see a list of all the IPs seen in your traffic.
 
