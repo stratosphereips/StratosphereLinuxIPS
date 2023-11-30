@@ -243,7 +243,10 @@ analysis and detected malicious behaviour can be analyzed as following:
 
 
 There are two options how to run Kalipso Locally:
-1. You can run Kalipso as a shell script in another terminal using the command:
+
+### Kalipso
+
+You can run Kalipso as a shell script in another terminal using the command:
 
 	```./kalipso.sh```
 
@@ -283,8 +286,9 @@ On the very top you can see the ASN, the GEO location, and the virustotal score 
 Check how to setup virustotal in Slips here https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications
 
 
+### The Web Interface
 
-2. You can use Slips' web interface by running slips with ```-w``` or running:
+You can use Slips' web interface by running slips with ```-w``` or running:
 
    ./webinteface.sh
 
@@ -309,6 +313,7 @@ You can view the traffic of each time window by clicking on it
 * The Alerts button shows the alerts Slips saw for this IP, each alert is a bunch of evidence that the given profile is malicious. Slips decides to block the IP if an alert is generated for it (if running with -p). Clicking on each alert expands the evidence that resulted in the alert.
 * The Evidence button shows all the evidence of the timewindow whether they were part of an alert or not. 
 
+--- 
 
 If you're running slips in docker you will need to add one of the following
 parameters to docker to be able to use the web interface:
