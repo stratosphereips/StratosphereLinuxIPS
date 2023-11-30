@@ -131,7 +131,7 @@ or our command-line based interface Kalipso
 Then navigate to ```http://localhost:55000/``` from your browser.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px">
-c
+
 For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
 
 
