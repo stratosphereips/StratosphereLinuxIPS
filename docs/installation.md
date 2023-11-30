@@ -6,22 +6,22 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 
 ## Table of Contents
 
-* [Docker](#slips-in-docker)
+* [Docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker)
   * Dockerhub (recommended)
     * On a linux host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html)
-      * [With P2P support](#for-p2p-support-on-linux-or-macos-non-m1-architecture)
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux)
+      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux)
     * On MacOS M1 host
-      * [Without P2P support](#for-macos-m1)
-    * On MacOS (non-M1 processor)
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors) 
-      * [With P2P support](#for-p2p-support-on-linux-or-macos-non-m1-architecture)
-  * [Docker-compose](#running-slips-using-docker-compose)
-  * [Dockerfile](#building-slips-from-the-dockerfile)
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
+    * On MacOS Intel processor
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors) 
+      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
+  * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
+  * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
 * Native
-  * [Using install.sh](#install-slips-using-shell-script)
-  * [Manually](#installing-slips-manually)
-* [on RPI (Beta)](#installing-slips-on-a-raspberry-pi)
+  * [Using install.sh](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#install-slips-using-shell-script)
+  * [Manually](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-manually)
+* [on RPI (Beta)](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-on-a-raspberry-pi)
 
 
 
@@ -212,34 +212,7 @@ The main limitation of running Slips in a Docker is that every time the containe
 
 First, you need to check which image is suitable for your architecture.
 
-```mermaid
-graph TD;
-    MacOS[MacOS] --> |M1| p2p_m1
-    p2p_m1 --> |yes| macosm1-P2P-image
-    p2p_m1 --> |no| macosm1-image
-
-    MacOS --> |Other Processor| p2p_other_processor
-    p2p_other_processor --> |yes| macos_other_processor_p2p
-    p2p_other_processor --> |no| macos_other_processor_nop2p
-
-    Windows --> linux_p2p
-    Linux --> linux_p2p
-    linux_p2p --> |yes| linux_p2p_image
-    linux_p2p --> |no| slips_image
-    
-    
-    p2p_other_processor{P2P Support}
-    linux_p2p_image[P2p-image]
-    
-    p2p_m1{P2P Support}
-    slips_image[ubuntu-image]
-
-    macos_other_processor_p2p[P2p-image]
-    macos_other_processor_nop2p[ubuntu-image]
-
-    linux_p2p{P2P Support}
-
-```
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/docker_images.png" width="850px"
 
 
 Before building the docker locally from the Dockerfile, first you should clone Slips repo or download the code directly: 

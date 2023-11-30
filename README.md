@@ -62,16 +62,15 @@ Slips is the first free software behavioral machine learning-based IDS/IPS for e
 
 Slips is supported on Linux and MacOS only. The blocking features of Slips are only supported on Linux
 
-Slips is Python-based and relies on [Zeek network analysis framework](https://zeek.org/get-zeek/) for capturing live traffic and analyzing PCAPs.
-
-Slips needs Redis >= 7.0.4 for interprocess communication. Redis can be installed directly on the host computer or in Docker.
+Slips is Python-based and relies on [Zeek network analysis framework](https://zeek.org/get-zeek/) for capturing live traffic and analyzing PCAPs. and relies on
+Redis >= 7.0.4 for interprocess communication.
 
 
 # Usage
 
 The recommended way to use Slips is on Docker.
 
-## Linux
+#### Linux
 ```
 docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
 ```
@@ -84,7 +83,7 @@ docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips s
 cat output_dir/alerts.log
 ```
 
-## Macos M1
+#### Macos M1
 
 ```
 docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
@@ -99,7 +98,7 @@ cat output_dir/alerts.log
 ```
 
 
-## Macos Intel
+#### Macos Intel
 
 ```
 docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
@@ -114,9 +113,9 @@ cat output_dir/alerts.log
 ```
 
 
-For more installation options: https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installation
+[For more installation options](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installation)
 
-For a detailed explanation of Slips parameters: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-parameters
+[For a detailed explanation of Slips parameters](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-parameters)
 
 
 
@@ -125,22 +124,22 @@ For a detailed explanation of Slips parameters: https://stratospherelinuxips.rea
 To check Slips output using a GUI you can use the web interface 
 or our command-line based interface Kalipso 
 
-### Web interface
+##### Web interface
 
     ./webinteface.sh
 
 Then navigate to ```http://localhost:55000/``` from your browser.
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
-
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px">
+c
 For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
 
 
-### Kalispo (CLI-Interface)
+##### Kalispo (CLI-Interface)
 
     ./kalipso.sh
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalipso.png" width="850px"
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalipso.png" width="850px">
 
 
 For more info about the Kalipso interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#kalipso
@@ -154,29 +153,16 @@ For more info about the Kalipso interface, check the docs: https://stratospherel
 
 Slips can be run on different platforms, the easiest and most recommended way if you're a Linux user is to run Slips on Docker.
 
-
-```
-
-docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
-
-```
-
-
-Check the installation guide for more Installation options:
-
-
 * [Docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker)
   * Dockerhub (recommended)
-    * On a Linux host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors)
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux-or-macos-non-m1-architecture)
-
+    * On a linux host
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux)
+      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux)
     * On MacOS M1 host
       * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
-    
-    * On MacOS (non-M1 processor)
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors) 
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux-or-macos-non-m1-architecture)
+    * On MacOS Intel processor
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors) 
+      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
 * Native
@@ -190,8 +176,33 @@ Check the installation guide for more Installation options:
 
 # Extended Usage
 
-#TODO
+### Linux 
 
+##### [Analyse your own traffic without P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#analyse-your-own-traffic)
+
+
+##### [Analyse your own traffic with P2P ](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux)
+
+
+#### [Analyse a pcap without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#analyze-your-pcap-file)
+
+
+
+### Macos M1
+
+#### [Analyse your own traffic without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#id1)
+
+
+### MacOS Intel processors
+
+
+##### [Analyse your own traffic without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#id2)
+
+
+##### [Analyse your own traffic with using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
+
+
+#### [Analyse a PCAP without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#id2)
 
 
 
@@ -206,8 +217,7 @@ Slips has a [config/slips.conf](https://github.com/stratosphereips/StratosphereL
 * You can enable [popup notifications](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications) of evidence, enable [blocking](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-permissions), [plug in your own zeek script](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#plug-in-a-zeek-script) and more.
 
 
-More details about the config file options here https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#modifying-the-configuration-file
-
+[More details about the config file options here]( https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#modifying-the-configuration-file)
 
 # Features
 Slips key features are:
@@ -244,9 +254,9 @@ We appreciate your contributions and thank you for helping to improve Slips!
 
 
 # Documentation
-User documentation: https://stratospherelinuxips.readthedocs.io/en/develop/
+[User documentation](https://stratospherelinuxips.readthedocs.io/en/develop/)
 
-Code docs: https://stratospherelinuxips.readthedocs.io/en/develop/code_documentation.html 
+[Code docs](https://stratospherelinuxips.readthedocs.io/en/develop/code_documentation.html )
 
 # Troubleshooting
 
