@@ -9,7 +9,7 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 * [Docker](#slips-in-docker)
   * Dockerhub (recommended)
     * On a linux host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux-and-macos-non-m1-processors)
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html)
       * [With P2P support](#for-p2p-support-on-linux-or-macos-non-m1-architecture)
     * On MacOS M1 host
       * [Without P2P support](#for-macos-m1)
@@ -41,19 +41,19 @@ For more advanced users, you can:
 * [Build Slips using the dockerfile](#Running-Slips-using-the-dockerfile)
 
 
-#### Running Slips from DockerHub
+### Running Slips from DockerHub
 
 1. First, choose the correct image for your architecture
 
-#####  For linux 
+####  For linux 
 
-1. Analyse your own traffic (without using p2p)
+###### Analyse your own traffic
 	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
     - Please change the name of the interface for your own. 
     - Check the alerts slips generated
       - ```tail -f output/eno1*/alerts.log ```
-      
-2. Analyze your pcap file 
+
+###### Analyze your PCAP file 
 	- Prepare a dataset directory
 		- `mkdir dataset`
 		- `cp myfile.pcap dataset`
@@ -63,21 +63,28 @@ For more advanced users, you can:
 		  - ```tail -f output/myfile*/alerts.log ```
 
 
-#####  For MacOS M1
+####  For MacOS M1
+
+###### Analyse your own traffic 
+	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
+    - Please change the name of the interface for your own. 
+    - Check the alerts slips generated
+      - ```tail -f output/eno1*/alerts.log ```
 
     docker run -it --rm --net=host stratosphereips/slips_macos_m1:latest
 
 Docker with P2P is not supported for MacOS M1.
 
+
 #### For MacOS Intel processors
 
-1. Analyse your own traffic (without using p2p)
+###### Analyse your own traffic 
 	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
     - Please change the name of the interface for your own. 
     - Check the alerts slips generated
       - ```tail -f output/eno1*/alerts.log ```
       
-2. Analyze your pcap file 
+###### Analyze your PCAP file 
 	- Prepare a dataset directory
 		- `mkdir dataset`
 		- `cp myfile.pcap dataset`
@@ -87,21 +94,24 @@ Docker with P2P is not supported for MacOS M1.
 		  - ```tail -f output/myfile*/alerts.log ```
 
 
-#####  For p2p support on Linux 
 
-To analyze your own traffic with p2p
+####  For P2P support on Linux 
+
+###### To analyze your own traffic with p2p
 	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
     - Please change the name of the interface for your own. 
     - Check evidence
       ```tail -f output_dir/alerts.log ```
 
-#### For P2P support on MacOS Intel architecture
+#### For P2P support on MacOS Intel
 
-To analyze your own traffic with p2p
+###### Analyze your own traffic 
 	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
     - Please change the name of the interface for your own. 
     - Check evidence
       ```tail -f output_dir/alerts.log ```
+
+
 
 ---
 
@@ -115,7 +125,6 @@ To analyze your own file using slips, you can mount it to your docker using -v
 	cp <some-place>/myfile.pcap ~/dataset
 	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
 	./slips.py -f dataset/myfile.pcap
-
 
 
 ### Updating the image in case there is a new one
@@ -171,8 +180,9 @@ Change eno1 in the command below to your own interface
     ./slips.py -i eno1 -p
 ```
 
+---
 
-#### Running Slips using docker compose
+### Running Slips using docker compose
 
 
 Change enp1s0 to your current interface in docker/docker-compose.yml and start slips using
@@ -197,7 +207,7 @@ The main limitation of running Slips in a Docker is that every time the containe
 
 ---
 
-#### Building Slips from the Dockerfile
+### Building Slips from the Dockerfile
 
 
 First, you need to check which image is suitable for your architecture.
@@ -261,6 +271,8 @@ Note that some GPUs don't support tensorflow in docker which may cause "Illegal 
 To fix this you can disable all machine learning based modules when running Slips in docker, or run Slips locally.
 
 ---
+
+
 
 ## Installing Slips natively
 
