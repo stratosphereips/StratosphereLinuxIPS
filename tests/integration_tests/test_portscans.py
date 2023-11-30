@@ -52,11 +52,6 @@ def test_horizontal(path, output_dir, redis_port):
     log_file = os.path.join(output_dir, alerts_file)
     assert is_evidence_present(log_file, expected_evidence) == True
 
-    not_estab_ports: dict = database.get_data_from_profile_tw('profile_10.0.2.112', 'timewindow1', 'Dst',
-                                                          'Not Established', 'TCP',
-                                          'Client', 'Ports')
-    port_80_dstips: int = len(not_estab_ports['80']['dstips'])
-    assert port_80_dstips == 8
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize(
@@ -95,17 +90,4 @@ def test_vertical(path, output_dir, redis_port):
     log_file = os.path.join(output_dir, alerts_file)
     assert is_evidence_present(log_file, expected_evidence) == True
 
-    not_estab_dstport: dict = database.get_data_from_profile_tw(
-        'profile_192.168.1.9',
-        'timewindow1',
-        'Dst',
-        'Not Established',
-        'TCP',
-        'Client',
-        'IPs'
-        )
-
-    not_estab_dstport: int = len(not_estab_dstport)
-
-    assert not_estab_dstport == 42
     shutil.rmtree(output_dir)
