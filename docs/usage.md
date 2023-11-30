@@ -265,6 +265,25 @@ Now you can run
 ```./kalipso.sh```
 
 
+and choose the port Slips started on. Slips uses port 6379 by default.
+
+On the right column, you can see a list of all the IPs seen in your traffic.
+
+The traffic of IP is splitted into time windows. each time window is 1h long of traffic.
+
+You can press Enter of any of them to view the list of flows in the timewindow.
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
+
+You can switch to the flows view in kalipso by pressing TAB, now you can scroll on flows using arrows
+
+
+On the very top you can see the ASN, the GEO location, and the virustotal score of each IP if available
+
+Check how to setup virustotal in Slips here https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications
+
+
+
 2. You can use Slips' web interface by running slips with ```-w``` or running:
 
    ./webinteface.sh
@@ -274,6 +293,22 @@ Then navigate to ```http://localhost:55000/``` from your browser.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
 title="Web Interface">
+
+Just like kalipso, On the right column, you can see a list of all the IPs seen in your traffic.
+
+The traffic of IP is splitted into time windows. each time window is 1h long of traffic.
+
+IPs and timewindows that are marked in red are considered malicious in Slips.
+
+You can view the traffic of each time window by clicking on it
+
+* The timeline button shows the zeek logs formatted into a human readable format by Slips' timeline module
+* The flows button shows the raw flows as seen in the input file, of by zeek in case of running Slips on a PCAP or on you rinterface
+* The outgoing button shows flow sent from this IP/profile to other IPs only. it doesn't show traffic sent to the profile.
+* The incoming button shows flow sent to this IP/profile to other IPs only. It doesn't show traffic sent from the profile.
+* The Alerts button shows the alerts Slips saw for this IP, each alert is a bunch of evidence that the given profile is malicious. Slips decides to block the IP if an alert is generated for it (if running with -p). Clicking on each alert expands the evidence that resulted in the alert.
+* The Evidence button shows all the evidence of the timewindow whether they were part of an alert or not. 
+
 
 If you're running slips in docker you will need to add one of the following
 parameters to docker to be able to use the web interface:
