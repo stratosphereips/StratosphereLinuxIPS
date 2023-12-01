@@ -208,7 +208,7 @@ class Evidence(ICore):
         domains_to_check_dst = []
         try:
             domains_to_check_src.append(
-                self.db.getIPData(flow['saddr'])
+                self.db.get_ip_info(flow['saddr'])
                 .get('SNI', [{}])[0]
                 .get('server_name')
             )
@@ -224,10 +224,8 @@ class Evidence(ICore):
         except (KeyError, TypeError):
             pass
         try:
-            # self.print(f"IPData of dst IP {self.column_values['daddr']}:
-            # {self.db.getIPData(self.column_values['daddr'])}")
             domains_to_check_dst.append(
-                self.db.getIPData(flow['daddr'])
+                self.db.get_ip_info(flow['daddr'])
                 .get('SNI', [{}])[0]
                 .get('server_name')
             )

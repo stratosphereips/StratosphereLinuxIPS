@@ -173,13 +173,13 @@ def test_ip_info_changed():
 
 def test_ip_data_save_to_redis():
     print('Data in slips for ip 1.2.3.4')
-    print(__database__.getIPData('1.2.3.4'))
+    print(__database__.get_ip_info('1.2.3.4'))
 
     print('Update data')
     save_ip_report_to_db('1.2.3.4', 1, 0.4, 0.4)
 
     print('Data in slips for ip 1.2.3.4')
-    print(__database__.getIPData('1.2.3.4'))
+    print(__database__.get_ip_info('1.2.3.4'))
 
 
 def test_inputs():

@@ -564,7 +564,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
         to a well-known org"""
 
-        ip_data = self.db.getIPData(ip)
+        ip_data = self.db.get_ip_info(ip)
         try:
             SNI = ip_data['SNI']
             if type(SNI) == list:

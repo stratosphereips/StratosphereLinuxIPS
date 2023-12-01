@@ -67,8 +67,8 @@ class DBManager(IObservable):
     def print(self, *args, **kwargs):
         return self.rdb.print(*args, **kwargs)
 
-    def getIPData(self, *args, **kwargs):
-        return self.rdb.getIPData(*args, **kwargs)
+    def get_ip_info(self, *args, **kwargs):
+        return self.rdb.get_ip_info(*args, **kwargs)
 
     def set_new_ip(self, *args, **kwargs):
         return self.rdb.set_new_ip(*args, **kwargs)

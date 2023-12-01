@@ -54,7 +54,7 @@ class Whitelist(IObservable):
         self.whitelist_path = conf.whitelist_path()
 
     def is_whitelisted_asn(self, ip, org):
-        ip_data = self.db.getIPData(ip)
+        ip_data = self.db.get_ip_info(ip)
         try:
             ip_asn = ip_data['asn']['asnorg']
             org_asn = json.loads(self.db.get_org_info(org, 'asn'))
@@ -537,7 +537,7 @@ class Whitelist(IObservable):
         domains_to_check_src = []
         domains_to_check_dst = []
         try:
-            if ip_data := self.db.getIPData(saddr):
+            if ip_data := self.db.get_ip_info(saddr):
                 if sni_info := ip_data.get('SNI', [{}])[0]:
                     domains_to_check_src.append(sni_info.get('server_name', ''))
         except (KeyError, TypeError):
@@ -550,7 +550,7 @@ class Whitelist(IObservable):
         except (KeyError, TypeError):
             pass
         try:
-            if ip_data := self.db.getIPData(daddr):
+            if ip_data := self.db.get_ip_info(daddr):
                 if sni_info := ip_data.get('SNI', [{}])[0]:
                     domains_to_check_dst.append(sni_info.get('server_name'))
         except (KeyError, TypeError):
@@ -626,7 +626,7 @@ class Whitelist(IObservable):
         returns true if the ASN of the given IP is listed in the ASNs of the given org ASNs
         """
         # Check if the IP in the content of the alert has ASN info in the db
-        ip_data = self.db.getIPData(ip)
+        ip_data = self.db.get_ip_info(ip)
         if not ip_data:
             return
         try:

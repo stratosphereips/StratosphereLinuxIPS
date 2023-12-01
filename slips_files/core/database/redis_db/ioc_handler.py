@@ -471,7 +471,7 @@ class IoCHandler():
             # This URL is not in the dictionary, add it first:
             self.setNewURL(url)
             # Now get the data, which should be empty, but just in case
-            data = self.getIPData(url)
+            data = self.get_ip_info(url)
         # empty dicts evaluate to False
         dict_has_keys = bool(data)
         if dict_has_keys:

@@ -407,22 +407,24 @@ class AlertHandler:
         """
 
         self.r.hset(profileid, 'threat_level', threat_level)
-        now = time.time()
-        now = utils.convert_format(now, utils.alerts_format)
-        # keep track of old threat levels
+
+        now = utils.convert_format(time.time(), utils.alerts_format)
         confidence = f'confidence: {confidence}'
-        past_threat_levels = self.r.hget(profileid, 'past_threat_levels')
+
         # this is what we'll be storing in the db, tl, ts, and confidence
         threat_level_data = (threat_level, now, confidence)
+
+        past_threat_levels = self.r.hget(profileid, 'past_threat_levels')
         if past_threat_levels:
-            # get the lists of ts and past threat levels
+            # get the list of ts and past threat levels
             past_threat_levels = json.loads(past_threat_levels)
             latest_threat_level, latest_ts, latest_confidence = past_threat_levels[-1]
             if (
                     latest_threat_level == threat_level
                     and latest_confidence == confidence
             ):
-                # if the past threat level and confidence are the same as the ones we wanna store,
+                # if the past threat level and confidence
+                # are the same as the ones we wanna store,
                 # replace the timestamp only
                 past_threat_levels[-1] = threat_level_data
             else:
@@ -440,13 +442,14 @@ class AlertHandler:
         # when it causes an evidence
         # these 2 values will be needed when sharing with peers
         ip = profileid.split('_')[-1]
-        # get the numerical value of this threat level
-        score = utils.threat_levels[threat_level.lower()]
+
         score_confidence = {
-            'score': score,
+            # get the numerical value of this threat level
+            'score': utils.threat_levels[threat_level.lower()],
             'confidence': confidence
         }
-        if cached_ip_data := self.getIPData(ip):
+
+        if cached_ip_data := self.get_ip_info(ip):
             # append the score and conf. to the already existing data
             cached_ip_data.update(score_confidence)
             self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))

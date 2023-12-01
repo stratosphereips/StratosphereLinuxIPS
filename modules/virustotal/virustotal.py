@@ -204,7 +204,7 @@ class VT(IModule, multiprocessing.Process):
                 ioc = self.api_call_queue.pop(0)
                 ioc_type = self.get_ioc_type(ioc)
                 if ioc_type == 'ip':
-                    cached_data = self.db.getIPData(ioc)
+                    cached_data = self.db.get_ip_info(ioc)
                     # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                     ip_addr = ipaddress.ip_address(ioc)
                     # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
@@ -531,7 +531,7 @@ class VT(IModule, multiprocessing.Process):
             for key, value in flow.items():
                 flow_data = json.loads(value)
             ip = flow_data['daddr']
-            cached_data = self.db.getIPData(ip)
+            cached_data = self.db.get_ip_info(ip)
             if not cached_data:
                 cached_data = {}
 

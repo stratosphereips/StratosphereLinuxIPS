@@ -769,7 +769,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         Check if this ip has any of our blacklisted ASNs.
         blacklisted asns are taken from own_malicious_iocs.csv
         """
-        ip_info = self.db.getIPData(ip)
+        ip_info = self.db.get_ip_info(ip)
         if not ip_info:
             # we dont know the asn of this ip
             return
