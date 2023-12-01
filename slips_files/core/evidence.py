@@ -243,7 +243,8 @@ class Evidence(ICore):
             os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
         elif platform.system() == 'Darwin':
             os.system(
-                f'osascript -e \'display notification "{alert_to_log}" with title "Slips"\' '
+                f'osascript -e \'display notification "{alert_to_log}" '
+                f'with title "Slips"\' '
             )
 
 
