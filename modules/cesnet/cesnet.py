@@ -1,6 +1,6 @@
 from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
-from ..CESNET.warden_client import Client, read_cfg
+from ..cesnet.warden_client import Client, read_cfg
 import os
 import json
 import time
