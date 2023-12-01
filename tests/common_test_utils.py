@@ -20,6 +20,15 @@ def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 
+def run_slips(cmd):
+    """runs slips and waits for it to end"""
+    slips = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        shell=True
+    )
+    return_code = slips.wait()
+    return return_code
 
 def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
