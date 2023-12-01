@@ -110,7 +110,7 @@ class CCDetection(IModule, multiprocessing.Process):
         # TODO: set the decision threshold in the function call
         try:
             # Download lstm model
-            self.tcpmodel = load_model('modules/rnn-cc-detection/rnn_model.h5')
+            self.tcpmodel = load_model('modules/rnn_cc_detection/rnn_model.h5')
         except AttributeError as e:
             self.print('Error loading the model.')
             self.print(e)

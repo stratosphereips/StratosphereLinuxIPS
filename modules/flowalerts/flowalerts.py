@@ -2,7 +2,7 @@ import contextlib
 
 from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
-from .TimerThread import TimerThread
+from .timer_thread import TimerThread
 from .set_evidence import Helper
 from slips_files.core.helpers.whitelist import Whitelist
 import multiprocessing
