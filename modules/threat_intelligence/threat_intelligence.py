@@ -178,7 +178,9 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         # this ip (the one that triggered this alert only), we don't want other descriptions from other TI sources!
         # setting it to true results in the following alert
         # blacklisted ip description: <Spamhaus description> source: ipsum
-        ip_identification = self.db.get_ip_identification(ip, get_ti_data=False).strip()
+        ip_identification = self.db.get_ip_identification(
+            ip, get_ti_data=False
+            ).strip()
 
         if self.is_dns_response:
             description = (
@@ -193,7 +195,9 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                           f'{opposite_dir} {victim}. '
 
 
-        description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
+        description += f'{ip_identification} ' \
+                       f'Description: {ip_info["description"]}. ' \
+                       f'Source: {ip_info["source"]}.'
 
         if tags := ip_info.get('tags', False):
             if type(tags) == list:

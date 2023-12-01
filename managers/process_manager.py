@@ -236,7 +236,8 @@ class ProcessManager:
         return plugins, failed_to_load_modules
 
     def load_modules(self):
-        to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
+        to_ignore: list = self.main.conf.get_disabled_modules(
+            self.main.input_type)
         # Import all the modules
         modules_to_call = self.get_modules(to_ignore)[0]
         loaded_modules = []

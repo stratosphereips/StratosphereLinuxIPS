@@ -697,7 +697,7 @@ class ConfigParser(object):
                 # param isn't used
                 pass
 
-    def get_disabled_modules(self, input_type) -> list:
+    def get_disabled_modules(self, input_type: str) -> list:
         """
         Uses input type to enable leak detector only on pcaps
         """
@@ -719,7 +719,7 @@ class ConfigParser(object):
                 'stix' not in export_to
                 and 'slack' not in export_to
         ):
-            to_ignore.append('Exporting Alerts')
+            to_ignore.append('exporting_alerts')
 
         use_p2p = self.use_p2p()
         if (
