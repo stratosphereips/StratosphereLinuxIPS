@@ -10,7 +10,7 @@ import contextlib
 
 class Module(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'cyst'
+    name = 'CYST'
     description = 'Communicates with CYST simulation framework'
     authors = ['Alya Gomaa']
 

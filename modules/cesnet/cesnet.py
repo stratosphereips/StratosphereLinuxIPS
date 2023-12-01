@@ -12,7 +12,7 @@ from slips_files.common.slips_utils import utils
 
 
 class CESNET(IModule, multiprocessing.Process):
-    name = 'cesnet'
+    name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
 
