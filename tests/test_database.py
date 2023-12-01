@@ -1,5 +1,6 @@
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
+from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
 import redis
 import os
@@ -221,3 +222,19 @@ def test_get_the_other_ip_version():
 def test_add_tuple(tupleid: str, symbol, expected_direction, role, flow):
     db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
     assert symbol[0] in db.r.hget(f'profile_{flow.saddr}_{twid}', expected_direction)
+
+
+@pytest.mark.parametrize(
+    'max_threat_level, cur_threat_level, expected_max',
+    [
+        ('info', 'info', utils.threat_levels['info']),
+        ('critical', 'info', utils.threat_levels['critical']),
+        ('high', 'critical', utils.threat_levels['critical']),
+    ],
+)
+def test_update_max_threat_level(
+        max_threat_level, cur_threat_level, expected_max
+    ):
+    db.set_max_threat_level(profileid, max_threat_level)
+    assert db.update_max_threat_level(
+        profileid, cur_threat_level) == expected_max
