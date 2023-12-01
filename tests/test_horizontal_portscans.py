@@ -61,9 +61,9 @@ def not_enough_dstips_to_reach_the_threshold(mock_rdb):
         }
     }
     
-    for _ in range(amount_of_dstips+1):
+    for _ in range(amount_of_dstips-1):
         res[dport]['dstips'].update({
-            generate_random_ip() : {
+            generate_random_ip(): {
                 'dstports': random_ports
                 }
         })
