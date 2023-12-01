@@ -22,7 +22,7 @@ alerts_file = 'alerts.log'
         (
             'dataset/port-scans/horizontal/conn.log',
             'testing_horizontal_ps/',
-            6659
+            7894
         )
     ],
 )
@@ -60,7 +60,7 @@ def test_horizontal(path, output_dir, redis_port):
         (
             'dataset/port-scans/vertical/conn.log',
             'testing_vertical_ps/',
-            6660
+            7895
         )
     ],
 )
