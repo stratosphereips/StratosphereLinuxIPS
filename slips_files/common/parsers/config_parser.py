@@ -701,18 +701,17 @@ class ConfigParser(object):
         """
         Uses input type to enable leak detector only on pcaps
         """
-        to_ignore = self.read_configuration(
+        to_ignore: str = self.read_configuration(
             'modules', 'disable', '[template , ensembling]'
         )
-        # Convert string to list
-        to_ignore = (
+
+        to_ignore: list = (
             to_ignore.replace('[', '')
                 .replace(']', '')
                 .split(',')
         )
-        # strip each one of them
+
         to_ignore = [mod.strip() for mod in to_ignore]
-        use_p2p = self.use_p2p()
 
         # Ignore exporting alerts module if export_to is empty
         export_to = self.export_to()
@@ -722,6 +721,7 @@ class ConfigParser(object):
         ):
             to_ignore.append('Exporting Alerts')
 
+        use_p2p = self.use_p2p()
         if (
                 not use_p2p
                 or '-i' not in sys.argv
@@ -734,7 +734,7 @@ class ConfigParser(object):
         receive_from_warden = self.receive_from_warden()
 
         if not send_to_warden and not receive_from_warden:
-            to_ignore.append('CESNET')
+            to_ignore.append('cesnet')
 
         # don't run blocking module unless specified
         if not (
@@ -748,7 +748,7 @@ class ConfigParser(object):
             to_ignore.append('leak_detector')
 
         if not self.reading_flows_from_cyst():
-            to_ignore.append('CYST')
+            to_ignore.append('cyst')
 
         return to_ignore
     

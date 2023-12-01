@@ -165,7 +165,19 @@ class ProcessManager:
         for loader, module_name, ispkg in pkgutil.walk_packages(
             modules.__path__, f"{modules.__name__}."
         ):
+            # If current item is a package, skip.
+            if ispkg:
+                continue
+
+            # to avoid loading everything in the dir,
+            # only load modules that have the same name as the dir name
+            dir_name = module_name.split(".")[1]
+            file_name = module_name.split(".")[2]
+            if dir_name != file_name:
+                continue
+
             ignore_module = False
+
             for ignored_module in to_ignore:
                 ignored_module = ignored_module.replace(' ','').replace('_','').replace('-','').lower()
                 # this version of the module name wont contain _ or spaces so we can
@@ -178,16 +190,6 @@ class ProcessManager:
             if ignore_module:
                 continue
 
-
-            # If current item is a package, skip.
-            if ispkg:
-                continue
-            # to avoid loading everything in the dir,
-            # only load modules that have the same name as the dir name
-            dir_name = module_name.split(".")[1]
-            file_name = module_name.split(".")[2]
-            if dir_name != file_name:
-                continue
 
             # Try to import the module, otherwise skip.
             try:
@@ -226,10 +228,10 @@ class ProcessManager:
         # when cyst starts first, as soon as slips connects to cyst, cyst sends slips the flows,
         # but the inputprocess didn't even start yet so the flows are lost
         # to fix this, change the order of the CYST module(load it last)
-        if "CYST" in plugins:
+        if "cyst" in plugins:
             plugins = OrderedDict(plugins)
             # last=False to move to the beginning of the dict
-            plugins.move_to_end("CYST", last=True)
+            plugins.move_to_end("cyst", last=True)
 
         return plugins, failed_to_load_modules
 
