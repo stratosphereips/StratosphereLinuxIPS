@@ -18,6 +18,7 @@ import modules
 import importlib
 import os
 import sys
+import traceback
 
 class ProcessManager:
     def __init__(self, main):
@@ -151,6 +152,19 @@ class ProcessManager:
             self.kill_process_tree(process.pid)
             self.print_stopped_module(module_name)
 
+    def is_ignored_module(
+            self, module_name: str, to_ignore: list
+        )-> bool:
+
+        for ignored_module in to_ignore:
+            ignored_module = ignored_module.replace(' ','').replace('_','').replace('-','').lower()
+            # this version of the module name wont contain _ or spaces so we can
+            # easily match it with the ignored module name
+            curr_module_name = module_name.replace('_','').replace('-','').lower()
+            if curr_module_name.__contains__(ignored_module):
+                return True
+        return False
+
     def get_modules(self, to_ignore: list):
         """
         Get modules from the 'modules' folder.
@@ -160,10 +174,14 @@ class ProcessManager:
 
         plugins = {}
         failed_to_load_modules = 0
-        # Walk recursively through all modules and packages found on the . folder.
+
+
         # __path__ is the current path of this python program
+        look_for_modules_in = modules.__path__
+        prefix = f"{modules.__name__}."
+        # Walk recursively through all modules and packages found on the . folder.
         for loader, module_name, ispkg in pkgutil.walk_packages(
-            modules.__path__, f"{modules.__name__}."
+            look_for_modules_in, prefix
         ):
             # If current item is a package, skip.
             if ispkg:
@@ -176,42 +194,38 @@ class ProcessManager:
             if dir_name != file_name:
                 continue
 
-            ignore_module = False
 
-            for ignored_module in to_ignore:
-                ignored_module = ignored_module.replace(' ','').replace('_','').replace('-','').lower()
-                # this version of the module name wont contain _ or spaces so we can
-                # easily match it with the ignored module name
-                curr_module_name = module_name.replace('_','').replace('-','').lower()
-                if curr_module_name.__contains__(ignored_module):
-                    ignore_module = True
-                    break
-
-            if ignore_module:
+            if self.is_ignored_module(module_name, to_ignore):
                 continue
 
 
             # Try to import the module, otherwise skip.
             try:
-                # "level specifies whether to use absolute or relative imports. The default is -1 which
-                # indicates both absolute and relative imports will be attempted. 0 means only perform
-                # absolute imports. Positive values for level indicate the number of parent
-                # directories to search relative to the directory of the module calling __import__()."
+                # "level specifies whether to use absolute or relative imports.
+                # The default is -1 which
+                # indicates both absolute and relative imports will be attempted.
+                # 0 means only perform absolute imports.
+                # Positive values for level indicate the number of parent
+                # directories to search relative to the directory of the
+                # module calling __import__()."
                 module = importlib.import_module(module_name)
             except ImportError as e:
-                print(
-                    "Something wrong happened while importing the module {0}: {1}".format(
-                        module_name, e
-                    )
-                )
+                print(f"Something wrong happened while "
+                      f"importing the module {module_name}: {e}")
+                self.print(traceback.print_exc())
                 failed_to_load_modules += 1
+
                 continue
 
             # Walk through all members of currently imported modules.
             for member_name, member_object in inspect.getmembers(module):
                 # Check if current member is a class.
-                if inspect.isclass(member_object) and (
-                        issubclass(member_object, IModule) and member_object is not IModule
+                if (
+                        inspect.isclass(member_object)
+                        and (
+                            issubclass(member_object, IModule)
+                            and member_object is not IModule
+                        )
                 ):
                     plugins[member_object.name] = dict(
                         obj=member_object,
@@ -440,7 +454,7 @@ class ProcessManager:
         # this module should handle the stopping of slips
         if (
                 self.is_debugger_active()
-                or self.main.input_type in ('stdin','CYST')
+                or self.main.input_type in ('stdin', 'cyst')
                 or self.main.is_interface
         ):
             return True
