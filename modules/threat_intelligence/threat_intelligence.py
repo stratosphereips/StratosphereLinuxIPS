@@ -193,7 +193,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                           f'{opposite_dir} {victim}. '
 
 
-        description += f'blacklisted IP {ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
+        description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
         if tags := ip_info.get('tags', False):
             if type(tags) == list:
@@ -203,9 +203,21 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         else:
             source_target_tag = 'BlacklistedIP'
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid, victim=victim)
+        self.db.setEvidence(
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+            victim=victim
+        )
 
         # mark this ip as malicious in our database
         ip_info = {'threatintelligence': ip_info}
