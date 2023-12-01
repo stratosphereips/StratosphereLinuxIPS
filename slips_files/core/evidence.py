@@ -587,8 +587,11 @@ class Evidence(ICore):
             if not hostname:
                 return evidence
 
+            padding_len = 26 - len(srcip) - len(hostname) - 3
             # fill the rest of the 26 characters with spaces to keep the alignment
-            evidence = f'{flow_datetime}: Src IP {srcip} ({hostname}){" "*(26-len(srcip))}. {evidence}'
+            evidence = f'{flow_datetime} (TW {timewindow_number}): Src IP' \
+                       f' {srcip} ({hostname}) {" "*padding_len}. ' \
+                       f'Detected {description}'
 
             return evidence
 
