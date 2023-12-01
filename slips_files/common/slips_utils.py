@@ -78,7 +78,7 @@ class Utils(object):
                     return network_range
 
 
-    def threat_level_to_string(self, threat_level: float):
+    def threat_level_to_string(self, threat_level: float) -> str:
         for str_lvl, int_value in self.threat_levels.items():
             if threat_level <= int_value:
                 return str_lvl

@@ -1,6 +1,7 @@
 import time
 import json
 from uuid import uuid4
+from typing import List, Tuple
 
 from slips_files.common.slips_utils import utils
 
@@ -398,7 +399,42 @@ class AlertHandler:
             evidence = self.remove_whitelisted_evidence(evidence)
         return evidence
 
-    def update_threat_level(self, profileid: str, threat_level: str, confidence: int):
+    def set_max_threat_level(self, profileid: str, threat_level: str):
+        self.r.hset(profileid, 'max_threat_level', threat_level)
+
+    def update_max_threat_level(
+            self, profileid: str, threat_level: str
+        ) -> float:
+        """
+        given the current threat level of a profileid, this method sets the
+        max_threaty_level value to the given val if that max is less than
+        the given
+        :returns: the numerical val of the max threat level
+        """
+        threat_level_float = utils.threat_levels[threat_level]
+
+        old_max_threat_level: str = self.r.hget(
+            profileid,
+            'max_threat_level'
+        )
+
+        if not old_max_threat_level:
+            # first time setting max tl
+            self.set_max_threat_level(profileid, threat_level)
+            return threat_level_float
+
+        old_max_threat_level_float = utils.threat_levels[old_max_threat_level]
+
+        if old_max_threat_level_float < threat_level_float:
+            self.set_max_threat_level(profileid, threat_level)
+            return threat_level_float
+
+        return old_max_threat_level_float
+
+
+    def update_threat_level(
+            self, profileid: str, threat_level: str, confidence: int
+            ):
         """
         Update the threat level of a certain profile
         Updates the profileid key and the IPsInfo key with the
@@ -407,49 +443,62 @@ class AlertHandler:
         """
 
         self.r.hset(profileid, 'threat_level', threat_level)
-        now = time.time()
-        now = utils.convert_format(now, utils.alerts_format)
-        # keep track of old threat levels
+
+        now = utils.convert_format(time.time(), utils.alerts_format)
         confidence = f'confidence: {confidence}'
-        past_threat_levels = self.r.hget(profileid, 'past_threat_levels')
+
         # this is what we'll be storing in the db, tl, ts, and confidence
         threat_level_data = (threat_level, now, confidence)
+
+        past_threat_levels: List[Tuple] = self.r.hget(
+            profileid,
+            'past_threat_levels'
+        )
         if past_threat_levels:
-            # get the lists of ts and past threat levels
+            # get the list of ts and past threat levels
             past_threat_levels = json.loads(past_threat_levels)
-            latest_threat_level, latest_ts, latest_confidence = past_threat_levels[-1]
+
+            latest: Tuple = past_threat_levels[-1]
+            latest_threat_level: str = latest[0]
+            latest_confidence: str = latest[2]
+
             if (
                     latest_threat_level == threat_level
                     and latest_confidence == confidence
             ):
-                # if the past threat level and confidence are the same as the ones we wanna store,
+                # if the past threat level and confidence
+                # are the same as the ones we wanna store,
                 # replace the timestamp only
                 past_threat_levels[-1] = threat_level_data
+                # dont change the old max tl
             else:
                 # add this threat level to the list of past threat levels
                 past_threat_levels.append(threat_level_data)
         else:
             # first time setting a threat level for this profile
             past_threat_levels = [threat_level_data]
-            # threat_levels_update_time = [now]
 
         past_threat_levels = json.dumps(past_threat_levels)
         self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
 
+        max_threat_lvl: float = self.update_max_threat_level(
+            profileid, threat_level
+            )
+
+        score_confidence = {
+            # get the numerical value of this threat level
+            'score': max_threat_lvl,
+            'confidence': confidence
+        }
         # set the score and confidence of the given ip in the db
         # when it causes an evidence
         # these 2 values will be needed when sharing with peers
         ip = profileid.split('_')[-1]
-        # get the numerical value of this threat level
-        score = utils.threat_levels[threat_level.lower()]
-        score_confidence = {
-            'score': score,
-            'confidence': confidence
-        }
-        if cached_ip_data := self.getIPData(ip):
-            # append the score and conf. to the already existing data
-            cached_ip_data.update(score_confidence)
-            self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))
-        else:
-            self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
+
+        if cached_ip_info := self.get_ip_info(ip):
+            # append the score and confidence to the already existing data
+            cached_ip_info.update(score_confidence)
+            score_confidence = cached_ip_info
+
+        self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
 

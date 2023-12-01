@@ -1102,7 +1102,7 @@ class ProfileHandler(IObservable):
                                       flow.uid, flow.daddr, lookup=flow.server_name)
 
         # Save new server name in the IPInfo. There might be several server_name per IP.
-        if ipdata := self.getIPData(flow.daddr):
+        if ipdata := self.get_ip_info(flow.daddr):
             sni_ipdata = ipdata.get('SNI', [])
         else:
             sni_ipdata = []

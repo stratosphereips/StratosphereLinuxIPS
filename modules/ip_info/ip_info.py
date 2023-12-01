@@ -537,7 +537,7 @@ class IPInfo(IModule, multiprocessing.Process):
         if not ip_addr.is_multicast:
             # Do we have cached info about this ip in redis?
             # If yes, load it
-            cached_ip_info = self.db.getIPData(ip)
+            cached_ip_info = self.db.get_ip_info(ip)
             if not cached_ip_info:
                 cached_ip_info = {}
 

@@ -377,16 +377,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
            }
         )
 
-
-
-    def getIPData(self, ip: str) -> dict:
+    def get_ip_info(self, ip: str) -> dict:
         """
-        Return information about this IP from IPsInfo
-        Returns a dictionary or False if there is no IP in the database
-        We need to separate these three cases:
-        1- IP is in the DB without data. Return empty dict.
-        2- IP is in the DB with data. Return dict.
-        3- IP is not in the DB. Return False
+        Return information about this IP from IPsInfo key
+        :return: a dictionary or False if there is no IP in the database
         """
         data = self.rcache.hget('IPsInfo', ip)
         return json.loads(data) if data else False
@@ -400,7 +394,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         accessed as str, it is automatically
         converted to str
         """
-        data = self.getIPData(ip)
+        data = self.get_ip_info(ip)
         if data is False:
             # If there is no data about this IP
             # Set this IP for the first time in the IPsInfo
@@ -564,7 +558,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         overwrite it
         """
         # Get the previous info already stored
-        cached_ip_info = self.getIPData(ip)
+        cached_ip_info = self.get_ip_info(ip)
         if cached_ip_info is False:
             # This IP is not in the dictionary, add it first:
             self.set_new_ip(ip)
@@ -940,7 +934,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         on the data stored so far
         :param get_ti_data: do we want to get info about this IP from out TI lists?
         """
-        current_data = self.getIPData(ip)
+        current_data = self.get_ip_info(ip)
         identification = ''
         if current_data:
             if 'asn' in current_data:

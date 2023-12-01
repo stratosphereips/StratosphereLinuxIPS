@@ -67,8 +67,8 @@ class DBManager(IObservable):
     def print(self, *args, **kwargs):
         return self.rdb.print(*args, **kwargs)
 
-    def getIPData(self, *args, **kwargs):
-        return self.rdb.getIPData(*args, **kwargs)
+    def get_ip_info(self, *args, **kwargs):
+        return self.rdb.get_ip_info(*args, **kwargs)
 
     def set_new_ip(self, *args, **kwargs):
         return self.rdb.set_new_ip(*args, **kwargs)
@@ -828,6 +828,12 @@ class DBManager(IObservable):
 
     def get_pid_of(self, *args, **kwargs):
         return self.rdb.get_pid_of(*args, **kwargs)
+
+    def set_max_threat_level(self, *args, **kwargs):
+        return self.rdb.set_max_threat_level(*args, **kwargs)
+
+    def update_max_threat_level(self, *args, **kwargs):
+        return self.rdb.update_max_threat_level(*args, **kwargs)
 
     def get_name_of_module_at(self, *args, **kwargs):
         return self.rdb.get_name_of_module_at(*args, **kwargs)
