@@ -1707,24 +1707,23 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if not smac:
             return
 
-        saddr = profileid.split("_")[-1]
-
-        if self.db.was_ip_seen_in_connlog_before(saddr):
-            # we should only check once for the first time we're seeing this flow
-            return
-
-        self.db.mark_srcip_as_seen_in_connlog(saddr)
-
+        saddr: str = profileid.split("_")[-1]
         if not (
                 validators.ipv4(saddr)
                 and utils.is_private_ip(ipaddress.ip_address(saddr))
         ):
             return
 
+        if self.db.was_ip_seen_in_connlog_before(saddr):
+            # we should only check once for the first time we're seeing this flow
+            return
+        self.db.mark_srcip_as_seen_in_connlog(saddr)
+
+
         if old_ip_list := self.db.get_ip_of_mac(smac):
             # old_ip is a list that may contain the ipv6 of this MAC
             # this ipv6 may be of the same device that has the given saddr and MAC
-            # so this would be fp. make sure we're dealing with ipv4 only
+            # so this would be fp. so, make sure we're dealing with ipv4 only
             for ip in json.loads(old_ip_list):
                 if validators.ipv4(ip):
                     old_ip = ip
@@ -1732,7 +1731,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
             else:
                 # all the IPs associated with the given macs are ipv6,
                 # 1 computer might have several ipv6, AND/OR a combination of ipv6 and 4
-                # so this detection will only work if both the old ip and the given saddr are ipv4 private ips
+                # so this detection will only work if both the
+                # old ip and the given saddr are ipv4 private ips
                 return
 
             if old_ip != saddr:
@@ -1745,7 +1745,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
                     uid,
                     timestamp
                 )
-
     def pre_main(self):
         utils.drop_root_privs()
         self.ssl_waiting_thread.start()
