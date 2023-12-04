@@ -15,19 +15,20 @@ import multiprocessing
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.common.imports import *
-
-from slips_files.core.helpers.flow_handler import FlowHandler
-from slips_files.core.helpers.symbols_handler import SymbolHandler
-
-from datetime import datetime
-from slips_files.core.helpers.whitelist import Whitelist
+# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
+# stratosphere@aic.fel.cvut.cz
 from dataclasses import asdict
 import queue
 import sys
 import ipaddress
+import pprint
+from datetime import datetime
+
+from slips_files.common.imports import *
 from slips_files.common.abstracts.core import ICore
+from slips_files.core.helpers.flow_handler import FlowHandler
+from slips_files.core.helpers.symbols_handler import SymbolHandler
+from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
@@ -194,16 +195,9 @@ class Profiler(ICore):
         if self.db.is_cyst_enabled():
             # print the added flow as a form of debugging feedback for
             # the user to know that slips is working
-            self.print(pp(asdict(self.flow)))
+            self.print(pprint.pp(asdict(self.flow)))
 
         return True
-        # except Exception:
-        #     # For some reason we can not use the output queue here.. check
-        #     self.print(
-        #         f'Error in Profiler Process add_flow_to_profile (). {traceback.format_exc()}'
-        #     ,0,1)
-        #     self.print(traceback.print_exc(),0,1)
-        #     return False
 
     def store_features_going_out(self):
         """
@@ -241,7 +235,7 @@ class Profiler(ICore):
         # mark this profile as modified
         self.db.markProfileTWAsModified(self.profileid, self.twid, '')
 
-    def store_features_going_in(self, profileid, twid):
+    def store_features_going_in(self, profileid: str, twid: str):
         """
         If we have the all direction set , slips creates profiles for each IP, the src and dst
         store features going our adds the conn in the profileA from IP A -> IP B in the db

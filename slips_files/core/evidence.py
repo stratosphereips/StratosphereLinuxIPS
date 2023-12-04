@@ -399,7 +399,8 @@ class Evidence(ICore):
 
     def delete_alerted_evidence(self, profileid, twid, tw_evidence:dict):
         """
-        if there was an alert in this tw before, remove the evidence that were part of the past alert
+        if there was an alert in this tw before, remove the evidence that
+        were part of the past alert
         from the current evidence
         """
         # format of tw_evidence is {<ev_id>: {evidence_details}}
@@ -451,7 +452,7 @@ class Evidence(ICore):
 
     def get_evidence_for_tw(self, profileid, twid):
         # Get all the evidence for this profile in this TW
-        tw_evidence = self.db.getEvidenceForTW(
+        tw_evidence: str = self.db.getEvidenceForTW(
             profileid, twid
         )
         if not tw_evidence:

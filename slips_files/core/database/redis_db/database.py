@@ -859,23 +859,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def mark_srcip_as_seen_in_connlog(self, ip):
         """
         Marks the given ip as seen in conn.log
+        keeps track of private ipv4 only.
         if an ip is not present in this set, it means we may have seen it but not in conn.log
         """
         self.r.sadd("srcips_seen_in_connlog", ip)
 
-    def is_gw_mac(self, MAC_info, ip) -> bool:
+    def is_gw_mac(self, mac_addr: str, ip: str) -> bool:
         """
         Detects the MAC of the gateway if 1 mac is seen assigned to 1 public destination IP
         :param ip: dst ip that should be associated with the given MAC info
         """
 
-        MAC = MAC_info.get('MAC', '')
-        if not validators.mac_address(MAC):
+        if not validators.mac_address(mac_addr):
             return False
 
         if self._gateway_MAC_found:
             # gateway MAC already set using this function
-            return self.get_gateway_mac() == MAC
+            return self.get_gateway_mac() == mac_addr
 
         # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
@@ -1054,10 +1054,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def get_gateway_MAC_Vendor(self):
         return self.r.hget('default_gateway', 'Vendor')
 
-    def set_default_gateway(self, address_type:str, address:str):
+    def set_default_gateway(self, address_type: str, address: str):
         """
         :param address_type: can either be 'IP' or 'MAC'
-        :param address: can be ip or mac
+        :param address: can be ip or mac, but always is a str
         """
         # make sure the IP or mac aren't already set before re-setting
         if (
