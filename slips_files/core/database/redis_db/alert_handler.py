@@ -391,11 +391,11 @@ class AlertHandler:
         alerts = json.loads(alerts)
         return alerts
 
-    def getEvidenceForTW(self, profileid, twid):
+    def getEvidenceForTW(self, profileid: str, twid: str) -> str:
         """Get the evidence for this TW for this Profile"""
         evidence = self.r.hget(profileid + self.separator + twid, 'Evidence')
         if evidence:
-            evidence = self.remove_whitelisted_evidence(evidence)
+            evidence: str = self.remove_whitelisted_evidence(evidence)
         return evidence
 
     def update_threat_level(self, profileid: str, threat_level: str, confidence: int):
