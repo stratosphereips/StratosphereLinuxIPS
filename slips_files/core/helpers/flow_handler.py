@@ -31,7 +31,7 @@ class Publisher():
         self.db.publish('new_dhcp', json.dumps(to_send))
 
 
-    def new_MAC(self, mac, ip, host_name=False):
+    def new_MAC(self, mac: str, ip: str, host_name=False):
         """
         check if mac and ip aren't multicast or link-local
         and publish to new_MAC channel to get more info about the mac
@@ -163,6 +163,12 @@ class FlowHandler:
             'benign'
         )
 
+        self.db.add_mac_addr_to_profile(
+                self.profileid,
+                self.flow.smac
+            )
+
+
         self.publisher.new_MAC(self.flow.smac, self.flow.saddr)
         self.publisher.new_MAC(self.flow.dmac, self.flow.daddr)
 
@@ -286,13 +292,18 @@ class FlowHandler:
 
 
     def handle_dhcp(self):
-        if self.flow.smac:
-            # send this to ip_info module to get vendor info about this MAC
-            self.publisher.new_MAC(
+        # send this to ip_info module to get vendor info about this MAC
+        self.publisher.new_MAC(
                 self.flow.smac or False,
                 self.flow.saddr,
                 host_name=(self.flow.host_name or False)
             )
+
+        self.db.add_mac_addr_to_profile(
+                self.profileid,
+                self.flow.smac
+            )
+
         if self.flow.server_addr:
             self.db.store_dhcp_server(self.flow.server_addr)
             self.db.mark_profile_as_dhcp(self.profileid)
@@ -345,7 +356,10 @@ class FlowHandler:
         # send to arp module
         to_send = json.dumps(to_send)
         self.db.publish('new_arp', to_send)
-
+        self.db.add_mac_addr_to_profile(
+                self.profileid,
+                self.flow.smac
+            )
         self.publisher.new_MAC(
             self.flow.dmac, self.flow.daddr
         )
