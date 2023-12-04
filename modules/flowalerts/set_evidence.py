@@ -320,9 +320,12 @@ class Helper:
 			attacker,
 			threat_level,
             confidence, description,
-            stime, category, source_target_tag=source_target_tag,
+            stime, category,
+            source_target_tag=source_target_tag,
             conn_count=conn_count,
-            profileid=profileid, twid=twid, uid=uid
+            profileid=profileid,
+            twid=twid,
+            uid=uid
             )
 
     def set_evidence_DNS_without_conn(
@@ -379,7 +382,8 @@ class Helper:
 			category,
 			source_target_tag=source_target_tag,
             profileid=profileid,
-            twid=twid, uid=uid
+            twid=twid,
+            uid=uid
             )
         return True
 
@@ -424,7 +428,8 @@ class Helper:
 			category,
 			source_target_tag=source_target_tag,
             profileid=profileid,
-            twid=twid, uid=uid
+            twid=twid,
+            uid=uid
             )
 
     def set_evidence_dns_arpa_scan(
@@ -449,9 +454,13 @@ class Helper:
 			attacker_direction,
 			attacker,
 			threat_level,
-            confidence, description,
-            stime, category, conn_count=arpa_scan_threshold,
-            profileid=profileid, twid=twid,
+            confidence,
+            description,
+            stime,
+            category,
+            conn_count=arpa_scan_threshold,
+            profileid=profileid,
+            twid=twid,
             uid=uid
             )
 
@@ -524,7 +533,9 @@ class Helper:
 			category,
 			source_target_tag=source_target_tag,
             conn_count=conn_count,
-            profileid=profileid, twid=twid, uid=uid
+            profileid=profileid,
+            twid=twid,
+            uid=uid
             )
 
     def set_evidence_horizontal_portscan(
@@ -556,7 +567,9 @@ class Helper:
 			category,
 			source_target_tag=source_target_tag,
             conn_count=conn_count,
-            profileid=profileid, twid=twid, uid=uid
+            profileid=profileid,
+            twid=twid,
+            uid=uid
             )
 
     def set_evidence_conn_to_private_ip(
@@ -591,8 +604,11 @@ class Helper:
 			attacker,
 			threat_level,
             confidence, description,
-            timestamp, category, profileid=profileid,
-            twid=twid, uid=uid, victim=daddr
+            timestamp, category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+            victim=daddr
             )
 
     def set_evidence_GRE_tunnel(
@@ -710,7 +726,11 @@ class Helper:
 			attacker,
 			threat_level,
             confidence, description,
-            timestamp, category, profileid=profileid, twid=twid, uid=uid,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
             victim=daddr
             )
 
@@ -747,8 +767,13 @@ class Helper:
 			attacker_direction,
 			attacker,
 			threat_level,
-            confidence, description,
-            timestamp, category, profileid=profileid, twid=twid, uid=uid,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
             victim=srcip
             )
 
@@ -830,7 +855,9 @@ class Helper:
 			attacker,
 			threat_level,
             confidence, description,
-            timestamp, category, profileid=profileid, twid=twid, uid=uid
+            timestamp,
+            category,
+            profileid=profileid, twid=twid, uid=uid
             )
 
     def set_evidence_suspicious_dns_answer(
