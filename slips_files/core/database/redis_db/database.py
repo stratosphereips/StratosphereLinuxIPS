@@ -89,11 +89,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     first_flow = True
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
-    # in case of redis ConnectionErrors, this is how long we'll wait in seconds before retrying.
+    # in case of redis ConnectionErrors, this is how long we'll wait in
+    # seconds before retrying.
     # this will increase exponentially each retry
-    backoff = 15
-    # try to reconnect to redis 3 times in case of connection errors before terminating
-    max_retries = 3
+    backoff = 0.1
+    # try to reconnect to redis this amount of times in case of connection
+    # errors before terminating
+    max_retries = 150
     # to keep track of connection retries. once it reaches max_retries, slips will terminate
     connection_retry = 0
 
@@ -341,10 +343,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 self.publish_stop()
                 self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 1, 1)
             else:
-                # retry to connect after backing off for a while
-                self.print(f"redis.exceptions.ConnectionError: "
-                           f"retrying to connect in {self.backoff}s. "
-                           f"Retries to far: {self.connection_retry}", 0, 1)
+                # don't log this each retry
+                if self.connection_retry % 10 == 0:
+                    # retry to connect after backing off for a while
+                    self.print(f"redis.exceptions.ConnectionError: "
+                               f"retrying to connect in {self.backoff}s. "
+                               f"Retries to far: {self.connection_retry}", 0, 1)
                 time.sleep(self.backoff)
                 self.backoff = self.backoff * 2
                 self.connection_retry += 1
