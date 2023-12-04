@@ -883,10 +883,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # now we're given a public ip and a MAC that's supposedly belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db
-            # set the ip of the gw, and the mac of the gw
-            for address_type, address in MAC_info.items():
-                # address_type can be 'IP' or 'MAC' or 'Vendor'
-                self.set_default_gateway(address_type, address)
+            self.set_default_gateway('MAC', mac_addr)
 
             # mark the gw mac as found so we don't look for it again
             self._gateway_MAC_found = True
