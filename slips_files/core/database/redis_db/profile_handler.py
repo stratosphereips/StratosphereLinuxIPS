@@ -1403,6 +1403,10 @@ class ProfileHandler(IObservable):
         return False
 
 
+    def update_mac_of_profile(self, profileid: str, mac: str):
+        """ Add the MAC addr to the given profileid key"""
+        self.r.hset(profileid, 'MAC', mac)
+
     def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
         """
         Used to associate the given profile with the given MAC addr.
@@ -1506,22 +1510,26 @@ class ProfileHandler(IObservable):
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
-            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+            self.r.hset('MAC', mac_addr, cached_ips)
+
+            self.update_mac_of_profile(profileid, mac_addr)
+            self.update_mac_of_profile(f'profile_{found_ip}', mac_addr)
 
         return True
 
-    def get_mac_addr_from_profile(self, profileid) -> str:
+    def get_mac_addr_from_profile(self, profileid: dict) \
+            -> Union[str, None]:
         """
-        Returns MAC info about a certain profile or None
+        Returns MAC address  of the given profile as a str, or None
+        returns the info from the profileid key.
         """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
-            return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
-            return json.loads(MAC_info)['MAC']
-        else:
-            return MAC_info
+            return None
+
+        return self.r.hget(profileid, 'MAC')
+
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
