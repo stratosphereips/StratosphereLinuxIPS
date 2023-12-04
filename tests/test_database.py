@@ -175,25 +175,25 @@ def test_profile_moddule_labels():
 def test_add_mac_addr_to_profile():
     ipv4 = '192.168.1.5'
     profileid_ipv4 = f'profile_{ipv4}'
-    MAC_info = {'MAC': '00:00:5e:00:53:af'}
+    mac_addr = '00:00:5e:00:53:af'
     # first associate this ip with some mac
-    assert db.add_mac_addr_to_profile(profileid_ipv4, MAC_info) is True
-    assert ipv4 in str(db.r.hget('MAC', MAC_info['MAC']))
+    assert db.add_mac_addr_to_profile(profileid_ipv4, mac_addr) is True
+    assert ipv4 in str(db.r.hget('MAC', mac_addr))
 
     # now claim that we found another profile
     # that has the same mac as this one
     # both ipv4
     profileid = 'profile_192.168.1.6'
-    assert db.add_mac_addr_to_profile(profileid, MAC_info) is False
+    assert db.add_mac_addr_to_profile(profileid, mac_addr) is False
     # this ip shouldnt be added to the profile as they're both ipv4
-    assert '192.168.1.6' not in db.r.hget('MAC', MAC_info['MAC'])
+    assert '192.168.1.6' not in db.r.hget('MAC', mac_addr)
 
     # now claim that another ipv6 has this mac
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     profileid_ipv6 = f'profile_{ipv6}'
-    db.add_mac_addr_to_profile(profileid_ipv6, MAC_info)
+    db.add_mac_addr_to_profile(profileid_ipv6, mac_addr)
     # make sure the mac is associated with his ipv6
-    assert ipv6 in db.r.hget('MAC', MAC_info['MAC'])
+    assert ipv6 in db.r.hget('MAC', mac_addr)
     # make sure the ipv4 is associated with this
     # ipv6 profile
     assert ipv4 in str(db.r.hmget(profileid_ipv6, 'IPv4'))

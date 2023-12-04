@@ -751,6 +751,9 @@ class DBManager(IObservable):
     def get_mac_vendor_from_profile(self, *args, **kwargs):
         return self.rdb.get_mac_vendor_from_profile(*args, **kwargs)
 
+    def set_mac_vendor_to_profile(self, *args, **kwargs):
+        return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
+
     def get_hostname_from_profile(self, *args, **kwargs):
         return self.rdb.get_hostname_from_profile(*args, **kwargs)
 

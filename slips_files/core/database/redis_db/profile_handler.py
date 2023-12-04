@@ -2,7 +2,7 @@ from dataclasses import asdict
 import redis
 import time
 import json
-from typing import Tuple
+from typing import Tuple, Union, Dict
 import traceback
 import ipaddress
 import sys
@@ -1353,23 +1353,82 @@ class ProfileHandler(IObservable):
         # return a set of unique profiles
         return set(profiles), time_of_last_modified_tw
 
-    def add_mac_addr_to_profile(self, profileid, MAC_info):
+
+    def add_to_the_list_of_ipv6(
+            self, ipv6_to_add: str, cached_ipv6: str
+        ) -> list :
         """
-        Used to associate this profile with its MAC addr in the 'MAC' key in the db
+        adds the given IPv6 to the list of given cached_ipv6
+        """
+        if not cached_ipv6:
+            cached_ipv6 = [ipv6_to_add]
+        else:
+            # found a list of ipv6 in the db
+            cached_ipv6: set = set(json.loads(cached_ipv6))
+            cached_ipv6.add(ipv6_to_add)
+            cached_ipv6 = list(cached_ipv6)
+        return cached_ipv6
+
+    def set_mac_vendor_to_profile(
+            self,
+            profileid: str,
+            mac_addr: str,
+            mac_vendor: str
+    ) -> bool:
+        """
+        sets the given mac add and vendor to the given profile key
+        is only called when we don't already have a vendor for the given
+        profile
+        """
+        if self.get_mac_vendor_from_profile(profileid):
+            # it already exists
+            return False
+
+        # we only wanna update the vendor of an ip if we have a mac for it
+        # because for example, we don't wanna set a mac to the profile
+        # 0.0.0.0
+        # set_mac_addr_to_profile handles the setting of addrs, and this
+        # func only handles the setting of vendors
+
+        # so first, make sure the given mac addr belongs to the given profile
+        # before setting the mac vendor
+        if cached_mac_addr := self.get_mac_addr_from_profile(profileid):
+            cached_mac_addr: str
+            if cached_mac_addr == mac_addr:
+                # now we're sure that the vendor of the given mac addr,
+                # is the vendor of this profileid
+                self.r.hset(profileid, 'MAC_vendor', mac_vendor)
+                return True
+
+        return False
+
+
+    def update_mac_of_profile(self, profileid: str, mac: str):
+        """ Add the MAC addr to the given profileid key"""
+        self.r.hset(profileid, 'MAC', mac)
+
+    def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
+        """
+        Used to associate the given profile with the given MAC addr.
+        stores this info in the 'MAC' key in the db
+        and in the profileid key of the given profile
         format of the MAC key is
             MAC: [ipv4, ipv6, etc.]
-        :param MAC_info: dict containing mac address and vendor info
-        this functions is called for all macs found in dhcp.log, conn.log, arp.log etc.
+        this functions is called for all macs found in
+        dhcp.log, conn.log, arp.log etc.
+        PS: it doesn't deal with the MAC vendor
         """
-        if not profileid:
+        if (
+                not profileid
+                or not mac_addr
+                or '0.0.0.0' in profileid
+        ):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
 
-        if '0.0.0.0' in profileid:
-            return False
 
-        incoming_ip = profileid.split('_')[1]
+        incoming_ip: str = profileid.split('_')[1]
 
         # sometimes we create profiles with the mac address.
         # don't save that in MAC hash
@@ -1377,66 +1436,69 @@ class ProfileHandler(IObservable):
             return False
 
         if (
-            self.is_gw_mac(MAC_info, incoming_ip)
+            self.is_gw_mac(mac_addr, incoming_ip)
             and incoming_ip != self.get_gateway_ip()
         ):
-            # we're trying to assign the gw mac to an ip that isn't the gateway's
+            # we're trying to assign the gw mac to
+            # an ip that isn't the gateway's
+            # this happens bc any public IP probably has the gw MAC
+            # in the zeek logs, so skip
             return False
+
         # get the ips that belong to this mac
-        cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
+        cached_ip = self.r.hmget('MAC', mac_addr)[0]
         if not cached_ip:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
-            self.r.hset('MAC', MAC_info['MAC'], ip)
-            # Add the MAC addr and vendor to this profile
-            self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
+            self.r.hset('MAC', mac_addr, ip)
+
+            # now that it's decided that this mac belongs to this profileid
+            # stoe the mac in the profileid's key in the db
+            self.update_mac_of_profile(profileid, mac_addr)
         else:
             # we found another profile that has the same mac as this one
-            # incoming_ip = profileid.split('_')[1]
-
             # get all the ips, v4 and 6, that are stored with this mac
             cached_ips = json.loads(cached_ip)
             # get the last one of them
             found_ip = cached_ips[-1]
+            cached_ips = set(cached_ips)
 
-            # we already have the incoming ip associated with this mac in the db
             if incoming_ip in cached_ips:
+                # this is the case where we have the given ip already
+                # seen with the given mac. nothing to do here.
                 return False
 
-            cached_ips = set(cached_ips)
-            # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
+
+            # make sure 1 profile is ipv4 and the other is ipv6
+            # (so we don't mess with MITM ARP detections)
             if validators.ipv6(incoming_ip) and validators.ipv4(found_ip):
-                # associate the ipv4 we found with the incoming ipv6 and vice versa
+                # associate the ipv4 we found with the incoming ipv6
+                # and vice versa
                 self.set_ipv4_of_profile(profileid, found_ip)
                 self.set_ipv6_of_profile(f'profile_{found_ip}', [incoming_ip])
+
             elif validators.ipv6(found_ip) and validators.ipv4(incoming_ip):
-                # associate the ipv6 we found with the incoming ipv4 and vice versa
+                # associate the ipv6 we found with the incoming ipv4
+                # and vice versa
                 self.set_ipv6_of_profile(profileid, [found_ip])
                 self.set_ipv4_of_profile(f'profile_{found_ip}', incoming_ip)
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
-                # If 2 IPV6 are claiming to have the same MAC it's fine
+                # If 2 IPv6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
                 # add this found ipv6 to the list of ipv6 of the incoming ip(profileid)
-                ipv6: str = self.r.hmget(profileid, 'IPv6')[0]
-                if not ipv6:
-                    ipv6 = [found_ip]
-                else:
-                    # found a list of ipv6 in the db
-                    ipv6: set = set(json.loads(ipv6))
-                    ipv6.add(found_ip)
-                    ipv6 = list(ipv6)
+
+                # get the list of cached ipv6
+                ipv6: str = self.get_ipv6_from_profile(profileid)
+                # get the list of cached ipv6+the new one
+                ipv6: list = self.add_to_the_list_of_ipv6(found_ip, ipv6)
                 self.set_ipv6_of_profile(profileid, ipv6)
 
-                # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
-                ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
-                if not ipv6:
-                    ipv6 = [incoming_ip]
-                else:
-                    # found a list of ipv6 in the db
-                    ipv6: set = set(json.loads(ipv6))
-                    ipv6.add(incoming_ip)
-                    #convert to list
-                    ipv6 = list(ipv6)
+                # add this incoming ipv6(profileid) to the list of
+                # ipv6 of the found ip
+                # get the list of cached ipv6
+                ipv6: str = self.get_ipv6_from_profile(f'profile_{found_ip}')
+                # get the list of cached ipv6+the new one
+                ipv6: list = self.add_to_the_list_of_ipv6(incoming_ip, ipv6)
                 self.set_ipv6_of_profile(f'profile_{found_ip}', ipv6)
 
             else:
@@ -1448,22 +1510,26 @@ class ProfileHandler(IObservable):
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
-            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+            self.r.hset('MAC', mac_addr, cached_ips)
+
+            self.update_mac_of_profile(profileid, mac_addr)
+            self.update_mac_of_profile(f'profile_{found_ip}', mac_addr)
 
         return True
 
-    def get_mac_addr_from_profile(self, profileid) -> str:
+    def get_mac_addr_from_profile(self, profileid: dict) \
+            -> Union[str, None]:
         """
-        Returns MAC info about a certain profile or None
+        Returns MAC address  of the given profile as a str, or None
+        returns the info from the profileid key.
         """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
-            return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
-            return json.loads(MAC_info)['MAC']
-        else:
-            return MAC_info
+            return None
+
+        return self.r.hget(profileid, 'MAC')
+
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
@@ -1862,20 +1928,22 @@ class ProfileHandler(IObservable):
 
     def set_ipv4_of_profile(self, profileid, ip):
         self.r.hset(profileid, 'IPv4', json.dumps([ip]))
-    def get_mac_vendor_from_profile(self, profileid) -> str:
+
+    def get_mac_vendor_from_profile(
+            self,
+            profileid: str
+        ) -> Union[str, None]:
         """
-        Returns MAC vendor about a certain profile or None
+        Returns a str MAC vendor of  the given profile or None
         """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
-            return json.loads(MAC_info)['Vendor']
-        else:
-            return MAC_info
 
-    def get_hostname_from_profile(self, profileid) -> str:
+        return self.r.hget(profileid, 'MAC_vendor')
+
+    def get_hostname_from_profile(self, profileid: str) -> str:
         """
         Returns hostname about a certain profile or None
         """

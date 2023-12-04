@@ -3,6 +3,7 @@ from slips_files.common.imports import *
 import json
 import urllib
 import requests
+from typing import Union
 
 
 class HTTPAnalyzer(IModule, multiprocessing.Process):
@@ -184,7 +185,9 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         Compare the user agent of this profile to the MAC vendor and check incompatibility
         """
         # get the mac vendor
-        vendor = self.db.get_mac_vendor_from_profile(profileid)
+        vendor: Union[str, None] = self.db.get_mac_vendor_from_profile(
+            profileid
+            )
         if not vendor:
             return False
         vendor = vendor.lower()
