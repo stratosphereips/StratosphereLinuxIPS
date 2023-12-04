@@ -1354,6 +1354,21 @@ class ProfileHandler(IObservable):
         return set(profiles), time_of_last_modified_tw
 
 
+    def add_to_the_list_of_ipv6(
+            self, ipv6_to_add: str, cached_ipv6: str
+        ) -> list :
+        """
+        adds the given IPv6 to the list of given cached_ipv6
+        """
+        if not cached_ipv6:
+            cached_ipv6 = [ipv6_to_add]
+        else:
+            # found a list of ipv6 in the db
+            cached_ipv6: set = set(json.loads(cached_ipv6))
+            cached_ipv6.add(ipv6_to_add)
+            cached_ipv6 = list(cached_ipv6)
+        return cached_ipv6
+
     def set_mac_vendor_to_profile(
             self,
             profileid: str,
@@ -1386,6 +1401,7 @@ class ProfileHandler(IObservable):
                 return True
 
         return False
+
 
     def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
         """
@@ -1444,7 +1460,10 @@ class ProfileHandler(IObservable):
             cached_ips = set(cached_ips)
 
             if incoming_ip in cached_ips:
+                # this is the case where we have the given ip already
+                # seen with the given mac. nothing to do here.
                 return False
+
 
             # make sure 1 profile is ipv4 and the other is ipv6
             # (so we don't mess with MITM ARP detections)
@@ -1460,29 +1479,22 @@ class ProfileHandler(IObservable):
                 self.set_ipv6_of_profile(profileid, [found_ip])
                 self.set_ipv4_of_profile(f'profile_{found_ip}', incoming_ip)
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
-                # If 2 IPV6 are claiming to have the same MAC it's fine
+                # If 2 IPv6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
                 # add this found ipv6 to the list of ipv6 of the incoming ip(profileid)
-                ipv6: str = self.r.hmget(profileid, 'IPv6')[0]
-                if not ipv6:
-                    ipv6 = [found_ip]
-                else:
-                    # found a list of ipv6 in the db
-                    ipv6: set = set(json.loads(ipv6))
-                    ipv6.add(found_ip)
-                    ipv6 = list(ipv6)
+
+                # get the list of cached ipv6
+                ipv6: str = self.get_ipv6_from_profile(profileid)
+                # get the list of cached ipv6+the new one
+                ipv6: list = self.add_to_the_list_of_ipv6(found_ip, ipv6)
                 self.set_ipv6_of_profile(profileid, ipv6)
 
-                # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
-                ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
-                if not ipv6:
-                    ipv6 = [incoming_ip]
-                else:
-                    # found a list of ipv6 in the db
-                    ipv6: set = set(json.loads(ipv6))
-                    ipv6.add(incoming_ip)
-                    #convert to list
-                    ipv6 = list(ipv6)
+                # add this incoming ipv6(profileid) to the list of
+                # ipv6 of the found ip
+                # get the list of cached ipv6
+                ipv6: str = self.get_ipv6_from_profile(f'profile_{found_ip}')
+                # get the list of cached ipv6+the new one
+                ipv6: list = self.add_to_the_list_of_ipv6(incoming_ip, ipv6)
                 self.set_ipv6_of_profile(f'profile_{found_ip}', ipv6)
 
             else:
