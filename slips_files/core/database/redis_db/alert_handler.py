@@ -12,6 +12,24 @@ class AlertHandler:
     """
     name = 'DB'
 
+    def increment_attack_counter(
+            self,
+            attacker: str,
+            victim: str,
+            evidence_type: str
+        ):
+        """
+        increments the value of the hash profile_attacker_evidence_summary
+        of the given victim
+        :param attacker: is a profileid
+        :param victim: IP of a victim
+        :param evidence_type: e.g. MaliciousJA3, DataExfiltration, etc.
+        """
+        self.r.hincrby(
+            f'{attacker}_evidence_sumamry',
+            f"{victim}_{evidence_type}",
+            1)
+
     def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
         When we have a bunch of evidence causing an alert,

@@ -854,6 +854,9 @@ class DBManager(IObservable):
     def get_redis_pid(self, *args, **kwargs):
         return self.rdb.get_redis_pid(*args, **kwargs)
 
+    def increment_attack_counter(self, *args, **kwargs):
+        return self.rdb.increment_attack_counter(*args, **kwargs)
+
     def export_labeled_flows(self, *args, **kwargs):
         """
         exports the labeled flows and altflows stored in sqlite

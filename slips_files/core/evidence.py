@@ -93,37 +93,6 @@ class Evidence(ICore):
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
 
-
-    def format_evidence_string(self, ip, detection_module, attacker,
-                               description) -> str:
-        """
-        Function to add the dns resolution of the src and dst ips of
-         each evidence
-        :return : string with a correct evidence displacement
-        """
-        evidence_string = ''
-        dns_resolution_attacker = self.db.get_dns_resolution(attacker)
-        dns_resolution_attacker = dns_resolution_attacker.get(
-            'domains', []
-        )
-        dns_resolution_attacker = dns_resolution_attacker[
-                                        :3] if dns_resolution_attacker else ''
-
-        dns_resolution_ip = self.db.get_dns_resolution(ip)
-        dns_resolution_ip = dns_resolution_ip.get('domains', [])
-        if len(dns_resolution_ip) >= 1:
-            dns_resolution_ip = dns_resolution_ip[0]
-        elif len(dns_resolution_ip) == 0:
-            dns_resolution_ip = ''
-
-        # dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_attacker and len(
-        #     dns_resolution_ip[:3]
-        #     ) > 0 else '. '
-
-
-        return f'{evidence_string}'
-    
-    
     def line_wrap(self, txt):
         """
         is called for evidence that are goinng to be printed in the terminal
@@ -594,6 +563,26 @@ class Evidence(ICore):
                        f'Detected {description}'
 
             return evidence
+    def increment_attack_counter(
+            self,
+            attacker: str,
+            victim: str,
+            evidence_type: str
+            ):
+        """
+        increments the number of attacks of this type from the given
+        attacker-> the given victim
+        used for displaying alert summary
+        """
+        # this method is here instead of the db bc here we check
+        # if the evidence is whitelisted, alerted before, etc. before we
+        # consider it as  valid evidence. this filtering is not done in the db
+        self.db.increment_attack_counter(
+            attacker,
+            victim,
+            evidence_type
+            )
+
 
     def main(self):
         while not self.should_stop():
@@ -609,7 +598,7 @@ class Evidence(ICore):
                 attacker = data.get(
                     'attacker'
                 )   # example: ip, port, inTuple, outTuple, domain
-                evidence_type = data.get(
+                evidence_type: str = data.get(
                     'evidence_type'
                 )   # example: PortScan, ThreatIntelligence, etc..
                 description = data.get('description')
@@ -623,7 +612,7 @@ class Evidence(ICore):
                 proto = data.get('proto', False)
                 source_target_tag = data.get('source_target_tag', False)
                 evidence_ID = data.get('ID', False)
-                victim = data.get('victim', '')
+                victim: str = data.get('victim', '')
 
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence below
@@ -672,6 +661,8 @@ class Evidence(ICore):
                 )
                 # Add the evidence to alerts.log
                 self.add_to_log_file(evidence_to_log)
+
+                self.increment_attack_counter(profileid, victim, evidence_type)
 
                 tw_evidence: dict = self.get_evidence_for_tw(profileid, twid)
                 # The accumulated threat level is for all the types of evidence for this profile
