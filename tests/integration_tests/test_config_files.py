@@ -13,6 +13,7 @@ from tests.module_factory import ModuleFactory
 import pytest
 from ...slips import *
 import shutil
+import os
 
 
 alerts_file = 'alerts.log'
