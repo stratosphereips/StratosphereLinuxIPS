@@ -740,8 +740,6 @@ class DBManager(IObservable):
     def get_timeline_last_lines(self, *args, **kwargs):
         return self.rdb.get_timeline_last_lines(*args, **kwargs)
 
-    def should_add(self, *args, **kwargs):
-        return self.rdb.should_add(*args, **kwargs)
 
     def mark_profile_as_gateway(self, *args, **kwargs):
         return self.rdb.mark_profile_as_gateway(*args, **kwargs)

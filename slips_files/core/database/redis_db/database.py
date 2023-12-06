@@ -171,7 +171,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         conf = ConfigParser()
         cls.deletePrevdb = conf.deletePrevdb()
         cls.disabled_detections = conf.disabled_detections()
-        cls.home_network = conf.get_home_network()
         cls.width = conf.get_tw_width_as_float()
 
     @classmethod
@@ -1099,20 +1098,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def get_reconnections_for_tw(self, profileid, twid):
         """Get the reconnections for this TW for this Profile"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        data = self.r.hget(profileid + self.separator + twid, 'Reconnections')
+        data = self.r.hget(f"{profileid}_{twid}", 'Reconnections')
         data = json.loads(data) if data else {}
         return data
 
     def setReconnections(self, profileid, twid, data):
         """Set the reconnections for this TW for this Profile"""
         data = json.dumps(data)
-        self.r.hset(
-            profileid + self.separator + twid, 'Reconnections', str(data)
-        )
+        self.r.hset(f"{profileid}_{twid}", 'Reconnections', str(data))
 
     def get_host_ip(self):
         """Get the IP addresses of the host from a db. There can be more than one"""

@@ -94,7 +94,6 @@ class Profiler(ICore):
         self.timeformat = conf.ts_format()
         self.analysis_direction = conf.analysis_direction()
         self.label = conf.label()
-        self.home_net = conf.get_home_network()
         self.width = conf.get_tw_width_as_float()
 
     def convert_starttime_to_epoch(self):
@@ -167,30 +166,11 @@ class Profiler(ICore):
         self.twid = self.db.get_timewindow(self.flow.starttime, self.profileid)
         self.flow_parser.twid = self.twid
 
-        if self.home_net:
-            # Home network is defined in slips.conf. Create profiles for home IPs only
-            for network in self.home_net:
-                if self.saddr_as_obj in network:
-                    # if a new profile is added for this saddr
-                    self.db.addProfile(
-                        self.profileid, self.flow.starttime, self.width
-                    )
-                    self.store_features_going_out()
-
-                if (
-                    self.analysis_direction == 'all'
-                    and self.daddr_as_obj in network
-                ):
-                    self.handle_in_flows()
-
-        else:
-            # home_network param wasn't set in slips.conf
-            # Create profiles for all ips we see
-            self.db.addProfile(self.profileid, self.flow.starttime, self.width)
-            self.store_features_going_out()
-            if self.analysis_direction == 'all':
-                # No home. Store all
-                self.handle_in_flows()
+        # Create profiles for all ips we see
+        self.db.addProfile(self.profileid, self.flow.starttime, self.width)
+        self.store_features_going_out()
+        if self.analysis_direction == 'all':
+            self.handle_in_flows()
 
         if self.db.is_cyst_enabled():
             # print the added flow as a form of debugging feedback for

@@ -171,10 +171,6 @@ class IoCHandler():
         Save in DB malicious IP found in the traffic
         with its profileid and twid
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
         # Retrieve all profiles and twis, where this malicios IP was met.
         ip_profileid_twid = self.get_malicious_ip(ip)
         try:
@@ -199,10 +195,6 @@ class IoCHandler():
         Save in DB a malicious domain found in the traffic
         with its profileid and twid
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
         # get all profiles and twis where this IP was met
         domain_profiled_twid = self.get_malicious_domain(domain)
         try:
