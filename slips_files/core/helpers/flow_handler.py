@@ -311,7 +311,6 @@ class FlowHandler:
         self.publisher.new_MAC(
                 self.flow.smac or False,
                 self.flow.saddr,
-                host_name=(self.flow.host_name or False)
             )
 
         self.db.add_mac_addr_to_profile(
