@@ -236,8 +236,12 @@ class DBManager(IObservable):
     def add_zeek_file(self, *args, **kwargs):
         return self.rdb.add_zeek_file(*args, **kwargs)
 
-    def get_all_zeek_file(self, *args, **kwargs):
-        return self.rdb.get_all_zeek_file(*args, **kwargs)
+    def get_all_zeek_files(
+            self,
+            *args,
+            **kwargs
+            ):
+        return self.rdb.get_all_zeek_files(*args, **kwargs)
 
     def get_gateway_ip(self, *args, **kwargs):
         return self.rdb.get_gateway_ip(*args, **kwargs)

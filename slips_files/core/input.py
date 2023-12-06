@@ -113,10 +113,16 @@ class Input(ICore):
         self.is_profiler_done_event = is_profiler_done_event
 
     def is_done_processing(self):
-        """marks this process as done processing so slips.py would know when to terminate"""
+        """
+        marks this process as done processing so
+        slips.py would know when to terminate
+        """
         # signal slips.py that this process is done
-        # tell profiler that this process is done and no kmore flows are arriving
-        self.print(f"Telling Profiler to stop because no more input is arriving.", log_to_logfiles_only=True)
+        # tell profiler that this process is
+        # done and no more flows are arriving
+        self.print(f"Telling Profiler to stop because "
+                   f"no more input is arriving.",
+                   log_to_logfiles_only=True)
         self.profiler_queue.put('stop')
         self.print(f"Waiting for Profiler to stop.", log_to_logfiles_only=True)
         self.is_profiler_done_event.wait()
@@ -325,7 +331,7 @@ class Input(ICore):
             # It may happen that we check all the files in the folder,
             # and there is still no files for us.
             # To cover this case, just refresh the list of files
-            self.zeek_files = self.db.get_all_zeek_file()
+            self.zeek_files = self.db.get_all_zeek_files()
             # time.sleep(1)
             return False, False
 
@@ -343,7 +349,7 @@ class Input(ICore):
         return earliest_line, file_with_earliest_flow
 
     def read_zeek_files(self) -> int:
-        self.zeek_files = self.db.get_all_zeek_file()
+        self.zeek_files = self.db.get_all_zeek_files()
         self.open_file_handlers = {}
         self.file_time = {}
         self.cache_lines = {}
@@ -380,7 +386,7 @@ class Input(ICore):
             del self.file_time[file_with_earliest_flow]
             # Get the new list of files. Since new files may have been created by
             # Zeek while we were processing them.
-            self.zeek_files = self.db.get_all_zeek_file()
+            self.zeek_files = self.db.get_all_zeek_files()
 
         self.close_all_handles()
         return self.lines
@@ -423,7 +429,8 @@ class Input(ICore):
         # This is the case that a folder full of zeek files is passed with -f
         # wait max 10 seconds before stopping slips if no new flows are read
         self.bro_timeout = 10
-        if self.db.is_growing_zeek_dir():
+        growing_zeek_dir: bool = self.db.is_growing_zeek_dir()
+        if growing_zeek_dir:
             # slips is given a dir that is growing i.e zeek dir running on an interface
             # don't stop zeek or slips
             self.bro_timeout = float('inf')
@@ -446,20 +453,21 @@ class Input(ICore):
             if self.is_ignored_file(full_path):
                 continue
 
-            if not self.db.is_growing_zeek_dir():
-                # get the total number of flows slips is going to read (used later for the progress bar)
+            if not growing_zeek_dir:
+                # get the total number of flows slips is going to read
+                # (used later for the progress bar)
                 total_flows += self.get_flows_number(full_path)
 
             # Add log file to the database
             self.db.add_zeek_file(full_path)
-
 
             # in testing mode, we only need to read one zeek file to know
             # that this function is working correctly
             if self.testing:
                 break
 
-        if total_flows == 0:
+        if total_flows == 0 and not growing_zeek_dir:
+            # we're given an empty dir/ zeek logfile
             self.is_done_processing()
             return True
 

@@ -565,12 +565,8 @@ class IPInfo(IModule, multiprocessing.Process):
     def main(self):
         if msg:= self.get_msg('new_MAC'):
             data = json.loads(msg['data'])
-            mac_addr = data['MAC']
-            host_name = data.get('host_name', False)
-            profileid = data['profileid']
-
-            if host_name:
-                self.db.add_host_name_to_profile(host_name, profileid)
+            mac_addr: str = data['MAC']
+            profileid: str = data['profileid']
 
             self.get_vendor(mac_addr, profileid)
             self.check_if_we_have_pending_mac_queries()

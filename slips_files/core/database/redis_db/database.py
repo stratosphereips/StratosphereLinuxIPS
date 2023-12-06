@@ -541,7 +541,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         return self.r.hget('analysis', 'evidence_detection_threshold')
 
 
-    def get_input_type(self):
+    def get_input_type(self) -> str:
         """
         gets input type from the db
         """
@@ -1042,7 +1042,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """Add an entry to the list of zeek files"""
         self.r.sadd('zeekfiles', filename)
 
-    def get_all_zeek_file(self):
+    def get_all_zeek_files(self) -> set:
         """Return all entries from the list of zeek files"""
         return self.r.smembers('zeekfiles')
 
