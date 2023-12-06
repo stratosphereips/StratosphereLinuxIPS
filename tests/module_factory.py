@@ -2,8 +2,7 @@ import shutil
 from unittest.mock import patch, Mock
 import os
 
-
-from slips import Main
+from slips.main import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
 from slips_files.core.database.database_manager import DBManager

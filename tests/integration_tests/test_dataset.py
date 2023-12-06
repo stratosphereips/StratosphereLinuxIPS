@@ -11,8 +11,9 @@ from tests.common_test_utils import (
 )
 from tests.module_factory import ModuleFactory
 import pytest
-from ...slips import *
+from ...slips.main import *
 import shutil
+import os
 
 alerts_file = 'alerts.log'
 

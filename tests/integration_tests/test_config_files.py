@@ -2,6 +2,7 @@
 This file tests 2 different config files other than slips' default config/slips.conf
 test/test.conf and tests/test2.conf
 """
+from slips.main import Main
 from tests.common_test_utils import (
         is_evidence_present,
         create_output_dir,
@@ -12,6 +13,7 @@ from tests.module_factory import ModuleFactory
 import pytest
 from ...slips import *
 import shutil
+import os
 
 
 alerts_file = 'alerts.log'
