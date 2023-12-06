@@ -31,7 +31,7 @@ class Publisher():
         self.db.publish('new_dhcp', json.dumps(to_send))
 
 
-    def new_MAC(self, mac: str, ip: str, host_name=False):
+    def new_MAC(self, mac: str, ip: str):
         """
         check if mac and ip aren't multicast or link-local
         and publish to new_MAC channel to get more info about the mac
@@ -54,8 +54,6 @@ class Publisher():
             'MAC': mac,
             'profileid': f'profile_{ip}'
         }
-        if host_name:
-            to_send['host_name'] = host_name
         self.db.publish('new_MAC', json.dumps(to_send))
 
 
@@ -81,9 +79,21 @@ class FlowHandler:
         self.publisher = Publisher(self.db)
         self.flow = flow
         self.symbol = symbol_handler
+        self.running_non_stop: bool = self.is_running_non_stop()
+
+    def is_running_non_stop(self) -> bool:
+        """
+        Slips runs non-stop in case of an interface or a growing zeek dir,
+        it only stops on ctrl+c
+        """
+        if (
+                self.db.get_input_type() == 'interface'
+                or
+                self.db.is_growing_zeek_dir()
+        ):
+            return True
 
     def is_supported_flow(self):
-
         supported_types = (
             'ssh',
             'ssl',
@@ -168,6 +178,11 @@ class FlowHandler:
                 self.flow.smac
             )
 
+        if self.running_non_stop:
+            # to avoid publishing duplicate MACs, when running on
+            # an interface, we should have an arp.log, so we'll publish
+            # MACs from there only
+            return
 
         self.publisher.new_MAC(self.flow.smac, self.flow.saddr)
         self.publisher.new_MAC(self.flow.dmac, self.flow.daddr)

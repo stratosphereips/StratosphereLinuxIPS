@@ -34,7 +34,7 @@ def test_is_growing_zeek_dir(
      zeek_dir: str, is_tabs: bool,  mock_rdb
 ):
     input = ModuleFactory().create_inputProcess_obj(zeek_dir, 'zeek_folder', mock_rdb)
-    mock_rdb.get_all_zeek_file.return_value = [os.path.join(zeek_dir, 'conn.log')]
+    mock_rdb.get_all_zeek_files.return_value = [os.path.join(zeek_dir, 'conn.log')]
 
     assert input.read_zeek_folder() is True
 
