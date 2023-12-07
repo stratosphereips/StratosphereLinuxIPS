@@ -129,13 +129,6 @@ def test_conf_file2(
 
     assert has_errors(output_dir) is False
 
-    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
-
-    # test 1 homenet ip
-    # the only profile we should have is the one in home_network parameter
-    profiles = database.get_profiles_len()
-    assert profiles == expected_profiles
-
     shutil.rmtree(output_dir)
 
 

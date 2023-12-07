@@ -89,10 +89,6 @@ class ProfileHandler(IObservable):
         try:
             # First check if we are not in the last TW. Since this will be the majority of cases
             try:
-                if not profileid:
-                    # profileid is None if we're dealing with a profile
-                    # outside of home_network when this param is given
-                    return False
                 [(lasttwid, lasttw_start_time)] = self.get_last_twid_of_profile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
@@ -607,10 +603,6 @@ class ProfileHandler(IObservable):
 
         :param type_data: can be 'Ports' or 'IPs'
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         try:
             # key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established,
@@ -815,10 +807,6 @@ class ProfileHandler(IObservable):
         """
         Get all the contacted IPs in a given profile and TW
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return {}
         all_flows: dict = self.db.get_all_flows_in_profileid_twid(profileid, twid)
         if not all_flows:
             return {}
@@ -1419,12 +1407,9 @@ class ProfileHandler(IObservable):
         PS: it doesn't deal with the MAC vendor
         """
         if (
-                not profileid
-                or not mac_addr
+                not mac_addr
                 or '0.0.0.0' in profileid
         ):
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
             return False
 
 
@@ -1523,10 +1508,6 @@ class ProfileHandler(IObservable):
         Returns MAC address  of the given profile as a str, or None
         returns the info from the profileid key.
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return None
 
         return self.r.hget(profileid, 'MAC')
 
@@ -1588,10 +1569,6 @@ class ProfileHandler(IObservable):
         Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
         used by a certain profile or None
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         if user_agent := self.get_first_user_agent(profileid):
             # user agents may be OpenSSH_8.6 , no need to deserialize them
@@ -1603,10 +1580,6 @@ class ProfileHandler(IObservable):
         """
         Used to mark this profile as dhcp server
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         # returns a list of dhcp if the profile is in the db
         profile_in_db = self.r.hmget(profileid, 'dhcp')
@@ -1624,13 +1597,10 @@ class ProfileHandler(IObservable):
         Duration is only needed for registration purposes in the profile. Nothing operational
         """
         try:
-            # make sure we don't add public ips if the user specified a home_network
             if self.r.sismember('profiles', str(profileid)):
                 # we already have this profile
                 return False
-            # execlude ips outside of local network is it's set in slips.conf
-            if not self.should_add(profileid):
-                return False
+
             # Add the profile to the index. The index is called 'profiles'
             self.r.sadd('profiles', str(profileid))
             # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
@@ -1661,10 +1631,6 @@ class ProfileHandler(IObservable):
         A module label is a label set by a module, and not
         a groundtruth label
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
         data = self.get_profile_modules_labels(profileid)
         data[module] = label
         data = json.dumps(data)
@@ -1855,20 +1821,12 @@ class ProfileHandler(IObservable):
         """
         Get labels set by modules in the profile.
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return {}
         data = self.r.hget(profileid, 'modules_labels')
         data = json.loads(data) if data else {}
         return data
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
         """Add a line to the timeline of this profileid and twid"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return
         self.print(f'Adding timeline for {profileid}, {twid}: {data}', 3, 0)
         key = str(
             profileid + self.separator + twid + self.separator + 'timeline'
@@ -1883,10 +1841,6 @@ class ProfileHandler(IObservable):
         self, profileid, twid, first_index: int
     ) -> Tuple[str, int]:
         """Get only the new items in the timeline."""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return [], []
         key = str(
             profileid + self.separator + twid + self.separator + 'timeline'
         )
@@ -1896,29 +1850,11 @@ class ProfileHandler(IObservable):
         data = self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
 
-    def should_add(self, profileid: str) -> bool:
-        """
-        determine whether we should add the given profile to the db or not based on the home_network param
-        is the user specified the home_network param, make sure the given profile/ip belongs to it before adding
-        """
-        # make sure the user specified a home network
-        if not self.home_network:
-            # no home_network is specified
-            return True
-
-        ip = profileid.split(self.separator)[1]
-        ip_obj = ipaddress.ip_address(ip)
-
-        return any(ip_obj in network for network in self.home_network)
 
     def mark_profile_as_gateway(self, profileid):
         """
         Used to mark this profile as dhcp server
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         self.r.hset(profileid, 'gateway', 'true')
 
@@ -1936,10 +1872,6 @@ class ProfileHandler(IObservable):
         """
         Returns a str MAC vendor of  the given profile or None
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         return self.r.hget(profileid, 'MAC_vendor')
 
@@ -1947,12 +1879,6 @@ class ProfileHandler(IObservable):
         """
         Returns hostname about a certain profile or None
         """
-
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-
         return self.r.hget(profileid, 'host_name')
 
     def add_host_name_to_profile(self, hostname, profileid):
@@ -1979,10 +1905,6 @@ class ProfileHandler(IObservable):
         Given an ipv4, returns the ipv6 of the same computer
         Given an ipv6, returns the ipv4 of the same computer
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
         srcip = profileid.split('_')[-1]
         ip = False
         if validators.ipv4(srcip):
