@@ -1,3 +1,5 @@
+from typing import List
+
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -752,6 +754,14 @@ class DBManager(IObservable):
 
     def get_mac_vendor_from_profile(self, *args, **kwargs):
         return self.rdb.get_mac_vendor_from_profile(*args, **kwargs)
+
+    def label_flows_causing_alert(self, evidence_ids: List[str]):
+        """
+        :param evidence_ids: list of ids of evidence causing an alert
+        """
+        for evidence_id in evidence_ids:
+            uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
+            self.set_flow_label(uids, 'malicious')
 
     def set_mac_vendor_to_profile(self, *args, **kwargs):
         return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
