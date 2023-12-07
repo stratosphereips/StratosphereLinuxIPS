@@ -20,7 +20,7 @@ from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
 from slips_files.common.abstracts.core import ICore
 import json
-from typing import Union, List
+from typing import Union, List, Tuple
 from datetime import datetime
 from os import path
 from colorama import Fore, Style
@@ -46,6 +46,7 @@ class Evidence(ICore):
         self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
+        self.running_non_stop = self.is_running_on_interface()
         # to keep track of the number of generated evidence
         self.db.init_evidence_number()
         if self.popup_alerts:
@@ -467,8 +468,7 @@ class Evidence(ICore):
             past_evidence_ids = []
         return past_evidence_ids
 
-    def is_evidence_done_by_others(self, evidence: str) -> bool:
-        evidence: str = json.loads(evidence)
+    def is_evidence_done_by_others(self, evidence: dict) -> bool:
         # given all the tw evidence, we should only
         # consider evidence that makes this given
         # profile malicious, aka evidence of this profile attacking others.
@@ -482,7 +482,7 @@ class Evidence(ICore):
 
 
     def get_evidence_for_tw(self, profileid: str, twid: str) \
-            -> Union[dict, bool]:
+            -> Tuple[dict, float]:
         """
         filters and returns all the evidence for this profile in this TW
         filters the follwing:
@@ -501,6 +501,7 @@ class Evidence(ICore):
         past_evidence_ids: List[str] = \
             self.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
 
+        accumulated_threat_level = 0.0
         res = {}
         for id, evidence in tw_evidence.items():
             id: str
@@ -517,6 +518,7 @@ class Evidence(ICore):
             if id in past_evidence_ids:
                 continue
 
+            evidence: dict = json.loads(evidence)
             if self.is_evidence_done_by_others(evidence):
                 continue
 
@@ -534,49 +536,48 @@ class Evidence(ICore):
             if not processed:
                 continue
 
-            res[id] = evidence
+            accumulated_threat_level: float = \
+                self.accummulate_threat_level(evidence, accumulated_threat_level)
+            res[id] = json.dumps(evidence)
 
-        return res
+        return res, accumulated_threat_level
 
-
-    def get_accumulated_threat_level(self, tw_evidence: dict):
-        """
-        return the sum of all threat levels of all evidence in
-        the given tw evidence dict
-        """
-        accumulated_threat_level = 0.0
+    def accummulate_threat_level(
+            self,
+            evidence: dict,
+            accumulated_threat_level: float
+            ) -> float:
         # to store all the ids causing this alert in the database
         self.IDs_causing_an_alert = []
-        for evidence in tw_evidence.values():
-            evidence = json.loads(evidence)
-            # attacker_direction = evidence.get('attacker_direction')
-            # attacker = evidence.get('attacker')
-            evidence_type = evidence.get('evidence_type')
-            confidence = float(evidence.get('confidence'))
-            threat_level = evidence.get('threat_level')
-            description = evidence.get('description')
-            ID = evidence.get('ID')
-            self.IDs_causing_an_alert.append(ID)
+        # attacker_direction = evidence.get('attacker_direction')
+        # attacker = evidence.get('attacker')
+        evidence_type: str = evidence.get('evidence_type')
+        confidence: float = float(evidence.get('confidence'))
+        threat_level: float = evidence.get('threat_level')
+        description: str = evidence.get('description')
+        id: str = evidence.get('ID')
+        #TODO
+        self.IDs_causing_an_alert.append(id)
 
-            # each threat level is a string, get the numerical value of it
-            try:
-                threat_level: float = \
-                    utils.threat_levels[threat_level.lower()]
-            except KeyError:
-                self.print(
-                    f'Error: Evidence of type {evidence_type} has '
-                    f'an invalid threat level {threat_level}', 0, 1
-                )
-                self.print(f'Description: {description}', 0, 1)
-                threat_level = 0
-
-            # Compute the moving average of evidence
-            new_threat_level: float = threat_level * confidence
-            self.print(f'\t\tWeighted Threat Level: {new_threat_level}', 3, 0)
-            accumulated_threat_level += new_threat_level
+        # each threat level is a string, get the numerical value of it
+        try:
+            threat_level: float = \
+                utils.threat_levels[threat_level.lower()]
+        except KeyError:
             self.print(
-                f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
+                f'Error: Evidence of type {evidence_type} has '
+                f'an invalid threat level {threat_level}', 0, 1
             )
+            self.print(f'Description: {description}', 0, 1)
+            threat_level = 0
+
+        # Compute the moving average of evidence
+        new_threat_level: float = threat_level * confidence
+        self.print(f'\t\tWeighted Threat Level: {new_threat_level}', 3, 0)
+        accumulated_threat_level += new_threat_level
+        self.print(
+            f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
+        )
         return accumulated_threat_level
 
     def get_last_evidence_ID(self, tw_evidence: dict) -> str:
@@ -648,7 +649,6 @@ class Evidence(ICore):
                 flow_datetime: str,
                 profileid: str,
         ) -> str:
-
             timewindow_number: int = twid.replace("timewindow", '')
 
             # to keep the alignment of alerts.json ip + hostname
@@ -733,13 +733,12 @@ class Evidence(ICore):
                     proto,
                     evidence_ID
                 )
-
-                # Format the time to a common style given multiple type of time variables
-                if self.is_running_on_interface():
+                # convert time to local timezone
+                if self.running_non_stop:
                     timestamp: datetime = utils.convert_to_local_timezone(timestamp)
                 flow_datetime = utils.convert_format(timestamp, 'iso')
 
-                evidence_to_log = self.get_evidence_to_log(
+                evidence_to_log: str = self.get_evidence_to_log(
                     srcip,
                     description,
                     twid,
@@ -749,10 +748,9 @@ class Evidence(ICore):
                 # Add the evidence to alerts.log
                 self.add_to_log_file(evidence_to_log)
 
-                tw_evidence: dict = self.get_evidence_for_tw(profileid, twid)
-                # The accumulated threat level is for all the types of evidence for this profile
-                accumulated_threat_level: float = \
-                    self.get_accumulated_threat_level(tw_evidence)
+                tw_evidence: dict
+                accumulated_threat_level: float
+                tw_evidence, accumulated_threat_level= self.get_evidence_for_tw(profileid, twid)
 
                 # add to alerts.json
                 self.add_to_json_log_file(
