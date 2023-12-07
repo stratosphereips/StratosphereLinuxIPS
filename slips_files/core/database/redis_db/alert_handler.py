@@ -191,7 +191,7 @@ class AlertHandler:
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
-        if type(uid) == list:
+        if isinstance(uid, list):
             # some evidence are caused by several uids, use the last one only
             # todo check why we have duplicates in the first place
             # remove duplicate uids
@@ -201,9 +201,9 @@ class AlertHandler:
 
         self.set_flow_causing_evidence(uids, evidence_ID)
 
-        if type(threat_level) != str:
+        if not isinstance(threat_level, str):
             # make sure we always store str threat levels in the db
-            threat_level = utils.threat_level_to_string(threat_level)
+            threat_level: str = utils.threat_level_to_string(threat_level)
 
         if timestamp:
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
@@ -283,13 +283,13 @@ class AlertHandler:
     def get_evidence_number(self):
         return self.r.get('number_of_evidence')
 
-    def mark_evidence_as_processed(self, evidence_ID):
+    def mark_evidence_as_processed(self, evidence_ID: str):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """
         self.r.sadd('processed_evidence', evidence_ID)
 
-    def is_evidence_processed(self, evidence_ID):
+    def is_evidence_processed(self, evidence_ID: str) -> bool:
         return self.r.sismember('processed_evidence', evidence_ID)
 
     def set_evidence_for_profileid(self, evidence):
@@ -386,10 +386,10 @@ class AlertHandler:
         The format for the returned dict is
             {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
-        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
+        alerts: str = self.r.hget(f'{profileid}_{twid}', 'alerts')
         if not alerts:
             return {}
-        alerts = json.loads(alerts)
+        alerts: dict = json.loads(alerts)
         return alerts
 
     def getEvidenceForTW(self, profileid: str, twid: str) -> str:

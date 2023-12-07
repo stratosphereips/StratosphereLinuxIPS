@@ -332,7 +332,7 @@ class Utils(object):
                 r_value = True
         return r_value
 
-    def is_ignored_ip(self, ip) -> bool:
+    def is_ignored_ip(self, ip: str) -> bool:
         """
         This function checks if an IP is a special list of IPs that
         should not be alerted for different reasons
