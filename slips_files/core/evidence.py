@@ -20,7 +20,7 @@ from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
 from slips_files.common.abstracts.core import ICore
 import json
-from typing import Union
+from typing import Union, List
 from datetime import datetime
 from os import path
 from colorama import Fore, Style
@@ -406,35 +406,6 @@ class Evidence(ICore):
         self.print("@@@@@@@@@@@@@@@@ discarded_bc_never_processed")
         self.print(self.discarded_bc_never_processed)
 
-    def delete_alerted_evidence(
-            self,
-            profileid: str,
-            twid: str,
-            tw_evidence: dict) -> dict:
-        """
-        if there was an alert in this tw before, remove the evidence that
-        were part of the past alert from the current evidence.
-
-        when blocking is not enabled, we can alert on a single profile many times
-        when we get all the tw evidence from the db, we get the once we
-        alerted, and the new once we need to alert
-        this method removes the already alerted evidence to avoid duplicates
-
-        :param tw_evidence: dict with {<ev_id>: {evidence_details}}
-        """
-        past_alerts: dict = self.db.get_profileid_twid_alerts(profileid, twid)
-        if not past_alerts:
-            return tw_evidence
-
-        for alert_id, evidence_IDs in past_alerts.items():
-            alert_id: str
-            evidence_IDs: str # json serialized
-
-            evidence_IDs: dict = json.loads(evidence_IDs)
-            for ID in evidence_IDs:
-                tw_evidence.pop(ID, None)
-        return tw_evidence
-
     def delete_whitelisted_evidence(self, profileid, twid, evidence: dict) \
             -> dict:
         """
@@ -484,22 +455,30 @@ class Evidence(ICore):
 
         return res
 
-    def delete_evidence_done_by_others(self, tw_evidence):
-        """
-        given all the tw evidence, we should only consider evidence that makes this given
-        profile malicious, aka evidence of this profile attacking others.
-        """
-        res = {}
-        for evidence_ID, evidence_info in tw_evidence.items():
-            evidence_info = json.loads(evidence_info)
-            attacker_direction = evidence_info.get('attacker_direction', '')
-            # the following type detections are the ones
-            # expected to be seen when we are attacking others
-            # marking this profileid (srcip) as malicious
-            if attacker_direction in ('srcip', 'sport', 'srcport'):
-                res[evidence_ID] = json.dumps(evidence_info)
+    def get_evidence_that_were_part_of_a_past_alert(
+            self, profileid: str, twid: str) -> List[str]:
 
-        return res
+        past_alerts: dict = self.db.get_profileid_twid_alerts(profileid, twid)
+        try:
+            past_evidence_ids = list(past_alerts.values())[0]
+            past_evidence_ids: List[str] = json.loads(past_evidence_ids)
+        except IndexError:
+            # no past evidence
+            past_evidence_ids = []
+        return past_evidence_ids
+
+    def is_evidence_done_by_others(self, evidence: str) -> bool:
+        evidence: str = json.loads(evidence)
+        # given all the tw evidence, we should only
+        # consider evidence that makes this given
+        # profile malicious, aka evidence of this profile attacking others.
+        attacker_direction: str = evidence.get('attacker_direction', '')
+        # the following type detections are the ones
+        # expected to be seen when we are attacking others
+        # marking this profileid (srcip) as malicious
+        if attacker_direction in ('srcip', 'sport', 'srcport'):
+            return False
+        return True
 
 
     def get_evidence_for_tw(self, profileid: str, twid: str) \
@@ -510,17 +489,54 @@ class Evidence(ICore):
         * evidence that were part of a past alert in this same profileid twid
         * evidence that weren't done by the given profileid
         * evidence that are whitelisted
+        * evidence that weren't processed by evidence.py yet
         """
         tw_evidence: str = self.db.getEvidenceForTW(profileid, twid)
         if not tw_evidence:
             return False
 
+        # format of this is {ev_id, json_serialized(ev_details)}
         tw_evidence: dict = json.loads(tw_evidence)
-        tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
-        tw_evidence = self.delete_evidence_done_by_others(tw_evidence)
-        tw_evidence = self.delete_whitelisted_evidence(profileid, twid,
-                                                       tw_evidence)
-        return tw_evidence
+
+        past_evidence_ids: List[str] = \
+            self.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
+
+        res = {}
+        for id, evidence in tw_evidence.items():
+            id: str
+            evidence: str
+
+            # delete already alerted evidence
+            # if there was an alert in this tw before, remove the evidence that
+            # were part of the past alert from the current evidence.
+
+            # when blocking is not enabled, we can alert on a single profile many times
+            # when we get all the tw evidence from the db, we get the once we
+            # alerted, and the new once we need to alert
+            # this method removes the already alerted evidence to avoid duplicates
+            if id in past_evidence_ids:
+                continue
+
+            if self.is_evidence_done_by_others(evidence):
+                continue
+
+            whitelisted: bool = self.db.is_whitelisted_evidence(id)
+            if whitelisted:
+                continue
+
+            # delete_not processed evidence
+            # sometimes the db has evidence that didn't come yet to evidence.py
+            # and they are alerted without checking the whitelist!
+            # to fix this, we keep track of processed evidence
+            # that came to new_evidence channel and were processed by it.
+            # so they are ready to be a part of an alerted
+            processed: bool = self.db.is_evidence_processed(id)
+            if not processed:
+                continue
+
+            res[id] = evidence
+
+        return res
 
 
     def get_accumulated_threat_level(self, tw_evidence: dict):
