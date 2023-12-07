@@ -20,7 +20,7 @@ from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
 from slips_files.common.abstracts.core import ICore
 import json
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Dict
 from datetime import datetime
 from os import path
 from colorama import Fore, Style
@@ -254,15 +254,22 @@ class Evidence(ICore):
 
 
     def format_evidence_causing_this_alert(
-        self, all_evidence, profileid, twid, flow_datetime
+            self,
+            all_evidence: Dict[str, dict],
+            profileid: str,
+            twid: str,
+            flow_datetime: str
     ) -> str:
         """
         Function to format the string with all evidence causing an alert
         flow_datetime: time of the last evidence received
         """
-        # alerts in slips consists of several evidence, each evidence has a threat_level
-        # once we reach a certain threshold of accumulated threat_levels, we produce an alert
-        # Now instead of printing the last evidence only, we print all of them
+        # alerts in slips consists of several evidence,
+        # each evidence has a threat_level
+        # once we reach a certain threshold of accumulated
+        # threat_levels, we produce an alert
+        # Now instead of printing the last evidence only,
+        # we print all of them
         try:
             twid_num = twid.split('timewindow')[1]
             srcip = profileid.split(self.separator)[1]
@@ -272,7 +279,8 @@ class Evidence(ICore):
                 # give the database time to retreive the time
                 twid_start_time = self.db.getTimeTW(profileid, twid)
 
-            tw_start_time_str = utils.convert_format(twid_start_time,  '%Y/%m/%d %H:%M:%S')
+            tw_start_time_str = utils.convert_format(twid_start_time,
+                                                     '%Y/%m/%d %H:%M:%S')
             # datetime obj
             tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
 
@@ -302,14 +310,15 @@ class Evidence(ICore):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,
+                f'Problem on format_evidence_causing_this_alert() '
+                f'line {exception_line}',0,1,
             )
             self.print(traceback.print_exc(),0,1)
             return True
 
         for evidence in all_evidence.values():
-            evidence = json.loads(evidence)
-            description = evidence.get('description')
+            evidence: dict
+            description: str = evidence.get('description')
 
             evidence_string = f'Detected {description}'
             evidence_string = self.line_wrap(evidence_string)
@@ -480,7 +489,7 @@ class Evidence(ICore):
 
 
     def get_evidence_for_tw(self, profileid: str, twid: str) \
-            -> Tuple[dict, float]:
+            -> Tuple[Dict[str, dict], float]:
         """
         filters and returns all the evidence for this profile in this TW
         filters the follwing:
@@ -488,6 +497,9 @@ class Evidence(ICore):
         * evidence that weren't done by the given profileid
         * evidence that are whitelisted
         * evidence that weren't processed by evidence.py yet
+
+        returns the dict with filtered evidence
+        and the accumulated threat levels of them
         """
         tw_evidence: str = self.db.getEvidenceForTW(profileid, twid)
         if not tw_evidence:
@@ -500,7 +512,10 @@ class Evidence(ICore):
             self.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
 
         accumulated_threat_level = 0.0
-        res = {}
+        # to store all the ids causing this alert in the database
+        self.IDs_causing_an_alert = []
+
+        filtered_evidence = {}
         for id, evidence in tw_evidence.items():
             id: str
             evidence: str
@@ -535,27 +550,30 @@ class Evidence(ICore):
                 continue
 
             accumulated_threat_level: float = \
-                self.accummulate_threat_level(evidence, accumulated_threat_level)
-            res[id] = json.dumps(evidence)
+                self.accummulate_threat_level(
+                    evidence,
+                    accumulated_threat_level
+                    )
+            id: str = evidence.get('ID')
+            # we keep track of these IDs to be able to label the flows of these
+            # evidence later if this was detected as an alert
+            self.IDs_causing_an_alert.append(id)
 
-        return res, accumulated_threat_level
+            filtered_evidence[id] = evidence
+
+        return filtered_evidence, accumulated_threat_level
 
     def accummulate_threat_level(
             self,
             evidence: dict,
             accumulated_threat_level: float
             ) -> float:
-        # to store all the ids causing this alert in the database
-        self.IDs_causing_an_alert = []
         # attacker_direction = evidence.get('attacker_direction')
         # attacker = evidence.get('attacker')
         evidence_type: str = evidence.get('evidence_type')
         confidence: float = float(evidence.get('confidence'))
         threat_level: float = evidence.get('threat_level')
         description: str = evidence.get('description')
-        id: str = evidence.get('ID')
-        #TODO
-        self.IDs_causing_an_alert.append(id)
 
         # each threat level is a string, get the numerical value of it
         try:
@@ -581,13 +599,9 @@ class Evidence(ICore):
     def get_last_evidence_ID(self, tw_evidence: dict) -> str:
         return list(tw_evidence.keys())[-1]
 
-    def send_to_exporting_module(self, tw_evidence):
+    def send_to_exporting_module(self, tw_evidence: Dict[str, str]):
         for evidence in tw_evidence.values():
-            self.db.publish('export_evidence', evidence)
-
-    def add_hostname_to_alert(self, alert_to_log, profileid, flow_datetime, evidence):
-
-        return alert_to_log
+            self.db.publish('export_evidence', json.dumps(evidence))
 
     def is_blocking_module_enabled(self) -> bool:
         """
@@ -599,12 +613,8 @@ class Evidence(ICore):
         custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
         return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
 
-    def label_flows_causing_alert(self):
-        #todo should be moved to the db
-        """Add the label "malicious" to all flows causing this alert in our db """
-        for evidence_id in self.IDs_causing_an_alert:
-            uids: list = self.db.get_flows_causing_evidence(evidence_id)
-            self.db.set_flow_label(uids, 'malicious')
+
+
 
     def handle_new_alert(self, alert_ID: str, tw_evidence: dict):
         """
@@ -636,7 +646,7 @@ class Evidence(ICore):
             {'time_detected': utils.convert_format(datetime.now(), 'unixtimestamp'),
              'label': 'malicious'})
         self.db.add_alert(alert_details)
-        self.label_flows_causing_alert()
+        self.db.label_flows_causing_alert(self.IDs_causing_an_alert)
         self.send_to_exporting_module(tw_evidence)
 
     def get_evidence_to_log(
@@ -768,9 +778,10 @@ class Evidence(ICore):
                 self.add_to_log_file(evidence_to_log)
                 self.increment_attack_counter(profileid, victim, evidence_type)
 
-                tw_evidence: dict
+                tw_evidence: Dict[str, dict]
                 accumulated_threat_level: float
-                tw_evidence, accumulated_threat_level= self.get_evidence_for_tw(profileid, twid)
+                tw_evidence, accumulated_threat_level = \
+                    self.get_evidence_for_tw(profileid, twid)
 
                 # add to alerts.json
                 self.add_to_json_log_file(
@@ -809,7 +820,8 @@ class Evidence(ICore):
                         self.handle_new_alert(alert_id, tw_evidence)
 
                         # print the alert
-                        alert_to_print = self.format_evidence_causing_this_alert(
+                        alert_to_print: str = \
+                            self.format_evidence_causing_this_alert(
                                 tw_evidence,
                                 profileid,
                                 twid,
