@@ -451,8 +451,8 @@ class Evidence(ICore):
             # so they are ready to be a part of an alerted
             whitelisted: bool = self.db.is_whitelisted_evidence(evidence_ID)
             processed: bool = self.db.is_evidence_processed(evidence_ID)
-            # client_ip = "192.168.1.113"
-            client_ip = "10.0.2.15"
+            client_ip = "192.168.1.113"
+            # client_ip = "10.0.2.15"
             if not processed and client_ip in profileid:
                 self.log_filtered(f"Evidence {evidence_ID} .."
                                   f" {evidence_info} is not processed yet, "
