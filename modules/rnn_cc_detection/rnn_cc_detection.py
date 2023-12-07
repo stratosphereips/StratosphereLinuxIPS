@@ -57,9 +57,22 @@ class CCDetection(IModule, multiprocessing.Process):
             f'score: {format(score, ".4f")}. {ip_identification}'
         )
         victim = profileid.split('_')[-1]
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, categroy, source_target_tag=source_target_tag, port=port, proto=proto,
-                                 profileid=profileid, twid=twid, uid=uid, victim= victim)
+        self.db.setEvidence(
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            categroy,
+            source_target_tag=source_target_tag,
+            port=port,
+            proto=proto,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+            victim= victim)
 
 
 
