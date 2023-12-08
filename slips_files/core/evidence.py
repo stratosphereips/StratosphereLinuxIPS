@@ -77,8 +77,6 @@ class Evidence(ICore):
         self.print(f'Storing Slips logs in {self.output_dir}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
-        filtered_log_path =  os.path.join(self.output_dir, 'filtered_ev.log')
-        self.filtered_log = open(filtered_log_path, 'w')
         self.discarded_bc_never_processed = {}
 
     def read_configuration(self):
@@ -410,9 +408,6 @@ class Evidence(ICore):
     def shutdown_gracefully(self):
         self.logfile.close()
         self.jsonfile.close()
-        self.filtered_log.close()
-        self.print("@@@@@@@@@@@@@@@@ discarded_bc_never_processed")
-        self.print(self.discarded_bc_never_processed)
 
     def get_evidence_that_were_part_of_a_past_alert(
             self, profileid: str, twid: str) -> List[str]:
@@ -466,9 +461,6 @@ class Evidence(ICore):
         # to store all the ids causing this alert in the database
         self.IDs_causing_an_alert = []
 
-        client_ip = "192.168.1.113"
-        # client_ip = "192.168.1.129"
-
         filtered_evidence = {}
         for id, evidence in tw_evidence.items():
             id: str
@@ -501,19 +493,6 @@ class Evidence(ICore):
             # so they are ready to be a part of an alerted
             processed: bool = self.db.is_evidence_processed(id)
             if not processed:
-                if client_ip in profileid:
-                    self.log_filtered(f"Evidence {id} .."
-                                      f" {evidence} is not processed yet, "
-                                      f"discarding")
-                    try:
-                        if id not in self.discarded_bc_never_processed[
-                            profileid][twid]:
-                            self.discarded_bc_never_processed[profileid][
-                                twid].append(id)
-                    except KeyError:
-                        self.discarded_bc_never_processed.update({
-                            profileid: {twid: [id]}
-                            })
                 continue
 
             id: str = evidence.get('ID')
@@ -532,20 +511,6 @@ class Evidence(ICore):
                         )
 
             filtered_evidence[id] = evidence
-
-            if client_ip in profileid:
-                try:
-                    if id in self.discarded_bc_never_processed[
-                        profileid][twid]:
-                        self.log_filtered(f"Evidence Alerted after being "
-                                          f"discarded before {id}")
-                        self.discarded_bc_never_processed[profileid][
-                            twid].remove(id)
-                except KeyError:
-                    pass
-
-        if client_ip in profileid:
-            self.log_filtered(f"done getting tw evidence {profileid} {twid}")
 
         return filtered_evidence, accumulated_threat_level
 
