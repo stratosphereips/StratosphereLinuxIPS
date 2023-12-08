@@ -424,11 +424,20 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         attacker_direction = 'dstip'
         attacker = daddr
         saddr = profileid.split('_')[-1]
-        description = (f'Unencrypted HTTP traffic from {saddr} to {daddr}.')
+        description = f'Unencrypted HTTP traffic from {saddr} to {daddr}.'
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+        self.db.setEvidence(evidence_type,
+                            attacker_direction,
+                            attacker,
+                            threat_level,
+                            confidence,
+                            description,
+                            timestamp,
+                            category,
+                            source_target_tag=source_target_tag,
+                            profileid=profileid,
+                            twid=twid,
+                            uid=uid)
         return True
 
 
