@@ -96,7 +96,6 @@ class Evidence(ICore):
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
 
-
     def format_evidence_string(self, ip, detection_module, attacker,
                                description) -> str:
         """
