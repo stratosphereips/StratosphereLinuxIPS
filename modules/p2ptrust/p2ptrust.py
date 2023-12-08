@@ -395,7 +395,10 @@ class Trust(IModule, multiprocessing.Process):
     #         # tell other peers that we're blocking this IP
     #         utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
-    def set_evidence_malicious_ip(self, ip_info, threat_level, confidence):
+    def set_evidence_malicious_ip(self,
+                                  ip_info: dict,
+                                  threat_level: str,
+                                  confidence: float):
         """
         Set an evidence for a malicious IP met in the timewindow
         ip_info format is json serialized {
@@ -403,7 +406,9 @@ class Trust(IModule, multiprocessing.Process):
         #             'profileid' : profile where the alert was generated. It includes the src ip
         #             'twid' : name of the timewindow when it happened.
         #             'proto' : protocol
-        #             'ip_state' : 'srcip/dstip',
+        #             'ip_state' : is basically the answer to "which one is the
+        #                           blacklisted IP"?'can be 'srcip' or
+        #                            'dstip',
         #             'stime': Exact time when the evidence happened
         #             'uid': Zeek uid of the flow that generated the evidence,
         #             'cache_age': How old is the info about this ip

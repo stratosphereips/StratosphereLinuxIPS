@@ -149,7 +149,8 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         :param ip_info: is all the info we have about that IP in the db source, confidence, description, etc.
         :param profileid: profile where the alert was generated. It includes the src ip
         :param twid: name of the timewindow when it happened.
-        :param ip_state: can be 'srcip' or 'dstip'
+        :param ip_state: is basically the answer to "which one is the
+        blacklisted IP"? can be 'srcip' or 'dstip'
         """
 
         attacker_direction = ip_state
@@ -852,8 +853,19 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
     def search_online_for_url(self, url):
         return self.urlhaus.urlhaus_lookup(url, 'url')
 
-    def is_malicious_ip(self, ip, uid, daddr, timestamp, profileid, twid, ip_state) -> bool:
-        """Search for this IP in our database of IoC"""
+    def is_malicious_ip(self,
+                        ip: str,
+                        uid: str,
+                        daddr: str,
+                        timestamp: str,
+                        profileid: str,
+                        twid: str,
+                        ip_state: str) -> bool:
+        """
+        Search for this IP in our database of IoC
+        :param ip_state: is basically the answer to "which one is the
+        blacklisted IP"? can be 'srcip' or 'dstip'
+        """
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
             ip_info = self.search_online_for_ip(ip)
