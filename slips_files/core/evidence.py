@@ -414,55 +414,6 @@ class Evidence(ICore):
         self.print("@@@@@@@@@@@@@@@@ discarded_bc_never_processed")
         self.print(self.discarded_bc_never_processed)
 
-    def delete_whitelisted_evidence(self, profileid, twid, evidence: dict) \
-            -> dict:
-        """
-        delete the hash of all whitelisted evidence
-        from the given dict of evidence ids
-        and the evidence that were returned from the db but not yet
-        processed by evidence.py
-        """
-        res = {}
-        for evidence_ID, evidence_info in evidence.items():
-            # sometimes the db has evidence that didnt come yet to evidence.py
-            # and they are alerted without checking the whitelist!
-
-            # to fix this, we keep track of processed evidence
-            # that came to new_evidence channel and were processed by it.
-            # so they are ready to be a part of an alerted
-            whitelisted: bool = self.db.is_whitelisted_evidence(evidence_ID)
-            processed: bool = self.db.is_evidence_processed(evidence_ID)
-            client_ip = "192.168.1.113"
-            # client_ip = "10.0.2.15"
-            if not processed and client_ip in profileid:
-                self.log_filtered(f"Evidence {evidence_ID} .."
-                                  f" {evidence_info} is not processed yet, "
-                                  f"discarding")
-                try:
-                    if evidence_ID not in self.discarded_bc_never_processed[profileid][twid]:
-                        self.discarded_bc_never_processed[profileid][twid].append(evidence_ID)
-                except KeyError:
-                    self.discarded_bc_never_processed.update({
-                        profileid: {twid: [evidence_ID]}
-                        })
-
-            if processed and not whitelisted:
-                res[evidence_ID] = evidence_info
-                if client_ip in profileid:
-                    try:
-                        if evidence_ID in self.discarded_bc_never_processed[profileid][twid]:
-                            self.log_filtered(f"Evidence Alerted after being "
-                                              f"discarded before {evidence_ID}")
-                            self.discarded_bc_never_processed[profileid][
-                                twid].remove(evidence_ID)
-                    except KeyError:
-                        continue
-
-            if client_ip in profileid:
-                self.log_filtered(f"done getting tw evidence {profileid} {twid}")
-
-        return res
-
     def get_evidence_that_were_part_of_a_past_alert(
             self, profileid: str, twid: str) -> List[str]:
 
@@ -515,6 +466,9 @@ class Evidence(ICore):
         # to store all the ids causing this alert in the database
         self.IDs_causing_an_alert = []
 
+        client_ip = "192.168.1.113"
+        # client_ip = "192.168.1.129"
+
         filtered_evidence = {}
         for id, evidence in tw_evidence.items():
             id: str
@@ -547,19 +501,51 @@ class Evidence(ICore):
             # so they are ready to be a part of an alerted
             processed: bool = self.db.is_evidence_processed(id)
             if not processed:
+                if client_ip in profileid:
+                    self.log_filtered(f"Evidence {id} .."
+                                      f" {evidence} is not processed yet, "
+                                      f"discarding")
+                    try:
+                        if id not in self.discarded_bc_never_processed[
+                            profileid][twid]:
+                            self.discarded_bc_never_processed[profileid][
+                                twid].append(id)
+                    except KeyError:
+                        self.discarded_bc_never_processed.update({
+                            profileid: {twid: [id]}
+                            })
                 continue
 
-            accumulated_threat_level: float = \
-                self.accummulate_threat_level(
-                    evidence,
-                    accumulated_threat_level
-                    )
             id: str = evidence.get('ID')
             # we keep track of these IDs to be able to label the flows of these
             # evidence later if this was detected as an alert
+            # now this should be done in its' own function but this is more
+            # optimal so we don't loop through all evidence again. i'll
+            # just leave it like that:D
             self.IDs_causing_an_alert.append(id)
 
+
+            accumulated_threat_level: float = \
+                    self.accummulate_threat_level(
+                        evidence,
+                        accumulated_threat_level
+                        )
+
             filtered_evidence[id] = evidence
+
+            if client_ip in profileid:
+                try:
+                    if id in self.discarded_bc_never_processed[
+                        profileid][twid]:
+                        self.log_filtered(f"Evidence Alerted after being "
+                                          f"discarded before {id}")
+                        self.discarded_bc_never_processed[profileid][
+                            twid].remove(id)
+                except KeyError:
+                    pass
+
+        if client_ip in profileid:
+            self.log_filtered(f"done getting tw evidence {profileid} {twid}")
 
         return filtered_evidence, accumulated_threat_level
 
@@ -643,7 +629,8 @@ class Evidence(ICore):
 
         #store the alerts in the alerts table in sqlite db
         alert_details.update(
-            {'time_detected': utils.convert_format(datetime.now(), 'unixtimestamp'),
+            {'time_detected': utils.convert_format(datetime.now(),
+                                                   'unixtimestamp'),
              'label': 'malicious'})
         self.db.add_alert(alert_details)
         self.db.label_flows_causing_alert(self.IDs_causing_an_alert)
