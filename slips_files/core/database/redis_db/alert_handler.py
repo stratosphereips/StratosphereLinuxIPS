@@ -4,8 +4,12 @@ from dataclasses import asdict
 from typing import List, Tuple
 
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import Evidence
-from slips_files.core.evidence_structure.evidence import Direction
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        EvidenceType,
+        Direction
+    )
 
 class AlertHandler:
     """
@@ -115,7 +119,7 @@ class AlertHandler:
 
     def get_evidence_by_ID(self, profileid, twid, ID):
 
-        evidence = self.getEvidenceForTW(profileid, twid)
+        evidence = self.get_twid_evidence(profileid, twid)
         if not evidence:
             return False
 
@@ -127,21 +131,11 @@ class AlertHandler:
                 # found an evidence that has a matching ID
                 return evidence_details
 
-    def is_detection_disabled(self, evidence_type: str):
+    def is_detection_disabled(self, evidence_type: EvidenceType):
         """
         Function to check if detection is disabled in slips.conf
         """
-        for disabled_detection in self.disabled_detections:
-            # when we disable a detection , we add 'SSHSuccessful' in slips.conf,
-            # however our evidence can depend on an addr, for example 'SSHSuccessful-by-addr'.
-            # check if any disabled detection is a part of our evidence.
-            # for example 'SSHSuccessful' is a part of 'SSHSuccessful-by-addr' so if  'SSHSuccessful'
-            # is disabled,  'SSHSuccessful-by-addr' should also be disabled
-            if disabled_detection in evidence_type:
-                #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ fix this once our evidenc
-                # eno longer depend on a daddr
-                return True
-        return False
+        return str(evidence_type) in self.disabled_detections
 
     def set_flow_causing_evidence(self, uids: list, evidence_ID):
         self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uids))
@@ -170,27 +164,8 @@ class AlertHandler:
             return False
 
 
-        # @@@@@@@@@@@@ todo make sure this is always a list
-        # if isinstance(evidence.uid, list):
-        #     # some evidence are caused by several uids, use the last one only
-        #     # todo check why we have duplicates in the first place
-        #     # remove duplicate uids
-        #     uids = list(set(evidence.uid))
-        # else:
-        #     uids = [evidence.uid]
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
-
-        # @@@@@@@@@@@@@@@@@@@@make sure evidence.threat_level is always a
-        # if not isinstance(evidence.threat_level, str):
-        #     make sure we always store str threat levels in the db
-            # threat_level: str = utils.threat_level_to_string(threat_level)
-
-        # if evidence.timestamp:
-        #     timestamp = utils.convert_format(timestamp, utils.alerts_format)
-
-        # if not victim:
-        #     victim = self.get_victim(profileid, attacker)
 
         # @@@@@@@@@@@@@ todo handle the new evidence format in all the
         #  receiving clients
@@ -199,12 +174,11 @@ class AlertHandler:
 
         # Check if we have the current evidence stored in the DB for
         # this profileid in this twid
-        # @@@@@@@@@@@@@@@@@@@@ todo change the case of this function
         # @@@@@@@@@@@@@ TODO search using redis for the id of this evidence
         #  in the profil+tw evidence in the db! it would be faster
-        current_evidence: str = self.getEvidenceForTW(
-            str(evidence.profileid),
-            evidence.timewindow
+        current_evidence: str = self.get_twid_evidence(
+            str(evidence.profile),
+            str(evidence.timewindow)
             )
         current_evidence: dict = json.loads(current_evidence) if \
             current_evidence else {}
@@ -215,11 +189,11 @@ class AlertHandler:
         current_evidence.update({evidence.id: evidence_to_send})
         current_evidence: str = json.dumps(current_evidence)
 
-        self.r.hset(f'{evidence.profileid}_{evidence.timewindow}',
+        self.r.hset(f'{evidence.profile}_{evidence.timewindow}',
                     'Evidence',
                     current_evidence)
 
-        self.r.hset(f'evidence{evidence.profileid}',
+        self.r.hset(f'evidence{evidence.profile}',
                     evidence.timewindow,
                     current_evidence)
 
@@ -234,7 +208,7 @@ class AlertHandler:
         if evidence.attacker.direction in Direction.SRC:
             # the srcip is the malicious one
             self.update_threat_level(
-                str(evidence.profileid),
+                str(evidence.profile),
                 str(evidence.threat_level),
                 evidence.confidence
                 )
@@ -276,7 +250,7 @@ class AlertHandler:
         Delete evidence from the database
         """
         # 1. delete evidence from 'evidence' key
-        current_evidence = self.getEvidenceForTW(profileid, twid)
+        current_evidence = self.get_twid_evidence(profileid, twid)
         current_evidence = json.loads(current_evidence) if current_evidence else {}
         # Delete the key regardless of whether it is in the dictionary
         current_evidence.pop(evidence_ID, None)
@@ -364,7 +338,7 @@ class AlertHandler:
         alerts: dict = json.loads(alerts)
         return alerts
 
-    def getEvidenceForTW(self, profileid: str, twid: str) -> str:
+    def get_twid_evidence(self, profileid: str, twid: str) -> str:
         """Get the evidence for this TW for this Profile"""
         evidence = self.r.hget(profileid + self.separator + twid, 'Evidence')
         if evidence:
