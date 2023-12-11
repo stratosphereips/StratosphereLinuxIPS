@@ -4,9 +4,23 @@ import datetime
 import json
 import sys
 import time
+from typing import List
 
 from slips_files.common.slips_utils import utils
-
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Anomaly
+    )
 
 class Helper:
     def __init__(
@@ -15,34 +29,44 @@ class Helper:
             ):
         self.db = db
 
+
+
     def set_evidence_young_domain(
-            self,
-            domain,
-            age,
-            stime,
-            profileid,
-            twid,
-            uid
-            ):
-        confidence = 1
-        threat_level = 'low'
-        category = 'Anomaly.Traffic'
-        evidence_type = 'YoungDomain'
-        attacker_direction = 'dstdomain'
-        attacker = domain
-        description = f'connection to a young domain: {domain} registered {age} days ago.'
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            stime,
-			category,
-			profileid=profileid,
-			twid=twid,
-			uid=uid
+        self,
+        domain: str,
+        age: int,
+        stime: str,
+        profileid: ProfileID,
+        twid: str,
+        uid: List[str]
+    ):
+        src_profile = ProfileID(ip=profileid.split("_")[-1])
+        twid_number: int =  int(twid.replace("timewindow", ""))
+        description = f'connection to a young domain: {domain} ' \
+                      f'registered {age} days ago.',
+        evidence = Evidence(
+                evidence_type=EvidenceType.YOUNG_DOMAIN,
+                attacker=Attacker(
+                    direction=Direction.DST,
+                    attacker_type=IoCType.DOMAIN,
+                    value=domain,
+                ),
+                threat_level=ThreatLevel.LOW,
+                category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+                description=description,
+                victim=Victim(
+                    direction=Direction.SRC,
+                    victim_type=IoCType.IP,
+                    value=src_profile.ip,
+                    ),
+                profile=src_profile,
+                timewindow=TimeWindow(number=twid_number),
+                uid=uid,
+                timestamp=stime,
+                conn_count=1,
+                confidence=1.0
             )
+        self.db.setEvidence(evidence)
 
     def set_evidence_multiple_ssh_versions(
             self,
