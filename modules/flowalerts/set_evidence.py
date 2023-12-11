@@ -29,8 +29,6 @@ class Helper:
             ):
         self.db = db
 
-
-
     def set_evidence_young_domain(
         self,
         domain: str,
@@ -41,24 +39,26 @@ class Helper:
         uid: List[str]
     ):
         src_profile = ProfileID(ip=profileid.split("_")[-1])
+        victim = Victim(
+                    direction=Direction.SRC,
+                    victim_type=IoCType.IP,
+                    value=src_profile.ip,
+                    )
+        attacker = Attacker(
+                    direction=Direction.DST,
+                    attacker_type=IoCType.DOMAIN,
+                    value=domain,
+                )
         twid_number: int =  int(twid.replace("timewindow", ""))
         description = f'connection to a young domain: {domain} ' \
                       f'registered {age} days ago.',
         evidence = Evidence(
                 evidence_type=EvidenceType.YOUNG_DOMAIN,
-                attacker=Attacker(
-                    direction=Direction.DST,
-                    attacker_type=IoCType.DOMAIN,
-                    value=domain,
-                ),
+                attacker=attacker,
                 threat_level=ThreatLevel.LOW,
                 category=IDEACategory(anomaly=Anomaly.TRAFFIC),
                 description=description,
-                victim=Victim(
-                    direction=Direction.SRC,
-                    victim_type=IoCType.IP,
-                    value=src_profile.ip,
-                    ),
+                victim=victim,
                 profile=src_profile,
                 timewindow=TimeWindow(number=twid_number),
                 uid=uid,
@@ -69,39 +69,53 @@ class Helper:
         self.db.setEvidence(evidence)
 
     def set_evidence_multiple_ssh_versions(
-            self,
-            srcip,
-            cached_versions,
-            current_versions,
-            timestamp,
-            twid,
-            uid,
-            daddr,
-            role=''
-            ):
+        self,
+        srcip: str,
+        cached_versions: str,
+        current_versions: str,
+        timestamp: str,
+        twid: TimeWindow,
+        uid: List[str],
+        daddr: Victim,
+        role: str = ''
+    ):
         """
         :param cached_versions: major.minor
         :param current_versions: major.minor
-        :param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
+        :param role: can be 'SSH::CLIENT' or
+                    'SSH::SERVER' as seen in zeek software.log flows
         """
-        profileid = f'profile_{srcip}'
-        confidence = 0.9
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        attacker_direction = 'srcip'
-        evidence_type = 'MultipleSSHVersions'
-        attacker = srcip
-        role = 'client' if 'CLIENT' in role else 'server'
-        description = f'SSH {role} version changing from {cached_versions} to {current_versions}'
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp, category, profileid=profileid, twid=twid, uid=uid,
-            victim=daddr
+        profileid = ProfileID(ip=srcip)
+        if role.upper() == 'CLIENT':
+            attacker_direction = Direction.SRC
+        else:
+            attacker_direction = Direction.DST
+
+        attacker = Attacker(
+            direction=attacker_direction,
+            attacker_type=IoCType.IP,
+            value=srcip
             )
+        role = 'client' if 'CLIENT' in role.upper() else 'server'
+        description = f'SSH {role} version changing from ' \
+                      f'{cached_versions} to {current_versions}'
+
+        evidence = Evidence(
+            evidence_type=EvidenceType.MULTIPLE_SSH_VERSIONS,
+            attacker=attacker,
+            threat_level=ThreatLevel.MEDIUM,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            description=description,
+            victim=daddr,
+            profile=profileid,
+            timewindow=twid,
+            uid=uid,
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=0.9
+        )
+
+        self.db.setEvidence(evidence)
 
     def set_evidence_different_localnet_usage(
             self,
