@@ -412,8 +412,8 @@ class DBManager(IObservable):
     def get_profileid_twid_alerts(self, *args, **kwargs):
         return self.rdb.get_profileid_twid_alerts(*args, **kwargs)
 
-    def getEvidenceForTW(self, *args, **kwargs):
-        return self.rdb.getEvidenceForTW(*args, **kwargs)
+    def get_twid_evidence(self, *args, **kwargs):
+        return self.rdb.get_twid_evidence(*args, **kwargs)
 
     def update_threat_level(self, *args, **kwargs):
         return self.rdb.update_threat_level(*args, **kwargs)

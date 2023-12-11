@@ -443,7 +443,7 @@ class Evidence(ICore):
         filters and returns all the evidence for this profile in this TW
         returns the dict with filtered evidence
         """
-        tw_evidence: str = self.db.getEvidenceForTW(profileid, twid)
+        tw_evidence: str = self.db.get_twid_evidence(profileid, twid)
         if not tw_evidence:
             return False
 
