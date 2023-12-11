@@ -1,9 +1,11 @@
 import time
 import json
-from uuid import uuid4
+from dataclasses import asdict
 from typing import List, Tuple
 
 from slips_files.common.slips_utils import utils
+from slips_files.core.evidence_structure.evidence import Evidence
+from slips_files.core.evidence_structure.evidence import Direction
 
 class AlertHandler:
     """
@@ -136,6 +138,8 @@ class AlertHandler:
             # for example 'SSHSuccessful' is a part of 'SSHSuccessful-by-addr' so if  'SSHSuccessful'
             # is disabled,  'SSHSuccessful-by-addr' should also be disabled
             if disabled_detection in evidence_type:
+                #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ fix this once our evidenc
+                # eno longer depend on a daddr
                 return True
         return False
 
@@ -154,128 +158,70 @@ class AlertHandler:
         # there's no 1 victim in this case. for example in ARP scans, the victim is the whole network
         return ''
 
-    def setEvidence(
-            self,
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=False,
-            conn_count=False,
-            port=False,
-            proto=False,
-            profileid='',
-            twid='',
-            uid='',
-            victim=''
-    ):
+    def setEvidence(self, evidence: Evidence):
         """
         Set the evidence for this Profile and Timewindow.
-
-        evidence_type: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
-        attacker_direction: the type of value causing the detection e.g. dstip, srcip, dstdomain, md5, url
-        attacker: the actual srcip or dstdomain. e.g. 1.1.1.1 or abc.com
-        threat_level: determine the importance of the evidence, available options are:
-                        info, low, medium, high, critical
-        confidence: determine the confidence of the detection on a scale from 0 to 1.
-                        (How sure you are that this is what you say it is.)
-        uid: can be a single uid as a str, or a list of uids causing the evidence.
-                        needed to get the flow from the database.
-        category: what is this evidence category according to IDEA categories
-        conn_count: the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
-        victim: the ip/domain that was attacked by the attacker param. if not given slips can deduce it.
-        this param is usually passed if the saddr is the attacker and slips can't deduce the victim
-
-        source_target_tag:
-            this is the IDEA category of the source and dst ip used in the evidence
-            if the attacker_direction is srcip this describes the source ip,
-            if the attacker_direction is dstip this describes the dst ip.
-            supported source and dst types are in the SourceTargetTag section https://idea.cesnet.cz/en/classifications
-            this is a keyword/optional argument because it shouldn't be used with dports and sports attacker_direction
+        :param evidence: an Evidence obj (defined in
+        slips_files/core/evidence_structure/evidence.py) with all the
+        evidence details,
         """
-
-
         # Ignore evidence if it's disabled in the configuration file
-        if self.is_detection_disabled(evidence_type):
+        if self.is_detection_disabled(evidence.evidence_type):
             return False
 
-        if not twid:
-            twid = ''
 
-        # every evidence should have an ID according to the IDEA format
-        evidence_ID = str(uuid4())
+        # @@@@@@@@@@@@ todo make sure this is always a list
+        # if isinstance(evidence.uid, list):
+        #     # some evidence are caused by several uids, use the last one only
+        #     # todo check why we have duplicates in the first place
+        #     # remove duplicate uids
+        #     uids = list(set(evidence.uid))
+        # else:
+        #     uids = [evidence.uid]
 
-        if isinstance(uid, list):
-            # some evidence are caused by several uids, use the last one only
-            # todo check why we have duplicates in the first place
-            # remove duplicate uids
-            uids = list(set(uid))
-        else:
-            uids = [uid]
+        self.set_flow_causing_evidence(evidence.uid, evidence.id)
 
-        self.set_flow_causing_evidence(uids, evidence_ID)
+        # @@@@@@@@@@@@@@@@@@@@make sure evidence.threat_level is always a
+        # if not isinstance(evidence.threat_level, str):
+        #     make sure we always store str threat levels in the db
+            # threat_level: str = utils.threat_level_to_string(threat_level)
 
-        if not isinstance(threat_level, str):
-            # make sure we always store str threat levels in the db
-            threat_level: str = utils.threat_level_to_string(threat_level)
+        # if evidence.timestamp:
+        #     timestamp = utils.convert_format(timestamp, utils.alerts_format)
 
-        if timestamp:
-            timestamp = utils.convert_format(timestamp, utils.alerts_format)
+        # if not victim:
+        #     victim = self.get_victim(profileid, attacker)
 
-        if not victim:
-            victim = self.get_victim(profileid, attacker)
-
-        evidence_to_send = {
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'attacker_direction': attacker_direction,
-            'attacker': attacker,
-            'evidence_type': evidence_type,
-            'description': description,
-            'stime': timestamp,
-            'uid': uids,
-            'confidence': confidence,
-            'threat_level': threat_level,
-            'category': category,
-            'ID': evidence_ID,
-            'victim': victim
-        }
-        # not all evidence requires a conn_coun, scans only
-        if conn_count:
-            evidence_to_send['conn_count'] = conn_count
-
-        # source_target_tag is defined only if attacker_direction is srcip or dstip
-        if source_target_tag:
-            evidence_to_send['source_target_tag'] = source_target_tag
-
-        if port:
-            evidence_to_send['port'] = port
-        if proto:
-            evidence_to_send['proto'] = proto
-
-        evidence_to_send = json.dumps(evidence_to_send)
+        # @@@@@@@@@@@@@ todo handle the new evidence format in all the
+        #  receiving clients
+        evidence_to_send: str = json.dumps(asdict(evidence))
 
 
         # Check if we have the current evidence stored in the DB for
         # this profileid in this twid
-        current_evidence = self.getEvidenceForTW(profileid, twid)
-        current_evidence = json.loads(current_evidence) if current_evidence else {}
-        should_publish = evidence_ID not in current_evidence.keys()
+        # @@@@@@@@@@@@@@@@@@@@ todo change the case of this function
+        # @@@@@@@@@@@@@ TODO search using redis for the id of this evidence
+        #  in the profil+tw evidence in the db! it would be faster
+        current_evidence: str = self.getEvidenceForTW(
+            str(evidence.profileid),
+            evidence.timewindow
+            )
+        current_evidence: dict = json.loads(current_evidence) if \
+            current_evidence else {}
+
+        should_publish: bool = evidence.id not in current_evidence.keys()
+
         # update our current evidence for this profileid and twid.
-        # now the evidence_ID is used as the key
-        current_evidence.update({evidence_ID: evidence_to_send})
+        current_evidence.update({evidence.id: evidence_to_send})
+        current_evidence: str = json.dumps(current_evidence)
 
-        # Set evidence in the database.
-        current_evidence = json.dumps(current_evidence)
-        self.r.hset(
-            f'{profileid}_{twid}', 'Evidence', current_evidence
-        )
+        self.r.hset(f'{evidence.profileid}_{evidence.timewindow}',
+                    'Evidence',
+                    current_evidence)
 
-        self.r.hset(f'evidence{profileid}', twid, current_evidence)
+        self.r.hset(f'evidence{evidence.profileid}',
+                    evidence.timewindow,
+                    current_evidence)
 
         # This is done to ignore repetition of the same evidence sent.
         # note that publishing HAS TO be done after updating the 'Evidence' keys
@@ -285,12 +231,20 @@ class AlertHandler:
 
         # an evidence is generated for this profile
         # update the threat level of this profile
-        if attacker_direction in ('sip', 'srcip'):
+        if evidence.attacker.direction in Direction.SRC:
             # the srcip is the malicious one
-            self.update_threat_level(profileid, threat_level, confidence)
-        elif attacker_direction in ('dip', 'dstip'):
+            self.update_threat_level(
+                str(evidence.profileid),
+                str(evidence.threat_level),
+                evidence.confidence
+                )
+        elif evidence.attacker.direction == Direction.DST:
             # the dstip is the malicious one
-            self.update_threat_level(f'profile_{attacker}', threat_level, confidence)
+            self.update_threat_level(
+                str(evidence.attacker.profile),
+                str(evidence.threat_level),
+                evidence.confidence
+                )
         return True
 
 
@@ -494,7 +448,7 @@ class AlertHandler:
 
 
     def update_threat_level(
-            self, profileid: str, threat_level: str, confidence: int
+            self, profileid: str, threat_level: str, confidence: float
             ):
         """
         Update the threat level of a certain profile
