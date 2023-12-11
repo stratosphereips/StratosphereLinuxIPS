@@ -20,6 +20,7 @@ from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
 from slips_files.common.abstracts.core import ICore
 import json
+from typing import Union, List, Tuple, Dict
 from datetime import datetime
 from os import path
 from colorama import Fore, Style
@@ -45,6 +46,7 @@ class Evidence(ICore):
         self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
+        self.running_non_stop = self.is_running_on_interface()
         # to keep track of the number of generated evidence
         self.db.init_evidence_number()
         if self.popup_alerts:
@@ -75,6 +77,7 @@ class Evidence(ICore):
         self.print(f'Storing Slips logs in {self.output_dir}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
+        self.discarded_bc_never_processed = {}
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -93,6 +96,36 @@ class Evidence(ICore):
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
 
+    def format_evidence_string(self, ip, detection_module, attacker,
+                               description) -> str:
+        """
+        Function to add the dns resolution of the src and dst ips of
+         each evidence
+        :return : string with a correct evidence displacement
+        """
+        evidence_string = ''
+        dns_resolution_attacker = self.db.get_dns_resolution(attacker)
+        dns_resolution_attacker = dns_resolution_attacker.get(
+            'domains', []
+        )
+        dns_resolution_attacker = dns_resolution_attacker[
+                                        :3] if dns_resolution_attacker else ''
+
+        dns_resolution_ip = self.db.get_dns_resolution(ip)
+        dns_resolution_ip = dns_resolution_ip.get('domains', [])
+        if len(dns_resolution_ip) >= 1:
+            dns_resolution_ip = dns_resolution_ip[0]
+        elif len(dns_resolution_ip) == 0:
+            dns_resolution_ip = ''
+
+        # dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_attacker and len(
+        #     dns_resolution_ip[:3]
+        #     ) > 0 else '. '
+
+
+        return f'{evidence_string}'
+    
+    
     def line_wrap(self, txt):
         """
         is called for evidence that are goinng to be printed in the terminal
@@ -218,15 +251,22 @@ class Evidence(ICore):
 
 
     def format_evidence_causing_this_alert(
-        self, all_evidence, profileid, twid, flow_datetime
+            self,
+            all_evidence: Dict[str, dict],
+            profileid: str,
+            twid: str,
+            flow_datetime: str
     ) -> str:
         """
         Function to format the string with all evidence causing an alert
         flow_datetime: time of the last evidence received
         """
-        # alerts in slips consists of several evidence, each evidence has a threat_level
-        # once we reach a certain threshold of accumulated threat_levels, we produce an alert
-        # Now instead of printing the last evidence only, we print all of them
+        # alerts in slips consists of several evidence,
+        # each evidence has a threat_level
+        # once we reach a certain threshold of accumulated
+        # threat_levels, we produce an alert
+        # Now instead of printing the last evidence only,
+        # we print all of them
         try:
             twid_num = twid.split('timewindow')[1]
             srcip = profileid.split(self.separator)[1]
@@ -236,7 +276,8 @@ class Evidence(ICore):
                 # give the database time to retreive the time
                 twid_start_time = self.db.getTimeTW(profileid, twid)
 
-            tw_start_time_str = utils.convert_format(twid_start_time,  '%Y/%m/%d %H:%M:%S')
+            tw_start_time_str = utils.convert_format(twid_start_time,
+                                                     '%Y/%m/%d %H:%M:%S')
             # datetime obj
             tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
 
@@ -266,14 +307,15 @@ class Evidence(ICore):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,
+                f'Problem on format_evidence_causing_this_alert() '
+                f'line {exception_line}',0,1,
             )
             self.print(traceback.print_exc(),0,1)
             return True
 
         for evidence in all_evidence.values():
-            evidence = json.loads(evidence)
-            description = evidence.get('description')
+            evidence: dict
+            description: str = evidence.get('description')
 
             evidence_string = f'Detected {description}'
             evidence_string = self.line_wrap(evidence_string)
@@ -366,122 +408,150 @@ class Evidence(ICore):
         self.logfile.close()
         self.jsonfile.close()
 
-    def delete_alerted_evidence(self, profileid, twid, tw_evidence:dict):
-        """
-        if there was an alert in this tw before, remove the evidence that
-        were part of the past alert
-        from the current evidence
-        """
-        # format of tw_evidence is {<ev_id>: {evidence_details}}
-        past_alerts = self.db.get_profileid_twid_alerts(profileid, twid)
-        if not past_alerts:
-            return tw_evidence
+    def get_evidence_that_were_part_of_a_past_alert(
+            self, profileid: str, twid: str) -> List[str]:
 
-        for alert_id, evidence_IDs in past_alerts.items():
-            evidence_IDs = json.loads(evidence_IDs)
-            for ID in evidence_IDs:
-                tw_evidence.pop(ID, None)
-        return tw_evidence
+        past_alerts: dict = self.db.get_profileid_twid_alerts(profileid, twid)
+        try:
+            past_evidence_ids = list(past_alerts.values())[0]
+            past_evidence_ids: List[str] = json.loads(past_evidence_ids)
+        except IndexError:
+            # no past evidence
+            past_evidence_ids = []
+        return past_evidence_ids
 
-    def delete_whitelisted_evidence(self, evidence):
-        """
-        delete the hash of all whitelisted evidence from the given dict of evidence ids
-        """
-        res = {}
-        for evidence_ID, evidence_info in evidence.items():
-            # sometimes the db has evidence that didnt come yet to evidenceprocess
-            # and they are alerted without checking the whitelist!
-            # to fix this, we have processed evidence which are
-            # evidence that came to new_evidence channel and were processed by it
-            # so they are ready to be a part of an alerted
-            if (
-                    not self.db.is_whitelisted_evidence(evidence_ID)
-                    and self.db.is_evidence_processed(evidence_ID)
-            ):
-                res[evidence_ID] = evidence_info
-        return res
-
-    def delete_evidence_done_by_others(self, tw_evidence):
-        """
-        given all the tw evidence, we should only consider evidence that makes this given
-        profile malicious, aka evidence of this profile attacking others.
-        """
-        res = {}
-        for evidence_ID, evidence_info in tw_evidence.items():
-            evidence_info = json.loads(evidence_info)
-            attacker_direction = evidence_info.get('attacker_direction', '')
-            # the following type detections are the ones
-            # expected to be seen when we are attacking others
-            # marking this profileid (srcip) as malicious
-            if attacker_direction in ('srcip', 'sport', 'srcport'):
-                res[evidence_ID] = json.dumps(evidence_info)
-
-        return res
+    def is_evidence_done_by_others(self, evidence: dict) -> bool:
+        # given all the tw evidence, we should only
+        # consider evidence that makes this given
+        # profile malicious, aka evidence of this profile attacking others.
+        attacker_direction: str = evidence.get('attacker_direction', '')
+        # the following type detections are the ones
+        # expected to be seen when we are attacking others
+        # marking this profileid (srcip) as malicious
+        if attacker_direction in ('srcip', 'sport', 'srcport'):
+            return False
+        return True
 
 
-    def get_evidence_for_tw(self, profileid, twid):
-        # Get all the evidence for this profile in this TW
-        tw_evidence: str = self.db.getEvidenceForTW(
-            profileid, twid
-        )
+    def get_evidence_for_tw(self, profileid: str, twid: str) \
+            -> Tuple[Dict[str, dict], float]:
+        """
+        filters and returns all the evidence for this profile in this TW
+        filters the follwing:
+        * evidence that were part of a past alert in this same profileid twid
+        * evidence that weren't done by the given profileid
+        * evidence that are whitelisted
+        * evidence that weren't processed by evidence.py yet
+
+        returns the dict with filtered evidence
+        and the accumulated threat levels of them
+        """
+        tw_evidence: str = self.db.getEvidenceForTW(profileid, twid)
         if not tw_evidence:
             return False
 
+        # format of this is {ev_id, json_serialized(ev_details)}
         tw_evidence: dict = json.loads(tw_evidence)
-        tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
-        tw_evidence = self.delete_evidence_done_by_others(tw_evidence)
-        tw_evidence = self.delete_whitelisted_evidence(tw_evidence)
-        return tw_evidence
 
+        past_evidence_ids: List[str] = \
+            self.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
 
-    def get_accumulated_threat_level(self, tw_evidence):
         accumulated_threat_level = 0.0
-        # to store all the ids causing this alerts in the database
+        # to store all the ids causing this alert in the database
         self.IDs_causing_an_alert = []
-        for evidence in tw_evidence.values():
-            evidence = json.loads(evidence)
-            # attacker_direction = evidence.get('attacker_direction')
-            # attacker = evidence.get('attacker')
-            evidence_type = evidence.get('evidence_type')
-            confidence = float(evidence.get('confidence'))
-            threat_level = evidence.get('threat_level')
-            description = evidence.get('description')
-            ID = evidence.get('ID')
-            self.IDs_causing_an_alert.append(ID)
-            # each threat level is a string, get the numerical value of it
-            try:
-                threat_level = utils.threat_levels[
-                    threat_level.lower()
-                ]
-            except KeyError:
-                self.print(
-                    f'Error: Evidence of type {evidence_type} has '
-                    f'an invalid threat level {threat_level}', 0, 1
-                )
-                self.print(f'Description: {description}', 0, 1)
-                threat_level = 0
 
-            # Compute the moving average of evidence
-            new_threat_level = threat_level * confidence
+        filtered_evidence = {}
+        for id, evidence in tw_evidence.items():
+            id: str
+            evidence: str
+
+            # delete already alerted evidence
+            # if there was an alert in this tw before, remove the evidence that
+            # were part of the past alert from the current evidence.
+
+            # when blocking is not enabled, we can alert on a single profile many times
+            # when we get all the tw evidence from the db, we get the once we
+            # alerted, and the new once we need to alert
+            # this method removes the already alerted evidence to avoid duplicates
+            if id in past_evidence_ids:
+                continue
+
+            evidence: dict = json.loads(evidence)
+            if self.is_evidence_done_by_others(evidence):
+                continue
+
+            whitelisted: bool = self.db.is_whitelisted_evidence(id)
+            if whitelisted:
+                continue
+
+            # delete_not processed evidence
+            # sometimes the db has evidence that didn't come yet to evidence.py
+            # and they are alerted without checking the whitelist!
+            # to fix this, we keep track of processed evidence
+            # that came to new_evidence channel and were processed by it.
+            # so they are ready to be a part of an alerted
+            processed: bool = self.db.is_evidence_processed(id)
+            if not processed:
+                continue
+
+            id: str = evidence.get('ID')
+            # we keep track of these IDs to be able to label the flows of these
+            # evidence later if this was detected as an alert
+            # now this should be done in its' own function but this is more
+            # optimal so we don't loop through all evidence again. i'll
+            # just leave it like that:D
+            self.IDs_causing_an_alert.append(id)
+
+
+            accumulated_threat_level: float = \
+                    self.accummulate_threat_level(
+                        evidence,
+                        accumulated_threat_level
+                        )
+
+            filtered_evidence[id] = evidence
+
+        return filtered_evidence, accumulated_threat_level
+
+    def accummulate_threat_level(
+            self,
+            evidence: dict,
+            accumulated_threat_level: float
+            ) -> float:
+        # attacker_direction = evidence.get('attacker_direction')
+        # attacker = evidence.get('attacker')
+        evidence_type: str = evidence.get('evidence_type')
+        confidence: float = float(evidence.get('confidence'))
+        threat_level: float = evidence.get('threat_level')
+        description: str = evidence.get('description')
+
+        # each threat level is a string, get the numerical value of it
+        try:
+            threat_level: float = \
+                utils.threat_levels[threat_level.lower()]
+        except KeyError:
             self.print(
-                f'\t\tWeighted Threat Level: {new_threat_level}', 3, 0
+                f'Error: Evidence of type {evidence_type} has '
+                f'an invalid threat level {threat_level}', 0, 1
             )
-            accumulated_threat_level += new_threat_level
-            self.print(
-                f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
-            )
+            self.print(f'Description: {description}', 0, 1)
+            threat_level = 0
+
+        # Compute the moving average of evidence
+        new_threat_level: float = threat_level * confidence
+        self.print(f'\t\tWeighted Threat Level: {new_threat_level}', 3, 0)
+        accumulated_threat_level += new_threat_level
+        self.print(
+            f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
+        )
         return accumulated_threat_level
 
-    def get_last_evidence_ID(self, tw_evidence) -> str:
+    def get_last_evidence_ID(self, tw_evidence: dict) -> str:
         return list(tw_evidence.keys())[-1]
 
-    def send_to_exporting_module(self, tw_evidence):
+    def send_to_exporting_module(self, tw_evidence: Dict[str, str]):
         for evidence in tw_evidence.values():
-            self.db.publish('export_evidence', evidence)
-
-    def add_hostname_to_alert(self, alert_to_log, profileid, flow_datetime, evidence):
-
-        return alert_to_log
+            self.db.publish('export_evidence', json.dumps(evidence))
 
     def is_blocking_module_enabled(self) -> bool:
         """
@@ -493,12 +563,8 @@ class Evidence(ICore):
         custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
         return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
 
-    def label_flows_causing_alert(self):
-        #todo should be moved to the db
-        """Add the label "malicious" to all flows causing this alert in our db """
-        for evidence_id in self.IDs_causing_an_alert:
-            uids: list = self.db.get_flows_causing_evidence(evidence_id)
-            self.db.set_flow_label(uids, 'malicious')
+
+
 
     def handle_new_alert(self, alert_ID: str, tw_evidence: dict):
         """
@@ -527,10 +593,11 @@ class Evidence(ICore):
 
         #store the alerts in the alerts table in sqlite db
         alert_details.update(
-            {'time_detected': utils.convert_format(datetime.now(), 'unixtimestamp'),
+            {'time_detected': utils.convert_format(datetime.now(),
+                                                   'unixtimestamp'),
              'label': 'malicious'})
         self.db.add_alert(alert_details)
-        self.label_flows_causing_alert()
+        self.db.label_flows_causing_alert(self.IDs_causing_an_alert)
         self.send_to_exporting_module(tw_evidence)
 
     def get_evidence_to_log(
@@ -541,7 +608,6 @@ class Evidence(ICore):
                 flow_datetime: str,
                 profileid: str,
         ) -> str:
-
             timewindow_number: int = twid.replace("timewindow", '')
 
             # to keep the alignment of alerts.json ip + hostname
@@ -563,6 +629,7 @@ class Evidence(ICore):
                        f'Detected {description}'
 
             return evidence
+
     def increment_attack_counter(
             self,
             attacker: str,
@@ -646,13 +713,12 @@ class Evidence(ICore):
                     proto,
                     evidence_ID
                 )
-
-                # Format the time to a common style given multiple type of time variables
-                if self.is_running_on_interface():
+                # convert time to local timezone
+                if self.running_non_stop:
                     timestamp: datetime = utils.convert_to_local_timezone(timestamp)
                 flow_datetime = utils.convert_format(timestamp, 'iso')
 
-                evidence_to_log = self.get_evidence_to_log(
+                evidence_to_log: str = self.get_evidence_to_log(
                     srcip,
                     description,
                     twid,
@@ -661,13 +727,12 @@ class Evidence(ICore):
                 )
                 # Add the evidence to alerts.log
                 self.add_to_log_file(evidence_to_log)
-
                 self.increment_attack_counter(profileid, victim, evidence_type)
 
-                tw_evidence: dict = self.get_evidence_for_tw(profileid, twid)
-                # The accumulated threat level is for all the types of evidence for this profile
-                accumulated_threat_level: float = \
-                    self.get_accumulated_threat_level(tw_evidence)
+                tw_evidence: Dict[str, dict]
+                accumulated_threat_level: float
+                tw_evidence, accumulated_threat_level = \
+                    self.get_evidence_for_tw(profileid, twid)
 
                 # add to alerts.json
                 self.add_to_json_log_file(
@@ -706,7 +771,8 @@ class Evidence(ICore):
                         self.handle_new_alert(alert_id, tw_evidence)
 
                         # print the alert
-                        alert_to_print = self.format_evidence_causing_this_alert(
+                        alert_to_print: str = \
+                            self.format_evidence_causing_this_alert(
                                 tw_evidence,
                                 profileid,
                                 twid,

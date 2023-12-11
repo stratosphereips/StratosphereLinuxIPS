@@ -40,14 +40,14 @@ class CCDetection(IModule, multiprocessing.Process):
         Set an evidence for malicious Tuple
         """
 
-        attacker_direction = 'outTuple'
-        attacker = tupleid
+        tupleid = tupleid.split('-')
+        dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
+        attacker_direction = 'dstip'
+        attacker = dstip
         source_target_tag = 'Botnet'
         evidence_type = 'Command-and-Control-channels-detection'
         threat_level = 'high'
         categroy = 'Intrusion.Botnet'
-        tupleid = tupleid.split('-')
-        dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
         portproto = f'{port}/{proto}'
         port_info = self.db.get_port_info(portproto)
         ip_identification = self.db.get_ip_identification(dstip)
@@ -57,10 +57,22 @@ class CCDetection(IModule, multiprocessing.Process):
             f'score: {format(score, ".4f")}. {ip_identification}'
         )
         victim = profileid.split('_')[-1]
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, categroy, source_target_tag=source_target_tag, port=port, proto=proto,
-                                 profileid=profileid, twid=twid, uid=uid, victim= victim)
-
+        self.db.setEvidence(
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            categroy,
+            source_target_tag=source_target_tag,
+            port=port,
+            proto=proto,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+            victim= victim)
 
 
     def convert_input_for_module(self, pre_behavioral_model):
