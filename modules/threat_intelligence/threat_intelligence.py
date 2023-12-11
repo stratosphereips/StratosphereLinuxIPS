@@ -115,7 +115,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         threat_level = asn_info.get('threat_level', 'medium')
 
         tags = asn_info.get('tags', False)
-        source_target_tag = tags.capitalize() if tags else 'BlacklistedASN'
+        source_target_tag = 'BlacklistedASN'
         identification = self.db.get_ip_identification(attacker)
 
         description = f'Connection to IP: {attacker} with blacklisted ASN: {asn} ' \
@@ -202,13 +202,8 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                        f'Description: {ip_info["description"]}. ' \
                        f'Source: {ip_info["source"]}.'
 
-        if tags := ip_info.get('tags', False):
-            if type(tags) == list:
-                source_target_tag = tags[0].capitalize()
-            else:
-                source_target_tag = tags.capitalize()
-        else:
-            source_target_tag = 'BlacklistedIP'
+
+        source_target_tag = 'BlacklistedIP'
 
         self.db.setEvidence(
             evidence_type,
@@ -265,7 +260,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         threat_level = domain_info.get('threat_level', 'high')
 
         tags = domain_info.get('tags', False)
-        source_target_tag = tags[0].capitalize() if tags else 'BlacklistedDomain'
+        source_target_tag = 'BlacklistedDomain'
 
         if self.is_dns_response:
             description = f'DNS answer with a blacklisted CNAME: {domain} ' \
