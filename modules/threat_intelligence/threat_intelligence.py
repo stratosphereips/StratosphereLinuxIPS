@@ -106,7 +106,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         """
         :param asn_info: the malicious asn info taken from own_malicious_iocs.csv
         """
-        attacker_direction = 'dstip'
+        attacker_direction = 'srcip'
         category = 'Anomaly.Traffic'
         evidence_type = 'ThreatIntelligenceBlacklistedASN'
         confidence = 0.8
@@ -161,16 +161,18 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
 
         confidence = 1
         category = 'Anomaly.Traffic'
-        if 'src' in attacker_direction:
+        if 'src' in ip_state:
             direction = 'from'
             opposite_dir = 'to'
             victim = daddr
-        elif 'dst' in attacker_direction:
+            attacker_direction = 'srcip'
+        elif 'dst' in ip_state:
             direction = 'to'
             opposite_dir = 'from'
             victim = profileid.split("_")[-1]
+            attacker_direction = 'srcip'
         else:
-            # attacker_dir is not specified?
+            # ip_state is not specified?
             return
 
 

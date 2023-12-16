@@ -421,7 +421,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         source_target_tag = 'SendingUnencryptedData'
         category = 'Anomaly.Traffic'
         evidence_type = 'HTTPtraffic'
-        attacker_direction = 'dstip'
+        attacker_direction = 'srcip'
         attacker = daddr
         saddr = profileid.split('_')[-1]
         description = f'Unencrypted HTTP traffic from {saddr} to {daddr}.'
