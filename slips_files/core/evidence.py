@@ -469,6 +469,20 @@ class Evidence(ICore):
                 ):
                 continue
 
+            whitelisted: bool = self.db.is_whitelisted_evidence(id)
+            if whitelisted:
+                continue
+
+            # delete not processed evidence
+            # sometimes the db has evidence that didn't come yet to evidence.py
+            # and they are alerted without checking the whitelist!
+            # to fix this, we keep track of processed evidence
+            # that came to new_evidence channel and were processed by it.
+            # so they are ready to be a part of an alert
+            processed: bool = self.db.is_evidence_processed(id)
+            if not processed:
+                continue
+
             id: str = evidence.get('ID')
             # we keep track of these IDs to be able to label the flows of these
             # evidence later if this was detected as an alert
@@ -478,10 +492,6 @@ class Evidence(ICore):
             self.IDs_causing_an_alert.append(id)
 
             filtered_evidence[id] = evidence
-            evidence_threat_level: float = self.get_threat_level(evidence)
-            self.db.update_accumulated_threat_level(
-                profileid, twid, evidence_threat_level
-                )
 
         return filtered_evidence
 
@@ -494,9 +504,6 @@ class Evidence(ICore):
         * evidence that were part of a past alert in this same profileid
         twid (past_evidence_ids)
         * evidence that weren't done by the given profileid
-        * evidence that are whitelisted
-        * evidence that weren't processed by evidence.py yet
-
         """
 
         # delete already alerted evidence
@@ -512,20 +519,6 @@ class Evidence(ICore):
             return True
 
         if self.is_evidence_done_by_others(evidence):
-            return True
-
-        whitelisted: bool = self.db.is_whitelisted_evidence(id)
-        if whitelisted:
-            return True
-
-        # delete_not processed evidence
-        # sometimes the db has evidence that didn't come yet to evidence.py
-        # and they are alerted without checking the whitelist!
-        # to fix this, we keep track of processed evidence
-        # that came to new_evidence channel and were processed by it.
-        # so they are ready to be a part of an alerted
-        processed: bool = self.db.is_evidence_processed(id)
-        if not processed:
             return True
 
         return False
@@ -576,9 +569,6 @@ class Evidence(ICore):
 
         custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
         return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
-
-
-
 
     def handle_new_alert(self, alert_ID: str, tw_evidence: dict):
         """
@@ -666,6 +656,33 @@ class Evidence(ICore):
             )
 
 
+    def update_accumulated_threat_level(self, evidence: dict) -> float:
+        """
+        update the accumulated threat level of the profileid and twid of
+        the given evidence and return the updated value
+        """
+        profileid: str = evidence['profileid']
+        twid: str = evidence['twid']
+        evidence_threat_level: float = self.get_threat_level(evidence)
+
+        self.db.update_accumulated_threat_level(
+            profileid, twid, evidence_threat_level
+        )
+        accumulated_threat_level: float = \
+            self.db.get_accumulated_threat_level(
+                profileid, twid
+            )
+        return accumulated_threat_level
+
+    def show_popup(self, alert: str):
+        # remove the colors from the alerts before printing
+        alert = (
+            alert.replace(Fore.RED, '')
+            .replace(Fore.CYAN, '')
+            .replace(Style.RESET_ALL, '')
+        )
+        self.notify.show_popup(alert)
+
     def main(self):
         while not self.should_stop():
             if msg := self.get_msg('evidence_added'):
@@ -697,8 +714,9 @@ class Evidence(ICore):
                 victim: str = evidence.get('victim', '')
 
                 # FP whitelisted alerts happen when the db returns an evidence
-                # that isn't processed in this channel, in the tw_evidence below
-                # to avoid this, we only alert on processed evidence
+                # that isn't processed in this channel, in the tw_evidence
+                # below.
+                # to avoid this, we only alert about processed evidence
                 self.db.mark_evidence_as_processed(evidence_ID)
 
                 # Ignore alert if IP is whitelisted
@@ -706,13 +724,49 @@ class Evidence(ICore):
                     srcip, attacker, attacker_direction, description, victim
                 ):
                     self.db.cache_whitelisted_evidence_ID(evidence_ID)
-                    # Modules add evidence to the db before reaching this point, now
-                    # remove evidence from db so it could be completely ignored
+                    # Modules add evidence to the db before
+                    # reaching this point, now remove evidence from db so
+                    # it could be completely ignored
                     self.db.deleteEvidence(
                         profileid, twid, evidence_ID
                     )
                     continue
 
+
+                # convert time to local timezone
+                if self.running_non_stop:
+                    timestamp: datetime = utils.convert_to_local_timezone(timestamp)
+                flow_datetime = utils.convert_format(timestamp, 'iso')
+
+                evidence_to_log: str = self.get_evidence_to_log(
+                    srcip,
+                    description,
+                    twid,
+                    flow_datetime,
+                    profileid
+                )
+                # Add the evidence to alerts.log
+                self.add_to_log_file(evidence_to_log)
+                self.increment_attack_counter(
+                    profileid,
+                    victim,
+                    evidence_type
+                    )
+
+                past_evidence_ids: List[str] = \
+                    self.get_evidence_that_were_part_of_a_past_alert(
+                        profileid,
+                        twid
+                        )
+                if not self.is_filtered_evidence(evidence, past_evidence_ids):
+                    accumulated_threat_level: float = \
+                        self.update_accumulated_threat_level(evidence)
+                else:
+                    accumulated_threat_level: float = \
+                        self.db.get_accumulated_threat_level(
+                            profileid,
+                            twid
+                        )
                 # prepare evidence for json log file
                 IDEA_dict: dict = utils.IDEA_format(
                     srcip,
@@ -728,31 +782,6 @@ class Evidence(ICore):
                     proto,
                     evidence_ID
                 )
-                # convert time to local timezone
-                if self.running_non_stop:
-                    timestamp: datetime = utils.convert_to_local_timezone(timestamp)
-                flow_datetime = utils.convert_format(timestamp, 'iso')
-
-                evidence_to_log: str = self.get_evidence_to_log(
-                    srcip,
-                    description,
-                    twid,
-                    flow_datetime,
-                    profileid
-                )
-                # Add the evidence to alerts.log
-                self.add_to_log_file(evidence_to_log)
-                self.increment_attack_counter(profileid, victim, evidence_type)
-
-                tw_evidence: Dict[str, dict] = \
-                    self.get_evidence_for_tw(
-                        profileid, twid
-                    )
-
-                accumulated_threat_level: float = \
-                    self.db.get_accumulated_threat_level(
-                        profileid, twid
-                    )
                 # add to alerts.json
                 self.add_to_json_log_file(
                       IDEA_dict,
@@ -764,27 +793,32 @@ class Evidence(ICore):
                 self.db.set_evidence_for_profileid(IDEA_dict)
                 self.db.publish('report_to_peers', json.dumps(evidence))
 
-                if tw_evidence:
-                    # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
-                    # Important! It may happen that the evidence is not related to a profileid and twid.
-                    # For example when the evidence is on some src IP attacking our home net, and we are not creating
-                    # profiles for attackers
 
-                    id: str = self.get_last_evidence_ID(tw_evidence)
+                # if the profile was already blocked in
+                # this twid, we shouldn't alert
+                profile_already_blocked = \
+                    self.db.checkBlockedProfTW(profileid, twid)
 
-                    # if the profile was already blocked in this twid, we shouldn't alert
-                    profile_already_blocked = self.db.checkBlockedProfTW(profileid, twid)
-
-                    # This is the part to detect if the accumulated evidence was enough for generating a detection
-                    # The detection should be done in attacks per minute. The parameter in the configuration
-                    # is attacks per minute
-                    # So find out how many attacks corresponds to the width we are using
-                    if (
-                        accumulated_threat_level >= self.detection_threshold_in_this_width
-                        and not profile_already_blocked
-                    ):
+                # This is the part to detect if the accumulated
+                # evidence was enough for generating a detection
+                # The detection should be done in attacks per minute.
+                # The parameter in the configuration
+                # is attacks per minute
+                # So find out how many attacks corresponds
+                # to the width we are using
+                if (
+                    accumulated_threat_level >= self.detection_threshold_in_this_width
+                    and not profile_already_blocked
+                ):
+                    tw_evidence: Dict[str, dict] = \
+                        self.get_evidence_for_tw(
+                            profileid, twid
+                        )
+                    if tw_evidence:
+                        id: str = self.get_last_evidence_ID(tw_evidence)
                         # store the alert in our database
-                        # the alert ID is profileid_twid + the ID of the last evidence causing this alert
+                        # the alert ID is profileid_twid + the ID of
+                        # the last evidence causing this alert
                         alert_id: str = f'{profileid}_{twid}_{id}'
 
                         self.handle_new_alert(alert_id, tw_evidence)
@@ -801,21 +835,16 @@ class Evidence(ICore):
                         self.print(f'{alert_to_print}', 1, 0)
 
                         if self.popup_alerts:
-                            # remove the colors from the alerts before printing
-                            alert_to_print = (
-                                alert_to_print.replace(Fore.RED, '')
-                                .replace(Fore.CYAN, '')
-                                .replace(Style.RESET_ALL, '')
-                            )
-                            self.notify.show_popup(alert_to_print)
+                            self.show_popup(alert_to_print)
 
-                        # todo if it's already blocked, we shouldn't decide blocking
+
                         blocked = False
-
-                        if self.is_blocking_module_enabled():
-                            # send ip to the blocking module
-                            if self.decide_blocking(profileid):
-                                blocked = True
+                        # send ip to the blocking module
+                        if (
+                                self.is_blocking_module_enabled()
+                                and self.decide_blocking(profileid)
+                        ):
+                            blocked = True
 
                         self.mark_as_blocked(
                             profileid,
