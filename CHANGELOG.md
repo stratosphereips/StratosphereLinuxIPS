@@ -2,8 +2,13 @@
 - Fix using -k to kill opened redis servers.
 - Better README and docs.
 - Improve URLhaus detections.
-- 
-
+- Improve the detection of vertical and horizontal portscans
+- Unify disabled modules names printed in the CLI.
+- Set the threat level reported to other peers to the max of threat levels seen in any time window.
+- Faster detections of devices changing IPs
+- Remove the home_network feature from Slips.
+- Faster detection of alerts.
+- Fix problem not using 'command and control channel' evidence in the alert of each profile.
 
 -1.0.8 (November 2023)
 - Use All-ID hash to fingerprint flows stored in the flows database
