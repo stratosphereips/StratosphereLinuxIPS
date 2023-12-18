@@ -244,7 +244,7 @@ class Daemon:
         self.prepare_std_streams(output_dir)
         self.logger = self.slips.proc_man.start_output_process(self.stdout, self.stderr, self.logsfile)
         self.slips.add_observer(self.logger)
-        db = DBManager(self.slips.logger,
+        db = DBManager(self.logger,
                        output_dir,
                        port,
                        start_sqlite=False,
