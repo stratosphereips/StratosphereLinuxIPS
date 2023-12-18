@@ -506,9 +506,6 @@ class Evidence(ICore):
             self.IDs_causing_an_alert.append(id)
 
             evidence_threat_level: float = self.get_threat_level(evidence)
-            print(f"@@@@@@@@@@@@@@@@ updating tl of {profileid} {twid} by "
-                  f"{evidence_threat_level} .. it it now "
-                  f"{self.db.get_accumulated_threat_level(profileid, twid)}")
             self.db.update_accumulated_threat_level(
                 profileid, twid, evidence_threat_level
                 )
@@ -589,7 +586,6 @@ class Evidence(ICore):
         }
         self.db.publish('new_alert', json.dumps(alert_details))
 
-
         #store the alerts in the alerts table in sqlite db
         alert_details.update(
             {'time_detected': utils.convert_format(datetime.now(),
@@ -598,6 +594,8 @@ class Evidence(ICore):
         self.db.add_alert(alert_details)
         self.db.label_flows_causing_alert(self.IDs_causing_an_alert)
         self.send_to_exporting_module(tw_evidence)
+        # reset the accumulated threat level now that an alert is generated
+        self.db.set_accumulated_threat_level(profileid, twid, 0)
 
     def get_evidence_to_log(
                 self,
@@ -654,31 +652,31 @@ class Evidence(ICore):
         while not self.should_stop():
             if msg := self.get_msg('evidence_added'):
                 # Data sent in the channel as a json dict, it needs to be deserialized first
-                data = json.loads(msg['data'])
-                profileid = data.get('profileid')
+                evidence: dict = json.loads(msg['data'])
+                profileid = evidence.get('profileid')
                 srcip = profileid.split(self.separator)[1]
-                twid = data.get('twid')
-                attacker_direction = data.get(
+                twid = evidence.get('twid')
+                attacker_direction = evidence.get(
                     'attacker_direction'
                 )   # example: dstip srcip dport sport dstdomain
-                attacker = data.get(
+                attacker = evidence.get(
                     'attacker'
                 )   # example: ip, port, inTuple, outTuple, domain
-                evidence_type: str = data.get(
+                evidence_type: str = evidence.get(
                     'evidence_type'
                 )   # example: PortScan, ThreatIntelligence, etc..
-                description = data.get('description')
-                timestamp = data.get('stime')
+                description = evidence.get('description')
+                timestamp = evidence.get('stime')
                 # this is all the uids of the flows that cause this evidence
-                all_uids = data.get('uid')
-                confidence = data.get('confidence', False)
-                category = data.get('category', False)
-                conn_count = data.get('conn_count', False)
-                port = data.get('port', False)
-                proto = data.get('proto', False)
-                source_target_tag = data.get('source_target_tag', False)
-                evidence_ID = data.get('ID', False)
-                victim: str = data.get('victim', '')
+                all_uids = evidence.get('uid')
+                confidence = evidence.get('confidence', False)
+                category = evidence.get('category', False)
+                conn_count = evidence.get('conn_count', False)
+                port = evidence.get('port', False)
+                proto = evidence.get('proto', False)
+                source_target_tag = evidence.get('source_target_tag', False)
+                evidence_ID = evidence.get('ID', False)
+                victim: str = evidence.get('victim', '')
 
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence below
@@ -746,7 +744,7 @@ class Evidence(ICore):
                     )
 
                 self.db.set_evidence_for_profileid(IDEA_dict)
-                self.db.publish('report_to_peers', json.dumps(data))
+                self.db.publish('report_to_peers', json.dumps(evidence))
 
                 if tw_evidence:
                     # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
