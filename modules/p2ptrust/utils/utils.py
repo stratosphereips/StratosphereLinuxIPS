@@ -96,7 +96,7 @@ def get_ip_info_from_slips(ip_address: str, db) -> (float, float):
     """
 
     # poll new info from redis
-    ip_info = db.getIPData(ip_address)
+    ip_info = db.get_ip_info(ip_address)
 
     # There is a bug in the database where sometimes False is returned when key is not found. Correctly, dictionary
     # should be always returned, even if it is empty. This check cannot be simplified to `if not ip_info`, because I

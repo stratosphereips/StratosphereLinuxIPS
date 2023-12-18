@@ -170,7 +170,7 @@ class Checker:
         :param module: this is the one given to slips via --input-module
         check if the module was created in modules/ dir
         """
-        available_modules = os.listdir('../../../modules/')
+        available_modules = os.listdir('modules')
 
         if module not in available_modules:
             print(f"{module} module is not available. Stopping slips")

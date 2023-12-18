@@ -3,6 +3,7 @@ from modules.ip_info.jarm import JARM
 from .asn_info import ASN
 import platform
 import sys
+from typing import Union
 import datetime
 import maxminddb
 import ipaddress
@@ -293,7 +294,7 @@ class IPInfo(IModule, multiprocessing.Process):
                 line = json.loads(line)
                 return line['vendorName']
 
-    def get_vendor(self, mac_addr: str, profileid: str):
+    def get_vendor(self, mac_addr: str, profileid: str) -> dict:
         """
         Returns vendor info of a MAC address either from an offline or an online
          database
@@ -309,19 +310,19 @@ class IPInfo(IModule, multiprocessing.Process):
         if self.db.get_mac_vendor_from_profile(profileid):
             return True
 
-        MAC_info = {
+        MAC_info: dict = {
             'MAC': mac_addr
         }
 
-        if vendor:= self.get_vendor_offline(mac_addr, profileid):
+        if vendor := self.get_vendor_offline(mac_addr, profileid):
             MAC_info['Vendor'] = vendor
-        elif vendor:= self.get_vendor_online(mac_addr):
+            self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
+        elif vendor := self.get_vendor_online(mac_addr):
             MAC_info['Vendor'] = vendor
+            self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
         else:
             MAC_info['Vendor'] = 'Unknown'
 
-        # either we found the vendor or not, store the mac of this ip to the db
-        self.db.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
 
     # domain info
@@ -422,6 +423,7 @@ class IPInfo(IModule, multiprocessing.Process):
         # In case of a zeek dir or a pcap,
         # check if we have the mac of this ip already saved in the db.
         if gw_MAC := self.db.get_mac_addr_from_profile(f'profile_{gw_ip}'):
+            gw_MAC: Union[str, None]
             self.db.set_default_gateway('MAC', gw_MAC)
             return gw_MAC
 
@@ -537,7 +539,7 @@ class IPInfo(IModule, multiprocessing.Process):
         if not ip_addr.is_multicast:
             # Do we have cached info about this ip in redis?
             # If yes, load it
-            cached_ip_info = self.db.getIPData(ip)
+            cached_ip_info = self.db.get_ip_info(ip)
             if not cached_ip_info:
                 cached_ip_info = {}
 
@@ -563,12 +565,8 @@ class IPInfo(IModule, multiprocessing.Process):
     def main(self):
         if msg:= self.get_msg('new_MAC'):
             data = json.loads(msg['data'])
-            mac_addr = data['MAC']
-            host_name = data.get('host_name', False)
-            profileid = data['profileid']
-
-            if host_name:
-                self.db.add_host_name_to_profile(host_name, profileid)
+            mac_addr: str = data['MAC']
+            profileid: str = data['profileid']
 
             self.get_vendor(mac_addr, profileid)
             self.check_if_we_have_pending_mac_queries()

@@ -4,42 +4,36 @@ It checks a random evidence and the total number of profiles in every file
 """
 from tests.common_test_utils import (
         get_total_profiles,
+        run_slips,
         is_evidence_present,
         create_output_dir,
         has_errors,
 )
 from tests.module_factory import ModuleFactory
 import pytest
-from ...slips import *
+from ...slips.main import *
 import shutil
+import os
 
 alerts_file = 'alerts.log'
 
 
 
-def run_slips(cmd):
-    """runs slips and waits for it to end"""
-    slips = subprocess.Popen(
-        cmd,
-        stdin=subprocess.PIPE,
-        shell=True
-    )
-    return_code = slips.wait()
-    return return_code
+
 
 
 @pytest.mark.parametrize(
     'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
     [
-        # ( #TODO fix this test
-        #     'dataset/test7-malicious.pcap',
-        #     15,
-        #     'test7/',
-        #     # Detected A device changing IPs. IP 192.168.2.12 was found with MAC address
-        #     # 68:5b:35:b1:55:93 but the MAC belongs originally to IP: 169.254.242.182
-        #     'A device changing IPs',
-        #     6666,
-        # ),
+        (
+            'dataset/test7-malicious.pcap',
+            15,
+            'test7/',
+            # Detected A device changing IPs. IP 192.168.2.12 was found with MAC address
+            # 68:5b:35:b1:55:93 but the MAC belongs originally to IP: 169.254.242.182
+            'A device changing IPs',
+            6666,
+        ),
         ('dataset/test8-malicious.pcap',
          3,
          'test8/',

@@ -65,11 +65,12 @@ class UIManager:
                 # set false as the return value of this thread
                 self.webinterface_return_value.put(False)
 
+                self.main.print (f"Web interface error:\n")
+                for line in error.strip().decode().splitlines():
+                    self.main.print (f"{line}")
+
                 pid = self.main.metadata_man.get_pid_using_port(55000)
-                # pid = self.get_pid_using_port(55000)
-                self.main.print (f"Web interface error:\n"
-                            f"{error.strip().decode()}\n"
-                            f"Port 55000 is used by PID {pid}")
+                self.main.print(f"Port 55000 is used by PID {pid}")
 
         # if there's an error, this will be set to false, and the error will be printed
         # otherwise we assume that the interface started

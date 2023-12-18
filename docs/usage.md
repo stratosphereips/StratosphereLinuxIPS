@@ -243,7 +243,10 @@ analysis and detected malicious behaviour can be analyzed as following:
 
 
 There are two options how to run Kalipso Locally:
-1. You can run Kalipso as a shell script in another terminal using the command:
+
+### Kalipso
+
+You can run Kalipso as a shell script in another terminal using the command:
 
 	```./kalipso.sh```
 
@@ -265,15 +268,51 @@ Now you can run
 ```./kalipso.sh```
 
 
-2. You can use Slips' web interface by running slips with ```-w``` or running:
+and choose the port Slips started on. Slips uses port 6379 by default.
+
+On the right column, you can see a list of all the IPs seen in your traffic.
+
+The traffic of IP is splitted into time windows. each time window is 1h long of traffic.
+
+You can press Enter of any of them to view the list of flows in the timewindow.
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
+
+You can switch to the flows view in kalipso by pressing TAB, now you can scroll on flows using arrows
+
+
+On the very top you can see the ASN, the GEO location, and the virustotal score of each IP if available
+
+Check how to setup virustotal in Slips here https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications
+
+
+### The Web Interface
+
+You can use Slips' web interface by running slips with ```-w``` or running:
 
    ./webinteface.sh
 
 Then navigate to ```http://localhost:55000/``` from your browser.
 
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
-title="Web Interface">
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px" title="Web Interface">
+
+Just like kalipso, On the right column, you can see a list of all the IPs seen in your traffic.
+
+The traffic of IP is splitted into time windows. each time window is 1h long of traffic.
+
+IPs and timewindows that are marked in red are considered malicious in Slips.
+
+You can view the traffic of each time window by clicking on it
+
+* The timeline button shows the zeek logs formatted into a human readable format by Slips' timeline module
+* The flows button shows the raw flows as seen in the input file, of by zeek in case of running Slips on a PCAP or on you rinterface
+* The outgoing button shows flow sent from this IP/profile to other IPs only. it doesn't show traffic sent to the profile.
+* The incoming button shows flow sent to this IP/profile to other IPs only. It doesn't show traffic sent from the profile.
+* The Alerts button shows the alerts Slips saw for this IP, each alert is a bunch of evidence that the given profile is malicious. Slips decides to block the IP if an alert is generated for it (if running with -p). Clicking on each alert expands the evidence that resulted in the alert.
+* The Evidence button shows all the evidence of the timewindow whether they were part of an alert or not. 
+
+--- 
 
 If you're running slips in docker you will need to add one of the following
 parameters to docker to be able to use the web interface:
@@ -467,28 +506,6 @@ Each IP address that appears in the network traffic of the input is represented 
 
 ```time_window_width```
 
-**Home Network**
-
-Slips can use your home network if you want to focus on analysing 
-IPs in side your home network only 
-
-the ```home_network``` parameter can be 1 network
-    
-    home_network = [147.32.0.0/16]
-
-or several networks when roaming:
-
-    home_network = [192.168.0.0/16, 10.0.0.0/8]
-
-When the ```home_network``` parameter is set, slips creates profiles
-only for ips inside the home network, check the analysis direction below for more info.
-
-The ```home_network``` parameter also supports one host as an argument, 
-which is written like this ```[192.168.2.16/32]```.
-When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.16```
-
-By default, the home_network parameter is not set, which means slips will
-create profiles for every IP it sees in the network
 
 **Analysis Direction**
 
@@ -551,7 +568,7 @@ Slips can export alerts to different systems.
 Refer to the [exporting section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html) for detailed instructions on how to export.
 
 
-### Logging
+## Logging
 
 To enable the creation of log files, there are two options:
 

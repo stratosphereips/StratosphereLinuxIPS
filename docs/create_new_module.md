@@ -1,4 +1,4 @@
-from slips_files.common.abstracts.module import IModule
+
 
 # How to Create a New Slips Module
 
@@ -274,6 +274,7 @@ Detailed explanation of [Slips profiles and timewindows here](https://idea.cesne
 Here is the whole local_connection_detector.py code for copy/paste.
 
 ```python
+from slips_files.common.abstracts.module import IModule
 from slips_files.common.imports import *
 import datetime
 import ipaddress

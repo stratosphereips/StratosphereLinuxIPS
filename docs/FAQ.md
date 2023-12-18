@@ -15,7 +15,7 @@ To fix this you can disable the modules that use tensorflow by adding
 ```rnn-cc-detection, flowmldetection``` to the ```disable``` key in ```config/slips.conf```
 
 
-## Docker time is not in syncs with that of the host
+## Docker time is not in sync with that of the host
 
 You can add your local /etc/localtime as volume in Slips Docker container by using:
 

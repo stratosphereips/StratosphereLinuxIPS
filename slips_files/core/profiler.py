@@ -15,19 +15,20 @@ import multiprocessing
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.common.imports import *
-
-from slips_files.core.helpers.flow_handler import FlowHandler
-from slips_files.core.helpers.symbols_handler import SymbolHandler
-
-from datetime import datetime
-from slips_files.core.helpers.whitelist import Whitelist
+# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
+# stratosphere@aic.fel.cvut.cz
 from dataclasses import asdict
 import queue
 import sys
 import ipaddress
+import pprint
+from datetime import datetime
+
+from slips_files.common.imports import *
 from slips_files.common.abstracts.core import ICore
+from slips_files.core.helpers.flow_handler import FlowHandler
+from slips_files.core.helpers.symbols_handler import SymbolHandler
+from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
@@ -93,7 +94,6 @@ class Profiler(ICore):
         self.timeformat = conf.ts_format()
         self.analysis_direction = conf.analysis_direction()
         self.label = conf.label()
-        self.home_net = conf.get_home_network()
         self.width = conf.get_tw_width_as_float()
 
     def convert_starttime_to_epoch(self):
@@ -166,44 +166,18 @@ class Profiler(ICore):
         self.twid = self.db.get_timewindow(self.flow.starttime, self.profileid)
         self.flow_parser.twid = self.twid
 
-        if self.home_net:
-            # Home network is defined in slips.conf. Create profiles for home IPs only
-            for network in self.home_net:
-                if self.saddr_as_obj in network:
-                    # if a new profile is added for this saddr
-                    self.db.addProfile(
-                        self.profileid, self.flow.starttime, self.width
-                    )
-                    self.store_features_going_out()
-
-                if (
-                    self.analysis_direction == 'all'
-                    and self.daddr_as_obj in network
-                ):
-                    self.handle_in_flows()
-
-        else:
-            # home_network param wasn't set in slips.conf
-            # Create profiles for all ips we see
-            self.db.addProfile(self.profileid, self.flow.starttime, self.width)
-            self.store_features_going_out()
-            if self.analysis_direction == 'all':
-                # No home. Store all
-                self.handle_in_flows()
+        # Create profiles for all ips we see
+        self.db.addProfile(self.profileid, self.flow.starttime, self.width)
+        self.store_features_going_out()
+        if self.analysis_direction == 'all':
+            self.handle_in_flows()
 
         if self.db.is_cyst_enabled():
             # print the added flow as a form of debugging feedback for
             # the user to know that slips is working
-            self.print(pp(asdict(self.flow)))
+            self.print(pprint.pp(asdict(self.flow)))
 
         return True
-        # except Exception:
-        #     # For some reason we can not use the output queue here.. check
-        #     self.print(
-        #         f'Error in Profiler Process add_flow_to_profile (). {traceback.format_exc()}'
-        #     ,0,1)
-        #     self.print(traceback.print_exc(),0,1)
-        #     return False
 
     def store_features_going_out(self):
         """
@@ -241,7 +215,7 @@ class Profiler(ICore):
         # mark this profile as modified
         self.db.markProfileTWAsModified(self.profileid, self.twid, '')
 
-    def store_features_going_in(self, profileid, twid):
+    def store_features_going_in(self, profileid: str, twid: str):
         """
         If we have the all direction set , slips creates profiles for each IP, the src and dst
         store features going our adds the conn in the profileA from IP A -> IP B in the db

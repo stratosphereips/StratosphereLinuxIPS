@@ -149,7 +149,8 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         :param ip_info: is all the info we have about that IP in the db source, confidence, description, etc.
         :param profileid: profile where the alert was generated. It includes the src ip
         :param twid: name of the timewindow when it happened.
-        :param ip_state: can be 'srcip' or 'dstip'
+        :param ip_state: is basically the answer to "which one is the
+        blacklisted IP"? can be 'srcip' or 'dstip'
         """
 
         attacker_direction = ip_state
@@ -178,7 +179,9 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         # this ip (the one that triggered this alert only), we don't want other descriptions from other TI sources!
         # setting it to true results in the following alert
         # blacklisted ip description: <Spamhaus description> source: ipsum
-        ip_identification = self.db.get_ip_identification(ip, get_ti_data=False).strip()
+        ip_identification = self.db.get_ip_identification(
+            ip, get_ti_data=False
+            ).strip()
 
         if self.is_dns_response:
             description = (
@@ -193,7 +196,9 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                           f'{opposite_dir} {victim}. '
 
 
-        description += f'blacklisted IP {ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
+        description += f'{ip_identification} ' \
+                       f'Description: {ip_info["description"]}. ' \
+                       f'Source: {ip_info["source"]}.'
 
         if tags := ip_info.get('tags', False):
             if type(tags) == list:
@@ -203,9 +208,21 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         else:
             source_target_tag = 'BlacklistedIP'
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid, victim=victim)
+        self.db.setEvidence(
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+            victim=victim
+        )
 
         # mark this ip as malicious in our database
         ip_info = {'threatintelligence': ip_info}
@@ -260,9 +277,19 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         if tags:
             description += f'with tags: {tags}. '
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+        self.db.setEvidence(
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uid)
 
     def is_valid_threat_level(self, threat_level):
         return threat_level in utils.threat_levels
@@ -311,63 +338,43 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                     # default value
                     threat_level = 'medium'
 
+                ioc_info = {
+                    'description': description,
+                    'source': data_file_name,
+                    'threat_level': threat_level,
+                    'tags': 'local TI file',
+                }
+                ioc_info: str = json.dumps(ioc_info)
+
                 data_type = utils.detect_data_type(ioc.strip())
                 if data_type == 'ip':
                     ip_address = ipaddress.ip_address(ioc.strip())
-                    # Only use global addresses. Ignore multicast, broadcast, private, reserved and undefined
+                    # Only use global addresses. Ignore multicast,
+                    # broadcast, private, reserved and undefined
                     if ip_address.is_global:
-                        # Store the ip in our local dict
-                        malicious_ips[str(ip_address)] = json.dumps(
-                            {
-                                'description': description,
-                                'source': data_file_name,
-                                'threat_level': threat_level,
-                                'tags': 'local TI file',
-                            }
-                        )
+                        malicious_ips[str(ip_address)] = ioc_info
+
                 elif data_type == 'domain':
-                    malicious_domains[ioc] = json.dumps(
-                        {
-                            'description': description,
-                            'source': data_file_name,
-                            'threat_level': threat_level,
-                            'tags': 'local TI file',
-                        }
-                    )
+                    malicious_domains[ioc] = ioc_info
+
                 elif data_type == 'ip_range':
                     net_addr = ioc[: ioc.index('/')]
-                    ip_obj = ipaddress.ip_address(net_addr)
                     if (
-                        ip_obj.is_multicast
-                        or utils.is_private_ip(ip_obj)
-                        or ip_obj.is_link_local
+                        utils.is_ignored_ip(net_addr)
                         or net_addr in utils.home_networks
                     ):
                         continue
-                    malicious_ip_ranges[ioc] = json.dumps(
-                        {
-                            'description': description,
-                            'source': data_file_name,
-                            'threat_level': threat_level,
-                            'tags': 'local TI file',
-                        }
-                    )
+                    malicious_ip_ranges[ioc] = ioc_info
+
                 elif data_type == 'asn':
-                    malicious_asns[ioc] = json.dumps(
-                            {
-                                'description': description,
-                                'source': data_file_name,
-                                'threat_level': threat_level,
-                                'tags': 'local TI file',
-                            }
-                        )
+                    malicious_asns[ioc] = ioc_info
 
                 else:
                     # invalid ioc, skip it
                     self.print(
                         f'Error while reading the TI file {ti_file_path}.'
                         f' Line {line_number} has invalid data: {ioc}',
-                        0, 1,
+                        0, 1
                     )
 
         # Add all loaded malicious ips to the database
@@ -442,7 +449,8 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                 # "JA3 hash", "Threat level", "Description"
                 data = line.replace('\n', '').replace('"', '').split(',')
 
-                # the column order is hardcoded because it's owr own ti file and we know the format,
+                # the column order is hardcoded because it's owr
+                # own ti file and we know the format,
                 # we shouldn't be trying to find it
                 ja3, threat_level, description = (
                     data[0].strip(),
@@ -499,7 +507,9 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                 if len(data) < 3:
                     # invalid line
                     continue
-                # the column order is hardcoded because it's owr own ti file and we know the format,
+
+                # the column order is hardcoded because
+                # it's owr own ti file and we know the format,
                 # we shouldn't be trying to find it
                 jarm, threat_level, description = (
                     data[0].strip(),
@@ -634,7 +644,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         return {
             'source': source_dataset,
             'description': description,
-            'therat_level': 'medium',
+            'threat_level': 'medium',
             'tags': 'spam',
         }
 
@@ -650,9 +660,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
 
 
 
-    def set_evidence_malicious_hash(self,
-                                    file_info: dict
-                                    ):
+    def set_evidence_malicious_hash(self,file_info: dict):
         """
         :param file_info: dict with flow, profileid, twid, and confidence of file
         """
@@ -771,7 +779,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         Check if this ip has any of our blacklisted ASNs.
         blacklisted asns are taken from own_malicious_iocs.csv
         """
-        ip_info = self.db.getIPData(ip)
+        ip_info = self.db.get_ip_info(ip)
         if not ip_info:
             # we dont know the asn of this ip
             return
@@ -845,8 +853,19 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
     def search_online_for_url(self, url):
         return self.urlhaus.urlhaus_lookup(url, 'url')
 
-    def is_malicious_ip(self, ip, uid, daddr, timestamp, profileid, twid, ip_state) -> bool:
-        """Search for this IP in our database of IoC"""
+    def is_malicious_ip(self,
+                        ip: str,
+                        uid: str,
+                        daddr: str,
+                        timestamp: str,
+                        profileid: str,
+                        twid: str,
+                        ip_state: str) -> bool:
+        """
+        Search for this IP in our database of IoC
+        :param ip_state: is basically the answer to "which one is the
+        blacklisted IP"? can be 'srcip' or 'dstip'
+        """
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
             ip_info = self.search_online_for_ip(ip)
@@ -868,10 +887,17 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         )
         return True
 
-    def is_malicious_hash(self, flow_info):
+    def is_malicious_hash(self, flow_info: dict):
         """
         :param flow_info: dict with uid, twid, ts, md5 etc.
         """
+        if not flow_info['flow']['md5']:
+            # some lines in the zeek files.log doesn't have a hash for example
+            # {"ts":293.713187,"fuid":"FpvjEj3U0Qoj1fVCQc","tx_hosts":["94.127.78.125"],"rx_hosts":["10.0.2.19"],
+            # "conn_uids":["CY7bgw3KI8QyV67jqa","CZEkWx4wAvHJv0HTw9","CmM1ggccDvwnwPCl3","CBwoAH2RcIueFH4eu9","CZVfkc4BGLqRR7wwD5"],
+            # "source":"HTTP","depth":0,"analyzers":["SHA1","SHA256","MD5"] .. }
+            return
+
         if blacklist_details := self.search_online_for_hash(flow_info):
             # the md5 appeared in a blacklist
             # update the blacklist_details dict with uid,
@@ -1030,6 +1056,6 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                 )
 
         if msg:= self.get_msg('new_downloaded_file'):
-            file_info = json.loads(msg['data'])
+            file_info: dict = json.loads(msg['data'])
             if file_info['type'] == 'zeek':
                 self.is_malicious_hash(file_info)

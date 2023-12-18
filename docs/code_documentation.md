@@ -12,7 +12,7 @@ flows to the profiler process.
 3. slips.py also starts the update manager, it updates slips local TI files, like the ones stored in slips_files/organizations_info and slips_files/ports_info.
 later, when slips is starting all the modules, slips also starts the update manager but to update remote TI files in the background in this case.
 4. Once the profiler process receives the flows read by the input process, it starts to convert them to a structure that slips can deal with. 
-it creates profiles and timewindows for each IP it encounters.
+it creates profiles and time windows for each IP it encounters.
 5. Profiler process gives each flow to the appropriate module to deal with it. for example flows from http.log will be sent to http_analyzer.py 
 to analyze them.
 6. Profiler process stores the flows, profiles, etc. in slips databases for later processing. the info stored in the dbs will be used by all modules later.

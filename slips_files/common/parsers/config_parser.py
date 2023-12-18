@@ -99,23 +99,6 @@ class ConfigParser(object):
     def get_all_homenet_ranges(self):
         return self.home_network_ranges
 
-    def get_home_network(self):
-        """
-        Returns a list of network objects if defined in slips.conf. or False
-        """
-        if home_net := self.read_configuration(
-            'parameters', 'home_network', False
-        ):
-            # we have home_network param set in slips.conf
-            home_nets = home_net.replace(']','').replace('[','').split(',')
-            home_nets = [network.strip() for network in home_nets]
-            return list(map(ipaddress.ip_network, home_nets))
-        else:
-            # return self.home_network_ranges_str
-            return False
-
-
-
     def evidence_detection_threshold(self):
         threshold = self.read_configuration(
             'detection', 'evidence_detection_threshold', 2
@@ -691,28 +674,27 @@ class ConfigParser(object):
         # are we reading custom flows from cyst module?
         for param in ('--input-module', '-im'):
             try:
-                if 'CYST' in sys.argv[sys.argv.index(param) + 1]:
+                if 'cyst' in sys.argv[sys.argv.index(param) + 1]:
                     return True
             except ValueError:
                 # param isn't used
                 pass
 
-    def get_disabled_modules(self, input_type) -> list:
+    def get_disabled_modules(self, input_type: str) -> list:
         """
         Uses input type to enable leak detector only on pcaps
         """
-        to_ignore = self.read_configuration(
+        to_ignore: str = self.read_configuration(
             'modules', 'disable', '[template , ensembling]'
         )
-        # Convert string to list
-        to_ignore = (
+
+        to_ignore: list = (
             to_ignore.replace('[', '')
                 .replace(']', '')
                 .split(',')
         )
-        # strip each one of them
+
         to_ignore = [mod.strip() for mod in to_ignore]
-        use_p2p = self.use_p2p()
 
         # Ignore exporting alerts module if export_to is empty
         export_to = self.export_to()
@@ -720,8 +702,9 @@ class ConfigParser(object):
                 'stix' not in export_to
                 and 'slack' not in export_to
         ):
-            to_ignore.append('Exporting Alerts')
+            to_ignore.append('exporting_alerts')
 
+        use_p2p = self.use_p2p()
         if (
                 not use_p2p
                 or '-i' not in sys.argv
@@ -734,7 +717,7 @@ class ConfigParser(object):
         receive_from_warden = self.receive_from_warden()
 
         if not send_to_warden and not receive_from_warden:
-            to_ignore.append('CESNET')
+            to_ignore.append('cesnet')
 
         # don't run blocking module unless specified
         if not (
@@ -748,7 +731,7 @@ class ConfigParser(object):
             to_ignore.append('leak_detector')
 
         if not self.reading_flows_from_cyst():
-            to_ignore.append('CYST')
+            to_ignore.append('cyst')
 
         return to_ignore
     

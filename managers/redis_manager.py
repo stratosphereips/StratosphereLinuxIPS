@@ -1,5 +1,3 @@
-from slips_files.core.database.database_manager import DBManager
-from slips_files.common.slips_utils import utils
 import contextlib
 from datetime import datetime
 import redis
@@ -7,8 +5,18 @@ import os
 import time
 import socket
 import subprocess
+from typing import Dict, Union
+
+from slips_files.core.output import Output
+from slips_files.common.slips_utils import utils
+from slips_files.core.database.database_manager import DBManager
+
+
+
 
 class RedisManager:
+    open_servers_pids: Dict[int, int]
+
     def __init__(self, main):
         self.main = main
         # slips picks a redis port from the following range
@@ -19,7 +27,7 @@ class RedisManager:
     def get_start_port(self):
         return self.start_port
 
-    def log_redis_server_PID(self, redis_port, redis_pid):
+    def log_redis_server_PID(self, redis_port: int, redis_pid: int):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         try:
             # used in case we need to remove the line using 6379 from running logfile
@@ -28,7 +36,7 @@ class RedisManager:
                 if f.tell() == 0:
                     f.write(
                         '# This file contains a list of used redis ports.\n'
-                        '# Once a server is killed, it will be removed from this file.\n'
+                        '# Once a server is killed, it will be removed from this file.\n\n'
                         'Date, File or interface, Used port, Server PID,'
                         ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
                     )
@@ -54,7 +62,7 @@ class RedisManager:
         # we shouldn't modify it as root
 
         self.main.input_information = os.path.basename(self.main.args.db)
-        redis_pid = self.get_pid_of_redis_server(redis_port)
+        redis_pid: int = self.get_pid_of_redis_server(redis_port)
         self.zeek_folder = '""'
         self.log_redis_server_PID(redis_port, redis_pid)
         self.remove_old_logline(redis_port)
@@ -87,7 +95,7 @@ class RedisManager:
 
     def get_end_port(self):
         return self.end_port
-    
+
     def check_redis_database(
         self, redis_host='localhost', redis_port=6379
     ) -> bool:
@@ -145,7 +153,7 @@ class RedisManager:
                "Unable to start slips.\n")
 
         return False
-    
+
     def clear_redis_cache_database(
         self, redis_host='localhost', redis_port=6379
     ) -> bool:
@@ -161,16 +169,17 @@ class RedisManager:
         )
         rcache.flushdb()
         return True
-    
+
     def close_all_ports(self):
         """
-        Closes all the redis ports  in logfile and in slips supported range of ports
+        Closes all the redis ports in running_slips_info.txt and in slips supported range of ports
         """
         if not hasattr(self, 'open_servers_PIDs'):
             self.get_open_redis_servers()
 
         # close all ports in logfile
-        for pid in self.open_servers_PIDs:
+        for pid in self.open_servers_pids:
+            pid: int
             self.flush_redis_server(pid=pid)
             self.kill_redis_server(pid)
 
@@ -192,7 +201,25 @@ class RedisManager:
         self.main.terminate_slips()
         return
 
-    def get_pid_of_redis_server(self, port: int) -> str:
+
+    def check_if_port_is_in_use(self, port: int) -> bool:
+        if port == 6379:
+            # even if it's already in use, slips should override it
+            return False
+
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("localhost", port))
+            return False
+        except OSError as e:
+            print(f"[Main] Port {port} is already in use by another process."
+                  f" Choose another port using -P <portnumber> \n"
+                  f"Or kill your open redis ports using: ./slips.py -k ")
+            self.main.terminate_slips()
+            return True
+
+
+    def get_pid_of_redis_server(self, port: int) -> int:
         """
         Gets the pid of the redis server running on this port
         Returns str(port) or false if there's no redis-server running on this port
@@ -201,16 +228,21 @@ class RedisManager:
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         cmd_output, _ = process.communicate()
         for line in cmd_output.splitlines():
-            if str(port).encode() in line:
-                pid = line.split()[1]
+            line: bytes
+            line: str = line.decode()
+            if str(port) in line:
+                pid: int = int(line.split()[1])
                 return pid
+
         return False
 
-    def get_open_redis_servers(self) -> dict:
+    def get_open_redis_servers(self) -> Dict[int,int]:
         """
-        Returns the dict of PIDs and ports of the redis servers started by slips
+        fills and returns self.open_servers_PIDs
+        with PIDs and ports of the redis servers started by slips
+        read from running_slips.info.txt
         """
-        self.open_servers_PIDs = {}
+        self.open_servers_pids = {}
         try:
             with open(self.running_logfile, 'r') as f:
                 for line in f.read().splitlines():
@@ -221,10 +253,21 @@ class RedisManager:
                         or len(line) < 3
                     ):
                         continue
+
                     line = line.split(',')
-                    pid, port = line[3], line[2]
-                    self.open_servers_PIDs[pid] = port
-            return self.open_servers_PIDs
+
+                    try:
+                        pid, port = int(line[3]), int(line[2])
+                        self.open_servers_pids[pid] = port
+                    except ValueError:
+                        # sometimes slips can't get the server pid and logs "False"
+                        # in the lofile instead of the PID
+                        # there's nothing we can do about it
+                        pass
+
+
+            return self.open_servers_pids
+
         except FileNotFoundError:
             # print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
             return {}
@@ -253,7 +296,7 @@ class RedisManager:
                     file, port, pid = line[1], line[2], line[3]
                     there_are_ports_to_print = True
                     to_print += f"[{line_number}] {file} - port {port}\n"
-                    open_servers[line_number] = (port, pid)
+                    open_servers[line_number] = (int(port), int(pid))
         except FileNotFoundError:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
             return False
@@ -266,57 +309,62 @@ class RedisManager:
         return open_servers
 
 
-    def get_port_of_redis_server(self, pid: str):
+    def get_port_of_redis_server(self, pid: int) -> Union[int, bool]:
         """
         returns the port of the redis running on this pid
         """
         cmd = 'ps aux | grep redis-server'
-        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd,
+                                   shell=True,
+                                   stdout=subprocess.PIPE)
         cmd_output, _ = process.communicate()
         for line in cmd_output.splitlines():
-            if str(pid).encode() in line:
-                port = line.split(':')[-1]
-                return port
+            line: bytes
+            line: str = line.decode()
+            if str(pid) in line:
+                port: str = line.split(':')[-1]
+                try:
+                    return int(port)
+                except ValueError:
+                    return False
+
+        # pid wasn't found using the above cmd
         return False
 
 
-    def flush_redis_server(self, pid: str='', port: str=''):
+    def flush_redis_server(self, pid: int=None, port: int=None):
         """
         Flush the redis server on this pid, only 1 param should be given, pid or port
         :param pid: can be False if port is given
-        Gets the pid of the port is not given
+        Gets the pid of the port if not given
         """
         if not port and not pid:
             return False
 
-        # sometimes the redis port is given, no need to get it manually
-        if not port and pid:
+        # sometimes the redis port is given, get it manually
+        if pid:
             if not hasattr(self, 'open_servers_PIDs'):
                 self.get_open_redis_servers()
-            port = self.open_servers_PIDs.get(str(pid), False)
+
+            port: int = self.open_servers_pids.get(pid, False)
             if not port:
                 # try to get the port using a cmd
-                port = self.get_port_of_redis_server(pid)
-        port = str(port)
+                port: int = self.get_port_of_redis_server(pid)
+                if not port:
+                    return False
 
         # clear the server opened on this port
         try:
-            # if connected := self.main.db.connect_to_redis_server(port):
-            # noinspection PyTypeChecker
-            #todo move this to the db
-            r = redis.StrictRedis(
-                    host='localhost',
-                    port=port,
-                    db=0,
-                    charset='utf-8',
-                    socket_keepalive=True,
-                    decode_responses=True,
-                    retry_on_timeout=True,
-                    health_check_interval=20,
-                    )
-            r.flushall()
-            r.flushdb()
-            r.script_flush()
+            db = DBManager(
+                Output(),
+                self.main.args.output,
+                port,
+                start_sqlite=False,
+                start_redis_server=False
+            )
+            db.rdb.r.flushall()
+            db.rdb.r.flushdb()
+            db.rdb.r.script_flush()
             return True
         except redis.exceptions.ConnectionError:
             # server already killed!
@@ -352,7 +400,7 @@ class RedisManager:
             # opened without root while he's root
             return False
         return True
-    
+
     def remove_old_logline(self, redis_port):
         """
         This function should be called after adding a new duplicate line with redis_port
@@ -404,24 +452,34 @@ class RedisManager:
             if not open_servers:
                 self.main.terminate_slips()
 
-            server_to_close = input()
-            # close all ports in running_slips_logs.txt and in our supported range
-            if server_to_close == '0':
-                self.close_all_ports()
+            try:
+                server_to_close: int = int(input())
+            except ValueError:
+                print(f"Invalid input.")
+                self.main.terminate_slips()
 
-            elif len(open_servers) > 0:
-                # close the given server number
-                try:
-                    pid = open_servers[int(server_to_close)][1]
-                    port = open_servers[int(server_to_close)][0]
-                    if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
-                        print(f"Killed redis server on port {port}.")
-                    else:
-                        print(f"Redis server running on port {port} "
-                              f"is either already killed or you don't have "
-                              f"enough permission to kill it.")
-                    self.remove_server_from_log(port)
-                except (KeyError, ValueError):
-                    print(f"Invalid input {server_to_close}")
+
+            # close all ports in running_slips_logs.txt and in our supported range
+            if server_to_close == 0:
+                self.close_all_ports()
+                self.main.terminate_slips()
+                return
+
+            # close the given server number
+            try:
+                pid: int = open_servers[server_to_close][1]
+                port: int = open_servers[server_to_close][0]
+
+                if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
+                    print(f"Killed redis server on port {port}.")
+                else:
+                    # if you dont have permission, dont removei from logs
+                    print(f"Redis server running on port {port} "
+                          f"is either already killed or you don't have "
+                          f"permission to kill it.")
+
+                self.remove_server_from_log(port)
+            except (KeyError, ValueError):
+                print(f"Invalid input {server_to_close}")
 
         self.main.terminate_slips()

@@ -3,6 +3,7 @@ from slips_files.common.imports import *
 import json
 import urllib
 import requests
+from typing import Union
 
 
 class HTTPAnalyzer(IModule, multiprocessing.Process):
@@ -184,7 +185,9 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         Compare the user agent of this profile to the MAC vendor and check incompatibility
         """
         # get the mac vendor
-        vendor = self.db.get_mac_vendor_from_profile(profileid)
+        vendor: Union[str, None] = self.db.get_mac_vendor_from_profile(
+            profileid
+            )
         if not vendor:
             return False
         vendor = vendor.lower()
@@ -421,11 +424,20 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         attacker_direction = 'dstip'
         attacker = daddr
         saddr = profileid.split('_')[-1]
-        description = (f'Unencrypted HTTP traffic from {saddr} to {daddr}.')
+        description = f'Unencrypted HTTP traffic from {saddr} to {daddr}.'
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+        self.db.setEvidence(evidence_type,
+                            attacker_direction,
+                            attacker,
+                            threat_level,
+                            confidence,
+                            description,
+                            timestamp,
+                            category,
+                            source_target_tag=source_target_tag,
+                            profileid=profileid,
+                            twid=twid,
+                            uid=uid)
         return True
 
 

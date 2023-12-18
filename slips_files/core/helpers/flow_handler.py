@@ -31,7 +31,7 @@ class Publisher():
         self.db.publish('new_dhcp', json.dumps(to_send))
 
 
-    def new_MAC(self, mac, ip, host_name=False):
+    def new_MAC(self, mac: str, ip: str):
         """
         check if mac and ip aren't multicast or link-local
         and publish to new_MAC channel to get more info about the mac
@@ -54,8 +54,6 @@ class Publisher():
             'MAC': mac,
             'profileid': f'profile_{ip}'
         }
-        if host_name:
-            to_send['host_name'] = host_name
         self.db.publish('new_MAC', json.dumps(to_send))
 
 
@@ -81,9 +79,21 @@ class FlowHandler:
         self.publisher = Publisher(self.db)
         self.flow = flow
         self.symbol = symbol_handler
+        self.running_non_stop: bool = self.is_running_non_stop()
+
+    def is_running_non_stop(self) -> bool:
+        """
+        Slips runs non-stop in case of an interface or a growing zeek dir,
+        it only stops on ctrl+c
+        """
+        if (
+                self.db.get_input_type() == 'interface'
+                or
+                self.db.is_growing_zeek_dir()
+        ):
+            return True
 
     def is_supported_flow(self):
-
         supported_types = (
             'ssh',
             'ssl',
@@ -162,6 +172,17 @@ class FlowHandler:
             self.twid,
             'benign'
         )
+
+        self.db.add_mac_addr_to_profile(
+                self.profileid,
+                self.flow.smac
+            )
+
+        if self.running_non_stop:
+            # to avoid publishing duplicate MACs, when running on
+            # an interface, we should have an arp.log, so we'll publish
+            # MACs from there only
+            return
 
         self.publisher.new_MAC(self.flow.smac, self.flow.saddr)
         self.publisher.new_MAC(self.flow.dmac, self.flow.daddr)
@@ -286,13 +307,17 @@ class FlowHandler:
 
 
     def handle_dhcp(self):
-        if self.flow.smac:
-            # send this to ip_info module to get vendor info about this MAC
-            self.publisher.new_MAC(
+        # send this to ip_info module to get vendor info about this MAC
+        self.publisher.new_MAC(
                 self.flow.smac or False,
                 self.flow.saddr,
-                host_name=(self.flow.host_name or False)
             )
+
+        self.db.add_mac_addr_to_profile(
+                self.profileid,
+                self.flow.smac
+            )
+
         if self.flow.server_addr:
             self.db.store_dhcp_server(self.flow.server_addr)
             self.db.mark_profile_as_dhcp(self.profileid)
@@ -315,7 +340,10 @@ class FlowHandler:
 
 
     def handle_files(self):
-        """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
+        """
+        Send files.log data to new_downloaded_file channel in the TI module to see if it's malicious
+        """
+
         # files slips sees can be of 2 types: suricata or zeek
         to_send = {
             'flow': asdict(self.flow),
@@ -342,7 +370,10 @@ class FlowHandler:
         # send to arp module
         to_send = json.dumps(to_send)
         self.db.publish('new_arp', to_send)
-
+        self.db.add_mac_addr_to_profile(
+                self.profileid,
+                self.flow.smac
+            )
         self.publisher.new_MAC(
             self.flow.dmac, self.flow.daddr
         )

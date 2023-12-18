@@ -89,21 +89,32 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     first_flow = True
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
-    # in case of redis ConnectionErrors, this is how long we'll wait in seconds before retrying.
+    # in case of redis ConnectionErrors, this is how long we'll wait in
+    # seconds before retrying.
     # this will increase exponentially each retry
-    backoff = 15
-    # try to reconnect to redis 3 times in case of connection errors before terminating
-    max_retries = 3
+    backoff = 0.1
+    # try to reconnect to redis this amount of times in case of connection
+    # errors before terminating
+    max_retries = 150
     # to keep track of connection retries. once it reaches max_retries, slips will terminate
     connection_retry = 0
 
-    def __new__(cls, logger, redis_port, flush_db=True):
+    def __new__(
+            cls,
+            logger,
+            redis_port,
+            start_redis_server=True,
+            flush_db=True
+            ):
         """
         treat the db as a singelton per port
         meaning every port will have exactly 1 single obj of this db at any given time
         """
         cls.redis_port = redis_port
         cls.flush_db = flush_db
+        # start the redis server using cli if it's not started?
+        cls.start_server = start_redis_server
+
         if cls.redis_port not in cls._instances:
             cls._instances[cls.redis_port] = super().__new__(cls)
             cls._set_redis_options()
@@ -160,7 +171,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         conf = ConfigParser()
         cls.deletePrevdb = conf.deletePrevdb()
         cls.disabled_detections = conf.disabled_detections()
-        cls.home_network = conf.get_home_network()
         cls.width = conf.get_tw_width_as_float()
 
     @classmethod
@@ -206,48 +216,50 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             print(f"[DB] Can't connect to redis on port {cls.redis_port}: {ex}")
             return False
 
-    @classmethod
-    def connect_to_redis_server(cls):
-        """Connects to the given port and Sets r and rcache"""
-        # start the redis server
-        os.system(
-            f'redis-server {cls._conf_file} --port {cls.redis_port}  > /dev/null 2>&1'
-        )
-        try:
-            # db 0 changes everytime we run slips
-            # set health_check_interval to avoid redis ConnectionReset errors:
-            # if the connection is idle for more than 30 seconds,
-            # a round trip PING/PONG will be attempted before next redis cmd.
-            # If the PING/PONG fails, the connection will reestablished
+    @staticmethod
+    def start_redis_instance(port: int, db: int) -> redis.StrictRedis:
+        # set health_check_interval to avoid redis ConnectionReset errors:
+        # if the connection is idle for more than 30 seconds,
+        # a round trip PING/PONG will be attempted before next redis cmd.
+        # If the PING/PONG fails, the connection will re-established
 
-            # retry_on_timeout=True after the command times out, it will be retried once,
-            # if the retry is successful, it will return normally; if it fails, an exception will be thrown
-            cls.r = redis.StrictRedis(
+        # retry_on_timeout=True after the command times out, it will be retried once,
+        # if the retry is successful, it will return normally; if it fails, an exception will be thrown
+
+        return redis.StrictRedis(
                 host='localhost',
-                port=cls.redis_port,
-                db=0,
+                port=port,
+                db=db,
                 charset='utf-8',
                 socket_keepalive=True,
                 decode_responses=True,
                 retry_on_timeout=True,
                 health_check_interval=20,
-            )  # password='password')
+        )
+
+    @classmethod
+    def connect_to_redis_server(cls):
+        """
+        Connects to the given port and Sets r and rcache
+        """
+        if cls.start_server:
+            #  starts the redis server using cli. we don't need that when using -k
+            os.system(
+                f'redis-server {cls._conf_file} --port {cls.redis_port}  > /dev/null 2>&1'
+            )
+        try:
+            # db 0 changes everytime we run slips
+            cls.r = cls.start_redis_instance(cls.redis_port, 0)
+
             # port 6379 db 0 is cache, delete it using -cc flag
-            cls.rcache = redis.StrictRedis(
-                host='localhost',
-                port=6379,
-                db=1,
-                charset='utf-8',
-                socket_keepalive=True,
-                retry_on_timeout=True,
-                decode_responses=True,
-                health_check_interval=30,
-            )  # password='password')
+            cls.rcache = cls.start_redis_instance(6379, 1)
+
+            # fix  ConnectionRefused error by giving redis time to open
+            time.sleep(1)
+
             # the connection to redis is only established
             # when you try to execute a command on the server.
             # so make sure it's established first
-            # fix  ConnectionRefused error by giving redis time to open
-            time.sleep(1)
             cls.r.client_list()
             return True
         except redis.exceptions.ConnectionError:
@@ -330,10 +342,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 self.publish_stop()
                 self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 1, 1)
             else:
-                # retry to connect after backing off for a while
-                self.print(f"redis.exceptions.ConnectionError: "
-                           f"retrying to connect in {self.backoff}s. "
-                           f"Retries to far: {self.connection_retry}", 0, 1)
+                # don't log this each retry
+                if self.connection_retry % 10 == 0:
+                    # retry to connect after backing off for a while
+                    self.print(f"redis.exceptions.ConnectionError: "
+                               f"retrying to connect in {self.backoff}s. "
+                               f"Retries to far: {self.connection_retry}", 0, 1)
                 time.sleep(self.backoff)
                 self.backoff = self.backoff * 2
                 self.connection_retry += 1
@@ -366,16 +380,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
            }
         )
 
-
-
-    def getIPData(self, ip: str) -> dict:
+    def get_ip_info(self, ip: str) -> dict:
         """
-        Return information about this IP from IPsInfo
-        Returns a dictionary or False if there is no IP in the database
-        We need to separate these three cases:
-        1- IP is in the DB without data. Return empty dict.
-        2- IP is in the DB with data. Return dict.
-        3- IP is not in the DB. Return False
+        Return information about this IP from IPsInfo key
+        :return: a dictionary or False if there is no IP in the database
         """
         data = self.rcache.hget('IPsInfo', ip)
         return json.loads(data) if data else False
@@ -389,7 +397,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         accessed as str, it is automatically
         converted to str
         """
-        data = self.getIPData(ip)
+        data = self.get_ip_info(ip)
         if data is False:
             # If there is no data about this IP
             # Set this IP for the first time in the IPsInfo
@@ -532,7 +540,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         return self.r.hget('analysis', 'evidence_detection_threshold')
 
 
-    def get_input_type(self):
+    def get_input_type(self) -> str:
         """
         gets input type from the db
         """
@@ -553,7 +561,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         overwrite it
         """
         # Get the previous info already stored
-        cached_ip_info = self.getIPData(ip)
+        cached_ip_info = self.get_ip_info(ip)
         if cached_ip_info is False:
             # This IP is not in the dictionary, add it first:
             self.set_new_ip(ip)
@@ -854,23 +862,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def mark_srcip_as_seen_in_connlog(self, ip):
         """
         Marks the given ip as seen in conn.log
+        keeps track of private ipv4 only.
         if an ip is not present in this set, it means we may have seen it but not in conn.log
         """
         self.r.sadd("srcips_seen_in_connlog", ip)
 
-    def is_gw_mac(self, MAC_info, ip) -> bool:
+    def is_gw_mac(self, mac_addr: str, ip: str) -> bool:
         """
         Detects the MAC of the gateway if 1 mac is seen assigned to 1 public destination IP
         :param ip: dst ip that should be associated with the given MAC info
         """
 
-        MAC = MAC_info.get('MAC', '')
-        if not validators.mac_address(MAC):
+        if not validators.mac_address(mac_addr):
             return False
 
         if self._gateway_MAC_found:
             # gateway MAC already set using this function
-            return self.get_gateway_mac() == MAC
+            return self.get_gateway_mac() == mac_addr
 
         # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
@@ -878,10 +886,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # now we're given a public ip and a MAC that's supposedly belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db
-            # set the ip of the gw, and the mac of the gw
-            for address_type, address in MAC_info.items():
-                # address_type can be 'IP' or 'MAC' or 'Vendor'
-                self.set_default_gateway(address_type, address)
+            self.set_default_gateway('MAC', mac_addr)
 
             # mark the gw mac as found so we don't look for it again
             self._gateway_MAC_found = True
@@ -929,7 +934,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         on the data stored so far
         :param get_ti_data: do we want to get info about this IP from out TI lists?
         """
-        current_data = self.getIPData(ip)
+        current_data = self.get_ip_info(ip)
         identification = ''
         if current_data:
             if 'asn' in current_data:
@@ -1036,7 +1041,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """Add an entry to the list of zeek files"""
         self.r.sadd('zeekfiles', filename)
 
-    def get_all_zeek_file(self):
+    def get_all_zeek_files(self) -> set:
         """Return all entries from the list of zeek files"""
         return self.r.smembers('zeekfiles')
 
@@ -1049,10 +1054,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def get_gateway_MAC_Vendor(self):
         return self.r.hget('default_gateway', 'Vendor')
 
-    def set_default_gateway(self, address_type:str, address:str):
+    def set_default_gateway(self, address_type: str, address: str):
         """
         :param address_type: can either be 'IP' or 'MAC'
-        :param address: can be ip or mac
+        :param address: can be ip or mac, but always is a str
         """
         # make sure the IP or mac aren't already set before re-setting
         if (
@@ -1093,20 +1098,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def get_reconnections_for_tw(self, profileid, twid):
         """Get the reconnections for this TW for this Profile"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        data = self.r.hget(profileid + self.separator + twid, 'Reconnections')
+        data = self.r.hget(f"{profileid}_{twid}", 'Reconnections')
         data = json.loads(data) if data else {}
         return data
 
     def setReconnections(self, profileid, twid, data):
         """Set the reconnections for this TW for this Profile"""
         data = json.dumps(data)
-        self.r.hset(
-            profileid + self.separator + twid, 'Reconnections', str(data)
-        )
+        self.r.hset(f"{profileid}_{twid}", 'Reconnections', str(data))
 
     def get_host_ip(self):
         """Get the IP addresses of the host from a db. There can be more than one"""

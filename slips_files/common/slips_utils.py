@@ -78,7 +78,7 @@ class Utils(object):
                     return network_range
 
 
-    def threat_level_to_string(self, threat_level: float):
+    def threat_level_to_string(self, threat_level: float) -> str:
         for str_lvl, int_value in self.threat_levels.items():
             if threat_level <= int_value:
                 return str_lvl
@@ -332,7 +332,7 @@ class Utils(object):
                 r_value = True
         return r_value
 
-    def is_ignored_ip(self, ip) -> bool:
+    def is_ignored_ip(self, ip: str) -> bool:
         """
         This function checks if an IP is a special list of IPs that
         should not be alerted for different reasons

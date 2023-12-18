@@ -1,3 +1,4 @@
+from typing import List
 import os.path
 import sqlite3
 import json
@@ -116,10 +117,6 @@ class SQLiteDB(IObservable):
         return False
 
     def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) -> dict:
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return {}
         all_flows: dict = self.get_all_flows_in_profileid_twid(profileid, twid)
 
         if not all_flows:
@@ -151,11 +148,6 @@ class SQLiteDB(IObservable):
         Return a list of all the flows in this profileid
         [{'uid':flow},...]
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return []
-
         condition = f'profileid = "{profileid}"'
         flows = self.select('flows', condition=condition)
         all_flows = {}
@@ -179,7 +171,7 @@ class SQLiteDB(IObservable):
                 flow_list.append(json.loads(flow[1]))
         return flow_list
 
-    def set_flow_label(self, uids: list, new_label: str):
+    def set_flow_label(self, uids: List[str], new_label: str):
         """
         sets the given new_label to each flow in the uids list
         """
@@ -310,7 +302,8 @@ class SQLiteDB(IObservable):
         :param alert: should contain alert_id, alert_ts, ip_alerted, twid, tw_start, tw_end, label
             alert_time is the local time slips detected this alert, not the network time
         """
-        # 'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
+        # 'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT,
+        # timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
         self.execute(
             'INSERT OR REPLACE INTO alerts (alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) '
             'VALUES (?, ?, ?, ?, ?, ?, ?);',

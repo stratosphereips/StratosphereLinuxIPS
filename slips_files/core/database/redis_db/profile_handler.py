@@ -2,7 +2,7 @@ from dataclasses import asdict
 import redis
 import time
 import json
-from typing import Tuple
+from typing import Tuple, Union, Dict
 import traceback
 import ipaddress
 import sys
@@ -48,23 +48,6 @@ class ProfileHandler(IObservable):
            }
         )
         
-    def get_data_from_profile_tw(self, hash_key: str, key_name: str):
-        try:
-            """
-            key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established, NotEstablihed]
-            Example: key_name = 'SrcPortClientTCPEstablished'
-            """
-            data = self.r.hget(hash_key, key_name)
-            value = {}
-            if data:
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Error in getDataFromProfileTW in '
-                       f'database.py line {exception_line}', 0, 1)
-            self.print(f'{traceback.print_exc()}',0,1)
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""
@@ -106,10 +89,6 @@ class ProfileHandler(IObservable):
         try:
             # First check if we are not in the last TW. Since this will be the majority of cases
             try:
-                if not profileid:
-                    # profileid is None if we're dealing with a profile
-                    # outside of home_network when this param is given
-                    return False
                 [(lasttwid, lasttw_start_time)] = self.get_last_twid_of_profile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
@@ -415,7 +394,7 @@ class ProfileHandler(IObservable):
         # Get the state. Established, NotEstablished
         summaryState = self.getFinalStateFromFlags(state, pkts)
 
-        old_profileid_twid_data = self.getDataFromProfileTW(
+        old_profileid_twid_data = self.get_data_from_profile_tw(
             profileid,
             twid,
             port_type,
@@ -485,27 +464,15 @@ class ProfileHandler(IObservable):
                     return 'Established'
                 elif 'closed' in state:
                     return 'Not Established'
+
                 # We have varius type of states depending on the type of flow.
                 # For Zeek
-                if (
-                    'S0' in state
-                    or 'REJ' in state
-                    or 'RSTOS0' in state
-                    or 'RSTRH' in state
-                    or 'SH' in state
-                    or 'SHR' in state
-                ):
+                if state in ('S0', 'REJ', 'RSTOS0', 'RSTRH', 'SH', 'SHR'):
                     return 'Not Established'
-                elif (
-                    'S1' in state
-                    or 'SF' in state
-                    or 'S2' in state
-                    or 'S3' in state
-                    or 'RSTO' in state
-                    or 'RSTP' in state
-                    or 'OTH' in state
-                ):
+                elif state in ('S1', 'SF', 'S2', 'S3', 'RSTO', 'RSTP', 'OTH'):
                     return 'Established'
+
+
                 # For Argus
                 suf = state.split('_')[1]
                 if 'S' in pre and 'A' in pre and 'S' in suf and 'A' in suf:
@@ -608,7 +575,7 @@ class ProfileHandler(IObservable):
             ,0,1)
             self.print(traceback.print_exc(), 0, 1)
 
-    def getDataFromProfileTW(
+    def get_data_from_profile_tw(
         self,
         profileid: str,
         twid: str,
@@ -636,12 +603,11 @@ class ProfileHandler(IObservable):
 
         :param type_data: can be 'Ports' or 'IPs'
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         try:
+            # key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established,
+            # Not Establihed]
+            # Example: key_name = 'SrcPortClientTCPEstablished'
             key = direction + type_data + role + protocol.upper() + state
             data = self.r.hget(f'{profileid}{self.separator}{twid}', key)
 
@@ -809,7 +775,7 @@ class ProfileHandler(IObservable):
             f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
         )
         # Get the previous data about this key
-        old_profileid_twid_data = self.getDataFromProfileTW(
+        old_profileid_twid_data = self.get_data_from_profile_tw(
             profileid,
             twid,
             direction,
@@ -841,10 +807,6 @@ class ProfileHandler(IObservable):
         """
         Get all the contacted IPs in a given profile and TW
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return {}
         all_flows: dict = self.db.get_all_flows_in_profileid_twid(profileid, twid)
         if not all_flows:
             return {}
@@ -1128,7 +1090,7 @@ class ProfileHandler(IObservable):
                                       flow.uid, flow.daddr, lookup=flow.server_name)
 
         # Save new server name in the IPInfo. There might be several server_name per IP.
-        if ipdata := self.getIPData(flow.daddr):
+        if ipdata := self.get_ip_info(flow.daddr):
             sni_ipdata = ipdata.get('SNI', [])
         else:
             sni_ipdata = []
@@ -1379,23 +1341,79 @@ class ProfileHandler(IObservable):
         # return a set of unique profiles
         return set(profiles), time_of_last_modified_tw
 
-    def add_mac_addr_to_profile(self, profileid, MAC_info):
+
+    def add_to_the_list_of_ipv6(
+            self, ipv6_to_add: str, cached_ipv6: str
+        ) -> list :
         """
-        Used to associate this profile with its MAC addr in the 'MAC' key in the db
+        adds the given IPv6 to the list of given cached_ipv6
+        """
+        if not cached_ipv6:
+            cached_ipv6 = [ipv6_to_add]
+        else:
+            # found a list of ipv6 in the db
+            cached_ipv6: set = set(json.loads(cached_ipv6))
+            cached_ipv6.add(ipv6_to_add)
+            cached_ipv6 = list(cached_ipv6)
+        return cached_ipv6
+
+    def set_mac_vendor_to_profile(
+            self,
+            profileid: str,
+            mac_addr: str,
+            mac_vendor: str
+    ) -> bool:
+        """
+        sets the given mac add and vendor to the given profile key
+        is only called when we don't already have a vendor for the given
+        profile
+        """
+        if self.get_mac_vendor_from_profile(profileid):
+            # it already exists
+            return False
+
+        # we only wanna update the vendor of an ip if we have a mac for it
+        # because for example, we don't wanna set a mac to the profile
+        # 0.0.0.0
+        # set_mac_addr_to_profile handles the setting of addrs, and this
+        # func only handles the setting of vendors
+
+        # so first, make sure the given mac addr belongs to the given profile
+        # before setting the mac vendor
+        if cached_mac_addr := self.get_mac_addr_from_profile(profileid):
+            cached_mac_addr: str
+            if cached_mac_addr == mac_addr:
+                # now we're sure that the vendor of the given mac addr,
+                # is the vendor of this profileid
+                self.r.hset(profileid, 'MAC_vendor', mac_vendor)
+                return True
+
+        return False
+
+
+    def update_mac_of_profile(self, profileid: str, mac: str):
+        """ Add the MAC addr to the given profileid key"""
+        self.r.hset(profileid, 'MAC', mac)
+
+    def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
+        """
+        Used to associate the given profile with the given MAC addr.
+        stores this info in the 'MAC' key in the db
+        and in the profileid key of the given profile
         format of the MAC key is
             MAC: [ipv4, ipv6, etc.]
-        :param MAC_info: dict containing mac address and vendor info
-        this functions is called for all macs found in dhcp.log, conn.log, arp.log etc.
+        this functions is called for all macs found in
+        dhcp.log, conn.log, arp.log etc.
+        PS: it doesn't deal with the MAC vendor
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
+        if (
+                not mac_addr
+                or '0.0.0.0' in profileid
+        ):
             return False
 
-        if '0.0.0.0' in profileid:
-            return False
 
-        incoming_ip = profileid.split('_')[1]
+        incoming_ip: str = profileid.split('_')[1]
 
         # sometimes we create profiles with the mac address.
         # don't save that in MAC hash
@@ -1403,66 +1421,69 @@ class ProfileHandler(IObservable):
             return False
 
         if (
-            self.is_gw_mac(MAC_info, incoming_ip)
+            self.is_gw_mac(mac_addr, incoming_ip)
             and incoming_ip != self.get_gateway_ip()
         ):
-            # we're trying to assign the gw mac to an ip that isn't the gateway's
+            # we're trying to assign the gw mac to
+            # an ip that isn't the gateway's
+            # this happens bc any public IP probably has the gw MAC
+            # in the zeek logs, so skip
             return False
+
         # get the ips that belong to this mac
-        cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
+        cached_ip = self.r.hmget('MAC', mac_addr)[0]
         if not cached_ip:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
-            self.r.hset('MAC', MAC_info['MAC'], ip)
-            # Add the MAC addr and vendor to this profile
-            self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
+            self.r.hset('MAC', mac_addr, ip)
+
+            # now that it's decided that this mac belongs to this profileid
+            # stoe the mac in the profileid's key in the db
+            self.update_mac_of_profile(profileid, mac_addr)
         else:
             # we found another profile that has the same mac as this one
-            # incoming_ip = profileid.split('_')[1]
-
             # get all the ips, v4 and 6, that are stored with this mac
             cached_ips = json.loads(cached_ip)
             # get the last one of them
             found_ip = cached_ips[-1]
+            cached_ips = set(cached_ips)
 
-            # we already have the incoming ip associated with this mac in the db
             if incoming_ip in cached_ips:
+                # this is the case where we have the given ip already
+                # seen with the given mac. nothing to do here.
                 return False
 
-            cached_ips = set(cached_ips)
-            # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
+
+            # make sure 1 profile is ipv4 and the other is ipv6
+            # (so we don't mess with MITM ARP detections)
             if validators.ipv6(incoming_ip) and validators.ipv4(found_ip):
-                # associate the ipv4 we found with the incoming ipv6 and vice versa
+                # associate the ipv4 we found with the incoming ipv6
+                # and vice versa
                 self.set_ipv4_of_profile(profileid, found_ip)
                 self.set_ipv6_of_profile(f'profile_{found_ip}', [incoming_ip])
+
             elif validators.ipv6(found_ip) and validators.ipv4(incoming_ip):
-                # associate the ipv6 we found with the incoming ipv4 and vice versa
+                # associate the ipv6 we found with the incoming ipv4
+                # and vice versa
                 self.set_ipv6_of_profile(profileid, [found_ip])
                 self.set_ipv4_of_profile(f'profile_{found_ip}', incoming_ip)
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
-                # If 2 IPV6 are claiming to have the same MAC it's fine
+                # If 2 IPv6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
                 # add this found ipv6 to the list of ipv6 of the incoming ip(profileid)
-                ipv6: str = self.r.hmget(profileid, 'IPv6')[0]
-                if not ipv6:
-                    ipv6 = [found_ip]
-                else:
-                    # found a list of ipv6 in the db
-                    ipv6: set = set(json.loads(ipv6))
-                    ipv6.add(found_ip)
-                    ipv6 = list(ipv6)
+
+                # get the list of cached ipv6
+                ipv6: str = self.get_ipv6_from_profile(profileid)
+                # get the list of cached ipv6+the new one
+                ipv6: list = self.add_to_the_list_of_ipv6(found_ip, ipv6)
                 self.set_ipv6_of_profile(profileid, ipv6)
 
-                # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
-                ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
-                if not ipv6:
-                    ipv6 = [incoming_ip]
-                else:
-                    # found a list of ipv6 in the db
-                    ipv6: set = set(json.loads(ipv6))
-                    ipv6.add(incoming_ip)
-                    #convert to list
-                    ipv6 = list(ipv6)
+                # add this incoming ipv6(profileid) to the list of
+                # ipv6 of the found ip
+                # get the list of cached ipv6
+                ipv6: str = self.get_ipv6_from_profile(f'profile_{found_ip}')
+                # get the list of cached ipv6+the new one
+                ipv6: list = self.add_to_the_list_of_ipv6(incoming_ip, ipv6)
                 self.set_ipv6_of_profile(f'profile_{found_ip}', ipv6)
 
             else:
@@ -1474,22 +1495,22 @@ class ProfileHandler(IObservable):
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
-            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+            self.r.hset('MAC', mac_addr, cached_ips)
+
+            self.update_mac_of_profile(profileid, mac_addr)
+            self.update_mac_of_profile(f'profile_{found_ip}', mac_addr)
 
         return True
 
-    def get_mac_addr_from_profile(self, profileid) -> str:
+    def get_mac_addr_from_profile(self, profileid: dict) \
+            -> Union[str, None]:
         """
-        Returns MAC info about a certain profile or None
+        Returns MAC address  of the given profile as a str, or None
+        returns the info from the profileid key.
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
-            return json.loads(MAC_info)['MAC']
-        else:
-            return MAC_info
+
+        return self.r.hget(profileid, 'MAC')
+
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
@@ -1548,10 +1569,6 @@ class ProfileHandler(IObservable):
         Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
         used by a certain profile or None
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         if user_agent := self.get_first_user_agent(profileid):
             # user agents may be OpenSSH_8.6 , no need to deserialize them
@@ -1563,10 +1580,6 @@ class ProfileHandler(IObservable):
         """
         Used to mark this profile as dhcp server
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         # returns a list of dhcp if the profile is in the db
         profile_in_db = self.r.hmget(profileid, 'dhcp')
@@ -1584,13 +1597,10 @@ class ProfileHandler(IObservable):
         Duration is only needed for registration purposes in the profile. Nothing operational
         """
         try:
-            # make sure we don't add public ips if the user specified a home_network
             if self.r.sismember('profiles', str(profileid)):
                 # we already have this profile
                 return False
-            # execlude ips outside of local network is it's set in slips.conf
-            if not self.should_add(profileid):
-                return False
+
             # Add the profile to the index. The index is called 'profiles'
             self.r.sadd('profiles', str(profileid))
             # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
@@ -1599,8 +1609,10 @@ class ProfileHandler(IObservable):
             # For now duration of the TW is fixed
             self.r.hset(profileid, 'duration', duration)
             # When a new profiled is created assign threat level = 0 and confidence = 0.05
-            self.r.hset(profileid, 'threat_level', 0)
-            self.r.hset(profileid, 'confidence', 0.05)
+            # self.r.hset(profileid, 'threat_level', 0)
+            confidence = 0.05
+            self.update_threat_level(profileid, 'info', confidence)
+            self.r.hset(profileid, 'confidence', confidence)
             # The IP of the profile should also be added as a new IP we know about.
             ip = profileid.split(self.separator)[1]
             # If the ip is new add it to the list of ips
@@ -1619,10 +1631,6 @@ class ProfileHandler(IObservable):
         A module label is a label set by a module, and not
         a groundtruth label
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
         data = self.get_profile_modules_labels(profileid)
         data[module] = label
         data = json.dumps(data)
@@ -1813,20 +1821,12 @@ class ProfileHandler(IObservable):
         """
         Get labels set by modules in the profile.
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return {}
         data = self.r.hget(profileid, 'modules_labels')
         data = json.loads(data) if data else {}
         return data
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
         """Add a line to the timeline of this profileid and twid"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return
         self.print(f'Adding timeline for {profileid}, {twid}: {data}', 3, 0)
         key = str(
             profileid + self.separator + twid + self.separator + 'timeline'
@@ -1841,10 +1841,6 @@ class ProfileHandler(IObservable):
         self, profileid, twid, first_index: int
     ) -> Tuple[str, int]:
         """Get only the new items in the timeline."""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return [], []
         key = str(
             profileid + self.separator + twid + self.separator + 'timeline'
         )
@@ -1854,29 +1850,11 @@ class ProfileHandler(IObservable):
         data = self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
 
-    def should_add(self, profileid: str) -> bool:
-        """
-        determine whether we should add the given profile to the db or not based on the home_network param
-        is the user specified the home_network param, make sure the given profile/ip belongs to it before adding
-        """
-        # make sure the user specified a home network
-        if not self.home_network:
-            # no home_network is specified
-            return True
-
-        ip = profileid.split(self.separator)[1]
-        ip_obj = ipaddress.ip_address(ip)
-
-        return any(ip_obj in network for network in self.home_network)
 
     def mark_profile_as_gateway(self, profileid):
         """
         Used to mark this profile as dhcp server
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
 
         self.r.hset(profileid, 'gateway', 'true')
 
@@ -1886,29 +1864,21 @@ class ProfileHandler(IObservable):
 
     def set_ipv4_of_profile(self, profileid, ip):
         self.r.hset(profileid, 'IPv4', json.dumps([ip]))
-    def get_mac_vendor_from_profile(self, profileid) -> str:
-        """
-        Returns MAC vendor about a certain profile or None
-        """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
-            return json.loads(MAC_info)['Vendor']
-        else:
-            return MAC_info
 
-    def get_hostname_from_profile(self, profileid) -> str:
+    def get_mac_vendor_from_profile(
+            self,
+            profileid: str
+        ) -> Union[str, None]:
+        """
+        Returns a str MAC vendor of  the given profile or None
+        """
+
+        return self.r.hget(profileid, 'MAC_vendor')
+
+    def get_hostname_from_profile(self, profileid: str) -> str:
         """
         Returns hostname about a certain profile or None
         """
-
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-
         return self.r.hget(profileid, 'host_name')
 
     def add_host_name_to_profile(self, hostname, profileid):
@@ -1935,10 +1905,6 @@ class ProfileHandler(IObservable):
         Given an ipv4, returns the ipv6 of the same computer
         Given an ipv6, returns the ipv4 of the same computer
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
         srcip = profileid.split('_')[-1]
         ip = False
         if validators.ipv4(srcip):

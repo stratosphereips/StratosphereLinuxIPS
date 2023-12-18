@@ -146,19 +146,7 @@ class MetadataManager:
         # file(pcap,netflow, etc.) start date will be set in
         self.main.db.set_input_metadata(info)
 
-    def check_if_port_is_in_use(self, port):
-        if port == 6379:
-            # even if it's already in use, slips should override it
-            return False
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("localhost", port))
-            return False
-        except OSError as e:
-            print(f"[Main] Port {port} is already in use by another process."
-                  f" Choose another port using -P <portnumber> \n"
-                  f"Or kill your open redis ports using: ./slips.py -k ")
-            self.main.terminate_slips()
+
 
     def update_slips_running_stats(self):
         """

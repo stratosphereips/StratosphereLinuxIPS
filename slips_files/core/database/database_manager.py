@@ -1,3 +1,5 @@
+from typing import List
+
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -17,6 +19,7 @@ class DBManager(IObservable):
             output_dir,
             redis_port,
             start_sqlite=True,
+            start_redis_server=True,
             **kwargs
     ):
         self.output_dir = output_dir
@@ -66,8 +69,8 @@ class DBManager(IObservable):
     def print(self, *args, **kwargs):
         return self.rdb.print(*args, **kwargs)
 
-    def getIPData(self, *args, **kwargs):
-        return self.rdb.getIPData(*args, **kwargs)
+    def get_ip_info(self, *args, **kwargs):
+        return self.rdb.get_ip_info(*args, **kwargs)
 
     def set_new_ip(self, *args, **kwargs):
         return self.rdb.set_new_ip(*args, **kwargs)
@@ -235,8 +238,12 @@ class DBManager(IObservable):
     def add_zeek_file(self, *args, **kwargs):
         return self.rdb.add_zeek_file(*args, **kwargs)
 
-    def get_all_zeek_file(self, *args, **kwargs):
-        return self.rdb.get_all_zeek_file(*args, **kwargs)
+    def get_all_zeek_files(
+            self,
+            *args,
+            **kwargs
+            ):
+        return self.rdb.get_all_zeek_files(*args, **kwargs)
 
     def get_gateway_ip(self, *args, **kwargs):
         return self.rdb.get_gateway_ip(*args, **kwargs)
@@ -521,6 +528,7 @@ class DBManager(IObservable):
 
     def setInfoForURLs(self, *args, **kwargs):
         return self.rdb.setInfoForURLs(*args, **kwargs)
+
     def get_data_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_data_from_profile_tw(*args, **kwargs)
 
@@ -550,9 +558,6 @@ class DBManager(IObservable):
 
     def getFinalStateFromFlags(self, *args, **kwargs):
         return self.rdb.getFinalStateFromFlags(*args, **kwargs)
-
-    def getDataFromProfileTW(self, *args, **kwargs):
-        return self.rdb.getDataFromProfileTW(*args, **kwargs)
 
     def add_ips(self, *args, **kwargs):
         return self.rdb.add_ips(*args, **kwargs)
@@ -737,8 +742,6 @@ class DBManager(IObservable):
     def get_timeline_last_lines(self, *args, **kwargs):
         return self.rdb.get_timeline_last_lines(*args, **kwargs)
 
-    def should_add(self, *args, **kwargs):
-        return self.rdb.should_add(*args, **kwargs)
 
     def mark_profile_as_gateway(self, *args, **kwargs):
         return self.rdb.mark_profile_as_gateway(*args, **kwargs)
@@ -751,6 +754,17 @@ class DBManager(IObservable):
 
     def get_mac_vendor_from_profile(self, *args, **kwargs):
         return self.rdb.get_mac_vendor_from_profile(*args, **kwargs)
+
+    def label_flows_causing_alert(self, evidence_ids: List[str]):
+        """
+        :param evidence_ids: list of ids of evidence causing an alert
+        """
+        for evidence_id in evidence_ids:
+            uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
+            self.set_flow_label(uids, 'malicious')
+
+    def set_mac_vendor_to_profile(self, *args, **kwargs):
+        return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
 
     def get_hostname_from_profile(self, *args, **kwargs):
         return self.rdb.get_hostname_from_profile(*args, **kwargs)
@@ -830,6 +844,12 @@ class DBManager(IObservable):
     def get_pid_of(self, *args, **kwargs):
         return self.rdb.get_pid_of(*args, **kwargs)
 
+    def set_max_threat_level(self, *args, **kwargs):
+        return self.rdb.set_max_threat_level(*args, **kwargs)
+
+    def update_max_threat_level(self, *args, **kwargs):
+        return self.rdb.update_max_threat_level(*args, **kwargs)
+
     def get_name_of_module_at(self, *args, **kwargs):
         return self.rdb.get_name_of_module_at(*args, **kwargs)
 
@@ -841,6 +861,9 @@ class DBManager(IObservable):
 
     def get_redis_pid(self, *args, **kwargs):
         return self.rdb.get_redis_pid(*args, **kwargs)
+
+    def increment_attack_counter(self, *args, **kwargs):
+        return self.rdb.increment_attack_counter(*args, **kwargs)
 
     def export_labeled_flows(self, *args, **kwargs):
         """

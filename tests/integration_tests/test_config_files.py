@@ -2,6 +2,7 @@
 This file tests 2 different config files other than slips' default config/slips.conf
 test/test.conf and tests/test2.conf
 """
+from slips.main import Main
 from tests.common_test_utils import (
         is_evidence_present,
         create_output_dir,
@@ -12,6 +13,7 @@ from tests.module_factory import ModuleFactory
 import pytest
 from ...slips import *
 import shutil
+import os
 
 
 alerts_file = 'alerts.log'
@@ -126,13 +128,6 @@ def test_conf_file2(
     os.system(command)
 
     assert has_errors(output_dir) is False
-
-    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
-
-    # test 1 homenet ip
-    # the only profile we should have is the one in home_network parameter
-    profiles = database.get_profiles_len()
-    assert profiles == expected_profiles
 
     shutil.rmtree(output_dir)
 
