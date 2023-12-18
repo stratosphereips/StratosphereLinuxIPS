@@ -999,9 +999,14 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         # Load the local Threat Intelligence files that are
         # stored in the local folder self.path_to_local_ti_files
         # The remote files are being loaded by the update_manager
-        self.update_local_file('own_malicious_iocs.csv')
-        self.update_local_file('own_malicious_JA3.csv')
-        self.update_local_file('own_malicious_JARM.csv')
+        local_files = (
+            'own_malicious_iocs.csv',
+            'own_malicious_JA3.csv',
+            'own_malicious_JARM.csv',
+        )
+        for local_file in local_files:
+            self.update_local_file(local_file)
+
         self.circllu_calls_thread.start()
 
     def main(self):

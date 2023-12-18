@@ -2042,10 +2042,12 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         if msg := self.get_msg('tw_closed'):
             profileid_tw = msg['data'].split('_')
-            profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
+            profileid = f'{profileid_tw[0]}_{profileid_tw[1]}',
+            twid = profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)
 
-        # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
+        # --- Detect DNS issues: 1) DNS resolutions without
+        # connection, 2) DGA, 3) young domains, 4) ARPA SCANs
         if msg:= self.get_msg('new_dns'):
             data = json.loads(msg['data'])
             profileid = data['profileid']
@@ -2060,8 +2062,10 @@ class FlowAlerts(IModule, multiprocessing.Process):
             rcode_name = flow_data.get('rcode_name', False)
             stime = data.get('stime', False)
 
-            # only check dns without connection if we have answers(we're sure the query is resolved)
-            # sometimes we have 2 dns flows, 1 for ipv4 and 1 fo ipv6, both have the
+            # only check dns without connection if we have
+            # answers(we're sure the query is resolved)
+            # sometimes we have 2 dns flows, 1 for ipv4 and
+            # 1 fo ipv6, both have the
             # same uid, this causes FP dns without connection,
             # so make sure we only check the uid once
             if answers and uid not in self.connections_checked_in_dns_conn_timer_thread:
@@ -2089,12 +2093,12 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 domain, stime, profileid, twid, uid
             )
 
-        if msg:= self.get_msg('new_downloaded_file'):
+        if msg := self.get_msg('new_downloaded_file'):
             ssl_info = json.loads(msg['data'])
             self.check_malicious_ssl(ssl_info)
 
         # --- Detect Bad SMTP logins ---
-        if msg:= self.get_msg('new_smtp'):
+        if msg := self.get_msg('new_smtp'):
             smtp_info = json.loads(msg['data'])
             profileid = smtp_info['profileid']
             twid = smtp_info['twid']
@@ -2106,7 +2110,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 flow
             )
         # --- Detect multiple used SSH versions ---
-        if msg:= self.get_msg('new_software'):
+        if msg := self.get_msg('new_software'):
             msg = json.loads(msg['data'])
             flow:dict = msg['sw_flow']
             twid = msg['twid']
@@ -2121,10 +2125,10 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 role='SSH::SERVER'
             )
 
-        if msg:=self.get_msg('new_weird'):
+        if msg := self.get_msg('new_weird'):
             msg = json.loads(msg['data'])
             self.check_weird_http_method(msg)
 
-        if msg:= self.get_msg('new_tunnel'):
+        if msg := self.get_msg('new_tunnel'):
             msg = json.loads(msg['data'])
             self.check_GRE_tunnel(msg)
