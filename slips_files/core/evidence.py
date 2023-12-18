@@ -159,7 +159,7 @@ class Evidence(ICore):
     def add_to_json_log_file(
              self,
              IDEA_dict: dict,
-             all_uids,
+             all_uids: list,
              timewindow: str,
              accumulated_threat_level: float =0
         ):
@@ -361,7 +361,12 @@ class Evidence(ICore):
         return True
 
     def mark_as_blocked(
-            self, profileid, twid, flow_datetime, accumulated_threat_level, IDEA_dict, blocked=False
+            self, profileid,
+            twid,
+            flow_datetime,
+            accumulated_threat_level,
+            IDEA_dict,
+            blocked=False
     ):
         """
         Marks the profileid and twid as blocked and logs it to alerts.log
@@ -400,7 +405,7 @@ class Evidence(ICore):
             IDEA_dict,
             [],
             twid,
-            accumulated_threat_level
+            profileid
         )
 
 
@@ -434,7 +439,7 @@ class Evidence(ICore):
 
 
     def get_evidence_for_tw(self, profileid: str, twid: str) \
-            -> Tuple[Dict[str, dict], float]:
+            -> Dict[str, dict]:
         """
         filters and returns all the evidence for this profile in this TW
         filters the follwing:
@@ -444,7 +449,6 @@ class Evidence(ICore):
         * evidence that weren't processed by evidence.py yet
 
         returns the dict with filtered evidence
-        and the accumulated threat levels of them
         """
         tw_evidence: str = self.db.getEvidenceForTW(profileid, twid)
         if not tw_evidence:
@@ -456,7 +460,6 @@ class Evidence(ICore):
         past_evidence_ids: List[str] = \
             self.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
 
-        accumulated_threat_level = 0.0
         # to store all the ids causing this alert in the database
         self.IDs_causing_an_alert = []
 
@@ -502,24 +505,24 @@ class Evidence(ICore):
             # just leave it like that:D
             self.IDs_causing_an_alert.append(id)
 
-
-            accumulated_threat_level: float = \
-                    self.accummulate_threat_level(
-                        evidence,
-                        accumulated_threat_level
-                        )
-
+            evidence_threat_level: float = self.get_threat_level(evidence)
+            print(f"@@@@@@@@@@@@@@@@ updating tl of {profileid} {twid} by "
+                  f"{evidence_threat_level} .. it it now "
+                  f"{self.db.get_accumulated_threat_level(profileid, twid)}")
+            self.db.update_accumulated_threat_level(
+                profileid, twid, evidence_threat_level
+                )
             filtered_evidence[id] = evidence
 
-        return filtered_evidence, accumulated_threat_level
+        return filtered_evidence
 
-    def accummulate_threat_level(
+    def get_threat_level(
             self,
             evidence: dict,
-            accumulated_threat_level: float
             ) -> float:
-        # attacker_direction = evidence.get('attacker_direction')
-        # attacker = evidence.get('attacker')
+        """
+        return the threat level of the given evidence * confidence
+        """
         evidence_type: str = evidence.get('evidence_type')
         confidence: float = float(evidence.get('confidence'))
         threat_level: float = evidence.get('threat_level')
@@ -538,13 +541,9 @@ class Evidence(ICore):
             threat_level = 0
 
         # Compute the moving average of evidence
-        new_threat_level: float = threat_level * confidence
-        self.print(f'\t\tWeighted Threat Level: {new_threat_level}', 3, 0)
-        accumulated_threat_level += new_threat_level
-        self.print(
-            f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
-        )
-        return accumulated_threat_level
+        evidence_threat_level: float = threat_level * confidence
+        self.print(f'\t\tWeighted Threat Level: {evidence_threat_level}', 3, 0)
+        return evidence_threat_level
 
     def get_last_evidence_ID(self, tw_evidence: dict) -> str:
         return list(tw_evidence.keys())[-1]
@@ -729,11 +728,15 @@ class Evidence(ICore):
                 self.add_to_log_file(evidence_to_log)
                 self.increment_attack_counter(profileid, victim, evidence_type)
 
-                tw_evidence: Dict[str, dict]
-                accumulated_threat_level: float
-                tw_evidence, accumulated_threat_level = \
-                    self.get_evidence_for_tw(profileid, twid)
+                tw_evidence: Dict[str, dict] = \
+                    self.get_evidence_for_tw(
+                        profileid, twid
+                    )
 
+                accumulated_threat_level: float = \
+                    self.db.get_accumulated_threat_level(
+                        profileid, twid
+                    )
                 # add to alerts.json
                 self.add_to_json_log_file(
                       IDEA_dict,
