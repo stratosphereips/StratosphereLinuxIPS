@@ -434,14 +434,18 @@ class AlertHandler:
             f'{profileid}_{twid}')
         return accumulated_threat_lvl or 0
 
+
     def update_accumulated_threat_level(
             self,
             profileid: str,
             twid: str,
             update_val: float):
         """
-        increments the accumulated threat level of the given profileid and
-        twid by the the given update_val
+        increments or decrements the accumulated threat level of the given
+        profileid and
+        twid by the given update_val
+        :param update_val: can be +ve to increase the threat level or -ve
+        to decrease
         """
         self.r.zincrby(
             'accumulated_threat_levels',
