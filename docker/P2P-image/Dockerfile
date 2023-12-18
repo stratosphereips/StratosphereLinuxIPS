@@ -10,8 +10,6 @@ ENV IS_IN_A_DOCKER_CONTAINER True
 ENV SLIPS_DIR /StratosphereLinuxIPS
 
 
-
-
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -48,9 +46,10 @@ RUN apt update && apt install -y --no-install-recommends \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 
-RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
-# Switch to Slips installation dir when login.
+RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
 WORKDIR ${SLIPS_DIR}
+RUN git submodule sync && git pull --recurse-submodules
+# Switch to Slips installation dir when login.
 RUN chmod 774 slips.py &&  git submodule init && git submodule update
 
 
