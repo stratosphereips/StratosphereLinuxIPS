@@ -106,7 +106,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         """
         :param asn_info: the malicious asn info taken from own_malicious_iocs.csv
         """
-        attacker_direction = 'dstip'
+        attacker_direction = 'srcip'
         category = 'Anomaly.Traffic'
         evidence_type = 'ThreatIntelligenceBlacklistedASN'
         confidence = 0.8
@@ -161,16 +161,18 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
 
         confidence = 1
         category = 'Anomaly.Traffic'
-        if 'src' in attacker_direction:
+        if 'src' in ip_state:
             direction = 'from'
             opposite_dir = 'to'
             victim = daddr
-        elif 'dst' in attacker_direction:
+            attacker_direction = 'srcip'
+        elif 'dst' in ip_state:
             direction = 'to'
             opposite_dir = 'from'
             victim = profileid.split("_")[-1]
+            attacker_direction = 'srcip'
         else:
-            # attacker_dir is not specified?
+            # ip_state is not specified?
             return
 
 
@@ -997,9 +999,14 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         # Load the local Threat Intelligence files that are
         # stored in the local folder self.path_to_local_ti_files
         # The remote files are being loaded by the update_manager
-        self.update_local_file('own_malicious_iocs.csv')
-        self.update_local_file('own_malicious_JA3.csv')
-        self.update_local_file('own_malicious_JARM.csv')
+        local_files = (
+            'own_malicious_iocs.csv',
+            'own_malicious_JA3.csv',
+            'own_malicious_JARM.csv',
+        )
+        for local_file in local_files:
+            self.update_local_file(local_file)
+
         self.circllu_calls_thread.start()
 
     def main(self):

@@ -127,6 +127,18 @@ class DBManager(IObservable):
     def get_input_file(self, *args, **kwargs):
         return self.rdb.get_input_file(*args, **kwargs)
 
+
+    def get_accumulated_threat_level(self, *args, **kwargs):
+        return self.rdb.get_accumulated_threat_level(*args, **kwargs)
+
+
+    def set_accumulated_threat_level(self, *args, **kwargs):
+        return self.rdb.set_accumulated_threat_level(*args, **kwargs)
+
+
+    def update_accumulated_threat_level(self, *args, **kwargs):
+        return self.rdb.update_accumulated_threat_level(*args, **kwargs)
+
     def setInfoForIPs(self, *args, **kwargs):
         return self.rdb.setInfoForIPs(*args, **kwargs)
 
