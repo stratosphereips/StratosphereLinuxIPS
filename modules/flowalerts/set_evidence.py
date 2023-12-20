@@ -672,7 +672,7 @@ class Helper:
         source_target_tag = 'Recon'
         conn_count = int(msg.split('least ')[1].split(' unique')[0])
         attacker = scanning_ip
-        victim = msg.splt('ports of ')[-1]
+        victim = msg.split('ports of ')[-1]
         self.db.setEvidence(
             evidence_type,
 			attacker_direction,
