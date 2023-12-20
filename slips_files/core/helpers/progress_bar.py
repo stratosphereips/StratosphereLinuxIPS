@@ -159,8 +159,8 @@ class PBar(Process):
         return True
 
     def run(self):
+        """keeps receiving events until pbar reaches 100%"""
         try:
-            """keeps receiving events until pbar reaches 100%"""
             while self.pbar_supported():
                 try:
                     msg: dict = self.pipe.recv()
@@ -182,10 +182,12 @@ class PBar(Process):
 
                 if event == "terminate":
                     self.terminate()
+                    return
 
                 if event == "print":
                     # let tqdm do th eprinting to avoid conflicts with the pbar
                     self.print(msg)
+
         except Exception as e:
             tqdm.write(f"PBar Error: {e}")
 
