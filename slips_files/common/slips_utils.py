@@ -11,7 +11,9 @@ import os
 import sys
 import ipaddress
 import aid_hash
-
+from typing import Any, Union
+from dataclasses import is_dataclass, asdict
+from enum import Enum, auto
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -506,6 +508,50 @@ class Utils(object):
         except KeyError:
             # proto doesn't have an aid.FlowTuple  method
             return ''
+
+    def to_json_serializable(self, obj: Any) -> Any:
+        if is_dataclass(obj):
+            return {k: self.to_json_serializable(v) for k, v in asdict(
+                obj).items()}
+        elif isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, list):
+            return [self.to_json_serializable(item) for item in obj]
+        elif isinstance(obj, dict):
+            return {k: self.to_json_serializable(v) for k, v in obj.items()}
+        else:
+            return obj
+
+    def from_json_serializable(self, data: Any, cls):
+        if hasattr(cls, "__args__") and cls.__args__ is not None:
+            # Handle Union type
+            for union_type in cls.__args__:
+                try:
+                    return self.from_json_serializable(data, union_type)
+                except (ValueError, TypeError):
+                    pass
+        elif is_dataclass(cls):
+            kwargs = {}
+            for field_name, field_type in cls.__annotations__.items():
+                if field_name in data:
+                    kwargs[field_name] = self.from_json_serializable(data[
+                                                                     field_name], field_type)
+            return cls(**kwargs)
+        elif issubclass(cls, Enum):
+            return cls(data)
+        elif isinstance(cls, list):
+            return [self.from_json_serializable(item, cls.__args__[0]) for
+                    item
+                    in data]
+        elif isinstance(cls, dict):
+            return {key: self.from_json_serializable(value, cls.__args__[1])
+                    for key, value in data.items()}
+        elif cls is None:
+            return ''
+
+        else:
+            return data
+
 
 
     def IDEA_format(
