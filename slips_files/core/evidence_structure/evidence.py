@@ -3,11 +3,11 @@ Contains evidence dataclass that is used amon all slips
 """
 from slips_files.common.slips_utils import utils
 import ipaddress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict, is_dataclass
 from enum import Enum, auto
 from uuid import uuid4
 from datetime import datetime
-from typing import List
+from typing import List, Any, Optional
 
 def validate_timestamp(ts) -> str:
     """
@@ -91,6 +91,8 @@ class EvidenceType(Enum):
 class Direction(Enum):
     DST = auto()
     SRC = auto()
+
+
 
 class IoCType(Enum):
     IP = auto()
@@ -199,7 +201,7 @@ class Attacker:
     direction: Direction
     attacker_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
-    profile: ProfileID = field(defaut='')
+    profile: ProfileID = ''
 
     def __post_init__(self):
         # each attacker should have a profile if it's an IP
@@ -215,6 +217,7 @@ class TimeWindow:
         return f"timewindow{self.number}"
 
 
+
 @dataclass
 class Evidence:
     evidence_type: EvidenceType
@@ -224,7 +227,8 @@ class Evidence:
     #  tl  obj
     threat_level: ThreatLevel
     category: IDEACategory
-    victim: Victim # this is not defined in all evidence, it should be #TODO
+    victim: Optional[Victim] # this is not defined in all evidence, it should
+    # be #TODO
     # profile of the srcip detected this evidence
     profile: ProfileID
     # @@@@@@@@@@@@@@@ TODO always pass it in utils.alerts_format format
@@ -237,7 +241,7 @@ class Evidence:
             'validate': lambda x: validate_timestamp(x)
             }
         )
-    proto: Proto = field(default=False)
+    proto: Optional[Proto] = field(default=False)
     port: int = field(default=False)
     source_target_tag: Tag = field(default=False)
     # every evidence should have an ID according to the IDEA format
@@ -257,6 +261,7 @@ class Evidence:
               'validate': lambda x: 0 <= x <= 1
             }
         )
+
 
     def __post_init__(self):
         # remove duplicate uids

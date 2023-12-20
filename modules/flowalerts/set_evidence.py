@@ -19,7 +19,8 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly
+        Anomaly,
+        Tag
     )
 
 class Helper:
@@ -74,9 +75,8 @@ class Helper:
         cached_versions: str,
         current_versions: str,
         timestamp: str,
-        twid: TimeWindow,
+        twid: str,
         uid: List[str],
-        daddr: Victim,
         role: str = ''
     ):
         """
@@ -106,15 +106,15 @@ class Helper:
             threat_level=ThreatLevel.MEDIUM,
             category=IDEACategory(anomaly=Anomaly.TRAFFIC),
             description=description,
-            victim=daddr,
+            victim=None,
             profile=profileid,
-            timewindow=twid,
+            timewindow=TimeWindow(int(twid.replace("timewindow", ''))),
             uid=uid,
             timestamp=timestamp,
             conn_count=1,
-            confidence=0.9
+            confidence=0.9,
+            source_target_tag=Tag.RECON
         )
-
         self.db.setEvidence(evidence)
 
     def set_evidence_different_localnet_usage(
