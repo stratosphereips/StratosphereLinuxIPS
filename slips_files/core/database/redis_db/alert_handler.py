@@ -169,7 +169,9 @@ class AlertHandler:
 
         # @@@@@@@@@@@@@ todo handle the new evidence format in all the
         #  receiving clients
-        evidence_to_send: str = json.dumps(asdict(evidence))
+        evidence: dict = utils.to_json_serializable(evidence)
+        evidence_to_send: str = json.dumps(evidence)
+        evidence: Evidence = utils.from_json_serializable(evidence, Evidence)
 
 
         # Check if we have the current evidence stored in the DB for
@@ -193,8 +195,8 @@ class AlertHandler:
                     'Evidence',
                     current_evidence)
 
-        self.r.hset(f'evidence{evidence.profile}',
-                    evidence.timewindow,
+        self.r.hset(f'evidence{str(evidence.profile)}',
+                    str(evidence.timewindow),
                     current_evidence)
 
         # This is done to ignore repetition of the same evidence sent.
@@ -205,7 +207,7 @@ class AlertHandler:
 
         # an evidence is generated for this profile
         # update the threat level of this profile
-        if evidence.attacker.direction in Direction.SRC:
+        if evidence.attacker.direction == Direction.SRC:
             # the srcip is the malicious one
             self.update_threat_level(
                 str(evidence.profile),
