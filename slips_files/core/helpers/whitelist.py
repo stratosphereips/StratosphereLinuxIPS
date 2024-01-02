@@ -6,6 +6,18 @@ from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
 import tld
 import os
+from slips_files.core.evidence_structure.evidence import (
+    dict_to_evidence,
+    Evidence,
+    Direction,
+    IoCType,
+    EvidenceType,
+    IDEACategory,
+    Proto,
+    Tag,
+    Attacker,
+    Victim
+    )
 
 
 class Whitelist(IObservable):
@@ -78,9 +90,14 @@ class Whitelist(IObservable):
         if flow_type in self.ignored_flow_types:
             return True
 
-
+    ##@@@@@@@@@@@@@ todo this is used in flowalerts, refactor it to use the
+    # Direction class and refactor flowalerts to do so too
     def is_whitelisted_domain_in_flow(
-            self, whitelisted_domain, direction, domains_of_flow, ignore_type
+            self,
+            whitelisted_domain,
+            direction,
+            domains_of_flow,
+            ignore_type
     ):
         """
         Given the domain of a flow, and a whitelisted domain,
@@ -589,7 +606,7 @@ class Whitelist(IObservable):
         return False
     
     def profile_has_whitelisted_mac(
-            self, profile_ip, whitelisted_macs, is_srcip, is_dstip
+            self, profile_ip, whitelisted_macs, direction: Direction
     ) -> bool:
         """
         Checks for alerts whitelist
@@ -612,16 +629,16 @@ class Whitelist(IObservable):
                 'alerts' in what_to_ignore
                 or 'both' in what_to_ignore
             ):
-                if is_srcip and (
+                if direction == Direction.DST and (
                     'src' in from_ or 'both' in from_
                 ):
                     return True
-                if is_dstip and (
+                if direction == Direction.DST and (
                     'dst' in from_ or 'both' in from_
                 ):
                     return True
 
-    def is_ip_asn_in_org_asn(self, ip, org):
+    def is_ip_asn_in_org_asn(self, ip: str, org):
         """
         returns true if the ASN of the given IP is listed in the ASNs of the given org ASNs
         """
@@ -646,10 +663,10 @@ class Whitelist(IObservable):
             # related to {org}. {data} in {description}')
             return True
 
-    def is_srcip(self, attacker_direction):
+    def is_srcip(self, attacker_direction: str):
         return attacker_direction in ('sip', 'srcip', 'sport', 'inTuple')
 
-    def is_dstip(self, attacker_direction):
+    def is_dstip(self, attacker_direction: str):
         return attacker_direction in ('dip', 'dstip', 'dport', 'outTuple')
 
     def should_ignore_from(self, direction) -> bool:
@@ -701,10 +718,13 @@ class Whitelist(IObservable):
 
 
     def is_whitelisted_evidence(
-            self, srcip, attacker, attacker_direction, description, victim
+            self, evidence: Evidence
         ) -> bool:
         """
-        Checks if IP is whitelisted
+        Checks if an evidence is whitelisted
+        """
+
+        """
         :param srcip: Src IP that generated the evidence
         :param attacker: This is what was detected in the evidence. (attacker) can be ip, domain, tuple(ip:port:proto).
         :param attacker_direction: this is the type of the attacker param. 'sip', 'dip', 'sport', 'dport', 'inTuple',
@@ -729,75 +749,64 @@ class Whitelist(IObservable):
             # we tried 10 times to get the whitelist, it's probably empty.
             return False
 
-        if self.check_whitelisted_attacker(attacker, attacker_direction):
+        if self.check_whitelisted_attacker(evidence.attacker):
             return True
 
-        if self.check_whitelisted_victim(victim, srcip):
-            return True
+        if (
+                hasattr(evidence, 'victim')
+                and self.check_whitelisted_victim(evidence.victim)
+        ):
+                return True
 
-    def check_whitelisted_victim(self, victim, srcip):
+    def check_whitelisted_victim(self, victim: Victim):
         if not victim:
             return False
 
         whitelist = self.db.get_all_whitelist()
-        whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist(whitelist)
+        whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
-        victim = victim.strip()
-        victim_type = utils.detect_data_type(victim)
-
-        if victim_type == 'ip':
-            ip = victim
-            is_srcip = True if srcip in victim else False
-            if self.is_ip_whitelisted(ip, is_srcip):
+        if (
+                victim.victim_type == IoCType.IP
+                and self.is_ip_whitelisted(victim.value, victim.direction)
+        ):
                 return True
 
-        elif victim_type == 'domain':
-            # the domain can never be a source here
-            if self.is_domain_whitelisted(victim, 'dstdomain'):
+        elif (
+                victim.victim_type == IoCType.DOMAIN
+                and self.is_domain_whitelisted(
+                        victim.value, victim.direction)
+        ):
                 return True
 
-        direction = 'src' if srcip in victim else 'dst'
+
         if (
                 whitelisted_orgs
-                and self.is_part_of_a_whitelisted_org(victim, victim_type, direction)
+                and self.is_part_of_a_whitelisted_org(victim)
         ):
             return True
 
 
-    def check_whitelisted_attacker(self, attacker, attacker_direction):
+    def check_whitelisted_attacker(self, attacker: Attacker):
 
         whitelist = self.db.get_all_whitelist()
-        whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist(whitelist)
+        whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
-        # Set attacker type
-        if 'domain' in attacker_direction:
-            attacker_type = 'domain'
-        elif 'outTuple' in attacker_direction:
-            # for example: ip:port:proto
-            attacker = attacker.split('-')[0]
-            attacker_type = 'ip'
-        else:
-            # it's probably one of the following:  'sip', 'dip', 'sport'
-            attacker_type = 'ip'
-
-        # Check IPs
-        if attacker_type == 'domain':
-            if self.is_domain_whitelisted(attacker, attacker_direction):
+        if (
+                attacker.attacker_type == IoCType.DOMAIN
+                and
+                self.is_domain_whitelisted(attacker.value, attacker.direction)
+        ):
                 return True
 
-        elif attacker_type == 'ip':
+        elif attacker.attacker_type == IoCType.IP:
             # Check that the IP in the content of the alert is whitelisted
-            # Was the evidence coming as a src or dst?
-            ip = attacker
-            is_srcip = self.is_srcip(attacker_direction)
-            # is_dstip = self.is_dstip(attacker_direction)
-            if self.is_ip_whitelisted(ip, is_srcip):
+            if self.is_ip_whitelisted(attacker.value, attacker.direction):
                 return True
 
         # Check orgs
         if (
                 whitelisted_orgs
-                and self.is_part_of_a_whitelisted_org(attacker, attacker_type, attacker_direction)
+                and self.is_part_of_a_whitelisted_org(attacker)
         ):
                return True
 
@@ -903,31 +912,30 @@ class Whitelist(IObservable):
         self.db.set_org_info(org, json.dumps(org_subnets), 'IPs')
         return org_subnets
 
-    def is_ip_whitelisted(self, ip: str, is_srcip: bool):
+    def is_ip_whitelisted(self, ip: str, direction: Direction):
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
         """
         whitelist = self.db.get_all_whitelist()
-        whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist(whitelist)
+        whitelisted_ips, _, _, whitelisted_macs = self.parse_whitelist(whitelist)
 
-        is_dstip = not is_srcip
-        if ip in whitelisted_IPs:
+        if ip in whitelisted_ips:
             # Check if we should ignore src or dst alerts from this ip
             # from_ can be: src, dst, both
             # what_to_ignore can be: alerts or flows or both
-            direction = whitelisted_IPs[ip]['from']
-            what_to_ignore = whitelisted_IPs[ip]['what_to_ignore']
+            whitelist_direction: str = whitelisted_ips[ip]['from']
+            what_to_ignore = whitelisted_ips[ip]['what_to_ignore']
             ignore_alerts = self.should_ignore_alerts(what_to_ignore)
 
             ignore_alerts_from_ip = (
                 ignore_alerts
-                and is_srcip
-                and self.should_ignore_from(direction)
+                and direction == Direction.SRC
+                and self.should_ignore_from(whitelist_direction)
             )
             ignore_alerts_to_ip = (
                 ignore_alerts
-                and is_dstip
-                and self.should_ignore_to(direction)
+                and direction == Direction.DST
+                and self.should_ignore_to(whitelist_direction)
             )
             if ignore_alerts_from_ip or ignore_alerts_to_ip:
                 # self.print(f'Whitelisting src IP {srcip} for evidence'
@@ -938,17 +946,15 @@ class Whitelist(IObservable):
                 # Now we know this ipv4 or ipv6 isn't whitelisted
                 # is the mac address of this ip whitelisted?
             if whitelisted_macs and self.profile_has_whitelisted_mac(
-                ip, whitelisted_macs, is_srcip, is_dstip
+                ip, whitelisted_macs, direction
             ):
                 return True
 
-    def is_domain_whitelisted(self, domain: str, direction: str):
+    def is_domain_whitelisted(self, domain: str, direction: Direction):
         """
         :param direction: can be either srcdomain or dstdomain
         """
         # todo differentiate between this and is_whitelisted_Domain()
-        is_srcdomain = direction in ('srcdomain')
-        is_dstdomain = direction in ('dstdomain')
 
         # extract the top level domain
         try:
@@ -966,7 +972,8 @@ class Whitelist(IObservable):
             sub_domain = domain[-len(domain_in_whitelist) :]
             if domain_in_whitelist in sub_domain:
                 # Ignore src or dst
-                direction = whitelisted_domains[sub_domain]['from']
+                whitelist_direction: str = whitelisted_domains[sub_domain][
+                    'from']
                 # Ignore flows or alerts?
                 what_to_ignore = whitelisted_domains[sub_domain][
                     'what_to_ignore'
@@ -974,13 +981,13 @@ class Whitelist(IObservable):
                 ignore_alerts = self.should_ignore_alerts(what_to_ignore)
                 ignore_alerts_from_domain = (
                     ignore_alerts
-                    and is_srcdomain
-                    and self.should_ignore_from(direction)
+                    and direction == Direction.SRC
+                    and self.should_ignore_from(whitelist_direction)
                 )
                 ignore_alerts_to_domain = (
                     ignore_alerts
-                    and is_dstdomain
-                    and self.should_ignore_to(direction)
+                    and direction == Direction.DST
+                    and self.should_ignore_to(whitelist_direction)
                 )
                 if ignore_alerts_from_domain or ignore_alerts_to_domain:
                     # self.print(f'Whitelisting evidence about '
@@ -993,14 +1000,10 @@ class Whitelist(IObservable):
             # https://tranco-list.eu/list/X5QNN/1000000
             return True
 
-    def is_part_of_a_whitelisted_org(self, ioc, ioc_type, direction):
+    def is_part_of_a_whitelisted_org(self, ioc):
         """
-        :param ioc: can be ip or domain
-        :param direction: can src or dst ip or domain
-        :param ioc: can be ip or domain
+        :param ioc: can be an Attacker or a Victim object
         """
-        is_src = self.is_srcip(direction) or direction in 'srcdomain'
-        is_dst = self.is_dstip(direction) or direction in 'dstdomain'
 
         whitelist = self.db.get_all_whitelist()
         whitelisted_orgs = self.parse_whitelist(whitelist)[2]
@@ -1011,29 +1014,33 @@ class Whitelist(IObservable):
             ignore_alerts = self.should_ignore_alerts(what_to_ignore)
             ignore_alerts_from_org = (
                 ignore_alerts
-                and is_src
+                and ioc.direction == Direction.SRC
                 and self.should_ignore_from(from_)
             )
             ignore_alerts_to_org = (
                 ignore_alerts
-                and is_dst
+                and ioc.direction == Direction.DST
                 and self.should_ignore_to(from_)
             )
 
+
+            ioc_type: IoCType = ioc.attacker_type if isinstance(ioc, Attacker) \
+                else \
+                ioc.victim_type
             # Check if the IP in the alert belongs to a whitelisted organization
-            if ioc_type == 'domain':
+            if ioc_type == IoCType.DOMAIN:
                 # Method 3 Check if the domains of this flow belong to this org domains
-                if self.is_domain_in_org(ioc, org):
+                if self.is_domain_in_org(ioc.value, org):
                     return True
 
-            elif ioc_type == 'ip':
+            elif ioc_type == IoCType.IP:
                 if ignore_alerts_from_org or ignore_alerts_to_org:
                     # Method 1: using asn
-                    self.is_ip_asn_in_org_asn(ioc, org)
+                    self.is_ip_asn_in_org_asn(ioc.value, org)
 
                     # Method 2 using the organization's list of ips
                     # ip doesn't have asn info, search in the list of organization IPs
-                    if self.is_ip_in_org(ioc, org):
+                    if self.is_ip_in_org(ioc.value, org):
                         # self.print(f'Whitelisting evidence sent by {srcip} about {ip},'
                         #            f'due to {ip} being in the range of {org}. {data} in {description}')
                         return True
