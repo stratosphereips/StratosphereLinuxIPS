@@ -97,8 +97,8 @@ class EvidenceHandler(ICore):
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
 
-    def format_evidence_string(self, ip, detection_module, attacker,
-                               description) -> str:
+    def format_evidence_string(
+            self, ip, detection_module, attacker, description) -> str:
         """
         Function to add the dns resolution of the src and dst ips of
          each evidence
