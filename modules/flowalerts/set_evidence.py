@@ -72,6 +72,7 @@ class Helper:
     def set_evidence_multiple_ssh_versions(
         self,
         srcip: str,
+        dstip: str,
         cached_versions: str,
         current_versions: str,
         timestamp: str,
@@ -88,13 +89,20 @@ class Helper:
         profileid = ProfileID(ip=srcip)
         if role.upper() == 'CLIENT':
             attacker_direction = Direction.SRC
+            victim_direction = Direction.DST
         else:
             attacker_direction = Direction.DST
+            victim_direction = Direction.SRC
 
         attacker = Attacker(
             direction=attacker_direction,
             attacker_type=IoCType.IP,
             value=srcip
+            )
+        victim = Victim(
+            direction=victim_direction,
+            victim_type=IoCType.IP,
+            value=dstip
             )
         role = 'client' if 'CLIENT' in role.upper() else 'server'
         description = f'SSH {role} version changing from ' \
@@ -106,7 +114,7 @@ class Helper:
             threat_level=ThreatLevel.MEDIUM,
             category=IDEACategory(anomaly=Anomaly.TRAFFIC),
             description=description,
-            victim=None,
+            victim=victim,
             profile=profileid,
             timewindow=TimeWindow(int(twid.replace("timewindow", ''))),
             uid=uid,

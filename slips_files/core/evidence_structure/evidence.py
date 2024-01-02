@@ -260,7 +260,8 @@ class Evidence:
     threat_level: ThreatLevel
     category: IDEACategory
     victim: Optional[Victim] # this is not defined in all evidence, it should
-    # be #TODO
+    # be #TODO @@@@@@@@@@@@@@@@@@@@@@@ no it shouldn't it's ok to have no
+    #  victim!
     # profile of the srcip detected this evidence
     profile: ProfileID
     # @@@@@@@@@@@@@@@ TODO always pass it in utils.alerts_format format
@@ -274,7 +275,7 @@ class Evidence:
             }
         )
     proto: Optional[Proto] = field(default=False)
-    port: int = field(default=False)
+    port: int = field(default=None)
     source_target_tag: Tag = field(default=False)
     # every evidence should have an ID according to the IDEA format
     id: str = field(default_factory=lambda: str(uuid4()))

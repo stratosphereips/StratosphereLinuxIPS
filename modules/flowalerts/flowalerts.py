@@ -1003,7 +1003,9 @@ class FlowAlerts(IModule, multiprocessing.Process):
         # get the uid of the cached versions, and the uid of the current used versions
         uids = [cached_ssh_versions['uid'], flow['uid']]
         self.helper.set_evidence_multiple_ssh_versions(
-            flow['saddr'], cached_versions, current_versions,
+            flow['saddr'],
+            flow['daddr'],
+            cached_versions, current_versions,
             flow['starttime'], twid, uids, role=role
         )
         return True
