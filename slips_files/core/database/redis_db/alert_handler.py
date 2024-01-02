@@ -227,11 +227,11 @@ class AlertHandler:
     def get_evidence_number(self):
         return self.r.get('number_of_evidence')
 
-    def mark_evidence_as_processed(self, evidence_ID: str):
+    def mark_evidence_as_processed(self, evidence_id: str):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """
-        self.r.sadd('processed_evidence', evidence_ID)
+        self.r.sadd('processed_evidence', evidence_id)
 
     def is_evidence_processed(self, evidence_ID: str) -> bool:
         return self.r.sismember('processed_evidence', evidence_ID)
