@@ -163,16 +163,12 @@ class AlertHandler:
         if self.is_detection_disabled(evidence.evidence_type):
             return False
 
-
-
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
 
         # @@@@@@@@@@@@@ todo handle the new evidence format in all the
         #  receiving clients
-        evidence: dict = utils.to_json_serializable(evidence)
-        evidence_to_send: str = json.dumps(evidence)
-        evidence: Evidence = utils.from_json_serializable(evidence, Evidence)
-
+        evidence_to_send: dict = utils.to_json_serializable(evidence)
+        evidence_to_send: str = json.dumps(evidence_to_send)
 
         # Check if we have the current evidence stored in the DB for
         # this profileid in this twid
