@@ -9,9 +9,11 @@ from uuid import uuid4
 from datetime import datetime
 from typing import List, Any, Optional
 
+
+
 def validate_timestamp(ts) -> str:
     """
-    the ts of allevidence should be in
+    the ts of all evidence should be in
      the alerts time format, if not, raise an exception
      """
     if utils.define_time_format(ts) == utils.alerts_format:
@@ -20,6 +22,36 @@ def validate_timestamp(ts) -> str:
         raise ValueError(f"Invalid timestamp format: {ts}. "
                          f"Expected format: '%Y/%m/%d %H:%M:%S.%f%z'.")
 
+def dict_to_evidence(evidence: dict):
+    """
+    Convert a dictionary to an Evidence object.
+    :param evidence (dict): Dictionary with evidence details.
+    returns an instance of the Evidence class.
+    """
+    evidence_attributes = {
+        'evidence_type': EvidenceType[list(EvidenceType)[evidence[
+            "evidence_type"]].name],
+        'description': evidence['description'],
+        'attacker': Attacker(**evidence['attacker']),
+        'threat_level': ThreatLevel(evidence['threat_level']),
+        'category': IDEACategory(**evidence['category']),
+        'victim': Victim(**evidence['victim']) if 'victim' in evidence
+        and evidence['victim'] else None,
+        'profile': ProfileID(evidence['profile']['ip']) if 'profile' in evidence else None,
+        'timewindow': TimeWindow(evidence['timewindow']['number']),
+        'uid': evidence['uid'],
+        'timestamp': evidence['timestamp'],
+        'proto': Proto[evidence['proto']] if 'proto' in evidence and
+                                             evidence['proto'] else None,
+        'port': evidence['port'],
+        'source_target_tag': Tag(evidence['source_target_tag']) if \
+            'source_target_tag' in evidence and evidence['source_target_tag'] else None,
+        'id': evidence['id'],
+        'conn_count': evidence['conn_count'],
+        'confidence': evidence['confidence']
+    }
+
+    return Evidence(**evidence_attributes)
 
 class EvidenceType(Enum):
     """
