@@ -1,7 +1,7 @@
 from slips_files.common.imports import *
 from slips_files.core.output import Output
 from slips_files.core.profiler import Profiler
-from slips_files.core.evidence import Evidence
+from slips_files.core.evidencehandler import EvidenceHandler
 from slips_files.core.input import Input
 from multiprocessing import Queue, Event, Process, Semaphore
 from modules.update_manager.update_manager import UpdateManager
@@ -78,7 +78,7 @@ class ProcessManager:
         return profiler_process
 
     def start_evidence_process(self):
-        evidence_process = Evidence(
+        evidence_process = EvidenceHandler(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
