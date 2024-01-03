@@ -497,40 +497,46 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def pastebin_download(
             self,
-            daddr,
-            bytes_downloaded,
-            timestamp,
-            profileid,
-            twid,
-            uid
-            ):
-        attacker_direction = 'dstip'
-        source_target_tag = 'Malware'
-        attacker = daddr
-        evidence_type = 'PastebinDownload'
-        threat_level = 'info'
-        category = 'Anomaly.Behaviour'
-        confidence = 1
-        response_body_len = utils.convert_to_mb(bytes_downloaded)
-        description = (
-            f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
+            daddr: str,
+            bytes_downloaded: int,
+            timestamp: str,
+            profileid: str,
+            twid: str,
+            uid: List[str]
+    ) -> bool:
+
+        threat_level: ThreatLevel = ThreatLevel.INFO
+        confidence: float = 1.0
+        saddr: str = profileid.split("_")[-1]
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
         )
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp,
-			category,
-			source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
-            )
+
+        response_body_len: float = utils.convert_to_mb(bytes_downloaded)
+        description: str = f'A downloaded file from pastebin.com. ' \
+                           f'size: {response_body_len} MBs'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.PASTEBIN_DOWNLOAD,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            source_target_tag=Tag.MALWARE,
+            uid=uid,
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
         return True
 
     def conn_without_dns(
