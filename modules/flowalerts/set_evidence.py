@@ -275,32 +275,51 @@ class SetEvidnceHelper:
         self.db.setEvidence(evidence)
 
     def non_ssl_port_443_conn(
-            self,
-            daddr,
-            profileid,
-            timestamp,
-            twid,
-            uid
-            ):
-        confidence = 0.8
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        attacker_direction = 'dstip'
-        evidence_type = 'Non-SSL-Port-443-Connection'
-        attacker = daddr
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = f'non-SSL established connection to port 443.' \
-                      f' destination IP: {daddr} {ip_identification}'
+                self,
+                daddr: str,
+                profileid: str,
+                timestamp: str,
+                twid: str,
+                uid: List[str]
+        ) -> None:
+        confidence: float = 0.8
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+        saddr: str = profileid.split("_")[-1]
 
-        self.db.setEvidence(
-            evidence_type, attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-
-            timestamp, category, profileid=profileid, twid=twid, uid=uid
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
             )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'non-SSL established connection to port 443. ' \
+                           f'destination IP: {daddr} {ip_identification}'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.NON_SSL_PORT_443_CONNECTION,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid,
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def weird_http_method(
             self,
