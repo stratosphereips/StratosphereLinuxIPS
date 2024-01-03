@@ -616,7 +616,7 @@ class SetEvidnceHelper:
             description=description,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory.recon,
+            category=IDEACategory.recon_scanning,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
@@ -724,39 +724,46 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
+
     def horizontal_portscan(
             self,
-            msg,
-            timestamp,
-            profileid,
-            twid,
-            uid
-            ):
-        # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
-        confidence = 1
-        threat_level = 'high'
-        description = f'horizontal port scan by Zeek engine. {msg}'
-        evidence_type = 'HorizontalPortscan'
-        attacker_direction = 'srcip'
-        source_target_tag = 'Recon'
-        attacker = profileid.split('_')[-1]
-        category = 'Recon.Scanning'
+            msg: str,
+            timestamp: str,
+            profileid: str,
+            twid: str,
+            uid: List[str]
+    ) -> None:
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.HIGH
+        twid_number: int = int(twid.replace("timewindow", ""))
+        saddr = profileid.split('_')[-1]
+
+        description: str = f'horizontal port scan by Zeek engine. {msg}'
         # get the number of unique hosts scanned on a specific port
-        conn_count = int(msg.split('least')[1].split('unique')[0])
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp,
-			category,
-			source_target_tag=source_target_tag,
+        conn_count: int = int(msg.split('least')[1].split('unique')[0])
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=IDEACategory.recon_scanning,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid,
+            timestamp=timestamp,
             conn_count=conn_count,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
-            )
+            confidence=confidence,
+            source_target_tag=Tag.RECON
+        )
+
+        self.db.setEvidence(evidence)
 
     def conn_to_private_ip(
             self,
