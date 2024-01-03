@@ -918,10 +918,8 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def ssh_successful(
             self,
-            profileid,
             twid,
             saddr,
             daddr,
@@ -929,8 +927,7 @@ class SetEvidnceHelper:
             uid,
             timestamp,
             by='',
-            ip_state='ip',
-            ):
+        ) -> None:
         """
         Set an evidence for a successful SSH login.
         This is not strictly a detection, but we don't have
@@ -938,32 +935,42 @@ class SetEvidnceHelper:
         The threat_level is 0.01 to show that this is not a detection
         """
 
-        attacker_direction = 'srcip'
-        attacker = saddr
-        evidence_type = f'SSHSuccessful-by-{saddr}'
-        threat_level = 'info'
-        confidence = 0.8
-        category = 'Infomation'
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = (
+        confidence: float = 0.8
+        threat_level: ThreatLevel = ThreatLevel.INFO
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = (
             f'SSH successful to IP {daddr}. {ip_identification}. '
             f'From IP {saddr}. Size: {str(size)}. Detection model {by}.'
             f' Confidence {confidence}'
         )
 
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.SSH_SUCCESSFUL,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid),
             uid=uid,
-            victim=daddr
-            )
+            timestamp=timestamp,
+            category=IDEACategory.information,
+        )
+
+        self.db.setEvidence(evidence)
 
     def long_connection(
             self,
