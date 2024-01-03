@@ -8,7 +8,8 @@ from slips_files.core.evidence_structure.evidence import \
     (
         Evidence,
         EvidenceType,
-        Direction
+        Direction,
+        evidence_to_dict,
     )
 
 class AlertHandler:
@@ -167,7 +168,7 @@ class AlertHandler:
 
         # @@@@@@@@@@@@@ todo handle the new evidence format in all the
         #  receiving clients
-        evidence_to_send: dict = utils.to_json_serializable(evidence)
+        evidence_to_send: dict = evidence_to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)
 
         # Check if we have the current evidence stored in the DB for
