@@ -459,30 +459,44 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def DNS_without_conn(
-            self,
-            domain,
-            timestamp,
-            profileid,
-            twid,
-            uid
-            ):
-        confidence = 0.8
-        threat_level = 'low'
-        category = 'Anomaly.Traffic'
-        attacker_direction = 'dstdomain'
-        evidence_type = 'DNSWithoutConnection'
-        attacker = domain
-        description = f'domain {domain} resolved with no connection'
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp, category, profileid=profileid, twid=twid, uid=uid
-            )
+        self,
+        domain: str,
+        timestamp: str,
+        profileid: str,
+        twid: str,
+        uid: List[str]
+    ) -> None:
+        confidence: float = 0.8
+        threat_level: ThreatLevel = ThreatLevel.LOW
+        saddr: str = profileid.split("_")[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        description: str = f'domain {domain} resolved with no connection'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.DNS_WITHOUT_CONNECTION,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid,
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def pastebin_download(
             self,
