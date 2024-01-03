@@ -370,42 +370,54 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def incompatible_CN(
             self,
-            org,
-            timestamp,
-            daddr,
-            profileid,
-            twid,
-            uid
-            ):
-        """
-        :param prg: the org this ip/domain claims it belongs to
-        """
-        confidence = 0.9
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        attacker_direction = 'dstip'
-        evidence_type = 'IncompatibleCN'
-        attacker = daddr
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = f'Incompatible certificate CN to IP: {daddr} ' \
-                      f'{ip_identification} claiming to ' \
-                      f'belong {org.capitalize()}.'
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
-            )
+            org: str,
+            timestamp: str,
+            daddr: str,
+            profileid: str,
+            twid: str,
+            uid: List[str]
+    ) -> None:
+        confidence: float = 0.9
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+        saddr: str = profileid.split("_")[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'Incompatible certificate CN to IP: {daddr} ' \
+                           f'{ip_identification} claiming to ' \
+                           f'belong {org.capitalize()}.'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.INCOMPATIBLE_CN,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid,
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def DGA(
             self,
