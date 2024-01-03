@@ -22,36 +22,7 @@ def validate_timestamp(ts) -> str:
         raise ValueError(f"Invalid timestamp format: {ts}. "
                          f"Expected format: '%Y/%m/%d %H:%M:%S.%f%z'.")
 
-def dict_to_evidence(evidence: dict):
-    """
-    Convert a dictionary to an Evidence object.
-    :param evidence (dict): Dictionary with evidence details.
-    returns an instance of the Evidence class.
-    """
-    evidence_attributes = {
-        'evidence_type': EvidenceType[list(EvidenceType)[evidence[
-            "evidence_type"]].name],
-        'description': evidence['description'],
-        'attacker': Attacker(**evidence['attacker']),
-        'threat_level': ThreatLevel(evidence['threat_level']),
-        'category': IDEACategory(**evidence['category']),
-        'victim': Victim(**evidence['victim']) if 'victim' in evidence
-        and evidence['victim'] else None,
-        'profile': ProfileID(evidence['profile']['ip']) if 'profile' in evidence else None,
-        'timewindow': TimeWindow(evidence['timewindow']['number']),
-        'uid': evidence['uid'],
-        'timestamp': evidence['timestamp'],
-        'proto': Proto[evidence['proto']] if 'proto' in evidence and
-                                             evidence['proto'] else None,
-        'port': evidence['port'],
-        'source_target_tag': Tag(evidence['source_target_tag']) if \
-            'source_target_tag' in evidence and evidence['source_target_tag'] else None,
-        'id': evidence['id'],
-        'conn_count': evidence['conn_count'],
-        'confidence': evidence['confidence']
-    }
 
-    return Evidence(**evidence_attributes)
 
 class EvidenceType(Enum):
     """
@@ -298,3 +269,54 @@ class Evidence:
     def __post_init__(self):
         # remove duplicate uids
         self.uid = list(set(self.uid))
+
+
+def evidence_to_dict(obj):
+    """
+    Converts an Evidence object to a dictionary (aka json serializable)
+    :param obj: object of any type.
+    """
+    if is_dataclass(obj):
+        # run this function on each value of the given dataclass
+        return {k: evidence_to_dict(v) for k, v in asdict(obj).items()}
+
+    if isinstance(obj, Enum):
+        return obj.name
+
+    if isinstance(obj, list):
+        return [evidence_to_dict(item) for item in obj]
+
+    if isinstance(obj, dict):
+        return {k: evidence_to_dict(v) for k, v in obj.items()}
+
+    return obj
+
+def dict_to_evidence(evidence: dict):
+    """
+    Convert a dictionary to an Evidence object.
+    :param evidence (dict): Dictionary with evidence details.
+    returns an instance of the Evidence class.
+    """
+    evidence_attributes = {
+        'evidence_type': EvidenceType[evidence["evidence_type"]],
+        'description': evidence['description'],
+        'attacker': Attacker(**evidence['attacker']),
+        'threat_level': ThreatLevel[evidence['threat_level']],
+        'category': IDEACategory(**evidence['category']),
+        'victim': Victim(**evidence['victim']) if 'victim' in evidence
+        and evidence['victim'] else None,
+        'profile': ProfileID(evidence['profile']['ip']) if 'profile' in evidence else None,
+        'timewindow': TimeWindow(evidence['timewindow']['number']),
+        'uid': evidence['uid'],
+        'timestamp': evidence['timestamp'],
+        'proto': Proto[evidence['proto']] if 'proto' in evidence and
+                                             evidence['proto'] else None,
+        'port': evidence['port'],
+        'source_target_tag': Tag[evidence['source_target_tag']] if \
+            'source_target_tag' in evidence and evidence['source_target_tag'] else None,
+        'id': evidence['id'],
+        'conn_count': evidence['conn_count'],
+        'confidence': evidence['confidence']
+    }
+
+    return Evidence(**evidence_attributes)

@@ -23,7 +23,7 @@ def idea_format(evidence: Evidence):
         # both times represet the time of the detection, we probably don't need flow_datetime
         'DetectTime': datetime.now(utils.local_tz).isoformat(),
         'EventTime': datetime.now(utils.local_tz).isoformat(),
-        'Category': [evidence.category.anomaly if
+        'Category': [f"Anomaly.{evidence.category.anomaly}" if
                      evidence.category.anomaly else evidence.category],
         'Confidence': evidence.confidence,
         'Source': [{}],
