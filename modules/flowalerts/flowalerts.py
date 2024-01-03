@@ -3,7 +3,7 @@ import contextlib
 from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 from .timer_thread import TimerThread
-from .set_evidence import Helper
+from .set_evidence import SetEvidnceHelper
 from slips_files.core.helpers.whitelist import Whitelist
 import multiprocessing
 import json
@@ -33,8 +33,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
         self.subscribe_to_channels()
         self.whitelist = Whitelist(self.logger, self.db)
         self.conn_counter = 0
-        # helper contains all functions used to set evidence
-        self.helper = Helper(self.db)
+        # this helper contains all functions used to set evidence
+        self.set_evidence = SetEvidnceHelper(self.db)
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = self.db.get_gateway_ip()
@@ -144,7 +144,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         ):
             return
 
-        self.helper.set_evidence_conn_to_private_ip(
+        self.set_evidence.conn_to_private_ip(
             proto,
             daddr,
             dport,
@@ -178,7 +178,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
-            self.helper.set_evidence_long_connection(
+            self.set_evidence.long_connection(
                 daddr, dur, profileid, twid, uid, timestamp, attacker_direction='srcip'
             )
             return True
@@ -302,7 +302,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         src_mbs = utils.convert_to_mb(int(sbytes))
         if src_mbs >= self.flow_upload_threshold:
-            self.helper.set_evidence_data_exfiltration(
+            self.set_evidence.data_exfiltration(
                 daddr,
                 src_mbs,
                 profileid,
@@ -376,7 +376,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         # orig_bytes is number of payload bytes downloaded
         downloaded_bytes = flow.get('resp_bytes', 0)
         if downloaded_bytes >= self.pastebin_downloads_threshold:
-            self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
+            self.set_evidence.pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
             return True
 
         else:
@@ -427,7 +427,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             if mbs_uploaded < self.data_exfiltration_threshold:
                 continue
 
-            self.helper.set_evidence_data_exfiltration(
+            self.set_evidence.data_exfiltration(
                 ip,
                 mbs_uploaded,
                 profileid,
@@ -467,7 +467,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             and not self.db.is_ftp_port(dport)
         ):
             # we don't have info about this port
-            self.helper.set_evidence_unknown_port(
+            self.set_evidence.unknown_port(
                 daddr, dport, proto, timestamp, profileid, twid, uid
             )
             return True
@@ -553,7 +553,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             # happened within more than 2 seconds
             return False
 
-        self.helper.set_evidence_dns_arpa_scan(
+        self.set_evidence.dns_arpa_scan(
             self.arpa_scan_threshold, stime, profileid, twid, uids
         )
         # empty the list of arpa queries for this profile, we don't need them anymore
@@ -683,7 +683,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
                 return False
             # self.print(f'Alerting after timer conn without dns on {daddr},
-            self.helper.set_evidence_conn_without_dns(
+            self.set_evidence.conn_without_dns(
                 daddr, timestamp, profileid, twid, uid
             )
             # This UID will never appear again, so we can remove it and
@@ -804,7 +804,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             # self.print(f'Alerting on {domain}, uid {uid}. time {datetime.datetime.now()}')
             # It means we already checked this dns with the Timer process
             # but still no connection for it.
-            self.helper.set_evidence_DNS_without_conn(
+            self.set_evidence.DNS_without_conn(
                 domain, timestamp, profileid, twid, uid
             )
             # This UID will never appear again, so we can remove it and
@@ -825,7 +825,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             daddr = ssh_flow_dict['daddr']
             saddr = ssh_flow_dict['saddr']
             size = ssh_flow_dict['allbytes']
-            self.helper.set_evidence_ssh_successful(
+            self.set_evidence.ssh_successful(
                 profileid,
                 twid,
                 saddr,
@@ -873,7 +873,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 # Set the evidence because there is no
                 # easier way to show how Slips detected
                 # the successful ssh and not Zeek
-                self.helper.set_evidence_ssh_successful(
+                self.set_evidence.ssh_successful(
                     profileid,
                     twid,
                     saddr,
@@ -954,7 +954,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         # found one of our supported orgs in the cn but it doesn't belong to any of this org's
         # domains or ips
-        self.helper.set_evidence_incompatible_CN(
+        self.set_evidence.incompatible_CN(
             found_org_in_cn,
             timestamp,
             daddr,
@@ -1002,7 +1002,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         # get the uid of the cached versions, and the uid of the current used versions
         uids = [cached_ssh_versions['uid'], flow['uid']]
-        self.helper.set_evidence_multiple_ssh_versions(
+        self.set_evidence.multiple_ssh_versions(
             flow['saddr'],
             flow['daddr'],
             cached_versions, current_versions,
@@ -1036,7 +1036,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 # TXT record
                 entropy = self.estimate_shannon_entropy(answer)
                 if entropy >= self.shannon_entropy_threshold:
-                    self.helper.set_evidence_suspicious_dns_answer(
+                    self.set_evidence.suspicious_dns_answer(
                         domain,
                         answer,
                         entropy,
@@ -1057,7 +1057,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         for answer in answers:
             if answer in invalid_answers and domain != "localhost":
                 #blocked answer found
-                self.helper.set_evidence_invalid_dns_answer(domain, answer, daddr, profileid, twid, stime, uid)
+                self.set_evidence.invalid_dns_answer(domain, answer, daddr, profileid, twid, stime, uid)
                 # delete answer from redis cache to prevent associating this dns answer with this domain/query and
                 # avoid FP "DNS without connection" evidence
                 self.db.delete_dns_resolution(answer)
@@ -1107,7 +1107,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             number_of_nxdomains % 5 == 0
             and number_of_nxdomains >= self.nxdomains_threshold
         ):
-            self.helper.set_evidence_DGA(
+            self.set_evidence.DGA(
                 number_of_nxdomains, stime, profileid, twid, uids
             )
             # clear the list of alerted queries and uids
@@ -1137,7 +1137,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             return
 
         direction = 'source' if sport == 0 else 'destination'
-        self.helper.set_evidence_for_port_0_connection(
+        self.set_evidence.for_port_0_connection(
             saddr,
             daddr,
             sport,
@@ -1192,7 +1192,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             f' {daddr} {ip_identification} '
             f'from IP: {saddr} reconnections: {reconnections}'
         )
-        self.helper.set_evidence_for_multiple_reconnection_attempts(
+        self.set_evidence.for_multiple_reconnection_attempts(
             profileid,
             twid,
             daddr,
@@ -1234,7 +1234,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if age >= age_threshold:
             return False
 
-        self.helper.set_evidence_young_domain(
+        self.set_evidence.young_domain(
             domain, age, stime, profileid, twid, uid
         )
         return True
@@ -1267,7 +1267,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 }
             )
 
-        self.helper.set_evidence_bad_smtp_login(
+        self.set_evidence.bad_smtp_login(
             saddr, daddr, stime, profileid, twid, uid
         )
 
@@ -1291,7 +1291,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             self.smtp_bruteforce_cache[profileid][1].pop(0)
             return
 
-        self.helper.set_evidence_smtp_bruteforce(
+        self.set_evidence.smtp_bruteforce(
             flow,
             profileid,
             twid,
@@ -1364,7 +1364,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 f'Destination IP: {daddr}. {ip_identification}'
             )
             uids = daddrs[daddr]['uid']
-            self.helper.set_evidence_for_connection_to_multiple_ports(
+            self.set_evidence.for_connection_to_multiple_ports(
                 profileid,
                 twid,
                 daddr,
@@ -1403,7 +1403,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             description = f'Connection to multiple ports {dstports} ' \
                           f'of Source IP: {saddr}'
 
-            self.helper.set_evidence_for_connection_to_multiple_ports(
+            self.set_evidence.for_connection_to_multiple_ports(
                 profileid,
                 twid,
                 daddr,
@@ -1431,7 +1431,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         malicious_ja3_dict = self.db.get_ja3_in_IoC()
 
         if ja3 in malicious_ja3_dict:
-            self.helper.set_evidence_malicious_JA3(
+            self.set_evidence.malicious_JA3(
                 malicious_ja3_dict,
                 saddr,
                 profileid,
@@ -1444,7 +1444,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             )
 
         if ja3s in malicious_ja3_dict:
-            self.helper.set_evidence_malicious_JA3(
+            self.set_evidence.malicious_JA3(
                 malicious_ja3_dict,
                 daddr,
                 profileid,
@@ -1482,7 +1482,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if server_name:
             description += f' SNI: {server_name}.'
 
-        self.helper.set_evidence_self_signed_certificates(
+        self.set_evidence.self_signed_certificates(
             profileid,
             twid,
             daddr,
@@ -1514,7 +1514,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if conn_count >= self.pw_guessing_threshold:
             description = f'SSH password guessing to IP {daddr}'
             uids = self.password_guessing_cache[cache_key]
-            self.helper.set_evidence_pw_guessing(
+            self.set_evidence.pw_guessing(
                 description, timestamp, profileid, twid, uids, by='Slips'
             )
 
@@ -1543,7 +1543,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if not ssl_info_from_db:
             return False
 
-        self.helper.set_evidence_malicious_ssl(
+        self.set_evidence.malicious_ssl(
             ssl_info, ssl_info_from_db
         )
 
@@ -1561,7 +1561,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if 'unknown_HTTP_method' not in name:
             return False
 
-        self.helper.set_evidence_weird_http_method(
+        self.set_evidence.weird_http_method(
             profileid,
             twid,
             flow
@@ -1590,7 +1590,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 and appproto.lower() != 'http'
                 and state == 'Established'
         ):
-            self.helper.set_evidence_non_http_port_80_conn(
+            self.set_evidence.non_http_port_80_conn(
                 daddr,
                 profileid,
                 timestamp,
@@ -1609,7 +1609,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if tunnel_type != 'Tunnel::GRE':
             return
 
-        self.helper.set_evidence_GRE_tunnel(
+        self.set_evidence.GRE_tunnel(
             tunnel_info
         )
 
@@ -1636,7 +1636,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 and appproto.lower() != 'ssl'
                 and state == 'Established'
         ):
-            self.helper.set_evidence_non_ssl_port_443_conn(
+            self.set_evidence.non_ssl_port_443_conn(
                 daddr,
                 profileid,
                 timestamp,
@@ -1679,7 +1679,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if ip_obj in ipaddress.IPv4Network(own_local_network):
             return
 
-        self.helper.set_evidence_different_localnet_usage(
+        self.set_evidence.different_localnet_usage(
             daddr,
             f'{dport}/{proto}',
             profileid,
@@ -1739,7 +1739,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
             if old_ip != saddr:
                 # we found this smac associated with an ip other than this saddr
-                self.helper.set_evidence_device_changing_ips(
+                self.set_evidence.device_changing_ips(
                     smac,
                     old_ip,
                     profileid,
@@ -1954,7 +1954,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             if 'Port_Scan' in note:
                 # Vertical port scan
                 scanning_ip = flow.get('scanning_ip', '')
-                self.helper.set_evidence_vertical_portscan(
+                self.set_evidence.vertical_portscan(
                     msg,
                     scanning_ip,
                     timestamp,
@@ -1967,7 +1967,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             if 'Address_Scan' in note:
                 # Horizontal port scan
                 # scanned_port = flow.get('scanned_port', '')
-                self.helper.set_evidence_horizontal_portscan(
+                self.set_evidence.horizontal_portscan(
                     msg,
                     timestamp,
                     profileid,
@@ -1976,7 +1976,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 )
             # --- Detect password guessing by zeek ---
             if 'Password_Guessing' in note:
-                self.helper.set_evidence_pw_guessing(
+                self.set_evidence.pw_guessing(
                     msg,
                     timestamp,
                     profileid,

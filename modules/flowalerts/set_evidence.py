@@ -23,14 +23,14 @@ from slips_files.core.evidence_structure.evidence import \
         Tag
     )
 
-class Helper:
+class SetEvidnceHelper:
     def __init__(
             self,
             db
             ):
         self.db = db
 
-    def set_evidence_young_domain(
+    def young_domain(
         self,
         domain: str,
         age: int,
@@ -69,7 +69,7 @@ class Helper:
             )
         self.db.setEvidence(evidence)
 
-    def set_evidence_multiple_ssh_versions(
+    def multiple_ssh_versions(
         self,
         srcip: str,
         dstip: str,
@@ -125,7 +125,7 @@ class Helper:
         )
         self.db.setEvidence(evidence)
 
-    def set_evidence_different_localnet_usage(
+    def different_localnet_usage(
             self,
             daddr,
             portproto,
@@ -178,7 +178,7 @@ class Helper:
             victim=victim
             )
 
-    def set_evidence_device_changing_ips(
+    def device_changing_ips(
             self,
             smac,
             old_ip,
@@ -210,7 +210,7 @@ class Helper:
             victim=old_ip
             )
 
-    def set_evidence_non_http_port_80_conn(
+    def non_http_port_80_conn(
             self,
             daddr,
             profileid,
@@ -241,7 +241,7 @@ class Helper:
             twid=twid,
             uid=uid)
 
-    def set_evidence_non_ssl_port_443_conn(
+    def non_ssl_port_443_conn(
             self,
             daddr,
             profileid,
@@ -269,7 +269,7 @@ class Helper:
             timestamp, category, profileid=profileid, twid=twid, uid=uid
             )
 
-    def set_evidence_weird_http_method(
+    def weird_http_method(
             self,
             profileid,
             twid,
@@ -303,7 +303,7 @@ class Helper:
             victim=daddr,
             )
 
-    def set_evidence_incompatible_CN(
+    def incompatible_CN(
             self,
             org,
             timestamp,
@@ -339,7 +339,7 @@ class Helper:
             uid=uid
             )
 
-    def set_evidence_DGA(
+    def DGA(
             self,
             nxdomains: int,
             stime,
@@ -374,7 +374,7 @@ class Helper:
             uid=uid
             )
 
-    def set_evidence_DNS_without_conn(
+    def DNS_without_conn(
             self,
             domain,
             timestamp,
@@ -398,7 +398,7 @@ class Helper:
             timestamp, category, profileid=profileid, twid=twid, uid=uid
             )
 
-    def set_evidence_pastebin_download(
+    def pastebin_download(
             self,
             daddr,
             bytes_downloaded,
@@ -433,7 +433,7 @@ class Helper:
             )
         return True
 
-    def set_evidence_conn_without_dns(
+    def conn_without_dns(
             self,
             daddr,
             timestamp,
@@ -478,7 +478,7 @@ class Helper:
             uid=uid
             )
 
-    def set_evidence_dns_arpa_scan(
+    def dns_arpa_scan(
             self,
             arpa_scan_threshold,
             stime,
@@ -510,7 +510,7 @@ class Helper:
             uid=uid
             )
 
-    def set_evidence_unknown_port(
+    def unknown_port(
             self,
             daddr,
             dport,
@@ -549,7 +549,7 @@ class Helper:
             victim=daddr
             )
 
-    def set_evidence_pw_guessing(
+    def pw_guessing(
             self,
             msg,
             timestamp,
@@ -584,7 +584,7 @@ class Helper:
             uid=uid
             )
 
-    def set_evidence_horizontal_portscan(
+    def horizontal_portscan(
             self,
             msg,
             timestamp,
@@ -618,7 +618,7 @@ class Helper:
             uid=uid
             )
 
-    def set_evidence_conn_to_private_ip(
+    def conn_to_private_ip(
             self,
             proto,
             daddr,
@@ -657,7 +657,7 @@ class Helper:
             victim=daddr
             )
 
-    def set_evidence_GRE_tunnel(
+    def GRE_tunnel(
             self,
             tunnel_info: dict
             ):
@@ -693,7 +693,7 @@ class Helper:
             uid=uid,
             )
 
-    def set_evidence_vertical_portscan(
+    def vertical_portscan(
             self,
             msg,
             scanning_ip,
@@ -734,7 +734,7 @@ class Helper:
 			victim=victim
             )
 
-    def set_evidence_ssh_successful(
+    def ssh_successful(
             self,
             profileid,
             twid,
@@ -780,7 +780,7 @@ class Helper:
             victim=daddr
             )
 
-    def set_evidence_long_connection(
+    def long_connection(
             self,
             attacker,
             duration,
@@ -823,7 +823,7 @@ class Helper:
             victim=srcip
             )
 
-    def set_evidence_self_signed_certificates(
+    def self_signed_certificates(
             self,
             profileid,
             twid,
@@ -849,7 +849,7 @@ class Helper:
             timestamp, category, profileid=profileid, twid=twid, uid=uid
             )
 
-    def set_evidence_for_multiple_reconnection_attempts(
+    def for_multiple_reconnection_attempts(
             self,
             profileid,
             twid,
@@ -876,7 +876,7 @@ class Helper:
             timestamp, category, profileid=profileid, twid=twid, uid=uid
             )
 
-    def set_evidence_for_connection_to_multiple_ports(
+    def for_connection_to_multiple_ports(
             self,
             profileid,
             twid,
@@ -906,7 +906,7 @@ class Helper:
             profileid=profileid, twid=twid, uid=uid
             )
 
-    def set_evidence_suspicious_dns_answer(
+    def suspicious_dns_answer(
             self,
             query,
             answer,
@@ -939,7 +939,7 @@ class Helper:
 			uid=uid
             )
 
-    def set_evidence_invalid_dns_answer(
+    def invalid_dns_answer(
             self,
             query,
             answer,
@@ -970,7 +970,7 @@ class Helper:
             uid=uid
             )
 
-    def set_evidence_for_port_0_connection(
+    def for_port_0_connection(
             self,
             saddr,
             daddr,
@@ -1020,7 +1020,7 @@ class Helper:
             victim=victim
             )
 
-    def set_evidence_malicious_JA3(
+    def malicious_JA3(
             self,
             malicious_ja3_dict,
             ip,
@@ -1080,7 +1080,7 @@ class Helper:
 			victim=victim
             )
 
-    def set_evidence_data_exfiltration(
+    def data_exfiltration(
             self,
             daddr,
             src_mbs,
@@ -1118,7 +1118,7 @@ class Helper:
             uid=uid
             )
 
-    def set_evidence_bad_smtp_login(
+    def bad_smtp_login(
             self,
             saddr,
             daddr,
@@ -1153,7 +1153,7 @@ class Helper:
             victim=daddr
             )
 
-    def set_evidence_smtp_bruteforce(
+    def smtp_bruteforce(
             self,
             flow: dict,
             profileid,
@@ -1193,7 +1193,7 @@ class Helper:
             victim=daddr
             )
 
-    def set_evidence_malicious_ssl(
+    def malicious_ssl(
             self,
             ssl_info: dict,
             ssl_info_from_db: dict
