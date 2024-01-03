@@ -15,12 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.common.imports import *
-from slips_files.core.helpers.whitelist import Whitelist
-from slips_files.core.helpers.notify import Notify
-from slips_files.common.abstracts.core import ICore
+
 import json
-from typing import Union, List, Tuple, Dict
+from typing import Union, List, Tuple, Dict, Optional
 from datetime import datetime
 from os import path
 from colorama import Fore, Style
@@ -29,8 +26,19 @@ import os
 import time
 import platform
 import traceback
-from slips_files.core.evidence_structure.evidence import dict_to_evidence, \
-    Evidence
+from slips_files.common.idea_format import idea_format
+from slips_files.common.imports import *
+from slips_files.core.helpers.whitelist import Whitelist
+from slips_files.core.helpers.notify import Notify
+from slips_files.common.abstracts.core import ICore
+from slips_files.core.evidence_structure.evidence import (
+    dict_to_evidence,
+    evidence_to_dict,
+    Evidence,
+    Direction,
+    EvidenceType,
+    )
+
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 # Evidence Process
@@ -159,29 +167,29 @@ class EvidenceHandler(ICore):
 
     def add_to_json_log_file(
              self,
-             IDEA_dict: dict,
+             idea_dict: dict,
              all_uids: list,
              timewindow: str,
              accumulated_threat_level: float =0
         ):
         """
         Add a new evidence line to our alerts.json file in json format.
-        :param IDEA_dict: dict containing 1 alert
+        :param idea_dict: dict containing 1 alert
         :param all_uids: the uids of the flows causing this evidence
         """
         try:
             # we add extra fields to alerts.json that are not in the IDEA format
-            IDEA_dict.update({
+            idea_dict.update({
                 'uids': all_uids,
                 'accumulated_threat_level': accumulated_threat_level,
                 'timewindow': int(timewindow.replace('timewindow', '')),
             })
-            json.dump(IDEA_dict, self.jsonfile)
+            json.dump(idea_dict, self.jsonfile)
             self.jsonfile.write('\n')
         except KeyboardInterrupt:
             return True
         except Exception:
-            self.print('Error in addDataToJSONFile()')
+            self.print('Error in add_to_json_log_file()')
             self.print(traceback.print_exc(), 0, 1)
 
     def add_to_log_file(self, data):
@@ -196,7 +204,7 @@ class EvidenceHandler(ICore):
         except KeyboardInterrupt:
             return True
         except Exception:
-            self.print('Error in addDataToLogFile()')
+            self.print('Error in add_to_log_file()')
             self.print(traceback.print_exc(),0,1)
 
     def get_domains_of_flow(self, flow: dict):
@@ -426,17 +434,12 @@ class EvidenceHandler(ICore):
             past_evidence_ids = []
         return past_evidence_ids
 
-    def is_evidence_done_by_others(self, evidence: dict) -> bool:
+    def is_evidence_done_by_others(self, evidence: Evidence) -> bool:
         # given all the tw evidence, we should only
         # consider evidence that makes this given
-        # profile malicious, aka evidence of this profile attacking others.
-        attacker_direction: str = evidence.get('attacker_direction', '')
-        # the following type detections are the ones
-        # expected to be seen when we are attacking others
-        # marking this profileid (srcip) as malicious
-        if attacker_direction in ('srcip', 'sport', 'srcport'):
-            return False
-        return True
+        # profile malicious, aka evidence of this profile(srcip) attacking
+        # others.
+        return not evidence.attacker.direction == Direction.SRC
 
     def get_evidence_for_tw(self, profileid: str, twid: str) \
             -> Dict[str, dict]:
@@ -463,7 +466,8 @@ class EvidenceHandler(ICore):
             evidence: str
 
             evidence: dict = json.loads(evidence)
-
+            #@@@@@@@@@@@@@@ TODO double chekc that the evidence here is
+            # Evidence obj!!
             if self.is_filtered_evidence(
                 evidence,
                 past_evidence_ids
@@ -498,7 +502,7 @@ class EvidenceHandler(ICore):
 
 
     def is_filtered_evidence(self,
-                             evidence: dict,
+                             evidence: Evidence,
                              past_evidence_ids: List[str]):
         """
         filters the following
@@ -690,50 +694,30 @@ class EvidenceHandler(ICore):
                 msg['data'] : str
                 evidence: dict = json.loads(msg['data'])
                 evidence: Evidence = dict_to_evidence(evidence)
-                profileid = evidence.get('profileid')
-                srcip = profileid.split(self.separator)[1]
-                twid = evidence.get('twid')
-                attacker_direction = evidence.get(
-                    'attacker_direction'
-                )   # example: dstip srcip dport sport dstdomain
-                attacker = evidence.get(
-                    'attacker'
-                )   # example: ip, port, inTuple, outTuple, domain
-                evidence_type: str = evidence.get(
-                    'evidence_type'
-                )   # example: PortScan, ThreatIntelligence, etc..
-                description = evidence.get('description')
-                timestamp = evidence.get('stime')
+                profileid: str = str(evidence.profile)
+                twid: str = str(evidence.timewindow)
+                evidence_type: EvidenceType = evidence.evidence_type
+                timestamp: str = evidence.timestamp
                 # this is all the uids of the flows that cause this evidence
-                all_uids = evidence.get('uid')
-                confidence = evidence.get('confidence', False)
-                category = evidence.get('category', False)
-                conn_count = evidence.get('conn_count', False)
-                port = evidence.get('port', False)
-                proto = evidence.get('proto', False)
-                source_target_tag = evidence.get('source_target_tag', False)
-                evidence_ID = evidence.get('ID', False)
-                victim: str = evidence.get('victim', '')
+                all_uids: list = evidence.uid
+                victim: str = evidence.victim.value
 
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence
                 # below.
                 # to avoid this, we only alert about processed evidence
-                self.db.mark_evidence_as_processed(evidence_ID)
+                self.db.mark_evidence_as_processed(evidence.id)
 
                 # Ignore alert if IP is whitelisted
-                if self.whitelist.is_whitelisted_evidence(
-                    srcip, attacker, attacker_direction, description, victim
-                ):
-                    self.db.cache_whitelisted_evidence_ID(evidence_ID)
+                if self.whitelist.is_whitelisted_evidence(evidence):
+                    self.db.cache_whitelisted_evidence_ID(evidence.id)
                     # Modules add evidence to the db before
                     # reaching this point, now remove evidence from db so
                     # it could be completely ignored
                     self.db.deleteEvidence(
-                        profileid, twid, evidence_ID
+                        profileid, twid, evidence.id
                     )
                     continue
-
 
                 # convert time to local timezone
                 if self.running_non_stop:
@@ -741,16 +725,13 @@ class EvidenceHandler(ICore):
                 flow_datetime = utils.convert_format(timestamp, 'iso')
 
                 evidence_to_log: str = self.get_evidence_to_log(
-                    srcip,
-                    description,
-                    twid,
+                    evidence,
                     flow_datetime,
-                    profileid
                 )
                 # Add the evidence to alerts.log
                 self.add_to_log_file(evidence_to_log)
                 self.increment_attack_counter(
-                    profileid,
+                    evidence.profile.ip,
                     victim,
                     evidence_type
                     )
@@ -867,16 +848,17 @@ class EvidenceHandler(ICore):
                         'Error in the report received from p2ptrust module'
                     )
                     return
-                # The available values for the following variables are defined in go_director
+                # The available values for the following variables are
+                # defined in go_director
 
                 # available key types: "ip"
-                key_type = data['key_type']
+                # key_type = data['key_type']
 
                 # if the key type is ip, the ip is validated
                 key = data['key']
 
                 # available evaluation types: 'score_confidence'
-                evaluation_type = data['evaluation_type']
+                # evaluation_type = data['evaluation_type']
 
                 # this is the score_confidence received from the peer
                 evaluation = data['evaluation']
