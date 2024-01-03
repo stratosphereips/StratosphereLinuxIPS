@@ -541,48 +541,54 @@ class SetEvidnceHelper:
 
     def conn_without_dns(
             self,
-            daddr,
-            timestamp,
-            profileid,
-            twid,
-            uid
-            ):
-        # uid {uid}. time {datetime.datetime.now()}')
-        threat_level = 'high'
-        category = 'Anomaly.Connection'
-        attacker_direction = 'dstip'
-        source_target_tag = 'Malware'
-        evidence_type = 'ConnectionWithoutDNS'
-        attacker = daddr
-        # the first 5 hours the confidence of connection w/o dns
-        # is 0.1  in case of interface only, until slips learns all the dns
-        start_time = self.db.get_slips_start_time()
-        now = time.time()
-        confidence = 0.8
-        if (
-                '-i' in sys.argv
-                or self.db.is_growing_zeek_dir()
-        ):
-            diff = utils.get_time_diff(start_time, now, return_type='hours')
+            daddr: str,
+            timestamp: str,
+            profileid: str,
+            twid: str,
+            uid: List[str]
+    ) -> None:
+        confidence: float = 0.8
+        threat_level: ThreatLevel = ThreatLevel.HIGH
+        saddr: str = profileid.split("_")[-1]
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        # The first 5 hours the confidence of connection w/o DNS
+        # is 0.1 in case of interface only, until slips learns all the DNS
+        start_time: float = self.db.get_slips_start_time()
+        now: float = time.time()
+        if '-i' in sys.argv or self.db.is_growing_zeek_dir():
+            diff: float = utils.get_time_diff(
+                start_time, now, return_type='hours'
+                )
             if diff < 5:
                 confidence = 0.1
 
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = f'a connection without DNS resolution to IP: ' \
-                      f'{daddr} {ip_identification}'
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp,
-			category,
-			source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
-            )
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'A connection without DNS resolution to IP: ' \
+                           f'{daddr} {ip_identification}'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+        evidence: Evidence = Evidence(
+            evidence_type= EvidenceType.CONNECTION_WITHOUT_DNS,
+            attacker=attacker,
+            threat_level=threat_level,
+            source_target_tag= Tag.MALWARE,
+            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid,
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def dns_arpa_scan(
             self,
