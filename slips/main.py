@@ -677,7 +677,7 @@ class Main(IObservable):
                     f'Run Slips with --killall to stop them.'
                 )
 
-            self.print("Warning: Slips may generate a large amount"
+            self.print("Warning: Slips may generate a large amount "
                        "of traffic by querying TI sites.")
 
 

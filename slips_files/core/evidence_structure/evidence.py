@@ -214,7 +214,6 @@ class IDEACategory:
     anomaly: Anomaly
     information = "Information"
     malware = "Malware"
-    alert = auto()
 
 
 @dataclass

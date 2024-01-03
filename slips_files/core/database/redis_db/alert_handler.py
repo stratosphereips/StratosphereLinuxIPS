@@ -236,7 +236,7 @@ class AlertHandler:
     def is_evidence_processed(self, evidence_ID: str) -> bool:
         return self.r.sismember('processed_evidence', evidence_ID)
 
-    def set_evidence_for_profileid(self, evidence):
+    def set_evidence_for_profileid(self, evidence: dict):
         """
         Set evidence for the profile in the same format as json in alerts.json
         """
