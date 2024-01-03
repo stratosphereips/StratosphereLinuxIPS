@@ -499,7 +499,6 @@ class SetEvidnceHelper:
 
     def pastebin_download(
             self,
-            daddr: str,
             bytes_downloaded: int,
             timestamp: str,
             profileid: str,
@@ -573,10 +572,10 @@ class SetEvidnceHelper:
 
         twid_number: int = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
-            evidence_type= EvidenceType.CONNECTION_WITHOUT_DNS,
+            evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS,
             attacker=attacker,
             threat_level=threat_level,
-            source_target_tag= Tag.MALWARE,
+            source_target_tag=Tag.MALWARE,
             category=IDEACategory(anomaly=Anomaly.CONNECTION),
             description=description,
             profile=ProfileID(ip=saddr),
@@ -589,38 +588,48 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def dns_arpa_scan(
-            self,
-            arpa_scan_threshold,
-            stime,
-            profileid,
-            twid,
-            uid
-            ):
-        confidence = 0.7
-        threat_level = 'medium'
-        category = 'Recon.Scanning'
-        attacker_direction = 'srcip'
-        evidence_type = 'DNS-ARPA-Scan'
-        description = f'doing DNS ARPA scan. Scanned ' \
-                      f'{arpa_scan_threshold} hosts within 2 seconds.'
-        attacker = profileid.split('_')[1]
+        self,
+        arpa_scan_threshold: int,
+        stime: str,
+        profileid: str,
+        twid: str,
+        uid: List[str]
+    ) -> bool:
 
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence,
-            description,
-            stime,
-            category,
+        threat_level = ThreatLevel.MEDIUM
+        confidence = 0.7
+        saddr = profileid.split("_")[-1]
+
+        description = f"Doing DNS ARPA scan. Scanned {arpa_scan_threshold}" \
+                      f" hosts within 2 seconds."
+        # Store attacker details in a local variable
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        # Create Evidence object using local variables
+        evidence = Evidence(
+            evidence_type=EvidenceType.DNS_ARPA_SCAN,
+            description=description,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=IDEACategory.recon,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uid,
+            timestamp=stime,
             conn_count=arpa_scan_threshold,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
-            )
+            confidence=confidence,
+        )
+
+        # Store evidence in the database
+        self.db.setEvidence(evidence)
+
+        return True
+
 
     def unknown_port(
             self,
