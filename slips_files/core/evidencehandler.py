@@ -36,7 +36,11 @@ from slips_files.core.evidence_structure.evidence import (
     evidence_to_dict,
     Evidence,
     Direction,
+    IoCType,
     EvidenceType,
+    IDEACategory,
+    Proto,
+    Tag
     )
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
@@ -133,8 +137,8 @@ class EvidenceHandler(ICore):
 
 
         return f'{evidence_string}'
-    
-    
+
+
     def line_wrap(self, txt):
         """
         is called for evidence that are goinng to be printed in the terminal
@@ -154,8 +158,8 @@ class EvidenceHandler(ICore):
             wrapped_txt = wrapped_txt[:-1]
 
         return wrapped_txt
-        
-    
+
+
     def clean_file(self, output_dir, file_to_clean):
         """
         Clear the file if exists and return an open handle to it
@@ -611,40 +615,36 @@ class EvidenceHandler(ICore):
         self.db.set_accumulated_threat_level(profileid, twid, 0)
 
     def get_evidence_to_log(
-                self,
-                srcip: str,
-                description: str,
-                twid: str,
-                flow_datetime: str,
-                profileid: str,
+                self, evidence: Evidence, flow_datetime
         ) -> str:
-            timewindow_number: int = twid.replace("timewindow", '')
+            timewindow_number: int = evidence.timewindow.number
 
             # to keep the alignment of alerts.json ip + hostname
             # combined should take no more than 26 chars
-            evidence = f'{flow_datetime} (TW {timewindow_number}): Src IP' \
-                       f' {srcip:26}. Detected {description}'
+            evidence_str = f'{flow_datetime} (TW {timewindow_number}): Src ' \
+                           f'IP {evidence.profile.ip:26}. Detected ' \
+                           f' {evidence.description}'
 
             # sometimes slips tries to get the hostname of a
             # profile before ip_info stores it in the db
             # there's nothing we can do about it
-            hostname: str = self.db.get_hostname_from_profile(profileid)
+            hostname: str = self.db.get_hostname_from_profile(str(evidence.profile))
             if not hostname:
-                return evidence
+                return evidence_str
 
-            padding_len = 26 - len(srcip) - len(hostname) - 3
+            padding_len = 26 - len(evidence.profile.ip) - len(hostname) - 3
             # fill the rest of the 26 characters with spaces to keep the alignment
-            evidence = f'{flow_datetime} (TW {timewindow_number}): Src IP' \
-                       f' {srcip} ({hostname}) {" "*padding_len}. ' \
-                       f'Detected {description}'
+            evidence_str = f'{flow_datetime} (TW {timewindow_number}): Src IP' \
+                       f' {evidence.profile.ip} ({hostname}) {" "*padding_len}. ' \
+                       f'Detected {evidence.description}'
 
-            return evidence
+            return evidence_str
 
     def increment_attack_counter(
             self,
             attacker: str,
             victim: str,
-            evidence_type: str
+            evidence_type: EvidenceType
             ):
         """
         increments the number of attacks of this type from the given
@@ -657,7 +657,7 @@ class EvidenceHandler(ICore):
         self.db.increment_attack_counter(
             attacker,
             victim,
-            evidence_type
+            evidence_type.name
             )
 
 
@@ -691,7 +691,7 @@ class EvidenceHandler(ICore):
     def main(self):
         while not self.should_stop():
             if msg := self.get_msg('evidence_added'):
-                msg['data'] : str
+                msg['data']: str
                 evidence: dict = json.loads(msg['data'])
                 evidence: Evidence = dict_to_evidence(evidence)
                 profileid: str = str(evidence.profile)
@@ -751,30 +751,18 @@ class EvidenceHandler(ICore):
                             twid
                         )
                 # prepare evidence for json log file
-                IDEA_dict: dict = utils.IDEA_format(
-                    srcip,
-                    evidence_type,
-                    attacker_direction,
-                    attacker,
-                    description,
-                    confidence,
-                    category,
-                    conn_count,
-                    source_target_tag,
-                    port,
-                    proto,
-                    evidence_ID
-                )
+                idea_dict: dict = idea_format(evidence)
                 # add to alerts.json
                 self.add_to_json_log_file(
-                      IDEA_dict,
+                      idea_dict,
                       all_uids,
                       twid,
                       accumulated_threat_level,
                     )
 
-                self.db.set_evidence_for_profileid(IDEA_dict)
-                self.db.publish('report_to_peers', json.dumps(evidence))
+                self.db.set_evidence_for_profileid(idea_dict)
+                evidence_dict: dict = evidence_to_dict(evidence)
+                self.db.publish('report_to_peers', json.dumps(evidence_dict))
 
 
                 # if the profile was already blocked in
@@ -834,7 +822,7 @@ class EvidenceHandler(ICore):
                             twid,
                             flow_datetime,
                             accumulated_threat_level,
-                            IDEA_dict,
+                            idea_dict,
                             blocked=blocked
                         )
 
