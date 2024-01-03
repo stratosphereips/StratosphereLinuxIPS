@@ -125,11 +125,11 @@ class SetEvidnceHelper:
 
     def different_localnet_usage(
             self,
-            daddr,
-            portproto,
+            daddr: str,
+            portproto: str,
             profileid: ProfileID,
-            timestamp,
-            twid,
+            timestamp: str,
+            twid: str,
             uid,
             ip_outside_localnet: str = ''
     ):
@@ -193,35 +193,45 @@ class SetEvidnceHelper:
 
     def device_changing_ips(
             self,
-            smac,
-            old_ip,
-            profileid,
-            twid,
-            uid,
-            timestamp
-            ):
+            smac: str,
+            old_ip: str,
+            profileid: str,
+            twid: str,
+            uid: List[str],
+            timestamp: str
+    ):
         confidence = 0.8
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        attacker_direction = 'srcip'
-        evidence_type = 'DeviceChangingIP'
-        saddr = profileid.split("_")[-1]
-        attacker = saddr
+        threat_level = ThreatLevel.MEDIUM
+        saddr: str = profileid.split("_")[-1]
+
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
         description = f'A device changing IPs. IP {saddr} was found ' \
                       f'with MAC address {smac} but the MAC belongs ' \
                       f'originally to IP: {old_ip}. '
 
-        self.db.setEvidence(
-            evidence_type
-            , attacker_direction, attacker, threat_level, confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
+        twid_number = int(twid.replace("timewindow", ""))
+
+        evidence = Evidence(
+            evidence_type=EvidenceType.DEVICE_CHANGING_IP,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            description=description,
+            victim=None,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
             uid=uid,
-            victim=old_ip
-            )
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
 
     def non_http_port_80_conn(
             self,
