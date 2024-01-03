@@ -772,7 +772,6 @@ class SetEvidnceHelper:
             daddr: str,
             dport: str,
             saddr: str,
-            profileid: str,
             twid: str,
             uid: List[str],
             timestamp: str
@@ -821,38 +820,55 @@ class SetEvidnceHelper:
     def GRE_tunnel(
             self,
             tunnel_info: dict
-            ):
-        tunnel_flow = tunnel_info['flow']
-        profileid = tunnel_info['profileid']
-        twid = tunnel_info['twid']
+    ) -> None:
+        profileid: str = tunnel_info['profileid']
+        twid: str = tunnel_info['twid']
+        tunnel_flow: str = tunnel_info['flow']
 
         action = tunnel_flow['action']
         daddr = tunnel_flow['daddr']
         ts = tunnel_flow['starttime']
         uid = tunnel_flow['uid']
 
-        ip_identification = self.db.get_ip_identification(daddr)
-        saddr = profileid.split('_')[-1]
-        description = f'GRE tunnel from {saddr} ' \
-                      f'to {daddr} {ip_identification} ' \
-                      f'tunnel action: {action}'
-        confidence = 1
-        threat_level = 'info'
-        evidence_type = 'GRETunnel'
-        category = 'Info'
-        self.db.setEvidence(
-            evidence_type,
-            'dstip',
-            daddr,
-            threat_level,
-            confidence,
-            description,
-            ts,
-            category,
-            profileid=profileid,
-            twid=twid,
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.INFO
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        saddr: str = profileid.split('_')[-1]
+        description: str = f'GRE tunnel from {saddr} ' \
+                          f'to {daddr} {ip_identification} ' \
+                          f'tunnel action: {action}'
+
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.GRE_TUNNEL,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            category=IDEACategory.information,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
             uid=uid,
-            )
+            timestamp=ts,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
 
     def vertical_portscan(
             self,
