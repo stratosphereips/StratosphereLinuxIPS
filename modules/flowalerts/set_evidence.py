@@ -870,46 +870,54 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
+
     def vertical_portscan(
             self,
             msg,
             scanning_ip,
             timestamp,
-            profileid,
             twid,
             uid
-            ):
-        """
-
-        @rtype: object
-        """
-        # confidence = 1 because this detection is comming
-        # from a zeek file so we're sure it's accurate
-        confidence = 1
-        threat_level = 'high'
+    ) -> None:
+        # confidence = 1 because this detection is coming
+        # from a Zeek file so we're sure it's accurate
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.HIGH
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
-        description = f'vertical port scan by Zeek engine. {msg}'
-        evidence_type = 'VerticalPortscan'
-        category = 'Recon.Scanning'
-        attacker_direction = 'dstip'
-        source_target_tag = 'Recon'
-        conn_count = int(msg.split('least ')[1].split(' unique')[0])
-        attacker = scanning_ip
-        victim = msg.split('ports of ')[-1]
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp,
-			category,
-			source_target_tag=source_target_tag,
+        description: str = f'vertical port scan by Zeek engine. {msg}'
+        conn_count: int = int(msg.split('least ')[1].split(' unique')[0])
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=scanning_ip
+        )
+
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=msg.split('ports of ')[-1]
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            category=IDEACategory.recon_scanning,
+            description=description,
+            profile=ProfileID(ip=scanning_ip),
+            timewindow=TimeWindow(number=twid),
+            uid=uid,
+            timestamp=timestamp,
             conn_count=conn_count,
-            profileid=profileid, twid=twid,
-			uid=uid,
-			victim=victim
-            )
+            confidence=confidence,
+            source_target_tag=Tag.RECON
+
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def ssh_successful(
             self,
