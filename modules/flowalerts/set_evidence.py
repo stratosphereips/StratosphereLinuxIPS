@@ -633,42 +633,53 @@ class SetEvidnceHelper:
 
     def unknown_port(
             self,
-            daddr,
-            dport,
-            proto,
-            timestamp,
-            profileid,
-            twid,
-            uid
-            ):
-        confidence = 1
-        threat_level = 'high'
-        category = 'Anomaly.Connection'
-        attacker_direction = 'srcip'
-        evidence_type = 'UnknownPort'
-        attacker = profileid.split('_')[-1]
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = (
+            daddr: str,
+            dport: int,
+            proto: str,
+            timestamp: str,
+            profileid: str,
+            twid: str,
+            uid: List[str]
+    ) -> None:
+        confidence: float = 1.0
+        twid_number: int = int(twid.replace("timewindow", ""))
+        saddr = profileid.split('_')[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = (
             f'Connection to unknown destination port {dport}/{proto.upper()} '
             f'destination IP {daddr}. {ip_identification}'
         )
 
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            port=dport,
-            proto=proto,
-            profileid=profileid,
-            twid=twid,
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.UNKNOWN_PORT,
+            attacker=attacker,
+            victim=victim,
+            threat_level=ThreatLevel.HIGH,
+            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            description=description,
+            profile=ProfileID(ip=profileid.split('_')[-1]),
+            timewindow=TimeWindow(number=twid_number),
             uid=uid,
-            victim=daddr
-            )
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def pw_guessing(
             self,
