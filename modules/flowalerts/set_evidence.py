@@ -235,34 +235,44 @@ class SetEvidnceHelper:
 
     def non_http_port_80_conn(
             self,
-            daddr,
-            profileid,
-            timestamp,
-            twid,
-            uid
-            ):
+            daddr: str,
+            profileid: str,
+            timestamp: str,
+            twid: str,
+            uid: List[str]
+    ) -> None:
         confidence = 0.8
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        attacker_direction = 'dstip'
-        evidence_type = 'Non-HTTP-Port-80-Connection'
-        attacker = daddr
-        ip_identification = self.db.get_ip_identification(daddr)
+        threat_level = ThreatLevel.MEDIUM
+        saddr: str = profileid.split("_")[-1]
 
-        description = f'non-HTTP established connection to port 80.' \
-                      f' destination IP: {daddr} {ip_identification}'
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-            uid=uid)
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+
+        description: str = f'non-HTTP established connection to port 80. ' \
+                           f'destination IP: {daddr} {ip_identification}'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid,
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
 
     def non_ssl_port_443_conn(
             self,
