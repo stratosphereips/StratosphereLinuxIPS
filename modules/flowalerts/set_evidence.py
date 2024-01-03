@@ -1,6 +1,4 @@
-# Must imports
 import datetime
-# Your imports
 import json
 import sys
 import time
@@ -129,54 +127,69 @@ class SetEvidnceHelper:
             self,
             daddr,
             portproto,
-            profileid,
+            profileid: ProfileID,
             timestamp,
             twid,
             uid,
             ip_outside_localnet: str = ''
-            ):
+    ):
         """
         :param ip_outside_localnet: was the 'srcip' outside the localnet or the 'dstip'?
         """
         srcip = profileid.split('_')[-1]
-        # the attacker here is the IP found to be private and outside th localnet
+        # the attacker here is the IP found to be private and outside the localnet
         if ip_outside_localnet == 'srcip':
-            attacker = srcip
-            victim = daddr
-            direction = 'from'
-            rev_direction = 'to'
-        else:
-            attacker = daddr
-            victim = srcip
-            direction = 'to'
-            rev_direction = 'from'
-
-        confidence = 1
-        threat_level = 'high'
-        category = 'Anomaly.Traffic'
-        attacker_direction = ip_outside_localnet
-        evidence_type = 'DifferentLocalnet'
-        localnet = self.db.get_local_network()
-        description = f'A connection {direction} a private IP ({attacker}) ' \
-                      f'outside of the used local network {localnet}.' \
-                      f' {rev_direction} IP: {victim} '
-
-        if attacker_direction == 'dstip':
-            description += 'using ARP' if 'arp' in portproto else f'on port: {portproto}'
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-            victim=victim
+            attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=srcip
             )
+            victim = Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=daddr
+            )
+            description = f'A connection from a private IP ({srcip}) ' \
+                          f'outside of the used local network {self.db.get_local_network()}. ' \
+                          f'To IP: {daddr} '
+        else:
+            attacker = Attacker(
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=daddr
+            )
+            victim = Victim(
+                direction=Direction.SRC,
+                victim_type=IoCType.IP,
+                value=srcip
+            )
+            description = f'A connection to a private IP ({daddr}) ' \
+                          f'outside of the used local network {self.db.get_local_network()}. ' \
+                          f'From IP: {srcip} '
+            description += 'using ARP' if 'arp' in portproto else f'on port: {portproto}'
+
+
+        confidence = 1.0
+        threat_level = ThreatLevel.HIGH
+        category = IDEACategory(anomaly=Anomaly.TRAFFIC)
+        evidence_type = EvidenceType.DIFFERENT_LOCALNET
+        twid_number = int(twid.replace("timewindow", ""))
+
+        evidence = Evidence(
+            evidence_type=evidence_type,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=category,
+            description=description,
+            victim=victim,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid,
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+        self.db.setEvidence(evidence)
 
     def device_changing_ips(
             self,
