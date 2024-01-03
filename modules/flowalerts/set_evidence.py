@@ -765,21 +765,23 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
+
     def conn_to_private_ip(
             self,
-            proto,
-            daddr,
-            dport,
-            saddr,
-            profileid,
-            twid,
-            uid,
-            timestamp
-            ):
+            proto: str,
+            daddr: str,
+            dport: str,
+            saddr: str,
+            profileid: str,
+            twid: str,
+            uid: List[str],
+            timestamp: str
+    ) -> None:
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.INFO
+        twid_number: int = int(twid.replace("timewindow", ""))
+        description: str = f'Connecting to private IP: {daddr} '
 
-        confidence = 1
-        threat_level = 'info'
-        description = f'Connecting to private IP: {daddr} '
         if proto.lower() == 'arp' or dport == '':
             pass
         elif proto.lower() == 'icmp':
@@ -787,22 +789,34 @@ class SetEvidnceHelper:
         else:
             description += f'on destination port: {dport}'
 
-        evidence_type = 'ConnectionToPrivateIP'
-        category = 'Recon'
-        attacker_direction = 'srcip'
-        attacker = saddr
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp, category,
-            profileid=profileid,
-            twid=twid,
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.CONNECTION_TO_PRIVATE_IP,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=IDEACategory.recon,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
             uid=uid,
-            victim=daddr
-            )
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence,
+            victim=victim
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def GRE_tunnel(
             self,
