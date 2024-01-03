@@ -320,40 +320,56 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def weird_http_method(
             self,
-            profileid,
-            twid,
+            profileid: str,
+            twid: str,
             flow: dict
-            ):
-        daddr = flow['daddr']
-        weird_method = flow['addl']
-        uid = flow['uid']
-        timestamp = flow['starttime']
+    ) -> None:
+        daddr: str = flow['daddr']
+        weird_method: str = flow['addl']
+        uid: List[str] = flow['uid']
+        timestamp: str = flow['starttime']
 
         confidence = 0.9
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        attacker_direction = 'srcip'
-        evidence_type = 'WeirdHTTPMethod'
-        attacker = profileid.split("_")[-1]
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = f'Weird HTTP method "{weird_method}" to IP: {daddr} {ip_identification}. by Zeek.'
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+        saddr: str = profileid.split("_")[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'Weird HTTP method "{weird_method}" to IP: {daddr} ' \
+                           f'{ip_identification}. by Zeek.'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.WEIRD_HTTP_METHOD,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
             uid=uid,
-            victim=daddr,
-            )
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def incompatible_CN(
             self,
