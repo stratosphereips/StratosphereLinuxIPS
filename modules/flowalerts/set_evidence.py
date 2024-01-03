@@ -670,7 +670,7 @@ class SetEvidnceHelper:
             threat_level=ThreatLevel.HIGH,
             category=IDEACategory(anomaly=Anomaly.CONNECTION),
             description=description,
-            profile=ProfileID(ip=profileid.split('_')[-1]),
+            profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=uid,
             timestamp=timestamp,
@@ -680,41 +680,49 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def pw_guessing(
             self,
-            msg,
-            timestamp,
-            profileid,
-            twid,
-            uid,
-            by=''
-            ):
+            msg: str,
+            timestamp: str,
+            twid: str,
+            uid: List[str],
+            by: str = ''
+    ) -> None:
         # 222.186.30.112 appears to be guessing SSH passwords
         # (seen in 30 connections)
         # confidence = 1 because this detection is comming
         # from a zeek file so we're sure it's accurate
-        confidence = 1
-        threat_level = 'high'
-        category = 'Attempt.Login'
-        evidence_type = 'Password_Guessing'
-        attacker_direction = 'srcip'
-        source_target_tag = 'Malware'
-        description = f'password guessing. {msg}. by {by}.'
-        scanning_ip = msg.split(' appears')[0]
-        conn_count = int(msg.split('in ')[1].split('connections')[0])
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.HIGH
+        twid_number: int = int(twid.replace("timewindow", ""))
+        scanning_ip: str = msg.split(' appears')[0]
 
-        self.db.setEvidence(
-            evidence_type, attacker_direction, scanning_ip, threat_level,
-            confidence, description,
-            timestamp,
-			category,
-			source_target_tag=source_target_tag,
+        description: str = f'password guessing. {msg}. by {by}.'
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=scanning_ip
+        )
+
+        conn_count: int = int(msg.split('in ')[1].split('connections')[0])
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.PASSWORD_GUESSING,
+            attacker=attacker,
+            threat_level=threat_level,
+            category= IDEACategory.attempt_login,
+            description=description,
+            profile=ProfileID(ip=scanning_ip),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid,
+            timestamp=timestamp,
             conn_count=conn_count,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
-            )
+            confidence=confidence,
+            source_target_tag=Tag.MALWARE
+        )
+
+        self.db.setEvidence(evidence)
 
     def horizontal_portscan(
             self,
