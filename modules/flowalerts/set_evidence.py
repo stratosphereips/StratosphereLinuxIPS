@@ -418,41 +418,47 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def DGA(
             self,
             nxdomains: int,
-            stime,
-            profileid,
-            twid,
-            uid
-            ):
-        confidence = (1 / 100) * (nxdomains - 100) + 1
+            stime: str,
+            profileid: str,
+            twid: str,
+            uid: List[str]
+    ) -> None:
+        # for each non-existent domain beyond the threshold of 100,
+        # the confidence score is increased linearly.
+        # +1 ensures that the minimum confidence score is 1.
+        confidence: float = max(0, (1 / 100) * (nxdomains - 100) + 1)
         confidence = round(confidence, 2)  # for readability
-        threat_level = 'high'
-        category = 'Intrusion.Botnet'
-        # the srcip doing all the dns queries
-        attacker_direction = 'srcip'
-        source_target_tag = 'OriginMalware'
-        evidence_type = f'DGA-{nxdomains}-NXDOMAINs'
-        attacker = profileid.split('_')[1]
-        description = f'possible DGA or domain scanning. {attacker} ' \
+        threat_level = ThreatLevel.HIGH
+        saddr = profileid.split("_")[-1]
+        description = f'Possible DGA or domain scanning. {saddr} ' \
                       f'failed to resolve {nxdomains} domains'
-        conn_count = nxdomains
 
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            stime, category,
-            source_target_tag=source_target_tag,
-            conn_count=conn_count,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
+        attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=profileid.split('_')[1]
             )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.DGA_NXDOMAINS,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uid,
+            timestamp=stime,
+            conn_count=nxdomains,
+            confidence=confidence,
+            source_target_tag=Tag.ORIGIN_MALWARE
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def DNS_without_conn(
             self,
