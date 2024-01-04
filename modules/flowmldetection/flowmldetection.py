@@ -409,7 +409,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid)),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
             category= IDEACategory(anomaly=Anomaly.TRAFFIC)
