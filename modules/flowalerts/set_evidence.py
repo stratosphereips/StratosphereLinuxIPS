@@ -1237,37 +1237,50 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def invalid_dns_answer(
             self,
-            query,
-            answer,
-            daddr,
-            profileid,
-            twid,
-            stime,
-            uid
-            ):
-        evidence_type = "InvalidDNSResolution"
-        attacker_direction = "dst_domain"
-        attacker = query
-        threat_level = "info"
-        confidence = 0.7
-        description = f"The DNS query {query} was resolved to {answer}"
-        timestamp = stime
-        category = "Anamoly.Behaviour"
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
+            query: str,
+            answer: str,
+            daddr: str,
+            profileid: str,
+            twid: str,
+            stime: str,
+            uid: List[str]
+    ) -> None:
+        threat_level: ThreatLevel = ThreatLevel.INFO
+        confidence: float = 0.7
+        twid: int = int(twid.replace("timewindow", ""))
+        saddr: str = profileid.split("_")[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        victim: Victim = Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=daddr
             )
+
+        description: str = f"The DNS query {query} was resolved to {answer}"
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.INVALID_DNS_RESOLUTION,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=twid,
+            uid=uid,
+            timestamp=stime,
+            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR)
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def for_port_0_connection(
             self,
