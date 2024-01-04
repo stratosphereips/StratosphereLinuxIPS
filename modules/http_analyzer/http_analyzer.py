@@ -111,7 +111,9 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         return False
 
     def check_multiple_empty_connections(
-        self, uid, contacted_host, timestamp, request_body_len, profileid, twid
+        self, uid: str, contacted_host: str, timestamp: str,
+            request_body_len: int,
+            profileid: str, twid: str
     ):
         """
         Detects more than 4 empty connections to google, bing, yandex and yahoo on port 80
@@ -140,25 +142,31 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
 
         uids, connections = self.connections_counter[host]
         if connections == self.empty_connections_threshold:
-            evidence_type = 'EmptyConnections'
-            attacker_direction = 'srcip'
-            attacker = profileid.split('_')[0]
-            threat_level = 'medium'
-            category = 'Anomaly.Connection' 
-            confidence = 1
-            description = f'multiple empty HTTP connections to {host}'
-            self.db.setEvidence(evidence_type,
-                                attacker_direction,
-                                attacker,
-                                threat_level,
-                                confidence,
-                                description,
-                                timestamp,
-                                category,
-                                profileid=profileid,
-                                twid=twid,
-                                uid=uids,
-                                victim=host)
+            threat_level: ThreatLevel = ThreatLevel.MEDIUM
+            confidence: float = 1
+            saddr: str = profileid.split('_')[0]
+            description: str = f'Multiple empty HTTP connections to {host}'
+
+            attacker = Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                )
+
+            evidence: Evidence = Evidence(
+                evidence_type=EvidenceType.EMPTY_CONNECTIONS,
+                attacker=attacker,
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=profileid.split('_')[1]),
+                timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                uid=uids,
+                timestamp=timestamp,
+                category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            )
+
+            self.db.setEvidence(evidence)
             # reset the counter
             self.connections_counter[host] = ([], 0)
             return True
