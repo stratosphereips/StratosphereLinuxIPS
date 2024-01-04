@@ -1492,44 +1492,54 @@ class SetEvidnceHelper:
         self.db.setEvidence(evidence)
 
     def smtp_bruteforce(
-            self,
-            flow: dict,
-            profileid,
-            twid,
-            uid,
-            smtp_bruteforce_threshold,
-            ):
-        saddr = flow['saddr']
-        daddr = flow['daddr']
-        stime = flow['starttime']
+        self,
+        flow: dict,
+        twid: str,
+        uid: List[str],
+        smtp_bruteforce_threshold: int,
+    ) -> None:
+        saddr: str = flow['saddr']
+        daddr: str = flow['daddr']
+        stime: str = flow['starttime']
 
-        confidence = 1
-        threat_level = 'high'
-        category = 'Attempt.Login'
-        attacker_direction = 'srcip'
-        evidence_type = 'SMTPLoginBruteforce'
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = f'doing SMTP login bruteforce to {daddr}. ' \
-                      f'{smtp_bruteforce_threshold} logins in 10 seconds. ' \
-                      f'{ip_identification}'
-        attacker = saddr
-        conn_count = smtp_bruteforce_threshold
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.HIGH
 
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            stime,
-            category,
-            conn_count=conn_count,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-            victim=daddr
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = (
+            f'doing SMTP login bruteforce to {daddr}. '
+            f'{smtp_bruteforce_threshold} logins in 10 seconds. '
+            f'{ip_identification}'
+        )
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        victim = Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=daddr
             )
+        conn_count: int = smtp_bruteforce_threshold
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.SMTP_LOGIN_BRUTEFORCE,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uid,
+            timestamp=stime,
+            category=IDEACategory.attempt_login,
+            conn_count=conn_count
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def malicious_ssl(
             self,
