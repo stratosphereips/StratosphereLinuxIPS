@@ -1342,65 +1342,79 @@ class SetEvidnceHelper:
         self.db.setEvidence(evidence)
 
 
-    def malicious_JA3(
-            self,
-            malicious_ja3_dict,
-            ip,
-            profileid,
-            twid,
-            uid,
-            timestamp,
-            victim,
-            type_='',
-            ioc='',
-            ):
+    def malicious_ja3(
+        self,
+        malicious_ja3_dict: dict,
+        twid: str,
+        uid: List[str],
+        timestamp: str,
+        victim: str,
+        attacker: str,
+        type_: str = '',
+        ioc: str = '',
+    ) -> None:
         malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
-        tags = malicious_ja3_dict.get('tags', '')
-        ja3_description = malicious_ja3_dict['description']
-        threat_level = malicious_ja3_dict['threat_level']
+        tags: str = malicious_ja3_dict.get('tags', '')
+        ja3_description: str = malicious_ja3_dict['description']
+        threat_level: ThreatLevel = ThreatLevel(
+            malicious_ja3_dict['threat_level']
+            )
 
         if type_ == 'ja3':
-            description = f'Malicious JA3: {ioc} from source address {ip} '
-            evidence_type = 'MaliciousJA3'
-            category = 'Intrusion.Botnet'
-            source_target_tag = 'Botnet'
-            attacker_direction = 'srcip'
+            description = f'Malicious JA3: {ioc} from source address ' \
+                          f'{attacker} '
+            evidence_type: EvidenceType = EvidenceType.MALICIOUS_JA3
+            source_target_tag: Tag = Tag.BOTNET
+            attacker_direction: Direction = Direction.SRC
+            victim_direction: Direction = Direction.DST
 
         elif type_ == 'ja3s':
             description = (
-                f'Malicious JA3s: (possible C&C server): {ioc} to server {ip} '
+                f'Malicious JA3s: (possible C&C server): {ioc} to server '
+                f'{attacker} '
             )
-            evidence_type = 'MaliciousJA3s'
-            category = 'Intrusion.Botnet'
-            source_target_tag = 'CC'
-            attacker_direction = 'dstip'
+
+            evidence_type: EvidenceType = EvidenceType.MALICIOUS_JA3S
+            source_target_tag: Tag = Tag.CC
+            attacker_direction: Direction = Direction.DST
+            victim_direction: Direction = Direction.SRC
 
         # append daddr identification to the description
-        ip_identification = self.db.get_ip_identification(ip)
-        description += f'{ip_identification}  '
-
+        ip_identification: str = self.db.get_ip_identification(attacker)
+        description += f'{ip_identification} '
         if ja3_description != 'None':
             description += f'description: {ja3_description} '
-
         description += f'tags: {tags}'
-        attacker = ip
-        confidence = 1
 
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence,
-            description,
-            timestamp,
-			category,
-			source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-			uid=uid,
-			victim=victim
-            )
+        attacker: Attacker = Attacker(
+            direction=attacker_direction,
+            attacker_type=IoCType.IP,
+            value=attacker
+        )
+        victim: Victim = Victim(
+                direction=victim_direction,
+                victim_type=IoCType.IP,
+                value=victim
+        )
+        confidence: float = 1
+
+        evidence: Evidence = Evidence(
+            evidence_type=evidence_type,
+            attacker=attacker,
+            victim=Victim(direction=Direction.DST, victim_type=IoCType.IP, value=victim),
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=attacker),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory.intrusion_botnet,
+            source_target_tag=source_target_tag
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def data_exfiltration(
             self,
