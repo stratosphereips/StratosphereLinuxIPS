@@ -1334,7 +1334,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         self.set_evidence.smtp_bruteforce(
             flow,
-            profileid,
             twid,
             uids,
             self.smtp_bruteforce_threshold,
