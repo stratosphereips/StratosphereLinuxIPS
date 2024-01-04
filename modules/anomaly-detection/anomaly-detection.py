@@ -1,10 +1,13 @@
 # Must imports
 from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts._module import IModule
 import multiprocessing
-from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
+from slips_files.core.database.database_manager import __database__
+from slips_files.common.parsers.config_parser import ConfigParser
 import sys
+import threading
+from multiprocessing import Queue
 
 # Your imports
 import pandas as pd
@@ -15,13 +18,23 @@ import os
 import threading
 import time
 
-class Module(Module, multiprocessing.Process):
+class Module(IModule, multiprocessing.Process)-> None:
     # Name: short name of the module. Do not use spaces
     name = 'Anomaly Detector'
     description = 'Anomaly detector for zeek conn.log files'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
+        self.c1 = self.db.subscribe('new_arp')
+        self.c2 = self.db.subscribe('tw_closed')
+        self.channels = {
+            'new_arp': self.c1,
+            'tw_closed': self.c2,
+        }
+        self.read_configuration()
+
+
+
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         self.read_configuration()
