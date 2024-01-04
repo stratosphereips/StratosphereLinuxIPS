@@ -1451,41 +1451,45 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def bad_smtp_login(
             self,
-            saddr,
-            daddr,
-            stime,
-            profileid,
-            twid,
-            uid
-            ):
-        confidence = 1
-        threat_level = 'high'
-        category = 'Attempt.Login'
-        evidence_type = 'BadSMTPLogin'
-        attacker_direction = 'srcip'
-        attacker = saddr
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = (
-            f'doing bad SMTP login to {daddr} {ip_identification}'
+            saddr: str,
+            daddr: str,
+            stime: str,
+            twid: str,
+            uid: List[str]
+    ) -> None:
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.HIGH
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        victim = Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=daddr
+            )
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'doing bad SMTP login to {daddr} {ip_identification}'
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.BAD_SMTP_LOGIN,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uid,
+            timestamp=stime,
+            category=IDEACategory.attempt_login
         )
 
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            stime,
-            category,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-            victim=daddr
-            )
+        self.db.setEvidence(evidence)
 
     def smtp_bruteforce(
             self,

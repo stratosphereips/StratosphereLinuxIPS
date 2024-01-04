@@ -1308,7 +1308,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             )
 
         self.set_evidence.bad_smtp_login(
-            saddr, daddr, stime, profileid, twid, uid
+            saddr, daddr, stime, twid, uid
         )
 
         timestamps = self.smtp_bruteforce_cache[profileid][0]
