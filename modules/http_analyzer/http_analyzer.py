@@ -546,20 +546,34 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         if ('pastebin' in ip_identification
             and response_body_len > self.pastebin_downloads_threshold
             and method == 'GET'):
-            attacker_direction = 'dstip'
-            source_target_tag = 'Malware'
-            attacker = daddr
-            evidence_type = 'PastebinDownload'
-            threat_level = 'info'
-            category = 'Anomaly.Behaviour'
-            confidence = 1
+            confidence: float = 1
+            threat_level: ThreatLevel = ThreatLevel.INFO
+            saddr = profileid.split('_')[1]
+
             response_body_len = utils.convert_to_mb(response_body_len)
-            description = (
-               f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
+            description: str = f'A downloaded file from pastebin.com. ' \
+                               f'Size: {response_body_len} MBs'
+            attacker = Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                )
+
+            evidence: Evidence = Evidence(
+                evidence_type= EvidenceType.PASTEBIN_DOWNLOAD,
+                attacker=attacker,
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=saddr),
+                timewindow=TimeWindow(number=int(twid)),
+                uid=uid,
+                timestamp=timestamp,
+                category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+                source_target_tag=Tag.MALWARE
             )
-            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                     description, timestamp, category, source_target_tag=source_target_tag,
-                                     profileid=profileid, twid=twid, uid=uid)
+
+            self.db.setEvidence(evidence)
             return True
 
 
