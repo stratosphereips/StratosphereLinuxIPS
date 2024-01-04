@@ -1229,21 +1229,14 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if reconnections < 5:
             return
 
-        ip_identification = (
-            self.db.get_ip_identification(daddr)
-        )
-        description = (
-            f'Multiple reconnection attempts to Destination IP:'
-            f' {daddr} {ip_identification} '
-            f'from IP: {saddr} reconnections: {reconnections}'
-        )
-        self.set_evidence.for_multiple_reconnection_attempts(
+
+        self.set_evidence.multiple_reconnection_attempts(
             profileid,
             twid,
             daddr,
-            description,
             uids,
             timestamp,
+            reconnections,
         )
         # reset the reconnection attempts of this src->dst
         current_reconnections[key] = (0, [])

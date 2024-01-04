@@ -1071,32 +1071,56 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-    def for_multiple_reconnection_attempts(
+    def multiple_reconnection_attempts(
             self,
             profileid,
             twid,
-            attacker,
-            description,
+            daddr,
             uid,
-            timestamp
-            ):
+            timestamp,
+            reconnections
+    ) -> None:
         """
         Set evidence for Reconnection Attempts.
         """
-        confidence = 0.5
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        attacker_direction = 'dstip'
-        evidence_type = 'MultipleReconnectionAttempts'
+        confidence: float = 0.5
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+        saddr: str = profileid.split("_")[-1]
 
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp, category, profileid=profileid, twid=twid, uid=uid
-            )
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        ip_identification = self.db.get_ip_identification(daddr)
+        description = (
+            f'Multiple reconnection attempts to Destination IP:'
+            f' {daddr} {ip_identification} '
+            f'from IP: {saddr} reconnections: {reconnections}'
+        )
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS,
+            attacker=attacker,
+            victim = victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC)
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def for_connection_to_multiple_ports(
             self,
