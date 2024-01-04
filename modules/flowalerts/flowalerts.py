@@ -1397,24 +1397,25 @@ class FlowAlerts(IModule, multiprocessing.Process):
             if len(dstports) <= 1:
                 return
 
-            ip_identification = self.db.get_ip_identification(daddr)
-            description = (
-                f'Connection to multiple ports {dstports} of '
-                f'Destination IP: {daddr}. {ip_identification}'
-            )
             uids = daddrs[daddr]['uid']
-            self.set_evidence.for_connection_to_multiple_ports(
+
+            victim: str = daddr
+            attacker: str = profileid.split("_")[-1]
+
+            self.set_evidence.connection_to_multiple_ports(
                 profileid,
                 twid,
                 daddr,
-                description,
                 uids,
                 timestamp,
+                dstports,
+                victim,
+                attacker,
             )
 
         # Connection to multiple port to the Source IP.
         # Happens in the mode 'all'
-        elif profileid.split('_')[1] == daddr:
+        elif profileid.split('_')[-1] == daddr:
             direction = 'Src'
             state = 'Established'
             protocol = 'TCP'
@@ -1440,16 +1441,17 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 return
 
             uids = saddrs[saddr]['uid']
-            description = f'Connection to multiple ports {dstports} ' \
-                          f'of Source IP: {saddr}'
+            attacker: str = daddr
+            victim: str = profileid.split("_")[-1]
 
-            self.set_evidence.for_connection_to_multiple_ports(
+            self.set_evidence.connection_to_multiple_ports(
                 profileid,
                 twid,
-                daddr,
-                description,
                 uids,
                 timestamp,
+                dstports,
+                victim,
+                attacker
             )
 
     def detect_malicious_ja3(
