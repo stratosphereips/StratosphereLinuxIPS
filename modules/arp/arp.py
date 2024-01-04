@@ -370,7 +370,7 @@ class ARP(IModule, multiprocessing.Process):
             self.db.setEvidence(evidence)
             return True
 
-    def detect_MITM_ARP_attack(self, profileid, twid, uid, saddr, ts, src_mac):
+    def detect_MITM_ARP_attack(self, twid, uid, saddr, ts, src_mac):
         """Detects when a MAC with IP A, is trying to tell others that
         now that MAC is also for IP B (arp cache attack)"""
         # Todo in rare cases, the vendor and IP of this mac is known AFTER
@@ -404,16 +404,13 @@ class ARP(IModule, multiprocessing.Process):
             # From our db we know that:
             # original_IP has src_MAC
             # now saddr has src_MAC and saddr isn't the same as original_IP
-            # so this is either a MITM arp attack or the IP address of this src_mac simply changed
+            # so this is either a MITM arp attack or the IP
+            # address of this src_mac simply changed
             # todo how to find out which one is it??
-            confidence = 0.2   # low confidence for now
-            threat_level = 'critical'
-            evidence_type = 'MITM-arp-attack'
-            # This may be arp spoofing
-            category = 'Recon'
-            attacker_direction = 'srcip'
-            source_target_tag = 'MITM'
-            attacker = profileid.split('_')[1]
+            # Assuming that 'threat_level' and 'category'
+            # are from predefined enums or constants
+            confidence: float = 0.2   # low confidence for now
+            threat_level: ThreatLevel = ThreatLevel.CRITICAL
 
             gateway_ip = self.db.get_gateway_ip()
             gateway_MAC = self.db.get_gateway_mac()
@@ -428,12 +425,38 @@ class ARP(IModule, multiprocessing.Process):
             if original_IP == gateway_ip:
                 original_IP = f'the gateway IP {original_IP}'
 
+            attacker: Attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            )
+
+            victim = Victim(
+                direction=Direction.DST,   #  TODO not really dst
+                victim_type=IoCType.IP,
+                value=original_IP,
+                )
+
             description = f'{saddr} performing a MITM ARP attack. The MAC {src_mac}, ' \
                           f'now belonging to {saddr}, was seen before for {original_IP}.'
             # self.print(f'{saddr} is claiming to have {src_mac}')
-            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                     description, ts, category, source_target_tag=source_target_tag,
-                                     profileid=profileid, twid=twid, uid=uid, victim=original_IP)
+
+            evidence: Evidence = Evidence(
+                evidence_type=EvidenceType.MITM_ARP_ATTACK,
+                attacker=attacker,
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=saddr),
+                timewindow=TimeWindow(number=int(twid)),
+                uid=uid,
+                timestamp=ts,
+                category=IDEACategory.recon,
+                source_target_tag=Tag.MITM,
+                victim=victim
+            )
+
+            self.db.setEvidence(evidence)
             return True
 
 
@@ -511,12 +534,13 @@ class ARP(IModule, multiprocessing.Process):
                 # A gratuitous ARP is always a reply. A MITM attack
                 # happens when there is a reply without a request
                 self.detect_MITM_ARP_attack(
-                    profileid, twid, uid, saddr, ts, src_mac
+                    twid, uid, saddr, ts, src_mac
                 )
             else:
                 # not gratuitous and request, may be an arp scan
                 self.check_arp_scan(
-                    profileid, twid, daddr, uid, ts, dst_mac, src_mac, operation, dst_hw, src_hw
+                    profileid, twid, daddr, uid, ts, dst_mac,
+                    src_mac, operation, dst_hw, src_hw
                 )
 
             if 'request' in operation:
