@@ -37,11 +37,11 @@ class SetEvidnceHelper:
         twid: str,
         uid: List[str]
     ):
-        src_profile = ProfileID(ip=profileid.split("_")[-1])
+        saddr: str = profileid.split("_")[-1]
         victim = Victim(
                     direction=Direction.SRC,
                     victim_type=IoCType.IP,
-                    value=src_profile.ip,
+                    value=saddr,
                     )
         attacker = Attacker(
                     direction=Direction.DST,
@@ -58,7 +58,7 @@ class SetEvidnceHelper:
                 category=IDEACategory(anomaly=Anomaly.TRAFFIC),
                 description=description,
                 victim=victim,
-                profile=src_profile,
+                profile=ProfileID(ip=saddr),
                 timewindow=TimeWindow(number=twid_number),
                 uid=uid,
                 timestamp=stime,
@@ -1415,44 +1415,42 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def data_exfiltration(
-            self,
-            daddr,
-            src_mbs,
-            profileid,
-            twid,
-            uid,
-            ):
-        confidence = 0.6
-        threat_level = 'high'
-        attacker_direction = 'dstip'
-        source_target_tag = 'OriginMalware'
-        evidence_type = 'DataUpload'
-        category = 'Malware'
-        attacker = daddr
-        ip_identification = self.db.get_ip_identification(
-            daddr
-            )
-        description = f'Large data upload. {src_mbs} MBs sent to {daddr} '
-        description += f'{ip_identification}'
-        timestamp = utils.convert_format(
-            datetime.datetime.now(), utils.alerts_format
-            )
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
-            )
+        self,
+        daddr: str,
+        src_mbs: float,
+        profileid: str,
+        twid: str,
+        uid: List[str],
+    ) -> None:
+        confidence: float = 0.6
+        threat_level: ThreatLevel = ThreatLevel.HIGH
+        saddr: str = profileid.split("_")[-1]
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'Large data upload. {src_mbs} MBs sent to {daddr} {ip_identification}'
+        timestamp: str = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.DATA_UPLOAD,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory.malware,
+            source_target_tag=Tag.ORIGIN_MALWARE
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def bad_smtp_login(
             self,
