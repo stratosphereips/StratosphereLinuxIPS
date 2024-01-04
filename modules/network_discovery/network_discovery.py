@@ -2,7 +2,22 @@ from slips_files.common.imports import *
 import json
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
-
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        Proto,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Anomaly,
+        Tag
+    )
 
 
 class NetworkDiscovery(IModule, multiprocessing.Process):
@@ -48,18 +63,26 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
         self.horizontal_ps.combine_evidence()
         self.vertical_ps.combine_evidence()
 
-    def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
+    def check_icmp_sweep(
+            self,
+            msg: str,
+            note: str,
+            profileid: str,
+            uid: str,
+            twid: str,
+            timestamp: str
+            ):
         """
-        Use our own Zeek scripts to detect ICMP scans. 
-        Threshold is on the scrips and it is 25 icmp flows
+        Use our own Zeek scripts to detect ICMP scans.
+        Threshold is on the scripts and it is 25 ICMP flows
         """
 
         if 'TimestampScan' in note:
-            evidence_type = 'ICMP-Timestamp-Scan'
+            evidence_type = EvidenceType.ICMP_TIMESTAMP_SCAN
         elif 'ICMPAddressScan' in note:
-            evidence_type = 'ICMP-AddressScan'
+            evidence_type = EvidenceType.ICMP_ADDRESS_SCAN
         elif 'AddressMaskScan' in note:
-            evidence_type = 'ICMP-AddressMaskScan'
+            evidence_type = EvidenceType.ICMP_ADDRESS_MASK_SCAN
         else:
             # unsupported notice type
             return False
@@ -67,17 +90,34 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
         hosts_scanned = int(msg.split('on ')[1].split(' hosts')[0])
         # get the confidence from 0 to 1 based on the number of hosts scanned
         confidence = 1 / (255 - 5) * (hosts_scanned - 255) + 1
-        threat_level = 'medium'
-        category = 'Recon.Scanning'
-        attacker_direction = 'srcip'
-        # this is the last dip scanned
-        attacker = profileid.split('_')[1]
-        source_target_tag = 'Recon'
-        description = msg
-        # this one is detected by zeek so we can't track the uids causing it
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, conn_count=hosts_scanned,
-                                 profileid=profileid, twid=twid, uid=uid)
+        threat_level = ThreatLevel.MEDIUM
+        saddr = profileid.split('_')[1]
+
+        # this is the last IP scanned
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+            )
+
+        # this one is detected by Zeek, so we can't track the UIDs causing it
+        evidence = Evidence(
+            evidence_type=evidence_type,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=msg,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[uid],
+            timestamp=timestamp,
+            category=IDEACategory.recon_scanning,
+            conn_count=hosts_scanned,
+            source_target_tag=Tag.RECON
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def check_portscan_type3(self):
         """

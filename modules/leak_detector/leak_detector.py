@@ -24,6 +24,8 @@ from slips_files.core.evidence_structure.evidence import \
         Anomaly,
         Tag
     )
+
+
 class LeakDetector(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Leak Detector'

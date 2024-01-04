@@ -23,7 +23,6 @@ from slips_files.core.evidence_structure.evidence import \
         Evidence,
         ProfileID,
         TimeWindow,
-        Victim,
         Attacker,
         Proto,
         ThreatLevel,
