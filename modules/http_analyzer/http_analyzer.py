@@ -1,9 +1,25 @@
 from slips_files.common.abstracts._module import IModule
-from slips_files.common.imports import *
 import json
 import urllib
 import requests
 from typing import Union
+
+from slips_files.common.imports import *
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Anomaly,
+        Tag
+    )
 
 
 class HTTPAnalyzer(IModule, multiprocessing.Process):
@@ -413,31 +429,40 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
 
 
     def set_evidence_http_traffic(self, daddr, profileid, twid, uid, timestamp):
-        """
-        Detect when a new HTTP flow is found stating that the traffic is unencrypted
-        """
-        confidence = 1
-        threat_level = 'low'
-        source_target_tag = 'SendingUnencryptedData'
-        category = 'Anomaly.Traffic'
-        evidence_type = 'HTTPtraffic'
-        attacker_direction = 'srcip'
-        attacker = daddr
+        confidence: float = 1
+        threat_level: ThreatLevel = ThreatLevel.LOW
         saddr = profileid.split('_')[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+            )
         description = f'Unencrypted HTTP traffic from {saddr} to {daddr}.'
 
-        self.db.setEvidence(evidence_type,
-                            attacker_direction,
-                            attacker,
-                            threat_level,
-                            confidence,
-                            description,
-                            timestamp,
-                            category,
-                            source_target_tag=source_target_tag,
-                            profileid=profileid,
-                            twid=twid,
-                            uid=uid)
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.HTTP_TRAFFIC,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=profileid.split('_')[1]),
+            timewindow=TimeWindow(number=int(twid)),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            source_target_tag=Tag.SENDING_UNENCRYPTED_DATA,
+            victim=victim
+        )
+
+        self.db.setEvidence(evidence)
+
         return True
 
 
