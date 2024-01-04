@@ -155,28 +155,46 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
     def set_evidence_incompatible_user_agent(
         self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid
     ):
-        attacker_direction = 'srcip'
-        source_target_tag = 'IncompatibleUserAgent'
-        attacker = profileid.split('_')[1]
-        evidence_type = 'IncompatibleUserAgent'
-        threat_level = 'high'
-        category = 'Anomaly.Behaviour'
-        confidence = 1
-        os_type = user_agent.get('os_type', '').lower()
-        os_name = user_agent.get('os_name', '').lower()
-        browser = user_agent.get('browser', '').lower()
-        user_agent = user_agent.get('user_agent', '')
-        victim = f'{host}{uri}'
-        description = (
-            f'using incompatible user-agent ({user_agent}) that belongs to OS: {os_name} '
+        source_target_tag: str = 'IncompatibleUserAgent'
+        threat_level: ThreatLevel = ThreatLevel.HIGH
+        saddr = profileid.split('_')[1]
+        confidence: float = 1
+
+        os_type: str = user_agent.get('os_type', '').lower()
+        os_name: str = user_agent.get('os_name', '').lower()
+        browser: str = user_agent.get('browser', '').lower()
+        user_agent: str = user_agent.get('user_agent', '')
+        description: str = (
+            f'using incompatible user-agent ({user_agent}) '
+            f'that belongs to OS: {os_name} '
             f'type: {os_type} browser: {browser}. '
-            f'while connecting to {victim}. '
+            f'while connecting to {host}{uri}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid, victim=victim)
-        
+
+        attacker: Attacker = Attacker(
+            direction= Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.INCOMPATIBLE_USER_AGENT,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid)),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+            source_target_tag=source_target_tag,
+        )
+
+        self.db.setEvidence(evidence)
+
+
     def report_executable_mime_type(self, mime_type, attacker, profileid, twid, uid, timestamp):
         confidence = 1
         threat_level = 'low'
