@@ -883,6 +883,7 @@ class SetEvidnceHelper:
         # from a Zeek file so we're sure it's accurate
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
+        twid: int = int(twid.replace("timewindow", ""))
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
         description: str = f'vertical port scan by Zeek engine. {msg}'
         conn_count: int = int(msg.split('least ')[1].split(' unique')[0])
@@ -937,6 +938,7 @@ class SetEvidnceHelper:
 
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.INFO
+        twid: int = int(twid.replace("timewindow", ""))
 
         attacker: Attacker = Attacker(
             direction=Direction.SRC,
@@ -985,6 +987,7 @@ class SetEvidnceHelper:
         Set an evidence for a long connection.
         """
         threat_level: ThreatLevel = ThreatLevel.LOW
+        twid: int = int(twid.replace("timewindow", ""))
         # Confidence depends on how long the connection.
         # Scale the confidence from 0 to 1; 1 means 24 hours long.
         confidence: float = 1 / (3600 * 24) * (duration - 3600 * 24) + 1
@@ -1043,6 +1046,7 @@ class SetEvidnceHelper:
         confidence: float = 0.5
         threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split("_")[-1]
+        twid: int = int(twid.replace("timewindow", ""))
 
         attacker: Attacker = Attacker(
             direction=Direction.SRC,
@@ -1093,6 +1097,7 @@ class SetEvidnceHelper:
         confidence: float = 0.5
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
         saddr: str = profileid.split("_")[-1]
+        twid: int = int(twid.replace("timewindow", ""))
 
         attacker: Attacker = Attacker(
             direction=Direction.SRC,
@@ -1128,69 +1133,110 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
-    def for_connection_to_multiple_ports(
+    def connection_to_multiple_ports(
             self,
-            profileid,
-            twid,
-            ip,
-            description,
-            uid,
-            timestamp
-            ):
+            profileid: str,
+            twid: str,
+            uid: List[str],
+            timestamp: str,
+            dstports: list,
+            victim: str,
+            attacker: str,
+    ) -> None:
         """
         Set evidence for connection to multiple ports.
         """
-        confidence = 0.5
-        threat_level = 'medium'
-        category = 'Anomaly.Connection'
-        attacker_direction = 'dstip'
-        evidence_type = 'ConnectionToMultiplePorts'
-        attacker = ip
-
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp,
-            category,
-            profileid=profileid, twid=twid, uid=uid
+        confidence: float = 0.5
+        threat_level: ThreatLevel = ThreatLevel.INFO
+        twid: int = int(twid.replace("timewindow", ""))
+        ip_identification = self.db.get_ip_identification(attacker)
+        description = (
+                f'Connection to multiple ports {dstports} of '
+                f'IP: {attacker}. {ip_identification}'
             )
+
+        if attacker in profileid:
+            attacker_direction = Direction.SRC
+            victim_direction = Direction.DST
+            profile_ip = attacker
+        else:
+            attacker_direction = Direction.DST
+            victim_direction = Direction.SRC
+            profile_ip = victim
+
+        victim: Victim = Victim(
+                direction=victim_direction,
+                victim_type=IoCType.IP,
+                value=victim
+            )
+        attacker: Attacker = Attacker(
+            direction=attacker_direction,
+            attacker_type=IoCType.IP,
+            value=attacker
+        )
+
+        evidence = Evidence(
+            evidence_type=EvidenceType.CONNECTION_TO_MULTIPLE_PORTS,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=profile_ip),
+            timewindow=TimeWindow(number=twid),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.CONNECTION)
+        )
+
+        self.db.setEvidence(evidence)
 
     def suspicious_dns_answer(
             self,
-            query,
-            answer,
-            entropy,
-            daddr,
-            profileid,
-            twid,
-            stime,
-            uid
-            ):
-        confidence = 0.6
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        evidence_type = 'HighEntropyDNSanswer'
-        attacker_direction = 'dstip'
-        attacker = daddr
-        description = f'A DNS TXT answer with high entropy. ' \
-                      f'query: {query} answer: "{answer}" entropy: {round(entropy, 2)} '
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence,
-            description,
-            stime,
-			category,
-			profileid=profileid,
-			twid=twid,
-			uid=uid
+            query: str,
+            answer: str,
+            entropy: float,
+            daddr: str,
+            profileid: str,
+            twid: str,
+            stime: str,
+            uid: List[str]
+    ) -> None:
+        confidence: float = 0.6
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+        twid: int = int(twid.replace("timewindow", ""))
+        saddr: str = profileid.split("_")[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.DST,
+            attacker_type=IoCType.IP,
+            value=daddr
+        )
+        victim: Victim = Victim(
+                direction=Direction.SRC,
+                victim_type=IoCType.IP,
+                value=saddr
             )
+
+        description: str = f'A DNS TXT answer with high entropy. ' \
+                           f'query: {query} answer: "{answer}" entropy: {round(entropy, 2)} '
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.HIGH_ENTROPY_DNS_ANSWER,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=daddr),
+            timewindow=TimeWindow(number=twid),
+            uid=uid,
+            timestamp=stime,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC)
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def invalid_dns_answer(
             self,
