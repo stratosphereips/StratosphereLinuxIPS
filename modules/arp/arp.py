@@ -256,18 +256,18 @@ class ARP(IModule, multiprocessing.Process):
             pass
 
 
-    def check_dstip_outside_localnet(
-        self, profileid, twid, daddr, uid, saddr, ts
-    ):
+    def check_dstip_outside_localnet(self, profileid, twid, daddr, uid, saddr, ts):
         """Function to setEvidence when daddr is outside the local network"""
 
         if '0.0.0.0' in saddr or '0.0.0.0' in daddr:
-            # this is the case of arp probe, not an arp outside of local network, don't alert
+            # this is the case of arp probe, not an
+            # arp outside of local network, don't alert
             return False
 
         daddr_as_obj = ipaddress.IPv4Address(daddr)
         if daddr_as_obj.is_multicast or daddr_as_obj.is_link_local:
-            # The arp to ‘outside’ the network should not detect multicast or link-local addresses.
+            # The arp to ‘outside’ the network should
+            # not detect multicast or link-local addresses.
             return False
 
         for network in self.home_network:
@@ -279,17 +279,45 @@ class ARP(IModule, multiprocessing.Process):
         local_net = saddr.split('.')[0]
         if not daddr.startswith(local_net):
             # comes here if the IP isn't in any of the local networks
-            confidence = 0.6
-            threat_level = 'low'
-            ip_identification = self.db.get_ip_identification(daddr)
-            description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
-            evidence_type = 'arp-outside-localnet'
-            category = 'Anomaly.Behaviour'
-            attacker_direction = 'srcip'
-            attacker = profileid.split('_')[1]
-            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                     description, ts, category, profileid=profileid, twid=twid, uid=uid, victim=daddr)
+            confidence: float = 0.6
+            threat_level: ThreatLevel = ThreatLevel.LOW
+            ip_identification: str = self.db.get_ip_identification(daddr)
+            saddr: str = profileid.split('_')[1]
+
+            description: str = f'{saddr} sending ARP packet to a destination ' \
+                               f'address outside of local network: {daddr}. ' \
+                               f'{ip_identification}'
+
+            attacker: Attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            )
+            victim = Victim(
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=daddr
+                )
+
+            evidence: Evidence = Evidence(
+                evidence_type= EvidenceType.ARP_OUTSIDE_LOCALNET,
+                attacker=attacker,
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=profileid.split('_')[1]),
+                timewindow=TimeWindow(number=int(twid)),
+                uid=uid,
+                timestamp=ts,
+                category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+                victim=victim
+            )
+
+            self.db.setEvidence(evidence)
             return True
+
+        return False
+
 
     def detect_unsolicited_arp(
         self, profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw
