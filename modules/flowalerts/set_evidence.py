@@ -1354,11 +1354,12 @@ class SetEvidnceHelper:
         ioc: str = '',
     ) -> None:
         malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
+
+        threat_level: float = utils.threat_levels[malicious_ja3_dict['threat_level']]
+        threat_level: ThreatLevel = ThreatLevel(threat_level)
+
         tags: str = malicious_ja3_dict.get('tags', '')
         ja3_description: str = malicious_ja3_dict['description']
-        threat_level: ThreatLevel = ThreatLevel(
-            malicious_ja3_dict['threat_level']
-            )
 
         if type_ == 'ja3':
             description = f'Malicious JA3: {ioc} from source address ' \
@@ -1556,10 +1557,10 @@ class SetEvidnceHelper:
         cert_description: str = ssl_info_from_db['description']
 
         confidence: float = 1.0
-        #@@@@@@@@@@@@ TODO make sure that this info is stored as a float in
-        # the db, not a str!
-        threat_level: ThreatLevel = ThreatLevel(ssl_info_from_db[
-                                                    'threat_level'])
+        threat_level: float = utils.threat_levels[
+            ssl_info_from_db['threat_level']
+        ]
+        threat_level: ThreatLevel = ThreatLevel(threat_level)
 
         ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = f'Malicious SSL certificate to server {daddr}.' \
