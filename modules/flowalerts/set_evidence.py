@@ -1027,11 +1027,12 @@ class SetEvidnceHelper:
         )
 
         self.db.setEvidence(evidence)
+
     def self_signed_certificates(
             self,
             profileid,
             twid,
-            attacker,
+            daddr,
             uid,
             timestamp,
             server_name
@@ -1043,14 +1044,19 @@ class SetEvidnceHelper:
         threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split("_")[-1]
 
-        attacker_obj: Attacker = Attacker(
-            direction=Direction.DST,
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
             attacker_type=IoCType.IP,
-            value=attacker
+            value=saddr
+        )
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
         )
 
-        ip_identification: str = self.db.get_ip_identification(attacker)
-        description = f'Self-signed certificate. Destination IP: {attacker}.' \
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description = f'Self-signed certificate. Destination IP: {daddr}.' \
                       f' {ip_identification}'
 
         if server_name:
@@ -1058,7 +1064,8 @@ class SetEvidnceHelper:
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.SELF_SIGNED_CERTIFICATE,
-            attacker=attacker_obj,
+            attacker=attacker,
+            victim=victim,
             threat_level=threat_level,
             confidence=confidence,
             description=description,
