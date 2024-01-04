@@ -189,6 +189,8 @@ class CCDetection(IModule, multiprocessing.Process):
                         'flow': flow,
                         'uid': uid,
                     }
+                    # we only check malicious jarm hashes when there's a CC
+                    # detection
                     self.db.publish('check_jarm_hash', json.dumps(to_send))
 
             """

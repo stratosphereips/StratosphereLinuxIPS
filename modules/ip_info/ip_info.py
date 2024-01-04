@@ -630,3 +630,18 @@ class IPInfo(IModule, multiprocessing.Process):
             ip = msg['data']
             self.handle_new_ip(ip)
 
+        if msg:= self.get_msg('check_jarm_hash'):
+            flow: dict = json.loads(msg['data'])
+            if flow['attacker_type'] == 'ip':
+                jarm_hash: str = self.JARM.JARM_hash(
+                    flow['attacker'],
+                    flow['flow']['port']
+                )
+
+                if self.db.is_malicious_jarm(jarm_hash):
+                    self.set_evidence_malicious_jarm_hash(
+                        flow['flow'],
+                        flow['uid'],
+                        flow['twid']
+                    )
+
