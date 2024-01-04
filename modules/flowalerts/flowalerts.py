@@ -1475,27 +1475,27 @@ class FlowAlerts(IModule, multiprocessing.Process):
         malicious_ja3_dict = self.db.get_ja3_in_IoC()
 
         if ja3 in malicious_ja3_dict:
-            self.set_evidence.malicious_JA3(
+            self.set_evidence.malicious_ja3(
                 malicious_ja3_dict,
-                saddr,
                 profileid,
                 twid,
                 uid,
                 timestamp,
                 daddr,
+                saddr,
                 type_='ja3',
                 ioc=ja3,
             )
 
         if ja3s in malicious_ja3_dict:
-            self.set_evidence.malicious_JA3(
+            self.set_evidence.malicious_ja3(
                 malicious_ja3_dict,
-                daddr,
                 profileid,
                 twid,
                 uid,
                 timestamp,
                 saddr,
+                daddr,
                 type_='ja3s',
                 ioc=ja3s,
             )
