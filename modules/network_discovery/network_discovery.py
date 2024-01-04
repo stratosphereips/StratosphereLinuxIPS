@@ -310,28 +310,6 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
 
         self.db.setEvidence(evidence)
 
-
-        if number_of_scanned_ips == 1:
-            description = (
-                            f'ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
-                            f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
-                            f'Confidence: {confidence}. by Slips'
-                        )
-            victim = scanned_ip
-        else:
-            description = (
-                f'ICMP scanning {number_of_scanned_ips} different IPs. ICMP scan type: {attack}. '
-                f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
-                f'Confidence: {confidence}. by Slips'
-            )
-            # not a single victim, there are many
-            victim = ''
-
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
-                                 proto=protocol, profileid=profileid, twid=twid, uid=icmp_flows_uids, victim=victim)
-
-
     def set_evidence_dhcp_scan(
             self,
             timestamp,
@@ -340,23 +318,38 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             uids,
             number_of_requested_addrs
     ):
-        evidence_type = 'DHCPScan'
-        attacker_direction = 'srcip'
-        source_target_tag = 'Recon'
-        srcip = profileid.split('_')[-1]
-        attacker = srcip
-        threat_level = 'medium'
-        category = 'Recon.Scanning'
+        threat_level = ThreatLevel.MEDIUM
         confidence = 0.8
+        srcip = profileid.split('_')[-1]
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=srcip
+            )
         description = (
-            f'Performing a DHCP scan by requesting {number_of_requested_addrs} different IP addresses. '
+            f'Performing a DHCP scan by requesting '
+            f'{number_of_requested_addrs} different IP addresses. '
             f'Threat Level: {threat_level}. '
             f'Confidence: {confidence}. by Slips'
         )
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag,
-                                 conn_count=number_of_requested_addrs, profileid=profileid, twid=twid, uid=uids)
+        evidence = Evidence(
+            evidence_type=EvidenceType.DHCP_SCAN,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uids,
+            timestamp=timestamp,
+            category=IDEACategory.recon_scanning,
+            conn_count=number_of_requested_addrs,
+            source_target_tag=Tag.RECON
+        )
+
+        self.db.setEvidence(evidence)
+
 
 
     def check_dhcp_scan(self, flow_info):
