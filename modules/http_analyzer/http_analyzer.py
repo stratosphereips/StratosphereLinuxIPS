@@ -203,7 +203,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             uid: str,
             timestamp: str,
             daddr: str
-                                    ):
+            ):
         confidence: float = 1
         threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split('_')[1]
@@ -299,7 +299,8 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             for keyword in tuple_:
                 if keyword in f'{os_name} {os_type}':
                     # from the same example,
-                    # this means that one of these keywords [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
+                    # this means that one of these keywords
+                    # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
                     # is found in the UA that belongs to an apple device
                     self.set_evidence_incompatible_user_agent(
                         host,
@@ -335,9 +336,11 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         # returns the following
         # {"agent_type":"Browser","agent_name":"Internet Explorer","agent_version":"8.0",
         # "os_type":"Windows","os_name":"Windows 7","os_versionName":"","os_versionNumber":"",
-        # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
+        # "os_producer":"","os_producerURL":"","linux_distibution"
+        # :"Null","agent_language":"","agent_languageTag":""}
         try:
-            # responses from this domain are broken for now. so this is a temp fix until they fix it from their side
+            # responses from this domain are broken for now. so this
+            # is a temp fix until they fix it from their side
             json_response = json.loads(response.text)
         except json.decoder.JSONDecodeError:
             # unexpected server response
@@ -355,7 +358,8 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         # keep a history of the past user agents
         self.db.add_all_user_agent_to_profile(profileid, user_agent)
 
-        # don't make a request again if we already have a user agent associated with this profile
+        # don't make a request again if we already have a
+        # user agent associated with this profile
         if self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return False
@@ -427,14 +431,13 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         return UA_info
 
     def check_multiple_UAs(
-        self,
-        cached_ua: dict,
-        user_agent: dict,
-        timestamp,
-        profileid,
-        twid,
-        uid,
-    ):
+            self,
+            cached_ua: dict,
+            user_agent: dict,
+            timestamp,
+            profileid,
+            twid,
+            uid):
         """
         Detect if the user is using an Apple UA, then android, then linux etc.
         Doesn't check multiple ssh clients
@@ -443,10 +446,10 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         """
         if not cached_ua or not user_agent:
             return False
+
         os_type = cached_ua['os_type']
         os_name = cached_ua['os_name']
-        # todo now the first UA seen is considered the only valid one and slips
-        #  will setevidence everytime another one is used, is that correct?
+
         for keyword in (os_type, os_name):
             # loop through each word in UA
             if keyword in user_agent:
@@ -455,20 +458,34 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                 # we will find the keyword 'Linux' in both UAs, so we shouldn't alert
                 return False
 
-        attacker_direction = 'srcip'
-        source_target_tag = 'MultipleUserAgent'
-        attacker = profileid.split('_')[1]
-        evidence_type = 'MultipleUserAgent'
-        threat_level = 'info'
-        category = 'Anomaly.Behaviour'
-        confidence = 1
-        ua = cached_ua.get('user_agent', '')
-        description = (
-            f'using multiple user-agents: "{ua}" then "{user_agent}"'
+        threat_level: ThreatLevel = ThreatLevel.INFO
+        confidence: float = 1
+        saddr: str = profileid.split('_')[1]
+        attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            )
+
+        ua: str = cached_ua.get('user_agent', '')
+        description: str = f'Using multiple user-agents: "{ua}" then "{user_agent}"'
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.MULTIPLE_USER_AGENT,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid)),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+            source_target_tag=Tag.MULTIPLE_USER_AGENT
         )
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+
+        self.db.setEvidence(evidence)
+
         return True
 
 
