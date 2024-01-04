@@ -195,21 +195,47 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         self.db.setEvidence(evidence)
 
 
-    def report_executable_mime_type(self, mime_type, attacker, profileid, twid, uid, timestamp):
-        confidence = 1
-        threat_level = 'low'
-        source_target_tag = 'ExecutableMIMEType'
-        category = 'Anomaly.File'
-        evidence_type = 'ExecutableMIMEType'
-        attacker_direction = 'dstip'
-        srcip = profileid.split('_')[1]
-        ip_identification = self.db.get_ip_identification(attacker)
-        description = f'download of an executable with mime type: {mime_type} ' \
-                      f'by {srcip} from {attacker} {ip_identification}.'
+    def report_executable_mime_type(
+            self,
+            mime_type: str,
+            profileid: str,
+            twid: str,
+            uid: str,
+            timestamp: str,
+            daddr: str
+                                    ):
+        confidence: float = 1
+        threat_level: ThreatLevel = ThreatLevel.LOW
+        saddr: str = profileid.split('_')[1]
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
+        attacker_obj: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = (
+            f'Download of an executable with MIME type: {mime_type} '
+            f'by {saddr} from {daddr} {ip_identification}.'
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
+            attacker=attacker_obj,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=profileid.split('_')[1]),
+            timewindow=TimeWindow(number=int(twid)),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.FILE),
+            source_target_tag=Tag.EXECUTABLE_MIME_TYPE
+        )
+
+        self.db.setEvidence(evidence)
+
 
 
     def check_incompatible_user_agent(
@@ -582,11 +608,11 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             if self.detect_executable_mime_types(resp_mime_types):
                 self.report_executable_mime_type(
                     resp_mime_types,
-                    daddr,
                     profileid,
                     twid,
                     uid,
-                    timestamp
+                    timestamp,
+                    daddr
                 )
 
             self.check_incompatible_user_agent(
