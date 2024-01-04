@@ -295,7 +295,7 @@ class ARP(IModule, multiprocessing.Process):
             )
             victim = Victim(
                 direction=Direction.DST,
-                attacker_type=IoCType.IP,
+                victim_type=IoCType.IP,
                 value=daddr
                 )
 
@@ -320,9 +320,20 @@ class ARP(IModule, multiprocessing.Process):
 
 
     def detect_unsolicited_arp(
-        self, profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw
+        self,
+        profileid: str,
+        twid: str,
+        uid,
+        ts: str,
+        dst_mac: str,
+        src_mac: str,
+        dst_hw: str,
+        src_hw: str
     ):
-        """Unsolicited arp is used to update the neighbours' arp caches but can also be used in arp spoofing"""
+        """
+        Unsolicited arp is used to update the neighbours'
+        arp caches but can also be used in arp spoofing
+        """
         if (
             dst_mac == 'ff:ff:ff:ff:ff:ff'
             and dst_hw == 'ff:ff:ff:ff:ff:ff'
@@ -330,18 +341,33 @@ class ARP(IModule, multiprocessing.Process):
             and src_hw != '00:00:00:00:00:00'
         ):
             # We're sure this is unsolicited arp
-            confidence = 0.8
-            threat_level = 'info'
-            description = 'broadcasting unsolicited ARP'
-            evidence_type = 'UnsolicitedARP'
-            # This may be arp spoofing
-            category = 'Information'
-            attacker_direction = 'srcip'
-            source_target_tag = 'Recon'   # srcip description
-            attacker = profileid.split('_')[1]
-            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                     description, ts, category, source_target_tag=source_target_tag,
-                                     profileid=profileid, twid=twid, uid=uid)
+            # it may be arp spoofing
+            confidence: float = 0.8
+            threat_level: ThreatLevel = ThreatLevel.INFO
+            description: str = 'broadcasting unsolicited ARP'
+
+            saddr: str = profileid.split('_')[-1]
+            attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            )
+
+            evidence: Evidence = Evidence(
+                evidence_type=EvidenceType.UNSOLICITED_ARP,
+                attacker=attacker,
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=saddr),
+                timewindow=TimeWindow(number=int(twid)),
+                uid=uid,
+                timestamp=ts,
+                source_target_tag=Tag.RECON,
+                category=IDEACategory.information
+            )
+
+            self.db.setEvidence(evidence)
             return True
 
     def detect_MITM_ARP_attack(self, profileid, twid, uid, saddr, ts, src_mac):
