@@ -41,6 +41,4 @@ yappi
 pytest-sugar
 memray
 aid_hash
-less
-tmux
 tensorflow

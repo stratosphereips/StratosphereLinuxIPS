@@ -47,6 +47,7 @@ RUN apt update && apt install -y --no-install-recommends \
     mc \
     iputils-ping \
     yara \
+    tmux \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 
