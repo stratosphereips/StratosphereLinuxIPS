@@ -1,6 +1,4 @@
-from slips_files.common.imports import *
 from modules.ip_info.jarm import JARM
-from .asn_info import ASN
 import platform
 import sys
 from typing import Union
@@ -16,7 +14,26 @@ import subprocess
 import re
 import time
 import asyncio
+
+from slips_files.common.imports import *
+from .asn_info import ASN
 from slips_files.common.slips_utils import utils
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        Proto,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Anomaly,
+        Tag
+    )
 
 
 class IPInfo(IModule, multiprocessing.Process):
@@ -487,39 +504,54 @@ class IPInfo(IModule, multiprocessing.Process):
         # run open_dbs in the background so we don't have
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())
-
     def set_evidence_malicious_jarm_hash(
             self,
-            flow,
-            uid,
-            profileid,
-            twid,
+            flow: dict,
+            uid: str,
+            twid: str,
     ):
         dport = flow['dport']
         dstip = flow['daddr']
+        saddr = flow['saddr']
         timestamp = flow['starttime']
         protocol = flow['proto']
 
-        evidence_type = 'MaliciousJARM'
-        attacker_direction = 'dstip'
-        source_target_tag = 'Malware'
-        attacker = dstip
-        threat_level = 'medium'
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+            )
+        threat_level = ThreatLevel.MEDIUM
         confidence = 0.7
-        category = 'Anomaly.Traffic'
+
         portproto = f'{dport}/{protocol}'
-        port_info = self.db.get_port_info(portproto)
-        port_info = port_info or ""
+        port_info = self.db.get_port_info(portproto) or ""
         port_info = f'({port_info.upper()})' if port_info else ""
+
         dstip_id = self.db.get_ip_identification(dstip)
         description = (
-           f"Malicious JARM hash detected for destination IP: {dstip}"
-           f" on port: {portproto} {port_info}.  {dstip_id}"
+            f"Malicious JARM hash detected for destination IP: {dstip}"
+            f" on port: {portproto} {port_info}.  {dstip_id}"
         )
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag,
-                                 port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
+        evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_JARM,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=dstip),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[uid],
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            proto=Proto(protocol.lower()),
+            port=dport,
+            source_target_tag=Tag.MALWARE
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def pre_main(self):
         utils.drop_root_privs()
