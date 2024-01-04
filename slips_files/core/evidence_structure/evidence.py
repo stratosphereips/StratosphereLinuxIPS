@@ -1,5 +1,5 @@
 """
-Contains evidence dataclass that is used amon all slips
+Contains evidence dataclass that is used in slips
 """
 from slips_files.common.slips_utils import utils
 import ipaddress
@@ -63,7 +63,7 @@ class EvidenceType(Enum):
     MALICIOUS_JA3S = auto()
     DATA_UPLOAD = auto()
     BAD_SMTP_LOGIN = auto()
-    SMTP_LOGIN_BRUTE_FORCE = auto()
+    SMTP_LOGIN_BRUTEFORCE = auto()
     MALICIOUS_SSL_CERT = auto()
     MALICIOUS_FLOW = auto()
     SUSPICIOUS_USER_AGENT = auto()
@@ -131,6 +131,8 @@ class Recon(Enum):
     SCANNING = "Recon.Scanning"
 
 
+
+
 class Attempt(Enum):
     LOGIN = "Attempt.Login"
 
@@ -185,6 +187,11 @@ class IDEACategory:
     anomaly: Anomaly
     information = "Information"
     malware = "Malware"
+    recon_scanning = "Recon.Scanning"
+    attempt_login = "Attempt.Login"
+    recon = "Recon"
+    intrusion_botnet = "Intrusion.Botnet"
+
 
 
 @dataclass
