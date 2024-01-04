@@ -123,16 +123,19 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
         """
         ###
         # PortScan Type 3. Direction OUT
-        # Considering all the flows in this TW, for all the Dst IP, get the sum of all the pkts send to each dst port TCP No tEstablished
+        # Considering all the flows in this TW, for all the Dst IP, get the
+         sum of all the pkts send to each dst port TCP No tEstablished
         totalpkts = int(data[dport]['totalpkt'])
-        # If for each port, more than X amount of packets were sent, report an evidence
+        # If for each port, more than X amount of packets were sent,
+        report an evidence
         if totalpkts > 3:
             # Type of evidence
             evidence_type = 'PortScanType3'
             # Key
             key = 'dport' + ':' + dport + ':' + evidence_type
             # Description
-            description = 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
+            description = 'Too Many Not Estab TCP to same port {} from IP: {}.
+             Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
             # Threat level
             threat_level = 50
             # Confidence. By counting how much we are over the threshold.
@@ -143,17 +146,18 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
                 # Between 3 and 10 pkts compute a kind of linear grow
                 confidence = totalpkts / 10.0
             self.db.setEvidence(profileid, twid, evidence_type, threat_level, confidence)
-            self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
+            self.print('Too Many Not Estab TCP to same port {} from IP: {}.
+            Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
         """
 
     def check_icmp_scan(self, profileid, twid):
         # Map the ICMP port scanned to it's attack
         port_map = {
-            '0x0008': 'AddressScan',
-            '0x0013': 'TimestampScan',
-            '0x0014': 'TimestampScan',
-            '0x0017': 'AddressMaskScan',
-            '0x0018': 'AddressMaskScan',
+            '0x0008': EvidenceType.ICMP_ADDRESS_SCAN,
+            '0x0013':  EvidenceType.ICMP_TIMESTAMP_SCAN,
+            '0x0014':  EvidenceType.ICMP_TIMESTAMP_SCAN,
+            '0x0017':  EvidenceType.ICMP_ADDRESS_MASK_SCAN,
+            '0x0018':  EvidenceType.ICMP_ADDRESS_MASK_SCAN,
         }
 
         direction = 'Src'
@@ -166,7 +170,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
                 )
         for sport, sport_info in sports.items():
             # get the name of this attack
-            attack = port_map.get(sport)
+            attack: EvidenceType = port_map.get(sport)
             if not attack:
                 return
 
@@ -244,24 +248,68 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
 
     def set_evidence_icmpscan(
             self,
-            number_of_scanned_ips,
-            timestamp,
-            pkts_sent,
-            protocol,
-            profileid,
-            twid,
+            number_of_scanned_ips: int,
+            timestamp: str,
+            pkts_sent: int,
+            protocol: str,
+            profileid: str,
+            twid: str,
             icmp_flows_uids,
-            attack,
-            scanned_ip=False
+            attack: EvidenceType,
+            scanned_ip: str=False
     ):
         confidence = utils.calculate_confidence(pkts_sent)
-        attacker_direction = 'srcip'
-        evidence_type = attack
-        source_target_tag = 'Recon'
-        threat_level = 'medium'
-        category = 'Recon.Scanning'
+
+        threat_level = ThreatLevel.MEDIUM
         srcip = profileid.split('_')[-1]
-        attacker = srcip
+
+        victim = None
+        if number_of_scanned_ips == 1:
+            description = (
+                            f'ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
+                            f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
+                            f'Confidence: {confidence}. by Slips'
+                        )
+            if scanned_ip:
+                victim = Victim(
+                    value=scanned_ip,
+                    direction=Direction.DST,  #  TODO is it?
+                    victim_type=IoCType.IP,
+                    )
+        else:
+            # not a single victim, there are many
+            description = (
+                f'ICMP scanning {number_of_scanned_ips} different IPs. ICMP scan type: {attack}. '
+                f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
+                f'Confidence: {confidence}. by Slips'
+            )
+
+
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=srcip
+            )
+
+        evidence = Evidence(
+            evidence_type=attack,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=icmp_flows_uids,
+            timestamp=timestamp,
+            category=IDEACategory.recon_scanning,
+            conn_count=pkts_sent,
+            proto=Proto[protocol],
+            source_target_tag=Tag.RECON,
+            victim=victim
+        )
+
+        self.db.setEvidence(evidence)
+
 
         if number_of_scanned_ips == 1:
             description = (
