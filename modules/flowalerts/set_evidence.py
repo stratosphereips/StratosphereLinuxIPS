@@ -1540,55 +1540,51 @@ class SetEvidnceHelper:
 
         self.db.setEvidence(evidence)
 
-
     def malicious_ssl(
             self,
             ssl_info: dict,
             ssl_info_from_db: dict
-            ):
-        """
-        This function only works on zeek files.log flows
-        :param ssl_info: info about this ssl cert as found in zeek
-        :param ssl_info_from_db: ti feed, tags, description of this malicious cert
-        """
+    ) -> None:
         flow: dict = ssl_info['flow']
-        ts = flow.get('starttime', '')
-        daddr = flow.get('daddr', '')
-        uid = flow.get('uid', '')
+        ts: str = flow.get('starttime', '')
+        daddr: str = flow.get('daddr', '')
+        uid: str = flow.get('uid', '')
+        twid: str = ssl_info.get('twid', '')
 
-        profileid = ssl_info.get('profileid', '')
-        twid = ssl_info.get('twid', '')
+        ssl_info_from_db: dict = json.loads(ssl_info_from_db)
+        tags: str = ssl_info_from_db['tags']
+        cert_description: str = ssl_info_from_db['description']
 
-        ssl_info_from_db = json.loads(ssl_info_from_db)
-        tags = ssl_info_from_db['tags']
-        cert_description = ssl_info_from_db['description']
-        threat_level = ssl_info_from_db['threat_level']
+        confidence: float = 1.0
+        #@@@@@@@@@@@@ TODO make sure that this info is stored as a float in
+        # the db, not a str!
+        threat_level: ThreatLevel = ThreatLevel(ssl_info_from_db[
+                                                    'threat_level'])
 
-        description = f'Malicious SSL certificate to server {daddr}.'
-        # append daddr identification to the description
-        ip_identification = self.db.get_ip_identification(daddr)
-        description += (
-            f'{ip_identification} description: {cert_description} {tags}  '
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'Malicious SSL certificate to server {daddr}.' \
+                           f'{ip_identification} description: ' \
+                           f'{cert_description} {tags}  '
+
+
+        attacker: Attacker = Attacker(
+            direction=Direction.DST,
+            attacker_type=IoCType.IP,
+            value=daddr
         )
 
-        evidence_type = 'MaliciousSSLCert'
-        category = 'Intrusion.Botnet'
-        source_target_tag = 'CC'
-        attacker_direction = 'dstip'
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_SSL_CERT,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=daddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uid,
+            timestamp=ts,
+            category=IDEACategory.intrusion_botnet,
+            source_target_tag=Tag.CC
+        )
 
-        attacker = daddr
-        confidence = 1
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            ts,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid
-            )
+        self.db.setEvidence(evidence)
