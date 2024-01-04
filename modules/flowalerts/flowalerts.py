@@ -1179,17 +1179,19 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if sport != 0 and dport != 0:
             return
 
-        direction = 'source' if sport == 0 else 'destination'
+        attacker = saddr if sport == 0 else daddr
+        victim = saddr if attacker == daddr else daddr
         self.set_evidence.for_port_0_connection(
             saddr,
             daddr,
             sport,
             dport,
-            direction,
             profileid,
             twid,
             uid,
             timestamp,
+            victim,
+            attacker
         )
 
     def check_multiple_reconnection_attempts(
