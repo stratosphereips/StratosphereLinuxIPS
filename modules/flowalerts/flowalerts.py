@@ -27,9 +27,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
     authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
     def init(self):
-        # Read the configuration
         self.read_configuration()
-        # Retrieve the labels
         self.subscribe_to_channels()
         self.whitelist = Whitelist(self.logger, self.db)
         self.conn_counter = 0
@@ -179,7 +177,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
             self.set_evidence.long_connection(
-                daddr, dur, profileid, twid, uid, timestamp, attacker_direction='srcip'
+                daddr, dur, profileid, twid, uid, timestamp
             )
             return True
         return False
@@ -376,7 +374,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         # orig_bytes is number of payload bytes downloaded
         downloaded_bytes = flow.get('resp_bytes', 0)
         if downloaded_bytes >= self.pastebin_downloads_threshold:
-            self.set_evidence.pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
+            self.set_evidence.pastebin_download(downloaded_bytes, ts, profileid, twid, uid)
             return True
 
         else:
@@ -556,7 +554,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
         self.set_evidence.dns_arpa_scan(
             self.arpa_scan_threshold, stime, profileid, twid, uids
         )
-        # empty the list of arpa queries for this profile, we don't need them anymore
+        # empty the list of arpa queries for this profile,
+        # we don't need them anymore
         self.dns_arpa_queries.pop(profileid)
         return True
 
@@ -568,7 +567,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
         try:
             SNI = ip_data['SNI']
             if type(SNI) == list:
-                # SNI is a list of dicts, each dict contains the 'server_name' and 'port'
+                # SNI is a list of dicts, each dict contains the
+                # 'server_name' and 'port'
                 SNI = SNI[0]
                 if SNI in (None, ''):
                     SNI = False
@@ -623,12 +623,14 @@ class FlowAlerts(IModule, multiprocessing.Process):
             return False
 
         # Ignore some IP
-        ## - All dhcp servers. Since is ok to connect to them without a DNS request.
+        ## - All dhcp servers. Since is ok to connect to
+        # them without a DNS request.
         # We dont have yet the dhcp in the redis, when is there check it
         # if self.db.get_dhcp_servers(daddr):
         # continue
 
-        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
+        # To avoid false positives in case of an interface
+        # don't alert ConnectionWithoutDNS
         # until 30 minutes has passed
         # after starting slips because the dns may have happened before starting slips
         if '-i' in sys.argv or self.db.is_growing_zeek_dir():
@@ -656,10 +658,12 @@ class FlowAlerts(IModule, multiprocessing.Process):
         # don't alert a Connection Without DNS until 5 seconds has passed
         # in real time from the time of this checking.
 
-        # Create a timer thread that will wait 15 seconds for the dns to arrive and then check again
+        # Create a timer thread that will wait 15 seconds
+        # for the dns to arrive and then check again
         # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
         if uid not in self.connections_checked_in_conn_dns_timer_thread:
-            # comes here if we haven't started the timer thread for this connection before
+            # comes here if we haven't started the timer
+            # thread for this connection before
             # mark this connection as checked
             self.connections_checked_in_conn_dns_timer_thread.append(uid)
             params = [flow_type, appproto, daddr, twid, profileid, timestamp, uid]
@@ -672,15 +676,18 @@ class FlowAlerts(IModule, multiprocessing.Process):
             timer.start()
         else:
             # It means we already checked this conn with the Timer process
-            # (we waited 15 seconds for the dns to arrive after the connection was made)
+            # (we waited 15 seconds for the dns to arrive after
+            # the connection was made)
             # but still no dns resolution for it.
-            # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
+            # Sometimes the same computer makes requests using
+            # its ipv4 and ipv6 address, check if this is the case
             if self.check_if_resolution_was_made_by_different_version(
                     profileid, daddr
             ):
                 return False
             if self.is_well_known_org(daddr):
-                # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
+                # if the SNI or rDNS of the IP matches a
+                # well-known org, then this is a FP
                 return False
             # self.print(f'Alerting after timer conn without dns on {daddr},
             self.set_evidence.conn_without_dns(
@@ -708,7 +715,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
         return False
 
     def check_dns_without_connection(
-            self, domain, answers: list, rcode_name: str, timestamp: str, profileid, twid, uid
+            self, domain, answers: list, rcode_name: str,
+            timestamp: str, profileid, twid, uid
     ):
         """
         Makes sure all cached DNS answers are used in contacted_ips
@@ -717,8 +725,10 @@ class FlowAlerts(IModule, multiprocessing.Process):
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
-        ## - Subdomains of cymru.com, since it is used by the ipwhois library in Slips to get the ASN
-        # of an IP and its range. This DNS is meant not to have a connection later
+        ## - Subdomains of cymru.com, since it is used by
+        # the ipwhois library in Slips to get the ASN
+        # of an IP and its range. This DNS is meant not
+        # to have a connection later
         ## - Domains check from Chrome, like xrvwsrklpqrw
         ## - The WPAD domain of windows
         # - When there is an NXDOMAIN as answer, it means
@@ -735,26 +745,34 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         ):
             return False
-        # One DNS query may not be answered exactly by UID, but the computer can re-ask the domain,
+        # One DNS query may not be answered exactly by UID,
+        # but the computer can re-ask the domain,
         # and the next DNS resolution can be
         # answered. So dont check the UID, check if the domain has an IP
 
         # self.print(f'The DNS query to {domain} had as answers {answers} ')
 
-        # It can happen that this domain was already resolved previously, but with other IPs
-        # So we get from the DB all the IPs for this domain first and append them to the answers
-        # This happens, for example, when there is 1 DNS resolution with A, then 1 DNS resolution
-        # with AAAA, and the computer chooses the A address. Therefore, the 2nd DNS resolution
+        # It can happen that this domain was already resolved
+        # previously, but with other IPs
+        # So we get from the DB all the IPs for this domain
+        # first and append them to the answers
+        # This happens, for example, when there is 1 DNS
+        # resolution with A, then 1 DNS resolution
+        # with AAAA, and the computer chooses the A address.
+        # Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
         if prev_domain_resolutions := self.db.getDomainData(domain):
             prev_domain_resolutions = prev_domain_resolutions.get('IPs',[])
-            # if there's a domain in the cache (prev_domain_resolutions) that is not in the
-            # current answers given to this function, append it to the answers list
+            # if there's a domain in the cache
+            # (prev_domain_resolutions) that is not in the
+            # current answers given to this function,
+            # append it to the answers list
             answers.extend([ans for ans in prev_domain_resolutions if ans not in answers])
 
 
         if answers == ['-']:
-            # If no IPs are in the answer, we can not expect the computer to connect to anything
+            # If no IPs are in the answer, we can not expect
+            # the computer to connect to anything
             # self.print(f'No ips in the answer, so ignoring')
             return False
         # self.print(f'The extended DNS query to {domain} had as answers {answers} ')
@@ -762,8 +780,10 @@ class FlowAlerts(IModule, multiprocessing.Process):
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
             profileid, twid
         )
-        # If contacted_ips is empty it can be because we didnt read yet all the flows.
-        # This is automatically captured later in the for loop and we start a Timer
+        # If contacted_ips is empty it can be because
+        # we didnt read yet all the flows.
+        # This is automatically captured later in the
+        # for loop and we start a Timer
 
         # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
@@ -787,11 +807,13 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         # self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
-        # It can be that Slips is still reading it from the files. Lets check back in some time
-        # Create a timer thread that will wait some seconds for the connection to arrive and then check again
+        # It can be that Slips is still reading it from the files.
+        # Lets check back in some time
+        # Create a timer thread that will wait some seconds for the
+        # connection to arrive and then check again
         if uid not in self.connections_checked_in_dns_conn_timer_thread:
-            # comes here if we haven't started the timer thread for this dns before
-            # mark this dns as checked
+            # comes here if we haven't started the timer
+            # thread for this dns before mark this dns as checked
             self.connections_checked_in_dns_conn_timer_thread.append(uid)
             params = [domain, answers, rcode_name, timestamp, profileid, twid, uid]
             # self.print(f'Starting the timer to check on {domain}, uid {uid}.
@@ -801,7 +823,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
             )
             timer.start()
         else:
-            # self.print(f'Alerting on {domain}, uid {uid}. time {datetime.datetime.now()}')
             # It means we already checked this dns with the Timer process
             # but still no connection for it.
             self.set_evidence.DNS_without_conn(
@@ -826,7 +847,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
             saddr = ssh_flow_dict['saddr']
             size = ssh_flow_dict['allbytes']
             self.set_evidence.ssh_successful(
-                profileid,
                 twid,
                 saddr,
                 daddr,
@@ -842,9 +862,11 @@ class FlowAlerts(IModule, multiprocessing.Process):
             return True
         elif uid not in self.connections_checked_in_ssh_timer_thread:
             # It can happen that the original SSH flow is not in the DB yet
-            # comes here if we haven't started the timer thread for this connection before
+            # comes here if we haven't started the timer thread
+            # for this connection before
             # mark this connection as checked
-            # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
+            # self.print(f'Starting the timer to check on {flow_dict},
+            # uid {uid}. time {datetime.datetime.now()}')
             self.connections_checked_in_ssh_timer_thread.append(
                 uid
             )
@@ -874,7 +896,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 # easier way to show how Slips detected
                 # the successful ssh and not Zeek
                 self.set_evidence.ssh_successful(
-                    profileid,
                     twid,
                     saddr,
                     daddr,
@@ -891,7 +912,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         elif uid not in self.connections_checked_in_ssh_timer_thread:
             # It can happen that the original SSH flow is not in the DB yet
-            # comes here if we haven't started the timer thread for this connection before
+            # comes here if we haven't started the timer
+            # thread for this connection before
             # mark this connection as checked
             # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
             # time {datetime.datetime.now()}')
@@ -904,7 +926,9 @@ class FlowAlerts(IModule, multiprocessing.Process):
             )
             timer.start()
 
-    def check_successful_ssh(self, uid, timestamp, profileid, twid, auth_success):
+    def check_successful_ssh(
+            self, uid, timestamp, profileid, twid, auth_success
+            ):
         """
         Function to check if an SSH connection logged in successfully
         """
@@ -938,7 +962,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
             if org not in issuer.lower():
                 continue
 
-            # save the org this domain/ip is claiming to belong to, to use it to set evidence later
+            # save the org this domain/ip is claiming to belong to,
+            # to use it to set evidence later
             found_org_in_cn = org
 
             # check that the domain belongs to that same org
@@ -952,7 +977,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if not found_org_in_cn:
             return False
 
-        # found one of our supported orgs in the cn but it doesn't belong to any of this org's
+        # found one of our supported orgs in the cn but
+        # it doesn't belong to any of this org's
         # domains or ips
         self.set_evidence.incompatible_CN(
             found_org_in_cn,
@@ -973,7 +999,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
         """
         checks if this srcip was detected using a different
          ssh client or server versions before
-        :param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
+        :param role: can be 'SSH::CLIENT' or 'SSH::SERVER'
+        as seen in zeek software.log flows
         """
         if role not in flow['software']:
             return
@@ -1000,7 +1027,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
             # they're using the same ssh client version
             return False
 
-        # get the uid of the cached versions, and the uid of the current used versions
+        # get the uid of the cached versions, and the uid
+        # of the current used versions
         uids = [cached_ssh_versions['uid'], flow['uid']]
         self.set_evidence.multiple_ssh_versions(
             flow['saddr'],
@@ -1024,9 +1052,12 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         return shannon_entropy_value * -1
 
-    def check_suspicious_dns_answers(self, domain, answers, daddr, profileid, twid, stime, uid):
+    def check_suspicious_dns_answers(
+            self, domain, answers, daddr, profileid, twid, stime, uid
+            ):
         """
-        Uses shannon entropy to detect DNS TXT answers with encoded/encrypted strings
+        Uses shannon entropy to detect DNS TXT answers
+        with encoded/encrypted strings
         """
         if not answers:
             return
@@ -1047,22 +1078,31 @@ class FlowAlerts(IModule, multiprocessing.Process):
                         uid
                     )
 
-    def check_invalid_dns_answers(self, domain, answers, daddr, profileid, twid, stime, uid):
-        # this function is used to check for certain IP answers to DNS queries being blocked
+    def check_invalid_dns_answers(
+            self, domain, answers, daddr, profileid, twid, stime, uid
+            ):
+        # this function is used to check for certain IP
+        # answers to DNS queries being blocked
         # (perhaps by ad blockers) and set to the following IP values
-        invalid_answers = {"127.0.0.1" , "0.0.0.0"} # currently hardcoding blocked ips
+        # currently hardcoding blocked ips
+        invalid_answers = {"127.0.0.1" , "0.0.0.0"}
         if not answers:
             return
 
         for answer in answers:
             if answer in invalid_answers and domain != "localhost":
                 #blocked answer found
-                self.set_evidence.invalid_dns_answer(domain, answer, daddr, profileid, twid, stime, uid)
-                # delete answer from redis cache to prevent associating this dns answer with this domain/query and
+                self.set_evidence.invalid_dns_answer(
+                    domain, answer, daddr, profileid, twid, stime, uid
+                )
+                # delete answer from redis cache to prevent
+                # associating this dns answer with this domain/query and
                 # avoid FP "DNS without connection" evidence
                 self.db.delete_dns_resolution(answer)
 
-    def detect_DGA(self, rcode_name, query, stime, daddr, profileid, twid, uid):
+    def detect_DGA(
+            self, rcode_name, query, stime, daddr, profileid, twid, uid
+        ):
 
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
@@ -1074,14 +1114,17 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         saddr = profileid.split('_')[-1]
         # check whitelisted queries because we
-        # don't want to count nxdomains to cymru.com or spamhaus as DGA as they're made
+        # don't want to count nxdomains to cymru.com or
+        # spamhaus as DGA as they're made
         # by slips
         if (
             'NXDOMAIN' not in rcode_name
             or not query
             or query.endswith('.arpa')
             or query.endswith('.local')
-            or self.whitelist.is_whitelisted_domain(query, saddr, daddr, 'alerts')
+            or self.whitelist.is_whitelisted_domain(
+                query, saddr, daddr, 'alerts'
+            )
         ):
             return False
 
@@ -1170,7 +1213,9 @@ class FlowAlerts(IModule, multiprocessing.Process):
         key = f'{saddr}-{daddr}-{dport}'
 
         # add this conn to the stored number of reconnections
-        current_reconnections = self.db.get_reconnections_for_tw(profileid, twid)
+        current_reconnections = self.db.get_reconnections_for_tw(
+            profileid, twid
+            )
 
         try:
             reconnections, uids = current_reconnections[key]
@@ -1286,7 +1331,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
         if diff > 10:
             # didnt happen within 10s!
-            # remove the first login from cache so we can check the next 3 logins
+            # remove the first login from cache so we
+            # can check the next 3 logins
             self.smtp_bruteforce_cache[profileid][0].pop(0)
             self.smtp_bruteforce_cache[profileid][1].pop(0)
             return
@@ -1373,7 +1419,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 timestamp,
             )
 
-        # Connection to multiple port to the Source IP. Happens in the mode 'all'
+        # Connection to multiple port to the Source IP.
+        # Happens in the mode 'all'
         elif profileid.split('_')[1] == daddr:
             direction = 'Src'
             state = 'Established'
@@ -1467,7 +1514,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
             uid
     ):
         """
-        checks the validation status of every azeek ssl flow for self signed certs
+        checks the validation status of every a zeek ssl flow for self
+        signed certs
         """
         if 'self signed' not in validation_status:
             return
@@ -1493,7 +1541,9 @@ class FlowAlerts(IModule, multiprocessing.Process):
 
 
 
-    def check_ssh_password_guessing(self, daddr, uid, timestamp, profileid, twid, auth_success):
+    def check_ssh_password_guessing(
+            self, daddr, uid, timestamp, profileid, twid, auth_success
+            ):
         """
         This detection is only done when there's a failed ssh attempt
         alerts ssh pw bruteforce when there's more than
@@ -1515,7 +1565,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             description = f'SSH password guessing to IP {daddr}'
             uids = self.password_guessing_cache[cache_key]
             self.set_evidence.pw_guessing(
-                description, timestamp, profileid, twid, uids, by='Slips'
+                description, timestamp, twid, uids, by='Slips'
             )
 
             #reset the counter
@@ -1657,9 +1707,11 @@ class FlowAlerts(IModule, multiprocessing.Process):
             what_to_check=''
     ):
         """
-        alerts when a connection to a private ip that doesn't belong to our local network is found
+        alerts when a connection to a private ip that
+        doesn't belong to our local network is found
         for example:
-        If we are on 192.168.1.0/24 then detect anything coming from/to 10.0.0.0/8
+        If we are on 192.168.1.0/24 then detect anything
+        coming from/to 10.0.0.0/8
         :param what_to_check: can be 'srcip' or 'dstip'
         """
         ip_to_check = saddr if what_to_check == 'srcip' else daddr
@@ -1699,7 +1751,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
             timestamp
     ):
         """
-        Every time we have a flow for a new ip (an ip that we're seeing for the first time)
+        Every time we have a flow for a new ip
+            (an ip that we're seeing for the first time)
         we check if the MAC of this srcip was associated with another ip
         this check is only done once for each source ip slips sees
         """
@@ -1717,14 +1770,16 @@ class FlowAlerts(IModule, multiprocessing.Process):
             return
 
         if self.db.was_ip_seen_in_connlog_before(saddr):
-            # we should only check once for the first time we're seeing this flow
+            # we should only check once for the first
+            # time we're seeing this flow
             return
         self.db.mark_srcip_as_seen_in_connlog(saddr)
 
 
         if old_ip_list := self.db.get_ip_of_mac(smac):
             # old_ip is a list that may contain the ipv6 of this MAC
-            # this ipv6 may be of the same device that has the given saddr and MAC
+            # this ipv6 may be of the same device that
+            # has the given saddr and MAC
             # so this would be fp. so, make sure we're dealing with ipv4 only
             for ip in json.loads(old_ip_list):
                 if validators.ipv4(ip):
@@ -1732,13 +1787,15 @@ class FlowAlerts(IModule, multiprocessing.Process):
                     break
             else:
                 # all the IPs associated with the given macs are ipv6,
-                # 1 computer might have several ipv6, AND/OR a combination of ipv6 and 4
+                # 1 computer might have several ipv6,
+                # AND/OR a combination of ipv6 and 4
                 # so this detection will only work if both the
                 # old ip and the given saddr are ipv4 private ips
                 return
 
             if old_ip != saddr:
-                # we found this smac associated with an ip other than this saddr
+                # we found this smac associated with an
+                # ip other than this saddr
                 self.set_evidence.device_changing_ips(
                     smac,
                     old_ip,
@@ -1752,7 +1809,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
         self.ssl_waiting_thread.start()
 
     def main(self):
-        # if timewindows are not updated for a long time, Slips is stopped automatically.
         if msg:= self.get_msg('new_flow'):
             new_flow = json.loads(msg['data'])
             profileid = new_flow['profileid']
@@ -1777,11 +1833,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
             smac = flow_dict.get('smac', '')
             if not appproto or appproto == '-':
                 appproto = flow_dict.get('type', '')
-            # dmac = flow_dict.get('dmac', '')
-            # stime = flow_dict['ts']
-            # timestamp = new_flow['stime']
-            # pkts = flow_dict['pkts']
-            # allbytes = flow_dict['allbytes']
 
             self.check_long_connection(
                 dur, daddr, saddr, profileid, twid, uid, timestamp
@@ -1933,7 +1984,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 auth_success
             )
         # --- Detect alerts from Zeek: Self-signed certs,
-        # invalid certs, port-scans and address scans, and password guessing ---
+        #       invalid certs, port-scans and address scans,
+        #       and password guessing ---
         if msg:= self.get_msg('new_notice'):
             data = msg['data']
             # Convert from json to dict
@@ -1958,7 +2010,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
                     msg,
                     scanning_ip,
                     timestamp,
-                    profileid,
                     twid,
                     uid,
                 )
@@ -1979,7 +2030,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 self.set_evidence.pw_guessing(
                     msg,
                     timestamp,
-                    profileid,
                     twid,
                     uid,
                     by='Zeek'
@@ -2087,7 +2137,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 rcode_name, domain, stime, daddr, profileid, twid, uid
             )
 
-            # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
+            # TODO: not sure how to make sure IP_info is
+            #  done adding domain age to the db or not
             self.detect_young_domains(
                 domain, stime, profileid, twid, uid
             )

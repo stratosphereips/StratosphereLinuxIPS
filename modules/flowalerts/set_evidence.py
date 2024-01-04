@@ -973,47 +973,60 @@ class SetEvidnceHelper:
         self.db.setEvidence(evidence)
 
     def long_connection(
-            self,
-            attacker,
-            duration,
-            profileid,
-            twid,
-            uid,
-            timestamp,
-            attacker_direction=''
-            ):
+        self,
+        daddr,
+        duration,
+        profileid,
+        twid,
+        uid,
+        timestamp,
+    ) -> None:
         """
         Set an evidence for a long connection.
         """
-
-        evidence_type = 'LongConnection'
-        threat_level = 'low'
-        category = 'Anomaly.Connection'
-        # confidence depends on how long the connection
-        # scale the confidence from 0 to 1, 1 means 24 hours long
-        confidence = 1 / (3600 * 24) * (duration - 3600 * 24) + 1
+        threat_level: ThreatLevel = ThreatLevel.LOW
+        # Confidence depends on how long the connection.
+        # Scale the confidence from 0 to 1; 1 means 24 hours long.
+        confidence: float = 1 / (3600 * 24) * (duration - 3600 * 24) + 1
         confidence = round(confidence, 2)
-        ip_identification = self.db.get_ip_identification(attacker)
-        # get the duration in minutes
-        duration = int(duration / 60)
-        srcip = profileid.split('_')[1]
-        description = f'Long Connection. Connection from {srcip} ' \
-                      f'to destination address: {attacker} ' \
-                      f'{ip_identification} took {duration} mins'
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
+        # Get the duration in minutes.
+        duration_minutes: int = int(duration / 60)
+        srcip: str = profileid.split('_')[1]
+
+        attacker_obj: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=srcip
+        )
+
+        victim_obj: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = (
+            f'Long Connection. Connection from {srcip} '
+            f'to destination address: {daddr} '
+            f'{ip_identification} took {duration_minutes} mins'
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.LONG_CONNECTION,
+            attacker=attacker_obj,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=twid),
             uid=uid,
-            victim=srcip
-            )
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            victim=victim_obj
+        )
+
+        self.db.setEvidence(evidence)
 
     def self_signed_certificates(
             self,
