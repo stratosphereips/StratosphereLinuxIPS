@@ -1,4 +1,3 @@
-from slips_files.common.imports import *
 import sys
 import base64
 import time
@@ -8,6 +7,23 @@ import subprocess
 import json
 import shutil
 
+from slips_files.common.imports import *
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        Proto,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Anomaly,
+        Tag
+    )
 class LeakDetector(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Leak Detector'
@@ -171,47 +187,58 @@ class LeakDetector(IModule, multiprocessing.Process):
             uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
                 'utf-8'
             )
-            src_profileid = f'profile_{srcip}'
-            dst_profileid = f'profile_{dstip}'
+            profileid = f'profile_{srcip}'
             # sometimes this module tries to find the profile before it's created. so
             # wait a while before alerting.
             time.sleep(4)
-            # make sure we have a profile for any of the above IPs
-            if self.db.has_profile(src_profileid):
-                attacker_direction = 'dstip'
-                victim = srcip
-                profileid = src_profileid
-                attacker = dstip
-                ip_identification = self.db.get_ip_identification(dstip)
-                description = f"{rule} to destination address: {dstip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
-            elif self.db.has_profile(dst_profileid):
-                attacker_direction = 'srcip'
-                victim = dstip
-                profileid = dst_profileid
-                attacker = srcip
-                ip_identification = self.db.get_ip_identification(srcip)
-                description = f"{rule} to destination address: {srcip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
-
-            else:
-                # no profiles in slips for either IPs
-                return
+            ip_identification = self.db.get_ip_identification(dstip)
+            description  = f"{rule} to destination address: {dstip} " \
+                           f"{ip_identification} port: {portproto} " \
+                           f"{port_info or ''}. " \
+                           f"Leaked location: {strings_matched}"
 
             # in which tw is this ts?
             twid = self.db.getTWofTime(profileid, ts)
             # convert ts to a readable format
             ts = utils.convert_format(ts, utils.alerts_format)
+
             if twid:
                 twid = twid[0]
-                source_target_tag = 'CC'
-                # TODO: this needs to be changed if add more rules to the rules/dir
-                evidence_type = 'NETWORK_gps_location_leaked'
-                category = 'Malware'
+                source_target_tag = Tag.CC
                 confidence = 0.9
-                threat_level = 'high'
-                self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                         description, ts, category, source_target_tag=source_target_tag, port=dport,
-                                         proto=proto, profileid=profileid, twid=twid, uid=uid, victim=victim)
+                threat_level = ThreatLevel.HIGH
+
+                attacker = Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=srcip
+                    )
+                victim = Victim(
+                    direction=Direction.DST,
+                    victim_type=IoCType.IP,
+                    value=dstip
+                    )
+
+                evidence = Evidence(
+                    evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
+                    attacker=attacker,
+                    threat_level=threat_level,
+                    confidence=confidence,
+                    description=description,
+                    profile=ProfileID(ip=srcip),
+                    timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                    uid=[uid],
+                    timestamp=ts,
+                    proto=Proto[proto],
+                    port=dport,
+                    source_target_tag=source_target_tag,
+                    victim=victim,
+                    category=IDEACategory.malware
+                )
+
+                self.db.setEvidence(evidence)
+
 
     def compile_and_save_rules(self):
         """
