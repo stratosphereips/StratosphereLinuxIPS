@@ -1027,32 +1027,49 @@ class SetEvidnceHelper:
         )
 
         self.db.setEvidence(evidence)
-
     def self_signed_certificates(
             self,
             profileid,
             twid,
             attacker,
-            description,
             uid,
-            timestamp
-            ):
+            timestamp,
+            server_name
+    ) -> None:
         """
-        Set evidence for self signed certificates.
+        Set evidence for self-signed certificates.
         """
-        confidence = 0.5
-        threat_level = 'low'
-        category = 'Anomaly.Behaviour'
-        attacker_direction = 'dstip'
-        evidence_type = 'SelfSignedCertificate'
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp, category, profileid=profileid, twid=twid, uid=uid
-            )
+        confidence: float = 0.5
+        threat_level: ThreatLevel = ThreatLevel.LOW
+        saddr: str = profileid.split("_")[-1]
+
+        attacker_obj: Attacker = Attacker(
+            direction=Direction.DST,
+            attacker_type=IoCType.IP,
+            value=attacker
+        )
+
+        ip_identification: str = self.db.get_ip_identification(attacker)
+        description = f'Self-signed certificate. Destination IP: {attacker}.' \
+                      f' {ip_identification}'
+
+        if server_name:
+            description += f' SNI: {server_name}.'
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.SELF_SIGNED_CERTIFICATE,
+            attacker=attacker_obj,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR)
+        )
+
+        self.db.setEvidence(evidence)
 
     def for_multiple_reconnection_attempts(
             self,

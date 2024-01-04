@@ -1520,23 +1520,13 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if 'self signed' not in validation_status:
             return
 
-
-        ip_identification = (
-            self.db.get_ip_identification(daddr)
-        )
-        description = f'Self-signed certificate. Destination IP: {daddr}.' \
-                      f' {ip_identification}'
-
-        if server_name:
-            description += f' SNI: {server_name}.'
-
         self.set_evidence.self_signed_certificates(
             profileid,
             twid,
             daddr,
-            description,
             uid,
             timestamp,
+            server_name
         )
 
 
