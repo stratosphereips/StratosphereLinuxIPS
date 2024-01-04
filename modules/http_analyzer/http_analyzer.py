@@ -83,18 +83,30 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         )
         for suspicious_ua in suspicious_user_agents:
             if suspicious_ua.lower() in user_agent.lower():
-                attacker_direction = 'srcip'
-                source_target_tag = 'SuspiciousUserAgent'
-                attacker = profileid.split('_')[1]
-                evidence_type = 'SuspiciousUserAgent'
-                threat_level = 'high'
-                category = 'Anomaly.Behaviour'
-                confidence = 1
-                victim = f'{host}{uri}'
-                description = f'suspicious user-agent: {user_agent} while connecting to {victim}'
-                self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
-                                         description, timestamp, category, source_target_tag=source_target_tag,
-                                         profileid=profileid, twid=twid, uid=uid, victim=victim)
+                threat_level: ThreatLevel = ThreatLevel.HIGH
+                confidence: float = 1
+                saddr = profileid.split('_')[1]
+                description: str = f'Suspicious user-agent: {user_agent} while connecting to {host}{uri}'
+                attacker = Attacker(
+                        direction=Direction.SRC,
+                        attacker_type=IoCType.IP,
+                        value=saddr
+                    )
+                evidence: Evidence = Evidence(
+                    evidence_type=EvidenceType.SUSPICIOUS_USER_AGENT,
+                    attacker=attacker,
+                    threat_level=threat_level,
+                    confidence=confidence,
+                    description=description,
+                    profile=ProfileID(ip=saddr),
+                    timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                    uid=uid,
+                    timestamp=timestamp,
+                    category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+                    source_target_tag=Tag.SUSPICIOUS_USER_AGENT,
+                )
+
+                self.db.setEvidence(evidence)
                 return True
         return False
 
