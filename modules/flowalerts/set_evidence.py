@@ -1283,54 +1283,64 @@ class SetEvidnceHelper:
 
 
     def for_port_0_connection(
-            self,
-            saddr,
-            daddr,
-            sport,
-            dport,
-            direction,
-            profileid,
-            twid,
-            uid,
-            timestamp
-            ):
-        """:param direction: 'source' or 'destination'"""
-        confidence = 0.8
-        threat_level = 'high'
-        category = 'Anomaly.Connection'
-        source_target_tag = 'Recon'
-        evidence_type = 'Port0Connection'
+        self,
+        saddr: str,
+        daddr: str,
+        sport: int,
+        dport: int,
+        profileid: str,
+        twid: str,
+        uid: List[str],
+        timestamp: str,
+        victim: str,
+        attacker: str
+    ) -> None:
+        confidence: float = 0.8
+        threat_level: ThreatLevel = ThreatLevel.HIGH
 
-        if direction == 'source':
-            attacker = saddr
-            attacker_direction = 'srcip'
-            victim = daddr
+        if attacker in profileid:
+            attacker_direction = Direction.SRC
+            victim_direction = Direction.DST
+            profile_ip = attacker
         else:
-            attacker = daddr
-            attacker_direction = 'dstip'
-            victim = saddr
+            attacker_direction = Direction.DST
+            victim_direction = Direction.SRC
+            profile_ip = victim
 
-        ip_identification = self.db.get_ip_identification(daddr)
-        description = f'Connection on port 0 from {saddr}:{sport} ' \
-                      f'to {daddr}:{dport}. {ip_identification}.'
-
-        conn_count = 1
-
-        self.db.setEvidence(
-            evidence_type,
-			attacker_direction,
-			attacker,
-			threat_level,
-            confidence, description,
-            timestamp,
-			category,
-			source_target_tag=source_target_tag,
-            conn_count=conn_count,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-            victim=victim
+        victim: Victim = Victim(
+                direction=victim_direction,
+                victim_type=IoCType.IP,
+                value=victim
             )
+        attacker: Attacker = Attacker(
+            direction=attacker_direction,
+            attacker_type=IoCType.IP,
+            value=attacker
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'Connection on port 0 from {saddr}:{sport} ' \
+                           f'to {daddr}:{dport}. {ip_identification}.'
+
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.PORT_0_CONNECTION,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=profile_ip),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            source_target_tag=Tag.RECON,
+            conn_count=1
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def malicious_JA3(
             self,
