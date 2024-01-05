@@ -309,7 +309,7 @@ class HorizontalPortscan():
             f'Confidence: {confidence}. by Slips'
         )
 
-        evidence_obj = Evidence(
+        evidence = Evidence(
             evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
             attacker=attacker,
             threat_level=threat_level,
@@ -326,4 +326,4 @@ class HorizontalPortscan():
             port=evidence["dport"]
         )
 
-        self.db.setEvidence(evidence_obj)
+        self.db.setEvidence(evidence)
