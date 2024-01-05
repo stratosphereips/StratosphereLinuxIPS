@@ -377,17 +377,18 @@ class ARP(IModule, multiprocessing.Process):
         #  returning from this function so detection is missed
 
         # to test this add these 2 flows to arp.log
-        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02",
-        #       "dst_mac":"ff:ff:ff:ff:ff:ff",
-        # "orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02",
-        #       "resp_hw":"00:00:00:00:00:00"}
-        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02",
-        #       "dst_mac":"ff:ff:ff:ff:ff:ff",
-        # "orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02",
-        #       "resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply",
+        # "src_mac":"2e:a4:18:f8:3d:02", "dst_mac":"ff:ff:ff:ff:ff:ff",
+        # "orig_h":"172.20.7.40","resp_h":"172.20.7.40",
+        # "orig_hw":"2e:a4:18:f8:3d:02", "resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply",
+        # "src_mac":"2e:a4:18:f8:3d:02", "dst_mac":"ff:ff:ff:ff:ff:ff",
+        # "orig_h":"172.20.7.41","resp_h":"172.20.7.41",
+        # "orig_hw":"2e:a4:18:f8:3d:02", "resp_hw":"00:00:00:00:00:00"}
 
         # todo will we get FPs when an ip changes?
-        # todo what if the ip of the attacker came to us first and we stored it in the db?
+        # todo what if the ip of the attacker came to us
+        #  first and we stored it in the db?
         #  the original IP of this src mac is now the IP of the attacker?
 
         # get the original IP of the src mac from the database
@@ -398,8 +399,9 @@ class ARP(IModule, multiprocessing.Process):
         # original_IP is a serialized list
         original_IP = json.loads(original_IP)[0]
 
-        # is this saddr trying to tell everyone that this it owns this src_mac
-        # even though we know this src_mac is associated with another IP (original_IP)?
+        # is this saddr trying to tell everyone that this
+        # it owns this src_mac even though we know this src_mac is associated
+        # with another IP (original_IP)?
         if saddr != original_IP:
             # From our db we know that:
             # original_IP has src_MAC
@@ -437,8 +439,9 @@ class ARP(IModule, multiprocessing.Process):
                 value=original_IP,
                 )
 
-            description = f'{saddr} performing a MITM ARP attack. The MAC {src_mac}, ' \
-                          f'now belonging to {saddr}, was seen before for {original_IP}.'
+            description = f'{saddr} performing a MITM ARP attack. ' \
+                          f'The MAC {src_mac}, now belonging to ' \
+                          f'{saddr}, was seen before for {original_IP}.'
             # self.print(f'{saddr} is claiming to have {src_mac}')
 
             evidence: Evidence = Evidence(
