@@ -2,9 +2,11 @@ import base64
 import binascii
 import json
 from typing import Dict
+import time
+
+
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
-
 from modules.p2ptrust.utils.utils import (
     validate_ip_address,
     validate_timestamp,
@@ -14,7 +16,21 @@ from modules.p2ptrust.utils.utils import (
 )
 from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.common.imports import *
-import time
+from slips_files.core.evidence_structure.evidence import (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Attacker,
+        ThreatLevel,
+        Victim,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Anomaly,
+    )
+
+
 
 
 class GoDirector(IObservable):
@@ -455,15 +471,25 @@ class GoDirector(IObservable):
             self.db.addProfile(profileid_of_attacker, report_time, self.width)
             self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
 
-    def set_evidence_p2p_report(self, ip, reporter, score, confidence, timestamp, profileid_of_attacker):
+    def set_evidence_p2p_report(
+            self: str,
+            ip: str,
+            reporter: str,
+            score: float,
+            confidence: float,
+            timestamp: str,
+            profileid_of_attacker: str
+    ):
         """
-        set evidence for the newly created attacker profile stating that it attacked another peer
+        set evidence for the newly created attacker
+        profile stating that it attacked another peer
         """
-        attacker_direction = 'srcip'
-        attacker = ip
-        evidence_type = 'P2PReport'
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=ip
+            )
         threat_level = utils.threat_level_to_string(score)
-        category = 'Anomaly.Connection'
 
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
@@ -476,8 +502,10 @@ class GoDirector(IObservable):
         if not reporter_ip:
             reporter_ip = ''
 
-        description = f'attacking another peer: {reporter_ip} ({reporter}). threat level: {threat_level} ' \
+        description = f'attacking another peer: {reporter_ip} ({reporter}). ' \
+                      f'threat level: {threat_level} ' \
                       f'confidence: {confidence} {ip_identification}'
+
         # get the tw of this report time
         if twid := self.db.get_tw_of_ts(profileid_of_attacker, timestamp):
             twid = twid[0]
@@ -486,21 +514,22 @@ class GoDirector(IObservable):
             # report time to add this evidence to
             twid = self.db.get_timewindow(timestamp, profileid_of_attacker)
 
-        uid = ''
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid_of_attacker,
-            twid=twid,
-            uid=uid,
-            victim=reporter_ip
-            )
+        timestamp = utils.convert_format(timestamp, utils.alerts_format)
+        evidence = Evidence(
+            evidence_type=EvidenceType.P2P_REPORT,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=ip),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[''],
+            timestamp=timestamp,
+            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+        )
+
+        self.db.setEvidence(evidence)
+
 
 
     def process_go_update(self, data: dict) -> None:

@@ -131,7 +131,7 @@ class VerticalPortscan:
             value=evidence['dstip']
             )
 
-        evidence_obj = Evidence(
+        evidence = Evidence(
             evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
             attacker=attacker,
             threat_level=threat_level,
@@ -148,7 +148,7 @@ class VerticalPortscan:
             victim=victim
         )
 
-        self.db.setEvidence(evidence_obj)
+        self.db.setEvidence(evidence)
 
 
 
