@@ -1,6 +1,6 @@
 import time
 import json
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import \
@@ -8,6 +8,7 @@ from slips_files.core.evidence_structure.evidence import \
         Evidence,
         EvidenceType,
         Direction,
+        Victim,
         evidence_to_dict,
     )
 
@@ -21,7 +22,7 @@ class AlertHandler:
     def increment_attack_counter(
             self,
             attacker: str,
-            victim: str,
+            victim: Optional[Victim],
             evidence_type: str
         ):
         """
@@ -31,6 +32,7 @@ class AlertHandler:
         :param victim: IP of a victim
         :param evidence_type: e.g. MaliciousJA3, DataExfiltration, etc.
         """
+        victim = '' if not victim else victim
         self.r.hincrby(
             f'{attacker}_evidence_sumamry',
             f"{victim}_{evidence_type}",

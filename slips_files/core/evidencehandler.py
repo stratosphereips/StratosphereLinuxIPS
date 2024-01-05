@@ -36,6 +36,7 @@ from slips_files.core.evidence_structure.evidence import (
     evidence_to_dict,
     Evidence,
     Direction,
+    Victim,
     IoCType,
     EvidenceType,
     IDEACategory,
@@ -643,7 +644,7 @@ class EvidenceHandler(ICore):
     def increment_attack_counter(
             self,
             attacker: str,
-            victim: str,
+            victim: Optional[Victim],
             evidence_type: EvidenceType
             ):
         """
@@ -700,7 +701,6 @@ class EvidenceHandler(ICore):
                 timestamp: str = evidence.timestamp
                 # this is all the uids of the flows that cause this evidence
                 all_uids: list = evidence.uid
-                victim: str = evidence.victim.value
 
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence
@@ -732,7 +732,7 @@ class EvidenceHandler(ICore):
                 self.add_to_log_file(evidence_to_log)
                 self.increment_attack_counter(
                     evidence.profile.ip,
-                    victim,
+                    evidence.victim,
                     evidence_type
                     )
 
