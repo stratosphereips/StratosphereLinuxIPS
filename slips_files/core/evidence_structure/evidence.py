@@ -168,9 +168,6 @@ class Proto(Enum):
     UDP = 'udp'
     ICMP = 'icmp'
 
-
-
-
 @dataclass
 class Victim:
     direction: Direction
@@ -236,7 +233,6 @@ class Evidence:
     #  tl  obj
     threat_level: ThreatLevel
     category: IDEACategory
-    victim: Optional[Victim] # this is not defined in all evidence, it should
     # be #TODO @@@@@@@@@@@@@@@@@@@@@@@ no it shouldn't it's ok to have no
     #  victim!
     # profile of the srcip detected this evidence
@@ -251,6 +247,7 @@ class Evidence:
             'validate': lambda x: validate_timestamp(x)
             }
         )
+    victim: Optional[Victim] = field(default=False)
     proto: Optional[Proto] = field(default=False)
     port: int = field(default=None)
     source_target_tag: Tag = field(default=False)

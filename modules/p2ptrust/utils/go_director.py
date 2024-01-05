@@ -450,11 +450,13 @@ class GoDirector(IObservable):
             reporter, key_type, key, score, confidence, report_time
         )
         result = (
-            f'Data processing ok: reporter {reporter}, report time {report_time}, key {key} ({key_type}), '
+            f'Data processing ok: reporter {reporter}, report time '
+            f'{report_time}, key {key} ({key_type}), '
             f'score {score}, confidence {confidence}'
         )
         self.print(result, 2, 0)
-        # print(f"*** [debugging p2p] ***  stored a report about about  {key} from {reporter} in p2p_reports key in the db ")
+        # print(f"*** [debugging p2p] ***  stored a report about about
+        # {key} from {reporter} in p2p_reports key in the db ")
         # save all report info in the db
         # convert ts to human readable format
         report_info = {
@@ -469,7 +471,10 @@ class GoDirector(IObservable):
         if key_type == 'ip':
             profileid_of_attacker = f'profile_{key}'
             self.db.add_profile(profileid_of_attacker, report_time, self.width)
-            self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
+            self.set_evidence_p2p_report(key, reporter, score,
+                                         confidence,
+                                         report_time,
+                                         profileid_of_attacker)
 
     def set_evidence_p2p_report(
             self: str,
