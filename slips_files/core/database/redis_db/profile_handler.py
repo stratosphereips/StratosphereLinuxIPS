@@ -1124,7 +1124,7 @@ class ProfileHandler(IObservable):
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
-            self.print('error in addprofileidfromip in database.py', 0, 1)
+            self.print('error in getProfileIdFromIP in database.py', 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 
@@ -1590,7 +1590,7 @@ class ProfileHandler(IObservable):
         if not is_dhcp_set:
             self.r.hset(profileid, 'dhcp', 'true')
 
-    def addProfile(self, profileid, starttime, duration):
+    def add_profile(self, profileid, starttime, duration):
         """
         Add a new profile to the DB. Both the list of profiles and the hashmap of profile data
         Profiles are stored in two structures. A list of profiles (index) and individual hashmaps for each profile (like a table)
@@ -1621,7 +1621,7 @@ class ProfileHandler(IObservable):
             self.publish('new_profile', ip)
             return True
         except redis.exceptions.ResponseError as inst:
-            self.print('Error in addProfile in database.py', 0, 1)
+            self.print('Error in add_profile in database.py', 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 

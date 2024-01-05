@@ -305,7 +305,7 @@ class ARP(IModule, multiprocessing.Process):
                 threat_level=threat_level,
                 confidence=confidence,
                 description=description,
-                profile=ProfileID(ip=profileid.split('_')[1]),
+                profile=ProfileID(ip=saddr),
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
                 uid=uid,
                 timestamp=ts,

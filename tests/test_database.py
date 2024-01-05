@@ -38,13 +38,13 @@ def add_flow():
 
 
 def test_getProfileIdFromIP():
-    """unit test for addProfile and getProfileIdFromIP"""
+    """unit test for add_profile and getProfileIdFromIP"""
 
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
 
     # add a profile
-    db.addProfile('profile_192.168.1.1', '00:00', '1')
+    db.add_profile('profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
     assert db.getProfileIdFromIP(test_ip) is not False
 
@@ -53,7 +53,7 @@ def test_timewindows():
     """unit tests for addNewTW ,getLastTWforProfile and getFirstTWforProfile"""
     profileid = 'profile_192.168.1.1'
     # add a profile
-    db.addProfile(profileid, '00:00', '1')
+    db.add_profile(profileid, '00:00', '1')
     # add a tw to that profile (first tw)
     db.addNewTW(profileid, 0.0)
     # add  a new tw (last tw)
@@ -69,7 +69,7 @@ def getSlipsInternalTime():
 
 def test_add_ips():
     # add a profile
-    db.addProfile(profileid, '00:00', '1')
+    db.add_profile(profileid, '00:00', '1')
     # add a tw to that profile
     db.addNewTW(profileid, 0.0)
     columns = {
@@ -139,7 +139,9 @@ def test_deleteEvidence():
     added_evidence2 = json.loads(
         db.r.hget(f'{profileid}_{twid}', 'Evidence')
     )
-    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
+    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence #
+    # @@@@@@@@@@@@@@@ update this once the evidenc eno longer depend on an
+    # addr
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
 

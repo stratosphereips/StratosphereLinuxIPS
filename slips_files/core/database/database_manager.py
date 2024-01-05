@@ -700,8 +700,8 @@ class DBManager(IObservable):
     def mark_profile_as_dhcp(self, *args, **kwargs):
         return self.rdb.mark_profile_as_dhcp(*args, **kwargs)
 
-    def addProfile(self, *args, **kwargs):
-        return self.rdb.addProfile(*args, **kwargs)
+    def add_profile(self, *args, **kwargs):
+        return self.rdb.add_profile(*args, **kwargs)
 
     def set_profile_module_label(self, *args, **kwargs):
         return self.rdb.set_profile_module_label(*args, **kwargs)
