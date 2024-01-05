@@ -10,7 +10,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Victim,
         Proto,
         Tag
@@ -141,7 +140,7 @@ class VerticalPortscan:
             timewindow=TimeWindow(number=int(evidence['twid'].replace("timewindow", ""))),
             uid=[evidence['uid']],
             timestamp=evidence['timestamp'],
-            category=IDEACategory.recon_scanning,
+            category=IDEACategory.RECON_SCANNING,
             conn_count=evidence['pkts_sent'],
             proto=Proto[evidence['protocol']],
             source_target_tag=Tag.RECON,

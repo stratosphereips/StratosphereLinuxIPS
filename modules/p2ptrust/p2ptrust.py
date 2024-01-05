@@ -30,7 +30,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Tag
     )
 
@@ -444,7 +443,7 @@ class Trust(IModule, multiprocessing.Process):
         timestamp = str(ip_info.get('stime'))
         saddr = profileid.split("_")[-1]
 
-        category = IDEACategory(anomaly=Anomaly.TRAFFIC)
+        category = IDEACategory.ANOMALY_TRAFFIC
 
         ip_identification = self.db.get_ip_identification(attacker_ip)
         if 'src' in ip_state:

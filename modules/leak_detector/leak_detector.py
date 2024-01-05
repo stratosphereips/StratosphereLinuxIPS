@@ -21,7 +21,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Tag
     )
 
@@ -231,7 +230,7 @@ class LeakDetector(IModule, multiprocessing.Process):
                     proto=Proto(proto),
                     port=dport,
                     source_target_tag=source_target_tag,
-                    category=IDEACategory.malware
+                    category=IDEACategory.MALWARE
                 )
 
                 self.db.setEvidence(evidence)

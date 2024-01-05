@@ -18,7 +18,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Tag
     )
 
@@ -240,7 +239,7 @@ class ARP(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uids,
             timestamp=ts,
-            category=IDEACategory.recon_scanning,
+            category=IDEACategory.RECON_SCANNING,
             source_target_tag=Tag.RECON,
             conn_count=conn_count
         )
@@ -309,7 +308,7 @@ class ARP(IModule, multiprocessing.Process):
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
                 uid=uid,
                 timestamp=ts,
-                category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+                category=IDEACategory.ANOMALY_BEHAVIOUR,
                 victim=victim
             )
 
@@ -364,7 +363,7 @@ class ARP(IModule, multiprocessing.Process):
                 uid=uid,
                 timestamp=ts,
                 source_target_tag=Tag.RECON,
-                category=IDEACategory.information
+                category=IDEACategory.INFO
             )
 
             self.db.setEvidence(evidence)
@@ -454,7 +453,7 @@ class ARP(IModule, multiprocessing.Process):
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
                 uid=uid,
                 timestamp=ts,
-                category=IDEACategory.recon,
+                category=IDEACategory.RECON,
                 source_target_tag=Tag.MITM,
                 victim=victim
             )

@@ -17,7 +17,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Victim,
         Proto,
         Tag
@@ -85,7 +84,7 @@ class CCDetection(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.intrusion_botnet,
+            category=IDEACategory.INTRUSION_BOTNET,
             source_target_tag=Tag.BOTNET,
             port=int(port),
             proto=Proto(proto) if proto else None,

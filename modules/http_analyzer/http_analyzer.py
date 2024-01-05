@@ -17,7 +17,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Tag
     )
 
@@ -102,7 +101,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                     timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
                     uid=uid,
                     timestamp=timestamp,
-                    category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+                    category=IDEACategory.ANOMALY_TRAFFIC,
                     source_target_tag=Tag.SUSPICIOUS_USER_AGENT,
                 )
 
@@ -167,7 +166,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
                 uid=uids,
                 timestamp=timestamp,
-                category=IDEACategory(anomaly=Anomaly.CONNECTION),
+                category=IDEACategory.ANOMALY_CONNECTION,
             )
 
             self.db.setEvidence(evidence)
@@ -212,7 +211,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+            category=IDEACategory.ANOMALY_BEHAVIOUR,
             source_target_tag=source_target_tag,
         )
 
@@ -254,7 +253,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.FILE),
+            category=IDEACategory.ANOMALY_FILE,
             source_target_tag=Tag.EXECUTABLE_MIME_TYPE
         )
 
@@ -504,7 +503,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+            category=IDEACategory.ANOMALY_BEHAVIOUR,
             source_target_tag=Tag.MULTIPLE_USER_AGENT
         )
 
@@ -541,7 +540,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.SENDING_UNENCRYPTED_DATA,
             victim=victim
         )
@@ -593,7 +592,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
                 uid=uid,
                 timestamp=timestamp,
-                category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+                category=IDEACategory.ANOMALY_BEHAVIOUR,
                 source_target_tag=Tag.MALWARE
             )
 

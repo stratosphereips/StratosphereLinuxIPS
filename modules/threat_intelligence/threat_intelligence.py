@@ -24,7 +24,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Tag
     )
 
@@ -157,7 +156,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.BLACKLISTED_ASN,
         )
 
@@ -235,7 +234,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.BLACKLISTED_IP,
         )
 
@@ -313,7 +312,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.BLACKLISTED_DOMAIN,
         )
 
@@ -736,7 +735,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             timewindow=twid,
             uid=[file_info['flow']["uid"]],
             timestamp=ts,
-            category=IDEACategory.malware
+            category=IDEACategory.MALWARE
         )
     
         self.db.setEvidence(evidence)

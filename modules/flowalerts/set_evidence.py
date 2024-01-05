@@ -17,7 +17,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Tag
     )
 
@@ -55,7 +54,7 @@ class SetEvidnceHelper:
                 evidence_type=EvidenceType.YOUNG_DOMAIN,
                 attacker=attacker,
                 threat_level=ThreatLevel.LOW,
-                category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+                category=IDEACategory.ANOMALY_TRAFFIC,
                 description=description,
                 victim=victim,
                 profile=ProfileID(ip=saddr),
@@ -113,7 +112,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MULTIPLE_SSH_VERSIONS,
             attacker=attacker,
             threat_level=ThreatLevel.MEDIUM,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             victim=victim,
             profile=ProfileID(ip=attacker.value),
@@ -182,7 +181,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DIFFERENT_LOCALNET,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             victim=victim,
             profile=ProfileID(ip=srcip),
@@ -223,7 +222,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DEVICE_CHANGING_IP,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             victim=None,
             profile=ProfileID(ip=saddr),
@@ -265,7 +264,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -311,11 +310,11 @@ class SetEvidnceHelper:
             attacker=attacker,
             victim=victim,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -361,7 +360,7 @@ class SetEvidnceHelper:
             attacker=attacker,
             victim=victim,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -409,7 +408,7 @@ class SetEvidnceHelper:
             attacker=attacker,
             victim=victim,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -449,7 +448,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DGA_NXDOMAINS,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+            category=IDEACategory.ANOMALY_BEHAVIOUR,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
@@ -488,7 +487,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DNS_WITHOUT_CONNECTION,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -527,7 +526,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.PASTEBIN_DOWNLOAD,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR),
+            category=IDEACategory.ANOMALY_BEHAVIOUR,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -579,7 +578,7 @@ class SetEvidnceHelper:
             attacker=attacker,
             threat_level=threat_level,
             source_target_tag=Tag.MALWARE,
-            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            category=IDEACategory.ANOMALY_CONNECTION,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -619,7 +618,7 @@ class SetEvidnceHelper:
             description=description,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory.recon_scanning,
+            category=IDEACategory.RECON_SCANNING,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
@@ -671,7 +670,7 @@ class SetEvidnceHelper:
             attacker=attacker,
             victim=victim,
             threat_level=ThreatLevel.HIGH,
-            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            category=IDEACategory.ANOMALY_CONNECTION,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -714,7 +713,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.PASSWORD_GUESSING,
             attacker=attacker,
             threat_level=threat_level,
-            category= IDEACategory.attempt_login,
+            category= IDEACategory.ATTEMPT_LOGIN,
             description=description,
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid_number),
@@ -755,7 +754,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory.recon_scanning,
+            category=IDEACategory.RECON_SCANNING,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -806,7 +805,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.CONNECTION_TO_PRIVATE_IP,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory.recon,
+            category=IDEACategory.RECON,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -861,7 +860,7 @@ class SetEvidnceHelper:
             attacker=attacker,
             victim=victim,
             threat_level=threat_level,
-            category=IDEACategory.information,
+            category=IDEACategory.INFO,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -908,7 +907,7 @@ class SetEvidnceHelper:
             attacker=attacker,
             victim=victim,
             threat_level=threat_level,
-            category=IDEACategory.recon_scanning,
+            category=IDEACategory.RECON_SCANNING,
             description=description,
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid),
@@ -972,7 +971,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory.information,
+            category=IDEACategory.INFO,
         )
 
         self.db.setEvidence(evidence)
@@ -1028,7 +1027,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            category=IDEACategory.ANOMALY_CONNECTION,
             victim=victim_obj
         )
 
@@ -1074,7 +1073,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR)
+            category=IDEACategory.ANOMALY_BEHAVIOUR
         )
 
         self.db.setEvidence(evidence)
@@ -1125,7 +1124,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC)
+            category=IDEACategory.ANOMALY_TRAFFIC
         )
 
         self.db.setEvidence(evidence)
@@ -1181,7 +1180,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.CONNECTION)
+            category=IDEACategory.ANOMALY_CONNECTION
         )
 
         self.db.setEvidence(evidence)
@@ -1228,7 +1227,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=uid,
             timestamp=stime,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC)
+            category=IDEACategory.ANOMALY_TRAFFIC
         )
 
         self.db.setEvidence(evidence)
@@ -1272,7 +1271,7 @@ class SetEvidnceHelper:
             timewindow=twid,
             uid=uid,
             timestamp=stime,
-            category=IDEACategory(anomaly=Anomaly.BEHAVIOUR)
+            category=IDEACategory.ANOMALY_BEHAVIOUR
         )
 
         self.db.setEvidence(evidence)
@@ -1330,7 +1329,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.CONNECTION),
+            category=IDEACategory.ANOMALY_CONNECTION,
             source_target_tag=Tag.RECON,
             conn_count=1
         )
@@ -1407,7 +1406,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory.intrusion_botnet,
+            category=IDEACategory.INTRUSION_BOTNET,
             source_target_tag=source_target_tag
         )
 
@@ -1445,7 +1444,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory.malware,
+            category=IDEACategory.MALWARE,
             source_target_tag=Tag.ORIGIN_MALWARE
         )
 
@@ -1487,7 +1486,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=stime,
-            category=IDEACategory.attempt_login
+            category=IDEACategory.ATTEMPT_LOGIN
         )
 
         self.db.setEvidence(evidence)
@@ -1535,7 +1534,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=stime,
-            category=IDEACategory.attempt_login,
+            category=IDEACategory.ATTEMPT_LOGIN,
             conn_count=conn_count
         )
 
@@ -1584,7 +1583,7 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=ts,
-            category=IDEACategory.intrusion_botnet,
+            category=IDEACategory.INTRUSION_BOTNET,
             source_target_tag=Tag.CC
         )
 

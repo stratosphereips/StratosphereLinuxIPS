@@ -15,7 +15,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Tag
     )
 
@@ -111,7 +110,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.recon_scanning,
+            category=IDEACategory.RECON_SCANNING,
             conn_count=hosts_scanned,
             source_target_tag=Tag.RECON
         )
@@ -301,7 +300,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=icmp_flows_uids,
             timestamp=timestamp,
-            category=IDEACategory.recon_scanning,
+            category=IDEACategory.RECON_SCANNING,
             conn_count=pkts_sent,
             proto=Proto(protocol),
             source_target_tag=Tag.RECON,
@@ -343,7 +342,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uids,
             timestamp=timestamp,
-            category=IDEACategory.recon_scanning,
+            category=IDEACategory.RECON_SCANNING,
             conn_count=number_of_requested_addrs,
             source_target_tag=Tag.RECON
         )
