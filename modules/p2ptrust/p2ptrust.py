@@ -475,7 +475,7 @@ class Trust(IModule, multiprocessing.Process):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=attacker_ip),
+            profile=ProfileID(ip=attacker.value),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
