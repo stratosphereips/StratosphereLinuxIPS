@@ -1,6 +1,5 @@
 import time
 import json
-from dataclasses import asdict
 from typing import List, Tuple
 
 from slips_files.common.slips_utils import utils
@@ -149,8 +148,10 @@ class AlertHandler:
         saddr = profileid.split("_")[-1]
         if saddr not in attacker:
             return saddr
-        # if the saddr is the attacker, then the victim should be passed as a param to this function
-        # there's no 1 victim in this case. for example in ARP scans, the victim is the whole network
+        # if the saddr is the attacker, then the victim should be
+        # passed as a param to this function
+        # there's no 1 victim in this case. for example in ARP scans,
+        # the victim is the whole network
         return ''
 
     def setEvidence(self, evidence: Evidence):
@@ -160,6 +161,14 @@ class AlertHandler:
         slips_files/core/evidence_structure/evidence.py) with all the
         evidence details,
         """
+
+        # create the profile if it doesn't exist
+        self.add_profile(
+            str(evidence.profile),
+            evidence.timestamp,
+            self.width
+            )
+
         # Ignore evidence if it's disabled in the configuration file
         if self.is_detection_disabled(evidence.evidence_type):
             return False
