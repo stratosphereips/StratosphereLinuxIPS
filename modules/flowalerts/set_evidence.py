@@ -1473,7 +1473,8 @@ class SetEvidnceHelper:
                 value=daddr
             )
         ip_identification: str = self.db.get_ip_identification(daddr)
-        description: str = f'doing bad SMTP login to {daddr} {ip_identification}'
+        description: str = f'doing bad SMTP login to {daddr} ' \
+                           f'{ip_identification}'
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.BAD_SMTP_LOGIN,
