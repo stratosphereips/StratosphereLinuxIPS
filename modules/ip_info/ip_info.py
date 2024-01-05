@@ -30,7 +30,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
         Tag
     )
 
@@ -543,7 +542,7 @@ class IPInfo(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+            category=IDEACategory.ANOMALY_TRAFFIC,
             proto=Proto(protocol.lower()),
             port=dport,
             source_target_tag=Tag.MALWARE

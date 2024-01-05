@@ -116,17 +116,17 @@ class FlowAlerts(IModule, multiprocessing.Process):
             dport,
             proto,
             saddr,
-            profileid,
             twid,
             uid,
             timestamp,
     ):
         """
-        Alerts when there's a connection from a private IP to another private IP
-        except for DNS connections to the gateway
+        Alerts when there's a connection from a private IP to
+        another private IP except for DNS connections to the gateway
         """
         def is_dns_conn():
-            return dport == 53 and proto.lower() == 'udp' and daddr == self.db.get_gateway_ip()
+            return dport == 53 and proto.lower() == 'udp' \
+                and daddr == self.db.get_gateway_ip()
 
         with contextlib.suppress(ValueError):
             dport = int(dport)
@@ -147,7 +147,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
             daddr,
             dport,
             saddr,
-            profileid,
             twid,
             uid,
             timestamp,
@@ -1924,12 +1923,12 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 uid,
                 timestamp
             )
+
             self.check_connection_to_local_ip(
                 daddr,
                 dport,
                 proto,
                 saddr,
-                profileid,
                 twid,
                 uid,
                 timestamp,

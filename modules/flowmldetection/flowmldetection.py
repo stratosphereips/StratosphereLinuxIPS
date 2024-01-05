@@ -18,7 +18,6 @@ from slips_files.core.evidence_structure.evidence import \
         IoCType,
         Direction,
         IDEACategory,
-        Anomaly,
     )
 
 # Only for debbuging
@@ -412,7 +411,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            category= IDEACategory(anomaly=Anomaly.TRAFFIC)
+            category=IDEACategory.ANOMALY_TRAFFIC
         )
 
         self.db.setEvidence(evidence)

@@ -175,19 +175,22 @@ class Victim:
     value: str  # like the actual ip/domain/url check if value is reserved
 
 
-@dataclass
-class IDEACategory:
+
+class IDEACategory(Enum):
     """
     The evidence category according to IDEA categories
     https://idea.cesnet.cz/en/classifications
     """
-    anomaly: Anomaly
-    information = "Information"
-    malware = "Malware"
-    recon_scanning = "Recon.Scanning"
-    attempt_login = "Attempt.Login"
-    recon = "Recon"
-    intrusion_botnet = "Intrusion.Botnet"
+    ANOMALY_TRAFFIC = "Anomaly.Traffic"
+    ANOMALY_FILE = "Anomaly.File"
+    ANOMALY_CONNECTION = "Anomaly.Connection"
+    ANOMALY_BEHAVIOUR = "Anomaly.Behaviour"
+    INFO = "Information"
+    MALWARE = "Malware"
+    RECON_SCANNING = "Recon.Scanning"
+    ATTEMPT_LOGIN = "Attempt.Login"
+    RECON = "Recon"
+    INTRUSION_BOTNET = "Intrusion.Botnet"
 
 
 
@@ -301,12 +304,14 @@ def dict_to_evidence(evidence: dict):
     :param evidence (dict): Dictionary with evidence details.
     returns an instance of the Evidence class.
     """
+    print(f"@@@@@@@@@@@@@@@@ evidence['category'] {evidence['category']}")
+    print(f"@@@@@@@@@@@@@@@@ {evidence}")
     evidence_attributes = {
         'evidence_type': EvidenceType[evidence["evidence_type"]],
         'description': evidence['description'],
         'attacker': Attacker(**evidence['attacker']),
         'threat_level': ThreatLevel[evidence['threat_level']],
-        'category': IDEACategory(**evidence['category']),
+        'category': IDEACategory[evidence['category']],
         'victim': Victim(**evidence['victim']) if 'victim' in evidence
         and evidence['victim'] else None,
         'profile': ProfileID(evidence['profile']['ip']) if 'profile' in evidence else None,
