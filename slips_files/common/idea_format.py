@@ -53,7 +53,7 @@ def idea_format(evidence: Evidence):
             ip_version = 'IP6'
 
         IDEA_dict['Source'].append({ip_version: [dstip], 'Type': ['CC']})
-    print(f"@@@@@@@@@@@@@@@@ evidence.attacker.direction.value {evidence.attacker.direction}")
+
     # some evidence have a dst ip
     if evidence.attacker.direction == Direction.DST:
         # is the dstip ipv4/ipv6 or mac?
