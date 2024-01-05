@@ -111,9 +111,13 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         return False
 
     def check_multiple_empty_connections(
-        self, uid: str, contacted_host: str, timestamp: str,
-            request_body_len: int,
-            profileid: str, twid: str
+        self,
+        uid: str,
+        contacted_host: str,
+        timestamp: str,
+        request_body_len: int,
+        profileid: str,
+        twid: str
     ):
         """
         Detects more than 4 empty connections to google, bing, yandex and yahoo on port 80
@@ -533,7 +537,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=profileid.split('_')[1]),
+            profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,

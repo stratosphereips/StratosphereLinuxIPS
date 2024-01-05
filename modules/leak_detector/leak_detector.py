@@ -216,11 +216,7 @@ class LeakDetector(IModule, multiprocessing.Process):
                     attacker_type=IoCType.IP,
                     value=srcip
                     )
-                victim = Victim(
-                    direction=Direction.DST,
-                    victim_type=IoCType.IP,
-                    value=dstip
-                    )
+
 
                 evidence = Evidence(
                     evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
@@ -235,7 +231,6 @@ class LeakDetector(IModule, multiprocessing.Process):
                     proto=Proto[proto],
                     port=dport,
                     source_target_tag=source_target_tag,
-                    victim=victim,
                     category=IDEACategory.malware
                 )
 

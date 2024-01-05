@@ -539,7 +539,7 @@ class IPInfo(IModule, multiprocessing.Process):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=dstip),
+            profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
