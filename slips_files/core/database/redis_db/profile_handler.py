@@ -1603,7 +1603,8 @@ class ProfileHandler(IObservable):
 
             # Add the profile to the index. The index is called 'profiles'
             self.r.sadd('profiles', str(profileid))
-            # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
+            # Create the hashmap with the profileid.
+            # The hasmap of each profile is named with the profileid
             # Add the start time of profile
             self.r.hset(profileid, 'starttime', starttime)
             # For now duration of the TW is fixed

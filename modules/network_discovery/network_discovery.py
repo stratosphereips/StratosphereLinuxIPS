@@ -303,7 +303,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             timestamp=timestamp,
             category=IDEACategory.recon_scanning,
             conn_count=pkts_sent,
-            proto=Proto[protocol],
+            proto=Proto(protocol),
             source_target_tag=Tag.RECON,
             victim=victim
         )
