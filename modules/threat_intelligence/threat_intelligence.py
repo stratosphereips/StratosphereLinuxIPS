@@ -6,6 +6,7 @@ import dns
 import requests
 import threading
 import time
+from typing import Dict
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.imports import *
@@ -627,22 +628,31 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                     0: False
         }
 
-        list_description = {'127.0.0.2' :'IP under the control of, used by, or made available for use'
-                                          ' by spammers and abusers in unsolicited bulk '
-                                          'email or other types of Internet-based abuse that '
-                                          'threatens networks or users',
-                             '127.0.0.3' :'IP involved in sending low-reputation email, '
-                                          'may display a risk to users or a compromised host',
-                             '127.0.0.4' :'IP address of exploited systems.'
-                                          'This includes machines operating open proxies, systems infected '
-                                          'with trojans, and other malware vectors.',
-                             '127.0.0.9' :'IP is part of a netblock that is ‘hijacked’ or leased by professional spam '
-                                          'or cyber-crime operations and therefore used for dissemination of malware, '
-                                          'trojan downloaders, botnet controllers, etc.',
-                             '127.0.0.10':'IP address should not -according to the ISP controlling it- '
-                                          'be delivering unauthenticated SMTP email to any Internet mail server',
-                             '127.0.0.11': 'IP is not expected be delivering unauthenticated SMTP email to any Internet mail server,'
-                                           ' such as dynamic and residential IP space'}
+        list_description = {
+            '127.0.0.2': 'IP under the control of, used by, or made '
+                         'available for use'
+                         ' by spammers and abusers in unsolicited bulk '
+                         'email or other types of Internet-based abuse that '
+                         'threatens networks or users',
+            '127.0.0.3': 'IP involved in sending low-reputation email, '
+                         'may display a risk to users or a compromised host',
+            '127.0.0.4': 'IP address of exploited systems.'
+                         'This includes machines operating open proxies, '
+                         'systems infected with trojans, and other '
+                         'malware vectors.',
+            '127.0.0.9': 'IP is part of a netblock that is ‘hijacked’ '
+                         'or leased by professional spam '
+                         'or cyber-crime operations and therefore used '
+                         'for dissemination of malware, '
+                         'trojan downloaders, botnet controllers, etc.',
+            '127.0.0.10': 'IP address should not -according to the ISP '
+                          'controlling it- '
+                          'be delivering unauthenticated SMTP email to '
+                          'any Internet mail server',
+            '127.0.0.11': 'IP is not expected be delivering unauthenticated'
+                          ' SMTP email to any Internet mail server,'
+                          ' such as dynamic and residential IP space'
+            }
 
 
         spamhaus_dns_hostname = ".".join(ip.split(".")[::-1]) + ".zen.spamhaus.org"
@@ -692,38 +702,49 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
 
 
 
-    def set_evidence_malicious_hash(self,file_info: dict):
+    def set_evidence_malicious_hash(self, file_info: Dict[str, any]):
         """
-        :param file_info: dict with flow, profileid, twid, and confidence of file
+        :param file_info: dict with flow, profileid,
+        twid, and confidence of file
         """
-        attacker_direction = 'md5'
-        category = 'Malware'
-        evidence_type = 'MaliciousDownloadedFile'
-        attacker = file_info['flow']["md5"]
-        threat_level = file_info["threat_level"]
-        daddr = file_info['flow']["daddr"]
-        ip_identification = self.db.get_ip_identification(daddr)
-        confidence = file_info["confidence"]
-        threat_level = utils.threat_level_to_string(threat_level)
+        srcip = file_info['flow']['saddr']
+        threat_level: ThreatLevel = ThreatLevel(file_info["threat_level"])
+        confidence: float = file_info["confidence"]
+        daddr = file_info["flow"]["daddr"]
 
-        description = (
-            f'Malicious downloaded file {attacker}. '
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = (
+            f'Malicious downloaded file {file_info["flow"]["md5"]}. '
             f'size: {file_info["flow"]["size"]} '
-            f'from IP: {daddr}. Detected by: {file_info["blacklist"]}. '
+            f'from IP: {daddr}. '
+            f'Detected by: {file_info["blacklist"]}. '
             f'Score: {confidence}. {ip_identification}'
         )
-
-        self.db.setEvidence(evidence_type,
-                                 attacker_direction,
-                                 attacker,
-                                 threat_level,
-                                 confidence,
-                                 description,
-                                 file_info['flow']["starttime"],
-                                 category,
-                                 profileid=file_info["profileid"],
-                                 twid=file_info["twid"],
-                                 uid=file_info['flow']["uid"])
+        attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=srcip
+            )
+        ts = utils.convert_format(
+            file_info['flow']["starttime"], utils.alerts_format
+            )
+        twid = TimeWindow(number=int(
+            file_info["twid"].replace("timewindow", "")
+            ))
+        evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=file_info["profileid"]),
+            timewindow=twid,
+            uid=[file_info['flow']["uid"]],
+            timestamp=ts,
+            category=IDEACategory.malware
+        )
+    
+        self.db.setEvidence(evidence)
 
     def circl_lu(self, flow_info: dict):
         """
