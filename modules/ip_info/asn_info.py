@@ -91,14 +91,17 @@ class ASN:
 
         return ip_info
 
-    def cache_ip_range(self, ip):
+    def cache_ip_range(self, ip: str):
         """
         Get the range of the given ip and
         cache the asn of the whole ip range
         """
+        if not ip:
+            return False
+
         try:
             # Cache the range of this ip
-            whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
+            whois_info: dict = ipwhois.IPWhois(address=ip).lookup_rdap()
             asnorg = whois_info.get('asn_description', False)
             asn_cidr = whois_info.get('asn_cidr', False)
             asn_number = whois_info.get('asn', False)
@@ -115,12 +118,12 @@ class ASN:
         except (
             ipwhois.exceptions.IPDefinedError,
             ipwhois.exceptions.HTTPLookupError,
+            ipwhois.exceptions.ASNRegistryError,
+            ipwhois.exceptions.ASNParseError,
         ):
             # private ip or RDAP lookup failed. don't cache
+            # or ASN lookup failed with no more methods to try
             return False
-        except ipwhois.exceptions.ASNRegistryError:
-            # ASN lookup failed with no more methods to try
-            pass
 
 
     def get_asn_online(self, ip):
