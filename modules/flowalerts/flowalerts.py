@@ -287,7 +287,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
         ):
             return True
 
-    def check_data_upload(self, sbytes, daddr, uid, profileid, twid):
+    def check_data_upload(self, sbytes, daddr, uid, profileid, twid, timestamp):
         """
         Set evidence when 1 flow is sending >= the flow_upload_threshold bytes
         """
@@ -306,6 +306,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 profileid,
                 twid,
                 uid,
+                timestamp,
             )
             return True
 
@@ -1897,7 +1898,8 @@ class FlowAlerts(IModule, multiprocessing.Process):
                 daddr,
                 uid,
                 profileid,
-                twid
+                twid,
+                timestamp
             )
 
             self.check_non_http_port_80_conns(

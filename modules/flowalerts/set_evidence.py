@@ -82,25 +82,28 @@ class SetEvidnceHelper:
         :param cached_versions: major.minor
         :param current_versions: major.minor
         :param role: can be 'SSH::CLIENT' or
-                    'SSH::SERVER' as seen in zeek software.log flows
+            'SSH::SERVER' as seen in zeek software.log flows
         """
-        profileid = ProfileID(ip=srcip)
         if role.upper() == 'CLIENT':
+            attacker = srcip
             attacker_direction = Direction.SRC
+            victim = dstip
             victim_direction = Direction.DST
         else:
+            attacker = dstip
             attacker_direction = Direction.DST
+            victim = srcip
             victim_direction = Direction.SRC
 
         attacker = Attacker(
             direction=attacker_direction,
             attacker_type=IoCType.IP,
-            value=srcip
+            value=attacker
             )
         victim = Victim(
             direction=victim_direction,
             victim_type=IoCType.IP,
-            value=dstip
+            value=victim
             )
         role = 'client' if 'CLIENT' in role.upper() else 'server'
         description = f'SSH {role} version changing from ' \
@@ -113,7 +116,7 @@ class SetEvidnceHelper:
             category=IDEACategory(anomaly=Anomaly.TRAFFIC),
             description=description,
             victim=victim,
-            profile=profileid,
+            profile=ProfileID(ip=attacker.value),
             timewindow=TimeWindow(int(twid.replace("timewindow", ''))),
             uid=uid,
             timestamp=timestamp,
@@ -134,7 +137,8 @@ class SetEvidnceHelper:
             ip_outside_localnet: str = ''
     ):
         """
-        :param ip_outside_localnet: was the 'srcip' outside the localnet or the 'dstip'?
+        :param ip_outside_localnet: was the
+        'srcip' outside the localnet or the 'dstip'?
         """
         srcip = profileid.split('_')[-1]
         # the attacker here is the IP found to be private and outside the localnet
@@ -150,8 +154,8 @@ class SetEvidnceHelper:
                 value=daddr
             )
             description = f'A connection from a private IP ({srcip}) ' \
-                          f'outside of the used local network {self.db.get_local_network()}. ' \
-                          f'To IP: {daddr} '
+                          f'outside of the used local network ' \
+                          f'{self.db.get_local_network()}. To IP: {daddr} '
         else:
             attacker = Attacker(
                 direction=Direction.DST,
@@ -164,26 +168,25 @@ class SetEvidnceHelper:
                 value=srcip
             )
             description = f'A connection to a private IP ({daddr}) ' \
-                          f'outside of the used local network {self.db.get_local_network()}. ' \
+                          f'outside of the used local network ' \
+                          f'{self.db.get_local_network()}. ' \
                           f'From IP: {srcip} '
-            description += 'using ARP' if 'arp' in portproto else f'on port: {portproto}'
+            description += 'using ARP' if 'arp' in portproto \
+                else f'on port: {portproto}'
 
 
         confidence = 1.0
         threat_level = ThreatLevel.HIGH
-        category = IDEACategory(anomaly=Anomaly.TRAFFIC)
-        evidence_type = EvidenceType.DIFFERENT_LOCALNET
-        twid_number = int(twid.replace("timewindow", ""))
 
         evidence = Evidence(
-            evidence_type=evidence_type,
+            evidence_type=EvidenceType.DIFFERENT_LOCALNET,
             attacker=attacker,
             threat_level=threat_level,
-            category=category,
+            category=IDEACategory(anomaly=Anomaly.TRAFFIC),
             description=description,
             victim=victim,
             profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(number=twid_number),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
             conn_count=1,
@@ -348,8 +351,8 @@ class SetEvidnceHelper:
         )
 
         ip_identification: str = self.db.get_ip_identification(daddr)
-        description: str = f'Weird HTTP method "{weird_method}" to IP: {daddr} ' \
-                           f'{ip_identification}. by Zeek.'
+        description: str = f'Weird HTTP method "{weird_method}" to IP: ' \
+                           f'{daddr} {ip_identification}. by Zeek.'
 
         twid_number: int = int(twid.replace("timewindow", ""))
 
@@ -439,7 +442,7 @@ class SetEvidnceHelper:
         attacker = Attacker(
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
-                value=profileid.split('_')[1]
+                value=saddr
             )
 
         evidence: Evidence = Evidence(
@@ -1053,11 +1056,6 @@ class SetEvidnceHelper:
             attacker_type=IoCType.IP,
             value=saddr
         )
-        victim: Victim = Victim(
-            direction=Direction.DST,
-            victim_type=IoCType.IP,
-            value=daddr
-        )
 
         ip_identification: str = self.db.get_ip_identification(daddr)
         description = f'Self-signed certificate. Destination IP: {daddr}.' \
@@ -1069,7 +1067,6 @@ class SetEvidnceHelper:
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.SELF_SIGNED_CERTIFICATE,
             attacker=attacker,
-            victim=victim,
             threat_level=threat_level,
             confidence=confidence,
             description=description,
@@ -1150,10 +1147,8 @@ class SetEvidnceHelper:
         threat_level: ThreatLevel = ThreatLevel.INFO
         twid: int = int(twid.replace("timewindow", ""))
         ip_identification = self.db.get_ip_identification(attacker)
-        description = (
-                f'Connection to multiple ports {dstports} of '
-                f'IP: {attacker}. {ip_identification}'
-            )
+        description = f'Connection to multiple ports {dstports} of ' \
+                      f'IP: {attacker}. {ip_identification}'
 
         if attacker in profileid:
             attacker_direction = Direction.SRC
@@ -1219,7 +1214,8 @@ class SetEvidnceHelper:
             )
 
         description: str = f'A DNS TXT answer with high entropy. ' \
-                           f'query: {query} answer: "{answer}" entropy: {round(entropy, 2)} '
+                           f'query: {query} answer: "{answer}" ' \
+                           f'entropy: {round(entropy, 2)} '
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.HIGH_ENTROPY_DNS_ANSWER,
@@ -1379,6 +1375,8 @@ class SetEvidnceHelper:
             source_target_tag: Tag = Tag.CC
             attacker_direction: Direction = Direction.DST
             victim_direction: Direction = Direction.SRC
+        else:
+            return
 
         # append daddr identification to the description
         ip_identification: str = self.db.get_ip_identification(attacker)
@@ -1398,11 +1396,10 @@ class SetEvidnceHelper:
                 value=victim
         )
         confidence: float = 1
-
         evidence: Evidence = Evidence(
             evidence_type=evidence_type,
             attacker=attacker,
-            victim=Victim(direction=Direction.DST, victim_type=IoCType.IP, value=victim),
+            victim=victim,
             threat_level=threat_level,
             confidence=confidence,
             description=description,
@@ -1423,6 +1420,7 @@ class SetEvidnceHelper:
         profileid: str,
         twid: str,
         uid: List[str],
+        timestamp
     ) -> None:
         confidence: float = 0.6
         threat_level: ThreatLevel = ThreatLevel.HIGH
@@ -1433,8 +1431,9 @@ class SetEvidnceHelper:
             value=saddr
         )
         ip_identification: str = self.db.get_ip_identification(daddr)
-        description: str = f'Large data upload. {src_mbs} MBs sent to {daddr} {ip_identification}'
-        timestamp: str = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
+        description: str = f'Large data upload. {src_mbs} MBs ' \
+                           f'sent to {daddr} {ip_identification}'
+        timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.DATA_UPLOAD,

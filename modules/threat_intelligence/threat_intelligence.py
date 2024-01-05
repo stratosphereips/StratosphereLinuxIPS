@@ -166,9 +166,6 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         self.db.setEvidence(evidence)
 
 
-
-
-
     def set_evidence_malicious_ip(
             self,
             ip: str,
