@@ -6,8 +6,6 @@ import dns
 import requests
 import threading
 import time
-from datetime import datetime
-from typing import Optional
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.imports import *
@@ -32,7 +30,8 @@ from slips_files.core.evidence_structure.evidence import \
 
 class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
     name = 'Threat Intelligence'
-    description = 'Check if the source IP or destination IP are in a malicious list of IPs'
+    description = 'Check if the source IP or destination IP' \
+                  ' are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia, Alya Gomaa']
 
     def init(self):
@@ -108,130 +107,151 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)
 
+
     def set_evidence_malicious_asn(
-            self,
-            attacker,
-            uid,
-            timestamp,
-            ip_info,
-            profileid,
-            twid,
-            asn,
-            asn_info,
-        ):
-        """
-        :param asn_info: the malicious asn info taken from own_malicious_iocs.csv
-        """
-        attacker_direction = 'srcip'
-        category = 'Anomaly.Traffic'
-        evidence_type = 'ThreatIntelligenceBlacklistedASN'
-        confidence = 0.8
-
-        # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
-        threat_level = asn_info.get('threat_level', 'medium')
-
-        tags = asn_info.get('tags', False)
-        source_target_tag = 'BlacklistedASN'
-        identification = self.db.get_ip_identification(attacker)
-
-        description = f'Connection to IP: {attacker} with blacklisted ASN: {asn} ' \
-                      f'Description: {asn_info["description"]}, ' \
-                      f'Found in feed: {asn_info["source"]}, ' \
-                      f'Confidence: {confidence}.'\
-                      f'Tags: {tags} ' \
-                      f'{identification}'
-
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
-
-
-
-
-    def set_evidence_malicious_ip(
         self,
-        ip: str,
+        attacker: str,
         uid: str,
-        dstip: str,
         timestamp: str,
-        ip_info: dict,
-        profileid: str = '',
-        twid: str = '',
-        ip_state: str = '',
+        profileid: str,
+        twid: str,
+        asn: str,
+        asn_info: dict,
     ):
         """
-        Set an evidence for a malicious IP met in the timewindow
-        :param ip: the ip source file
-        :param uid: Zeek uid of the flow that generated the evidence
-        :param timestamp: Exact time when the evidence happened
-        :param ip_info: is all the info we have about that IP in the db source, confidence, description, etc.
-        :param profileid: profile where the alert was generated. It includes the src ip
-        :param twid: name of the timewindow when it happened.
-        :param ip_state: is basically the answer to "which one is the
-        blacklisted IP"? can be 'srcip' or 'dstip'
+        :param asn_info: the malicious ASN info taken from own_malicious_iocs.csv
         """
+
+        confidence: float = 0.8
+        saddr = profileid.split("_")[-1]
+
+        # when we comment ti_files and run slips, we get the
+        # error of not being able to get feed threat_level
         threat_level: float = utils.threat_levels[
-            ip_info.get('threat_level', 'medium')
+            asn_info.get('threat_level', 'medium')
         ]
         threat_level: ThreatLevel = ThreatLevel(threat_level)
-        confidence: float = 1.0
-        srcip = profileid.split("_")[-1]
 
-        if 'src' in ip_state:
-            description: str = f'connection from blacklisted ' \
-                               f'IP: {ip} to {dstip}. '
-            attacker = Attacker(
-                direction=Direction.DST,
-                attacker_type=IoCType.IP,
-                value=dstip
-            )
-        elif 'dst' in ip_state:
-            if self.is_dns_response:
-                description: str = f'DNS answer with a blacklisted ' \
-                                   f'IP: {ip} for query: {self.dns_query}'
-            else:
-                description: str = f'connection to blacklisted ' \
-                                   f'IP: {ip} from {srcip}. '
+        tags = asn_info.get('tags', '')
+        identification: str = self.db.get_ip_identification(attacker)
 
-            attacker = Attacker(
+        description: str = (
+            f'Connection to IP: {attacker} with blacklisted ASN: {asn} '
+            f'Description: {asn_info["description"]}, '
+            f'Found in feed: {asn_info["source"]}, '
+            f'Confidence: {confidence}.'
+            f'Tags: {tags} '
+            f'{identification}'
+        )
+        attacker = Attacker(
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
-                value=srcip
+                value=saddr
             )
-        else:
-            # ip_state is not specified?
-            return
-
-        ip_identification: str = self.db.get_ip_identification(
-            ip, get_ti_data=False
-            ).strip()
-        description += f'{ip_identification} Description: ' \
-                       f'{ip_info["description"]}. Source: {ip_info["source"]}.'
-
-
         evidence = Evidence(
-            evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
+            evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_ASN,
             attacker=attacker,
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=attacker.value),
+            profile=ProfileID(ip=profileid),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
             category=IDEACategory(anomaly=Anomaly.TRAFFIC),
-            source_target_tag=Tag.BLACKLISTED_IP,
+            source_target_tag=Tag.BLACKLISTED_ASN,
         )
 
         self.db.setEvidence(evidence)
 
 
-        # mark this ip as malicious in our database
-        ip_info = {'threatintelligence': ip_info}
-        self.db.setInfoForIPs(ip, ip_info)
 
-        # add this ip to our MaliciousIPs hash in the database
-        self.db.set_malicious_ip(ip, profileid, twid)
+
+
+    def set_evidence_malicious_ip(
+            self,
+            ip: str,
+            uid: str,
+            dstip: str,
+            timestamp: str,
+            ip_info: dict,
+            profileid: str = '',
+            twid: str = '',
+            ip_state: str = '',
+        ):
+            """
+            Set an evidence for a malicious IP met in the timewindow
+            :param ip: the ip source file
+            :param uid: Zeek uid of the flow that generated the evidence
+            :param timestamp: Exact time when the evidence happened
+            :param ip_info: is all the info we have about that IP in the db source, confidence, description, etc.
+            :param profileid: profile where the alert was generated. It includes the src ip
+            :param twid: name of the timewindow when it happened.
+            :param ip_state: is basically the answer to "which one is the
+            blacklisted IP"? can be 'srcip' or 'dstip'
+            """
+            threat_level: float = utils.threat_levels[
+                ip_info.get('threat_level', 'medium')
+            ]
+            threat_level: ThreatLevel = ThreatLevel(threat_level)
+            confidence: float = 1.0
+            srcip = profileid.split("_")[-1]
+
+            if 'src' in ip_state:
+                description: str = f'connection from blacklisted ' \
+                                   f'IP: {ip} to {dstip}. '
+                attacker = Attacker(
+                    direction=Direction.DST,
+                    attacker_type=IoCType.IP,
+                    value=dstip
+                )
+            elif 'dst' in ip_state:
+                if self.is_dns_response:
+                    description: str = f'DNS answer with a blacklisted ' \
+                                       f'IP: {ip} for query: {self.dns_query}'
+                else:
+                    description: str = f'connection to blacklisted ' \
+                                       f'IP: {ip} from {srcip}. '
+
+                attacker = Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=srcip
+                )
+            else:
+                # ip_state is not specified?
+                return
+
+            ip_identification: str = self.db.get_ip_identification(
+                ip, get_ti_data=False
+                ).strip()
+            description += f'{ip_identification} Description: ' \
+                           f'{ip_info["description"]}. Source: {ip_info["source"]}.'
+
+
+            evidence = Evidence(
+                evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
+                attacker=attacker,
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=attacker.value),
+                timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                uid=[uid],
+                timestamp=utils.convert_format(timestamp, utils.alerts_format),
+                category=IDEACategory(anomaly=Anomaly.TRAFFIC),
+                source_target_tag=Tag.BLACKLISTED_IP,
+            )
+
+            self.db.setEvidence(evidence)
+
+
+            # mark this ip as malicious in our database
+            ip_info = {'threatintelligence': ip_info}
+            self.db.setInfoForIPs(ip, ip_info)
+
+            # add this ip to our MaliciousIPs hash in the database
+            self.db.set_malicious_ip(ip, profileid, twid)
 
     def set_evidence_malicious_domain(
         self,
@@ -799,7 +819,6 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                 ip,
                 uid,
                 timestamp,
-                ip_info,
                 profileid,
                 twid,
                 asn,
