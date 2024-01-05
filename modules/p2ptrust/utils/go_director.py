@@ -468,7 +468,7 @@ class GoDirector(IObservable):
         # with the width from slips.conf and the starttime as the report time
         if key_type == 'ip':
             profileid_of_attacker = f'profile_{key}'
-            self.db.addProfile(profileid_of_attacker, report_time, self.width)
+            self.db.add_profile(profileid_of_attacker, report_time, self.width)
             self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
 
     def set_evidence_p2p_report(
@@ -496,14 +496,14 @@ class GoDirector(IObservable):
         ip_identification = self.db.get_ip_identification(ip, get_ti_data=False)
         last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
 
-        # this should never happen. if we have a report, we will have a reporter
-        # and will have the ip of the reporter
+        # this should never happen. if we have a report,
+        # we will have a reporter and will have the ip of the reporter
         # but just in case
         if not reporter_ip:
             reporter_ip = ''
 
-        description = f'attacking another peer: {reporter_ip} ({reporter}). ' \
-                      f'threat level: {threat_level} ' \
+        description = f'attacking another peer: {reporter_ip} ' \
+                      f'({reporter}). threat level: {threat_level} ' \
                       f'confidence: {confidence} {ip_identification}'
 
         # get the tw of this report time

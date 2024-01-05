@@ -140,9 +140,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             f'Connection to IP: {attacker} with blacklisted ASN: {asn} '
             f'Description: {asn_info["description"]}, '
             f'Found in feed: {asn_info["source"]}, '
-            f'Confidence: {confidence}.'
-            f'Tags: {tags} '
-            f'{identification}'
+            f'Confidence: {confidence}. Tags: {tags} {identification}'
         )
         attacker = Attacker(
                 direction=Direction.SRC,
@@ -155,7 +153,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=profileid),
+            profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
@@ -311,7 +309,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=profileid),
+            profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
@@ -734,7 +732,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=file_info["profileid"]),
+            profile=ProfileID(ip=srcip),
             timewindow=twid,
             uid=[file_info['flow']["uid"]],
             timestamp=ts,
