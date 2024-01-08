@@ -274,8 +274,12 @@ class Evidence:
 
 
     def __post_init__(self):
-        # remove duplicate uids
-        self.uid = list(set(self.uid))
+        if not isinstance(self.uid, list) or not all(isinstance(uid, str) for uid in self.uid):
+            raise ValueError(f"uid must be a list of strings .. {self.uid}")
+        else:
+            # remove duplicate uids
+            self.uid = list(set(self.uid))
+
 
 
 def evidence_to_dict(obj):

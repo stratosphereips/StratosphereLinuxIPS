@@ -69,7 +69,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         return False
 
     def check_suspicious_user_agents(
-        self, uid, host, uri, timestamp, user_agent, profileid, twid
+        self, uid: str, host, uri, timestamp, user_agent, profileid, twid
     ):
         """Check unusual user agents and set evidence"""
 
@@ -99,7 +99,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                     description=description,
                     profile=ProfileID(ip=saddr),
                     timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-                    uid=uid,
+                    uid=[uid],
                     timestamp=timestamp,
                     category=IDEACategory.ANOMALY_TRAFFIC,
                     source_target_tag=Tag.SUSPICIOUS_USER_AGENT,
@@ -176,9 +176,16 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         return False
 
     def set_evidence_incompatible_user_agent(
-        self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid
+            self,
+            host,
+            uri,
+            vendor,
+            user_agent,
+            timestamp,
+            profileid,
+            twid,
+            uid: str
     ):
-        source_target_tag: str = 'IncompatibleUserAgent'
         threat_level: ThreatLevel = ThreatLevel.HIGH
         saddr = profileid.split('_')[1]
         confidence: float = 1
@@ -209,16 +216,15 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_BEHAVIOUR,
-            source_target_tag=source_target_tag,
         )
 
         self.db.setEvidence(evidence)
 
 
-    def report_executable_mime_type(
+    def set_evidence_executable_mime_type(
             self,
             mime_type: str,
             profileid: str,
@@ -251,7 +257,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_FILE,
             source_target_tag=Tag.EXECUTABLE_MIME_TYPE
@@ -262,7 +268,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
 
 
     def check_incompatible_user_agent(
-        self, host, uri, timestamp, profileid, twid, uid
+        self, host, uri, timestamp, profileid, twid, uid: str
     ):
         """
         Compare the user agent of this profile to the MAC vendor and check incompatibility
@@ -660,7 +666,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                 )
 
             if self.detect_executable_mime_types(resp_mime_types):
-                self.report_executable_mime_type(
+                self.set_evidence_executable_mime_type(
                     resp_mime_types,
                     profileid,
                     twid,

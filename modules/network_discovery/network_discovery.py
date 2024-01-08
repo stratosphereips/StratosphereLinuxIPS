@@ -1,5 +1,7 @@
-from slips_files.common.imports import *
 import json
+from typing import List
+
+from slips_files.common.imports import *
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from slips_files.core.evidence_structure.evidence import \
@@ -31,9 +33,6 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
     def init(self):
         self.horizontal_ps = HorizontalPortscan(self.db)
         self.vertical_ps = VerticalPortscan(self.db)
-        # Get from the database the separator used to separate the IP and the word profile
-        self.fieldseparator = self.db.get_field_separator()
-        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = self.db.subscribe('tw_modified')
         self.c2 = self.db.subscribe('new_notice')
         self.c3 = self.db.subscribe('new_dhcp')
@@ -144,7 +143,8 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             else:
                 # Between 3 and 10 pkts compute a kind of linear grow
                 confidence = totalpkts / 10.0
-            self.db.setEvidence(profileid, twid, evidence_type, threat_level, confidence)
+            self.db.setEvidence(profileid, twid, evidence_type,
+            threat_level, confidence)
             self.print('Too Many Not Estab TCP to same port {} from IP: {}.
             Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
         """
@@ -185,7 +185,8 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
                     number_of_flows = len(icmp_flows_uids)
                     # how many flows are responsible for this attack
                     # (from this srcip to this dstip on the same port)
-                    cache_key = f'{profileid}:{twid}:dstip:{scanned_ip}:{sport}:{attack}'
+                    cache_key = f'{profileid}:{twid}:dstip:' \
+                                f'{scanned_ip}:{sport}:{attack}'
                     prev_flows = self.cache_det_thresholds.get(cache_key, 0)
 
                     # We detect a scan every Threshold. So we detect when there
@@ -219,8 +220,8 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
                 prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
                 # detect every 5, 10, 15 scanned IPs
                 if (
-                        amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
-                        and prev_scanned_ips < amount_of_scanned_ips
+                    amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
+                    and prev_scanned_ips < amount_of_scanned_ips
                 ):
 
                     pkts_sent = 0
@@ -253,7 +254,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             protocol: str,
             profileid: str,
             twid: str,
-            icmp_flows_uids,
+            icmp_flows_uids: List[str],
             attack: EvidenceType,
             scanned_ip: str=False
     ):
@@ -266,7 +267,8 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
         if number_of_scanned_ips == 1:
             description = (
                             f'ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
-                            f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
+                            f'Total packets sent: {pkts_sent} over '
+                            f'{len(icmp_flows_uids)} flows. '
                             f'Confidence: {confidence}. by Slips'
                         )
             if scanned_ip:
@@ -278,8 +280,10 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
         else:
             # not a single victim, there are many
             description = (
-                f'ICMP scanning {number_of_scanned_ips} different IPs. ICMP scan type: {attack}. '
-                f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
+                f'ICMP scanning {number_of_scanned_ips} different IPs.'
+                f' ICMP scan type: {attack}. '
+                f'Total packets sent: {pkts_sent} over '
+                f'{len(icmp_flows_uids)} flows. '
                 f'Confidence: {confidence}. by Slips'
             )
 
