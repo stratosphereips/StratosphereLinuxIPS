@@ -1,9 +1,20 @@
-# Must imports
-from slips_files.common.imports import *
-
-# Your imports
+from typing import Dict, Any
 import json
 import requests
+
+from slips_files.common.imports import *
+from slips_files.core.evidence_structure.evidence import (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Attacker,
+        ThreatLevel,
+        Victim,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+    )
 
 URLHAUS_BASE_URL = 'https://urlhaus-api.abuse.ch/v1'
 
@@ -133,87 +144,123 @@ class URLhaus:
         elif type_of_ioc == 'url':
             return self.parse_urlhaus_url_response(response, ioc)
 
-    def set_evidence_malicious_hash(self, file_info: dict):
-        attacker_direction = 'md5'
-        category = 'Malware'
-        evidence_type = 'MaliciousDownloadedFile'
+    def set_evidence_malicious_hash(self, file_info: Dict[str, Any]) -> None:
 
-        threat_level = file_info["threat_level"]
-        flow = file_info['flow']
-        attacker = flow["md5"]
-        daddr = flow["daddr"]
+        flow: Dict[str, Any] = file_info['flow']
 
-        ip_identification = self.db.get_ip_identification(daddr)
+        daddr: str = flow["daddr"]
+        ip_identification: str = self.db.get_ip_identification(daddr)
 
-        # add the following fields in the evidence description but only if we're sure they exist
-        size = f" size: {flow['size']}." if flow.get('size', False) else ''
-        file_name = f" file name: {flow['file_name']}." if flow.get('file_name', False) else ''
-        file_type = f" file type: {flow['file_type']}." if flow.get('file_type', False) else ''
-        tags = f" tags: {flow['tags']}." if flow.get('tags', False) else ''
+        # Add the following fields in the evidence
+        # description but only if we're sure they exist
+        size: str = f" size: {flow['size']}." if flow.get('size', False) \
+            else ''
+        file_name: str = f" file name: {flow['file_name']}." \
+            if flow.get('file_name', False) else ''
+        file_type: str = f" file type: {flow['file_type']}." \
+            if flow.get('file_type', False) else ''
+        tags: str = f" tags: {flow['tags']}." if flow.get('tags', False) \
+            else ''
 
-        # we have more info about the downloaded file
+        # We have more info about the downloaded file
         # so we need a more detailed description
-        description = f"Malicious downloaded file: {flow['md5']}." \
-                      f"{size}" \
-                      f" from IP: {flow['daddr']} {ip_identification}." \
-                      f"{file_name}" \
-                      f"{file_type}" \
-                      f"{tags}" \
-                      f" by URLhaus." \
+        description: str = (
+            f"Malicious downloaded file: {flow['md5']}."
+            f"{size}"
+            f" from IP: {daddr} {ip_identification}."
+            f"{file_name}"
+            f"{file_type}"
+            f"{tags}"
+            f" by URLhaus."
+        )
 
+        threat_level: float = file_info.get("threat_level", 0)
         if threat_level:
-            # threat level here is the vt percentage from urlhaus
-            description += f" virustotal score: {threat_level}% malicious"
-            threat_level = float(threat_level)/100
+            # Threat level here is the VT percentage from URLhaus
+            description += f" Virustotal score: {threat_level}% malicious"
+            threat_level: str = utils.threat_level_to_string(float(
+                threat_level) / 100)
         else:
-            threat_level = 0.8
+            threat_level = 'high'
 
-        confidence = 0.7
+        threat_level: ThreatLevel= ThreatLevel[threat_level]
 
-        self.db.setEvidence(evidence_type,
-                                 attacker_direction,
-                                 attacker,
-                                 threat_level,
-                                 confidence,
-                                 description,
-                                 flow["starttime"],
-                                 category,
-                                 profileid=file_info["profileid"],
-                                 twid=file_info["twid"],
-                                 uid=flow["uid"])
+        confidence: float = 0.7
+        saddr: str = file_info['profileid'].split("_")[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+        timestamp: str = flow["starttime"]
+        twid: str = file_info["twid"]
+
+        # Assuming you have an instance of the Evidence class in your class
+        evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            timestamp=timestamp,
+            category=IDEACategory.MALWARE,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[flow["uid"]]
+        )
+
+        self.db.setEvidence(evidence)
+
 
     def set_evidence_malicious_url(
             self,
-            url_info,
-            uid,
-            timestamp,
-            profileid,
-            twid
-    ):
-        """
-        :param url_info: dict with source, description, therat_level, and tags of url
-        """
-        threat_level = url_info['threat_level']
-        attacker = url_info['url']
-        description = url_info['description']
+            url_info: Dict[str, Any],
+            uid: str,
+            timestamp: str,
+            profileid: str,
+            twid: str
+        ) -> None:
+            """
+            Set evidence for a malicious URL based on the provided URL info
+            """
+            threat_level: str = url_info.get('threat_level', '')
+            description: str = url_info.get('description', '')
 
-        confidence = 0.7
+            confidence: float = 0.7
 
-        if not threat_level:
-            threat_level = 'medium'
-        else:
-            # convert percentage reported by urlhaus (virustotal) to
-            # a valid slips confidence
-            try:
-                threat_level = int(threat_level)/100
-                threat_level = utils.threat_level_to_string(threat_level)
-            except ValueError:
+            if not threat_level:
                 threat_level = 'medium'
+            else:
+                # Convert percentage reported by URLhaus (VirusTotal) to
+                # a valid SLIPS confidence
+                try:
+                    threat_level = int(threat_level) / 100
+                    threat_level = utils.threat_level_to_string(threat_level)
+                except ValueError:
+                    threat_level = 'medium'
 
+            threat_level: ThreatLevel = ThreatLevel[threat_level]
+            saddr: str = profileid.split("_")[-1]
 
-        attacker_direction = 'url'
-        category = 'Malware'
-        evidence_type = 'MaliciousURL'
+            attacker: Attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            )
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+            # Assuming you have an instance of the Evidence class in your class
+            evidence = Evidence(
+                evidence_type=EvidenceType.MALICIOUS_URL,
+                attacker=attacker,
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                timestamp=timestamp,
+                category=IDEACategory.MALWARE,
+                profile=ProfileID(ip=saddr),
+                timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                uid=[uid]
+            )
+
+            self.db.setEvidence(evidence)
