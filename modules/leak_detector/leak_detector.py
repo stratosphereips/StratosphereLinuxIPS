@@ -227,7 +227,7 @@ class LeakDetector(IModule, multiprocessing.Process):
                     timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
                     uid=[uid],
                     timestamp=ts,
-                    proto=Proto(proto),
+                    proto=Proto(proto.lower()),
                     port=dport,
                     source_target_tag=source_target_tag,
                     category=IDEACategory.MALWARE

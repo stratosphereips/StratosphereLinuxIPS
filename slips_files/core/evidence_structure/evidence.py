@@ -324,7 +324,7 @@ def dict_to_evidence(evidence: dict):
         'timewindow': TimeWindow(evidence['timewindow']['number']),
         'uid': evidence['uid'],
         'timestamp': evidence['timestamp'],
-        'proto': Proto[evidence['proto']] if 'proto' in evidence and
+        'proto': Proto[evidence['proto'].upper()] if 'proto' in evidence and
                                              evidence['proto'] else None,
         'port': evidence['port'],
         'source_target_tag': Tag[evidence['source_target_tag']] if \
