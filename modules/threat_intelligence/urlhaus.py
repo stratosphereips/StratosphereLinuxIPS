@@ -183,7 +183,7 @@ class URLhaus:
         else:
             threat_level = 'high'
 
-        threat_level: ThreatLevel= ThreatLevel[threat_level]
+        threat_level: ThreatLevel= ThreatLevel[threat_level.upper()]
 
         confidence: float = 0.7
         saddr: str = file_info['profileid'].split("_")[-1]
@@ -240,7 +240,7 @@ class URLhaus:
                 except ValueError:
                     threat_level = 'medium'
 
-            threat_level: ThreatLevel = ThreatLevel[threat_level]
+            threat_level: ThreatLevel = ThreatLevel[threat_level.upper()]
             saddr: str = profileid.split("_")[-1]
 
             attacker: Attacker = Attacker(

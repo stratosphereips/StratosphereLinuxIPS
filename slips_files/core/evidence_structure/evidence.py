@@ -1,14 +1,13 @@
 """
 Contains evidence dataclass that is used in slips
 """
-from slips_files.common.slips_utils import utils
 import ipaddress
 from dataclasses import dataclass, field, asdict, is_dataclass
 from enum import Enum, auto
 from uuid import uuid4
-from datetime import datetime
-from typing import List, Any, Optional
+from typing import List, Optional
 
+from slips_files.common.slips_utils import utils
 
 
 def validate_timestamp(ts) -> str:
@@ -274,8 +273,12 @@ class Evidence:
 
 
     def __post_init__(self):
-        if not isinstance(self.uid, list) or not all(isinstance(uid, str) for uid in self.uid):
-            raise ValueError(f"uid must be a list of strings .. {self.uid}")
+        if (
+                not isinstance(self.uid, list)
+                or
+                not all(isinstance(uid, str) for uid in self.uid)
+        ):
+            raise ValueError(f"uid must be a list of strings .. {self}")
         else:
             # remove duplicate uids
             self.uid = list(set(self.uid))
@@ -308,8 +311,6 @@ def dict_to_evidence(evidence: dict):
     :param evidence (dict): Dictionary with evidence details.
     returns an instance of the Evidence class.
     """
-    print(f"@@@@@@@@@@@@@@@@ evidence['category'] {evidence['category']}")
-    print(f"@@@@@@@@@@@@@@@@ {evidence}")
     evidence_attributes = {
         'evidence_type': EvidenceType[evidence["evidence_type"]],
         'description': evidence['description'],
@@ -318,7 +319,8 @@ def dict_to_evidence(evidence: dict):
         'category': IDEACategory[evidence['category']],
         'victim': Victim(**evidence['victim']) if 'victim' in evidence
         and evidence['victim'] else None,
-        'profile': ProfileID(evidence['profile']['ip']) if 'profile' in evidence else None,
+        'profile': ProfileID(evidence['profile']['ip'])
+                    if 'profile' in evidence else None,
         'timewindow': TimeWindow(evidence['timewindow']['number']),
         'uid': evidence['uid'],
         'timestamp': evidence['timestamp'],
@@ -326,7 +328,8 @@ def dict_to_evidence(evidence: dict):
                                              evidence['proto'] else None,
         'port': evidence['port'],
         'source_target_tag': Tag[evidence['source_target_tag']] if \
-            'source_target_tag' in evidence and evidence['source_target_tag'] else None,
+            'source_target_tag' in evidence and evidence['source_target_tag']
+                    else None,
         'id': evidence['id'],
         'conn_count': evidence['conn_count'],
         'confidence': evidence['confidence']
