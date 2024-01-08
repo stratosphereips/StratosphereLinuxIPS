@@ -506,14 +506,13 @@ class IPInfo(IModule, multiprocessing.Process):
     def set_evidence_malicious_jarm_hash(
             self,
             flow: dict,
-            uid: str,
             twid: str,
     ):
-        dport = flow['dport']
-        dstip = flow['daddr']
-        saddr = flow['saddr']
-        timestamp = flow['starttime']
-        protocol = flow['proto']
+        dport: int = flow['dport']
+        dstip: str = flow['daddr']
+        saddr: str = flow['saddr']
+        timestamp: float = flow['starttime']
+        protocol: str = flow['proto']
 
         attacker = Attacker(
             direction=Direction.SRC,
@@ -541,7 +540,7 @@ class IPInfo(IModule, multiprocessing.Process):
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
+            uid=[flow['uid']],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_TRAFFIC,
             proto=Proto(protocol.lower()),
@@ -630,17 +629,28 @@ class IPInfo(IModule, multiprocessing.Process):
             self.handle_new_ip(ip)
 
         if msg:= self.get_msg('check_jarm_hash'):
-            flow: dict = json.loads(msg['data'])
-            if flow['attacker_type'] == 'ip':
+            # example of a msg
+            # {'attacker_type': 'ip',
+            # 'profileid': 'profile_192.168.1.9', 'twid': 'timewindow1',
+            # 'flow': {'starttime': 1700828217.923668,
+            # 'uid': 'CuTCcR1Bbp9Je7LVqa', 'saddr': '192.168.1.9',
+            # 'daddr': '45.33.32.156', 'dur': 0.20363497734069824,
+            # 'proto': 'tcp', 'appproto': '', 'sport': 50824, 'dport': 443,
+            # 'spkts': 1, 'dpkts': 1, 'sbytes': 0, 'dbytes': 0,
+            # 'smac': 'c4:23:60:3d:fd:d3', 'dmac': '50:78:b3:b0:08:ec',
+            # 'state': 'REJ', 'history': 'Sr', 'type_': 'conn', 'dir_': '->'},
+            # 'uid': 'CuTCcR1Bbp9Je7LVqa'}
+
+            msg: dict = json.loads(msg['data'])
+            flow: dict = msg['flow']
+            if msg['attacker_type'] == 'ip':
                 jarm_hash: str = self.JARM.JARM_hash(
-                    flow['attacker'],
-                    flow['flow']['port']
+                    flow['daddr'],
+                    flow['dport']
                 )
 
                 if self.db.is_malicious_jarm(jarm_hash):
                     self.set_evidence_malicious_jarm_hash(
-                        flow['flow'],
-                        flow['uid'],
-                        flow['twid']
+                        flow,
+                        msg['twid']
                     )
-
