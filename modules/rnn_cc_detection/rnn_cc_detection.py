@@ -87,7 +87,7 @@ class CCDetection(IModule, multiprocessing.Process):
             category=IDEACategory.INTRUSION_BOTNET,
             source_target_tag=Tag.BOTNET,
             port=int(port),
-            proto=Proto(proto) if proto else None,
+            proto=Proto(proto.lower()) if proto else None,
         )
 
         self.db.setEvidence(evidence)

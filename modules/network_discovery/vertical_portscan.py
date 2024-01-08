@@ -142,7 +142,7 @@ class VerticalPortscan:
             timestamp=evidence['timestamp'],
             category=IDEACategory.RECON_SCANNING,
             conn_count=evidence['pkts_sent'],
-            proto=Proto[evidence['protocol']],
+            proto=Proto(evidence['protocol'].lower()),
             source_target_tag=Tag.RECON,
             victim=victim
         )
