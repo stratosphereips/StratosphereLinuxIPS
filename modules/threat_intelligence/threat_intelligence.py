@@ -702,7 +702,10 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         twid, and confidence of file
         """
         srcip = file_info['flow']['saddr']
-        threat_level: ThreatLevel = ThreatLevel(file_info["threat_level"])
+        threat_level: str = utils.threat_level_to_string(
+            file_info["threat_level"]
+            )
+        threat_level: ThreatLevel = ThreatLevel[threat_level.upper()]
         confidence: float = file_info["confidence"]
         daddr = file_info["flow"]["daddr"]
 
