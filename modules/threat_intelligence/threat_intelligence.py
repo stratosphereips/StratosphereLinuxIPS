@@ -1108,5 +1108,13 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
 
         if msg:= self.get_msg('new_downloaded_file'):
             file_info: dict = json.loads(msg['data'])
+            # the format of file_info is as follows
+            #  {
+            #     'flow': asdict(self.flow),
+            #     'type': 'suricata' or 'zeek',
+            #     'profileid': str,
+            #     'twid': str,
+            # }
+
             if file_info['type'] == 'zeek':
                 self.is_malicious_hash(file_info)

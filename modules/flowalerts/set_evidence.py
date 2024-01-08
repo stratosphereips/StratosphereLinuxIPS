@@ -34,7 +34,7 @@ class SetEvidnceHelper:
         stime: str,
         profileid: ProfileID,
         twid: str,
-        uid: List[str]
+        uid: str
     ):
         saddr: str = profileid.split("_")[-1]
         victim = Victim(
@@ -59,7 +59,7 @@ class SetEvidnceHelper:
                 victim=victim,
                 profile=ProfileID(ip=saddr),
                 timewindow=TimeWindow(number=twid_number),
-                uid=uid,
+                uid=[uid],
                 timestamp=stime,
                 conn_count=1,
                 confidence=1.0
@@ -132,7 +132,7 @@ class SetEvidnceHelper:
             profileid: ProfileID,
             timestamp: str,
             twid: str,
-            uid,
+            uid: str,
             ip_outside_localnet: str = ''
     ):
         """
@@ -186,7 +186,7 @@ class SetEvidnceHelper:
             victim=victim,
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -199,7 +199,7 @@ class SetEvidnceHelper:
             old_ip: str,
             profileid: str,
             twid: str,
-            uid: List[str],
+            uid: str,
             timestamp: str
     ):
         confidence = 0.8
@@ -227,7 +227,7 @@ class SetEvidnceHelper:
             victim=None,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -241,7 +241,7 @@ class SetEvidnceHelper:
             profileid: str,
             timestamp: str,
             twid: str,
-            uid: List[str]
+            uid: str
     ) -> None:
         confidence = 0.8
         threat_level = ThreatLevel.MEDIUM
@@ -268,7 +268,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -282,7 +282,7 @@ class SetEvidnceHelper:
                 profileid: str,
                 timestamp: str,
                 twid: str,
-                uid: List[str]
+                uid: str
         ) -> None:
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
@@ -330,7 +330,7 @@ class SetEvidnceHelper:
     ) -> None:
         daddr: str = flow['daddr']
         weird_method: str = flow['addl']
-        uid: List[str] = flow['uid']
+        uid: str = flow['uid']
         timestamp: str = flow['starttime']
 
         confidence = 0.9
@@ -364,7 +364,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -379,7 +379,7 @@ class SetEvidnceHelper:
             daddr: str,
             profileid: str,
             twid: str,
-            uid: List[str]
+            uid: str
     ) -> None:
         confidence: float = 0.9
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
@@ -412,7 +412,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -467,7 +467,7 @@ class SetEvidnceHelper:
         timestamp: str,
         profileid: str,
         twid: str,
-        uid: List[str]
+        uid: str
     ) -> None:
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.LOW
@@ -491,7 +491,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -505,7 +505,7 @@ class SetEvidnceHelper:
             timestamp: str,
             profileid: str,
             twid: str,
-            uid: List[str]
+            uid: str
     ) -> bool:
 
         threat_level: ThreatLevel = ThreatLevel.INFO
@@ -531,7 +531,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             source_target_tag=Tag.MALWARE,
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -546,7 +546,7 @@ class SetEvidnceHelper:
             timestamp: str,
             profileid: str,
             twid: str,
-            uid: List[str]
+            uid: str
     ) -> None:
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.HIGH
@@ -582,7 +582,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -641,7 +641,7 @@ class SetEvidnceHelper:
             timestamp: str,
             profileid: str,
             twid: str,
-            uid: List[str]
+            uid: str
     ) -> None:
         confidence: float = 1.0
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -674,7 +674,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence
@@ -687,7 +687,7 @@ class SetEvidnceHelper:
             msg: str,
             timestamp: str,
             twid: str,
-            uid: List[str],
+            uid: str,
             by: str = ''
     ) -> None:
         # 222.186.30.112 appears to be guessing SSH passwords
@@ -717,7 +717,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=conn_count,
             confidence=confidence,
@@ -733,7 +733,7 @@ class SetEvidnceHelper:
             timestamp: str,
             profileid: str,
             twid: str,
-            uid: List[str]
+            uid: str
     ) -> None:
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
@@ -758,7 +758,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=conn_count,
             confidence=confidence,
@@ -775,7 +775,7 @@ class SetEvidnceHelper:
             dport: str,
             saddr: str,
             twid: str,
-            uid: List[str],
+            uid: str,
             timestamp: str
     ) -> None:
         confidence: float = 1.0
@@ -809,7 +809,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=1,
             confidence=confidence,
@@ -830,7 +830,7 @@ class SetEvidnceHelper:
         action = tunnel_flow['action']
         daddr = tunnel_flow['daddr']
         ts = tunnel_flow['starttime']
-        uid = tunnel_flow['uid']
+        uid: str = tunnel_flow['uid']
 
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.INFO
@@ -864,7 +864,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=[uid],
             timestamp=ts,
             conn_count=1,
             confidence=confidence
@@ -875,11 +875,11 @@ class SetEvidnceHelper:
 
     def vertical_portscan(
             self,
-            msg,
-            scanning_ip,
-            timestamp,
-            twid,
-            uid
+            msg: str,
+            scanning_ip: str,
+            timestamp: str,
+            twid: str,
+            uid: str
     ) -> None:
         # confidence = 1 because this detection is coming
         # from a Zeek file so we're sure it's accurate
@@ -911,7 +911,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             conn_count=conn_count,
             confidence=confidence,
@@ -923,12 +923,12 @@ class SetEvidnceHelper:
 
     def ssh_successful(
             self,
-            twid,
-            saddr,
-            daddr,
+            twid: str,
+            saddr: str,
+            daddr: str,
             size,
-            uid,
-            timestamp,
+            uid: str,
+            timestamp: str,
             by='',
         ) -> None:
         """
@@ -969,7 +969,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.INFO,
         )
@@ -978,11 +978,11 @@ class SetEvidnceHelper:
 
     def long_connection(
         self,
-        daddr,
+        daddr: str,
         duration,
-        profileid,
-        twid,
-        uid,
+        profileid: str,
+        twid: str,
+        uid: str,
         timestamp,
     ) -> None:
         """
@@ -1025,7 +1025,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=twid),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_CONNECTION,
             victim=victim_obj
@@ -1038,7 +1038,7 @@ class SetEvidnceHelper:
             profileid,
             twid,
             daddr,
-            uid,
+            uid: str,
             timestamp,
             server_name
     ) -> None:
@@ -1071,7 +1071,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_BEHAVIOUR
         )
@@ -1083,7 +1083,7 @@ class SetEvidnceHelper:
             profileid,
             twid,
             daddr,
-            uid,
+            uid: List[str],
             timestamp,
             reconnections
     ) -> None:
@@ -1194,7 +1194,7 @@ class SetEvidnceHelper:
             profileid: str,
             twid: str,
             stime: str,
-            uid: List[str]
+            uid: str
     ) -> None:
         confidence: float = 0.6
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
@@ -1225,7 +1225,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid),
-            uid=uid,
+            uid=[uid],
             timestamp=stime,
             category=IDEACategory.ANOMALY_TRAFFIC
         )
@@ -1240,7 +1240,7 @@ class SetEvidnceHelper:
             profileid: str,
             twid: str,
             stime: str,
-            uid: List[str]
+            uid: str
     ) -> None:
         threat_level: ThreatLevel = ThreatLevel.INFO
         confidence: float = 0.7
@@ -1268,8 +1268,8 @@ class SetEvidnceHelper:
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=saddr),
-            timewindow=twid,
-            uid=uid,
+            timewindow=TimeWindow(number=twid),
+            uid=[uid],
             timestamp=stime,
             category=IDEACategory.ANOMALY_BEHAVIOUR
         )
@@ -1285,7 +1285,7 @@ class SetEvidnceHelper:
         dport: int,
         profileid: str,
         twid: str,
-        uid: List[str],
+        uid: str,
         timestamp: str,
         victim: str,
         attacker: str
@@ -1327,7 +1327,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=profile_ip),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_CONNECTION,
             source_target_tag=Tag.RECON,
@@ -1341,7 +1341,7 @@ class SetEvidnceHelper:
         self,
         malicious_ja3_dict: dict,
         twid: str,
-        uid: List[str],
+        uid: str,
         timestamp: str,
         victim: str,
         attacker: str,
@@ -1402,9 +1402,9 @@ class SetEvidnceHelper:
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=attacker),
+            profile=ProfileID(ip=attacker.value),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.INTRUSION_BOTNET,
             source_target_tag=source_target_tag
@@ -1456,7 +1456,7 @@ class SetEvidnceHelper:
             daddr: str,
             stime: str,
             twid: str,
-            uid: List[str]
+            uid: str
     ) -> None:
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
@@ -1484,7 +1484,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=stime,
             category=IDEACategory.ATTEMPT_LOGIN
         )
@@ -1581,7 +1581,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=ts,
             category=IDEACategory.INTRUSION_BOTNET,
             source_target_tag=Tag.CC

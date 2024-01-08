@@ -502,6 +502,7 @@ class IPInfo(IModule, multiprocessing.Process):
         # run open_dbs in the background so we don't have
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())
+
     def set_evidence_malicious_jarm_hash(
             self,
             flow: dict,

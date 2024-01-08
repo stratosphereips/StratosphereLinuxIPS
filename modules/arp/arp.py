@@ -4,6 +4,7 @@ import ipaddress
 import time
 import threading
 from multiprocessing import Queue
+from typing import List
 
 from slips_files.common.imports import *
 from slips_files.core.evidence_structure.evidence import \
@@ -77,7 +78,9 @@ class ARP(IModule, multiprocessing.Process):
         scans_ctr = 0
         while True:
             try:
-                evidence: dict = self.pending_arp_scan_evidence.get(timeout=0.5)
+                evidence: dict = self.pending_arp_scan_evidence.get(
+                    timeout=0.5
+                )
             except Exception:
                 # nothing in queue
                 time.sleep(5)
@@ -90,7 +93,9 @@ class ARP(IModule, multiprocessing.Process):
 
             while True:
                 try:
-                    new_evidence = self.pending_arp_scan_evidence.get(timeout=0.5)
+                    new_evidence = self.pending_arp_scan_evidence.get(
+                        timeout=0.5
+                    )
                 except Exception:
                     # queue is empty
                     break
@@ -105,9 +110,10 @@ class ARP(IModule, multiprocessing.Process):
                     uids += uids2
                     conn_count = conn_count2
                 else:
-                    # this is an ip performing arp scan in a diff profile or a diff twid,
-                    # we shouldn't accumulate its evidence
-                    # store it back in the queue until we're done with the current one
+                    # this is an ip performing arp scan in a diff
+                    # profile or a diff twid, we shouldn't accumulate its
+                    # evidence  store it back in the queue until we're done
+                    # with the current one
                     scans_ctr += 1
                     self.pending_arp_scan_evidence.put(new_evidence)
                     if scans_ctr == 3:
@@ -125,7 +131,14 @@ class ARP(IModule, multiprocessing.Process):
 
 
     def check_arp_scan(
-        self, profileid, twid, daddr, uid, ts, dst_mac, src_mac, operation, dst_hw, src_hw
+            self,
+            profileid,
+            twid,
+            daddr,
+            uid,
+            ts,
+            operation,
+            dst_hw
     ):
         """
         Check if the profile is doing an arp scan
@@ -152,8 +165,8 @@ class ARP(IModule, multiprocessing.Process):
             return res
 
         # The Gratuitous arp is sent as a broadcast, as a way for a
-        # node to announce or update its IP to MAC mapping to the entire network.
-        # It shouldn't be marked as an arp scan
+        # node to announce or update its IP to MAC mapping
+        # to the entire network. It shouldn't be marked as an arp scan
         saddr = profileid.split('_')[1]
 
         # Don't detect arp scan from the GW router
@@ -188,10 +201,12 @@ class ARP(IModule, multiprocessing.Process):
 
             return True
 
-        # the list of daddrs that are scanned by the current proffileid in the curr tw
+        # the list of daddrs that are scanned by the current
+        # proffileid in the curr tw
         daddrs = list(cached_requests.keys())
 
-        # The minimum amount of arp packets to send to be considered as scan is 5
+        # The minimum amount of arp packets to send to be
+        # considered as scan is 5
         if len(daddrs) >= self.arp_scan_threshold:
             # check if these requests happened within 30 secs
             # get the first and the last request of the 10
@@ -209,15 +224,27 @@ class ARP(IModule, multiprocessing.Process):
                 # we are sure this is an arp scan
                 if not self.alerted_once_arp_scan:
                     self.alerted_once_arp_scan = True
-                    self.set_evidence_arp_scan(ts, profileid, twid, uids, conn_count)
+                    self.set_evidence_arp_scan(
+                        ts, profileid, twid, uids, conn_count
+                        )
                 else:
-                    # after alerting once, wait 10s to see if more evidence are coming
-                    self.pending_arp_scan_evidence.put((ts, profileid, twid, uids, conn_count))
+                    # after alerting once, wait 10s to see
+                    # if more evidence are coming
+                    self.pending_arp_scan_evidence.put(
+                        (ts, profileid, twid, uids, conn_count)
+                        )
 
                 return True
         return False
 
-    def set_evidence_arp_scan(self, ts, profileid, twid, uids, conn_count):
+    def set_evidence_arp_scan(
+            self,
+            ts,
+            profileid,
+            twid,
+            uids: List[str],
+            conn_count
+          ):
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split('_')[1]
@@ -255,7 +282,15 @@ class ARP(IModule, multiprocessing.Process):
             pass
 
 
-    def check_dstip_outside_localnet(self, profileid, twid, daddr, uid, saddr, ts):
+    def check_dstip_outside_localnet(
+            self,
+            profileid,
+            twid,
+            daddr,
+            uid: str,
+            saddr,
+            ts
+        ):
         """Function to setEvidence when daddr is outside the local network"""
 
         if '0.0.0.0' in saddr or '0.0.0.0' in daddr:
@@ -306,7 +341,7 @@ class ARP(IModule, multiprocessing.Process):
                 description=description,
                 profile=ProfileID(ip=saddr),
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-                uid=uid,
+                uid=[uid],
                 timestamp=ts,
                 category=IDEACategory.ANOMALY_BEHAVIOUR,
                 victim=victim
@@ -322,7 +357,7 @@ class ARP(IModule, multiprocessing.Process):
         self,
         profileid: str,
         twid: str,
-        uid,
+        uid: str,
         ts: str,
         dst_mac: str,
         src_mac: str,
@@ -360,7 +395,7 @@ class ARP(IModule, multiprocessing.Process):
                 description=description,
                 profile=ProfileID(ip=saddr),
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-                uid=uid,
+                uid=[uid],
                 timestamp=ts,
                 source_target_tag=Tag.RECON,
                 category=IDEACategory.INFO
@@ -369,9 +404,18 @@ class ARP(IModule, multiprocessing.Process):
             self.db.setEvidence(evidence)
             return True
 
-    def detect_MITM_ARP_attack(self, twid, uid, saddr, ts, src_mac):
-        """Detects when a MAC with IP A, is trying to tell others that
-        now that MAC is also for IP B (arp cache attack)"""
+    def detect_MITM_ARP_attack(
+            self,
+            twid: str,
+            uid: str,
+            saddr: str,
+            ts: str,
+            src_mac: str,
+        ):
+        """
+        Detects when a MAC with IP A, is trying to tell others that
+        now that MAC is also for IP B (arp cache attack)
+        """
         # Todo in rare cases, the vendor and IP of this mac is known AFTER
         #  returning from this function so detection is missed
 
@@ -451,7 +495,7 @@ class ARP(IModule, multiprocessing.Process):
                 description=description,
                 profile=ProfileID(ip=saddr),
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-                uid=uid,
+                uid=[uid],
                 timestamp=ts,
                 category=IDEACategory.RECON,
                 source_target_tag=Tag.MITM,
@@ -525,7 +569,8 @@ class ARP(IModule, multiprocessing.Process):
             dst_hw = flow['dst_hw']
             src_hw = flow['src_hw']
             operation = flow['operation']
-            # arp flows don't have uids, the uids received are randomly generated by slips
+            # arp flows don't have uids, the uids received
+            # are randomly generated by slips
             uid = flow['uid']
 
             if self.check_if_gratutitous_ARP(dst_hw, operation):
@@ -539,8 +584,7 @@ class ARP(IModule, multiprocessing.Process):
             else:
                 # not gratuitous and request, may be an arp scan
                 self.check_arp_scan(
-                    profileid, twid, daddr, uid, ts, dst_mac,
-                    src_mac, operation, dst_hw, src_hw
+                    profileid, twid, daddr, uid, ts, operation, dst_hw
                 )
 
             if 'request' in operation:
