@@ -1346,18 +1346,20 @@ class SetEvidnceHelper:
         victim: str,
         attacker: str,
         type_: str = '',
-        ioc: str = '',
+        ja3: str = '',
     ) -> None:
-        malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
+        """
+        """
+        ja3_info: dict = json.loads(malicious_ja3_dict[ja3])
 
-        threat_level: float = utils.threat_levels[malicious_ja3_dict['threat_level']]
-        threat_level: ThreatLevel = ThreatLevel(threat_level)
+        threat_level: str = ja3_info['threat_level'].upper()
+        threat_level: ThreatLevel = ThreatLevel[threat_level]
 
-        tags: str = malicious_ja3_dict.get('tags', '')
-        ja3_description: str = malicious_ja3_dict['description']
+        tags: str = ja3_info.get('tags', '')
+        ja3_description: str = ja3_info['description']
 
         if type_ == 'ja3':
-            description = f'Malicious JA3: {ioc} from source address ' \
+            description = f'Malicious JA3: {ja3} from source address ' \
                           f'{attacker} '
             evidence_type: EvidenceType = EvidenceType.MALICIOUS_JA3
             source_target_tag: Tag = Tag.BOTNET
@@ -1366,7 +1368,7 @@ class SetEvidnceHelper:
 
         elif type_ == 'ja3s':
             description = (
-                f'Malicious JA3s: (possible C&C server): {ioc} to server '
+                f'Malicious JA3s: (possible C&C server): {ja3} to server '
                 f'{attacker} '
             )
 

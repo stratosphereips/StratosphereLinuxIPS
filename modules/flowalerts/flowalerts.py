@@ -1476,27 +1476,25 @@ class FlowAlerts(IModule, multiprocessing.Process):
         if ja3 in malicious_ja3_dict:
             self.set_evidence.malicious_ja3(
                 malicious_ja3_dict,
-                profileid,
                 twid,
                 uid,
                 timestamp,
                 daddr,
                 saddr,
                 type_='ja3',
-                ioc=ja3,
+                ja3=ja3,
             )
 
         if ja3s in malicious_ja3_dict:
             self.set_evidence.malicious_ja3(
                 malicious_ja3_dict,
-                profileid,
                 twid,
                 uid,
                 timestamp,
                 saddr,
                 daddr,
                 type_='ja3s',
-                ioc=ja3s,
+                ja3=ja3s,
             )
 
     def check_self_signed_certs(
