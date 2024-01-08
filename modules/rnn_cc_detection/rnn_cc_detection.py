@@ -197,14 +197,11 @@ class CCDetection(IModule, multiprocessing.Process):
                         profileid,
                         twid,
                     )
-                    attacker = tupleid.split('-')[0]
                     to_send = {
-                        'attacker': attacker,
-                        'attacker_type': utils.detect_data_type(attacker),
+                        'attacker_type': utils.detect_data_type(flow['daddr']),
                         'profileid' : profileid,
                         'twid' : twid,
                         'flow': flow,
-                        'uid': uid,
                     }
                     # we only check malicious jarm hashes when there's a CC
                     # detection

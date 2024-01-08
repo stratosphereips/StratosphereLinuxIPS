@@ -129,7 +129,7 @@ class VerticalPortscan:
             victim_type=IoCType.IP,
             value=evidence['dstip']
             )
-
+        twid = int(evidence['twid'].replace("timewindow", ""))
         evidence = Evidence(
             evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
             attacker=attacker,
@@ -137,8 +137,8 @@ class VerticalPortscan:
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(evidence['twid'].replace("timewindow", ""))),
-            uid=[evidence['uid']],
+            timewindow=TimeWindow(number=twid),
+            uid=evidence['uid'],
             timestamp=evidence['timestamp'],
             category=IDEACategory.RECON_SCANNING,
             conn_count=evidence['pkts_sent'],

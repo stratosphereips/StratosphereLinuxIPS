@@ -518,7 +518,14 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         return True
 
 
-    def set_evidence_http_traffic(self, daddr, profileid, twid, uid, timestamp):
+    def set_evidence_http_traffic(
+          self,
+          daddr: str,
+          profileid: str,
+          twid: str,
+          uid: str,
+          timestamp: str
+    ):
         confidence: float = 1
         threat_level: ThreatLevel = ThreatLevel.LOW
         saddr = profileid.split('_')[-1]
@@ -544,7 +551,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.SENDING_UNENCRYPTED_DATA,
@@ -596,7 +603,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                 description=description,
                 profile=ProfileID(ip=saddr),
                 timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-                uid=uid,
+                uid=[uid],
                 timestamp=timestamp,
                 category=IDEACategory.ANOMALY_BEHAVIOUR,
                 source_target_tag=Tag.MALWARE
