@@ -605,7 +605,8 @@ class ProfileHandler(IObservable):
         """
 
         try:
-            # key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established,
+            # key_name = [Src,Dst] + [Port,IP] + [Client,Server] +
+            # [TCP,UDP, ICMP, ICMP6] + [Established,
             # Not Establihed]
             # Example: key_name = 'SrcPortClientTCPEstablished'
             key = direction + type_data + role + protocol.upper() + state

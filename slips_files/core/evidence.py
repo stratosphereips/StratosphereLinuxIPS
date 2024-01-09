@@ -405,7 +405,7 @@ class Evidence(ICore):
             IDEA_dict,
             [],
             twid,
-            profileid
+            accumulated_threat_level
         )
 
 
