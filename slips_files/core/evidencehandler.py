@@ -739,7 +739,6 @@ class EvidenceHandler(ICore):
                       accumulated_threat_level,
                     )
 
-                self.db.set_evidence_for_profileid(idea_dict)
                 evidence_dict: dict = evidence_to_dict(evidence)
                 self.db.publish('report_to_peers', json.dumps(evidence_dict))
 
