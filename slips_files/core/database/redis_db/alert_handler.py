@@ -177,13 +177,12 @@ class AlertHandler:
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
 
-        # @@@@@@@@@@@@@ todo handle the new evidence format in all the
-        #  receiving clients
         evidence_to_send: dict = evidence_to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)
 
         # Check if we have the current evidence stored in the DB for
         # this profileid in this twid
+
         # @@@@@@@@@@@@@ TODO search using redis for the id of this evidence
         #  in the profil+tw evidence in the db! it would be faster
         current_evidence: str = self.get_twid_evidence(
@@ -248,12 +247,7 @@ class AlertHandler:
     def is_evidence_processed(self, evidence_ID: str) -> bool:
         return self.r.sismember('processed_evidence', evidence_ID)
 
-    def set_evidence_for_profileid(self, evidence: dict):
-        """
-        Set evidence for the profile in the same format as json in alerts.json
-        """
-        evidence = json.dumps(evidence)
-        self.r.sadd('Evidence', evidence)
+
 
     def deleteEvidence(self, profileid, twid, evidence_ID: str):
         """
@@ -271,6 +265,7 @@ class AlertHandler:
             current_evidence_json,
         )
         self.r.hset(f'evidence{profileid}', twid, current_evidence_json)
+
         # 2. delete evidence from 'alerts' key
         profile_alerts = self.r.hget('alerts', profileid)
         if not profile_alerts:

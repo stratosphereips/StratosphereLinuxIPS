@@ -394,8 +394,6 @@ class DBManager(IObservable):
     def is_evidence_processed(self, *args, **kwargs):
         return self.rdb.is_evidence_processed(*args, **kwargs)
 
-    def set_evidence_for_profileid(self, *args, **kwargs):
-        return self.rdb.set_evidence_for_profileid(*args, **kwargs)
 
     def deleteEvidence(self, *args, **kwargs):
         return self.rdb.deleteEvidence(*args, **kwargs)
