@@ -27,6 +27,7 @@ import time
 import platform
 import traceback
 from slips_files.common.idea_format import idea_format
+from slips_files.common.style import red, green, cyan
 from slips_files.common.imports import *
 from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
@@ -34,12 +35,14 @@ from slips_files.common.abstracts.core import ICore
 from slips_files.core.evidence_structure.evidence import (
     dict_to_evidence,
     evidence_to_dict,
+    ProfileID,
     Evidence,
     Direction,
     Victim,
     IoCType,
     EvidenceType,
     IDEACategory,
+    TimeWindow,
     Proto,
     Tag
     )
@@ -95,7 +98,7 @@ class EvidenceHandler(ICore):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.width = conf.get_tw_width_as_float()
+        self.width: float = conf.get_tw_width_as_float()
         self.detection_threshold = conf.evidence_detection_threshold()
         self.print(
             f'Detection Threshold: {self.detection_threshold} '
@@ -266,14 +269,14 @@ class EvidenceHandler(ICore):
 
     def format_evidence_causing_this_alert(
             self,
-            all_evidence: Dict[str, dict],
-            profileid: str,
-            twid: str,
+            all_evidence: Dict[str, Evidence],
+            profileid: ProfileID,
+            twid: TimeWindow,
             flow_datetime: str
     ) -> str:
         """
         Function to format the string with all evidence causing an alert
-        flow_datetime: time of the last evidence received
+        : param flow_datetime: time of the last evidence received
         """
         # alerts in slips consists of several evidence,
         # each evidence has a threat_level
@@ -281,66 +284,47 @@ class EvidenceHandler(ICore):
         # threat_levels, we produce an alert
         # Now instead of printing the last evidence only,
         # we print all of them
-        try:
-            twid_num = twid.split('timewindow')[1]
-            srcip = profileid.split(self.separator)[1]
-            # Get the start time of this TW
-            twid_start_time = None
-            while twid_start_time is None:
-                # give the database time to retreive the time
-                twid_start_time = self.db.getTimeTW(profileid, twid)
+        # Get the start and end time of this TW
+        twid_start_time: Optional[float] = \
+            self.db.get_timewindow_start_time(str(profileid), str(twid))
+        tw_stop_time: float = twid_start_time + self.width
 
-            tw_start_time_str = utils.convert_format(twid_start_time,
-                                                     '%Y/%m/%d %H:%M:%S')
-            # datetime obj
-            tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
+        # format them both for printing
+        time_format = '%Y/%m/%d %H:%M:%S'
+        twid_start_time: str = utils.convert_format(
+            twid_start_time, time_format
+        )
+        tw_stop_time: str = utils.convert_format(
+            tw_stop_time, time_format
+        )
 
-            # Convert the tw width to deltatime
-            # tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
-            delta_width = utils.to_delta(self.width)
-
-            # Get the stop time of the TW
-            tw_stop_time_datetime = (tw_start_time_datetime + delta_width)
-
-            tw_stop_time_str = utils.convert_format(
-                tw_stop_time_datetime,
-                 '%Y/%m/%d %H:%M:%S'
+        alert_to_print = f'IP {profileid.ip} '
+        hostname: Optional[str] = self.db.get_hostname_from_profile(
+            str(profileid)
             )
+        if hostname:
+            alert_to_print += f'({hostname}) '
 
-            hostname = self.db.get_hostname_from_profile(profileid)
-            # if there's no hostname, set it as ' '
-            hostname = hostname or ''
-            if hostname:
-                hostname = f'({hostname})'
-
-            alert_to_print = (
-                f'{Fore.RED}IP {srcip} {hostname} detected as malicious in timewindow {twid_num} '
-                f'(start {tw_start_time_str}, stop {tw_stop_time_str}) \n'
-                f'given the following evidence:{Style.RESET_ALL}\n'
-            )
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(
-                f'Problem on format_evidence_causing_this_alert() '
-                f'line {exception_line}',0,1,
-            )
-            self.print(traceback.print_exc(),0,1)
-            return True
+        alert_to_print += (
+                f"detected as malicious in timewindow {twid.number} "
+                f"(start {twid_start_time}, stop {tw_stop_time}) \n"
+                f"given the following evidence:\n"
+        )
+        alert_to_print: str = red(alert_to_print)
 
         for evidence in all_evidence.values():
-            evidence: dict
-            description: str = evidence.get('description')
+            evidence: Evidence
+            description: str = evidence.description
+            evidence_string = self.line_wrap(f'Detected {description}')
+            alert_to_print += cyan(f'\t- {evidence_string}\n')
 
-            evidence_string = f'Detected {description}'
-            evidence_string = self.line_wrap(evidence_string)
-
-            alert_to_print += (
-                f'\t{Fore.CYAN}- {evidence_string}{Style.RESET_ALL}\n'
+        # Add the timestamp to the alert.
+        # The datetime printed will be of the last evidence only
+        readable_datetime: str = utils.convert_format(
+            flow_datetime,
+            utils.alerts_format
             )
-
-        # Add the timestamp to the alert. The datetime printed will be of the last evidence only
-        readable_datetime = utils.convert_format(flow_datetime, utils.alerts_format)
-        alert_to_print = f'{Fore.RED}{readable_datetime}{Style.RESET_ALL} {alert_to_print}'
+        alert_to_print: str = red(f'{readable_datetime} ') + alert_to_print
         return alert_to_print
 
     def is_running_on_interface(self):
@@ -444,7 +428,7 @@ class EvidenceHandler(ICore):
         # consider evidence that makes this given
         # profile malicious, aka evidence of this profile(srcip) attacking
         # others.
-        return not evidence.attacker.direction == Direction.SRC
+        return evidence.attacker.direction != 'SRC'
 
     def get_evidence_for_tw(self, profileid: str, twid: str) \
             -> Dict[str, dict]:
@@ -469,10 +453,9 @@ class EvidenceHandler(ICore):
         for id, evidence in tw_evidence.items():
             id: str
             evidence: str
-
             evidence: dict = json.loads(evidence)
-            #@@@@@@@@@@@@@@ TODO double chekc that the evidence here is
-            # Evidence obj!!
+            evidence: Evidence = dict_to_evidence(evidence)
+
             if self.is_filtered_evidence(
                 evidence,
                 past_evidence_ids
@@ -493,15 +476,15 @@ class EvidenceHandler(ICore):
             if not processed:
                 continue
 
-            id: str = evidence.get('ID')
+            evidence_id: str = evidence.id
             # we keep track of these IDs to be able to label the flows of these
             # evidence later if this was detected as an alert
             # now this should be done in its' own function but this is more
             # optimal so we don't loop through all evidence again. i'll
             # just leave it like that:D
-            self.IDs_causing_an_alert.append(id)
+            self.IDs_causing_an_alert.append(evidence_id)
 
-            filtered_evidence[id] = evidence
+            filtered_evidence[evidence_id] = evidence
 
         return filtered_evidence
 
@@ -525,7 +508,7 @@ class EvidenceHandler(ICore):
         # when we get all the tw evidence from the db, we get the once we
         # alerted, and the new once we need to alert
         # this method removes the already alerted evidence to avoid duplicates
-        if id in past_evidence_ids:
+        if evidence.id in past_evidence_ids:
             return True
 
         if self.is_evidence_done_by_others(evidence):
@@ -536,27 +519,13 @@ class EvidenceHandler(ICore):
 
     def get_threat_level(
             self,
-            evidence: dict,
+            evidence: Evidence,
             ) -> float:
         """
         return the threat level of the given evidence * confidence
         """
-        evidence_type: str = evidence.get('evidence_type')
-        confidence: float = float(evidence.get('confidence'))
-        threat_level: float = evidence.get('threat_level')
-        description: str = evidence.get('description')
-
-        # each threat level is a string, get the numerical value of it
-        try:
-            threat_level: float = \
-                utils.threat_levels[threat_level.lower()]
-        except KeyError:
-            self.print(
-                f'Error: Evidence of type {evidence_type} has '
-                f'an invalid threat level {threat_level}', 0, 1
-            )
-            self.print(f'Description: {description}', 0, 1)
-            threat_level = 0
+        confidence: float = evidence.confidence
+        threat_level: float = evidence.threat_level.value
 
         # Compute the moving average of evidence
         evidence_threat_level: float = threat_level * confidence
@@ -566,8 +535,16 @@ class EvidenceHandler(ICore):
     def get_last_evidence_ID(self, tw_evidence: dict) -> str:
         return list(tw_evidence.keys())[-1]
 
-    def send_to_exporting_module(self, tw_evidence: Dict[str, str]):
+    def send_to_exporting_module(self, tw_evidence: Dict[str, Evidence]):
+        """
+        sends all given evidence to export_evidence channel
+        :param tw_evidence: alll evidence that happened in a certain
+        timewindow
+        format is {evidence_id (str) :  Evidence obj}
+        """
         for evidence in tw_evidence.values():
+            evidence: Evidence
+            evidence: dict = evidence_to_dict(evidence)
             self.db.publish('export_evidence', json.dumps(evidence))
 
     def is_blocking_module_enabled(self) -> bool:
@@ -629,7 +606,9 @@ class EvidenceHandler(ICore):
             # sometimes slips tries to get the hostname of a
             # profile before ip_info stores it in the db
             # there's nothing we can do about it
-            hostname: str = self.db.get_hostname_from_profile(str(evidence.profile))
+            hostname: Optional[str] = self.db.get_hostname_from_profile(
+                str(evidence.profile)
+                )
             if not hostname:
                 return evidence_str
 
@@ -662,13 +641,13 @@ class EvidenceHandler(ICore):
             )
 
 
-    def update_accumulated_threat_level(self, evidence: dict) -> float:
+    def update_accumulated_threat_level(self, evidence: Evidence) -> float:
         """
         update the accumulated threat level of the profileid and twid of
         the given evidence and return the updated value
         """
-        profileid: str = evidence['profileid']
-        twid: str = evidence['twid']
+        profileid: str = str(evidence.profile)
+        twid: str = str(evidence.timewindow)
         evidence_threat_level: float = self.get_threat_level(evidence)
 
         self.db.update_accumulated_threat_level(
@@ -786,11 +765,11 @@ class EvidenceHandler(ICore):
                             profileid, twid
                         )
                     if tw_evidence:
-                        id: str = self.get_last_evidence_ID(tw_evidence)
                         # store the alert in our database
+                        last_id: str = self.get_last_evidence_ID(tw_evidence)
                         # the alert ID is profileid_twid + the ID of
                         # the last evidence causing this alert
-                        alert_id: str = f'{profileid}_{twid}_{id}'
+                        alert_id: str = f'{profileid}_{twid}_{last_id}'
 
                         self.handle_new_alert(alert_id, tw_evidence)
 
@@ -798,8 +777,8 @@ class EvidenceHandler(ICore):
                         alert_to_print: str = \
                             self.format_evidence_causing_this_alert(
                                 tw_evidence,
-                                profileid,
-                                twid,
+                                evidence.profile,
+                                evidence.timewindow,
                                 flow_datetime,
                             )
 
@@ -827,7 +806,6 @@ class EvidenceHandler(ICore):
                         )
 
             if msg := self.get_msg('new_blame'):
-                self.msg_received = True
                 data = msg['data']
                 try:
                     data = json.loads(data)

@@ -1369,7 +1369,7 @@ class ProfileHandler(IObservable):
             self.print(traceback.print_exc(), 0, 1)
             self.print(e, 0, 1)
 
-    def getTimeTW(self, profileid, twid):
+    def get_timewindow_start_time(self, profileid: str, twid: str):
         """Return the time when this TW in this profile was created"""
         # Get all the TW for this profile
         # We need to encode it to 'search' because the data in the sorted set is encoded
@@ -1937,7 +1937,7 @@ class ProfileHandler(IObservable):
 
         return self.r.hget(profileid, 'MAC_vendor')
 
-    def get_hostname_from_profile(self, profileid: str) -> str:
+    def get_hostname_from_profile(self, profileid: str) -> Optional[str]:
         """
         Returns hostname about a certain profile or None
         """
