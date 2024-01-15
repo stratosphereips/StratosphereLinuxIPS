@@ -42,7 +42,7 @@ class CCDetection(IModule, multiprocessing.Process):
 
         tupleid = tupleid.split('-')
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
-        attacker_direction = 'dstip'
+        attacker_direction = 'srcip'
         attacker = dstip
         source_target_tag = 'Botnet'
         evidence_type = 'Command-and-Control-channels-detection'

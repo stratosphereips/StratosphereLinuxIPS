@@ -289,6 +289,8 @@ class Output(IObserver):
         self.manager.shutdown()
         self.send_pipe.close()
         self.recv_pipe.close()
+        if hasattr(self, 'pbar'):
+            self.pbar.join(3)
 
 
     def tell_pbar(self, msg: dict):
@@ -309,7 +311,8 @@ class Output(IObserver):
             wanna log the text to all logfiles or the cli only?
             txt: text to log to the logfiles and/or the cli
             bar_info: {
-                input_type: only given when we send bar:'init', specifies the type of the input file given to slips
+                input_type: only given when we send bar:'init',
+                            specifies the type of the input file given to slips
                     eg zeek, argus, etc
                 total_flows: int,
         }

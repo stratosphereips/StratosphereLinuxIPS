@@ -420,6 +420,49 @@ class AlertHandler:
     def set_max_threat_level(self, profileid: str, threat_level: str):
         self.r.hset(profileid, 'max_threat_level', threat_level)
 
+
+    def get_accumulated_threat_level(
+            self,
+            profileid: str,
+            twid: str
+        ) -> float:
+        """
+        returns the accumulated_threat_lvl or 0 if it's not there
+        """
+        accumulated_threat_lvl = self.r.zscore(
+            'accumulated_threat_levels',
+            f'{profileid}_{twid}')
+        return accumulated_threat_lvl or 0
+
+
+    def update_accumulated_threat_level(
+            self,
+            profileid: str,
+            twid: str,
+            update_val: float):
+        """
+        increments or decrements the accumulated threat level of the given
+        profileid and
+        twid by the given update_val
+        :param update_val: can be +ve to increase the threat level or -ve
+        to decrease
+        """
+        self.r.zincrby(
+            'accumulated_threat_levels',
+            update_val,
+            f'{profileid}_{twid}',
+        )
+
+    def set_accumulated_threat_level(
+            self,
+            profileid: str,
+            twid: str,
+            accumulated_threat_lvl: float,
+        ):
+
+        self.r.zadd('accumulated_threat_levels',
+                    {f'{profileid}_{twid}': accumulated_threat_lvl} )
+
     def update_max_threat_level(
             self, profileid: str, threat_level: str
         ) -> float:
@@ -429,7 +472,7 @@ class AlertHandler:
         the given
         :returns: the numerical val of the max threat level
         """
-        threat_level_float = utils.threat_levels[threat_level]
+        threat_level_float  = utils.threat_levels[threat_level]
 
         old_max_threat_level: str = self.r.hget(
             profileid,

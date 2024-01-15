@@ -547,8 +547,6 @@ class ProcessManager:
             analysis_time = self.get_analysis_time()
             self.main.print(f"Analysis of {self.main.input_information} "
                             f"finished in {analysis_time:.2f} minutes")
-            flows_count: int = self.main.db.get_flows_count()
-            self.main.print(f"Total flows read (without altflows): {flows_count}", log_to_logfiles_only=True)
 
             graceful_shutdown = True
             if self.main.mode == 'daemonized':
@@ -563,6 +561,9 @@ class ProcessManager:
                 self.main.daemon.delete_pidfile()
 
             else:
+                flows_count: int = self.main.db.get_flows_count()
+                self.main.print(f"Total flows read (without altflows): {flows_count}", log_to_logfiles_only=True)
+
                 hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
                 to_kill_first: List[Process] = hitlist[0]
                 to_kill_last: List[Process] = hitlist[1]
