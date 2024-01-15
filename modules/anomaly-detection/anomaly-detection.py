@@ -1,13 +1,15 @@
 # Must imports
-from slips_files.common.abstracts import Module
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 from slips_files.common.abstracts._module import IModule
-import multiprocessing
-from slips_files.core.database.database_manager import __database__
-from slips_files.common.parsers.config_parser import ConfigParser
-import sys
 import threading
 from multiprocessing import Queue
+
+#from slips_files.common.abstracts import Module
+#from slips_files.common.slips_utils import utils
+#from slips_files.core.database.database_manager import __database__
+#from slips_files.common.parsers.config_parser import ConfigParser
+#import sys
+#import multiprocessing
 
 # Your imports
 import pandas as pd
@@ -18,57 +20,21 @@ import os
 import threading
 import time
 
-class Module(IModule, multiprocessing.Process)-> None:
+class Module(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Anomaly Detector'
     description = 'Anomaly detector for zeek conn.log files'
-    authors = ['Alya Gomaa']
+    authors = ['Sebastian Garcia', 'Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
-        self.c1 = self.db.subscribe('new_arp')
+        self.c1 = self.db.subscribe('new_flow')
         self.c2 = self.db.subscribe('tw_closed')
         self.channels = {
-            'new_arp': self.c1,
+            'new_flow': self.c1,
             'tw_closed': self.c2,
         }
         self.read_configuration()
-
-
-
-        multiprocessing.Process.__init__(self)
-        self.outputqueue = outputqueue
-        self.read_configuration()
-        __database__.start(redis_port)
-        self.c1 = __database__.subscribe('tw_closed')
-        self.is_first_run = True
-        self.current_srcip = ''
-        self.dataframes = {}
-        self.saving_thread = threading.Thread(
-            target=self.save_models_thread,
-            daemon=True
-        )
-        self.models_path = 'modules/anomaly-detection/models/'
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
-
+    
     def read_configuration(self):
         conf = ConfigParser()
         self.mode = conf.get_anomaly_detection_mode()
@@ -107,11 +73,14 @@ class Module(IModule, multiprocessing.Process)-> None:
         self.print('Done.')
 
     def shutdown_gracefully(self):
-        if 'train' in self.mode:
-            # train and save the models before exiting
-            self.save_models()
         # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
+        if self.mode == 'train':
+            self.store_model()
+
+    def pre_main(self):
+        utils.drop_root_privs()
+        # Load the model
+        self.read_model()
 
     def get_model(self) -> str:
         """
@@ -172,23 +141,16 @@ class Module(IModule, multiprocessing.Process)-> None:
         """
         :param flows: flows of the closed tw to train on
         """
-
-        # make sure it is not first run so we don't save an empty model to disk
-        # first run is the only case that the new srcip will be == the curr ip,
-        # so we should create a new df. but starting from next run, don't chaneg self.bro_df unless the srcipip changes
-        if self.current_srcip != self.new_srcip or self.is_first_run:
-            self.is_first_run = False
-
-            try:
-                # there is a dataframe for this src ip, append to it
-                self.bro_df = self.dataframes[self.current_srcip]
-            except KeyError:
-                # there's no saved df for this ip, save it
-                self.dataframes[self.current_srcip] = None
-                # empty the current dataframe so we can create a new one for the new srcip
-                self.bro_df = None
-
-
+        """
+        try:
+            # there is a dataframe for this src ip, append to it
+            self.bro_df = self.dataframes[self.current_srcip]
+        except KeyError:
+            # there's no saved df for this ip, save it
+            self.dataframes[self.current_srcip] = None
+            # empty the current dataframe so we can create a new one for the new srcip
+            self.bro_df = None
+        """
 
         # flows is a dict {uid: serialized flow dict}
         for flow in flows.values():
@@ -207,16 +169,6 @@ class Module(IModule, multiprocessing.Process)-> None:
                 # current srcip will be used as the model name
                 # self.current_srcip = self.profileid_twid[1]
                 self.bro_df = pd.DataFrame(flow, index=[0])
-
-        if not self.df_exists(self.bro_df): return
-
-        # In case you need a label, due to some models being able to work in a
-        # semisupervised mode, then put it here. For now everything is
-        # 'normal', but we are not using this for detection
-        self.bro_df['label'] = 'normal'
-
-        # from IPython.display import display
-        # display(self.bro_df)
 
         self.normalize_col_with_no_data('sbytes', 'int32')
         self.normalize_col_with_no_data('dbytes', 'int32')
@@ -279,54 +231,36 @@ class Module(IModule, multiprocessing.Process)-> None:
 
 
 
-    def run(self):
+    def main(self):
         if 'train' in self.mode:
-            self.saving_thread.start()
+            # In train mode, we wait for a whole TW to be ready
+            if msg := self.get_msg('tw_closed'):
+                profileid_tw = msg['data']
+                # when a tw is closed, this means that it's too old so we don't check for arp scan in this time
+                # range anymore
+                # this copy is made to avoid dictionary changed size during iteration err
 
-        if self.mode.lower() in ('none', ''):
-            self.print(f"{self.mode} is not a valid mode, available options are: "
-                       f"training or testing. Anomaly Detector module stopping.")
-            self.shutdown_gracefully()
-            return True
+                # get all flows in the tw
+                flows = __database__.get_all_flows_in_profileid_twid(self.profileid, self.twid)
+                self.train(flows)
+        elif 'test' in self.mode:
+            # In test mode, we test each new flow
+            if msg:= self.get_msg('new_flow'):
+                data = msg['data']
+                # Convert from json to dict
+                data = json.loads(data)
+                profileid = data['profileid']
+                twid = data['twid']
+                # Get flow that is now in json format
+                flow = data['flow']
+                # Convert flow to a dict
+                flow = json.loads(flow)
+                # Convert the common fields to something that can
+                # be interpreted
+                # Get the uid which is the key
+                uid = next(iter(flow))
+                self.flow_dict = json.loads(flow[uid])
 
-        while True:
-            try:
-                msg = __database__.get_message(self.c1)
-                if msg and msg['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-
-                if utils.is_msg_intended_for(msg, 'tw_closed'):
-                    profileid_twid = msg["data"]
-                    # example: profile_192.168.1.1_timewindow1
-                    self.profileid_twid = profileid_twid.split('_')
-                    self.new_srcip = self.profileid_twid[1]
-                    self.twid = self.profileid_twid[2]
-                    self.profileid = f'{self.profileid_twid[0]}_{self.profileid_twid[1]}'
-
-
-                    if self.is_first_run:
-                        self.current_srcip = self.new_srcip
-
-                    # get all flows in the tw
-                    flows = __database__.get_all_flows_in_profileid_twid(self.profileid, self.twid)
-                    if not flows:
-                        continue
-
-                    if 'train' in self.mode:
-                        self.train(flows)
-
-                    elif 'test' in self.mode:
-                        if not self.are_there_models_to_test():
-                            return True
-
-                        self.test(flows)
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+                if not self.are_there_models_to_test():
+                    return True
+                self.test(flows)
