@@ -23,7 +23,7 @@ jobs:
         fetch-depth: ''
 
     - name: Install slips dependencies
-      run: sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
+      run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
 
     - name: Install Zeek
       run: |
