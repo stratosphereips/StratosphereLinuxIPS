@@ -1,11 +1,11 @@
 - 1.0.10 (January 2024)
 - Faster ensembling of evidence.
 - Log accumulated threat levels of each evidence in alerts.json.
-- Better handling of the termination of the grogress bar.
-- Update the dockers for macOS M1 and macOS M1 P2P by re-adding support for tensorflow.
-- Fix problem setting 'vertical portscan' evidence detected by zeek.
+- Better handling of the termination of the progress bar.
+- Re-add support for tensorflow to the dockers for macOS M1 and macOS M1 P2P.
+- Fix problem setting 'vertical portscan' evidence detected by Zeek.
 - Fix unable to do RDAP lookups
-- Fix issues stopping of Slips daemon.
+- Fix stopping Slips daemon.
 
 -1.0.9 (December 2023)
 - Fix using -k to kill opened redis servers.
