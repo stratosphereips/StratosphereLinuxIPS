@@ -59,7 +59,7 @@ def test_timewindows():
     # add  a new tw (last tw)
     db.add_new_tw(profileid, 5.0)
     assert db.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
-    assert db.get_last_twid_of_profile(profileid) == [('timewindow2', 5.0)]
+    assert db.get_last_twid_of_profile(profileid) == ('timewindow2', 5.0)
 
 
 def getSlipsInternalTime():

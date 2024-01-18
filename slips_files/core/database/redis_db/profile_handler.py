@@ -253,8 +253,10 @@ class ProfileHandler(IObservable):
         http_flow.pop('flow', None)
         http_flow['uid'] = flow.uid
 
-        # Check if the host domain AND the url is detected by the threat intelligence.
-        # not all flows have a host value so don't send empty hosts to ti module.
+        # Check if the host domain AND the url is detected by the threat
+        # intelligence.
+        # not all flows have a host value so don't send empty hosts to ti
+        # module.
         if len(flow.host) > 2:
             self.give_threat_intelligence(profileid,
                                           twid,
