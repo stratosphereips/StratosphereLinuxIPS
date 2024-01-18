@@ -1212,13 +1212,17 @@ class ProfileHandler(IObservable):
         profiles_n =  self.r.scard('profiles')
         return 0 if not profiles_n else int(profiles_n)
 
-    def get_last_twid_of_profile(self, profileid):
-        """Return the last TW id and the starttime of the given profile id"""
-        return (
-            self.r.zrange(f'tws{profileid}', -1, -1, withscores=True)
-            if profileid
-            else False
-        )
+    def get_last_twid_of_profile(self, profileid: str) -> Tuple[str, float]:
+        """
+        Returns the last TW id and the starttime of the given profile id
+        """
+        if profileid:
+             res = self.r.zrange(
+                f'tws{profileid}', -1, -1, withscores=True)
+             if res:
+                twid, starttime = res[0]
+                return twid, starttime
+
 
     def getFirstTWforProfile(self, profileid):
         """Return the first TW id and the time for the given profile id"""
