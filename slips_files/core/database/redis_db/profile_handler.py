@@ -2,7 +2,7 @@ from dataclasses import asdict
 import redis
 import time
 import json
-from typing import Tuple, Union, Dict
+from typing import Tuple, Union, Dict, Optional
 import traceback
 import ipaddress
 import sys
@@ -78,25 +78,33 @@ class ProfileHandler(IObservable):
 
     def get_timewindow(self, flowtime, profileid):
         """
-        This function should get the id of the TW in the database where the flow belong.
-        If the TW is not there, we create as many tw as necessary in the future or past until we get the correct TW for this flow.
-        - We use this function to avoid retrieving all the data from the DB for the complete profile. We use a separate table for the TW per profile.
+        This function returns the TW in the database where the flow belongs.
+        If the TW is not there, we create as many tw as necessary in the future
+         or past until we get the correct TW for this flow.
+        - We use this function to avoid retrieving all the data from the DB
+        for the complete profile.
+        We use a separate table for the TW per profile.
         -- Returns the time window id
         THIS IS NOT WORKING:
-        - The empty profiles in the middle are not being created!!!
-        - The Dtp ips are stored in the first time win
+        - The empty tws in the middle are not being created!!!
+        - The Dtp ips are stored in the first tw
         """
         try:
-            # First check if we are not in the last TW. Since this will be the majority of cases
-            try:
-                [(lasttwid, lasttw_start_time)] = self.get_last_twid_of_profile(profileid)
+            # First check if we are not in the last TW. Since this will be
+            # the majority of cases
+            last_twid: Optional[Tuple[str, float]]
+            last_twid = self.get_last_twid_of_profile(profileid)
+            if last_twid:
+                lasttwid: str
+                lasttw_start_time: float
+                lasttwid, lasttw_start_time = last_twid
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
                 self.print(
-                    f'The last TW id for profile {profileid} was {lasttwid}. Start:{lasttw_start_time}. End: {lasttw_end_time}',
-                    3,
-                    0,
+                    f'The last TW id for profile {profileid} was {lasttwid}. '
+                    f'Start:{lasttw_start_time}. End: {lasttw_end_time}',
+                    3, 0,
                 )
                 # There was a last TW, so check if the current flow belongs here.
                 if (
@@ -104,58 +112,63 @@ class ProfileHandler(IObservable):
                     and lasttw_start_time <= flowtime
                 ):
                     self.print(
-                        f'The flow ({flowtime}) is on the last time window ({lasttw_end_time})',
-                        3,
-                        0,
+                        f'The flow ({flowtime}) is on the last time window'
+                        f' ({lasttw_end_time})',
+                        3, 0,
                     )
                     twid = lasttwid
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
                     self.print(
-                        f'The flow ({flowtime}) is NOT on the last time window ({lasttw_end_time}). Its newer',
-                        3,
-                        0,
+                        f'The flow ({flowtime}) is NOT on the last time '
+                        f'window ({lasttw_end_time}). Its newer',
+                        3, 0,
                     )
                     amount_of_new_tw = int(
                         (flowtime - lasttw_end_time) / self.width
                     )
                     self.print(
-                        f'We have to create {amount_of_new_tw} empty TWs in the middle.',
-                        3,
-                        0,
+                        f'We have to create {amount_of_new_tw}'
+                        f' empty TWs in the middle.', 3, 0,
                     )
                     temp_end = lasttw_end_time
                     for _ in range(amount_of_new_tw + 1):
                         new_start = temp_end
-                        twid = self.addNewTW(profileid, new_start)
-                        self.print(f'Creating the TW id {twid}. Start: {new_start}.', 3, 0)
+                        twid = self.add_new_tw(profileid, new_start)
+                        self.print(f'Creating the TW id {twid}. '
+                                   f'Start: {new_start}.', 3, 0)
                         temp_end = new_start + self.width
 
                 else:
                     # The flow was not in the last TW, its OLDER that it
                     self.print(
-                        f'The flow ({flowtime}) is NOT on the last time window ({lasttw_end_time}). Its older',
-                        3,
-                        0,
+                        f'The flow ({flowtime}) is NOT on the last time '
+                        f'window ({lasttw_end_time}). Its older',
+                        3, 0,
                     )
                     if data := self.getTWofTime(profileid, flowtime):
                         # We found a TW where this flow belongs to
                         (twid, tw_start_time) = data
                         return twid
                     else:
-                        # There was no TW that included the time of this flow, so create them in the past
+                        # There was no TW that included the time of this
+                        # flow, so create them in the past
                         # How many new TW we need in the past?
-                        # amount_of_new_tw is the total amount of tw we should have under the new situation
+                        # amount_of_new_tw is the total amount of tw we
+                        # should have under the new situation
                         amount_of_new_tw = int(
                             (lasttw_end_time - flowtime) / self.width
                         )
-                        # amount_of_current_tw is the real amount of tw we have now
+                        # amount_of_current_tw is the real amount of tw we
+                        # have now
                         amount_of_current_tw = (
                             self.get_number_of_tws_in_profile(profileid)
                         )
-                        # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
+                        # diff is the new ones we should add in the past.
+                        # (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
-                        self.print(f'We need to create {diff + 1} TW before the first', 3, 0)
+                        self.print(f'We need to create {diff + 1} '
+                                   f'TW before the first', 3, 0)
                         # Get the first TW
                         [
                             (firsttwid, firsttw_start_time)
@@ -167,15 +180,19 @@ class ProfileHandler(IObservable):
                             new_start = temp_start
                             # The method to add an older TW is the same as
                             # to add a new one, just the starttime changes
-                            twid = self.addNewOlderTW(
+                            twid: str = self.addNewOlderTW(
                                 profileid, new_start
                             )
-                            self.print(f'Creating the new older TW id {twid}. Start: {new_start}.', 3, 0)
+                            self.print(f'Creating the new older TW id {twid}.'
+                                       f' Start: {new_start}.', 3, 0)
                             temp_start = new_start - self.width
-            except ValueError:
+            else:
                 # There is no last tw. So create the first TW
-                # If the option for only-one-tw was selected, we should create the TW at least 100 years before the flowtime, to cover for
-                # 'flows in the past'. Which means we should cover for any flow that is coming later with time before the first flow
+                # If the option for only-one-tw was selected, we should
+                # create the TW at least 100 years before the flowtime,
+                # to cover for 'flows in the past'. Which means we should
+                # cover for any flow that is coming later with time before the
+                # first flow
                 if self.width == 9999999999:
                     # Seconds in 1 year = 31536000
                     startoftw = float(flowtime - (31536000 * 100))
@@ -183,11 +200,12 @@ class ProfileHandler(IObservable):
                     startoftw = flowtime
 
                 # Add this TW, of this profile, to the DB
-                twid = self.addNewTW(profileid, startoftw)
-                # self.print("First TW ({}) created for profile {}.".format(twid, profileid), 0, 1)
+                twid: str = self.add_new_tw(profileid, startoftw)
+
             return twid
         except Exception as e:
             self.print('Error in get_timewindow().', 0, 1)
+            self.print(traceback.print_exc(), 0, 1)
             self.print(e, 0, 1)
 
     def add_out_http(
@@ -1248,65 +1266,69 @@ class ProfileHandler(IObservable):
             Return the id of the timewindow just created
             """
             # Get the first twid and obtain the new tw id
-            try:
-                (firstid, firstid_time) = self.getFirstTWforProfile(profileid)[
-                    0
-                ]
-                # We have a first id
-                # Decrement it!!
-                twid = 'timewindow' + str(
-                    int(firstid.split('timewindow')[1]) - 1
-                )
-            except IndexError:
-                # Very weird error, since the first TW MUST exist. What are we doing here?
-                pass
+            (firstid, firstid_time) = self.getFirstTWforProfile(profileid)[
+                0
+            ]
+            # We have a first id
+            # Decrement it!!
+            twid = 'timewindow' + str(
+                int(firstid.split('timewindow')[1]) - 1
+            )
             # Add the new TW to the index of TW
-            data = {str(twid): float(startoftw)}
-            self.r.zadd(f'tws{profileid}', data)
+            timewindows: Dict[str, float] = {twid: float(startoftw)}
+            self.r.zadd(f'tws{profileid}', timewindows)
             self.print(f'Created and added to DB the new older '
                        f'TW with id {twid}. Time: {startoftw} '
                        ,0,4)
 
-            # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
+            # The creation of a TW now does not imply that it was modified.
+            # You need to put data to mark is at modified
             return twid
         except redis.exceptions.ResponseError as e:
             self.print('error in addNewOlderTW in database.py', 0, 1)
             self.print(type(e), 0, 1)
             self.print(e, 0, 1)
 
-    def addNewTW(self, profileid, startoftw):
+    def add_new_tw(self, profileid, startoftw) -> str:
         try:
             """
-            Creates or adds a new timewindow to the list of tw for the given profile
+            Creates or adds a new timewindow to the list of tw for the 
+            given profile
             Add the twid to the ordered set of a given profile
-            Return the id of the timewindow just created
-            We should not mark the TW as modified here, since there is still no data on it, and it may remain without data.
+            Returns the id of the timewindow just created
             """
             # Get the last twid and obtain the new tw id
-            try:
-                (lastid, lastid_time) = self.get_last_twid_of_profile(profileid)[0]
-                # We have a last id
-                # Increment it
-                twid = 'timewindow' + str(
-                    int(lastid.split('timewindow')[1]) + 1
-                )
-            except IndexError:
+            last_twid: Optional[Tuple[str, float]]
+            last_twid = self.get_last_twid_of_profile(profileid)
+            if last_twid:
+                last_tw: str
+                last_tw_starttime: float
+                last_tw, last_tw_starttime = last_twid
+                last_tw_number = int(last_tw.split("timewindow")[1])
+                # Increment the last timewindow
+                twid = f'timewindow{last_tw_number + 1}'
+            else:
                 # There is no first TW, create it
                 twid = 'timewindow1'
-            # Add the new TW to the index of TW
-            data = {twid: float(startoftw)}
-            self.r.zadd(f'tws{profileid}', data)
-            self.print(f'Created and added to DB for profile '
-                       f'{profileid} on TW with id {twid}. Time: {startoftw} ', 0, 4)
 
-            # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
+            # Add the new TW to the index of TW
+            self.r.zadd(f'tws{profileid}', {twid: float(startoftw)})
+            self.print(f'Created and added to DB for '
+                       f'{profileid}: a new tw: {twid}. '
+                       f' with starttime : {startoftw} ',
+                       0, 4)
+
+            # The creation of a TW now does not imply that it was modified.
+            # You need to put data to mark is at modified.
 
             # When a new TW is created for this profile,
-            # change the threat level of the profile to 0(info) and confidence to 0.05
+            # change the threat level of the profile to 0(info)
+            # and confidence to 0.05
             self.update_threat_level(profileid, 'info',  0.5)
             return twid
         except redis.exceptions.ResponseError as e:
             self.print('Error in addNewTW', 0, 1)
+            self.print(traceback.print_exc(), 0, 1)
             self.print(e, 0, 1)
 
     def getTimeTW(self, profileid, twid):

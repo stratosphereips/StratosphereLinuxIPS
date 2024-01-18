@@ -661,8 +661,8 @@ class DBManager(IObservable):
     def addNewOlderTW(self, *args, **kwargs):
         return self.rdb.addNewOlderTW(*args, **kwargs)
 
-    def addNewTW(self, *args, **kwargs):
-        return self.rdb.addNewTW(*args, **kwargs)
+    def add_new_tw(self, *args, **kwargs):
+        return self.rdb.add_new_tw(*args, **kwargs)
 
     def getTimeTW(self, *args, **kwargs):
         return self.rdb.getTimeTW(*args, **kwargs)
