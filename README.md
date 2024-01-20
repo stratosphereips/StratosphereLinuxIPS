@@ -125,7 +125,7 @@ or our command-line based interface Kalipso
 
 ##### Web interface
 
-    ./webinteface.sh
+    ./webinterface.sh
 
 Then navigate to ```http://localhost:55000/``` from your browser.
 
