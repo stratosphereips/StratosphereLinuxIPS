@@ -652,14 +652,14 @@ class DBManager(IObservable):
     def get_last_twid_of_profile(self, *args, **kwargs):
         return self.rdb.get_last_twid_of_profile(*args, **kwargs)
 
-    def getFirstTWforProfile(self, *args, **kwargs):
-        return self.rdb.getFirstTWforProfile(*args, **kwargs)
+    def get_first_twid_for_profile(self, *args, **kwargs):
+        return self.rdb.get_first_twid_for_profile(*args, **kwargs)
 
-    def getTWofTime(self, *args, **kwargs):
-        return self.rdb.getTWofTime(*args, **kwargs)
+    def get_tw_of_ts(self, *args, **kwargs):
+        return self.rdb.get_tw_of_ts(*args, **kwargs)
 
-    def addNewOlderTW(self, *args, **kwargs):
-        return self.rdb.addNewOlderTW(*args, **kwargs)
+    def add_new_older_tw(self, *args, **kwargs):
+        return self.rdb.add_new_older_tw(*args, **kwargs)
 
     def add_new_tw(self, *args, **kwargs):
         return self.rdb.add_new_tw(*args, **kwargs)

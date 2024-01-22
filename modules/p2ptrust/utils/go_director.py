@@ -479,7 +479,7 @@ class GoDirector(IObservable):
         description = f'attacking another peer: {reporter_ip} ({reporter}). threat level: {threat_level} ' \
                       f'confidence: {confidence} {ip_identification}'
         # get the tw of this report time
-        if twid := self.db.getTWofTime(profileid_of_attacker, timestamp):
+        if twid := self.db.get_tw_of_ts(profileid_of_attacker, timestamp):
             twid = twid[0]
         else:
             # create a new twid for the attacker profile that has the
