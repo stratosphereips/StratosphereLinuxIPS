@@ -188,20 +188,20 @@ class AlertHandler:
             str(evidence.timewindow)
             )
 
-        should_publish: bool = evidence.id not in current_evidence.keys()
-
+        # This is done to ignore repetition of the same evidence sent.
+        evidence_exists: Optional[dict] = self.r.hget(
+            f'{evidence.profile}_{evidence.timewindow}_evidence',
+            evidence.id
+        )
 
         self.r.hset(f'{evidence.profile}_{evidence.timewindow}_evidence',
                     evidence.id,
                     evidence_to_send)
 
-        self.r.hset(f'evidence_{str(evidence.profile)}',
-                    str(evidence.timewindow),
-                    json.dumps(current_evidence))
 
-        # This is done to ignore repetition of the same evidence sent.
-        # note that publishing HAS TO be done after updating the 'Evidence' keys
-        if should_publish:
+        # note that publishing HAS TO be done after adding the evidence
+        # to the db
+        if not evidence_exists:
             self.r.incr('number_of_evidence', 1)
             self.publish('evidence_added', evidence_to_send)
 
