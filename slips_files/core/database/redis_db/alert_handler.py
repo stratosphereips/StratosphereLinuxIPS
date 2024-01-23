@@ -42,11 +42,15 @@ class AlertHandler:
         """
         When we have a bunch of evidence causing an alert,
         we associate all evidence IDs with the alert ID in our database
-        this function stores evidence in 'alerts' key only
-        :param alert ID: the profileid_twid_ID of the last evidence causing this alert
+        this function stores evidence in 'alerts_profile_twid' key only
+        :param alert ID: the profileid_twid_ID of the last evidence
+            causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
-        old_profileid_twid_alerts: dict = self.get_profileid_twid_alerts(profileid, twid)
+        old_profileid_twid_alerts: Dict[str, List[str]]
+        old_profileid_twid_alerts = self.get_profileid_twid_alerts(
+            profileid, twid
+            )
 
         alert = {
             alert_ID: json.dumps(evidence_IDs)
@@ -61,62 +65,20 @@ class AlertHandler:
             # no previous alerts for this profileid twid
             profileid_twid_alerts = json.dumps(alert)
 
-
-        self.r.hset(f'{profileid}{self.separator}{twid}',
+        self.r.hset(f'{profileid}_{twid}',
                     'alerts',
                     profileid_twid_alerts)
 
-        # the structure of alerts key is
-        # alerts {
-        #     profile_<ip>: {
-        #               twid1: {
-        #                   alert_ID1: [evidence_IDs],
-        #                   alert_ID2: [evidence_IDs]
-        #                  }
-        #             }
-        # }
-
-        profile_alerts = self.r.hget('alerts', profileid)
-        # alert ids look like this
-        # profile_192.168.131.2_timewindow1_92a3b9c2-330b-47ab-b73e-c5380af90439
-        alert_hash = alert_ID.split('_')[-1]
-        alert = {
-            twid: {
-                alert_hash: evidence_IDs
-            }
-        }
-        if not profile_alerts:
-            # first alert in this profile
-            alert = json.dumps(alert)
-            self.r.hset('alerts', profileid, alert)
-            return
-
-        # the format of this dict is {twid1: {alert_hash: [evidence_IDs]},
-        #                              twid2: {alert_hash: [evidence_IDs]}}
-        profile_alerts:dict = json.loads(profile_alerts)
-
-        if twid not in profile_alerts:
-            # first time having an alert for this twid
-            profile_alerts.update(alert)
-        else:
-            # we already have a twid with alerts in this profile, update it
-            # the format of twid_alerts is {alert_hash: evidence_IDs}
-            twid_alerts: dict = profile_alerts[twid]
-            twid_alerts[alert_hash] = evidence_IDs
-            profile_alerts[twid] = twid_alerts
-
-        profile_alerts = json.dumps(profile_alerts)
-        self.r.hset('alerts', profileid, profile_alerts)
-
-    def get_evidence_causing_alert(self, profileid, twid, alert_ID) -> list:
+    def get_evidence_causing_alert(self, profileid, twid, alert_id: str) -> \
+            list:
         """
         Returns all the IDs of evidence causing this alert
         :param alert_ID: ID of alert to export to warden server
         for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        if alerts := self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts'):
+        if alerts := self.r.hget(f'{profileid}_{twid}', 'alerts'):
             alerts = json.loads(alerts)
-            return alerts.get(alert_ID, False)
+            return alerts.get(alert_id, False)
         return False
 
     def get_evidence_by_ID(self, profileid: str, twid: str, evidence_id: str):
@@ -235,57 +197,35 @@ class AlertHandler:
 
 
 
-    def deleteEvidence(self, profileid, twid, evidence_ID: str):
+    def deleteEvidence(self, profileid, twid, evidence_id: str):
         """
         Delete evidence from the database
         """
-        # 1. delete evidence from the hash profileid_twid, Evidence key
-        current_evidence: Dict[str, dict] = self.get_twid_evidence(
-            profileid, twid
-        )
-        # Delete the key regardless of whether it is in the dictionary
-        current_evidence.pop(evidence_ID, None)
-        current_evidence: str = json.dumps(current_evidence)
-        self.r.hset(f'{profileid}_{twid}_evidence', current_evidence)
-        self.r.hset(f'evidence_{profileid}', twid, current_evidence)
+        self.r.hdel(f'{profileid}_{twid}_evidence', evidence_id)
 
-        # 2. delete evidence from 'alerts' key
-        profile_alerts = self.r.hget('alerts', profileid)
-        if not profile_alerts:
-            # this means that this evidence wasn't a part of an alert
-            # give redis time to the save the changes before calling this function again
-            # removing this sleep will cause this function to be called again before
-            # deleting the evidence ID from the evidence keys
-            time.sleep(0.5)
-            return
+        # delete it if it was a part of an alert too
+        alerts: Dict[str, List[str]]
+        alerts = self.get_profileid_twid_alerts(profileid, twid)
 
-        profile_alerts:dict = json.loads(profile_alerts)
-        try:
-            # we already have a twid with alerts in this profile, update it
-            # the format of twid_alerts is {alert_hash: evidence_IDs}
-            twid_alerts: dict = profile_alerts[twid]
-            IDs = False
-            hash = False
-            for alert_hash, evidence_IDs in twid_alerts.items():
-                if evidence_ID in evidence_IDs:
-                    IDs = evidence_IDs
-                    hash = alert_hash
+        was_part_of_an_alert = False
+        for alert_id, evidence_list in alerts.items():
+            evidence_list: List[str]
+            if evidence_id in evidence_list:
+                was_part_of_an_alert = True
                 break
-            else:
-                return
 
-            if IDs and hash:
-                evidence_IDs = IDs.remove(evidence_ID)
-                alert_ID = f'{profileid}_{twid}_{hash}'
-                if evidence_IDs:
-                    self.set_evidence_causing_alert(
-                        profileid, twid, alert_ID, evidence_IDs
-                    )
+            if was_part_of_an_alert:
+                break
 
-        except KeyError:
-            # alert not added to the 'alerts' key yet!
-            # this means that this evidence wasn't a part of an alert
-            return
+        if was_part_of_an_alert:
+            evidence_list.remove(evidence_id)
+            alerts[alert_id] = evidence_list
+            self.r.hset(f'{profileid}_{twid}',
+                'alerts',
+                json.dumps(alerts)
+            )
+
+
 
     def cache_whitelisted_evidence_ID(self, evidence_ID:str):
         """
@@ -315,7 +255,8 @@ class AlertHandler:
             tw_evidence[evidence_id] = evidence
         return tw_evidence
 
-    def get_profileid_twid_alerts(self, profileid, twid) -> dict:
+    def get_profileid_twid_alerts(self, profileid, twid) \
+            -> Dict[str, List[str]]:
         """
         The format for the returned dict is
             {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}

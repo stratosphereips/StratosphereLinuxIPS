@@ -860,6 +860,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
                     uid
                 )
             return True
+
         elif uid not in self.connections_checked_in_ssh_timer_thread:
             # It can happen that the original SSH flow is not in the DB yet
             # comes here if we haven't started the timer thread
