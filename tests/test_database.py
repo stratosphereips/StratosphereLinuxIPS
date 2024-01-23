@@ -119,7 +119,7 @@ def test_setEvidence():
     db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                          timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
-    added_evidence = db.r.hget(f'evidence{profileid}', twid)
+    added_evidence = db.r.hget(f'evidence_{profileid}', twid)
     added_evidence2 = db.r.hget(f'{profileid}_{twid}', 'Evidence')
     assert added_evidence2 == added_evidence
 
@@ -135,7 +135,7 @@ def test_setEvidence():
 def test_deleteEvidence():
     description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
     db.deleteEvidence(profileid, twid, description)
-    added_evidence = json.loads(db.r.hget(f'evidence{profileid}', twid))
+    added_evidence = json.loads(db.r.hget(f'evidence_{profileid}', twid))
     added_evidence2 = json.loads(
         db.r.hget(f'{profileid}_{twid}', 'Evidence')
     )
