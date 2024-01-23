@@ -466,7 +466,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             timestamp,
             profileid,
             twid,
-            uid):
+            uid: str):
         """
         Detect if the user is using an Apple UA, then android, then linux etc.
         Doesn't check multiple ssh clients
@@ -507,7 +507,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
+            uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_BEHAVIOUR,
             source_target_tag=Tag.MULTIPLE_USER_AGENT

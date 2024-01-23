@@ -23,11 +23,16 @@ def get_random_MAC():
 def test_check_suspicious_user_agents(mock_rdb):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
     # create a flow with suspicious user agent
-    host = '147.32.80.7'
-    uri = '/wpad.dat'
-    user_agent = 'CHM_MSDN'
     assert (
-        http_analyzer.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid) is True
+        http_analyzer.check_suspicious_user_agents(
+           uid,
+           '147.32.80.7',
+           '/wpad.dat',
+            timestamp,
+           'CHM_MSDN',
+           profileid,
+           twid
+        ) is True
     )
 
 
@@ -36,8 +41,10 @@ def test_check_multiple_google_connections(mock_rdb):
     # {"ts":1635765765.435485,"uid":"C7mv0u4M1zqJBHydgj",
     # "id.orig_h":"192.168.1.28","id.orig_p":52102,"id.resp_h":"216.58.198.78",
     # "id.resp_p":80,"trans_depth":1,"method":"GET","host":"google.com","uri":"/",
-    # "version":"1.1","user_agent":"Wget/1.20.3 (linux-gnu)","request_body_len":0,"response_body_len":219,
-    # "status_code":301,"status_msg":"Moved Permanently","tags":[],"resp_fuids":["FGhwTU1OdvlfLrzBKc"],
+    # "version":"1.1","user_agent":"Wget/1.20.3 (linux-gnu)",
+    # "request_body_len":0,"response_body_len":219,
+    # "status_code":301,"status_msg":"Moved Permanently","tags":[],
+    # "resp_fuids":["FGhwTU1OdvlfLrzBKc"],
     # "resp_mime_types":["text/html"]}
     host = 'google.com'
     # uri = '/'
@@ -53,8 +60,8 @@ def test_parsing_online_ua_info(mock_rdb, mocker):
     tests the parsing and processing the ua found by the online query
     """
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
-    # use a different profile for this unit test to make sure we don't already have info about
-    # it in the db
+    # use a different profile for this unit test to make sure we don't
+    # already have info about it in the db
     profileid = 'profile_192.168.99.99'
 
     mock_rdb.get_user_agent_from_profile.return_value = None
@@ -129,17 +136,27 @@ def test_extract_info_from_UA(mock_rdb):
 
 def test_check_multiple_UAs(mock_rdb):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_rdb)
-    mozilla_ua = 'Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) Gecko/20100101 Firefox/60.0'
+    mozilla_ua = 'Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) ' \
+                 'Gecko/20100101 Firefox/60.0'
     # old ua
     cached_ua = {'os_type': 'Fedora', 'os_name': 'Linux'}
-    # current ua
-    user_agent = mozilla_ua
     # should set evidence
     assert (
-        http_analyzer.check_multiple_UAs(cached_ua, user_agent, timestamp, profileid, twid, uid) is False
+        http_analyzer.check_multiple_UAs(
+            cached_ua,
+             mozilla_ua,
+            timestamp,
+            profileid,
+            twid,
+            uid) is False
     )
     # in this case we should alert
-    user_agent = SAFARI_UA
     assert (
-        http_analyzer.check_multiple_UAs(cached_ua, user_agent, timestamp, profileid, twid, uid) is True
+        http_analyzer.check_multiple_UAs(
+            cached_ua,
+            SAFARI_UA,
+            timestamp,
+            profileid,
+            twid,
+            uid) is True
     )

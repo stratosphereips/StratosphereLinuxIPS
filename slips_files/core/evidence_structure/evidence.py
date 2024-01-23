@@ -231,16 +231,12 @@ class Evidence:
     evidence_type: EvidenceType
     description: str
     attacker: Attacker
-    # @@@@@@@@@@@@@@@@@@@@ todo make sure evidence.threat_level is always a
-    #  tl  obj
     threat_level: ThreatLevel
     category: IDEACategory
     # profile of the srcip detected this evidence
     profile: ProfileID
-    # @@@@@@@@@@@@@@@ TODO always pass it in utils.alerts_format format
     timewindow: TimeWindow
     # the uids of the flows causing this evidence
-    # @@@@@@@@@@@@ todo make sure this is always a list
     uid: List[str]
     timestamp: str = field(
         metadata={
