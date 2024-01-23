@@ -181,13 +181,6 @@ class AlertHandler:
         # Check if we have the current evidence stored in the DB for
         # this profileid in this twid
 
-        # @@@@@@@@@@@@@ TODO search using redis for the id of this evidence
-        #  in the profil+tw evidence in the db! it would be faster
-        current_evidence: Dict[str, dict] = self.get_twid_evidence(
-            str(evidence.profile),
-            str(evidence.timewindow)
-            )
-
         # This is done to ignore repetition of the same evidence sent.
         evidence_exists: Optional[dict] = self.r.hget(
             f'{evidence.profile}_{evidence.timewindow}_evidence',
@@ -401,7 +394,7 @@ class AlertHandler:
         the given
         :returns: the numerical val of the max threat level
         """
-        threat_level_float  = utils.threat_levels[threat_level]
+        threat_level_float = utils.threat_levels[threat_level]
 
         old_max_threat_level: str = self.r.hget(
             profileid,

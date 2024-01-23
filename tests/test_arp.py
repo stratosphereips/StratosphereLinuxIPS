@@ -45,7 +45,6 @@ def test_detect_MITM_ARP_attack(mock_rdb):
     mock_rdb.get_ip_of_mac.return_value = json.dumps([profileid])
     assert (
         ARP.detect_MITM_ARP_attack(
-            profileid,
             twid,
             uid,
             saddr,

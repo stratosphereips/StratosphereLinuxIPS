@@ -140,8 +140,6 @@ def test_deleteEvidence():
         db.r.hget(f'{profileid}_{twid}', 'Evidence')
     )
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence #
-    # @@@@@@@@@@@@@@@ update this once the evidenc eno longer depend on an
-    # addr
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
 
