@@ -90,12 +90,10 @@ class Whitelist(IObservable):
         if flow_type in self.ignored_flow_types:
             return True
 
-    ##@@@@@@@@@@@@@ todo this is used in flowalerts, refactor it to use the
-    # Direction class and refactor flowalerts to do so too
     def is_whitelisted_domain_in_flow(
             self,
             whitelisted_domain,
-            direction,
+            direction: Direction,
             domains_of_flow,
             ignore_type
     ):
@@ -106,7 +104,7 @@ class Whitelist(IObservable):
 
         :param whitelisted_domain: the domain we want to check if it exists in the domains_of_flow
         :param ignore_type: alerts or flows or both
-        :param direction: src or dst or both
+        :param direction: Direction obj
         :param domains_of_flow: src domains of the src IP of the flow,
                                 or dst domains of the dst IP of the flow
         """
@@ -116,8 +114,9 @@ class Whitelist(IObservable):
 
         # do we wanna whitelist flows coming from or going to this domain or both?
         from_ = whitelisted_domains[whitelisted_domain]['from']
+        from_ = Direction.SRC if 'src' in from_ else Direction.DST
         # Now check the domains of the src IP
-        if direction in from_ or 'both' in from_:
+        if direction == from_ or 'both' in whitelisted_domains[whitelisted_domain]['from']:
             what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
 
             for domain_to_check in domains_of_flow:
@@ -151,7 +150,8 @@ class Whitelist(IObservable):
             src_domains_of_flow,
         ) = self.get_domains_of_flow(saddr, daddr)
 
-        # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
+        # self.print(f'Domains to check from flow: {domains_to_check},
+        # {domains_to_check_dst} {domains_to_check_src}')
         # Go through each whitelisted domain and check if what arrived is there
         for whitelisted_domain in list(whitelisted_domains.keys()):
             what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
@@ -172,7 +172,7 @@ class Whitelist(IObservable):
 
             if self.is_whitelisted_domain_in_flow(
                     whitelisted_domain,
-                    'src',
+                    Direction.SRC,
                     src_domains_of_flow,
                     ignore_type):
                 # self.print(f"Whitelisting the domain
@@ -183,7 +183,7 @@ class Whitelist(IObservable):
 
             if self.is_whitelisted_domain_in_flow(
                     whitelisted_domain,
-                    'dst',
+                    Direction.DST,
                     dst_domains_of_flow,
                     ignore_type):
                 # self.print(f"Whitelisting the domain
