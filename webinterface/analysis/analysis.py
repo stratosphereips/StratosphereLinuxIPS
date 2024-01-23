@@ -350,23 +350,25 @@ def set_evidence(profile, timewindow, alert_id):
 
 
 @analysis.route("/evidence/<profile>/<timewindow>/")
-def set_evidence_general(profile, timewindow):
+def set_evidence_general(profile: str, timewindow: str):
     """
     Set an analysis tag with general evidence
-    :param profile:
-    :param timewindow:
+    :param profile: the ip
+    :param timewindow: timewindowx
     :return: {"data": data} where data is a list of evidences
     """
     data = []
-    if evidence := __database__.db.hget(
-        "evidence" + "profile_" + profile, timewindow
-    ):
-        evidence = json.loads(evidence)
-        for id, content in evidence.items():
-            content = json.loads(content)
-            if "source_target_tag" not in content:
-                content["source_target_tag"] = "-"
-            data.append(content)
+    profile = f"profile_{profile}"
+
+    evidence: Dict[str, str] = __database__.db.hgetall(
+            f'{profile}_{timewindow}_evidence'
+    )
+    if evidence :
+        for evidence_details in evidence.values():
+            evidence_details: dict = json.loads(evidence_details)
+            if "source_target_tag" not in evidence_details:
+                evidence_details["source_target_tag"] = "-"
+            data.append(evidence_details)
     return {"data": data}
 
 
