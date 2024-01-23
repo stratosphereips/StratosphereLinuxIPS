@@ -198,7 +198,7 @@ class LeakDetector(IModule, multiprocessing.Process):
                 return
 
             # in which tw is this ts?
-            twid = self.db.getTWofTime(profileid, ts)
+            twid = self.db.get_tw_of_ts(profileid, ts)
             # convert ts to a readable format
             ts = utils.convert_format(ts, utils.alerts_format)
             if twid:

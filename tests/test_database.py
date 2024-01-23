@@ -55,11 +55,11 @@ def test_timewindows():
     # add a profile
     db.addProfile(profileid, '00:00', '1')
     # add a tw to that profile (first tw)
-    db.addNewTW(profileid, 0.0)
+    db.add_new_tw(profileid, 0.0)
     # add  a new tw (last tw)
-    db.addNewTW(profileid, 5.0)
-    assert db.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
-    assert db.get_last_twid_of_profile(profileid) == [('timewindow2', 5.0)]
+    db.add_new_tw(profileid, 5.0)
+    assert db.get_first_twid_for_profile(profileid) == ('timewindow1', 0.0)
+    assert db.get_last_twid_of_profile(profileid) == ('timewindow2', 5.0)
 
 
 def getSlipsInternalTime():
@@ -71,7 +71,7 @@ def test_add_ips():
     # add a profile
     db.addProfile(profileid, '00:00', '1')
     # add a tw to that profile
-    db.addNewTW(profileid, 0.0)
+    db.add_new_tw(profileid, 0.0)
     columns = {
         'dport': 80,
         'sport': 80,

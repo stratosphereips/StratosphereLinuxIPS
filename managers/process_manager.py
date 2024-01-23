@@ -562,9 +562,11 @@ class ProcessManager:
 
             else:
                 flows_count: int = self.main.db.get_flows_count()
-                self.main.print(f"Total flows read (without altflows): {flows_count}", log_to_logfiles_only=True)
+                self.main.print(f"Total flows read (without altflows): "
+                                f"{flows_count}", log_to_logfiles_only=True)
 
-                hitlist: Tuple[List[Process], List[Process]] = self.get_hitlist_in_order()
+                hitlist: Tuple[List[Process], List[Process]]
+                hitlist  = self.get_hitlist_in_order()
                 to_kill_first: List[Process] = hitlist[0]
                 to_kill_last: List[Process] = hitlist[1]
                 self.termination_event.set()
