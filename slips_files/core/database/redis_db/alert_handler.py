@@ -68,6 +68,7 @@ class AlertHandler:
         self.r.hset(f'{profileid}_{twid}',
                     'alerts',
                     profileid_twid_alerts)
+        self.r.incr('number_of_alerts', 1)
 
     def get_evidence_causing_alert(self, profileid, twid, alert_id: str) -> \
             list:
