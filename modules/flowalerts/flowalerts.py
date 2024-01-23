@@ -1938,7 +1938,7 @@ class FlowAlerts(IModule, multiprocessing.Process):
             self.conn_counter += 1
 
         # --- Detect successful SSH connections ---
-        if msg:= self.get_msg('new_ssh'):
+        if msg := self.get_msg('new_ssh'):
             data = msg['data']
             data = json.loads(data)
             profileid = data['profileid']

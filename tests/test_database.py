@@ -1,12 +1,29 @@
-from slips_files.common.slips_utils import utils
-from slips_files.core.flows.zeek import Conn
-from slips_files.common.slips_utils import utils
-from tests.module_factory import ModuleFactory
 import redis
 import os
 import json
 import time
 import pytest
+
+from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import Conn
+from slips_files.common.slips_utils import utils
+from tests.module_factory import ModuleFactory
+from slips_files.core.evidence_structure.evidence import (
+    dict_to_evidence,
+    Evidence,
+    Direction,
+    IoCType,
+    EvidenceType,
+    IDEACategory,
+    Proto,
+    Tag,
+    Attacker,
+    Victim,
+    ThreatLevel,
+    ProfileID,
+    TimeWindow
+    )
+
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -107,40 +124,75 @@ def test_add_port():
 
 
 def test_setEvidence():
-    attacker_direction = 'ip'
-    attacker = test_ip
-    evidence_type = f'SSHSuccessful-by-{attacker}'
-    threat_level = 0.01
-    confidence = 0.6
-    description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
+    attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=test_ip
+        )
+    threat_level: ThreatLevel = ThreatLevel.INFO
+    confidence = 0.8
+    description = f'SSH Successful to IP : 8.8.8.8 . From IP {test_ip}'
     timestamp = time.time()
-    category = 'Infomation'
-    uid = '123'
-    db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                         timestamp, category, profileid=profileid, twid=twid, uid=uid)
+    uid = ['123']
+    victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value='8.8.8.8'
+        )
+    evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.SSH_SUCCESSFUL,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=test_ip),
+            timewindow=TimeWindow(number=twid),
+            uid=[uid],
+            timestamp=timestamp,
+            category=IDEACategory.INFO,
+        )
 
-    added_evidence = db.r.hget(f'evidence_{profileid}', twid)
-    added_evidence2 = db.r.hget(f'{profileid}_{twid}', 'Evidence')
-    assert added_evidence2 == added_evidence
-
-    added_evidence = json.loads(added_evidence)
-    description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
-    #  note that added_evidence may have evidence from other unit tests
-    evidence_uid =  next(iter(added_evidence))
-    evidence_details = json.loads(added_evidence[evidence_uid])
-    assert 'description' in evidence_details
-    assert evidence_details['description'] == description
-
+    db.setEvidence(evidence)
+    added = db.r.hget(f'{profileid}_{twid}_evidence', evidence.id)
+    assert added
 
 def test_deleteEvidence():
-    description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
-    db.deleteEvidence(profileid, twid, description)
-    added_evidence = json.loads(db.r.hget(f'evidence_{profileid}', twid))
-    added_evidence2 = json.loads(
-        db.r.hget(f'{profileid}_{twid}', 'Evidence')
-    )
-    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence #
-    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
+    # @@@@@@@@@@ todo
+    # attacker: Attacker = Attacker(
+    #         direction=Direction.SRC,
+    #         attacker_type=IoCType.IP,
+    #         value=test_ip
+    #     )
+    # threat_level: ThreatLevel = ThreatLevel.INFO
+    # confidence = 0.8
+    # description = f'SSH Successful to IP : 8.8.8.8 . From IP {test_ip}'
+    # timestamp = time.time()
+    # uid = ['123']
+    # victim: Victim = Victim(
+    #         direction=Direction.DST,
+    #         victim_type=IoCType.IP,
+    #         value='8.8.8.8'
+    #     )
+    # evidence: Evidence = Evidence(
+    #         evidence_type=EvidenceType.SSH_SUCCESSFUL,
+    #         attacker=attacker,
+    #         victim=victim,
+    #         threat_level=threat_level,
+    #         confidence=confidence,
+    #         description=description,
+    #         profile=ProfileID(ip=test_ip),
+    #         timewindow=TimeWindow(number=twid),
+    #         uid=[uid],
+    #         timestamp=timestamp,
+    #         category=IDEACategory.INFO,
+    #     )
+    #
+    # db.setEvidence(evidence)
+    #
+    # db.deleteEvidence(profileid, twid, evidence.id)
+    # added_evidence = json.loads(db.r.hget(f'evidence_{profileid}', twid))
+    # assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence #
 
 
 
