@@ -149,14 +149,14 @@ class AlertHandler:
             evidence.id
         )
 
-        self.r.hset(f'{evidence.profile}_{evidence.timewindow}_evidence',
-                    evidence.id,
-                    evidence_to_send)
-
-
         # note that publishing HAS TO be done after adding the evidence
         # to the db
         if not evidence_exists:
+            self.r.hset(
+                f'{evidence.profile}_{evidence.timewindow}_evidence',
+                evidence.id,
+                evidence_to_send
+            )
             self.r.incr('number_of_evidence', 1)
             self.publish('evidence_added', evidence_to_send)
 
@@ -176,6 +176,7 @@ class AlertHandler:
                 str(evidence.threat_level),
                 evidence.confidence
                 )
+
         return True
 
 
@@ -200,30 +201,11 @@ class AlertHandler:
     def deleteEvidence(self, profileid, twid, evidence_id: str):
         """
         Delete evidence from the database
+        this is only called by evidencehandler,
+        which means that any evidence passed to this function
+        can never be a part of a past alert
         """
         self.r.hdel(f'{profileid}_{twid}_evidence', evidence_id)
-
-        # delete it if it was a part of an alert too
-        alerts: Dict[str, List[str]]
-        alerts = self.get_profileid_twid_alerts(profileid, twid)
-
-        was_part_of_an_alert = False
-        for alert_id, evidence_list in alerts.items():
-            evidence_list: List[str]
-            if evidence_id in evidence_list:
-                was_part_of_an_alert = True
-                break
-
-            if was_part_of_an_alert:
-                break
-
-        if was_part_of_an_alert:
-            evidence_list.remove(evidence_id)
-            alerts[alert_id] = evidence_list
-            self.r.hset(f'{profileid}_{twid}',
-                'alerts',
-                json.dumps(alerts)
-            )
 
 
 
