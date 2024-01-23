@@ -235,8 +235,6 @@ class Evidence:
     #  tl  obj
     threat_level: ThreatLevel
     category: IDEACategory
-    # be #TODO @@@@@@@@@@@@@@@@@@@@@@@ no it shouldn't it's ok to have no
-    #  victim!
     # profile of the srcip detected this evidence
     profile: ProfileID
     # @@@@@@@@@@@@@@@ TODO always pass it in utils.alerts_format format
