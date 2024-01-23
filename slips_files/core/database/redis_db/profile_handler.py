@@ -819,7 +819,10 @@ class ProfileHandler(IObservable):
 
 
     def markProfileTWAsBlocked(self, profileid, twid):
-        """Add this profile and tw to the list of blocked"""
+        """Add this profile and tw to the list of blocked
+        a profile is only blocked if it was blocked using the user's
+        firewall, not if it just generated an alert
+        """
         tws = self.getBlockedProfTW(profileid)
         tws.append(twid)
         self.r.hset('BlockedProfTW', profileid, json.dumps(tws))

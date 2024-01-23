@@ -95,7 +95,8 @@ def get_ip_info(ip):
 @analysis.route("/profiles_tws")
 def set_profile_tws():
     '''
-    Set profiles and their timewindows into the tree. Blocked are highligted in red.
+    Set profiles and their timewindows into the tree.
+    Blocked are highligted in red.
     :return: (profile, [tw, blocked], blocked)
     '''
 
@@ -106,9 +107,9 @@ def set_profile_tws():
         profile_word, profile_ip = profileid.split("_")
         profiles_dict[profile_ip] = False
 
-    if blockedProfileTWs := __database__.db.hgetall('alerts'):
-        for blocked in blockedProfileTWs.keys():
-            profile_word, blocked_ip = blocked.split("_")
+    if blocked_profiles := __database__.db.smembers('malicious_profiles'):
+        for profile in blocked_profiles:
+            blocked_ip = profile.split("_")[-1]
             profiles_dict[blocked_ip] = True
 
     data = [
@@ -146,6 +147,7 @@ def set_tws(profileid):
     # Fetch all profile TWs
     tws = get_all_tw_with_ts(f"profile_{profileid}")
 
+    # @@@@@@@@@ todo fix this!
     if blockedTWs := __database__.db.hget('alerts', f"profile_{profileid}"):
         blockedTWs = json.loads(blockedTWs)
 
