@@ -335,7 +335,6 @@ class AlertHandler:
 
     def get_twid_evidence(self, profileid: str, twid: str) -> Dict[str, dict]:
         """Get the evidence for this TW for this Profile"""
-        #@@@@@@@@@ todo test this!
         evidence: Dict[str, dict] = self.r.hgetall(
             f'{profileid}_{twid}_evidence'
         )
