@@ -292,7 +292,7 @@ def set_alerts(profile, timewindow):
         alerts = json.loads(alerts)
         alerts_tw = alerts.get(timewindow, {})
         tws = get_all_tw_with_ts(profile)
-        evidences = __database__.db.hget(f"evidence{profile}", timewindow)
+        evidences = __database__.db.hget(f"evidence_{profile}", timewindow)
         if evidences:
             evidences = json.loads(evidences)
 

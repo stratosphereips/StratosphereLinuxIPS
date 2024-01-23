@@ -1,6 +1,6 @@
 import time
 import json
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import \
@@ -119,17 +119,15 @@ class AlertHandler:
             return alerts.get(alert_ID, False)
         return False
 
-    def get_evidence_by_ID(self, profileid, twid, ID):
-
-        evidence = self.get_twid_evidence(profileid, twid)
+    def get_evidence_by_ID(self, profileid: str, twid: str, evidence_id: str):
+        evidence: Dict[str, dict] = self.get_twid_evidence(profileid, twid)
         if not evidence:
             return False
 
-        evidence: dict = json.loads(evidence)
         # loop through each evidence in this tw
         for evidence_details in evidence.values():
             evidence_details = json.loads(evidence_details)
-            if evidence_details.get('ID') == ID:
+            if evidence_details.get('ID') == evidence_id:
                 # found an evidence that has a matching ID
                 return evidence_details
 
@@ -185,26 +183,21 @@ class AlertHandler:
 
         # @@@@@@@@@@@@@ TODO search using redis for the id of this evidence
         #  in the profil+tw evidence in the db! it would be faster
-        current_evidence: str = self.get_twid_evidence(
+        current_evidence: Dict[str, dict] = self.get_twid_evidence(
             str(evidence.profile),
             str(evidence.timewindow)
             )
-        current_evidence: dict = json.loads(current_evidence) if \
-            current_evidence else {}
 
         should_publish: bool = evidence.id not in current_evidence.keys()
 
-        # update our current evidence for this profileid and twid.
-        current_evidence.update({evidence.id: evidence_to_send})
-        current_evidence: str = json.dumps(current_evidence)
 
-        self.r.hset(f'{evidence.profile}_{evidence.timewindow}',
-                    'Evidence',
-                    current_evidence)
+        self.r.hset(f'{evidence.profile}_{evidence.timewindow}_evidence',
+                    evidence.id,
+                    evidence_to_send)
 
-        self.r.hset(f'evidence{str(evidence.profile)}',
+        self.r.hset(f'evidence_{str(evidence.profile)}',
                     str(evidence.timewindow),
-                    current_evidence)
+                    json.dumps(current_evidence))
 
         # This is done to ignore repetition of the same evidence sent.
         # note that publishing HAS TO be done after updating the 'Evidence' keys
@@ -253,18 +246,15 @@ class AlertHandler:
         """
         Delete evidence from the database
         """
-        # 1. delete evidence from 'evidence' key
-        current_evidence = self.get_twid_evidence(profileid, twid)
-        current_evidence = json.loads(current_evidence) if current_evidence else {}
+        # 1. delete evidence from the hash profileid_twid, Evidence key
+        current_evidence: Dict[str, dict] = self.get_twid_evidence(
+            profileid, twid
+        )
         # Delete the key regardless of whether it is in the dictionary
         current_evidence.pop(evidence_ID, None)
-        current_evidence_json = json.dumps(current_evidence)
-        self.r.hset(
-            profileid + self.separator + twid,
-            'Evidence',
-            current_evidence_json,
-        )
-        self.r.hset(f'evidence{profileid}', twid, current_evidence_json)
+        current_evidence: str = json.dumps(current_evidence)
+        self.r.hset(f'{profileid}_{twid}_evidence', current_evidence)
+        self.r.hset(f'evidence_{profileid}', twid, current_evidence)
 
         # 2. delete evidence from 'alerts' key
         profile_alerts = self.r.hget('alerts', profileid)
@@ -318,19 +308,19 @@ class AlertHandler:
         """
         return self.r.sismember('whitelisted_evidence', evidence_ID)
 
-    def remove_whitelisted_evidence(self, all_evidence:str) -> str:
+    def remove_whitelisted_evidence(self, all_evidence: dict) -> dict:
         """
         param all_evidence serialized json dict
-        returns a serialized json dict
+        returns a dict
         """
         # remove whitelisted evidence from the given evidence
-        all_evidence = json.loads(all_evidence)
+        # all_evidence = json.loads(all_evidence)
         tw_evidence = {}
-        for ID,evidence in all_evidence.items():
-            if self.is_whitelisted_evidence(ID):
+        for evidence_id, evidence in all_evidence.items():
+            if self.is_whitelisted_evidence(evidence_id):
                 continue
-            tw_evidence[ID] = evidence
-        return json.dumps(tw_evidence)
+            tw_evidence[evidence_id] = evidence
+        return tw_evidence
 
     def get_profileid_twid_alerts(self, profileid, twid) -> dict:
         """
@@ -343,12 +333,19 @@ class AlertHandler:
         alerts: dict = json.loads(alerts)
         return alerts
 
-    def get_twid_evidence(self, profileid: str, twid: str) -> str:
+    def get_twid_evidence(self, profileid: str, twid: str) -> Dict[str, dict]:
         """Get the evidence for this TW for this Profile"""
-        evidence = self.r.hget(profileid + self.separator + twid, 'Evidence')
+        #@@@@@@@@@ todo test this!
+        evidence: Dict[str, dict] = self.r.hgetall(
+            f'{profileid}_{twid}_evidence'
+        )
         if evidence:
-            evidence: str = self.remove_whitelisted_evidence(evidence)
-        return evidence
+            evidence: Dict[str, dict] = self.remove_whitelisted_evidence(
+                evidence
+            )
+            return evidence
+
+        return {}
 
     def set_max_threat_level(self, profileid: str, threat_level: str):
         self.r.hset(profileid, 'max_threat_level', threat_level)

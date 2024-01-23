@@ -436,12 +436,11 @@ class EvidenceHandler(ICore):
         filters and returns all the evidence for this profile in this TW
         returns the dict with filtered evidence
         """
-        tw_evidence: str = self.db.get_twid_evidence(profileid, twid)
+        tw_evidence: Dict[str, dict] = self.db.get_twid_evidence(
+            profileid, twid
+        )
         if not tw_evidence:
             return False
-
-        # format of this is {ev_id, json_serialized(ev_details)}
-        tw_evidence: dict = json.loads(tw_evidence)
 
         past_evidence_ids: List[str] = \
             self.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
