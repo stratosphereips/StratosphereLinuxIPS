@@ -373,9 +373,12 @@ class EvidenceHandler(ICore):
                     in alerts.log, if not, we should say that we generated an alert
         :param IDEA_dict: the last evidence of this alert, used for logging the blocking
         """
+        self.db.mark_profile_as_malicious(profileid)
+
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
         ip = profileid.split('_')[-1].strip()
+
         msg = f'{flow_datetime}: Src IP {ip:26}. '
         if blocked:
             self.db.markProfileTWAsBlocked(profileid, twid)
@@ -685,7 +688,6 @@ class EvidenceHandler(ICore):
                 # below.
                 # to avoid this, we only alert about processed evidence
                 self.db.mark_evidence_as_processed(evidence.id)
-
                 # Ignore alert if IP is whitelisted
                 if self.whitelist.is_whitelisted_evidence(evidence):
                     self.db.cache_whitelisted_evidence_ID(evidence.id)

@@ -97,6 +97,9 @@ class DBManager(IObservable):
     def getSlipsInternalTime(self, *args, **kwargs):
         return self.rdb.getSlipsInternalTime(*args, **kwargs)
 
+    def mark_profile_as_malicious(self, *args, **kwargs):
+        return self.rdb.mark_profile_as_malicious(*args, **kwargs)
+
     def get_equivalent_tws(self, *args, **kwargs):
         return self.rdb.get_equivalent_tws(*args, **kwargs)
 

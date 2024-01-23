@@ -38,6 +38,10 @@ class AlertHandler:
             f"{victim}_{evidence_type}",
             1)
 
+    def mark_profile_as_malicious(self, profileid: str):
+        """keeps track of profiles that generated an alert"""
+        self.r.sadd("malicious_profiles", profileid)
+
     def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
         When we have a bunch of evidence causing an alert,
