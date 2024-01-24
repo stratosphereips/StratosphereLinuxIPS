@@ -141,18 +141,24 @@ def set_ip_info(ip):
 def set_tws(profileid):
     '''
     Set timewindows for selected profile
+    :param profileid: ip of the profile
     :return:
     '''
 
     # Fetch all profile TWs
-    tws = get_all_tw_with_ts(f"profile_{profileid}")
+    tws: Dict[str, dict] = get_all_tw_with_ts(f"profile_{profileid}")
 
-    # @@@@@@@@@ todo fix this!
-    if blockedTWs := __database__.db.hget('alerts', f"profile_{profileid}"):
-        blockedTWs = json.loads(blockedTWs)
+    blocked_tws: List[str] = []
+    for tw_id, twid_details in tws.items():
+        is_blocked: bool = __database__.db.hget(
+            f'profile_{profileid}_{tw_id}',
+            'alerts'
+        )
+        if is_blocked:
+            blocked_tws.append(tw_id)
 
-        for tw in blockedTWs.keys():
-            tws[tw]['blocked'] = True
+    for tw in blocked_tws:
+        tws[tw]['blocked'] = True
 
     data = [
         {
