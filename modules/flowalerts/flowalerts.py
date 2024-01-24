@@ -1407,7 +1407,6 @@ class FlowAlerts(IModule, multiprocessing.Process):
             self.set_evidence.connection_to_multiple_ports(
                 profileid,
                 twid,
-                daddr,
                 uids,
                 timestamp,
                 dstports,
