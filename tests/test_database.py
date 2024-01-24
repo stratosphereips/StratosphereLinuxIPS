@@ -153,46 +153,9 @@ def test_setEvidence():
             category=IDEACategory.INFO,
         )
 
-    db.setEvidence(evidence)
+    db.set_evidence(evidence)
     added = db.r.hget(f'{profileid}_{twid}_evidence', evidence.id)
     assert added
-
-def test_deleteEvidence():
-    # @@@@@@@@@@ todo
-    # attacker: Attacker = Attacker(
-    #         direction=Direction.SRC,
-    #         attacker_type=IoCType.IP,
-    #         value=test_ip
-    #     )
-    # threat_level: ThreatLevel = ThreatLevel.INFO
-    # confidence = 0.8
-    # description = f'SSH Successful to IP : 8.8.8.8 . From IP {test_ip}'
-    # timestamp = time.time()
-    # uid = ['123']
-    # victim: Victim = Victim(
-    #         direction=Direction.DST,
-    #         victim_type=IoCType.IP,
-    #         value='8.8.8.8'
-    #     )
-    # evidence: Evidence = Evidence(
-    #         evidence_type=EvidenceType.SSH_SUCCESSFUL,
-    #         attacker=attacker,
-    #         victim=victim,
-    #         threat_level=threat_level,
-    #         confidence=confidence,
-    #         description=description,
-    #         profile=ProfileID(ip=test_ip),
-    #         timewindow=TimeWindow(number=twid),
-    #         uid=[uid],
-    #         timestamp=timestamp,
-    #         category=IDEACategory.INFO,
-    #     )
-    #
-    # db.setEvidence(evidence)
-    #
-    # db.deleteEvidence(profileid, twid, evidence.id)
-    # added_evidence = json.loads(db.r.hget(f'evidence_{profileid}', twid))
-    # assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence #
 
 
 

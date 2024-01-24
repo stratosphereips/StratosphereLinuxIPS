@@ -64,7 +64,7 @@ class SetEvidnceHelper:
                 conn_count=1,
                 confidence=1.0
             )
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def multiple_ssh_versions(
         self,
@@ -123,7 +123,7 @@ class SetEvidnceHelper:
             confidence=0.9,
             source_target_tag=Tag.RECON
         )
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def different_localnet_usage(
             self,
@@ -191,7 +191,7 @@ class SetEvidnceHelper:
             conn_count=1,
             confidence=confidence
         )
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def device_changing_ips(
             self,
@@ -233,7 +233,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def non_http_port_80_conn(
             self,
@@ -274,7 +274,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def non_ssl_port_443_conn(
                 self,
@@ -320,7 +320,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def weird_http_method(
             self,
@@ -370,7 +370,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def incompatible_CN(
             self,
@@ -418,7 +418,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def DGA(
             self,
@@ -459,7 +459,7 @@ class SetEvidnceHelper:
             source_target_tag=Tag.ORIGIN_MALWARE
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def DNS_without_conn(
         self,
@@ -497,7 +497,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def pastebin_download(
             self,
@@ -537,7 +537,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
         return True
 
     def conn_without_dns(
@@ -588,7 +588,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def dns_arpa_scan(
         self,
@@ -628,7 +628,7 @@ class SetEvidnceHelper:
         )
 
         # Store evidence in the database
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
         return True
 
@@ -680,7 +680,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def pw_guessing(
             self,
@@ -724,7 +724,7 @@ class SetEvidnceHelper:
             source_target_tag=Tag.MALWARE
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def horizontal_portscan(
@@ -765,7 +765,7 @@ class SetEvidnceHelper:
             source_target_tag=Tag.RECON
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def conn_to_private_ip(
@@ -816,7 +816,7 @@ class SetEvidnceHelper:
             victim=victim
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def GRE_tunnel(
@@ -870,7 +870,7 @@ class SetEvidnceHelper:
             confidence=confidence
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def vertical_portscan(
@@ -919,7 +919,7 @@ class SetEvidnceHelper:
 
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def ssh_successful(
             self,
@@ -974,7 +974,7 @@ class SetEvidnceHelper:
             category=IDEACategory.INFO,
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def long_connection(
         self,
@@ -1031,7 +1031,7 @@ class SetEvidnceHelper:
             victim=victim_obj
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def self_signed_certificates(
             self,
@@ -1076,7 +1076,7 @@ class SetEvidnceHelper:
             category=IDEACategory.ANOMALY_BEHAVIOUR
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def multiple_reconnection_attempts(
             self,
@@ -1127,7 +1127,7 @@ class SetEvidnceHelper:
             category=IDEACategory.ANOMALY_TRAFFIC
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def connection_to_multiple_ports(
             self,
@@ -1183,7 +1183,7 @@ class SetEvidnceHelper:
             category=IDEACategory.ANOMALY_CONNECTION
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def suspicious_dns_answer(
             self,
@@ -1230,7 +1230,7 @@ class SetEvidnceHelper:
             category=IDEACategory.ANOMALY_TRAFFIC
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def invalid_dns_answer(
             self,
@@ -1274,7 +1274,7 @@ class SetEvidnceHelper:
             category=IDEACategory.ANOMALY_BEHAVIOUR
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def for_port_0_connection(
@@ -1334,7 +1334,7 @@ class SetEvidnceHelper:
             conn_count=1
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def malicious_ja3(
@@ -1412,7 +1412,7 @@ class SetEvidnceHelper:
             source_target_tag=source_target_tag
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def data_exfiltration(
         self,
@@ -1450,7 +1450,7 @@ class SetEvidnceHelper:
             source_target_tag=Tag.ORIGIN_MALWARE
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def bad_smtp_login(
             self,
@@ -1491,7 +1491,7 @@ class SetEvidnceHelper:
             category=IDEACategory.ATTEMPT_LOGIN
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def smtp_bruteforce(
         self,
@@ -1540,7 +1540,7 @@ class SetEvidnceHelper:
             conn_count=conn_count
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def malicious_ssl(
             self,
@@ -1589,4 +1589,4 @@ class SetEvidnceHelper:
             source_target_tag=Tag.CC
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)

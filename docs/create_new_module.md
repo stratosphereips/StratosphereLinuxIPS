@@ -204,8 +204,10 @@ profileid = msg['profileid']
 # this comes in the msg received in the channel
 twid = msg['twid']
 
-self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                         timestamp, category, profileid=profileid, twid=twid)
+self.db.set_evidence(
+    evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+    timestamp, category, profileid=profileid, twid=twid
+    )
 ```
 
 
@@ -287,7 +289,9 @@ class Module(IModule, multiprocessing.Process):
     description = 'detects connections to other devices in your local network'
     authors = ['Template Author']
 
-    def init(self)
+    def init(
+            self
+            )
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -299,19 +303,25 @@ class Module(IModule, multiprocessing.Process):
         self.c1 = self.db.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1,
-        }
+            }
 
-    def shutdown_gracefully(self):
+    def shutdown_gracefully(
+            self
+            ):
         # Confirm that the module is done processing
         self.db.publish('finished_modules', self.name)
 
-    def pre_main(self):
+    def pre_main(
+            self
+            ):
         """
         Initializations that run only once before the main() function runs in a loop
         """
         utils.drop_root_privs()
 
-    def main(self):
+    def main(
+            self
+            ):
         """Main loop function"""
         if msg := self.get_msg('new_flow'):
             msg = msg['data']
@@ -344,11 +354,11 @@ class Module(IModule, multiprocessing.Process):
                 # Profiles are split into timewindows, each timewindow is 1h, this comes in the msg received in the channel
                 twid = msg['twid']
 
-                self.db.setEvidence(
+                self.db.set_evidence(
                     evidence_type, attacker_direction, attacker, threat_level,
                     confidence, description, timestamp, category, profileid=profileid,
                     twid=twid
-                )
+                    )
 
 ```
 

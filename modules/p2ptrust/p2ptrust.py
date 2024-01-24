@@ -481,7 +481,7 @@ class Trust(IModule, multiprocessing.Process):
             category=category,
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(attacker, profileid, twid)
 

@@ -147,7 +147,7 @@ class VerticalPortscan:
             victim=victim
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
 

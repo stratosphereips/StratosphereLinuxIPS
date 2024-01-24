@@ -160,7 +160,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             source_target_tag=Tag.BLACKLISTED_ASN,
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def set_evidence_malicious_ip(
@@ -238,7 +238,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             source_target_tag=Tag.BLACKLISTED_IP,
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
         # mark this ip as malicious in our database
@@ -316,7 +316,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             source_target_tag=Tag.BLACKLISTED_DOMAIN,
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def is_valid_threat_level(self, threat_level):
         return threat_level in utils.threat_levels
@@ -741,7 +741,7 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             category=IDEACategory.MALWARE
         )
     
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def circl_lu(self, flow_info: dict):
         """
