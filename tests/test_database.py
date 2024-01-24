@@ -123,7 +123,7 @@ def test_add_port():
     assert flow.daddr in added_ports['DstPortsServerTCPNot Established']
 
 
-def test_setEvidence():
+def test_set_evidence():
     attacker: Attacker = Attacker(
             direction=Direction.SRC,
             attacker_type=IoCType.IP,
@@ -147,8 +147,8 @@ def test_setEvidence():
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=test_ip),
-            timewindow=TimeWindow(number=twid),
-            uid=[uid],
+            timewindow=TimeWindow(number=1),
+            uid=uid,
             timestamp=timestamp,
             category=IDEACategory.INFO,
         )
