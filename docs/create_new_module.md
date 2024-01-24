@@ -160,6 +160,7 @@ uid = next(iter(flow))
 flow = json.loads(flow[uid])
 saddr = flow['saddr']
 daddr = flow['daddr']
+timestamp = flow['ts']
 ```
 
 Now we need to check if both of them are private.
@@ -176,38 +177,105 @@ if srcip_obj.is_private and dstip_obj.is_private:
 
 Now that we're sure both IPs are private, we need to generate an alert.
 
-Slips requires certain info about the evidence to be able to sort them and properly display them using Kalipso.
+Slips requires certain info about the evidence to be able to deal with them.
 
-Each parameter is described below
+first, since we are creating a new evidence, other than the ones defined in the EvidenceType Enum in
+```StratosphereLinuxIPS/slips_files/core/evidence_structure/evidence.py```
+then, we need to add it 
+
+so the EvidenceType Enum in ```slips_files/core/evidence_structure/evidence.py``` would look something like this
+
+```python
+class EvidenceType(Enum):
+    """
+    These are the types of evidence slips can detect
+    """
+    ...
+    CONNECTION_TO_LOCAL_DEVICE = auto()
+```
+
+now we have our evidence type supported. it's time to set the evidence!
+
+Now we need to use the Evidence structure of slips, to do that,
+first import the necessary dataclasses
+
+```python
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+    )
+```
+
+now use them,
 
 ```python
 # on a scale of 0 to 1, how confident you are of this evidence
 confidence = 0.8
 # how dangerous is this evidence? info, low, medium, high, critical?
-threat_level = 'high'
+threat_level = ThreatLevel.HIGH
 
 # the name of your evidence, you can put any descriptive string here
-evidence_type = 'ConnectionToLocalDevice'
+# this is the type we just created
+evidence_type = EvidenceType.CONNECTION_TO_LOCAL_DEVICE
 # what is this evidence category according to IDEA categories 
-category = 'Anomaly.Connection'
-# which ip is the attacker here? the src or the dst?
-attacker_direction = 'srcip'
-# what is the ip of the attacker?
-attacker = saddr
+category = IDEACategory.ANOMALY_CONNECTION
+# which ip is the attacker here? 
+attacker = Attacker(
+            direction=Direction.SRC, # who's the attacker the src or the dst?
+            attacker_type=IoCType.IP, # is it an IP? is it a domain? etc.
+            value=saddr # the actual ip/domain/url of the attacker, in our case, this is the IP
+        )
+victim = Victim(
+            direction=Direction.SRC,
+            victim_type=IoCType.IP,
+            value=daddr,
+        )
 # describe the evidence
-description = f'Detected a connection to a local device {daddr}'
-timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
-# the crrent profile is the source ip, this comes in 
-# the msg received in the channel
-profileid = msg['profileid']
-# Profiles are split into timewindows, each timewindow is 1h, 
+description = f'A connection to a local device {daddr}'
+# the current profile is the source ip, 
 # this comes in the msg received in the channel
-twid = msg['twid']
-
-self.db.set_evidence(
-    evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-    timestamp, category, profileid=profileid, twid=twid
+# the profile this evidence should be in, should be the profile of the attacker
+# because this is evidence that this profile is attacker others right?
+profile = ProfileID(ip=saddr)
+# Profiles are split into timewindows, each timewindow is 1h, 
+# this if of the timewindwo comes in the msg received in the channel 
+twid_number = int(
+    msg['twid'].replace("timewindow",'')
     )
+timewindow = TimeWindow(number=twid_number)
+# how many flows formed this evidence?
+# in the case of scans, it can be way more than 1
+conn_count = 1
+# list of uids of the flows that are part of this evidence
+uid_list = [uid]
+# no use the above info to create the evidence obj
+evidence = Evidence(
+                evidence_type=evidence_type,
+                attacker=attacker,
+                threat_level=threat_level,
+                category=category,
+                description=description,
+                victim=victim,
+                profile=profile,
+                timewindow=timewindow,
+                uid=uid_list,
+                # when did this evidence happen? use the
+                # flow's ts detected by zeek
+                # this comes in the msg received in the channel
+                timestamp=timestamp,
+                conn_count=conn_count,
+                confidence=confidence
+            )
+self.db.set_evidence(evidence)
 ```
 
 
@@ -226,7 +294,7 @@ First we start Slips by using the following command:
 
 -o is to store the output in the ```local_conn_detector/``` dir.
 
-Then we make a connnection to a local ip
+Then we make a connnection to a local ip (change it to a host you know is up in your network)
 
 ```
 ping 192.168.1.18
@@ -242,8 +310,8 @@ cat local_conn_detector/alerts.log
 ```
 Using develop - 9f5f9412a3c941b3146d92c8cb2f1f12aab3699e - 2022-06-02 16:51:43.989778
 
-2022/06/02-16:51:57: Src IP 192.168.1.18              . Detected Detected a connection to a local device 192.168.1.12
-2022/06/02-16:51:57: Src IP 192.168.1.12              . Detected Detected a connection to a local device 192.168.1.18
+2022/06/02-16:51:57: Src IP 192.168.1.18              . Detected a connection to a local device 192.168.1.12
+2022/06/02-16:51:57: Src IP 192.168.1.12              . Detected a connection to a local device 192.168.1.18
 ```
 
 
@@ -276,12 +344,23 @@ Detailed explanation of [Slips profiles and timewindows here](https://idea.cesne
 Here is the whole local_connection_detector.py code for copy/paste.
 
 ```python
-from slips_files.common.abstracts.module import IModule
-from slips_files.common.imports import *
-import datetime
 import ipaddress
 import json
 
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+    )
+from slips_files.common.imports import *
 
 class Module(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -289,9 +368,7 @@ class Module(IModule, multiprocessing.Process):
     description = 'detects connections to other devices in your local network'
     authors = ['Template Author']
 
-    def init(
-            self
-            )
+    def init(self):
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -331,35 +408,68 @@ class Module(IModule, multiprocessing.Process):
             flow = json.loads(flow[uid])
             saddr = flow['saddr']
             daddr = flow['daddr']
+            timestamp = flow['ts']
             srcip_obj = ipaddress.ip_address(saddr)
             dstip_obj = ipaddress.ip_address(daddr)
             if srcip_obj.is_private and dstip_obj.is_private:
                 # on a scale of 0 to 1, how confident you are of this evidence
                 confidence = 0.8
                 # how dangerous is this evidence? info, low, medium, high, critical?
-                threat_level = 'high'
+                threat_level = ThreatLevel.HIGH
+                
                 # the name of your evidence, you can put any descriptive string here
-                evidence_type = 'ConnectionToLocalDevice'
-                # what is this evidence category according to IDEA categories
-                category = 'Anomaly.Connection'
-                # which ip is the attacker here? the src or the dst?
-                attacker_direction = 'srcip'
-                # what is the ip of the attacker?
-                attacker = saddr
+                # this is the type we just created
+                evidence_type = EvidenceType.CONNECTION_TO_LOCAL_DEVICE
+                # what is this evidence category according to IDEA categories 
+                category = IDEACategory.ANOMALY_CONNECTION
+                # which ip is the attacker here? 
+                attacker = Attacker(
+                            direction=Direction.SRC, # who's the attacker the src or the dst?
+                            attacker_type=IoCType.IP, # is it an IP? is it a domain? etc.
+                            value=saddr # the actual ip/domain/url of the attacker, in our case, this is the IP
+                        )
+                victim = Victim(
+                            direction=Direction.SRC,
+                            victim_type=IoCType.IP,
+                            value=daddr,
+                        )
                 # describe the evidence
-                description = f'Detected a connection to a local device {daddr}'
-                timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
-                # the crrent profile is the source ip, this comes in the msg received in the channel
-                profileid = msg['profileid']
-                # Profiles are split into timewindows, each timewindow is 1h, this comes in the msg received in the channel
-                twid = msg['twid']
-
-                self.db.set_evidence(
-                    evidence_type, attacker_direction, attacker, threat_level,
-                    confidence, description, timestamp, category, profileid=profileid,
-                    twid=twid
+                description = f'A connection to a local device {daddr}'
+                # the current profile is the source ip, 
+                # this comes in the msg received in the channel
+                # the profile this evidence should be in, should be the profile of the attacker
+                # because this is evidence that this profile is attacker others right?
+                profile = ProfileID(ip=saddr)
+                # Profiles are split into timewindows, each timewindow is 1h, 
+                # this if of the timewindwo comes in the msg received in the channel 
+                twid_number = int(
+                    msg['twid'].replace("timewindow",'')
                     )
-
+                timewindow = TimeWindow(number=twid_number)
+                # how many flows formed this evidence?
+                # in the case of scans, it can be way more than 1
+                conn_count = 1
+                # list of uids of the flows that are part of this evidence
+                uid_list = [uid]
+                # no use the above info to create the evidence obj
+                evidence = Evidence(
+                                evidence_type=evidence_type,
+                                attacker=attacker,
+                                threat_level=threat_level,
+                                category=category,
+                                description=description,
+                                victim=victim,
+                                profile=profile,
+                                timewindow=timewindow,
+                                uid=uid_list,
+                                # when did this evidence happen? use the
+                                # flow's ts detected by zeek
+                                # this comes in the msg received in the channel
+                                timestamp=timestamp,
+                                conn_count=conn_count,
+                                confidence=confidence
+                            )
+                self.db.set_evidence(evidence)
 ```
 
 
