@@ -221,9 +221,13 @@ class Attacker:
 class TimeWindow:
     number: int
 
+    def __post_init__(self):
+        if not isinstance(self.number, int):
+            raise ValueError(f"timewindow number must be an int. "
+                             f"{self.number} is invalid!")
+
     def __repr__(self):
         return f"timewindow{self.number}"
-
 
 
 @dataclass
