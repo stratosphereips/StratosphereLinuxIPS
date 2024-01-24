@@ -271,7 +271,7 @@ class ARP(IModule, multiprocessing.Process):
             conn_count=conn_count
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
         # after we set evidence, clear the dict so we can detect if it does another scan
         try:
             self.cache_arp_requests.pop(f'{profileid}_{twid}')
@@ -347,7 +347,7 @@ class ARP(IModule, multiprocessing.Process):
                 victim=victim
             )
 
-            self.db.setEvidence(evidence)
+            self.db.set_evidence(evidence)
             return True
 
         return False
@@ -401,7 +401,7 @@ class ARP(IModule, multiprocessing.Process):
                 category=IDEACategory.INFO
             )
 
-            self.db.setEvidence(evidence)
+            self.db.set_evidence(evidence)
             return True
 
     def detect_MITM_ARP_attack(
@@ -502,7 +502,7 @@ class ARP(IModule, multiprocessing.Process):
                 victim=victim
             )
 
-            self.db.setEvidence(evidence)
+            self.db.set_evidence(evidence)
             return True
 
 

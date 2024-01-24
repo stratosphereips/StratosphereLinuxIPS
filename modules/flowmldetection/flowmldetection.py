@@ -414,7 +414,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
             category=IDEACategory.ANOMALY_TRAFFIC
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def shutdown_gracefully(self):

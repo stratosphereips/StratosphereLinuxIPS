@@ -379,8 +379,8 @@ class DBManager(IObservable):
         """returns the list of uids of the flows causing evidence"""
         return self.rdb.get_flows_causing_evidence(*args, **kwargs)
 
-    def setEvidence(self, *args, **kwargs):
-        return self.rdb.setEvidence(*args, **kwargs)
+    def set_evidence(self, *args, **kwargs):
+        return self.rdb.set_evidence(*args, **kwargs)
 
     def get_user_agents_count(self, *args, **kwargs):
         return self.rdb.get_user_agents_count(*args, **kwargs)
@@ -398,8 +398,8 @@ class DBManager(IObservable):
         return self.rdb.is_evidence_processed(*args, **kwargs)
 
 
-    def deleteEvidence(self, *args, **kwargs):
-        return self.rdb.deleteEvidence(*args, **kwargs)
+    def delete_evidence(self, *args, **kwargs):
+        return self.rdb.delete_evidence(*args, **kwargs)
 
     def cache_whitelisted_evidence_ID(self, *args, **kwargs):
         return self.rdb.cache_whitelisted_evidence_ID(*args, **kwargs)

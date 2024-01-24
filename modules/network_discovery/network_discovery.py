@@ -114,7 +114,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             source_target_tag=Tag.RECON
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def check_portscan_type3(self):
@@ -311,7 +311,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             victim=victim
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
     def set_evidence_dhcp_scan(
             self,
@@ -351,7 +351,7 @@ class NetworkDiscovery(IModule, multiprocessing.Process):
             source_target_tag=Tag.RECON
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
 

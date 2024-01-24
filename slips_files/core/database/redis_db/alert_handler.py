@@ -121,7 +121,7 @@ class AlertHandler:
         # the victim is the whole network
         return ''
 
-    def setEvidence(self, evidence: Evidence):
+    def set_evidence(self, evidence: Evidence):
         """
         Set the evidence for this Profile and Timewindow.
         :param evidence: an Evidence obj (defined in
@@ -203,13 +203,13 @@ class AlertHandler:
 
 
 
-    def deleteEvidence(self, profileid, twid, evidence_id: str):
+    def delete_evidence(self, profileid, twid, evidence_id: str):
         """
-        Delete evidence from the database
-        this is only called by evidencehandler,
-        which means that any evidence passed to this function
-        can never be a part of a past alert
+        Deletes an evidence from the database
         """
+        # this is only called by evidencehandler,
+        # which means that any evidence passed to this function
+        # can never be a part of a past alert
         self.r.hdel(f'{profileid}_{twid}_evidence', evidence_id)
 
 

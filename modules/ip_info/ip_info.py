@@ -548,7 +548,7 @@ class IPInfo(IModule, multiprocessing.Process):
             source_target_tag=Tag.MALWARE
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def pre_main(self):

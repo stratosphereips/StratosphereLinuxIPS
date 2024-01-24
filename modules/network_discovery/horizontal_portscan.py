@@ -325,4 +325,4 @@ class HorizontalPortscan():
             port=evidence["dport"]
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)

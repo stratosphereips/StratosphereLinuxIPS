@@ -233,7 +233,7 @@ class LeakDetector(IModule, multiprocessing.Process):
                     category=IDEACategory.MALWARE
                 )
 
-                self.db.setEvidence(evidence)
+                self.db.set_evidence(evidence)
 
 
     def compile_and_save_rules(self):

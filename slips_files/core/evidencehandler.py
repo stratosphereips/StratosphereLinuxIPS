@@ -694,7 +694,7 @@ class EvidenceHandler(ICore):
                     # Modules add evidence to the db before
                     # reaching this point, now remove evidence from db so
                     # it could be completely ignored
-                    self.db.deleteEvidence(
+                    self.db.delete_evidence(
                         profileid, twid, evidence.id
                     )
                     continue

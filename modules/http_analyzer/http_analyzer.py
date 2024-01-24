@@ -105,7 +105,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                     source_target_tag=Tag.SUSPICIOUS_USER_AGENT,
                 )
 
-                self.db.setEvidence(evidence)
+                self.db.set_evidence(evidence)
                 return True
         return False
 
@@ -169,7 +169,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                 category=IDEACategory.ANOMALY_CONNECTION,
             )
 
-            self.db.setEvidence(evidence)
+            self.db.set_evidence(evidence)
             # reset the counter
             self.connections_counter[host] = ([], 0)
             return True
@@ -221,7 +221,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             category=IDEACategory.ANOMALY_BEHAVIOUR,
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def set_evidence_executable_mime_type(
@@ -263,7 +263,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             source_target_tag=Tag.EXECUTABLE_MIME_TYPE
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
 
@@ -513,7 +513,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             source_target_tag=Tag.MULTIPLE_USER_AGENT
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
         return True
 
@@ -558,7 +558,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             victim=victim
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
         return True
 
@@ -609,7 +609,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                 source_target_tag=Tag.MALWARE
             )
 
-            self.db.setEvidence(evidence)
+            self.db.set_evidence(evidence)
             return True
 
 

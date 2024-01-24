@@ -210,7 +210,7 @@ class URLhaus:
             uid=[flow["uid"]]
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def set_evidence_malicious_url(
@@ -263,4 +263,4 @@ class URLhaus:
                 uid=[uid]
             )
 
-            self.db.setEvidence(evidence)
+            self.db.set_evidence(evidence)

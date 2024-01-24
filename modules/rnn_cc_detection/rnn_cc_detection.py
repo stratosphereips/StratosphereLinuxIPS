@@ -90,7 +90,7 @@ class CCDetection(IModule, multiprocessing.Process):
             proto=Proto(proto.lower()) if proto else None,
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
     def convert_input_for_module(self, pre_behavioral_model):

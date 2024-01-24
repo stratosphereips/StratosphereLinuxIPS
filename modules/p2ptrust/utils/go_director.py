@@ -532,7 +532,7 @@ class GoDirector(IObservable):
             category=IDEACategory.ANOMALY_CONNECTION,
         )
 
-        self.db.setEvidence(evidence)
+        self.db.set_evidence(evidence)
 
 
 
