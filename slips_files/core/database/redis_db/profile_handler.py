@@ -125,8 +125,6 @@ class ProfileHandler(IObservable):
             # Add this TW, of this profile, to the DB
             self.add_new_tw(profileid, tw_id, tw_start)
             return tw_id
-
-            return twid
         except Exception as e:
             self.print('Error in get_timewindow().', 0, 1)
             self.print(traceback.print_exc(), 0, 1)
