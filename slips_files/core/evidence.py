@@ -274,7 +274,7 @@ class Evidence(ICore):
             twid_start_time = None
             while twid_start_time is None:
                 # give the database time to retreive the time
-                twid_start_time = self.db.getTimeTW(profileid, twid)
+                twid_start_time = self.db.get_tw_start_time(profileid, twid)
 
             tw_start_time_str = utils.convert_format(twid_start_time,
                                                      '%Y/%m/%d %H:%M:%S')

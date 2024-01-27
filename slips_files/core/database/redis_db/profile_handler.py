@@ -5,7 +5,7 @@ import json
 from typing import Tuple, Union, Dict, Optional, List
 import traceback
 import ipaddress
-from math import ceil
+from math import ceil, floor
 import sys
 import validators
 from slips_files.common.abstracts.observer import IObservable
@@ -77,87 +77,6 @@ class ProfileHandler(IObservable):
             self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(flow))
 
 
-    def create_new_tws_as_needed(self,
-                                 flowtime: float,
-                                 lasttw_end_time: float,
-                                 profileid: str,
-                                 ) -> str:
-        """
-        calculates how many new tws need to be added, adds them and returns
-        the id of the timewindow the given flowtime belongs to.
-        """
-        # The flow was not in the last TW, its NEWER than it
-        amount_of_new_tw = int(
-            (flowtime - lasttw_end_time) / self.width
-        )
-        self.print(
-            f'We have to create {amount_of_new_tw}'
-            f' empty TWs in the middle.', 3, 0,
-        )
-
-        tw_start_time = lasttw_end_time
-        for _ in range(amount_of_new_tw + 1):
-            # new_start = tw_start_time
-            twid: str = self.add_new_tw(profileid, tw_start_time)
-            self.print(f'Creating the TW id {twid}. '
-                       f'Start: {tw_start_time}.', 3, 0)
-            tw_start_time += self.width
-        return twid
-
-    def create_old_tws_as_needed(self,
-                                 flowtime: float,
-                                 last_tw_end_time: float,
-                                 profileid: str) -> str:
-        """
-        :param last_tw_end_time: this is the end time of the last
-        registered timewindow aka oldest seen tw in the given traffic
-
-        """
-        # There was no TW that included the time of this
-        # flow, so create them in the past
-
-        # How many new TW we need in the past?
-        # amount_of_new_tw is the total amount of tw we
-        # should have under the new situation
-        amount_of_new_tw = ceil(
-            (last_tw_end_time - flowtime) / self.width
-        )
-        # this is the real amount of tw we have now
-        amount_of_current_tw = (
-            self.get_number_of_tws_in_profile(profileid)
-        )
-        # diff is the new ones we should add in the past.
-        # (Yes, we could have computed this differently)
-        # this plus one is because we're using the last_tw_end_time to get
-        # the amount of new tws
-        # so we're adding the first timewindow with this +1
-        diff = amount_of_new_tw - amount_of_current_tw
-        self.print(f'We need to create {diff} '
-                   f'TW before the first', 3, 0)
-
-        # Get the first TW (it may be  anegative tw like timewindow-4)
-        first_tw: Optional[Tuple[str, float]]
-        first_tw = self.get_first_twid_for_profile(profileid)
-        if first_tw:
-            first_tw_number = int(first_tw[0].replace("timewindow",''))
-            first_tw_start_time: float = first_tw[1]
-
-            # The start of the older TW should be the
-            # first - the width
-            tw_start_time = first_tw_start_time - self.width
-            # the number of the tw to add
-            new_tw_number = first_tw_number - 1
-            for _ in range(diff):
-                twid: str = self.add_new_older_tw(
-                    profileid, tw_start_time, new_tw_number
-                )
-                self.print(f'Creating the new older TW id {twid}.'
-                           f' Start: {tw_start_time}.', 3, 0)
-                tw_start_time -= self.width
-                new_tw_number -= 1
-
-            return twid
-
 
 
     def get_timewindow(self, flowtime, profileid):
@@ -173,64 +92,37 @@ class ProfileHandler(IObservable):
         - The empty tws in the middle are not being created!!!
         - The Dtp ips are stored in the first tw
         """
-        try:
-            # First check if we are not in the last TW. Since this will be
-            # the majority of cases
-            last_twid: Optional[Tuple[str, float]]
-            last_twid = self.get_last_twid_of_profile(profileid)
-            if last_twid:
-                lasttwid: str
-                last_tw_start_time: float
-                lasttwid, last_tw_start_time = last_twid
-                last_tw_start_time = float(last_tw_start_time)
-                last_tw_end_time: float = last_tw_start_time + self.width
-                flowtime = float(flowtime)
+        # If the option for only-one-tw was selected, we should
+        # create the TW at least 100 years before the flowtime,
+        # to cover for 'flows in the past'. Which means we should
+        # cover for any flow that is coming later with time before the
+        # first flow
+        if self.width == 9999999999:
+            # Seconds in 1 year = 31536000
+            tw_start = float(flowtime - (31536000 * 100))
+            tw_number: int = 1
+        else:
+            starttime_of_first_tw: str = self.r.hget(
+                'analysis', 'file_start'
+            )
 
-                # since there was a last TW, so check if the current flow
-                # belongs here.
-                if last_tw_end_time > flowtime >= last_tw_start_time:
-                    return lasttwid
+            if starttime_of_first_tw:
+                starttime_of_first_tw = float(starttime_of_first_tw)
+                tw_number: int = floor((flowtime - starttime_of_first_tw)
+                                       / self.width) + 1
 
-                # does it belong to a newer tw?
-                if last_tw_end_time <= flowtime:
-                    return self.create_new_tws_as_needed(
-                        flowtime,
-                        last_tw_end_time,
-                        profileid
-                    )
-
-                tw_of_ts: Optional[Tuple[str, float]]
-                if tw_of_ts := self.get_tw_of_ts(profileid, flowtime):
-                    # We found an existing TW where this flow belongs to
-                    return tw_of_ts[0]
-
-                # The flow was not in the last TW, its OLDER that it
-                twid: str = self.create_old_tws_as_needed(
-                    flowtime,
-                    last_tw_end_time,
-                    profileid)
-                return twid
-
-
-            # There is no last tw. So create the first TW
-            # If the option for only-one-tw was selected, we should
-            # create the TW at least 100 years before the flowtime,
-            # to cover for 'flows in the past'. Which means we should
-            # cover for any flow that is coming later with time before the
-            # first flow
-            if self.width == 9999999999:
-                # Seconds in 1 year = 31536000
-                startoftw = float(flowtime - (31536000 * 100))
+                tw_start: float = starttime_of_first_tw + (
+                        self.width * (tw_number-1) )
             else:
-                startoftw = flowtime
+                # this is the first timewindow
+                tw_number: int = 1
+                tw_start: float = flowtime
 
-            # Add this TW, of this profile, to the DB
-            twid: str = self.add_new_tw(profileid, startoftw)
-            return twid
-        except Exception as e:
-            self.print('Error in get_timewindow().', 0, 1)
-            self.print(traceback.print_exc(), 0, 1)
-            self.print(e, 0, 1)
+        tw_id: str = f"timewindow{tw_number}"
+
+        # Add this TW, of this profile, to the DB
+        self.add_new_tw(profileid, tw_id, tw_start)
+        return tw_id
 
     def add_out_http(
         self,
@@ -889,6 +781,8 @@ class ProfileHandler(IObservable):
         """Retrieve from the db if this TW of this profile was modified"""
         data = self.r.zrank('ModifiedTW', profileid + self.separator + twid)
         return bool(data)
+
+
     def add_flow(
         self,
         flow,
@@ -969,7 +863,8 @@ class ProfileHandler(IObservable):
                     'uid': flow.uid
                 }
         }
-        # cached_sw is {software: {'version-major':x, 'version-minor':y, 'uid':...}}
+        # cached_sw is {software: {'version-major':x,
+        # 'version-minor':y, 'uid':...}}
         if cached_sw := self.get_software_from_profile(profileid):
             if flow.software in cached_sw:
                 # we already have this same software for this proileid.
@@ -1088,8 +983,10 @@ class ProfileHandler(IObservable):
     ):
         """
         Store in the DB an ssl request
-        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
-        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        All the type of flows that are not netflows are stored in a separate
+         hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other
+         type of info is related to that uid
         """
         ssl_flow = {
             'uid': flow.uid,
@@ -1131,10 +1028,16 @@ class ProfileHandler(IObservable):
             return False
 
         # We are giving only new server_name to the threat_intelligence module.
-        self.give_threat_intelligence(profileid, twid, 'dstip', flow.starttime,
-                                      flow.uid, flow.daddr, lookup=flow.server_name)
+        self.give_threat_intelligence(profileid,
+                                      twid,
+                                      'dstip',
+                                      flow.starttime,
+                                      flow.uid,
+                                      flow.daddr,
+                                      lookup=flow.server_name)
 
-        # Save new server name in the IPInfo. There might be several server_name per IP.
+        # Save new server name in the IPInfo. There might be several
+        # server_name per IP.
         if ipdata := self.get_ip_info(flow.daddr):
             sni_ipdata = ipdata.get('SNI', [])
         else:
@@ -1146,10 +1049,12 @@ class ProfileHandler(IObservable):
         }
         # We do not want any duplicates.
         if SNI_port not in sni_ipdata:
-            # Verify that the SNI is equal to any of the domains in the DNS resolution
+            # Verify that the SNI is equal to any of the domains in the DNS
+            # resolution
             # only add this SNI to our db if it has a DNS resolution
             if dns_resolutions := self.r.hgetall('DNSresolution'):
-                # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
+                # dns_resolutions is a dict with {ip:{'ts'..,'domains':...,
+                # 'uid':..}}
                 for ip, resolution in dns_resolutions.items():
                     resolution = json.loads(resolution)
                     if SNI_port['server_name'] in resolution['domains']:
@@ -1161,10 +1066,13 @@ class ProfileHandler(IObservable):
                         break
 
 
-    def getProfileIdFromIP(self, daddr_as_obj):
-        """Receive an IP and we want the profileid"""
+    def get_profileid_from_ip(self, ip: str) -> Optional[str]:
+        """
+        returns the profile of the given IP only if it was registered in
+        slips before
+        """
         try:
-            profileid = f'profile{self.separator}{str(daddr_as_obj)}'
+            profileid = f'profile_{ip}'
             if self.r.sismember('profiles', profileid):
                 return profileid
             return False
@@ -1191,7 +1099,8 @@ class ProfileHandler(IObservable):
 
     def get_number_of_tws_in_profile(self, profileid) -> int:
         """
-        Receives a profile id and returns the number of all the TWs in that profile
+        Receives a profile id and returns the number of all the
+        TWs in that profile
         """
         return len(self.getTWsfromProfile(profileid)) if profileid else 0
 
@@ -1224,7 +1133,8 @@ class ProfileHandler(IObservable):
                 return False, False
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Error in getT2ForProfileTW in database.py line {exception_line}',0,1)
+            self.print(f'Error in getT2ForProfileTW in database.py line '
+                       f'{exception_line}',0,1)
             self.print(type(e), 0, 1)
             self.print(e, 0, 1)
             self.print(traceback.format_exc(), 0, 1)
@@ -1234,7 +1144,8 @@ class ProfileHandler(IObservable):
         return self.r.sismember('profiles', profileid) if profileid else False
 
     def get_profiles_len(self) -> int:
-        """Return the amount of profiles. Redis should be faster than python to do this count"""
+        """Return the amount of profiles. Redis should be faster than python
+         to do this count"""
         profiles_n =  self.r.scard('profiles')
         return 0 if not profiles_n else int(profiles_n)
 
@@ -1327,32 +1238,19 @@ class ProfileHandler(IObservable):
             self.print(e, 0, 1)
             self.print(traceback.print_exc(), 0, 1)
 
-    def add_new_tw(self, profileid, startoftw) -> str:
+    def add_new_tw(self, profileid, timewindow: str, startoftw: float):
+        """
+        Creates or adds a new timewindow to the list of tw for the
+        given profile
+        Add the twid to the ordered set of a given profile
+        :param timewindow: str id of the twid, e.g timewindow7, timewindow-9
+        Returns the id of the timewindow just created
+        """
         try:
-            """
-            Creates or adds a new timewindow to the list of tw for the 
-            given profile
-            Add the twid to the ordered set of a given profile
-            Returns the id of the timewindow just created
-            """
-            # Get the last twid and obtain the new tw id
-            last_twid: Optional[Tuple[str, float]]
-            last_twid = self.get_last_twid_of_profile(profileid)
-            if last_twid:
-                last_tw: str
-                last_tw_starttime: float
-                last_tw, last_tw_starttime = last_twid
-                last_tw_number = int(last_tw.split("timewindow")[1])
-                # Increment the last timewindow
-                twid = f'timewindow{last_tw_number + 1}'
-            else:
-                # There is no first TW, create it
-                twid = 'timewindow1'
-
             # Add the new TW to the index of TW
-            self.r.zadd(f'tws{profileid}', {twid: float(startoftw)})
+            self.r.zadd(f'tws{profileid}', {timewindow: float(startoftw)})
             self.print(f'Created and added to DB for '
-                       f'{profileid}: a new tw: {twid}. '
+                       f'{profileid}: a new tw: {timewindow}. '
                        f' with starttime : {startoftw} ',
                        0, 4)
 
@@ -1363,16 +1261,16 @@ class ProfileHandler(IObservable):
             # change the threat level of the profile to 0(info)
             # and confidence to 0.05
             self.update_threat_level(profileid, 'info',  0.5)
-            return twid
         except redis.exceptions.ResponseError as e:
             self.print('Error in addNewTW', 0, 1)
             self.print(traceback.print_exc(), 0, 1)
             self.print(e, 0, 1)
 
-    def getTimeTW(self, profileid, twid):
+    def get_tw_start_time(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
         # Get all the TW for this profile
-        # We need to encode it to 'search' because the data in the sorted set is encoded
+        # We need to encode it to 'search' because the data in the
+        # sorted set is encoded
         return self.r.zscore(f'tws{profileid}', twid.encode('utf-8'))
 
     def getAmountTW(self, profileid):
@@ -1387,7 +1285,8 @@ class ProfileHandler(IObservable):
         return data or []
 
     def getModifiedProfilesSince(self, time):
-        """Returns a set of modified profiles since a certain time and the time of the last modified profile"""
+        """Returns a set of modified profiles since a certain time and
+        the time of the last modified profile"""
         modified_tws = self.getModifiedTWSinceTime(time)
         if not modified_tws:
             # no modified tws, and no time_of_last_modified_tw
@@ -1531,7 +1430,8 @@ class ProfileHandler(IObservable):
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
                 # If 2 IPv6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
-                # add this found ipv6 to the list of ipv6 of the incoming ip(profileid)
+                # add this found ipv6 to the list of ipv6 of the incoming
+                # ip(profileid)
 
                 # get the list of cached ipv6
                 ipv6: str = self.get_ipv6_from_profile(profileid)
@@ -1576,7 +1476,8 @@ class ProfileHandler(IObservable):
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
         Used to associate this profile with it's used user_agent
-        :param user_agent: dict containing user_agent, os_type , os_name and agent_name
+        :param user_agent: dict containing user_agent, os_type ,
+        os_name and agent_name
         """
         self.r.hset(profileid, 'first user-agent', user_agent)
 
@@ -1651,30 +1552,40 @@ class ProfileHandler(IObservable):
         if not is_dhcp_set:
             self.r.hset(profileid, 'dhcp', 'true')
 
+    def get_first_flow_time(self) -> Optional[str]:
+        return self.r.hget('analysis', 'file_start')
+
     def addProfile(self, profileid, starttime, duration):
         """
-        Add a new profile to the DB. Both the list of profiles and the hashmap of profile data
-        Profiles are stored in two structures. A list of profiles (index) and individual hashmaps for each profile (like a table)
-        Duration is only needed for registration purposes in the profile. Nothing operational
+        Add a new profile to the DB. Both the list of profiles and the
+         hashmap of profile data
+        Profiles are stored in two structures. A list of profiles (index)
+         and individual hashmaps for each profile (like a table)
+        Duration is only needed for registration purposes in the profile.
+        Nothing operational
         """
         try:
-            if self.r.sismember('profiles', str(profileid)):
+            if self.r.sismember('profiles', profileid):
                 # we already have this profile
                 return False
 
             # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd('profiles', str(profileid))
-            # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
+            self.r.sadd('profiles', profileid)
+            # Create the hashmap with the profileid. The hasmap of each
+            # profile is named with the profileid
+
             # Add the start time of profile
             self.r.hset(profileid, 'starttime', starttime)
             # For now duration of the TW is fixed
             self.r.hset(profileid, 'duration', duration)
-            # When a new profiled is created assign threat level = 0 and confidence = 0.05
+            # When a new profiled is created assign threat level = 0
+            # and confidence = 0.05
             # self.r.hset(profileid, 'threat_level', 0)
             confidence = 0.05
             self.update_threat_level(profileid, 'info', confidence)
             self.r.hset(profileid, 'confidence', confidence)
-            # The IP of the profile should also be added as a new IP we know about.
+            # The IP of the profile should also be added as a new IP
+            # we know about.
             ip = profileid.split(self.separator)[1]
             # If the ip is new add it to the list of ips
             self.set_new_ip(ip)
@@ -1720,13 +1631,13 @@ class ProfileHandler(IObservable):
             profile_tw_to_close_id = profile_tw_to_close[0]
             profile_tw_to_close_time = profile_tw_to_close[1]
             self.print(
-                f'The profile id {profile_tw_to_close_id} has to be closed because it was'
-                f' last modifed on {profile_tw_to_close_time} and we are closing everything older '
-                f'than {modification_time}.'
+                f'The profile id {profile_tw_to_close_id} has to be closed'
+                f' because it was'
+                f' last modifed on {profile_tw_to_close_time} and we are '
+                f'closing everything older than {modification_time}.'
                 f' Current time {sit}. '
                 f'Difference: {modification_time - profile_tw_to_close_time}',
-                3,
-                0,
+                3, 0,
             )
             self.markProfileTWAsClosed(profile_tw_to_close_id)
 
@@ -1760,7 +1671,8 @@ class ProfileHandler(IObservable):
         # Check if we should close some TW
         self.check_TW_to_close()
 
-    def publish_new_letter(self, new_symbol:str, profileid:str, twid:str, tupleid:str, flow):
+    def publish_new_letter(self, new_symbol:str, profileid:str,
+                           twid:str, tupleid:str, flow):
         """
         analyze behavioral model with lstm model if
         the length is divided by 3 -
@@ -1781,7 +1693,8 @@ class ProfileHandler(IObservable):
         self.publish('new_letters', to_send)
 
     #
-    # def get_previous_symbols(self, profileid: str, twid: str, direction: str, tupleid: str):
+    # def get_previous_symbols(self, profileid: str, twid: str, direction:
+    # str, tupleid: str):
     #     """
     #     returns all the InTuples or OutTuples for this profileid in this TW
     #     """
@@ -1800,10 +1713,12 @@ class ProfileHandler(IObservable):
                   role: str, flow):
         """
         Add the tuple going in or out for this profile
-        and if there was previous symbols for this profile, append the new symbol to it
+        and if there was previous symbols for this profile, append the new
+        symbol to it
         before adding the tuple to the db
 
-        :param tupleid:  a dash separated str with the following format daddr-dport-proto
+        :param tupleid:  a dash separated str with the following format
+        daddr-dport-proto
         :param symbol:  (symbol, (symbol_to_add, previous_two_timestamps))
         T1: is the time diff between the past flow and the past-past flow.
         last_ts: the timestamp of the last flow
@@ -1819,7 +1734,8 @@ class ProfileHandler(IObservable):
         try:
             profileid_twid = f'{profileid}{self.separator}{twid}'
 
-            # prev_symbols is a dict with {tulpeid: ['symbols_so_far', [timestamps]]}
+            # prev_symbols is a dict with {tulpeid: ['symbols_so_far',
+            # [timestamps]]}
             prev_symbols: str = self.r.hget(profileid_twid, direction) or '{}'
             prev_symbols: dict = json.loads(prev_symbols)
 
@@ -1830,9 +1746,11 @@ class ProfileHandler(IObservable):
                 # Separate the symbol to add and the previous data
                 (symbol_to_add, previous_two_timestamps) = symbol
                 self.print(
-                    f'Not the first time for tuple {tupleid} as an {direction} for '
+                    f'Not the first time for tuple {tupleid} as an '
+                    f'{direction} for '
                     f'{profileid} in TW {twid}. Add the symbol: {symbol_to_add}. '
-                    f'Store previous_times: {previous_two_timestamps}. Prev Data: {prev_symbols}',
+                    f'Store previous_times: {previous_two_timestamps}. '
+                    f'Prev Data: {prev_symbols}',
                     3, 0,
                 )
 
@@ -1848,11 +1766,13 @@ class ProfileHandler(IObservable):
                 )
 
                 prev_symbols[tupleid] = (new_symbol, previous_two_timestamps)
-                self.print(f'\tLetters so far for tuple {tupleid}: {new_symbol}', 3, 0)
+                self.print(f'\tLetters so far for tuple {tupleid}:'
+                           f' {new_symbol}', 3, 0)
             except (TypeError, KeyError):
                 # TODO check that this condition is triggered correctly
                 #  only for the first case and not the rest after...
-                # There was no previous data stored in the DB to append the given symbol to.
+                # There was no previous data stored in the DB to append
+                # the given symbol to.
                 self.print(
                     f'First time for tuple {tupleid} as an'
                     f' {direction} for {profileid} in TW {twid}',
