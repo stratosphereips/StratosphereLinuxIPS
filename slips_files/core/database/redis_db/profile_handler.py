@@ -92,42 +92,37 @@ class ProfileHandler(IObservable):
         - The empty tws in the middle are not being created!!!
         - The Dtp ips are stored in the first tw
         """
-        try:
-            # If the option for only-one-tw was selected, we should
-            # create the TW at least 100 years before the flowtime,
-            # to cover for 'flows in the past'. Which means we should
-            # cover for any flow that is coming later with time before the
-            # first flow
-            if self.width == 9999999999:
-                # Seconds in 1 year = 31536000
-                tw_start = float(flowtime - (31536000 * 100))
-                tw_number: int = 1
+        # If the option for only-one-tw was selected, we should
+        # create the TW at least 100 years before the flowtime,
+        # to cover for 'flows in the past'. Which means we should
+        # cover for any flow that is coming later with time before the
+        # first flow
+        if self.width == 9999999999:
+            # Seconds in 1 year = 31536000
+            tw_start = float(flowtime - (31536000 * 100))
+            tw_number: int = 1
+        else:
+            starttime_of_first_tw: str = self.r.hget(
+                'analysis', 'file_start'
+            )
+
+            if starttime_of_first_tw:
+                starttime_of_first_tw = float(starttime_of_first_tw)
+                tw_number: int = floor((flowtime - starttime_of_first_tw)
+                                       / self.width) + 1
+
+                tw_start: float = starttime_of_first_tw + (
+                        self.width * (tw_number-1) )
             else:
-                starttime_of_first_tw: str = self.r.hget(
-                    'analysis', 'file_start'
-                )
+                # this is the first timewindow
+                tw_number: int = 1
+                tw_start: float = flowtime
 
-                if starttime_of_first_tw:
-                    starttime_of_first_tw = float(starttime_of_first_tw)
-                    tw_number: int = floor((flowtime - starttime_of_first_tw)
-                                           / self.width) + 1
+        tw_id: str = f"timewindow{tw_number}"
 
-                    tw_start: float = starttime_of_first_tw + (
-                            self.width * (tw_number-1) )
-                else:
-                    # this is the first timewindow
-                    tw_number: int = 1
-                    tw_start: float = flowtime
-
-            tw_id: str = f"timewindow{tw_number}"
-
-            # Add this TW, of this profile, to the DB
-            self.add_new_tw(profileid, tw_id, tw_start)
-            return tw_id
-        except Exception as e:
-            self.print('Error in get_timewindow().', 0, 1)
-            self.print(traceback.print_exc(), 0, 1)
-            self.print(e, 0, 1)
+        # Add this TW, of this profile, to the DB
+        self.add_new_tw(profileid, tw_id, tw_start)
+        return tw_id
 
     def add_out_http(
         self,
