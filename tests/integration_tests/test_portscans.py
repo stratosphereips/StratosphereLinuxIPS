@@ -32,7 +32,7 @@ def test_horizontal(path, output_dir, redis_port):
     """
     output_dir = create_output_dir(output_dir)
 
-    expected_evidence = 'horizontal port scan to port  80/TCP. From 10.0.2.112'
+    expected_evidence = 'Horizontal port scan to port  80/TCP. From 10.0.2.112'
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -e 1 -t -f {path}  -o {output_dir} -P {redis_port} > {output_file} 2>&1'
