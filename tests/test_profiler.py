@@ -204,7 +204,8 @@ def test_get_rev_profile(mock_rdb):
                 'Established',''
             )
     profiler.daddr_as_obj = ipaddress.ip_address(profiler.flow.daddr)
-    mock_rdb.getProfileIdFromIP.return_value =  None
+    mock_rdb.getProfileIdFromIP.return_value = None
+    mock_rdb.r.hget('analysis', 'file_start').return_value = 0
     assert profiler.get_rev_profile() == ('profile_8.8.8.8', 'timewindow1')
 
 def test_get_rev_profile_no_daddr(flow):

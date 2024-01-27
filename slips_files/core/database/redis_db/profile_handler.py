@@ -114,7 +114,6 @@ class ProfileHandler(IObservable):
 
                     tw_start: float = starttime_of_first_tw + (
                             self.width * (tw_number-1) )
-
                 else:
                     # this is the first timewindow
                     tw_number: int = 1
