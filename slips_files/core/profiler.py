@@ -98,7 +98,9 @@ class Profiler(ICore):
 
     def convert_starttime_to_epoch(self):
         try:
-            self.flow.starttime = utils.convert_format(self.flow.starttime, 'unixtimestamp')
+            self.flow.starttime = utils.convert_format(
+                self.flow.starttime,
+                'unixtimestamp')
         except ValueError:
             self.print(f'We can not recognize time format of '
                        f'self.flow.starttime: {self.flow.starttime}', 0, 1)
@@ -112,14 +114,16 @@ class Profiler(ICore):
             # some flows don't have a daddr like software.log flows
             return False, False
 
-        rev_profileid = self.db.getProfileIdFromIP(self.daddr_as_obj)
+        rev_profileid: str = self.db.get_profileid_from_ip(self.flow.daddr)
         if not rev_profileid:
             # the profileid is not present in the db, create it
             rev_profileid = f'profile_{self.flow.daddr}'
             self.db.add_profile(rev_profileid, self.flow.starttime, self.width)
 
-        # in the database, Find the id of the tw where the flow belongs.
-        rev_twid = self.db.get_timewindow(self.flow.starttime, rev_profileid)
+        # in the database, Find and register the id of the tw where the flow
+        # belongs.
+        rev_twid: str = self.db.get_timewindow(
+            self.flow.starttime, rev_profileid)
         return rev_profileid, rev_twid
 
     def add_flow_to_profile(self):
@@ -159,10 +163,12 @@ class Profiler(ICore):
             return True
 
         # 5th. Store the data according to the paremeters
-        # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
+        # Now that we have the profileid and twid, add the data from the flow
+        # in this tw for this profile
         self.print(f'Storing data in the profile: {self.profileid}', 3, 0)
         self.convert_starttime_to_epoch()
-        # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
+        # For this 'forward' profile, find the id in the
+        # database of the tw where the flow belongs.
         self.twid = self.db.get_timewindow(self.flow.starttime, self.profileid)
         self.flow_parser.twid = self.twid
 

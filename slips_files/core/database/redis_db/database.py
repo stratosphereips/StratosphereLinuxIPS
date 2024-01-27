@@ -503,7 +503,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         else:
             return {}
 
-    def set_input_metadata(self, info:dict):
+    def set_input_metadata(self, info: dict):
         """
         sets name, size, analysis dates, and zeek_dir in the db
         """

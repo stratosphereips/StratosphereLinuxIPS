@@ -286,7 +286,7 @@ class EvidenceHandler(ICore):
         # we print all of them
         # Get the start and end time of this TW
         twid_start_time: Optional[float] = \
-            self.db.get_timewindow_start_time(str(profileid), str(twid))
+            self.db.get_tw_start_time(str(profileid), str(twid))
         tw_stop_time: float = twid_start_time + self.width
 
         # format them both for printing

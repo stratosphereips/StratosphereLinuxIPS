@@ -185,8 +185,6 @@ def test_process_line(file, flow_type):
         )
     assert added_flow is not None
 
-
-
 def test_get_rev_profile(mock_rdb):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.flow = Conn(
@@ -204,7 +202,8 @@ def test_get_rev_profile(mock_rdb):
                 'Established',''
             )
     profiler.daddr_as_obj = ipaddress.ip_address(profiler.flow.daddr)
-    mock_rdb.getProfileIdFromIP.return_value =  None
+    mock_rdb.get_profileid_from_ip.return_value = None
+    mock_rdb.get_timewindow.return_value = 'timewindow1'
     assert profiler.get_rev_profile() == ('profile_8.8.8.8', 'timewindow1')
 
 def test_get_rev_profile_no_daddr(flow):
