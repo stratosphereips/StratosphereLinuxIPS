@@ -622,8 +622,11 @@ class DBManager(IObservable):
     def add_out_ssl(self, *args, **kwargs):
         return self.rdb.add_out_ssl(*args, **kwargs)
 
-    def getProfileIdFromIP(self, *args, **kwargs):
-        return self.rdb.getProfileIdFromIP(*args, **kwargs)
+    def get_profileid_from_ip(self, *args, **kwargs):
+        return self.rdb.get_profileid_from_ip(*args, **kwargs)
+
+    def get_first_flow_time(self, *args, **kwargs):
+        return self.rdb.get_first_flow_time(*args, **kwargs)
 
     def getProfiles(self, *args, **kwargs):
         return self.rdb.getProfiles(*args, **kwargs)

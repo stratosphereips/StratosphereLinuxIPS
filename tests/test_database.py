@@ -46,7 +46,7 @@ def test_getProfileIdFromIP():
     # add a profile
     db.addProfile('profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
-    assert db.getProfileIdFromIP(test_ip) is not False
+    assert db.get_profileid_from_ip(test_ip) is not False
 
 
 def test_timewindows():
@@ -73,21 +73,6 @@ def test_add_ips():
     db.addProfile(profileid, '00:00', '1')
     # add a tw to that profile
     db.add_new_tw(profileid, 'timewindow1', 0.0)
-    columns = {
-        'dport': 80,
-        'sport': 80,
-        'totbytes': 80,
-        'pkts': 20,
-        'sbytes': 30,
-        'bytes': 30,
-        'spkts': 70,
-        'state': 'Not Established',
-        'uid': '1234',
-        'proto': 'TCP',
-        'saddr': '8.8.8.8',
-        'daddr': test_ip,
-        'starttime': '20.0',
-    }
     # make sure ip is added
     assert (
         db.add_ips(profileid, twid, flow, 'Server') is True

@@ -109,8 +109,8 @@ class ProfileHandler(IObservable):
 
                 if starttime_of_first_tw:
                     starttime_of_first_tw = float(starttime_of_first_tw)
-                    tw_number: int = floor((flowtime - starttime_of_first_tw) /
-                                      self.width) + 1
+                    tw_number: int = floor((flowtime - starttime_of_first_tw)
+                                           / self.width) + 1
 
                     tw_start: float = starttime_of_first_tw + (
                             self.width * (tw_number-1) )
@@ -1071,10 +1071,13 @@ class ProfileHandler(IObservable):
                         break
 
 
-    def getProfileIdFromIP(self, daddr_as_obj):
-        """Receive an IP and we want the profileid"""
+    def get_profileid_from_ip(self, ip: str) -> Optional[str]:
+        """
+        returns the profile of the given IP only if it was registered in
+        slips before
+        """
         try:
-            profileid = f'profile{self.separator}{str(daddr_as_obj)}'
+            profileid = f'profile_{ip}'
             if self.r.sismember('profiles', profileid):
                 return profileid
             return False
@@ -1554,6 +1557,9 @@ class ProfileHandler(IObservable):
         if not is_dhcp_set:
             self.r.hset(profileid, 'dhcp', 'true')
 
+    def get_first_flow_time(self) -> Optional[str]:
+        return self.r.hget('analysis', 'file_start')
+
     def addProfile(self, profileid, starttime, duration):
         """
         Add a new profile to the DB. Both the list of profiles and the
@@ -1564,12 +1570,12 @@ class ProfileHandler(IObservable):
         Nothing operational
         """
         try:
-            if self.r.sismember('profiles', str(profileid)):
+            if self.r.sismember('profiles', profileid):
                 # we already have this profile
                 return False
 
             # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd('profiles', str(profileid))
+            self.r.sadd('profiles', profileid)
             # Create the hashmap with the profileid. The hasmap of each
             # profile is named with the profileid
 
