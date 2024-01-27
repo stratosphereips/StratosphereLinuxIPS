@@ -664,8 +664,8 @@ class DBManager(IObservable):
     def add_new_tw(self, *args, **kwargs):
         return self.rdb.add_new_tw(*args, **kwargs)
 
-    def getTimeTW(self, *args, **kwargs):
-        return self.rdb.getTimeTW(*args, **kwargs)
+    def get_tw_start_time(self, *args, **kwargs):
+        return self.rdb.get_tw_start_time(*args, **kwargs)
 
     def getAmountTW(self, *args, **kwargs):
         return self.rdb.getAmountTW(*args, **kwargs)
@@ -892,7 +892,7 @@ class DBManager(IObservable):
         return self.rdb.get_branch(*args, **kwargs)
 
     def add_alert(self, alert: dict):
-        twid_starttime: float = self.rdb.getTimeTW(alert['profileid'], alert['twid'])
+        twid_starttime: float = self.rdb.get_tw_start_time(alert['profileid'], alert['twid'])
         twid_endtime: float = twid_starttime + RedisDB.width
         alert.update({'tw_start': twid_starttime, 'tw_end': twid_endtime})
         return self.sqlite.add_alert(alert)
