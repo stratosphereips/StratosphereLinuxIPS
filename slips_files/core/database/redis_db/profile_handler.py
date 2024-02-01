@@ -76,9 +76,6 @@ class ProfileHandler(IObservable):
         else:
             self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(flow))
 
-
-
-
     def get_timewindow(self, flowtime, profileid):
         """
         This function returns the TW in the database where the flow belongs.
@@ -108,6 +105,7 @@ class ProfileHandler(IObservable):
 
             if starttime_of_first_tw:
                 starttime_of_first_tw = float(starttime_of_first_tw)
+                flowtime = float(flowtime)
                 tw_number: int = floor((flowtime - starttime_of_first_tw)
                                        / self.width) + 1
 
