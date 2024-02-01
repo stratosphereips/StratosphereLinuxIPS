@@ -15,7 +15,9 @@ from slips_files.core.flows.zeek import Conn
     'file,input_type,expected_value',
     [('dataset/test6-malicious.suricata.json', 'suricata', 'suricata')]
 )
-def test_define_separator_suricata(file, input_type, expected_value, mock_rdb):
+def test_define_separator_suricata(file, input_type, expected_value,
+                                   mock_db
+                                   ):
     profilerProcess = ModuleFactory().create_profiler_obj()
     with open(file) as f:
         while True:
@@ -35,7 +37,9 @@ def test_define_separator_suricata(file, input_type, expected_value, mock_rdb):
     'file,input_type,expected_value',
     [('dataset/test10-mixed-zeek-dir/conn.log', 'zeek_log_file', 'zeek-tabs')],
 )
-def test_define_separator_zeek_tab(file, input_type, expected_value, mock_rdb):
+def test_define_separator_zeek_tab(file, input_type, expected_value,
+                                   mock_db
+                                   ):
     profilerProcess = ModuleFactory().create_profiler_obj()
     with open(file) as f:
         while True:
@@ -55,7 +59,9 @@ def test_define_separator_zeek_tab(file, input_type, expected_value, mock_rdb):
     'file, input_type,expected_value',
     [('dataset/test9-mixed-zeek-dir/conn.log', 'zeek_log_file', 'zeek')]
 )
-def test_define_separator_zeek_dict(file, input_type, expected_value, mock_rdb):
+def test_define_separator_zeek_dict(file, input_type, expected_value,
+                                    mock_db
+                                    ):
     """
     :param input_type: as determined by slips.py
     """
@@ -73,7 +79,9 @@ def test_define_separator_zeek_dict(file, input_type, expected_value, mock_rdb):
 
 
 @pytest.mark.parametrize('nfdump_file', [('dataset/test1-normal.nfdump')])
-def test_define_separator_nfdump(nfdump_file, mock_rdb):
+def test_define_separator_nfdump(nfdump_file,
+                                 mock_db
+                                 ):
     # nfdump files aren't text files so we need to process them first
     command = f'nfdump -b -N -o csv -q -r {nfdump_file}'
     # Execute command
@@ -110,7 +118,7 @@ def test_define_separator_nfdump(nfdump_file, mock_rdb):
 #     ],
 # )
 # def test_define_columns(
-#     file, separator, expected_value, mock_rdb
+#     file, separator, expected_value, mock_db
 # ):
 #     # define_columns is called on header lines
 #     # line = '#fields ts      uid     id.orig_h       id.orig_p
@@ -185,7 +193,7 @@ def test_process_line(file, flow_type):
         )
     assert added_flow is not None
 
-def test_get_rev_profile(mock_rdb):
+def test_get_rev_profile(mock_db):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.flow = Conn(
                 '1.0',
@@ -202,8 +210,8 @@ def test_get_rev_profile(mock_rdb):
                 'Established',''
             )
     profiler.daddr_as_obj = ipaddress.ip_address(profiler.flow.daddr)
-    mock_rdb.get_profileid_from_ip.return_value = None
-    mock_rdb.get_timewindow.return_value = 'timewindow1'
+    mock_db.get_profileid_from_ip.return_value = None
+    mock_db.get_timewindow.return_value = 'timewindow1'
     assert profiler.get_rev_profile() == ('profile_8.8.8.8', 'timewindow1')
 
 def test_get_rev_profile_no_daddr(flow):

@@ -9,12 +9,12 @@ def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
 
 
-def not_enough_dports_to_reach_the_threshold(mock_rdb):
+def not_enough_dports_to_reach_the_threshold(mock_db):
     """
     returns a dict with conns to dport that are not enough
     to reach the minimum dports to trigger the first scan
     """
-    module = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+    module = ModuleFactory().create_vertical_portscan_obj(mock_db)
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
@@ -37,12 +37,12 @@ def not_enough_dports_to_reach_the_threshold(mock_rdb):
     # Return the list of random integers
     return res
 
-def enough_dports_to_reach_the_threshold(mock_rdb):
+def enough_dports_to_reach_the_threshold(mock_db):
     """
     returns conns to dport that are not enough
     to reach the minimum dports to trigger the first scan
     """
-    module = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+    module = ModuleFactory().create_vertical_portscan_obj(mock_db)
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
@@ -67,14 +67,14 @@ def enough_dports_to_reach_the_threshold(mock_rdb):
     return res
 
 
-def not_enough_dports_to_combine_1_evidence(mock_rdb):
+def not_enough_dports_to_combine_1_evidence(mock_db):
     """
     returns dports that are not enough to combine an evidence
     any number of dports within the range threshold -> threshold +15 is ok
     here, aka won't be enough
     :param key:
     """
-    module = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+    module = ModuleFactory().create_vertical_portscan_obj(mock_db)
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
@@ -110,16 +110,16 @@ def not_enough_dports_to_combine_1_evidence(mock_rdb):
 def test_min_dports_threshold(
         get_test_conns,
         expected_return_val: bool,
-        mock_rdb
+        mock_db
     ):
-    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
 
     profileid = 'profile_1.1.1.1'
     timewindow = 'timewindow0'
     dstip = '8.8.8.8'
 
-    conns: dict = get_test_conns(mock_rdb)
-    mock_rdb.get_data_from_profile_tw.return_value = conns
+    conns: dict = get_test_conns(mock_db)
+    mock_db.get_data_from_profile_tw.return_value = conns
 
     cache_key = vertical_ps.get_cache_key(profileid, timewindow, dstip)
     amount_of_dports = len(conns[dstip]['dstports'])
@@ -143,7 +143,7 @@ def test_min_dports_threshold(
 def test_combining_evidence(
         number_of_pending_evidence,
         expected_return_val: bool,
-        mock_rdb
+        mock_db
     ):
     """
     first evidence will be alerted, the rest will be combined
@@ -152,10 +152,10 @@ def test_combining_evidence(
     timewindow = 'timewindow0'
     dstip = '8.8.8.8'
 
-    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
     key: str = vertical_ps.get_cache_key(profileid, timewindow, dstip)
     # get a random bunch of dstips, this dict is not important
-    dstips:dict = enough_dports_to_reach_the_threshold(mock_rdb)
+    dstips:dict = enough_dports_to_reach_the_threshold(mock_db)
     amount_of_dports = len(dstips[dstip]['dstports'])
 
     pkts_sent = sum(dstips[dstip]['dstports'].values())
@@ -200,10 +200,11 @@ def test_combining_evidence(
         (15, 20, True),
     ]
 )
-def test_check_if_enough_dports_to_trigger_an_evidence(mock_rdb,
-                                   prev_amount_of_dports,
-                                   cur_amount_of_dports,
-                                   expected_return_val):
+def test_check_if_enough_dports_to_trigger_an_evidence(
+        mock_db,
+        prev_amount_of_dports,
+        cur_amount_of_dports,
+        expected_return_val):
     """
     slip sdetects can based on the number of current dports scanned to the
     number of the ports scanned before
@@ -214,7 +215,7 @@ def test_check_if_enough_dports_to_trigger_an_evidence(mock_rdb,
     timewindow = 'timewindow0'
     dstip = '8.8.8.8'
 
-    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_rdb)
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
 
     key: str = vertical_ps.get_cache_key(profileid, timewindow, dstip)
     vertical_ps.cached_tw_thresholds[key] = prev_amount_of_dports

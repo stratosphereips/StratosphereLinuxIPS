@@ -79,25 +79,25 @@ class ModuleFactory:
         return main
 
 
-    def create_http_analyzer_obj(self, mock_rdb):
+    def create_http_analyzer_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             http_analyzer = HTTPAnalyzer(self.logger,
                                          'dummy_output_dir',
                                          6379,
                                          self.dummy_termination_event)
-            http_analyzer.db.rdb = mock_rdb
+            http_analyzer.db.rdb = mock_db
 
         # override the self.print function to avoid broken pipes
         http_analyzer.print = do_nothing
         return http_analyzer
 
-    def create_virustotal_obj(self, mock_rdb):
+    def create_virustotal_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             virustotal = VT(self.logger,
                             'dummy_output_dir',
                             6379,
                             self.dummy_termination_event)
-            virustotal.db.rdb = mock_rdb
+            virustotal.db.rdb = mock_db
 
         # override the self.print function to avoid broken pipes
         virustotal.print = do_nothing
@@ -107,44 +107,44 @@ class ModuleFactory:
         )
         return virustotal
 
-    def create_arp_obj(self, mock_rdb):
+    def create_arp_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             arp = ARP(self.logger,
                       'dummy_output_dir',
                       6379,
                       self.dummy_termination_event
                       )
-            arp.db.rdb = mock_rdb
+            arp.db.rdb = mock_db
         # override the self.print function to avoid broken pipes
         arp.print = do_nothing
         return arp
 
-    def create_blocking_obj(self, mock_rdb):
+    def create_blocking_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             blocking = Blocking(self.logger,
                                 'dummy_output_dir',
                                 6379,
                                 self.dummy_termination_event)
-            blocking.db.rdb = mock_rdb
+            blocking.db.rdb = mock_db
 
         # override the print function to avoid broken pipes
         blocking.print = do_nothing
         return blocking
 
-    def create_flowalerts_obj(self, mock_rdb):
+    def create_flowalerts_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             flowalerts = FlowAlerts(self.logger,
                                     'dummy_output_dir',
                                     6379,
                                     self.dummy_termination_event)
-            flowalerts.db.rdb = mock_rdb
+            flowalerts.db.rdb = mock_db
 
         # override the self.print function to avoid broken pipes
         flowalerts.print = do_nothing
         return flowalerts
 
     def create_inputProcess_obj(
-            self, input_information, input_type, mock_rdb, line_type=False
+            self, input_information, input_type, mock_db, line_type=False
             ):
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
@@ -165,7 +165,7 @@ class ModuleFactory:
                 line_type=line_type,
                 is_profiler_done_event=self.dummy_termination_event,
             )
-        inputProcess.db.rdb = mock_rdb
+        inputProcess.db.rdb = mock_db
         inputProcess.is_done_processing = do_nothing
         inputProcess.bro_timeout = 1
         # override the print function to avoid broken pipes
@@ -176,14 +176,14 @@ class ModuleFactory:
         return inputProcess
 
 
-    def create_ip_info_obj(self, mock_rdb):
+    def create_ip_info_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             ip_info = IPInfo(self.logger,
                              'dummy_output_dir',
                              6379,
                              self.dummy_termination_event
                              )
-            ip_info.db.rdb = mock_rdb
+            ip_info.db.rdb = mock_db
         # override the self.print function to avoid broken pipes
         ip_info.print = do_nothing
         return ip_info
@@ -191,7 +191,7 @@ class ModuleFactory:
     def create_asn_obj(self, db):
         return ASN(db)
 
-    def create_leak_detector_obj(self, mock_rdb):
+    def create_leak_detector_obj(self, mock_db):
         # this file will be used for storing the module output
         # and deleted when the tests are done
         test_pcap = 'dataset/test7-malicious.pcap'
@@ -202,7 +202,7 @@ class ModuleFactory:
                                          'dummy_output_dir',
                                          6379,
                                          self.dummy_termination_event)
-            leak_detector.db.rdb = mock_rdb
+            leak_detector.db.rdb = mock_db
         # override the self.print function to avoid broken pipes
         leak_detector.print = do_nothing
         # this is the path containing 1 yara rule for testing, it matches every pcap
@@ -238,35 +238,35 @@ class ModuleFactory:
     def create_utils_obj(self):
         return utils
 
-    def create_threatintel_obj(self, mock_rdb):
+    def create_threatintel_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             threatintel = ThreatIntel(self.logger,
                                       'dummy_output_dir',
                                       6379,
                                       self.dummy_termination_event)
-            threatintel.db.rdb = mock_rdb
+            threatintel.db.rdb = mock_db
 
         # override the self.print function to avoid broken pipes
         threatintel.print = do_nothing
         return threatintel
 
-    def create_update_manager_obj(self, mock_rdb):
+    def create_update_manager_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
             update_manager = UpdateManager(self.logger,
                                            'dummy_output_dir',
                                            6379,
                                            self.dummy_termination_event)
 
-            update_manager.db.rdb = mock_rdb
+            update_manager.db.rdb = mock_db
 
         # override the self.print function to avoid broken pipes
         update_manager.print = do_nothing
         return update_manager
 
-    def create_whitelist_obj(self, mock_rdb):
+    def create_whitelist_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            whitelist = Whitelist(self.logger, mock_rdb)
-            whitelist.db.rdb = mock_rdb
+            whitelist = Whitelist(self.logger, mock_db)
+            whitelist.db.rdb = mock_db
 
         # override the self.print function to avoid broken pipes
         whitelist.print = do_nothing
@@ -274,18 +274,18 @@ class ModuleFactory:
         return whitelist
 
 
-    def create_flow_handler_obj(self, flow ,mock_rdb):
+    def create_flow_handler_obj(self, flow ,mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            symbol = SymbolHandler(self.logger, mock_rdb)
-            flow_handler = FlowHandler(mock_rdb, symbol, flow)
+            symbol = SymbolHandler(self.logger, mock_db)
+            flow_handler = FlowHandler(mock_db, symbol, flow)
             return flow_handler
 
-    def create_horizontal_portscan_obj(self, mock_rdb):
+    def create_horizontal_portscan_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            horizontal_ps = HorizontalPortscan(mock_rdb)
+            horizontal_ps = HorizontalPortscan(mock_db)
             return horizontal_ps
 
-    def create_vertical_portscan_obj(self, mock_rdb):
+    def create_vertical_portscan_obj(self, mock_db):
         with patch.object(DBManager, 'create_sqlite_db', return_value=Mock()):
-            vertical_ps = VerticalPortscan(mock_rdb)
+            vertical_ps = VerticalPortscan(mock_db)
             return vertical_ps
