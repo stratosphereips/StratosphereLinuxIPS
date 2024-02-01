@@ -188,8 +188,8 @@ class ModuleFactory:
         ip_info.print = do_nothing
         return ip_info
 
-    def create_asn_obj(self, db):
-        return ASN(db)
+    def create_asn_obj(self, mock_db):
+        return ASN(mock_db)
 
     def create_leak_detector_obj(self, mock_db):
         # this file will be used for storing the module output
@@ -212,9 +212,9 @@ class ModuleFactory:
         return leak_detector
 
 
-    def create_profiler_obj(self):
+    def create_profiler_obj(self, mock_db):
         dummy_semaphore = Semaphore(0)
-        profilerProcess = Profiler(
+        profiler = Profiler(
             self.logger,
             'output/',
             6379,
@@ -225,9 +225,10 @@ class ModuleFactory:
         )
 
         # override the self.print function to avoid broken pipes
-        profilerProcess.print = do_nothing
-        profilerProcess.whitelist_path = 'tests/test_whitelist.conf'
-        return profilerProcess
+        profiler.print = do_nothing
+        profiler.whitelist_path = 'tests/test_whitelist.conf'
+        profiler.db = mock_db
+        return profiler
 
     def create_redis_manager_obj(self, main):
         return RedisManager(main)
@@ -244,7 +245,7 @@ class ModuleFactory:
                                       'dummy_output_dir',
                                       6379,
                                       self.dummy_termination_event)
-            threatintel.db.rdb = mock_db
+            threatintel.db = mock_db
 
         # override the self.print function to avoid broken pipes
         threatintel.print = do_nothing
