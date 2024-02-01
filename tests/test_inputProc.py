@@ -12,10 +12,11 @@ import json
     [('pcap', 'dataset/test12-icmp-portscan.pcap')],
 )
 def test_handle_pcap_and_interface(
-    input_type, input_information, mock_rdb
+    input_type, input_information,
+        mock_db
 ):
     # no need to test interfaces because in that case read_zeek_files runs in a loop and never returns
-    input = ModuleFactory().create_inputProcess_obj(input_information, input_type, mock_rdb)
+    input = ModuleFactory().create_inputProcess_obj(input_information, input_type, mock_db)
     input.zeek_pid = 'False'
     input.is_zeek_tabs = False
     assert input.handle_pcap_and_interface() is True
@@ -31,10 +32,11 @@ def test_handle_pcap_and_interface(
     ],
 )
 def test_is_growing_zeek_dir(
-     zeek_dir: str, is_tabs: bool,  mock_rdb
+     zeek_dir: str, is_tabs: bool,
+        mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(zeek_dir, 'zeek_folder', mock_rdb)
-    mock_rdb.get_all_zeek_files.return_value = [os.path.join(zeek_dir, 'conn.log')]
+    input = ModuleFactory().create_inputProcess_obj(zeek_dir, 'zeek_folder', mock_db)
+    mock_db.get_all_zeek_files.return_value = [os.path.join(zeek_dir, 'conn.log')]
 
     assert input.read_zeek_folder() is True
 
@@ -47,8 +49,10 @@ def test_is_growing_zeek_dir(
         ('dataset/test9-mixed-zeek-dir/conn.log', False), # json
     ],
 )
-def test_is_zeek_tabs_file(path: str, expected_val: bool, mock_rdb):
-    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_folder', mock_rdb)
+def test_is_zeek_tabs_file(path: str, expected_val: bool,
+                           mock_db
+                           ):
+    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_folder', mock_db)
     assert input.is_zeek_tabs_file(path) == expected_val
 
 
@@ -62,9 +66,10 @@ def test_is_zeek_tabs_file(path: str, expected_val: bool, mock_rdb):
     ],
 )
 def test_handle_zeek_log_file(
-    input_information, mock_rdb, expected_output
+    input_information,
+        mock_db, expected_output
 ):
-    input = ModuleFactory().create_inputProcess_obj(input_information, 'zeek_log_file', mock_rdb)
+    input = ModuleFactory().create_inputProcess_obj(input_information, 'zeek_log_file', mock_db)
     assert input.handle_zeek_log_file() == expected_output
 
 
@@ -78,11 +83,13 @@ def test_handle_zeek_log_file(
 )
 
 def test_cache_nxt_line_in_file(
-        path: str, is_tabs: str, line_cached: bool , mock_rdb):
+        path: str, is_tabs: str, line_cached: bool ,
+        mock_db
+        ):
     """
     :param line_cached: should slips cache  the first line of this file or not
     """
-    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_log_file', mock_rdb)
+    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_log_file', mock_db)
     input.cache_lines = {}
     input.file_time = {}
     input.is_zeek_tabs = is_tabs
@@ -122,8 +129,10 @@ def test_cache_nxt_line_in_file(
     ],
 )
 def test_get_ts_from_line(
-        path: str, is_tabs: str,zeek_line: str, expected_val:float, mock_rdb):
-    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_log_file', mock_rdb)
+        path: str, is_tabs: str,zeek_line: str, expected_val:float,
+        mock_db
+        ):
+    input = ModuleFactory().create_inputProcess_obj(path, 'zeek_log_file', mock_db)
     input.is_zeek_tabs = is_tabs
     input.get_ts_from_line(zeek_line)
 
@@ -138,10 +147,11 @@ def test_get_ts_from_line(
     ]
     )
 def test_reached_timeout(
-        last_updated_file_time, now, bro_timeout, expected_val, mock_rdb
+        last_updated_file_time, now, bro_timeout, expected_val,
+        mock_db
         ):
     input = ModuleFactory().create_inputProcess_obj(
-        '', 'zeek_log_file', mock_rdb
+        '', 'zeek_log_file', mock_db
         )
     input.last_updated_file_time = last_updated_file_time
     input.bro_timeout = bro_timeout
@@ -161,15 +171,18 @@ def test_reached_timeout(
     'path', [('dataset/test1-normal.nfdump')]
 )
 def test_handle_nfdump(
-    path, mock_rdb
+    path,
+        mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(path, 'nfdump', mock_rdb)
+    input = ModuleFactory().create_inputProcess_obj(path, 'nfdump', mock_db)
     assert input.handle_nfdump() is True
 
 
-def test_get_earliest_line(mock_rdb):
+def test_get_earliest_line(
+        mock_db
+        ):
     input = ModuleFactory().create_inputProcess_obj(
-        '', 'zeek_log_file', mock_rdb
+        '', 'zeek_log_file', mock_db
         )
     input.file_time = {
         'software.log': 3,
@@ -202,8 +215,10 @@ def test_get_earliest_line(mock_rdb):
      ]
 )
 def test_get_flows_number(
-        path: str, is_tabs: bool, expected_val: int, mock_rdb):
-    input = ModuleFactory().create_inputProcess_obj(path, 'nfdump', mock_rdb)
+        path: str, is_tabs: bool, expected_val: int,
+        mock_db
+        ):
+    input = ModuleFactory().create_inputProcess_obj(path, 'nfdump', mock_db)
     input.is_zeek_tabs = is_tabs
     assert input.get_flows_number(path) == expected_val
 
@@ -219,9 +234,10 @@ def test_get_flows_number(
 #                                                           ('binetflow','dataset/test3-mixed.binetflow'),
 #                                                           ('binetflow','dataset/test4-malicious.binetflow'),
 def test_handle_binetflow(
-    input_type, input_information, mock_rdb
+    input_type, input_information,
+        mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(input_information, input_type, mock_rdb)
+    input = ModuleFactory().create_inputProcess_obj(input_information, input_type, mock_db)
     with patch.object(input, 'get_flows_number', return_value=5):
         assert input.handle_binetflow() is True
 
@@ -231,9 +247,10 @@ def test_handle_binetflow(
     [('dataset/test6-malicious.suricata.json')],
 )
 def test_handle_suricata(
-    input_information, mock_rdb
+    input_information,
+        mock_db
 ):
-    inputProcess = ModuleFactory().create_inputProcess_obj(input_information, 'suricata', mock_rdb)
+    inputProcess = ModuleFactory().create_inputProcess_obj(input_information, 'suricata', mock_db)
     assert inputProcess.handle_suricata() is True
 
 @pytest.mark.parametrize(
@@ -250,11 +267,13 @@ def test_handle_suricata(
      ],
 )
 
-def test_read_from_stdin(line_type: str, line: str, mock_rdb):
+def test_read_from_stdin(line_type: str, line: str,
+                         mock_db
+                         ):
     # slips supports reading zeek json conn.log only using stdin,
     # tabs aren't supported
     input = ModuleFactory().create_inputProcess_obj(
-        line_type, 'stdin', mock_rdb, line_type=line_type,
+        line_type, 'stdin', mock_db, line_type=line_type,
         )
     with patch.object(input, 'stdin', return_value=[line, 'done\n']):
         # this function will give the line to profiler
@@ -286,11 +305,13 @@ def test_read_from_stdin(line_type: str, line: str, mock_rdb):
      ],
 )
 
-def test_read_from_stdin(line_type: str, line: str, mock_rdb):
+def test_read_from_stdin(line_type: str, line: str,
+                         mock_db
+                         ):
     # slips supports reading zeek json conn.log only using stdin,
     # tabs aren't supported
     input = ModuleFactory().create_inputProcess_obj(
-        line_type, 'stdin', mock_rdb, line_type=line_type,
+        line_type, 'stdin', mock_db, line_type=line_type,
         )
     with patch.object(input, 'stdin', return_value=[line, 'done\n']):
         # this function will give the line to profiler
