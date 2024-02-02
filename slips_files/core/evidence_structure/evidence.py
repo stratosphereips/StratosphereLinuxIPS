@@ -21,8 +21,6 @@ def validate_timestamp(ts) -> str:
         raise ValueError(f"Invalid timestamp format: {ts}. "
                          f"Expected format: '%Y/%m/%d %H:%M:%S.%f%z'.")
 
-
-
 class EvidenceType(Enum):
     """
     These are the types of evidence slips can detect
@@ -195,10 +193,12 @@ class IDEACategory(Enum):
 
 @dataclass
 class ProfileID:
-    ip: str = field(metadata={
-        'validate': lambda x: ipaddress.ip_address(x)
-        }
-    )
+    ip: str
+
+    def __setattr__(self, name, value):
+        if name == 'ip':
+            assert ipaddress.ip_address(value)
+        self.__dict__[name] = value
 
     def __repr__(self):
         return f"profile_{self.ip}"
