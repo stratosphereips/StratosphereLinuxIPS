@@ -51,11 +51,11 @@ def test_check_multiple_google_connections(
     # "resp_fuids":["FGhwTU1OdvlfLrzBKc"],
     # "resp_mime_types":["text/html"]}
     host = 'google.com'
-    # uri = '/'
+    uri = '/'
     request_body_len = 0
     for _ in range(4):
         found_detection = http_analyzer.check_multiple_empty_connections(
-            uid, host, timestamp, request_body_len, profileid, twid
+            uid, host, uri, timestamp, request_body_len, profileid, twid
         )
     assert found_detection is True
 
