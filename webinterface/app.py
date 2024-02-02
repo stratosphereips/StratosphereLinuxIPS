@@ -46,10 +46,8 @@ def set_pcap_info():
     profiles = __database__.db.smembers('profiles')
     info["num_profiles"] = len(profiles) if profiles else 0
 
-    alerts = __database__.db.hgetall('alerts')
-    info["num_alerts"] = len(alerts) if alerts else 0
-
-
+    alerts_number = __database__.db.get('number_of_alerts')
+    info["num_alerts"] = int(alerts_number) if alerts_number else 0
 
     return info
 

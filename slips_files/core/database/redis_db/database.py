@@ -15,6 +15,7 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
+from typing import List
 
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -169,8 +170,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     @classmethod
     def _read_configuration(cls):
         conf = ConfigParser()
-        cls.deletePrevdb = conf.deletePrevdb()
-        cls.disabled_detections = conf.disabled_detections()
+        cls.deletePrevdb: bool = conf.deletePrevdb()
+        cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.width = conf.get_tw_width_as_float()
 
     @classmethod

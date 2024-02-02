@@ -1,9 +1,4 @@
 
-import modules.p2ptrust.trust.base_model as reputation_model
-import modules.p2ptrust.trust.trustdb as trustdb
-import modules.p2ptrust.utils.utils as p2p_utils
-from modules.p2ptrust.utils.go_director import GoDirector
-from slips_files.common.imports import *
 import threading
 import os
 import shutil
@@ -15,6 +10,29 @@ from typing import Dict
 import json
 import sys
 import socket
+
+
+from slips_files.common.imports import *
+import modules.p2ptrust.trust.base_model as reputation_model
+import modules.p2ptrust.trust.trustdb as trustdb
+import modules.p2ptrust.utils.utils as p2p_utils
+from modules.p2ptrust.utils.go_director import GoDirector
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        Proto,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Tag
+    )
+
 
 def validate_slips_data(message_data: str) -> (str, int):
     """
@@ -417,41 +435,53 @@ class Trust(IModule, multiprocessing.Process):
         :param confidence: how confident the network opinion is about this opinion
         """
 
-        attacker = ip_info.get('ip')
+        attacker_ip: str = ip_info.get('ip')
         ip_state = ip_info.get('ip_state')
-        # proto = ip_info.get('proto', '').upper()
         uid = ip_info.get('uid')
         profileid = ip_info.get('profileid')
         twid = ip_info.get('twid')
         timestamp = str(ip_info.get('stime'))
+        saddr = profileid.split("_")[-1]
 
-        attacker_direction = ip_state
-        evidence_type = 'Malicious-IP-from-P2P-network'
+        category = IDEACategory.ANOMALY_TRAFFIC
 
-        category = 'Anomaly.Traffic'
-        # dns_resolution = self.db.get_dns_resolution(ip)
-        # dns_resolution = dns_resolution.get('domains', [])
-        # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
-        victim = profileid.split("_")[-1]
-
+        ip_identification = self.db.get_ip_identification(attacker_ip)
         if 'src' in ip_state:
-            direction = 'from'
-            # we'll be using this to make the description more clear
-            other_direction = 'to'
+            description = (
+                f'Connection from blacklisted IP {attacker_ip} '
+                f'({ip_identification}) to {saddr} Source: Slips P2P network.'
+            )
+            attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=attacker_ip
+            )
         else:
-            direction = 'to'
-            other_direction = 'from'
+            description = (
+                f'Connection to blacklisted IP {attacker_ip} '
+                f'({ip_identification}) '
+                f'from {saddr} Source: Slips P2P network.'
+            )
+            attacker = Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            )
 
-        ip_identification = self.db.get_ip_identification(attacker)
-        description = (
-            f'connection {direction} blacklisted IP {attacker} ({ip_identification}) '
-            f'{other_direction} {profileid.split("_")[-1]}'
-            f' Source: Slips P2P network.'
+        evidence = Evidence(
+            evidence_type= EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=attacker.value),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[uid],
+            timestamp=timestamp,
+            category=category,
         )
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid, victim=victim)
-
+        self.db.set_evidence(evidence)
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(attacker, profileid, twid)
 

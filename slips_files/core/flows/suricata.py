@@ -60,6 +60,7 @@ class SuricataFlow:
             ).total_seconds() or 0
         self.pkts = self.dpkts + self.spkts
         self.bytes = self.dbytes + self.sbytes
+        self.uid = str(self.uid)
 
 @dataclass
 class SuricataHTTP:
@@ -91,6 +92,8 @@ class SuricataHTTP:
     resp_mime_types: str = ''
     resp_fuids: str = ''
     type_:str = 'http'
+    def __post_init__(self):
+        self.uid = str(self.uid)
 
 @dataclass
 class SuricataDNS:
@@ -115,6 +118,8 @@ class SuricataDNS:
     qclass_name: str = ''
     rcode_name: str = ''
     type_: str = 'dns'
+    def __post_init__(self):
+        self.uid = str(self.uid)
 
 
 @dataclass
@@ -141,6 +146,8 @@ class SuricataTLS:
     notafter: str
 
     type_: str = 'ssl'
+    def __post_init__(self):
+        self.uid = str(self.uid)
 
 
 @dataclass
@@ -166,6 +173,8 @@ class SuricataFile:
     analyzers: str =''
     tx_hosts: str = ''
     rx_hosts: str = ''
+    def __post_init__(self):
+        self.uid = str(self.uid)
 
 @dataclass
 class SuricataSSH:
@@ -196,4 +205,6 @@ class SuricataSSH:
     host_key: str = ''
 
     type_: str = 'ssh'
+    def __post_init__(self):
+        self.uid = str(self.uid)
 

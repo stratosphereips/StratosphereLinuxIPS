@@ -129,9 +129,15 @@ def test_check_multiple_ssh_versions(
         ):
     flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
     # in the first flow, we only have 1 use ssh client so no version incompatibility
-    mock_db.get_software_from_profile.return_value = {'SSH::CLIENT': {'version-major': 8, 'version-minor': 1, 'uid': 'YTYwNjBiMjIxZDkzOWYyYTc4'}}
+    mock_db.get_software_from_profile.return_value = {
+        'SSH::CLIENT': {'version-major': 8, 'version-minor': 1,
+                        'uid': 'YTYwNjBiMjIxZDkzOWYyYTc4'}}
 
-    flow2 = {'starttime': 1632302619.444328, 'uid': 'M2VhNTA3ZmZiYjU3OGMxMzJk', 'saddr': '192.168.1.247', 'daddr': '', 'software': 'SSH::CLIENT', 'unparsed_version': 'OpenSSH_9.1', 'version_major': 9, 'version_minor': 1, 'type_': 'software'}
+    flow2 = {'starttime': 1632302619.444328, 'uid': 'M2VhNTA3ZmZiYjU3OGMxMzJk',
+             'saddr': '192.168.1.247', 'daddr': '192.168.1.50', 'software':
+                 'SSH::CLIENT',
+             'unparsed_version': 'OpenSSH_9.1', 'version_major': 9,
+             'version_minor': 1, 'type_': 'software'}
 
     # in flow 2 slips should detect a client version change
     assert flowalerts.check_multiple_ssh_versions(flow2, 'timewindow1') is True

@@ -235,6 +235,7 @@ class IoCHandler():
     def get_ssl_info(self, sha1):
         info = self.rcache.hmget('IoC_SSL', sha1)[0]
         return False if info is None else info
+
     def is_domain_malicious(self, domain: str) -> tuple:
         """
         Search in the dB of malicious domains and return a

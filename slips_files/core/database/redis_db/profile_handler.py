@@ -754,7 +754,10 @@ class ProfileHandler(IObservable):
 
 
     def markProfileTWAsBlocked(self, profileid, twid):
-        """Add this profile and tw to the list of blocked"""
+        """Add this profile and tw to the list of blocked
+        a profile is only blocked if it was blocked using the user's
+        firewall, not if it just generated an alert
+        """
         tws = self.getBlockedProfTW(profileid)
         tws.append(twid)
         self.r.hset('BlockedProfTW', profileid, json.dumps(tws))
@@ -1075,7 +1078,7 @@ class ProfileHandler(IObservable):
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
-            self.print('error in addprofileidfromip in database.py', 0, 1)
+            self.print('error in get_profileid_from_ip in database.py', 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 
@@ -1553,7 +1556,7 @@ class ProfileHandler(IObservable):
     def get_first_flow_time(self) -> Optional[str]:
         return self.r.hget('analysis', 'file_start')
 
-    def addProfile(self, profileid, starttime, duration):
+    def add_profile(self, profileid, starttime, duration):
         """
         Add a new profile to the DB. Both the list of profiles and the
          hashmap of profile data
@@ -1568,10 +1571,9 @@ class ProfileHandler(IObservable):
                 return False
 
             # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd('profiles', profileid)
-            # Create the hashmap with the profileid. The hasmap of each
-            # profile is named with the profileid
-
+            self.r.sadd('profiles', str(profileid))
+            # Create the hashmap with the profileid.
+            # The hasmap of each profile is named with the profileid
             # Add the start time of profile
             self.r.hset(profileid, 'starttime', starttime)
             # For now duration of the TW is fixed
@@ -1591,7 +1593,7 @@ class ProfileHandler(IObservable):
             self.publish('new_profile', ip)
             return True
         except redis.exceptions.ResponseError as inst:
-            self.print('Error in addProfile in database.py', 0, 1)
+            self.print('Error in add_profile in database.py', 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 
@@ -1854,7 +1856,7 @@ class ProfileHandler(IObservable):
 
         return self.r.hget(profileid, 'MAC_vendor')
 
-    def get_hostname_from_profile(self, profileid: str) -> str:
+    def get_hostname_from_profile(self, profileid: str) -> Optional[str]:
         """
         Returns hostname about a certain profile or None
         """

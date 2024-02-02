@@ -1,6 +1,4 @@
-from slips_files.common.imports import *
 from modules.ip_info.jarm import JARM
-from .asn_info import ASN
 import platform
 import sys
 from typing import Union
@@ -16,7 +14,24 @@ import subprocess
 import re
 import time
 import asyncio
+
+from slips_files.common.imports import *
+from .asn_info import ASN
 from slips_files.common.slips_utils import utils
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Attacker,
+        Proto,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Tag
+    )
 
 
 class IPInfo(IModule, multiprocessing.Process):
@@ -490,36 +505,51 @@ class IPInfo(IModule, multiprocessing.Process):
 
     def set_evidence_malicious_jarm_hash(
             self,
-            flow,
-            uid,
-            profileid,
-            twid,
+            flow: dict,
+            twid: str,
     ):
-        dport = flow['dport']
-        dstip = flow['daddr']
-        timestamp = flow['starttime']
-        protocol = flow['proto']
+        dport: int = flow['dport']
+        dstip: str = flow['daddr']
+        saddr: str = flow['saddr']
+        timestamp: float = flow['starttime']
+        protocol: str = flow['proto']
 
-        evidence_type = 'MaliciousJARM'
-        attacker_direction = 'dstip'
-        source_target_tag = 'Malware'
-        attacker = dstip
-        threat_level = 'medium'
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+            )
+        threat_level = ThreatLevel.MEDIUM
         confidence = 0.7
-        category = 'Anomaly.Traffic'
+
         portproto = f'{dport}/{protocol}'
-        port_info = self.db.get_port_info(portproto)
-        port_info = port_info or ""
+        port_info = self.db.get_port_info(portproto) or ""
         port_info = f'({port_info.upper()})' if port_info else ""
+
         dstip_id = self.db.get_ip_identification(dstip)
         description = (
-           f"Malicious JARM hash detected for destination IP: {dstip}"
-           f" on port: {portproto} {port_info}.  {dstip_id}"
+            f"Malicious JARM hash detected for destination IP: {dstip}"
+            f" on port: {portproto} {port_info}.  {dstip_id}"
         )
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag,
-                                 port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
+        evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_JARM,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[flow['uid']],
+            timestamp=timestamp,
+            category=IDEACategory.ANOMALY_TRAFFIC,
+            proto=Proto(protocol.lower()),
+            port=dport,
+            source_target_tag=Tag.MALWARE
+        )
+
+        self.db.set_evidence(evidence)
+
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -598,3 +628,29 @@ class IPInfo(IModule, multiprocessing.Process):
             ip = msg['data']
             self.handle_new_ip(ip)
 
+        if msg:= self.get_msg('check_jarm_hash'):
+            # example of a msg
+            # {'attacker_type': 'ip',
+            # 'profileid': 'profile_192.168.1.9', 'twid': 'timewindow1',
+            # 'flow': {'starttime': 1700828217.923668,
+            # 'uid': 'CuTCcR1Bbp9Je7LVqa', 'saddr': '192.168.1.9',
+            # 'daddr': '45.33.32.156', 'dur': 0.20363497734069824,
+            # 'proto': 'tcp', 'appproto': '', 'sport': 50824, 'dport': 443,
+            # 'spkts': 1, 'dpkts': 1, 'sbytes': 0, 'dbytes': 0,
+            # 'smac': 'c4:23:60:3d:fd:d3', 'dmac': '50:78:b3:b0:08:ec',
+            # 'state': 'REJ', 'history': 'Sr', 'type_': 'conn', 'dir_': '->'},
+            # 'uid': 'CuTCcR1Bbp9Je7LVqa'}
+
+            msg: dict = json.loads(msg['data'])
+            flow: dict = msg['flow']
+            if msg['attacker_type'] == 'ip':
+                jarm_hash: str = self.JARM.JARM_hash(
+                    flow['daddr'],
+                    flow['dport']
+                )
+
+                if self.db.is_malicious_jarm(jarm_hash):
+                    self.set_evidence_malicious_jarm_hash(
+                        flow,
+                        msg['twid']
+                    )

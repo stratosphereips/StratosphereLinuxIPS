@@ -3,7 +3,9 @@ from flask import render_template
 import json
 from collections import defaultdict
 from datetime import datetime
+from typing import Dict, List
 from database.database import __database__
+from slips_files.common.slips_utils import utils
 
 analysis = Blueprint('analysis', __name__, static_folder='static', static_url_path='/analysis/static',
                      template_folder='templates')
@@ -14,8 +16,8 @@ analysis = Blueprint('analysis', __name__, static_folder='static', static_url_pa
 # ----------------------------------------
 def ts_to_date(ts, seconds=False):
     if seconds:
-        return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S.%f')
-    return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S')
+        return utils.convert_format(ts, '%Y/%m/%d %H:%M:%S.%f')
+    return utils.convert_format(ts, '%Y/%m/%d %H:%M:%S')
 
 
 def get_all_tw_with_ts(profileid):
@@ -93,7 +95,8 @@ def get_ip_info(ip):
 @analysis.route("/profiles_tws")
 def set_profile_tws():
     '''
-    Set profiles and their timewindows into the tree. Blocked are highligted in red.
+    Set profiles and their timewindows into the tree.
+    Blocked are highligted in red.
     :return: (profile, [tw, blocked], blocked)
     '''
 
@@ -104,9 +107,9 @@ def set_profile_tws():
         profile_word, profile_ip = profileid.split("_")
         profiles_dict[profile_ip] = False
 
-    if blockedProfileTWs := __database__.db.hgetall('alerts'):
-        for blocked in blockedProfileTWs.keys():
-            profile_word, blocked_ip = blocked.split("_")
+    if blocked_profiles := __database__.db.smembers('malicious_profiles'):
+        for profile in blocked_profiles:
+            blocked_ip = profile.split("_")[-1]
             profiles_dict[blocked_ip] = True
 
     data = [
@@ -138,17 +141,24 @@ def set_ip_info(ip):
 def set_tws(profileid):
     '''
     Set timewindows for selected profile
+    :param profileid: ip of the profile
     :return:
     '''
 
     # Fetch all profile TWs
-    tws = get_all_tw_with_ts(f"profile_{profileid}")
+    tws: Dict[str, dict] = get_all_tw_with_ts(f"profile_{profileid}")
 
-    if blockedTWs := __database__.db.hget('alerts', f"profile_{profileid}"):
-        blockedTWs = json.loads(blockedTWs)
+    blocked_tws: List[str] = []
+    for tw_id, twid_details in tws.items():
+        is_blocked: bool = __database__.db.hget(
+            f'profile_{profileid}_{tw_id}',
+            'alerts'
+        )
+        if is_blocked:
+            blocked_tws.append(tw_id)
 
-        for tw in blockedTWs.keys():
-            tws[tw]['blocked'] = True
+    for tw in blocked_tws:
+        tws[tw]['blocked'] = True
 
     data = [
         {
@@ -292,22 +302,32 @@ def set_alerts(profile, timewindow):
         alerts = json.loads(alerts)
         alerts_tw = alerts.get(timewindow, {})
         tws = get_all_tw_with_ts(profile)
-        evidences = __database__.db.hget(f"evidence{profile}", timewindow)
-        if evidences:
-            evidences = json.loads(evidences)
 
-        for alert_ID, evidence_ID_list in alerts_tw.items():
-            evidence_count = len(evidence_ID_list)
-            alert_description = json.loads(evidences[alert_ID])
-            alert_timestamp = alert_description["stime"]
-            if not isinstance(alert_timestamp, str):  # add check if the timestamp is a string
-                alert_timestamp = ts_to_date(alert_description["stime"], seconds=True)
-            profile_ip = profile.split("_")[1]
-            tw_name = tws[timewindow]["name"]
+        evidence: Dict[str, str] = __database__.db.hgetall(
+            f'{profile}_{timewindow}_evidence'
+            )
+
+        for alert_id, evidence_id_list in alerts_tw.items():
+            evidence_count = len(evidence_id_list)
+            evidence_details: dict = json.loads(evidence[alert_id])
+
+            timestamp: str = ts_to_date(
+                evidence_details["timestamp"],
+                seconds=True
+                )
+
+            profile_ip: str = profile.split("_")[1]
+            twid: str = tws[timewindow]["name"]
 
             data.append(
-                {"alert": alert_timestamp, "alert_id": alert_ID, "profileid": profile_ip, "timewindow": tw_name,
-                 "evidence_count": evidence_count})
+                {
+                     "alert": timestamp,
+                     "alert_id": alert_id,
+                     "profileid": profile_ip,
+                     "timewindow": twid,
+                     "evidence_count": evidence_count
+                    }
+            )
     return {"data": data}
 
 
@@ -321,12 +341,16 @@ def set_evidence(profile, timewindow, alert_id):
     if alerts := __database__.db.hget("alerts", f"profile_{profile}"):
         alerts = json.loads(alerts)
         alerts_tw = alerts[timewindow]
-        evidence_ID_list = alerts_tw[alert_id]
-        evidences = __database__.db.hget("evidence" + "profile_" + profile, timewindow)
-        evidences = json.loads(evidences)
+        # get the list of evidence that were part of this alert
+        evidence_ids: List[str] = alerts_tw[alert_id]
 
-        for evidence_ID in evidence_ID_list:
-            temp_evidence = json.loads(evidences[evidence_ID])
+        profileid = f"profile_{profile}"
+        evidence: Dict[str, str] = __database__.db.hgetall(
+            f'{profileid}_{timewindow}_evidence'
+        )
+
+        for evidence_id in evidence_ids:
+            temp_evidence = json.loads(evidence[evidence_id])
             if "source_target_tag" not in temp_evidence:
                 temp_evidence["source_target_tag"] = "-"
             data.append(temp_evidence)
@@ -334,23 +358,25 @@ def set_evidence(profile, timewindow, alert_id):
 
 
 @analysis.route("/evidence/<profile>/<timewindow>/")
-def set_evidence_general(profile, timewindow):
+def set_evidence_general(profile: str, timewindow: str):
     """
     Set an analysis tag with general evidence
-    :param profile:
-    :param timewindow:
+    :param profile: the ip
+    :param timewindow: timewindowx
     :return: {"data": data} where data is a list of evidences
     """
     data = []
-    if evidence := __database__.db.hget(
-        "evidence" + "profile_" + profile, timewindow
-    ):
-        evidence = json.loads(evidence)
-        for id, content in evidence.items():
-            content = json.loads(content)
-            if "source_target_tag" not in content:
-                content["source_target_tag"] = "-"
-            data.append(content)
+    profile = f"profile_{profile}"
+
+    evidence: Dict[str, str] = __database__.db.hgetall(
+            f'{profile}_{timewindow}_evidence'
+    )
+    if evidence :
+        for evidence_details in evidence.values():
+            evidence_details: dict = json.loads(evidence_details)
+            if "source_target_tag" not in evidence_details:
+                evidence_details["source_target_tag"] = "-"
+            data.append(evidence_details)
     return {"data": data}
 
 

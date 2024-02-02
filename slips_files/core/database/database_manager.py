@@ -97,6 +97,9 @@ class DBManager(IObservable):
     def getSlipsInternalTime(self, *args, **kwargs):
         return self.rdb.getSlipsInternalTime(*args, **kwargs)
 
+    def mark_profile_as_malicious(self, *args, **kwargs):
+        return self.rdb.mark_profile_as_malicious(*args, **kwargs)
+
     def get_equivalent_tws(self, *args, **kwargs):
         return self.rdb.get_equivalent_tws(*args, **kwargs)
 
@@ -376,8 +379,8 @@ class DBManager(IObservable):
         """returns the list of uids of the flows causing evidence"""
         return self.rdb.get_flows_causing_evidence(*args, **kwargs)
 
-    def setEvidence(self, *args, **kwargs):
-        return self.rdb.setEvidence(*args, **kwargs)
+    def set_evidence(self, *args, **kwargs):
+        return self.rdb.set_evidence(*args, **kwargs)
 
     def get_user_agents_count(self, *args, **kwargs):
         return self.rdb.get_user_agents_count(*args, **kwargs)
@@ -394,11 +397,9 @@ class DBManager(IObservable):
     def is_evidence_processed(self, *args, **kwargs):
         return self.rdb.is_evidence_processed(*args, **kwargs)
 
-    def set_evidence_for_profileid(self, *args, **kwargs):
-        return self.rdb.set_evidence_for_profileid(*args, **kwargs)
 
-    def deleteEvidence(self, *args, **kwargs):
-        return self.rdb.deleteEvidence(*args, **kwargs)
+    def delete_evidence(self, *args, **kwargs):
+        return self.rdb.delete_evidence(*args, **kwargs)
 
     def cache_whitelisted_evidence_ID(self, *args, **kwargs):
         return self.rdb.cache_whitelisted_evidence_ID(*args, **kwargs)
@@ -412,8 +413,8 @@ class DBManager(IObservable):
     def get_profileid_twid_alerts(self, *args, **kwargs):
         return self.rdb.get_profileid_twid_alerts(*args, **kwargs)
 
-    def getEvidenceForTW(self, *args, **kwargs):
-        return self.rdb.getEvidenceForTW(*args, **kwargs)
+    def get_twid_evidence(self, *args, **kwargs):
+        return self.rdb.get_twid_evidence(*args, **kwargs)
 
     def update_threat_level(self, *args, **kwargs):
         return self.rdb.update_threat_level(*args, **kwargs)
@@ -703,8 +704,8 @@ class DBManager(IObservable):
     def mark_profile_as_dhcp(self, *args, **kwargs):
         return self.rdb.mark_profile_as_dhcp(*args, **kwargs)
 
-    def addProfile(self, *args, **kwargs):
-        return self.rdb.addProfile(*args, **kwargs)
+    def add_profile(self, *args, **kwargs):
+        return self.rdb.add_profile(*args, **kwargs)
 
     def set_profile_module_label(self, *args, **kwargs):
         return self.rdb.set_profile_module_label(*args, **kwargs)
@@ -895,7 +896,10 @@ class DBManager(IObservable):
         return self.rdb.get_branch(*args, **kwargs)
 
     def add_alert(self, alert: dict):
-        twid_starttime: float = self.rdb.get_tw_start_time(alert['profileid'], alert['twid'])
+        twid_starttime: float = self.rdb.get_tw_start_time(
+            alert['profileid'],
+            alert['twid']
+        )
         twid_endtime: float = twid_starttime + RedisDB.width
         alert.update({'tw_start': twid_starttime, 'tw_end': twid_endtime})
         return self.sqlite.add_alert(alert)

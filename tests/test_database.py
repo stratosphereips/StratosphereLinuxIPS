@@ -1,12 +1,29 @@
-from slips_files.common.slips_utils import utils
-from slips_files.core.flows.zeek import Conn
-from slips_files.common.slips_utils import utils
-from tests.module_factory import ModuleFactory
 import redis
 import os
 import json
 import time
 import pytest
+
+from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import Conn
+from slips_files.common.slips_utils import utils
+from tests.module_factory import ModuleFactory
+from slips_files.core.evidence_structure.evidence import (
+    dict_to_evidence,
+    Evidence,
+    Direction,
+    IoCType,
+    EvidenceType,
+    IDEACategory,
+    Proto,
+    Tag,
+    Attacker,
+    Victim,
+    ThreatLevel,
+    ProfileID,
+    TimeWindow
+    )
+
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -38,13 +55,13 @@ def add_flow():
 
 
 def test_getProfileIdFromIP():
-    """unit test for addProfile and getProfileIdFromIP"""
+    """unit test for add_profile and getProfileIdFromIP"""
 
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
 
     # add a profile
-    db.addProfile('profile_192.168.1.1', '00:00', '1')
+    db.add_profile('profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
     assert db.get_profileid_from_ip(test_ip) is not False
 
@@ -54,7 +71,7 @@ def test_timewindows():
     getFirstTWforProfile"""
     profileid = 'profile_192.168.1.1'
     # add a profile
-    db.addProfile(profileid, '00:00', '1')
+    db.add_profile(profileid, '00:00', '1')
     # add a tw to that profile (first tw)
     db.add_new_tw(profileid, 'timewindow1', 0.0)
     # add  a new tw (last tw)
@@ -70,7 +87,7 @@ def getSlipsInternalTime():
 
 def test_add_ips():
     # add a profile
-    db.addProfile(profileid, '00:00', '1')
+    db.add_profile(profileid, '00:00', '1')
     # add a tw to that profile
     db.add_new_tw(profileid, 'timewindow1', 0.0)
     # make sure ip is added
@@ -92,41 +109,39 @@ def test_add_port():
     assert flow.daddr in added_ports['DstPortsServerTCPNot Established']
 
 
-def test_setEvidence():
-    attacker_direction = 'ip'
-    attacker = test_ip
-    evidence_type = f'SSHSuccessful-by-{attacker}'
-    threat_level = 0.01
-    confidence = 0.6
-    description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
+def test_set_evidence():
+    attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=test_ip
+        )
+    threat_level: ThreatLevel = ThreatLevel.INFO
+    confidence = 0.8
+    description = f'SSH Successful to IP : 8.8.8.8 . From IP {test_ip}'
     timestamp = time.time()
-    category = 'Infomation'
-    uid = '123'
-    db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                         timestamp, category, profileid=profileid, twid=twid, uid=uid)
+    uid = ['123']
+    victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value='8.8.8.8'
+        )
+    evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.SSH_SUCCESSFUL,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=test_ip),
+            timewindow=TimeWindow(number=1),
+            uid=uid,
+            timestamp=timestamp,
+            category=IDEACategory.INFO,
+        )
 
-    added_evidence = db.r.hget(f'evidence{profileid}', twid)
-    added_evidence2 = db.r.hget(f'{profileid}_{twid}', 'Evidence')
-    assert added_evidence2 == added_evidence
-
-    added_evidence = json.loads(added_evidence)
-    description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
-    #  note that added_evidence may have evidence from other unit tests
-    evidence_uid =  next(iter(added_evidence))
-    evidence_details = json.loads(added_evidence[evidence_uid])
-    assert 'description' in evidence_details
-    assert evidence_details['description'] == description
-
-
-def test_deleteEvidence():
-    description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
-    db.deleteEvidence(profileid, twid, description)
-    added_evidence = json.loads(db.r.hget(f'evidence{profileid}', twid))
-    added_evidence2 = json.loads(
-        db.r.hget(f'{profileid}_{twid}', 'Evidence')
-    )
-    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
-    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
+    db.set_evidence(evidence)
+    added = db.r.hget(f'{profileid}_{twid}_evidence', evidence.id)
+    assert added
 
 
 

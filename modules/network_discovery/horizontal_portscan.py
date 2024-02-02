@@ -1,5 +1,21 @@
-from slips_files.common.imports import *
 import ipaddress
+
+from slips_files.common.imports import *
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Victim,
+        Attacker,
+        Proto,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Tag
+    )
 
 
 class HorizontalPortscan():
@@ -272,43 +288,41 @@ class HorizontalPortscan():
         return False
 
 
-    def set_evidence_horizontal_portscan(
-            self,
-            evidence: dict
-    ):
-        evidence_type = 'HorizontalPortscan'
-        attacker_direction = 'srcip'
-        source_target_tag = 'Recon'
-        srcip = evidence["profileid"].split('_')[-1]
-        attacker = srcip
-        threat_level = 'high'
-        category = 'Recon.Scanning'
-        portproto = f'{evidence["dport"]}/{evidence["protocol"]}'
-        port_info = self.db.get_port_info(portproto)
-        port_info = port_info or ""
+    def set_evidence_horizontal_portscan(self, evidence: dict):
+        threat_level = ThreatLevel.HIGH
         confidence = utils.calculate_confidence(evidence["pkts_sent"])
+        srcip = evidence["profileid"].split('_')[-1]
+
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=srcip
+            )
+        portproto = f'{evidence["dport"]}/{evidence["protocol"]}'
+        port_info = self.db.get_port_info(portproto) or ""
         description = (
-            f'horizontal port scan to port {port_info} {portproto}. '
-            f'From {srcip} to {evidence["amount_of_dips"]} unique dst IPs. '
+            f'Horizontal port scan to port {port_info} {portproto}. '
+            f'From {srcip} to {evidence["amount_of_dips"]} unique destination IPs. '
             f'Total packets sent: {evidence["pkts_sent"]}. '
             f'Threat Level: {threat_level}. '
             f'Confidence: {confidence}. by Slips'
         )
 
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            evidence["timestamp"],
-            category,
-            source_target_tag=source_target_tag,
+        evidence = Evidence(
+            evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=int(evidence["twid"].replace("timewindow", ""))),
+            uid=evidence["uids"],
+            timestamp=evidence["timestamp"],
+            category=IDEACategory.RECON_SCANNING,
             conn_count=evidence["pkts_sent"],
-            port=evidence["dport"],
-            proto=evidence["protocol"],
-            profileid=evidence["profileid"],
-            twid=evidence["twid"],
-            uid=evidence["uids"]
-            )
+            proto=Proto(evidence["protocol"].lower()),
+            source_target_tag=Tag.RECON,
+            port=evidence["dport"]
+        )
+
+        self.db.set_evidence(evidence)
