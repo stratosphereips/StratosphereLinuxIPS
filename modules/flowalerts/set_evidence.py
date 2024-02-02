@@ -69,7 +69,6 @@ class SetEvidnceHelper:
     def multiple_ssh_versions(
         self,
         srcip: str,
-        dstip: str,
         cached_versions: str,
         current_versions: str,
         timestamp: str,
@@ -83,26 +82,10 @@ class SetEvidnceHelper:
         :param role: can be 'SSH::CLIENT' or
             'SSH::SERVER' as seen in zeek software.log flows
         """
-        if role.upper() == 'CLIENT':
-            attacker = srcip
-            attacker_direction = Direction.SRC
-            victim = dstip
-            victim_direction = Direction.DST
-        else:
-            attacker = dstip
-            attacker_direction = Direction.DST
-            victim = srcip
-            victim_direction = Direction.SRC
-
         attacker = Attacker(
-            direction=attacker_direction,
+            direction=Direction.SRC,
             attacker_type=IoCType.IP,
-            value=attacker
-            )
-        victim = Victim(
-            direction=victim_direction,
-            victim_type=IoCType.IP,
-            value=victim
+            value=srcip
             )
         role = 'client' if 'CLIENT' in role.upper() else 'server'
         description = f'SSH {role} version changing from ' \
@@ -114,7 +97,6 @@ class SetEvidnceHelper:
             threat_level=ThreatLevel.MEDIUM,
             category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
-            victim=victim,
             profile=ProfileID(ip=attacker.value),
             timewindow=TimeWindow(int(twid.replace("timewindow", ''))),
             uid=uid,
