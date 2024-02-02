@@ -12,12 +12,12 @@ random_ports = {
 def generate_random_ip():
     return ".".join(str(random.randint(0, 255)) for _ in range(4))
 
-def enough_dstips_to_reach_the_threshold(mock_rdb):
+def enough_dstips_to_reach_the_threshold(mock_db):
     """
     returns conns to dport that are not enough
     to reach the minimum dports to trigger the first scan
     """
-    module = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
+    module = ModuleFactory().create_horizontal_portscan_obj(mock_db)
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dstips: int = random.randint(
@@ -42,12 +42,12 @@ def enough_dstips_to_reach_the_threshold(mock_rdb):
 
 
 
-def not_enough_dstips_to_reach_the_threshold(mock_rdb):
+def not_enough_dstips_to_reach_the_threshold(mock_db):
     """
     returns conns to dport that are not enough
     to reach the minimum dports to trigger the first scan
     """
-    module = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
+    module = ModuleFactory().create_horizontal_portscan_obj(mock_db)
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dstips: int = random.randint(
@@ -80,16 +80,16 @@ def not_enough_dstips_to_reach_the_threshold(mock_rdb):
 def test_min_dstips_threshold(
         get_test_conns,
         expected_return_val: bool,
-        mock_rdb
+        mock_db
     ):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
 
     profileid = 'profile_1.1.1.1'
     timewindow = 'timewindow0'
     dport = 5555
 
-    dports: dict = get_test_conns(mock_rdb)
-    mock_rdb.get_data_from_profile_tw.return_value = dports
+    dports: dict = get_test_conns(mock_db)
+    mock_db.get_data_from_profile_tw.return_value = dports
 
     cache_key = horizontal_ps.get_cache_key(profileid, timewindow, dport)
     amount_of_dips = len(dports[dport]['dstips'])
@@ -114,7 +114,7 @@ def test_min_dstips_threshold(
 def test_combine_evidence(
         number_of_pending_evidence,
         expected_return_val: bool,
-        mock_rdb
+        mock_db
     ):
     """
     first evidence will be alerted, the rest will be combined
@@ -124,7 +124,7 @@ def test_combine_evidence(
     dstip = '8.8.8.8'
     dport = 5555
 
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
     key: str = horizontal_ps.get_cache_key(profileid, timewindow, dstip)
 
     for evidence_ctr in range(number_of_pending_evidence+1):
@@ -167,10 +167,11 @@ def test_combine_evidence(
         (15, 20, True),
     ]
 )
-def test_check_if_enough_dstips_to_trigger_an_evidence(mock_rdb,
-                                   prev_amount_of_dstips,
-                                   cur_amount_of_dstips,
-                                   expected_return_val):
+def test_check_if_enough_dstips_to_trigger_an_evidence(
+        mock_db,
+        prev_amount_of_dstips,
+        cur_amount_of_dstips,
+        expected_return_val):
     """
     slip sdetects can based on the number of current dports scanned to the
     number of the ports scanned before
@@ -181,7 +182,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence(mock_rdb,
     timewindow = 'timewindow0'
     dport = 5555
 
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_rdb)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
 
     key: str = horizontal_ps.get_cache_key(profileid, timewindow, dport)
     horizontal_ps.cached_tw_thresholds[key] = prev_amount_of_dstips

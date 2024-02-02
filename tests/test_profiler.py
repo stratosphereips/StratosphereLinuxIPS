@@ -15,8 +15,10 @@ from slips_files.core.flows.zeek import Conn
     'file,input_type,expected_value',
     [('dataset/test6-malicious.suricata.json', 'suricata', 'suricata')]
 )
-def test_define_separator_suricata(file, input_type, expected_value, mock_rdb):
-    profilerProcess = ModuleFactory().create_profiler_obj()
+def test_define_separator_suricata(file, input_type, expected_value,
+                                   mock_db
+                                   ):
+    profilerProcess = ModuleFactory().create_profiler_obj(mock_db)
     with open(file) as f:
         while True:
             sample_flow = f.readline().replace('\n', '')
@@ -35,8 +37,10 @@ def test_define_separator_suricata(file, input_type, expected_value, mock_rdb):
     'file,input_type,expected_value',
     [('dataset/test10-mixed-zeek-dir/conn.log', 'zeek_log_file', 'zeek-tabs')],
 )
-def test_define_separator_zeek_tab(file, input_type, expected_value, mock_rdb):
-    profilerProcess = ModuleFactory().create_profiler_obj()
+def test_define_separator_zeek_tab(file, input_type, expected_value,
+                                   mock_db
+                                   ):
+    profilerProcess = ModuleFactory().create_profiler_obj(mock_db)
     with open(file) as f:
         while True:
             sample_flow = f.readline().replace('\n', '')
@@ -55,12 +59,14 @@ def test_define_separator_zeek_tab(file, input_type, expected_value, mock_rdb):
     'file, input_type,expected_value',
     [('dataset/test9-mixed-zeek-dir/conn.log', 'zeek_log_file', 'zeek')]
 )
-def test_define_separator_zeek_dict(file, input_type, expected_value, mock_rdb):
+def test_define_separator_zeek_dict(file, input_type, expected_value,
+                                    mock_db
+                                    ):
     """
     :param input_type: as determined by slips.py
     """
 
-    profilerProcess = ModuleFactory().create_profiler_obj()
+    profilerProcess = ModuleFactory().create_profiler_obj(mock_db)
     with open(file) as f:
         sample_flow = f.readline().replace('\n', '')
 
@@ -73,7 +79,9 @@ def test_define_separator_zeek_dict(file, input_type, expected_value, mock_rdb):
 
 
 @pytest.mark.parametrize('nfdump_file', [('dataset/test1-normal.nfdump')])
-def test_define_separator_nfdump(nfdump_file, mock_rdb):
+def test_define_separator_nfdump(nfdump_file,
+                                 mock_db
+                                 ):
     # nfdump files aren't text files so we need to process them first
     command = f'nfdump -b -N -o csv -q -r {nfdump_file}'
     # Execute command
@@ -90,7 +98,7 @@ def test_define_separator_nfdump(nfdump_file, mock_rdb):
         else:
             break
 
-    profilerProcess = ModuleFactory().create_profiler_obj()
+    profilerProcess = ModuleFactory().create_profiler_obj(mock_db)
     sample_flow = {
         'data': nfdump_line,
     }
@@ -110,7 +118,7 @@ def test_define_separator_nfdump(nfdump_file, mock_rdb):
 #     ],
 # )
 # def test_define_columns(
-#     file, separator, expected_value, mock_rdb
+#     file, separator, expected_value, mock_db
 # ):
 #     # define_columns is called on header lines
 #     # line = '#fields ts      uid     id.orig_h       id.orig_p
@@ -124,7 +132,7 @@ def test_define_separator_nfdump(nfdump_file, mock_rdb):
 #             line = f.readline()
 #             if line.startswith('#fields'):
 #                 break
-#     profilerProcess = ModuleFactory().create_profiler_obj()
+#     profilerProcess = ModuleFactory().create_profiler_obj(mock_db)
 #     line = {'data': line}
 #     profilerProcess.separator = separator
 #     assert profilerProcess.define_columns(line) == expected_value
@@ -144,8 +152,8 @@ def test_define_separator_nfdump(nfdump_file, mock_rdb):
         # ('dataset/test9-mixed-zeek-dir/files.log', 'files.log'),
     ],
 )
-def test_process_line(file, flow_type):
-    profiler = ModuleFactory().create_profiler_obj()
+def test_process_line(file, flow_type, mock_db):
+    profiler = ModuleFactory().create_profiler_obj(mock_db)
     # we're testing another functionality here
     profiler.whitelist.is_whitelisted_flow = do_nothing
     profiler.input_type = 'zeek'
@@ -185,8 +193,8 @@ def test_process_line(file, flow_type):
         )
     assert added_flow is not None
 
-def test_get_rev_profile(mock_rdb):
-    profiler = ModuleFactory().create_profiler_obj()
+def test_get_rev_profile(mock_db):
+    profiler = ModuleFactory().create_profiler_obj(mock_db)
     profiler.flow = Conn(
                 '1.0',
                 '1234',
@@ -201,13 +209,12 @@ def test_get_rev_profile(mock_rdb):
                 '','',
                 'Established',''
             )
-    profiler.daddr_as_obj = ipaddress.ip_address(profiler.flow.daddr)
-    mock_rdb.get_profileid_from_ip.return_value = None
-    mock_rdb.get_timewindow.return_value = 'timewindow1'
+    mock_db.get_profileid_from_ip.return_value = None
+    mock_db.get_timewindow.return_value = 'timewindow1'
     assert profiler.get_rev_profile() == ('profile_8.8.8.8', 'timewindow1')
 
-def test_get_rev_profile_no_daddr(flow):
-    profiler = ModuleFactory().create_profiler_obj()
+def test_get_rev_profile_no_daddr(flow, mock_db):
+    profiler = ModuleFactory().create_profiler_obj(mock_db)
     profiler.flow = flow
     profiler.flow.daddr = None
     profiler.daddr_as_obj = None
