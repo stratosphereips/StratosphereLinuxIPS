@@ -276,8 +276,10 @@ class ARP(IModule, multiprocessing.Process):
         try:
             self.cache_arp_requests.pop(f'{profileid}_{twid}')
         except KeyError:
-            # when a tw is closed, we clear all its' entries from the cache_arp_requests dict
-            # having keyerr is a result of closing a timewindow before setting an evidence
+            # when a tw is closed, we clear all its' entries from the
+            # cache_arp_requests dict
+            # having keyerr is a result of closing a timewindow before
+            # setting an evidence
             # ignore it
             pass
 

@@ -36,7 +36,12 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware
         # to check your internet connection
-        self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com', 'gmail.com']
+        self.hosts = ['bing.com',
+                      'google.com',
+                      'yandex.com',
+                      'yahoo.com',
+                      'duckduckgo.com',
+                      'gmail.com']
         self.read_configuration()
         self.executable_mime_types = [
             'application/x-msdownload',
@@ -113,20 +118,29 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         self,
         uid: str,
         contacted_host: str,
+        uri: str,
         timestamp: str,
         request_body_len: int,
         profileid: str,
         twid: str
     ):
         """
-        Detects more than 4 empty connections to google, bing, yandex and yahoo on port 80
+        Detects more than 4 empty connections to
+            google, bing, yandex and yahoo on port 80
+        and evidence is generted only when the 4 conns have an empty uri
         """
+        print(f"@@@@@@@@@@@@@@@@ contacted host {contacted_host}")
         # to test this wget google.com:80 twice
         # wget makes multiple connections per command,
         # 1 to google.com and another one to www.google.com
+        if uri != '/':
+            # emtpy detections are only done when we go to bing.com,
+            # bing.com/something seems benign
+            return False
 
         for host in self.hosts:
-            if contacted_host in [host, f'www.{host}'] and request_body_len == 0:
+            if (contacted_host in [host, f'www.{host}']
+                    and request_body_len == 0):
                 try:
                     # this host has past connections, add to counter
                     uids, connections = self.connections_counter[host]
@@ -637,7 +651,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
                 uid, host, uri, timestamp, user_agent, profileid, twid
             )
             self.check_multiple_empty_connections(
-                uid, host, timestamp, request_body_len, profileid, twid
+                uid, host, uri, timestamp, request_body_len, profileid, twid
             )
             # find the UA of this profileid if we don't have it
             # get the last used ua of this profile
