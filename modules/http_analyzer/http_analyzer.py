@@ -129,7 +129,6 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             google, bing, yandex and yahoo on port 80
         and evidence is generted only when the 4 conns have an empty uri
         """
-        print(f"@@@@@@@@@@@@@@@@ contacted host {contacted_host}")
         # to test this wget google.com:80 twice
         # wget makes multiple connections per command,
         # 1 to google.com and another one to www.google.com
@@ -161,7 +160,7 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         if connections == self.empty_connections_threshold:
             threat_level: ThreatLevel = ThreatLevel.MEDIUM
             confidence: float = 1
-            saddr: str = profileid.split('_')[0]
+            saddr: str = profileid.split('_')[-1]
             description: str = f'Multiple empty HTTP connections to {host}'
 
             attacker = Attacker(

@@ -896,7 +896,10 @@ class DBManager(IObservable):
         return self.rdb.get_branch(*args, **kwargs)
 
     def add_alert(self, alert: dict):
-        twid_starttime: float = self.rdb.get_tw_start_time(alert['profileid'], alert['twid'])
+        twid_starttime: float = self.rdb.get_tw_start_time(
+            alert['profileid'],
+            alert['twid']
+        )
         twid_endtime: float = twid_starttime + RedisDB.width
         alert.update({'tw_start': twid_starttime, 'tw_end': twid_endtime})
         return self.sqlite.add_alert(alert)
