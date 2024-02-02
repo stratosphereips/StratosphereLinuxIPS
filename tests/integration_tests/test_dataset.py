@@ -157,9 +157,9 @@ def test_binetflow(
             [
                 'bad SMTP login to 80.75.42.226',
                 'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
-                'multiple empty HTTP connections to bing.com',
-                'suspicious user-agent',
-                'download of an executable',
+                'Multiple empty HTTP connections to google.com',
+                'Suspicious user-agent:',
+                'Download of an executable',
                 'GRE tunnel'
             ],
             'test14-malicious-zeek-dir/',
