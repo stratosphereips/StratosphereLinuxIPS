@@ -93,17 +93,26 @@ def idea_format(evidence: Evidence):
     # https://idea.cesnet.cz/en/design#:~:text=to%20string%20%E2%80%9CIDEA1
     # %E2%80%9D.-,Sources%20and%20targets,-As%20source%20of
     if evidence.evidence_type == EvidenceType.COMMAND_AND_CONTROL_CHANNEL:
-        botnet, ip_version = extract_cc_botnet_ip(evidence)
-        idea_dict['Source'].append({
-            ip_version: [botnet],
+        # botnet, ip_version = extract_cc_botnet_ip(evidence)
+        idea_dict['Source'][0].update({
             'Type': ['Botnet']
             })
 
         cc_server, ip_version = extract_cc_server_ip(evidence)
-        idea_dict['Source'].append({
+        server_info: dict = {
             ip_version: [cc_server],
             'Type': ['CC']
-            })
+            }
+
+        idea_dict['Source'].append(server_info)
+
+    # the idx of the daddr, in CC detections, it's the second one
+    idx = 1 if (evidence.evidence_type ==
+            EvidenceType.COMMAND_AND_CONTROL_CHANNEL) else 0
+    if evidence.port:
+        idea_dict["Source"][idx].update({'Port': [evidence.port]})
+    if evidence.proto:
+        idea_dict["Source"][idx].update({'Proto': [evidence.proto.name]})
 
     if hasattr(evidence, 'victim') and evidence.victim:
         # is the dstip ipv4/ipv6 or mac?
@@ -117,40 +126,10 @@ def idea_format(evidence: Evidence):
             hasattr(evidence, 'source_target_tag')
             and evidence.source_target_tag
     ):
-        if evidence.attacker.direction == Direction.DST:
-            key = 'Target'
-        else:
-            key = 'Source'
-
         # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
-        idea_dict[key][0].update({
+        idea_dict['Source'][0].update({
             'Type': [evidence.source_target_tag.value]
         })
-
-
-
-    # add the port/proto
-    # for all alerts, the srcip is in IDEA_dict['Source'][0]
-    # and the dstip is in IDEA_dict['Target'][0]
-    # for alert that only have a source, this is the port/proto
-    # of the source ip
-    key = 'Source'
-
-    if 'Target' in idea_dict:
-        # if the alert has a target, add the port/proto to the target(dstip)
-        key = 'Target'
-
-    # for C&C alerts IDEA_dict['Source'][0] is the
-    # Botnet aka srcip and IDEA_dict['Source'][1] is the C&C aka dstip
-    if evidence.evidence_type == EvidenceType.COMMAND_AND_CONTROL_CHANNEL:
-        # idx of the dict containing the dstip, we'll
-        # use this to add the port and proto to this dict
-        key = 'Source'
-
-    if evidence.port:
-        idea_dict[key][0].update({'Port': [evidence.port]})
-    if evidence.proto:
-        idea_dict[key][0].update({'Proto': [evidence.proto.name]})
 
     # add the description
     attachment = {
