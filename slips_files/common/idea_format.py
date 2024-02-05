@@ -1,6 +1,6 @@
 import validators
 from datetime import datetime
-
+from typing import Tuple
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
@@ -9,6 +9,42 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     )
 
+
+def get_ip_version(ip: str) -> str:
+    """returns 'IP6' or 'IP4'"""
+    if validators.ipv4(ip):
+        ip_version = 'IP4'
+    elif validators.ipv6(ip):
+        ip_version = 'IP6'
+    return ip_version
+
+
+def extract_cc_server_ip(evidence: Evidence) -> Tuple[str, str]:
+    """
+    extracts the CC server's IP from CC evidence
+    and returns the following in a tuple
+    ip_version: 'IP6' or 'IP4'
+    and the IP
+    """
+    # get the destination IP
+    cc_server = evidence.description \
+        .split('destination IP: ')[1] \
+        .split(' ')[0]
+    return cc_server, get_ip_version(cc_server)
+
+def extract_cc_botnet_ip(evidence: Evidence) -> Tuple[str, str]:
+    """
+    extracts the botnet's IP aka client's ip from the CC evidence
+    and returns the following  in a tuple
+    ip_version: 'IP6' or 'IP4'
+    and the IP
+    """
+    # this evidence belongs to the botnet's profile, not the server
+    srcip = evidence.attacker.value
+    return srcip, get_ip_version(srcip)
+
+
+
 def idea_format(evidence: Evidence):
     """
     Function to format our evidence according to I
@@ -16,7 +52,7 @@ def idea_format(evidence: Evidence):
     Detailed explanation of IDEA categories:
     https://idea.cesnet.cz/en/classifications
     """
-    IDEA_dict = {
+    idea_dict = {
         'Format': 'IDEA0',
         'ID': evidence.id,
         # both times represet the time of the detection, we probably
@@ -30,40 +66,44 @@ def idea_format(evidence: Evidence):
 
     # is the srcip ipv4/ipv6 or mac?
     if validators.ipv4(evidence.profile.ip):
-        IDEA_dict['Source'][0].update({'IP4': [evidence.profile.ip]})
+        idea_dict['Source'][0].update({'IP4': [evidence.profile.ip]})
     elif validators.ipv6(evidence.profile.ip):
-        IDEA_dict['Source'][0].update({'IP6': [evidence.profile.ip]})
+        idea_dict['Source'][0].update({'IP6': [evidence.profile.ip]})
     elif validators.mac_address(evidence.profile.ip):
-        IDEA_dict['Source'][0].update({'MAC': [evidence.profile.ip]})
+        idea_dict['Source'][0].update({'MAC': [evidence.profile.ip]})
     elif validators.url(evidence.profile.ip):
-        IDEA_dict['Source'][0].update({'URL': [evidence.profile.ip]})
+        idea_dict['Source'][0].update({'URL': [evidence.profile.ip]})
 
 
+    # according to the IDEA format
     # When someone communicates with C&C, both sides of communication are
     # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
-    if evidence.evidence_type == 'Command-and-Control-channels-detection':
-        # get the destination IP
-        dstip = evidence.description.split('destination IP: ')[
-            1].split(' ')[0]
+    # https://idea.cesnet.cz/en/design#:~:text=to%20string%20%E2%80%9CIDEA1
+    # %E2%80%9D.-,Sources%20and%20targets,-As%20source%20of
+    if evidence.evidence_type == EvidenceType.COMMAND_AND_CONTROL_CHANNEL:
+        botnet, ip_version = extract_cc_botnet_ip(evidence)
+        idea_dict['Source'].append({
+            ip_version: [botnet],
+            'Type': ['Botnet']
+            })
 
-        if validators.ipv4(dstip):
-            ip_version = 'IP4'
-        elif validators.ipv6(dstip):
-            ip_version = 'IP6'
-
-        IDEA_dict['Source'].append({ip_version: [dstip], 'Type': ['CC']})
+        cc_server, ip_version = extract_cc_server_ip(evidence)
+        idea_dict['Source'].append({
+            ip_version: [cc_server],
+            'Type': ['CC']
+            })
 
     # some evidence have a dst ip
     if evidence.attacker.direction == Direction.DST:
         # is the dstip ipv4/ipv6 or mac?
         if validators.ipv4(evidence.attacker.value):
-            IDEA_dict['Target'] = [{'IP4': [evidence.attacker.value]}]
+            idea_dict['Target'] = [{'IP4': [evidence.attacker.value]}]
         elif validators.ipv6(evidence.attacker.value):
-            IDEA_dict['Target'] = [{'IP6': [evidence.attacker.value]}]
+            idea_dict['Target'] = [{'IP6': [evidence.attacker.value]}]
         elif validators.mac_address(evidence.attacker.value):
-            IDEA_dict['Target'] = [{'MAC': [evidence.attacker.value]}]
+            idea_dict['Target'] = [{'MAC': [evidence.attacker.value]}]
         elif validators.url(evidence.attacker.value):
-            IDEA_dict['Target'][0].update({'URL': [evidence.profile.ip]})
+            idea_dict['Target'][0].update({'URL': [evidence.profile.ip]})
 
         # try to extract the hostname/SNI/rDNS of the dstip form the
         # description if available
@@ -78,12 +118,12 @@ def idea_format(evidence: Evidence):
             pass
 
         if hostname:
-            IDEA_dict['Target'][0].update({'Hostname': [hostname]})
+            idea_dict['Target'][0].update({'Hostname': [hostname]})
 
         # update the dstip description if specified in the evidence
         if evidence.source_target_tag:
             # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
-            IDEA_dict['Target'][0].update({'Type': [
+            idea_dict['Target'][0].update({'Type': [
                 evidence.source_target_tag]})
 
     elif IoCType.DOMAIN == evidence.attacker.attacker_type:
@@ -94,11 +134,11 @@ def idea_format(evidence: Evidence):
             attacker_type = 'URL'
 
         target_info = {attacker_type: [evidence.attacker.value]}
-        IDEA_dict['Target'] = [target_info]
+        idea_dict['Target'] = [target_info]
 
         # update the dstdomain description if specified in the evidence
         if evidence.source_target_tag:
-            IDEA_dict['Target'][0].update(
+            idea_dict['Target'][0].update(
                 {
                     'Type': [evidence.source_target_tag.value]
                 }
@@ -106,7 +146,7 @@ def idea_format(evidence: Evidence):
     elif evidence.source_target_tag:
         # the ioc is the srcip, therefore the tag is
         # desscribing the source
-        IDEA_dict['Source'][0].update(
+        idea_dict['Source'][0].update(
             {
                 'Type': [evidence.source_target_tag.value]
             }
@@ -119,7 +159,7 @@ def idea_format(evidence: Evidence):
     # of the source ip
     key = 'Source'
 
-    if 'Target' in IDEA_dict:
+    if 'Target' in idea_dict:
         # if the alert has a target, add the port/proto to the target(dstip)
         key = 'Target'
 
@@ -131,9 +171,9 @@ def idea_format(evidence: Evidence):
         key = 'Source'
 
     if evidence.port:
-        IDEA_dict[key][0].update({'Port': [evidence.port]})
+        idea_dict[key][0].update({'Port': [evidence.port]})
     if evidence.proto:
-        IDEA_dict[key][0].update({'Proto': [evidence.proto.name]})
+        idea_dict[key][0].update({'Proto': [evidence.proto.name]})
 
     # add the description
     attachment = {
@@ -144,14 +184,14 @@ def idea_format(evidence: Evidence):
             }
         ]
     }
-    IDEA_dict.update(attachment)
+    idea_dict.update(attachment)
 
     # only evidence of type scanning have conn_count
     if evidence.conn_count:
-        IDEA_dict['ConnCount'] = evidence.conn_count
+        idea_dict['ConnCount'] = evidence.conn_count
 
     if evidence.evidence_type == EvidenceType.MALICIOUS_DOWNLOADED_FILE:
-        IDEA_dict['Attach'] = [
+        idea_dict['Attach'] = [
             {
                 'Type': ['Malware'],
                 'Hash': [f'md5:{evidence.attacker.value}'],
@@ -159,11 +199,11 @@ def idea_format(evidence: Evidence):
 
         ]
         if 'size' in evidence.description:
-            IDEA_dict.update(
+            idea_dict.update(
                 {'Size': int(evidence.description.replace(".",'').split(
                     'size:')[1].split('from')[0])}
             )
 
-    return IDEA_dict
+    return idea_dict
 
 
