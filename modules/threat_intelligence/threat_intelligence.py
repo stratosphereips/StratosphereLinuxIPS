@@ -196,9 +196,9 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
             description: str = f'connection from blacklisted ' \
                                f'IP: {ip} to {dstip}. '
             attacker = Attacker(
-                direction=Direction.DST,
+                direction=Direction.SRC,
                 attacker_type=IoCType.IP,
-                value=dstip
+                value=ip
             )
         elif 'dst' in ip_state:
             if self.is_dns_response:
@@ -209,9 +209,9 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                                    f'IP: {ip} from {srcip}. '
 
             attacker = Attacker(
-                direction=Direction.SRC,
+                direction=Direction.DST,
                 attacker_type=IoCType.IP,
-                value=srcip
+                value=ip
             )
         else:
             # ip_state is not specified?
@@ -220,8 +220,9 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
         ip_identification: str = self.db.get_ip_identification(
             ip, get_ti_data=False
             ).strip()
-        description += f'{ip_identification} Description: ' \
-                       f'{ip_info["description"]}. Source: {ip_info["source"]}.'
+        description += (f'{ip_identification} Description: '
+                        f'{ip_info["description"]}. '
+                        f'Source: {ip_info["source"]}.')
 
 
         evidence = Evidence(
@@ -270,8 +271,8 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
 
         srcip = profileid.split("_")[-1]
         # in case of finding a subdomain in our blacklists
-        # print that in the description of the alert and change the confidence accordingly
-        # in case of a domain, confidence=1
+        # print that in the description of the alert and change the
+        # confidence accordingly in case of a domain, confidence=1
         confidence: float = 0.7 if is_subdomain else 1
 
         # when we comment ti_files and run slips, we
@@ -283,13 +284,14 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
 
 
         if self.is_dns_response:
-            description: str = f'DNS answer with a blacklisted CNAME: {domain} ' \
-                              f'for query: {self.dns_query} '
+            description: str = (f'DNS answer with a blacklisted '
+                                f'CNAME: {domain} '
+                                f'for query: {self.dns_query} ')
         else:
             description: str = f'connection to a blacklisted domain {domain}. '
 
-        description += f'Description: {domain_info.get("description", "")}, ' \
-                       f'Found in feed: {domain_info["source"]}, ' \
+        description += f'Description: {domain_info.get("description", "")},' \
+                       f' Found in feed: {domain_info["source"]}, ' \
                        f'Confidence: {confidence}. '
 
         tags = domain_info.get('tags', None)
@@ -1089,9 +1091,15 @@ class ThreatIntel(IModule, multiprocessing.Process, URLhaus):
                         utils.is_ignored_ip(ip)
                         or self.is_outgoing_icmp_packet(protocol, ip_state)
                     ):
-                    self.is_malicious_ip(ip, uid, daddr, timestamp, profileid, twid, ip_state)
-                    self.ip_belongs_to_blacklisted_range(ip, uid, daddr, timestamp, profileid, twid, ip_state)
-                    self.ip_has_blacklisted_ASN(ip, uid, timestamp, profileid, twid, ip_state)
+                    self.is_malicious_ip(
+                        ip, uid, daddr, timestamp, profileid, twid, ip_state
+                        )
+                    self.ip_belongs_to_blacklisted_range(
+                        ip, uid, daddr, timestamp, profileid, twid, ip_state
+                        )
+                    self.ip_has_blacklisted_ASN(
+                        ip, uid, timestamp, profileid, twid, ip_state
+                        )
             elif type_ == 'domain':
                 self.is_malicious_domain(
                     to_lookup,
