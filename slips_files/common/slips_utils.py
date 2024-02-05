@@ -102,7 +102,8 @@ class Utils(object):
 
     def detect_data_type(self, data):
         """
-        Detects the type of incoming data: ipv4, ipv6, domain, ip range, asn, md5, etc
+        Detects the type of incoming data:
+        ipv4, ipv6, domain, ip range, asn, md5, etc
         """
         data = data.strip()
         try:

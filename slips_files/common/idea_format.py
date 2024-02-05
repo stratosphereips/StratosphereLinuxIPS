@@ -44,6 +44,26 @@ def extract_cc_botnet_ip(evidence: Evidence) -> Tuple[str, str]:
     return srcip, get_ip_version(srcip)
 
 
+def extract_victim(evidence: Evidence) -> Tuple[str, str]:
+    ip = evidence.victim.value
+    # map of slips victim types to IDEA supported types
+    cases = {
+        IoCType.IP.name:  get_ip_version(ip),
+        IoCType.DOMAIN.name: 'Hostname',
+        IoCType.URL.name: 'URL',
+
+        }
+    return ip, cases[evidence.victim.victim_type]
+
+def extract_attacker(evidence: Evidence) -> Tuple[str, str]:
+    ip = evidence.attacker.value
+    # map of slips victim types to IDEA supported types
+    cases = {
+        IoCType.IP.name: get_ip_version(ip),
+        IoCType.DOMAIN.name: 'Hostname',
+        IoCType.URL.name: 'URL',
+    }
+    return ip, cases[evidence.attacker.attacker_type]
 
 def idea_format(evidence: Evidence):
     """
@@ -64,16 +84,8 @@ def idea_format(evidence: Evidence):
         'Source': [{}],
     }
 
-    # is the srcip ipv4/ipv6 or mac?
-    if validators.ipv4(evidence.profile.ip):
-        idea_dict['Source'][0].update({'IP4': [evidence.profile.ip]})
-    elif validators.ipv6(evidence.profile.ip):
-        idea_dict['Source'][0].update({'IP6': [evidence.profile.ip]})
-    elif validators.mac_address(evidence.profile.ip):
-        idea_dict['Source'][0].update({'MAC': [evidence.profile.ip]})
-    elif validators.url(evidence.profile.ip):
-        idea_dict['Source'][0].update({'URL': [evidence.profile.ip]})
-
+    attacker, attacker_type = extract_attacker(evidence)
+    idea_dict['Source'][0].update({attacker_type: [attacker]})
 
     # according to the IDEA format
     # When someone communicates with C&C, both sides of communication are
@@ -93,64 +105,29 @@ def idea_format(evidence: Evidence):
             'Type': ['CC']
             })
 
-    # some evidence have a dst ip
-    if evidence.attacker.direction == Direction.DST:
+    if hasattr(evidence, 'victim') and evidence.victim:
         # is the dstip ipv4/ipv6 or mac?
-        if validators.ipv4(evidence.attacker.value):
-            idea_dict['Target'] = [{'IP4': [evidence.attacker.value]}]
-        elif validators.ipv6(evidence.attacker.value):
-            idea_dict['Target'] = [{'IP6': [evidence.attacker.value]}]
-        elif validators.mac_address(evidence.attacker.value):
-            idea_dict['Target'] = [{'MAC': [evidence.attacker.value]}]
-        elif validators.url(evidence.attacker.value):
-            idea_dict['Target'][0].update({'URL': [evidence.profile.ip]})
+        victims_ip: str
+        victim_type:str
+        victims_ip, victim_type = extract_victim(evidence)
+        idea_dict['Target'] = [{victim_type: [victims_ip]}]
 
-        # try to extract the hostname/SNI/rDNS of the dstip form the
-        # description if available
-        hostname = False
-        try:
-            hostname = evidence.description.split('rDNS: ')[1]
-        except IndexError:
-            ...
-        try:
-            hostname = evidence.description.split('SNI: ')[1]
-        except IndexError:
-            pass
-
-        if hostname:
-            idea_dict['Target'][0].update({'Hostname': [hostname]})
-
-        # update the dstip description if specified in the evidence
-        if evidence.source_target_tag:
-            # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
-            idea_dict['Target'][0].update({'Type': [
-                evidence.source_target_tag]})
-
-    elif IoCType.DOMAIN == evidence.attacker.attacker_type:
-        # the ioc is a domain
-        if evidence.attacker.attacker_type == IoCType.DOMAIN:
-            attacker_type = 'Hostname'
+    # update the dstip description if specified in the evidence
+    if (
+            hasattr(evidence, 'source_target_tag')
+            and evidence.source_target_tag
+    ):
+        if evidence.attacker.direction == Direction.DST:
+            key = 'Target'
         else:
-            attacker_type = 'URL'
+            key = 'Source'
 
-        target_info = {attacker_type: [evidence.attacker.value]}
-        idea_dict['Target'] = [target_info]
+        # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
+        idea_dict[key][0].update({
+            'Type': [evidence.source_target_tag.value]
+        })
 
-        # update the dstdomain description if specified in the evidence
-        if evidence.source_target_tag:
-            idea_dict['Target'][0].update(
-                {
-                    'Type': [evidence.source_target_tag.value]
-                }
-            )
-    elif evidence.source_target_tag:
-        # the ioc is the srcip, therefore the tag is
-        # desscribing the source
-        idea_dict['Source'][0].update(
-            {
-                'Type': [evidence.source_target_tag.value]
-            }
-        )
+
 
     # add the port/proto
     # for all alerts, the srcip is in IDEA_dict['Source'][0]
