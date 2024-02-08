@@ -24,9 +24,10 @@ class ICore(IModule, Process):
             **kwargs
             ):
         """
-        contains common initializations in all core files in  slips_files/core/
-        the goal of this is to have one common __init__() for all modules, which is the one
-        in this file
+        contains common initializations in all core files in
+         slips_files/core/
+        the goal of this is to have one common __init__()
+        for all modules, which is the one in this file
         """
         Process.__init__(self)
         self.output_dir = output_dir

@@ -21,7 +21,7 @@ from slips_files.core.evidence_structure.evidence import \
     )
 
 
-class NetworkDiscovery(IModule, multiprocessing.Process):
+class NetworkDiscovery(IModule):
     """
     A class process to find port scans
     This should be converted into a module that wakesup alone when a new alert arrives

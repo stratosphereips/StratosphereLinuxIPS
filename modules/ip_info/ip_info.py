@@ -34,7 +34,7 @@ from slips_files.core.evidence_structure.evidence import \
     )
 
 
-class IPInfo(IModule, multiprocessing.Process):
+class IPInfo(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'IP Info'
     description = 'Get different info about an IP/MAC address'

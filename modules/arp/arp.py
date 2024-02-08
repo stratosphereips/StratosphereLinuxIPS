@@ -23,7 +23,7 @@ from slips_files.core.evidence_structure.evidence import \
     )
 
 
-class ARP(IModule, multiprocessing.Process):
+class ARP(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'ARP'
     description = 'Detect ARP attacks'

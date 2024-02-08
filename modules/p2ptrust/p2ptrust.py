@@ -67,7 +67,7 @@ def validate_slips_data(message_data: str) -> (str, int):
         return None
 
 
-class Trust(IModule, multiprocessing.Process):
+class Trust(IModule):
     name = 'P2P Trust'
     description = 'Enables sharing detection data with other Slips instances'
     authors = ['Dita', 'Alya Gomaa']

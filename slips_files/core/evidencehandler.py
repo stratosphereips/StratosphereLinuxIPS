@@ -135,7 +135,8 @@ class EvidenceHandler(ICore):
         elif len(dns_resolution_ip) == 0:
             dns_resolution_ip = ''
 
-        # dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_attacker and len(
+        # dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. '
+        # if dns_resolution_attacker and len(
         #     dns_resolution_ip[:3]
         #     ) > 0 else '. '
 
@@ -202,7 +203,8 @@ class EvidenceHandler(ICore):
 
     def add_to_log_file(self, data):
         """
-        Add a new evidence line to the alerts.log and other log files if logging is enabled.
+        Add a new evidence line to the alerts.log and other log files if
+        logging is enabled.
         """
         try:
             # write to alerts.log
@@ -216,12 +218,17 @@ class EvidenceHandler(ICore):
             self.print(traceback.print_exc(),0,1)
 
     def get_domains_of_flow(self, flow: dict):
-        """Returns the domains of each ip (src and dst) that appeared in this flow"""
-        # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
+        """
+        Returns the domains of each ip (src and dst) that a
+        ppeared in this flow
+        """
+        # These separate lists, hold the domains that we should only
+        # check if they are SRC or DST. Not both
         try:
             flow = json.loads(list(flow.values())[0])
         except TypeError:
-            # sometimes this function is called before the flow is add to our database
+            # sometimes this function is called before the flow is
+            # added to our database
             return [], []
         domains_to_check_src = []
         domains_to_check_dst = []
@@ -258,7 +265,8 @@ class EvidenceHandler(ICore):
         Function to display a popup with the alert depending on the OS
         """
         if platform.system() == 'Linux':
-            #  is notify_cmd is set in setup_notifications function depending on the user
+            #  is notify_cmd is set in setup_notifications function
+            #  depending on the user
             os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
         elif platform.system() == 'Darwin':
             os.system(
@@ -340,7 +348,8 @@ class EvidenceHandler(ICore):
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)
         # that we decided to alert and block it
-        #todo if by default we don't block everything from/to this ip anymore, remember to update the CYST module
+        #todo if by default we don't block everything from/to this ip anymore,
+        # remember to update the CYST module
 
         ip_to_block = profileid.split('_')[-1]
 
@@ -369,9 +378,11 @@ class EvidenceHandler(ICore):
         """
         Marks the profileid and twid as blocked and logs it to alerts.log
         we don't block when running slips on files, we log it in alerts.log only
-        :param blocked: bool. if the ip was blocked by the blocking module, we should say so
+        :param blocked: bool. if the ip was blocked by the blocking module,
+                we should say so
                     in alerts.log, if not, we should say that we generated an alert
-        :param IDEA_dict: the last evidence of this alert, used for logging the blocking
+        :param IDEA_dict: the last evidence of this alert,
+                        used for logging the blocking
         """
         self.db.mark_profile_as_malicious(profileid)
 
@@ -387,7 +398,8 @@ class EvidenceHandler(ICore):
         else:
             msg += 'Generated an alert '
 
-        msg += f'given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+        msg += (f'given enough evidence on timewindow '
+                f'{twid.split("timewindow")[1]}. (real time {now})')
 
         # log in alerts.log
         self.add_to_log_file(msg)
@@ -479,8 +491,8 @@ class EvidenceHandler(ICore):
                 continue
 
             evidence_id: str = evidence.id
-            # we keep track of these IDs to be able to label the flows of these
-            # evidence later if this was detected as an alert
+            # we keep track of these IDs to be able to label the flows
+            # of these evidence later if this was detected as an alert
             # now this should be done in its' own function but this is more
             # optimal so we don't loop through all evidence again. i'll
             # just leave it like that:D
@@ -531,7 +543,8 @@ class EvidenceHandler(ICore):
 
         # Compute the moving average of evidence
         evidence_threat_level: float = threat_level * confidence
-        self.print(f'\t\tWeighted Threat Level: {evidence_threat_level}', 3, 0)
+        self.print(f'\t\tWeighted Threat Level: {evidence_threat_level}',
+                   3, 0)
         return evidence_threat_level
 
     def get_last_evidence_ID(self, tw_evidence: dict) -> str:
@@ -551,13 +564,16 @@ class EvidenceHandler(ICore):
 
     def is_blocking_module_enabled(self) -> bool:
         """
-        returns true if slips is running in an interface or growing zeek dir with -p
-        or if slips is using custom flows. meaning slips is reading the flows by a custom module not by
+        returns true if slips is running in an interface or growing
+         zeek dir with -p
+        or if slips is using custom flows. meaning slips is reading the
+        flows by a custom module not by
         inputprocess. there's no need for -p to enable the blocking
         """
 
         custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
-        return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
+        return ((self.is_running_on_interface() and '-p' not in sys.argv)
+                or custom_flows)
 
     def handle_new_alert(self, alert_ID: str, tw_evidence: dict):
         """
@@ -682,7 +698,6 @@ class EvidenceHandler(ICore):
                 timestamp: str = evidence.timestamp
                 # this is all the uids of the flows that cause this evidence
                 all_uids: list = evidence.uid
-
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence
                 # below.
@@ -701,7 +716,9 @@ class EvidenceHandler(ICore):
 
                 # convert time to local timezone
                 if self.running_non_stop:
-                    timestamp: datetime = utils.convert_to_local_timezone(timestamp)
+                    timestamp: datetime = utils.convert_to_local_timezone(
+                        timestamp
+                        )
                 flow_datetime = utils.convert_format(timestamp, 'iso')
 
                 evidence_to_log: str = self.get_evidence_to_log(

@@ -21,7 +21,7 @@ from slips_files.core.evidence_structure.evidence import \
     )
 
 
-class HTTPAnalyzer(IModule, multiprocessing.Process):
+class HTTPAnalyzer(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'HTTP Analyzer'
     description = 'Analyze HTTP flows'
@@ -140,15 +140,12 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         for host in self.hosts:
             if (contacted_host in [host, f'www.{host}']
                     and request_body_len == 0):
-                if "google" in contacted_host:
-                    print(f"@@@@@@@@@@@@@@@@ came here ")
                 try:
                     # this host has past connections, add to counter
                     uids, connections = self.connections_counter[host]
                     connections +=1
                     uids.append(uid)
                     self.connections_counter[host] = (uids, connections)
-                    print(f"@@@@@@@@@@@@@@@@ {self.connections_counter}")
                 except KeyError:
                     # first empty connection to this host
                     self.connections_counter.update({host: ([uid], 1)})

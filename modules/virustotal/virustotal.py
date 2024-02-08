@@ -12,7 +12,7 @@ from slips_files.common.imports import *
 from slips_files.common.slips_utils import utils
 
 
-class VT(IModule, multiprocessing.Process):
+class VT(IModule):
     name = 'Virustotal'
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = [
