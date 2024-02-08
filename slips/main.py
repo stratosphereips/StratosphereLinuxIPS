@@ -565,12 +565,12 @@ class Main(IObservable):
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
+            self.stdout = current_stdout
             self.logger = self.proc_man.start_output_process(
                 current_stdout,
                 stderr,
                 slips_logfile)
             self.add_observer(self.logger)
-
             self.db = DBManager(self.logger, self.args.output, self.redis_port)
             self.db.set_input_metadata({
                     'output_dir': self.args.output,
@@ -580,11 +580,6 @@ class Main(IObservable):
 
             self.cpu_profiler_init()
             self.memory_profiler_init()
-            # uncomment line to see that memory profiler works correctly
-            # Should print out red text if working properly
-            # self.memory_profiler_multiproc_test()
-
-
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':

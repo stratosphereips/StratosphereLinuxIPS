@@ -1,42 +1,49 @@
-from multiprocessing import Process, Pipe
+from multiprocessing.connection import Connection
+from multiprocessing.managers import ValueProxy
 from tqdm.auto import tqdm
 import sys
 
-class PBar(Process):
+from slips_files.common.abstracts._module import IModule
+
+
+class PBar(IModule):
     """
     Here's why this class is run in a separate process
     we need all modules to have access to the pbar.
-    so for example, profile is the one always initializing the pbar, when this class
-    isn't run as a proc, profiler would be the only proc that "knows" about the pbar
+    so for example, profile is the one always initializing the pbar,
+    when this class isn't run as a proc, profiler would be the only proc
+    that "knows" about the pbar
     because it initialized it right?
-    now when any txt is sent to be print by the output proc by anyone other than the profiler
-    the output.py would print it on top of the pbar! and we'd get duplicate bars!
+    now when any txt is sent to be printed by the output proc by anyone
+    other than the profiler
+    the output proc would print it on top of the pbar! and we'd get duplicate
+    bars!
 
     the solution to this is to make the pbar a separate proc
     whenever it's supported, the output.py will forward all txt to be printed
     to this class, and this class would handle the printing nicely
     so that nothing will overlap with the pbar
-    once the pbar is done, this proc sets teh has_pbar shared var to Flase
+    once the pbar is done, this proc sets the has_pbar shared var to Flase
     and output.py would know about it and print txt normally
     """
-    def __init__(
-            self,
-            pipe: Pipe,
-            has_bar,
-            slips_mode: str,
-            input_type: str,
-            stdout: str,
-         ):
-
-        Process.__init__(self)
-        self.pipe: Pipe = pipe
-        self.stdout = stdout
+    name = 'Progress Bar'
+    description = 'Shows a pbar of processed flows'
+    authors = ['Alya Gomaa']
+    def init(self,
+            has_pbar: ValueProxy = False,
+            stdout: str = None,
+            slips_mode: str = None,
+            pipe: Connection = None,
+            input_type: str = None):
+        self.has_pbar = has_pbar
+        self.stdout: str = stdout
         self.slips_mode: str = slips_mode
+        self.pipe = pipe
+        input_type: str = input_type
 
         # this is a shared obj using mp Manager
         # using mp manager to be able to change this value
         # here and and have it changed in the Output.py
-        self.has_pbar = has_bar
         self.supported: bool = self.is_pbar_supported(input_type)
         if self.supported:
             self.has_pbar.value = True
@@ -80,17 +87,17 @@ class PBar(Process):
         )
 
 
-    def init(self, msg: dict):
+    def initialize_pbar(self, msg: dict):
         """
-        initializes the progress bar when slips is runnning on a file or a zeek dir
+        initializes the progress bar when slips is runnning on a file or
+         a zeek dir
         ignores pcaps, interface and dirs given to slips if -g is enabled
         :param bar: dict with input type, total_flows, etc.
         """
-
-
         self.total_flows = int(msg['total_flows'])
         # the bar_format arg is to disable ETA and unit display
-        # dont use ncols so tqdm will adjust the bar size according to the terminal size
+        # dont use ncols so tqdm will adjust the bar size according to the
+        # terminal size
         self.progress_bar = tqdm(
             total=self.total_flows,
             leave=True,
@@ -113,7 +120,8 @@ class PBar(Process):
         """
 
         if not hasattr(self, 'progress_bar') :
-            # this module wont have the progress_bar set if it's running on pcap or interface
+            # this module wont have the progress_bar set if it's running
+            # on pcap or interface
             # or if the output is redirected to a file!
             return
 
@@ -128,11 +136,11 @@ class PBar(Process):
         # remove it from the bar because we'll be
         # prining it in a new line
         self.remove_stats()
-        tqdm.write("Profiler is done reading all flows. Slips is now processing them.")
-        self.done_reading_flows = True
+        tqdm.write("Profiler is done reading all flows. "
+                   "Slips is now processing them.")
         self.has_pbar.value = False
 
-    def print(self, msg: dict):
+    def print_to_cli(self, msg: dict):
         """
         prints using tqdm in order to avoid conflict with the pbar
         """
@@ -146,48 +154,41 @@ class PBar(Process):
             refresh=True
         )
 
-    def pbar_supported(self) -> bool:
+
+    def pre_main(self):
+        if not self.supported:
+            return 1
+
+    def shutdown_gracefully(self):
+        # to tell output.py to no longer send prints here
+        self.has_pbar.value = False
+
+
+    def main(self):
         """
-        this proc should stop listening
-        to events if the pbar reached 100% or if it's not supported
+        keeps receiving events until pbar reaches 100%
         """
-        if (
-                self.done_reading_flows
-                or not self.supported
-        ):
-            return False
-        return True
+        sth = self.pipe.poll(timeout=0.1)
 
-    def run(self):
-        """keeps receiving events until pbar reaches 100%"""
-        try:
-            while self.pbar_supported():
-                try:
-                    msg: dict = self.pipe.recv()
-                except KeyboardInterrupt:
-                    # to tell output.py to no longer send prints here
-                    self.has_pbar.value = False
-                    return
+        if sth:
+            msg: dict = self.pipe.recv()
 
-                event: str = msg['event']
-                if event == "init":
-                    self.init(msg)
+            event: str = msg['event']
+            if event == "init":
+                self.initialize_pbar(msg)
 
-                if event == "update_bar":
-                    self.update_bar()
+            if event == "update_bar":
+                self.update_bar()
 
-                if event == "update_stats":
-                    self.update_stats(msg)
+            if event == "update_stats":
+                self.update_stats(msg)
 
+            if event == "terminate":
+                self.terminate()
+                return 1
 
-                if event == "terminate":
-                    self.terminate()
-                    return
+            if event == "print":
+                # let tqdm do th eprinting to avoid conflicts with the pbar
+                self.print_to_cli(msg)
 
-                if event == "print":
-                    # let tqdm do th eprinting to avoid conflicts with the pbar
-                    self.print(msg)
-
-        except Exception as e:
-            tqdm.write(f"PBar Error: {e}")
 
