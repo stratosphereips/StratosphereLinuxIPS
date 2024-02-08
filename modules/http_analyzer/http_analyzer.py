@@ -140,12 +140,15 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
         for host in self.hosts:
             if (contacted_host in [host, f'www.{host}']
                     and request_body_len == 0):
+                if "google" in contacted_host:
+                    print(f"@@@@@@@@@@@@@@@@ came here ")
                 try:
                     # this host has past connections, add to counter
                     uids, connections = self.connections_counter[host]
                     connections +=1
                     uids.append(uid)
                     self.connections_counter[host] = (uids, connections)
+                    print(f"@@@@@@@@@@@@@@@@ {self.connections_counter}")
                 except KeyError:
                     # first empty connection to this host
                     self.connections_counter.update({host: ([uid], 1)})
@@ -372,7 +375,8 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             response = requests.get(url, params=params, timeout=5)
             if response.status_code != 200 or not response.text:
                 raise requests.exceptions.ConnectionError
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.ReadTimeout):
             return False
 
         # returns the following
