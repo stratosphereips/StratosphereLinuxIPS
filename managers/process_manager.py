@@ -306,12 +306,15 @@ class ProcessManager:
                 continue
 
             module_class = modules_to_call[module_name]["obj"]
-            module = module_class(
-                self.main.logger,
-                self.main.args.output,
-                self.main.redis_port,
-                self.termination_event,
-            )
+            if module_name == "Progress Bar":
+                module = self.start_progress_bar(module_class)
+            else:
+                module = module_class(
+                    self.main.logger,
+                    self.main.args.output,
+                    self.main.redis_port,
+                    self.termination_event,
+                )
             module.start()
             self.main.db.store_process_PID(module_name, int(module.pid))
             self.module_objects[module_name] = module  # maps name -> object
