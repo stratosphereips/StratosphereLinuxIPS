@@ -437,12 +437,13 @@ class ARP(IModule):
         #  the original IP of this src mac is now the IP of the attacker?
 
         # get the original IP of the src mac from the database
-        original_IP = self.db.get_ip_of_mac(src_mac)
+        original_IP: str = self.db.get_ip_of_mac(src_mac)
         if original_IP is None:
             return
 
         # original_IP is a serialized list
-        original_IP = json.loads(original_IP)[0]
+        original_IP: str = json.loads(original_IP)[0]
+        original_IP = original_IP.replace("profile_","")
 
         # is this saddr trying to tell everyone that this
         # it owns this src_mac even though we know this src_mac is associated
@@ -459,9 +460,11 @@ class ARP(IModule):
             confidence: float = 0.2   # low confidence for now
             threat_level: ThreatLevel = ThreatLevel.CRITICAL
 
+            attackers_ip = saddr
+            victims_ip = original_IP
+
             gateway_ip = self.db.get_gateway_ip()
             gateway_MAC = self.db.get_gateway_mac()
-
             if saddr == gateway_ip:
                 saddr = f'The gateway {saddr}'
 
@@ -475,19 +478,18 @@ class ARP(IModule):
             attacker: Attacker = Attacker(
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
-                value=saddr
+                value=attackers_ip
             )
 
             victim = Victim(
                 direction=Direction.DST,   #  TODO not really dst
                 victim_type=IoCType.IP,
-                value=original_IP,
+                value=victims_ip
                 )
 
             description = f'{saddr} performing a MITM ARP attack. ' \
                           f'The MAC {src_mac}, now belonging to ' \
                           f'{saddr}, was seen before for {original_IP}.'
-            # self.print(f'{saddr} is claiming to have {src_mac}')
 
             evidence: Evidence = Evidence(
                 evidence_type=EvidenceType.MITM_ARP_ATTACK,
@@ -514,22 +516,23 @@ class ARP(IModule):
         """
         Check if an ARP packet is gratuitous
 
-        # The Gratuitous arp is sent as a broadcast, as a way for a node to announce or update
-        # its IP to MAC mapping to the entire network.
-        #  Gratuitous ARP shouldn't be marked as an arp scan
-        # Check https://www.practicalnetworking.net/series/arp/gratuitous-arp/
-        # dst_mac is the real MAC used to deliver the packet
-        # src_mac is the real MAC used to deliver the packet
-        # dst_hw is the MAC in the headers of the ARP packet
-        # src_hw is the MAC in the headers of the ARP packet
-        # saddr is the IP in the headers of the ARP packet
-        # daddr is the IP in the headers of the ARP packet
+        The Gratuitous arp is sent as a broadcast, as a way for a
+        node to announce or update
+        its IP to MAC mapping to the entire network.
+        Gratuitous ARP shouldn't be marked as an arp scan
+        Check https://www.practicalnetworking.net/series/arp/gratuitous-arp/
+        dst_mac is the real MAC used to deliver the packet
+        src_mac is the real MAC used to deliver the packet
+        dst_hw is the MAC in the headers of the ARP packet
+        src_hw is the MAC in the headers of the ARP packet
+        saddr is the IP in the headers of the ARP packet
+        daddr is the IP in the headers of the ARP packet
 
-        # Gratuitous ARP can be used for (1) Updating ARP Mapping,
+        Gratuitous ARP can be used for (1) Updating ARP Mapping,
         (2) Announcing a Node’s Existence,
         (3) Redundancy, (4) MITM. Which is similar to an
         'unrequested' load balancing
-        # The saddr and daddr are the ones being avertised.
+         The saddr and daddr are the ones being avertised.
          The supposed purpose of the Gratuitous ARP
         """
         # It should be a reply
