@@ -15,19 +15,19 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.common.abstracts.observer import IObserver
-from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.core.helpers.progress_bar import PBar
-from slips_files.common.slips_utils import utils
-from slips_files.common.style import red
 from threading import Lock
+from multiprocessing.connection import Connection
+from multiprocessing.managers import ValueProxy
 import sys
 import io
-import time
 from pathlib import Path
 from datetime import datetime
 import os
-from multiprocessing import Pipe, Manager
+
+from slips_files.common.abstracts.observer import IObserver
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.style import red
 
 
 
@@ -53,7 +53,9 @@ class Output(IObserver):
         stderr='output/errors.log',
         slips_logfile='output/slips.log',
         slips_mode='interactive',
-        input_type=False
+        input_type=False,
+        sender_pipe: Connection =None,
+        has_pbar: ValueProxy = False,
     ):
         if not cls._obj:
             cls._obj = super().__new__(cls)
@@ -62,37 +64,24 @@ class Output(IObserver):
             cls.verbose = verbose
             cls.debug = debug
             cls.input_type = input_type
+            cls.has_pbar = has_pbar
+            cls.sender_pipe = sender_pipe
             ####### create the log files
             cls._read_configuration()
             cls.errors_logfile = stderr
             cls.slips_logfile = slips_logfile
             cls.create_logfile(cls.errors_logfile)
             cls.create_logfile(cls.slips_logfile)
-            utils.change_logfiles_ownership(cls.errors_logfile, cls.UID, cls.GID)
-            utils.change_logfiles_ownership(cls.slips_logfile, cls.UID, cls.GID)
+            utils.change_logfiles_ownership(
+                cls.errors_logfile, cls.UID, cls.GID
+            )
+            utils.change_logfiles_ownership(
+                cls.slips_logfile, cls.UID, cls.GID
+            )
             cls.stdout = stdout
             if stdout != '':
                 cls.change_stdout()
-            # Pipe(False) means the pipe is unidirectional.
-            # aka only msgs can go from output -> pbar and not vice versa
-            # recv_pipe used only for receiving,
-            # send_pipe use donly for sending
-            cls.recv_pipe, cls.send_pipe = Pipe(False)
-            # using mp manager to be able to change this value
-            # from the PBar class and have it changed here
-            cls.slips_mode = slips_mode
 
-            cls.manager = Manager()
-            cls.has_pbar = cls.manager.Value("has_pbar", False)
-
-            cls.pbar = PBar(
-                cls.recv_pipe,
-                cls.has_pbar,
-                cls.slips_mode,
-                cls.input_type,
-                cls.stdout
-            )
-            cls.pbar.start()
 
             if cls.verbose > 2:
                 print(f'Verbosity: {cls.verbose}. Debugging: {cls.debug}')
@@ -177,14 +166,18 @@ class Output(IObserver):
         to be able to print the stats to the output file
         """
         # io.TextIOWrapper creates a file object of this file
-        # Pass 0 to open() to switch output buffering off (only allowed in binary mode)
-        # write_through= True, to flush the buffer to disk, from there the file can read it.
-        # without it, the file writer keeps the information in a local buffer that's not accessible to the file.
-        sys.stdout = io.TextIOWrapper(
+        # Pass 0 to open() to switch output buffering off
+        # (only allowed in binary mode)
+        # write_through= True, to flush the buffer to disk, from there the
+        # file can read it.
+        # without it, the file writer keeps the information in a local buffer
+        # that's not accessible to the file.
+        stdout = io.TextIOWrapper(
             open(cls.stdout, 'wb', 0),
             write_through=True
         )
-        return
+        sys.stdout = stdout
+        return stdout
 
     def print(self, sender: str, txt: str, end='\n'):
         """
@@ -226,9 +219,11 @@ class Output(IObserver):
         """
         slips prints the stats as a pbar postfix,
         or in a separate line if pbar isn't supported
-        this method handles the 2 cases depending on the availability of the pbar
+        this method handles the 2 cases depending on the availability
+        of the pbar
         """
-        # if we're done reading flows, aka pbar reached 100% or we dont have a pbar
+        # if we're done reading flows, aka pbar reached 100% or we dont
+        # have a pbar
         # we print the stats in a new line, instead of next to the pbar
         if self.has_pbar.value:
             self.tell_pbar({
@@ -255,9 +250,11 @@ class Output(IObserver):
 
     def output_line(self, msg: dict):
         """
-        Prints to terminal and logfiles depending on the debug and verbose levels
+        Prints to terminal and logfiles depending on the debug and verbose
+        levels
         """
-        verbose, debug = msg.get('verbose', self.verbose), msg.get('debug', self.debug)
+        verbose = msg.get('verbose', self.verbose)
+        debug = msg.get('debug', self.debug)
         sender, txt = msg['from'], msg['txt']
 
         # if debug level is 3 make it red
@@ -280,26 +277,17 @@ class Output(IObserver):
 
         # if the line is an error and we're running slips without -e 1 ,
         # we should log the error to output/errors.log
-        # make sure the msg is an error. debug_level==1 is the one printing errors
+        # make sure the msg is an error. debug_level==1 is the one printing
+        # errors
         if debug == 1:
             self.log_error(msg)
-
-    def shutdown_gracefully(self):
-        """closes all communications with the pbar process"""
-        self.manager.shutdown()
-        self.send_pipe.close()
-        self.recv_pipe.close()
-        if hasattr(self, 'pbar'):
-            self.pbar.join(3)
-
 
     def tell_pbar(self, msg: dict):
         """
         writes to the pbar pipe. anything sent by this method
         will be received by the pbar class
         """
-        self.send_pipe.send(msg)
-
+        self.sender_pipe.send(msg)
 
     def update(self, msg: dict):
         """

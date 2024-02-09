@@ -16,7 +16,7 @@ import datetime
 from slips_files.common.slips_utils import utils
 
 
-class UpdateManager(IModule, multiprocessing.Process):
+class UpdateManager(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'Update Manager'
     description = 'Update Threat Intelligence files'

@@ -11,7 +11,7 @@ import validators
 from slips_files.common.slips_utils import utils
 
 
-class CESNET(IModule, multiprocessing.Process):
+class CESNET(IModule):
     name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']

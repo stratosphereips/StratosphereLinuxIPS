@@ -8,7 +8,7 @@ import sys
 from pprint import pp
 import contextlib
 
-class Module(IModule, multiprocessing.Process):
+class Module(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'CYST'
     description = 'Communicates with CYST simulation framework'

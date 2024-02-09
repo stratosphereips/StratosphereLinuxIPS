@@ -11,7 +11,7 @@ import threading
 import sys
 import datetime
 
-class ExportingAlerts(IModule, multiprocessing.Process):
+class ExportingAlerts(IModule):
     """
     Module to export alerts to slack and/or STIX
     You need to have the token in your environment variables to use this module

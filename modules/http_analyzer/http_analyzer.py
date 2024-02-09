@@ -21,7 +21,7 @@ from slips_files.core.evidence_structure.evidence import \
     )
 
 
-class HTTPAnalyzer(IModule, multiprocessing.Process):
+class HTTPAnalyzer(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'HTTP Analyzer'
     description = 'Analyze HTTP flows'
@@ -372,7 +372,8 @@ class HTTPAnalyzer(IModule, multiprocessing.Process):
             response = requests.get(url, params=params, timeout=5)
             if response.status_code != 200 or not response.text:
                 raise requests.exceptions.ConnectionError
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.ReadTimeout):
             return False
 
         # returns the following

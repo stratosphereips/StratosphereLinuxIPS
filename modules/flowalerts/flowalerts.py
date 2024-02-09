@@ -18,7 +18,7 @@ import time
 from slips_files.common.slips_utils import utils
 
 
-class FlowAlerts(IModule, multiprocessing.Process):
+class FlowAlerts(IModule):
     name = 'Flow Alerts'
     description = (
         'Alerts about flows: long connection, successful ssh, '
