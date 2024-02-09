@@ -58,7 +58,9 @@ class HTTPAnalyzer(IModule):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
+        self.pastebin_downloads_threshold = (
+            conf.get_pastebin_download_threshold()
+        )
 
     def detect_executable_mime_types(self, resp_mime_types: list) -> bool:
         """
@@ -90,7 +92,9 @@ class HTTPAnalyzer(IModule):
                 threat_level: ThreatLevel = ThreatLevel.HIGH
                 confidence: float = 1
                 saddr = profileid.split('_')[1]
-                description: str = f'Suspicious user-agent: {user_agent} while connecting to {host}{uri}'
+                description: str = (f'Suspicious user-agent: '
+                                    f'{user_agent} while '
+                                    f'connecting to {host}{uri}')
                 attacker = Attacker(
                         direction=Direction.SRC,
                         attacker_type=IoCType.IP,
@@ -284,7 +288,8 @@ class HTTPAnalyzer(IModule):
         self, host, uri, timestamp, profileid, twid, uid: str
     ):
         """
-        Compare the user agent of this profile to the MAC vendor and check incompatibility
+        Compare the user agent of this profile to the MAC vendor
+        and check incompatibility
         """
         # get the mac vendor
         vendor: Union[str, None] = self.db.get_mac_vendor_from_profile(
@@ -322,8 +327,10 @@ class HTTPAnalyzer(IModule):
             for keyword in tuple_:
                 if keyword in vendor:
                     # this means this computer belongs to this org
-                    # create a copy of the os_keywords list without the correct org
-                    # FOR EXAMPLE if the mac vendor is apple, the os_keyword should be
+                    # create a copy of the os_keywords list
+                    # without the correct org
+                    # FOR EXAMPLE if the mac vendor is apple,
+                    # the os_keyword should be
                     # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
                     os_keywords.pop(os_keywords.index(tuple_))
                     found_vendor_tuple = True
@@ -359,7 +366,8 @@ class HTTPAnalyzer(IModule):
 
     def get_ua_info_online(self, user_agent):
         """
-        Get OS and browser info about a use agent from an online database http://useragentstring.com
+        Get OS and browser info about a use agent from an online database
+         http://useragentstring.com
         """
         url = 'http://useragentstring.com/'
         params = {
@@ -377,8 +385,9 @@ class HTTPAnalyzer(IModule):
             return False
 
         # returns the following
-        # {"agent_type":"Browser","agent_name":"Internet Explorer","agent_version":"8.0",
-        # "os_type":"Windows","os_name":"Windows 7","os_versionName":"","os_versionNumber":"",
+        # {"agent_type":"Browser","agent_name":"Internet Explorer",
+        # "agent_version":"8.0", "os_type":"Windows","os_name":"Windows 7",
+        # "os_versionName":"","os_versionNumber":"",
         # "os_producer":"","os_producerURL":"","linux_distibution"
         # :"Null","agent_language":"","agent_languageTag":""}
         try:
@@ -414,8 +423,9 @@ class HTTPAnalyzer(IModule):
         }
 
         if ua_info := self.get_ua_info_online(user_agent):
-            # the above website returns unknown if it has no info about this UA,
-            # remove the 'unknown' from the string before storing in the db
+            # the above website returns unknown if it has
+            # no info about this UA, remove the 'unknown' from the string
+            # before storing in the db
             os_type = (
                 ua_info.get('os_type', '')
                 .replace('unknown', '')
@@ -445,8 +455,8 @@ class HTTPAnalyzer(IModule):
 
     def extract_info_from_UA(self, user_agent, profileid):
         """
-        Zeek sometimes collects info about a specific UA, in this case the UA starts with
-        'server-bag'
+        Zeek sometimes collects info about a specific UA,
+        in this case the UA starts with 'server-bag'
         """
         if self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
@@ -496,9 +506,10 @@ class HTTPAnalyzer(IModule):
         for keyword in (os_type, os_name):
             # loop through each word in UA
             if keyword in user_agent:
-                # for example if the os of the cached UA is Linux and the current UA
-                # is Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0)
-                # we will find the keyword 'Linux' in both UAs, so we shouldn't alert
+                # for example if the os of the cached UA is
+                # Linux and the current UA is Mozilla/5.0 (X11;
+                # Fedora;Linux x86; rv:60.0) we will find the keyword
+                # 'Linux' in both UAs, so we shouldn't alert
                 return False
 
         threat_level: ThreatLevel = ThreatLevel.INFO
@@ -511,7 +522,8 @@ class HTTPAnalyzer(IModule):
             )
 
         ua: str = cached_ua.get('user_agent', '')
-        description: str = f'Using multiple user-agents: "{ua}" then "{user_agent}"'
+        description: str = (f'Using multiple user-agents:'
+                            f' "{ua}" then "{user_agent}"')
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_USER_AGENT,
@@ -674,7 +686,8 @@ class HTTPAnalyzer(IModule):
                     and cached_ua.get('user_agent', '') != user_agent
                     and 'server-bag' not in user_agent)
             ):
-                # only UAs of type dict are browser UAs, skips str UAs as they are SSH clients
+                # only UAs of type dict are browser UAs,
+                # skips str UAs as they are SSH clients
                 self.get_user_agent_info(
                     user_agent,
                     profileid

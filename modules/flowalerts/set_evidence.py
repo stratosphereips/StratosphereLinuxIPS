@@ -881,7 +881,7 @@ class SetEvidnceHelper:
         victim: Victim = Victim(
             direction=Direction.DST,
             victim_type=IoCType.IP,
-            value=msg.split('ports of ')[-1]
+            value=msg.split('ports of host ')[-1].split(" in")[0]
         )
 
         evidence: Evidence = Evidence(
