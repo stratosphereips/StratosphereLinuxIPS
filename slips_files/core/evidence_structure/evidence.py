@@ -10,6 +10,9 @@ from typing import List, Optional
 from slips_files.common.slips_utils import utils
 
 
+def validate_ip(ip):
+    ipaddress.ip_address(ip)
+
 def validate_timestamp(ts) -> str:
     """
     the ts of all evidence should be in
@@ -171,6 +174,9 @@ class Victim:
     victim_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
 
+    def __post_init__(self):
+        if self.victim_type == IoCType.IP:
+            validate_ip(self.value)
 
 
 class IDEACategory(Enum):
@@ -212,6 +218,8 @@ class Attacker:
     profile: ProfileID = ''
 
     def __post_init__(self):
+        if self.attacker_type == IoCType.IP:
+            validate_ip(self.value)
         # each attacker should have a profile if it's an IP
         if self.attacker_type == IoCType.IP:
             self.profile = ProfileID(ip=self.value)
