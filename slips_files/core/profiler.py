@@ -78,13 +78,15 @@ class Profiler(ICore):
         # Read the configuration
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
-        # there has to be a timeout or it will wait forever and never receive a new line
+        # there has to be a timeout or it will wait forever and never
+        # receive a new line
         self.timeout = 0.0000001
         self.c1 = self.db.subscribe('reload_whitelist')
         self.channels = {
             'reload_whitelist': self.c1,
         }
-        # is set by this proc to tell input proc that we are dne processing and it can exit no issue
+        # is set by this proc to tell input proc that we are done
+        # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
 
 
@@ -103,7 +105,8 @@ class Profiler(ICore):
                 'unixtimestamp')
         except ValueError:
             self.print(f'We can not recognize time format of '
-                       f'self.flow.starttime: {self.flow.starttime}', 0, 1)
+                       f'self.flow.starttime: {self.flow.starttime}',
+                       0, 1)
 
     def get_rev_profile(self):
         """
@@ -128,10 +131,11 @@ class Profiler(ICore):
 
     def add_flow_to_profile(self):
         """
-        This is the main function that takes the columns of a flow and does all the magic to
-        convert it into a working data in our system.
-        It includes checking if the profile exists and how to put the flow correctly.
-        It interprets each column
+        This is the main function that takes the columns of a flow
+        and does all the magic to convert it into a working data in our
+        system.
+        It includes checking if the profile exists and how to put
+        the flow correctly. It interprets each column
         """
         # try:
         if not hasattr(self, 'flow'):
@@ -165,7 +169,8 @@ class Profiler(ICore):
         # 5th. Store the data according to the paremeters
         # Now that we have the profileid and twid, add the data from the flow
         # in this tw for this profile
-        self.print(f'Storing data in the profile: {self.profileid}', 3, 0)
+        self.print(f'Storing data in the profile: {self.profileid}',
+                   3, 0)
         self.convert_starttime_to_epoch()
         # For this 'forward' profile, find the id in the
         # database of the tw where the flow belongs.
@@ -223,11 +228,15 @@ class Profiler(ICore):
 
     def store_features_going_in(self, profileid: str, twid: str):
         """
-        If we have the all direction set , slips creates profiles for each IP, the src and dst
-        store features going our adds the conn in the profileA from IP A -> IP B in the db
-        this function stores the reverse of this connection. adds the conn in the profileB from IP B <- IP A
+        If we have the all direction set , slips creates profiles
+        for each IP, the src and dst
+        store features going our adds the conn in the profileA from
+        IP A -> IP B in the db
+        this function stores the reverse of this connection. adds
+        the conn in the profileB from IP B <- IP A
         """
-        # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
+        # self.print(f'Storing features going in for profile
+        # {profileid} and tw {twid}')
         if (
             'flow' not in self.flow.type_
             and 'conn' not in self.flow.type_
@@ -301,8 +310,10 @@ class Profiler(ICore):
 
 
     def shutdown_gracefully(self):
-        self.print(f"Stopping. Total lines read: {self.rec_lines}", log_to_logfiles_only=True)
-        # By default if a process(profiler) is not the creator of the queue(profiler_queue) then on
+        self.print(f"Stopping. Total lines read: {self.rec_lines}",
+                   log_to_logfiles_only=True)
+        # By default if a process(profiler) is not the creator of
+        # the queue(profiler_queue) then on
         # exit it will attempt to join the queue’s background thread.
         # this causes a deadlock
         # to avoid this behaviour we should call cancel_join_thread
@@ -311,11 +322,14 @@ class Profiler(ICore):
     def is_done_processing(self):
         """is called to mark this process as done processing so slips.py would know when to terminate"""
         # signal slips.py that this process is done
-        self.print(f"Marking Profiler as done processing.", log_to_logfiles_only=True)
+        self.print(f"Marking Profiler as done processing.",
+                   log_to_logfiles_only=True)
         self.done_processing.release()
-        self.print(f"Profiler is done processing.", log_to_logfiles_only=True)
+        self.print(f"Profiler is done processing.",
+                   log_to_logfiles_only=True)
         self.is_profiler_done_event.set()
-        self.print(f"Profiler is done telling input.py that it's done processing.", log_to_logfiles_only=True)
+        self.print(f"Profiler is done telling input.py "
+                   f"that it's done processing.", log_to_logfiles_only=True)
 
 
     def check_for_stop_msg(self, msg: str)-> bool:
@@ -327,8 +341,8 @@ class Profiler(ICore):
         if msg != 'stop':
             return False
 
-
-        self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
+        self.print(f"Stopping profiler process. Number of whitelisted "
+                   f"conn flows: "
                    f"{self.whitelisted_flows_ctr}", 2, 0)
 
         self.shutdown_gracefully()
@@ -409,7 +423,6 @@ class Profiler(ICore):
                 self.print("Can't determine input type.")
                 return False
 
-
             # only create the input obj once,
             # the rest of the flows will use the same input handler
             if not hasattr(self, 'input'):
@@ -419,7 +432,6 @@ class Profiler(ICore):
             self.flow = self.input.process_line(line)
             if self.flow:
                 self.add_flow_to_profile()
-
 
             # now that one flow is processed tell output.py to update the bar
             if self.supported_pbar:

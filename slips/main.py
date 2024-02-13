@@ -10,6 +10,7 @@ import sys
 import time
 from datetime import datetime
 from distutils.dir_util import copy_tree
+from typing import Set
 
 from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
@@ -54,7 +55,9 @@ class Main(IObservable):
 
             if not self.args.stopdaemon:
                 # Check the type of input
-                self.input_type, self.input_information, self.line_type = self.checker.check_input_type()
+                self.input_type, self.input_information, self.line_type = (
+                    self.checker.check_input_type()
+                )
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
@@ -140,17 +143,21 @@ class Main(IObservable):
         num_processes = 3
 
         for _ in range(num_processes):
-            process = multiprocessing.Process(target=target_function if _%2 else mem_function)
+            process = multiprocessing.Process(
+                target=target_function if _%2 else mem_function
+                )
             process.start()
             processes.append(process)
 
         # Message passing
         self.db.publish("memory_profile", processes[1].pid) # successful
-        # subprocess.Popen(["memray", "live", "1234"])
-        time.sleep(5) # target_function will timeout and tracker will be cleared
-        self.db.publish("memory_profile", processes[0].pid) # end but maybe don't start
+        # target_function will timeout and tracker will be cleared
+        time.sleep(5)
+        # end but maybe don't start
+        self.db.publish("memory_profile", processes[0].pid)
         time.sleep(5) # mem_function will get tracker started
-        self.db.publish("memory_profile", processes[0].pid) # start successfully
+        # start successfully
+        self.db.publish("memory_profile", processes[0].pid)
         input()
 
     def get_slips_version(self):
@@ -511,10 +518,11 @@ class Main(IObservable):
               f'({now})'
         self.print(msg)
 
-    def update_host_ip(self, hostIP, modified_profiles) -> str:
+    def update_host_ip(self, hostIP: str, modified_profiles: Set[str]) -> str:
         """
-        when running on an interface we keep track of the host IP. If there was no
-        # modified TWs in the host IP, we check if the network was changed.
+        when running on an interface we keep track of the host IP.
+        If there was no  modified TWs in the host IP, we check if the
+        network was changed.
         """
         if self.is_interface and hostIP not in modified_profiles:
             if hostIP := self.metadata_man.get_host_ip():
@@ -564,7 +572,9 @@ class Main(IObservable):
 
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
-            current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
+            current_stdout, stderr, slips_logfile = (
+                self.checker.check_output_redirection()
+            )
             self.stdout = current_stdout
             self.logger = self.proc_man.start_output_process(
                 current_stdout,
@@ -614,8 +624,10 @@ class Main(IObservable):
 
             self.db.store_std_file(**std_files)
 
-            self.print(f'Using redis server on port: {green(self.redis_port)}', 1, 0)
-            self.print(f'Started {green("Main")} process [PID {green(self.pid)}]', 1, 0)
+            self.print(f'Using redis server on '
+                       f'port: {green(self.redis_port)}', 1, 0)
+            self.print(f'Started {green("Main")} process '
+                       f'[PID {green(self.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
             # if slips is given a .rdb file, don't load the
@@ -675,48 +687,48 @@ class Main(IObservable):
             self.print("Warning: Slips may generate a large amount "
                        "of traffic by querying TI sites.")
 
-
             hostIP = self.metadata_man.store_host_ip()
-
-
 
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
             self.is_interface: bool = self.args.interface or self.db.is_growing_zeek_dir()
 
-            while True:
-                # check for the stop msg
-                if self.proc_man.should_stop():
-                    self.proc_man.shutdown_gracefully()
-                    break
-
-                # Sleep some time to do routine checks and give time for more traffic to come
+            while (
+                    not self.proc_man.should_stop()
+                    and not self.proc_man.slips_is_done_receiving_new_flows()
+            ):
+                # Sleep some time to do routine checks and give time for
+                # more traffic to come
                 time.sleep(5)
 
-                # if you remove the below logic anywhere before the above sleep() statement
-                # it will try to get the return value very quickly before
+                # if you remove the below logic anywhere before the
+                # above sleep() statement, it will try to get the return
+                # value very quickly before
                 # the webinterface thread sets it. so don't
                 self.ui_man.check_if_webinterface_started()
 
+                # update the text we show in the cli
                 self.update_stats()
 
                 # Check if we need to close any TWs
                 self.db.check_TW_to_close()
 
-                modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
+                modified_profiles: Set[str] = (
+                    self.metadata_man.update_slips_running_stats()[1]
+                )
                 hostIP: str = self.update_host_ip(hostIP, modified_profiles)
 
-                # don't move this up because we still need to print the stats and check tws anyway
+                # don't move this line up because we still need to print the
+                # stats and check tws anyway
                 if self.proc_man.should_run_non_stop():
                     continue
-
-                if self.proc_man.slips_is_done_receiving_new_flows():
-                    self.proc_man.shutdown_gracefully()
-                    break
 
                 self.db.check_health()
 
         except KeyboardInterrupt:
-            # the EINTR error code happens if a signal occurred while the system call was in progress
+            # the EINTR error code happens if a signal occurred while
+            # the system call was in progress
             # comes here if zeek terminates while slips is still working
-            self.proc_man.shutdown_gracefully()
+            pass
+
+        self.proc_man.shutdown_gracefully()

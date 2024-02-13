@@ -176,6 +176,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     @classmethod
     def set_slips_internal_time(cls, timestamp):
+        """
+        slips internal time is the timestamp of the last tw update done in
+        slips
+        it is updated each time slips detects a new modification in any
+        timewindow
+        metadata_manager.py checks for new tw modifications every 5s and
+        updates this value accordingly
+        """
         cls.r.set('slips_internal_time', timestamp)
         
     @classmethod

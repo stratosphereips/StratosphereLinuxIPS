@@ -124,9 +124,11 @@ class Input(ICore):
                    f"no more input is arriving.",
                    log_to_logfiles_only=True)
         self.profiler_queue.put('stop')
-        self.print(f"Waiting for Profiler to stop.", log_to_logfiles_only=True)
+        self.print(f"Waiting for Profiler to stop.",
+                   log_to_logfiles_only=True)
         self.is_profiler_done_event.wait()
-        self.print(f"Input is done processing.", log_to_logfiles_only=True)
+        self.print(f"Input is done processing.",
+                   log_to_logfiles_only=True)
         self.done_processing.release()
 
     def read_configuration(self):
@@ -141,8 +143,10 @@ class Input(ICore):
 
     def stop_queues(self):
         """Stops the profiler queue"""
-        # By default if a process is not the creator of the queue then on exit it
-        # will attempt to join the queue’s background thread. The process can call cancel_join_thread() to make join_thread() do nothing.
+        # By default if a process is not the creator of the queue then on
+        # exit it will attempt to join the queue’s background thread. The
+        # process can call cancel_join_thread() to make join_thread()
+        # do nothing.
         self.profiler_queue.cancel_join_thread()
 
     def read_nfdump_output(self) -> int:

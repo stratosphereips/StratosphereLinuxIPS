@@ -559,20 +559,23 @@ class ProcessManager:
 
     def slips_is_done_receiving_new_flows(self) -> bool:
         """
-        Slips won't be receiving new flows when
-        the input and profiler release the semaphores signaling that they're done
-        that's when this method will return True.
+        this method will return True when the input and profiler release
+        the semaphores signaling that they're done
         If they're still processing it will return False
         """
         # try to acquire the semaphore without blocking
-        input_done_processing: bool = self.is_input_done.acquire(block=False)
-        profiler_done_processing: bool = self.is_profiler_done.acquire(block=False)
+        input_done_processing: bool = self.is_input_done.acquire(
+            block=False
+        )
+        profiler_done_processing: bool = self.is_profiler_done.acquire(
+            block=False
+        )
 
         if input_done_processing and profiler_done_processing:
             return True
-        else:
-            # can't acquire the semaphore, processes are still running
-            return False
+
+        # can't acquire the semaphore, processes are still running
+        return False
 
 
     def shutdown_daemon(self):

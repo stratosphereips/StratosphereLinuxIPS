@@ -2,10 +2,9 @@ from dataclasses import asdict
 import redis
 import time
 import json
-from typing import Tuple, Union, Dict, Optional, List
+from typing import Tuple, Union, Dict, Optional, List, Set
 import traceback
-import ipaddress
-from math import ceil, floor
+from math import floor
 import sys
 import validators
 from slips_files.common.abstracts.observer import IObservable
@@ -1278,22 +1277,31 @@ class ProfileHandler(IObservable):
         """Return the number of tws for this profile id"""
         return self.r.zcard(f'tws{profileid}') if profileid else False
 
-    def getModifiedTWSinceTime(self, time):
-        """Return the list of modified timewindows since a certain time"""
+    def getModifiedTWSinceTime(self, time: float) -> List[Tuple[str, float]]:
+        """
+        Return the list of modified timewindows since a certain time
+        """
+        # this ModifiedTW set has all timewindows of all profiles
+        #  the score of each tw is the ts it was last updated
+        # this ts is not network time, it is local time
         data = self.r.zrangebyscore(
             'ModifiedTW', time, float('+inf'), withscores=True
         )
         return data or []
 
-    def getModifiedProfilesSince(self, time):
+    def getModifiedProfilesSince(self, time: float) -> Tuple[Set[str], float]:
         """Returns a set of modified profiles since a certain time and
         the time of the last modified profile"""
-        modified_tws = self.getModifiedTWSinceTime(time)
+        modified_tws: List[Tuple[str, float]] = self.getModifiedTWSinceTime(
+            time
+        )
         if not modified_tws:
             # no modified tws, and no time_of_last_modified_tw
             return [], 0
+
         # get the time of last modified tw
-        time_of_last_modified_tw = modified_tws[-1][-1]
+        time_of_last_modified_tw: float = modified_tws[-1][-1]
+
         # this list will store modified profiles without tws
         profiles = []
         profiles.extend(
