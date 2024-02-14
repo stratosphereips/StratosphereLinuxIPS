@@ -309,7 +309,10 @@ class Profiler(ICore):
         # self.profiler_queue.cancel_join_thread()
 
     def is_done_processing(self):
-        """is called to mark this process as done processing so slips.py would know when to terminate"""
+        """
+        is called to mark this process as done processing so
+        slips.py would know when to terminate
+        """
         # signal slips.py that this process is done
         self.print(f"Marking Profiler as done processing.", log_to_logfiles_only=True)
         self.done_processing.release()
