@@ -58,7 +58,7 @@ class ICore(IModule, Process):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem in main() line {exception_line}', 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
 
         return True
 

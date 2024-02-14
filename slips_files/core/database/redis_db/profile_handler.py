@@ -506,7 +506,7 @@ class ProfileHandler(IObservable):
             self.print(
                 f'Error in getFinalStateFromFlags() in database.py line {exception_line}'
             ,0,1)
-            self.print(traceback.print_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
 
     def get_data_from_profile_tw(
         self,
@@ -559,7 +559,7 @@ class ProfileHandler(IObservable):
             self.print(
                 f'Error in getDataFromProfileTW database.py line {exception_line}'
             ,0,1)
-            self.print(traceback.print_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
 
 
     def update_ip_info(
@@ -1137,7 +1137,7 @@ class ProfileHandler(IObservable):
                        f'{exception_line}',0,1)
             self.print(type(e), 0, 1)
             self.print(e, 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
@@ -1236,7 +1236,7 @@ class ProfileHandler(IObservable):
             self.print('error in addNewOlderTW in database.py', 0, 1)
             self.print(type(e), 0, 1)
             self.print(e, 0, 1)
-            self.print(traceback.print_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
 
     def add_new_tw(self, profileid, timewindow: str, startoftw: float):
         """
@@ -1263,7 +1263,7 @@ class ProfileHandler(IObservable):
             self.update_threat_level(profileid, 'info',  0.5)
         except redis.exceptions.ResponseError as e:
             self.print('Error in addNewTW', 0, 1)
-            self.print(traceback.print_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
             self.print(e, 0, 1)
 
     def get_tw_start_time(self, profileid, twid):
@@ -1795,7 +1795,7 @@ class ProfileHandler(IObservable):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Error in add_tuple in database.py line {exception_line}', 0,1)
-            self.print(traceback.format_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
 
     def get_tws_to_search(self, go_back):
         tws_to_search = float('inf')
