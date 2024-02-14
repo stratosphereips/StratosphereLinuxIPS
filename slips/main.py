@@ -564,7 +564,7 @@ class Main(IObservable):
                 stderr,
                 slips_logfile)
             self.add_observer(self.logger)
-            
+
             # get the port that is going to be used for this instance of slips
             if self.args.port:
                 self.redis_port = int(self.args.port)
