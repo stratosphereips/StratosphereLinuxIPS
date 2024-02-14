@@ -6,7 +6,6 @@ import time
 import socket
 import subprocess
 from typing import Dict, Union
-
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
@@ -202,21 +201,28 @@ class RedisManager:
         return
 
 
+    def print_port_in_use(self, port: int):
+        print(f"[Main] Port {port} is already in use by another process"
+              f"\nChoose another port using -P <portnumber>"
+              f"\nOr kill your open redis ports using: ./slips.py -k ")
+
+
     def check_if_port_is_in_use(self, port: int) -> bool:
         if port == 6379:
             # even if it's already in use, slips should override it
             return False
 
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("localhost", port))
+        # is it used by another app?
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if sock.connect_ex(("localhost", port)) != 0:
+            # not used
+            sock.close()
             return False
-        except OSError as e:
-            print(f"[Main] Port {port} is already in use by another process."
-                  f" Choose another port using -P <portnumber> \n"
-                  f"Or kill your open redis ports using: ./slips.py -k ")
-            self.main.terminate_slips()
-            return True
+
+        sock.close()
+        self.print_port_in_use(port)
+        self.main.terminate_slips()
+        return True
 
 
     def get_pid_of_redis_server(self, port: int) -> int:
