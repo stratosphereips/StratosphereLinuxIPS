@@ -286,7 +286,7 @@ class VT(IModule):
             self.print(
                 f'Problem in the get_ip_vt_data() line {exception_line}', 0, 1
             )
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_stack(),0,1)
 
     def get_domain_vt_data(self, domain: str):
         """
@@ -310,11 +310,10 @@ class VT(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem in the get_domain_vt_data() line {exception_line}',
-                0,
-                1,
+                f'Problem in the get_domain_vt_data() '
+                f'line {exception_line}',0,1,
             )
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_stack(),0,1)
             return False
 
     def get_ioc_type(self, ioc):
