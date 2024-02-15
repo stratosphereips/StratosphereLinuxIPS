@@ -1,5 +1,4 @@
 from multiprocessing.connection import Connection
-from multiprocessing.managers import ValueProxy
 from multiprocessing import Event
 from tqdm.auto import tqdm
 import sys
@@ -33,13 +32,11 @@ class PBar(IModule):
     
     def init(
             self,
-            has_pbar: ValueProxy = False,
             stdout: str = None,
-            slips_mode: str = None,
             pipe: Connection = None,
+            slips_mode: str = None,
             pbar_finished: Event = None
         ):
-        self.has_pbar = has_pbar
         self.stdout: str = stdout
         self.slips_mode: str = slips_mode
         self.pipe = pipe
@@ -61,7 +58,6 @@ class PBar(IModule):
         initializes the progress bar when slips is runnning on a file or
          a zeek dir
         ignores pcaps, interface and dirs given to slips if -g is enabled
-        :param bar: dict with input type, total_flows, etc.
         """
         self.total_flows = int(msg['total_flows'])
         # the bar_format arg is to disable ETA and unit display
@@ -126,7 +122,8 @@ class PBar(IModule):
 
     def shutdown_gracefully(self):
         # to tell output.py to no longer send prints here
-        self.has_pbar.value = False
+        self.pbar_finished.set()
+
 
 
     def main(self):
