@@ -96,21 +96,17 @@ class ProcessManager:
         return True
     
     def start_output_process(self, current_stdout, stderr, slips_logfile):
-        # only in this instance we'll have to specify the verbose,
-        # debug, std files and input type
-        # since the output is a singleton, the same params will
-        # be set everywhere, no need to pass them everytime
         output_process = Output(
             stdout=current_stdout,
             stderr=stderr,
             slips_logfile=slips_logfile,
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
-            slips_mode=self.main.mode,
             input_type=self.main.input_type,
             sender_pipe=self.output_send_pipe,
             has_pbar=self.is_pbar_supported(),
             pbar_finished=self.pbar_finished,
+            stop_daemon=self.main.args.stopdaemon
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
@@ -527,7 +523,6 @@ class ProcessManager:
     def should_stop(self):
         """
         returns true if the channel received the stop msg
-        :param msg: msgs receive  in the control chanel
         """
         message = self.main.c1.get_message(timeout=0.01)
         if (

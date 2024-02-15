@@ -1,7 +1,5 @@
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
-import traceback
-from multiprocessing import Event
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -16,6 +14,7 @@ from multiprocessing import Event
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
+import traceback
 from threading import Lock
 from multiprocessing.connection import Connection
 from multiprocessing import Event
@@ -47,16 +46,16 @@ class Output(IObserver):
     cli_lock = Lock()
 
     def __init__(self,
-        verbose=1,
-        debug=0,
-        stdout='',
-        stderr='output/errors.log',
-        slips_logfile='output/slips.log',
-        slips_mode='interactive',
-        input_type=False,
+        verbose = 1,
+        debug = 0,
+        stdout = '',
+        stderr = 'output/errors.log',
+        slips_logfile = 'output/slips.log',
+        input_type = False,
         sender_pipe: Connection = None,
         has_pbar: bool = False,
-        pbar_finished: Event=None,
+        pbar_finished: Event = None,
+        stop_daemon: bool = None,
     ):
         super().__init__()
         # when running slips using -e , this var is set and we only
@@ -67,30 +66,32 @@ class Output(IObserver):
         self.has_pbar = has_pbar
         self.pbar_finished: Event = pbar_finished
         self.sender_pipe = sender_pipe
-
-        self._read_configuration()
-
+        self.stop_daemon = stop_daemon
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
-        self.create_logfile(self.errors_logfile)
-        self.log_branch_info(self.errors_logfile)
-        self.create_logfile(self.slips_logfile)
-        self.log_branch_info(self.slips_logfile)
-        
-        utils.change_logfiles_ownership(
-            self.errors_logfile, self.UID, self.GID
-        )
-        utils.change_logfiles_ownership(
-            self.slips_logfile, self.UID, self.GID
-        )
-        self.stdout = stdout
-        if stdout != '':
-            self.change_stdout()
-
-        if self.verbose > 2:
-            print(f'Verbosity: {self.verbose}. Debugging: {self.debug}')
-
-        self.done_reading_flows = False
+        # if we're using -S, no need to init all the logfiles
+        # we just need an instance of this class to be able
+        # to start the db from the daemon class
+        if not stop_daemon:
+            self._read_configuration()
+    
+            self.create_logfile(self.errors_logfile)
+            self.log_branch_info(self.errors_logfile)
+            self.create_logfile(self.slips_logfile)
+            self.log_branch_info(self.slips_logfile)
+            
+            utils.change_logfiles_ownership(
+                self.errors_logfile, self.UID, self.GID
+            )
+            utils.change_logfiles_ownership(
+                self.slips_logfile, self.UID, self.GID
+            )
+            self.stdout = stdout
+            if stdout != '':
+                self.change_stdout()
+    
+            if self.verbose > 2:
+                print(f'Verbosity: {self.verbose}. Debugging: {self.debug}')
 
 
     def _read_configuration(self):

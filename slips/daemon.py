@@ -52,7 +52,6 @@ class Daemon:
         """
         prepare the path of stderr, stdout, logsfile
         """
-
         self.stderr = os.path.join(output_dir, self.stderr)
         self.stdout = os.path.join(output_dir, self.stdout)
         self.logsfile = os.path.join(output_dir, self.logsfile)
@@ -245,7 +244,11 @@ class Daemon:
         )
         self.slips.add_observer(self.logger)
         db = DBManager(
-            self.logger, output_dir, port, start_sqlite=False, flush_db=False
+            self.logger,
+            output_dir,
+            port,
+            start_sqlite=False,
+            flush_db=False
         )
         db.set_slips_mode("daemonized")
         self.slips.set_mode("daemonized", daemon=self)
