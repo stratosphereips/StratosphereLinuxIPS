@@ -124,10 +124,6 @@ class PBar(IModule):
         )
 
 
-    def pre_main(self):
-        if not self.supported:
-            return 1
-
     def shutdown_gracefully(self):
         # to tell output.py to no longer send prints here
         self.has_pbar.value = False
@@ -151,10 +147,6 @@ class PBar(IModule):
 
             if event == "update_stats":
                 self.update_stats(msg)
-
-            if event == "terminate":
-                self.terminate()
-                return 1
 
             if event == "print":
                 # let tqdm do the printing to avoid conflicts with the pbar
