@@ -64,7 +64,8 @@ class ProcessManager:
         # recv_pipe used only for receiving,
         # send_pipe use donly for sending
         self.pbar_recv_pipe, self.output_send_pipe = Pipe(False)
-
+        self.pbar_finished: Event = Event()
+        
     def is_pbar_supported(self) -> bool:
         """
         When running on a pcap, interface, or taking flows from an
@@ -73,26 +74,27 @@ class ProcessManager:
         """
         # input type can be false whne using -S or in unit tests
         if (
-            not self.main.input_type
-            or self.main.input_type in ("interface", "pcap", "stdin")
-            or self.main.mode == "daemonized"
+                not self.main.input_type
+                or self.main.input_type in ('interface', 'pcap', 'stdin')
+                or self.main.mode == 'daemonized'
         ):
             return False
 
-        if self.main.stdout != "":
+
+        if self.main.stdout != '':
             # this means that stdout was redirected to a file,
             # no need to print the progress bar
             return False
-
+        
         if (
-            self.main.args.growing
-            or self.main.args.input_module
-            or self.main.args.testing
+                self.main.args.growing
+                or self.main.args.input_module
+                or self.main.args.testing
         ):
             return False
-
+        
         return True
-
+    
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         # only in this instance we'll have to specify the verbose,
         # debug, std files and input type
@@ -108,10 +110,11 @@ class ProcessManager:
             input_type=self.main.input_type,
             sender_pipe=self.output_send_pipe,
             has_pbar=self.is_pbar_supported(),
+            pbar_finished=self.pbar_finished,
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
-
+    
     def start_progress_bar(self, cls):
         pbar = cls(
             self.main.logger,
@@ -121,9 +124,10 @@ class ProcessManager:
             stdout=self.main.stdout,
             pipe=self.pbar_recv_pipe,
             slips_mode=self.main.mode,
+            pbar_finished=self.pbar_finished,
         )
         return pbar
-
+    
     def start_profiler_process(self):
         profiler_process = Profiler(
             self.main.logger,
@@ -132,15 +136,13 @@ class ProcessManager:
             self.termination_event,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
-            is_profiler_done_event=self.is_profiler_done_event,
+            is_profiler_done_event= self.is_profiler_done_event,
             has_pbar=self.is_pbar_supported(),
         )
         profiler_process.start()
         self.main.print(
             f'Started {green("Profiler Process")} '
-            f"[PID {green(profiler_process.pid)}]",
-            1,
-            0,
+            f"[PID {green(profiler_process.pid)}]", 1, 0,
         )
         self.main.db.store_process_PID("Profiler", int(profiler_process.pid))
         return profiler_process
@@ -180,12 +182,14 @@ class ProcessManager:
         )
         input_process.start()
         self.main.print(
-            f'Started {green("Input Process")} ' f"[PID {green(input_process.pid)}]",
+            f'Started {green("Input Process")} '
+            f'[PID {green(input_process.pid)}]',
             1,
             0,
         )
         self.main.db.store_process_PID("Input", int(input_process.pid))
         return input_process
+
 
     def kill_process_tree(self, pid: int):
         try:
@@ -196,7 +200,9 @@ class ProcessManager:
 
         # Get the child processes of the current process
         try:
-            process_list = os.popen(f"pgrep -P {pid}").read().splitlines()
+            process_list = (os.popen(f'pgrep -P {pid}')
+                            .read()
+                            .splitlines())
         except:
             process_list = []
 
@@ -220,19 +226,23 @@ class ProcessManager:
             self.kill_process_tree(process.pid)
             self.print_stopped_module(module_name)
 
-    def is_ignored_module(self, module_name: str, to_ignore: list) -> bool:
+    def is_ignored_module(
+            self, module_name: str, to_ignore: list
+        )-> bool:
 
         for ignored_module in to_ignore:
-            ignored_module = (
-                ignored_module.replace(" ", "")
-                .replace("_", "")
-                .replace("-", "")
-                .lower()
-            )
+            ignored_module = (ignored_module
+                              .replace(' ','')
+                              .replace('_','')
+                              .replace('-','')
+                              .lower())
             # this version of the module name wont contain
             # _ or spaces so we can
             # easily match it with the ignored module name
-            curr_module_name = module_name.replace("_", "").replace("-", "").lower()
+            curr_module_name = (module_name
+                                .replace('_','')
+                                .replace('-','')
+                                .lower())
             if curr_module_name.__contains__(ignored_module):
                 return True
         return False
@@ -245,6 +255,7 @@ class ProcessManager:
         # and put them in the __modules__ variable
         plugins = {}
         failed_to_load_modules = 0
+
 
         # __path__ is the current path of this python program
         look_for_modules_in = modules.__path__
@@ -265,8 +276,10 @@ class ProcessManager:
             if dir_name != file_name:
                 continue
 
+
             if self.is_ignored_module(module_name, to_ignore):
                 continue
+
 
             # Try to import the module, otherwise skip.
             try:
@@ -280,10 +293,8 @@ class ProcessManager:
                 # module calling __import__()."
                 module = importlib.import_module(module_name)
             except ImportError as e:
-                print(
-                    f"Something wrong happened while "
-                    f"importing the module {module_name}: {e}"
-                )
+                print(f"Something wrong happened while "
+                      f"importing the module {module_name}: {e}")
                 print(traceback.print_stack())
                 failed_to_load_modules += 1
 
@@ -292,8 +303,12 @@ class ProcessManager:
             # Walk through all members of currently imported modules.
             for member_name, member_object in inspect.getmembers(module):
                 # Check if current member is a class.
-                if inspect.isclass(member_object) and (
-                    issubclass(member_object, IModule) and member_object is not IModule
+                if (
+                        inspect.isclass(member_object)
+                        and (
+                            issubclass(member_object, IModule)
+                            and member_object is not IModule
+                        )
                 ):
                     plugins[member_object.name] = dict(
                         obj=member_object,
@@ -319,7 +334,8 @@ class ProcessManager:
         return plugins, failed_to_load_modules
 
     def load_modules(self):
-        to_ignore: list = self.main.conf.get_disabled_modules(self.main.input_type)
+        to_ignore: list = self.main.conf.get_disabled_modules(
+            self.main.input_type)
 
         # Import all the modules
         modules_to_call = self.get_modules(to_ignore)[0]
@@ -346,8 +362,7 @@ class ProcessManager:
                 f"\t\tStarting the module {green(module_name)} "
                 f"({description}) "
                 f"[PID {green(module.pid)}]",
-                1,
-                0,
+                1, 0,
             )
             loaded_modules.append(module_name)
         # give outputprocess time to print all the started modules
@@ -363,9 +378,9 @@ class ProcessManager:
 
         # to vertically align them when printing
         module += " " * (20 - len(module))
-        self.main.print(
-            f"\t{green(module)} \tStopped. " f"" f"{green(modules_left)} left."
-        )
+        self.main.print(f"\t{green(module)} \tStopped. "
+                        f"" f"{green(modules_left)} left.")
+
 
     def start_update_manager(self, local_files=False, TI_feeds=False):
         """
@@ -388,7 +403,7 @@ class ProcessManager:
                     self.main.logger,
                     self.main.args.output,
                     self.main.redis_port,
-                    multiprocessing.Event(),
+                    multiprocessing.Event()
                 )
 
                 if local_files:
@@ -429,6 +444,7 @@ class ProcessManager:
 
         self.warning_printed_once = True
         return True
+
 
     def get_hitlist_in_order(self) -> Tuple[List[Process], List[Process]]:
         """
@@ -504,7 +520,9 @@ class ProcessManager:
         end_date = self.main.metadata_man.set_analysis_end_date()
 
         start_time = self.main.db.get_slips_start_time()
-        return utils.get_time_diff(start_time, end_date, return_type="minutes")
+        return utils.get_time_diff(
+            start_time, end_date, return_type="minutes"
+        )
 
     def should_stop(self):
         """
@@ -513,15 +531,16 @@ class ProcessManager:
         """
         message = self.main.c1.get_message(timeout=0.01)
         if (
-            message
-            and utils.is_msg_intended_for(message, "control_channel")
-            and message["data"] == "stop_slips"
+                message
+                and utils.is_msg_intended_for(message, 'control_channel')
+                and message['data'] == 'stop_slips'
         ):
             return True
 
+
     def is_debugger_active(self) -> bool:
         """Returns true if the debugger is currently active"""
-        gettrace = getattr(sys, "gettrace", lambda: None)
+        gettrace = getattr(sys, 'gettrace', lambda: None)
         return gettrace() is not None
 
     def should_run_non_stop(self) -> bool:
@@ -533,9 +552,9 @@ class ProcessManager:
         # when slips is reading from a special module other than the input process
         # this module should handle the stopping of slips
         if (
-            self.is_debugger_active()
-            or self.main.input_type in ("stdin", "cyst")
-            or self.main.is_interface
+                self.is_debugger_active()
+                or self.main.input_type in ('stdin', 'cyst')
+                or self.main.is_interface
         ):
             return True
         return False
@@ -576,6 +595,7 @@ class ProcessManager:
         # all of them are killed
         return None, None
 
+
     def slips_is_done_receiving_new_flows(self) -> bool:
         """
         this method will return True when the input and profiler release
@@ -583,14 +603,19 @@ class ProcessManager:
         If they're still processing it will return False
         """
         # try to acquire the semaphore without blocking
-        input_done_processing: bool = self.is_input_done.acquire(block=False)
-        profiler_done_processing: bool = self.is_profiler_done.acquire(block=False)
+        input_done_processing: bool = self.is_input_done.acquire(
+            block=False
+        )
+        profiler_done_processing: bool = self.is_profiler_done.acquire(
+            block=False
+        )
 
         if input_done_processing and profiler_done_processing:
             return True
 
         # can't acquire the semaphore, processes are still running
         return False
+
 
     def shutdown_daemon(self):
         """
@@ -616,6 +641,7 @@ class ProcessManager:
                 print("\n" + "-" * 27)
             self.main.print("Stopping Slips")
 
+
             # by default, 15 mins from this time, all modules should be killed
             method_start_time = time.time()
 
@@ -626,13 +652,11 @@ class ProcessManager:
             # close all tws
             self.main.db.check_TW_to_close(close_all=True)
             analysis_time = self.get_analysis_time()
-            self.main.print(
-                f"Analysis of {self.main.input_information} "
-                f"finished in {analysis_time:.2f} minutes"
-            )
+            self.main.print(f"Analysis of {self.main.input_information} "
+                            f"finished in {analysis_time:.2f} minutes")
 
             graceful_shutdown = True
-            if self.main.mode == "daemonized":
+            if self.main.mode == 'daemonized':
                 self.processes: dict = self.main.db.get_pids()
                 self.shutdown_daemon()
 
@@ -645,13 +669,11 @@ class ProcessManager:
 
             else:
                 flows_count: int = self.main.db.get_flows_count()
-                self.main.print(
-                    f"Total flows read (without altflows): " f"{flows_count}",
-                    log_to_logfiles_only=True,
-                )
+                self.main.print(f"Total flows read (without altflows): "
+                                f"{flows_count}", log_to_logfiles_only=True)
 
                 hitlist: Tuple[List[Process], List[Process]]
-                hitlist = self.get_hitlist_in_order()
+                hitlist  = self.get_hitlist_in_order()
                 to_kill_first: List[Process] = hitlist[0]
                 to_kill_last: List[Process] = hitlist[1]
                 self.termination_event.set()
@@ -660,11 +682,13 @@ class ProcessManager:
                 # modules
                 self.warning_printed_once = False
 
+
                 try:
                     # Wait timeout_seconds for all the processes to finish
                     while time.time() - method_start_time < timeout_seconds:
                         to_kill_first, to_kill_last = self.shutdown_interactive(
-                            to_kill_first, to_kill_last
+                            to_kill_first,
+                            to_kill_last
                         )
                         if not to_kill_first and not to_kill_last:
                             # all modules are done
@@ -685,10 +709,8 @@ class ProcessManager:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
-                    reason = (
-                        f"Killing modules that took more than {timeout}"
-                        f" mins to finish."
-                    )
+                    reason = (f"Killing modules that took more than {timeout}"
+                              f" mins to finish.")
                     self.main.print(reason)
                     graceful_shutdown = False
 
@@ -715,16 +737,12 @@ class ProcessManager:
             self.main.db.close()
 
             if graceful_shutdown:
-                self.main.print(
-                    "[Process Manager] Slips shutdown gracefully\n",
-                    log_to_logfiles_only=True,
-                )
+                self.main.print("[Process Manager] Slips shutdown gracefully\n",
+                                log_to_logfiles_only=True)
             else:
-                self.main.print(
-                    f"[Process Manager] Slips didn't "
-                    f"shutdown gracefully - {reason}\n",
-                    log_to_logfiles_only=True,
-                )
+                self.main.print(f"[Process Manager] Slips didn't "
+                                f"shutdown gracefully - {reason}\n",
+                                log_to_logfiles_only=True)
 
         except KeyboardInterrupt:
             return False
