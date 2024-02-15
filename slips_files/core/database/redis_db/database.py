@@ -15,6 +15,7 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
+from typing import List
 
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -116,19 +117,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         cls.start_server = start_redis_server
 
         if cls.redis_port not in cls._instances:
-            cls._instances[cls.redis_port] = super().__new__(cls)
             cls._set_redis_options()
             cls._read_configuration()
-            cls.start()
-            # By default the slips internal time is 0 until we receive something
-            cls.set_slips_internal_time(0)
-            if not cls.get_slips_start_time():
-                cls._set_slips_start_time()
-            # useful for debugging using 'CLIENT LIST' redis cmd
-            cls.r.client_setname(f"Slips-DB")
+            if cls.start():
+                cls._instances[cls.redis_port] = super().__new__(cls)
+                # By default the slips internal time is
+                # 0 until we receive something
+                cls.set_slips_internal_time(0)
+                if not cls.get_slips_start_time():
+                    cls._set_slips_start_time()
+                # useful for debugging using 'CLIENT LIST' redis cmd
+                cls.r.client_setname(f"Slips-DB")
+            else:
+                return False
         return cls._instances[cls.redis_port]
 
-    def __init__(self, logger, redis_port, flush_db=True):
+    def __init__(self, logger, redis_port, start_redis_server=True,
+                 flush_db=True):
         # the main purpose of this init is to call the parent's __init__
         IObservable.__init__(self)
         self.add_observer(logger)
@@ -169,12 +174,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     @classmethod
     def _read_configuration(cls):
         conf = ConfigParser()
-        cls.deletePrevdb = conf.deletePrevdb()
-        cls.disabled_detections = conf.disabled_detections()
+        cls.deletePrevdb: bool = conf.deletePrevdb()
+        cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.width = conf.get_tw_width_as_float()
 
     @classmethod
     def set_slips_internal_time(cls, timestamp):
+        """
+        slips internal time is the timestamp of the last tw update done in
+        slips
+        it is updated each time slips detects a new modification in any
+        timewindow
+        metadata_manager.py checks for new tw modifications every 5s and
+        updates this value accordingly
+        """
         cls.r.set('slips_internal_time', timestamp)
         
     @classmethod
@@ -185,10 +198,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             return start_time
     
     @classmethod
-    def start(cls):
+    def start(cls) -> bool:
         """Flushes and Starts the DB and """
         try:
-            cls.connect_to_redis_server()
+            if not cls.connect_to_redis_server():
+                return False
+
             # Set the memory limits of the output buffer,  For normal clients: no limits
             # for pub-sub 4GB maximum buffer size
             # and 2GB for soft limit
@@ -197,21 +212,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # don't flush the db when starting or stopping the daemon, or when testing
             if (
                     cls.deletePrevdb
-                    and not ('-S' in sys.argv or '-cb' in sys.argv or '-d' in sys.argv )
+                    and not ('-S' in sys.argv
+                             or '-cb' in sys.argv
+                             or '-d' in sys.argv )
                     and cls.flush_db
             ):
-                # when stopping the daemon, don't flush bc we need to get the pids
-                # to close slips files
+                # when stopping the daemon, don't flush bc we need to get
+                # the PIDS to close slips files
                 cls.r.flushdb()
 
             cls.change_redis_limits(cls.r)
             cls.change_redis_limits(cls.rcache)
 
-            # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
-            # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
+            # to fix redis.exceptions.ResponseError MISCONF Redis is
+            # configured to save RDB snapshots
+            # configure redis to stop writing to dump.rdb when an error
+            # occurs without throwing errors in slips
             # Even if the DB is not deleted. We need to delete some temp data
             cls.r.delete('zeekfiles')
-
+            return True
         except redis.exceptions.ConnectionError as ex:
             print(f"[DB] Can't connect to redis on port {cls.redis_port}: {ex}")
             return False
@@ -238,7 +257,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         )
 
     @classmethod
-    def connect_to_redis_server(cls):
+    def connect_to_redis_server(cls) -> bool:
         """
         Connects to the given port and Sets r and rcache
         """
@@ -263,15 +282,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             cls.r.client_list()
             return True
         except redis.exceptions.ConnectionError:
-            # unable to connect to this port
-            # sometimes we open the server but we have trouble connecting,
-            # so we need to close it
-            # if the port is used for another instance, slips.py is going to detect it
-            if cls.redis_port != 32850:
-                # 32850 is where we have the loaded rdb file when loading a saved db
-                # we shouldn't close it because this is what kalipso will
-                # use to view the loaded the db
-                cls.close_redis_server(cls.redis_port)
             return False
 
     @classmethod
@@ -502,7 +512,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         else:
             return {}
 
-    def set_input_metadata(self, info:dict):
+    def set_input_metadata(self, info: dict):
         """
         sets name, size, analysis dates, and zeek_dir in the db
         """

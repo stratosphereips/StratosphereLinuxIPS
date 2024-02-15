@@ -61,7 +61,8 @@ class Profiler(ICore):
     def init(self,
              is_profiler_done: multiprocessing.Semaphore = None,
              profiler_queue=None,
-             is_profiler_done_event : multiprocessing.Event =None
+             is_profiler_done_event : multiprocessing.Event =None,
+             has_pbar: bool =False,
              ):
         # when profiler is done processing, it releases this semaphore,
         # that's how the process_manager knows it's done
@@ -74,17 +75,20 @@ class Profiler(ICore):
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
+        self.has_pbar = has_pbar
         self.whitelist = Whitelist(self.logger, self.db)
         # Read the configuration
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
-        # there has to be a timeout or it will wait forever and never receive a new line
+        # there has to be a timeout or it will wait forever and never
+        # receive a new line
         self.timeout = 0.0000001
         self.c1 = self.db.subscribe('reload_whitelist')
         self.channels = {
             'reload_whitelist': self.c1,
         }
-        # is set by this proc to tell input proc that we are dne processing and it can exit no issue
+        # is set by this proc to tell input proc that we are done
+        # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
 
 
@@ -98,10 +102,13 @@ class Profiler(ICore):
 
     def convert_starttime_to_epoch(self):
         try:
-            self.flow.starttime = utils.convert_format(self.flow.starttime, 'unixtimestamp')
+            self.flow.starttime = utils.convert_format(
+                self.flow.starttime,
+                'unixtimestamp')
         except ValueError:
             self.print(f'We can not recognize time format of '
-                       f'self.flow.starttime: {self.flow.starttime}', 0, 1)
+                       f'self.flow.starttime: {self.flow.starttime}',
+                       0, 1)
 
     def get_rev_profile(self):
         """
@@ -112,22 +119,25 @@ class Profiler(ICore):
             # some flows don't have a daddr like software.log flows
             return False, False
 
-        rev_profileid = self.db.getProfileIdFromIP(self.daddr_as_obj)
+        rev_profileid: str = self.db.get_profileid_from_ip(self.flow.daddr)
         if not rev_profileid:
             # the profileid is not present in the db, create it
             rev_profileid = f'profile_{self.flow.daddr}'
-            self.db.addProfile(rev_profileid, self.flow.starttime, self.width)
+            self.db.add_profile(rev_profileid, self.flow.starttime, self.width)
 
-        # in the database, Find the id of the tw where the flow belongs.
-        rev_twid = self.db.get_timewindow(self.flow.starttime, rev_profileid)
+        # in the database, Find and register the id of the tw where the flow
+        # belongs.
+        rev_twid: str = self.db.get_timewindow(
+            self.flow.starttime, rev_profileid)
         return rev_profileid, rev_twid
 
     def add_flow_to_profile(self):
         """
-        This is the main function that takes the columns of a flow and does all the magic to
-        convert it into a working data in our system.
-        It includes checking if the profile exists and how to put the flow correctly.
-        It interprets each column
+        This is the main function that takes the columns of a flow
+        and does all the magic to convert it into a working data in our
+        system.
+        It includes checking if the profile exists and how to put
+        the flow correctly. It interprets each column
         """
         # try:
         if not hasattr(self, 'flow'):
@@ -159,15 +169,18 @@ class Profiler(ICore):
             return True
 
         # 5th. Store the data according to the paremeters
-        # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-        self.print(f'Storing data in the profile: {self.profileid}', 3, 0)
+        # Now that we have the profileid and twid, add the data from the flow
+        # in this tw for this profile
+        self.print(f'Storing data in the profile: {self.profileid}',
+                   3, 0)
         self.convert_starttime_to_epoch()
-        # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
+        # For this 'forward' profile, find the id in the
+        # database of the tw where the flow belongs.
         self.twid = self.db.get_timewindow(self.flow.starttime, self.profileid)
         self.flow_parser.twid = self.twid
 
         # Create profiles for all ips we see
-        self.db.addProfile(self.profileid, self.flow.starttime, self.width)
+        self.db.add_profile(self.profileid, self.flow.starttime, self.width)
         self.store_features_going_out()
         if self.analysis_direction == 'all':
             self.handle_in_flows()
@@ -217,11 +230,15 @@ class Profiler(ICore):
 
     def store_features_going_in(self, profileid: str, twid: str):
         """
-        If we have the all direction set , slips creates profiles for each IP, the src and dst
-        store features going our adds the conn in the profileA from IP A -> IP B in the db
-        this function stores the reverse of this connection. adds the conn in the profileB from IP B <- IP A
+        If we have the all direction set , slips creates profiles
+        for each IP, the src and dst
+        store features going our adds the conn in the profileA from
+        IP A -> IP B in the db
+        this function stores the reverse of this connection. adds
+        the conn in the profileB from IP B <- IP A
         """
-        # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
+        # self.print(f'Storing features going in for profile
+        # {profileid} and tw {twid}')
         if (
             'flow' not in self.flow.type_
             and 'conn' not in self.flow.type_
@@ -295,21 +312,29 @@ class Profiler(ICore):
 
 
     def shutdown_gracefully(self):
-        self.print(f"Stopping. Total lines read: {self.rec_lines}", log_to_logfiles_only=True)
-        # By default if a process(profiler) is not the creator of the queue(profiler_queue) then on
+        self.print(f"Stopping. Total lines read: {self.rec_lines}",
+                   log_to_logfiles_only=True)
+        # By default if a process(profiler) is not the creator of
+        # the queue(profiler_queue) then on
         # exit it will attempt to join the queue’s background thread.
         # this causes a deadlock
         # to avoid this behaviour we should call cancel_join_thread
         # self.profiler_queue.cancel_join_thread()
 
     def is_done_processing(self):
-        """is called to mark this process as done processing so slips.py would know when to terminate"""
+        """
+        is called to mark this process as done processing so
+        slips.py would know when to terminate
+        """
         # signal slips.py that this process is done
-        self.print(f"Marking Profiler as done processing.", log_to_logfiles_only=True)
+        self.print(f"Marking Profiler as done processing.",
+                   log_to_logfiles_only=True)
         self.done_processing.release()
-        self.print(f"Profiler is done processing.", log_to_logfiles_only=True)
+        self.print(f"Profiler is done processing.",
+                   log_to_logfiles_only=True)
         self.is_profiler_done_event.set()
-        self.print(f"Profiler is done telling input.py that it's done processing.", log_to_logfiles_only=True)
+        self.print(f"Profiler is done telling input.py "
+                   f"that it's done processing.", log_to_logfiles_only=True)
 
 
     def check_for_stop_msg(self, msg: str)-> bool:
@@ -321,8 +346,8 @@ class Profiler(ICore):
         if msg != 'stop':
             return False
 
-
-        self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
+        self.print(f"Stopping profiler process. Number of whitelisted "
+                   f"conn flows: "
                    f"{self.whitelisted_flows_ctr}", 2, 0)
 
         self.shutdown_gracefully()
@@ -333,22 +358,10 @@ class Profiler(ICore):
         self.is_done_processing()
         return True
 
-    def init_pbar(self, input_type: str, total_flows:int):
+    def init_pbar(self, total_flows:int):
         """
         sends the output.py a msg with the pbar details for initialization
         """
-        # don't init the pbar when given the following
-        # input types because we don't
-        # know the total flows beforehand
-        if (
-                input_type in ('pcap', 'interface', 'stdin')
-                or '-t' in sys.argv
-                or '--testing' in sys.argv
-        ):
-            # pbar not supported
-            self.supported_pbar = False
-            return
-
         # Find the number of flows we're going to receive of input received
         self.notify_observers({
             'bar': 'init',
@@ -395,14 +408,14 @@ class Profiler(ICore):
             if not self.input_type:
                 # Find the type of input received
                 self.input_type = self.define_separator(line, input_type)
-                self.init_pbar(input_type, total_flows)
+                if self.has_pbar:
+                    self.init_pbar(total_flows)
 
             # What type of input do we have?
             if not self.input_type:
                 # the above define_type can't define the type of input
                 self.print("Can't determine input type.")
                 return False
-
 
             # only create the input obj once,
             # the rest of the flows will use the same input handler
@@ -414,9 +427,9 @@ class Profiler(ICore):
             if self.flow:
                 self.add_flow_to_profile()
 
-
-            # now that one flow is processed tell output.py to update the bar
-            if self.supported_pbar:
+            # now that one flow is processed tell output.py
+            # to update the bar
+            if self.has_pbar:
                 self.notify_observers({'bar': 'update'})
 
             # listen on this channel in case whitelist.conf is changed,

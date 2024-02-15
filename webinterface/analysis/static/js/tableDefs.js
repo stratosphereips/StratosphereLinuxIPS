@@ -30,7 +30,7 @@ let analysisSubTableDefs = {
         searching: false,
         scrollY: "25vh", // hardcoded length of opened datatable
         columns: [
-            { data: 'stime'},
+            { data: 'timestamp'},
             { data: 'confidence'},
             { data: 'threat_level'},
             { data: 'category'},
@@ -210,7 +210,7 @@ let analysisTableDefs = {
         scrollX: false,
         searching: true,
         columns: [
-            { data: 'stime'},
+            { data: 'timestamp'},
             { data: 'confidence'},
             { data: 'threat_level'},
             { data: 'category'},

@@ -1,4 +1,3 @@
-from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 from slack import WebClient
 from slack.errors import SlackApiError
@@ -11,7 +10,7 @@ import threading
 import sys
 import datetime
 
-class ExportingAlerts(IModule, multiprocessing.Process):
+class ExportingAlerts(IModule):
     """
     Module to export alerts to slack and/or STIX
     You need to have the token in your environment variables to use this module
@@ -70,18 +69,18 @@ class ExportingAlerts(IModule, multiprocessing.Process):
         if not hasattr(self, 'slack_token_filepath'):
             return False
 
-        # slack_bot_token_secret should contain your slack token only
+        # slack_bot_token_secret should contain the slack token only
         try:
             with open(self.slack_token_filepath, 'r') as f:
                 self.BOT_TOKEN = f.read()
                 if len(self.BOT_TOKEN) < 5:
+                    del self.BOT_TOKEN
                     raise NameError
         except (FileNotFoundError, NameError):
             self.print(
                 f'Please add slack bot token to '
                 f'{self.slack_token_filepath}. Stopping.'
             )
-            # Stop the module
             self.shutdown_gracefully()
 
 
@@ -96,7 +95,8 @@ class ExportingAlerts(IModule, multiprocessing.Process):
         if self.BOT_TOKEN == '':
             # The file is empty
             self.print(
-                f"Can't find SLACK_BOT_TOKEN in {self.slack_token_filepath}.",0,2,
+                f"Can't find SLACK_BOT_TOKEN "
+                f"in {self.slack_token_filepath}.",0,2,
             )
             return False
 
@@ -174,7 +174,7 @@ class ExportingAlerts(IModule, multiprocessing.Process):
             self.print(f'Successfully exported to TAXII server: {self.TAXII_server}.', 1, 0)
             return True
 
-    def export_to_STIX(self, msg_to_send: tuple) -> bool:
+    def export_to_stix(self, msg_to_send: tuple) -> bool:
         """
         Function to export evidence to a STIX_data.json file in the cwd.
         It keeps appending the given indicator to STIX_data.json until they're sent to the
@@ -276,17 +276,14 @@ class ExportingAlerts(IModule, multiprocessing.Process):
                 self.is_bundle_created = False
             else:
                 self.print(
-                    f'{self.push_delay} seconds passed, no new alerts in STIX_data.json.', 2, 0
+                    f'{self.push_delay} seconds passed, '
+                    f'no new alerts in STIX_data.json.', 2, 0
                 )
 
     def shutdown_gracefully(self):
         # We need to publish to taxii server before stopping
         if 'stix' in self.export_to:
             self.push_to_TAXII_server()
-
-        if hasattr(self, 'json_file_handle'):
-            self.json_file_handle.close()
-
         if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
             date_time = datetime.datetime.now()
             date_time = utils.convert_format(date_time, utils.alerts_format)
@@ -309,21 +306,22 @@ class ExportingAlerts(IModule, multiprocessing.Process):
             self.send_to_slack(f'{date_time}: Slips started on sensor: {self.sensor_name}.')
 
     def main(self):
-        if msg:= self.get_msg('export_evidence'):
+        if msg := self.get_msg('export_evidence'):
             evidence = json.loads(msg['data'])
-            description = evidence['description']
+            description: str = evidence['description']
+            
             if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
-                srcip = evidence['profileid'].split("_")[-1]
+                srcip = evidence['profile']['ip']
                 msg_to_send = f'Src IP {srcip} Detected {description}'
                 self.send_to_slack(msg_to_send)
 
             if 'stix' in self.export_to:
                 msg_to_send = (
                     evidence['evidence_type'],
-                    evidence['attacker_direction'],
-                    evidence['attacker'],
+                    evidence['attacker']['direction'],
+                    evidence['attacker']['value'],
                     description,
                 )
-                exported_to_stix = self.export_to_STIX(msg_to_send)
+                exported_to_stix = self.export_to_stix(msg_to_send)
                 if not exported_to_stix:
                     self.print('Problem in export_to_STIX()', 0, 3)

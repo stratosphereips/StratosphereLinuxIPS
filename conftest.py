@@ -21,18 +21,20 @@ sys.path.insert(0, parent_dir)
 
 
 @pytest.fixture
-def mock_rdb():
+def mock_db():
     # Create a mock version of the database object
     with patch('slips_files.core.database.database_manager.DBManager') as mock:
         yield mock.return_value
 
 def do_nothing(*arg):
-    """Used to override the print function because using the self.print causes broken pipes"""
+    """Used to override the print function because using the self.print causes
+    broken pipes"""
     pass
 
 @pytest.fixture
 def input_queue():
-    """This input_queue will be passed to all module constructors that need it"""
+    """This input_queue will be passed to all module constructors that need
+     it"""
     input_queue = Queue()
     input_queue.put = do_nothing
     return input_queue
@@ -40,7 +42,8 @@ def input_queue():
 
 @pytest.fixture
 def profiler_queue():
-    """This profiler_queue will be passed to all module constructors that need it"""
+    """This profiler_queue will be passed to all module constructors that need
+    it"""
     profiler_queue = Queue()
     profiler_queue.put = do_nothing
     return profiler_queue

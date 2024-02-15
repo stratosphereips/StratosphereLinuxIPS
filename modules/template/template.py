@@ -14,7 +14,7 @@
 from slips_files.common.imports import *
 
 
-class Template(IModule, multiprocessing.Process):
+class Template(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'Template'
     description = 'Template module'

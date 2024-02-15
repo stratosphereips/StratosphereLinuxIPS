@@ -8,6 +8,7 @@ import os
 import shutil
 import json
 from datetime import datetime
+from typing import Tuple, List, Set
 
 class MetadataManager:
     def __init__(self, main):
@@ -147,20 +148,25 @@ class MetadataManager:
         self.main.db.set_input_metadata(info)
 
 
-
-    def update_slips_running_stats(self):
+    def update_slips_running_stats(self) -> Tuple[int, Set[str]] :
         """
-        updates the number of processed ips, slips internal time, and modified tws so far in the db
+        updates the number of processed ips, slips internal time,
+         and modified tws so far in the db
         """
         slips_internal_time = float(self.main.db.getSlipsInternalTime()) + 1
 
         # Get the amount of modified profiles since we last checked
-        modified_profiles, last_modified_tw_time = self.main.db.getModifiedProfilesSince(
-            slips_internal_time
+        # this is the modification time of the last timewindow
+        last_modified_tw_time: float
+        modified_profiles, last_modified_tw_time = (
+            self.main.db.getModifiedProfilesSince(slips_internal_time)
         )
         modified_ips_in_the_last_tw = len(modified_profiles)
-        self.main.db.set_input_metadata({'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw})
-        # Get the time of last modified timewindow and set it as a new
+        self.main.db.set_input_metadata(
+            {'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw}
+            )
+        # last_modified_tw_time is 0 the moment we start slips
+        # or if we don't have modified tw since the last slips_internal_time
         if last_modified_tw_time != 0:
             self.main.db.set_slips_internal_time(
                 last_modified_tw_time

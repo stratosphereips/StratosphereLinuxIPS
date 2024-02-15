@@ -8,7 +8,7 @@ import json
 import subprocess
 import time
 
-class Blocking(IModule, multiprocessing.Process):
+class Blocking(IModule):
     """Data should be passed to this module as a json encoded python dict,
     by default this module flushes all slipsBlocking chains before it starts"""
 

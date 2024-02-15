@@ -1,5 +1,3 @@
-# Must imports
-from slips_files.common.imports import *
 import sys
 import traceback
 import json
@@ -9,22 +7,22 @@ import time
 import ipaddress
 import threading
 import validators
+
+from slips_files.common.imports import *
 from slips_files.common.slips_utils import utils
 
 
-class VT(IModule, multiprocessing.Process):
+class VT(IModule):
     name = 'Virustotal'
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = [
-        'Dita Hollmannova, Kamila Babayeva',
+        'Dita Hollmannova',
+        'Kamila Babayeva',
         'Alya Gomaa',
         'Sebastian Garcia',
     ]
 
     def init(self):
-        # This line might not be needed when running SLIPS,
-        # but when VT module is run standalone, it still uses the
-        # database and this line is necessary. Do not delete it, instead move it to line 21.
         self.c1 = self.db.subscribe('new_flow')
         self.c2 = self.db.subscribe('new_dns')
         self.c3 = self.db.subscribe('new_url')
@@ -41,7 +39,8 @@ class VT(IModule, multiprocessing.Process):
         # Queue of API calls
         self.api_call_queue = []
         # Pool manager to make HTTP requests with urllib3
-        # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
+        # The certificate provides a bundle of trusted CAs,
+        # the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(
             cert_reqs='CERT_REQUIRED', ca_certs=certifi.where()
         )
@@ -49,7 +48,8 @@ class VT(IModule, multiprocessing.Process):
         self.api_calls_thread = threading.Thread(
             target=self.API_calls_thread, daemon=True
         )
-        # this will be true when there's a problem with the API key, then the module will exit
+        # this will be true when there's a problem with the
+        # API key, then the module will exit
         self.incorrect_API_key = False
 
     def read_api_key(self):
@@ -75,13 +75,18 @@ class VT(IModule, multiprocessing.Process):
         self, response: dict, response_key: str, positive_key, total_key
     ):
         """
-        Count positive checks and total checks in the response, for the given category. To compute ratio of downloaded
-        samples, sum results for both detected and undetected dicts: "undetected_downloaded_samples" and
+        Count positive checks and total checks in the response,
+         for the given category. To compute ratio of downloaded
+        samples, sum results for both detected and undetected
+        dicts: "undetected_downloaded_samples" and
         "detected_downloaded_samples".
         :param response: json dictionary with response data
-        :param response_key: category to count, eg "undetected_downloaded_samples"
-        :param positive_key: key to use inside of the category for successful detections (usually its "positives")
-        :param total_key: key to use inside of the category to sum all checks (usually its "total")
+        :param response_key: category to count, eg
+        "undetected_downloaded_samples"
+        :param positive_key: key to use inside of the
+        category for successful detections (usually its "positives")
+        :param total_key: key to use inside of the category to sum all checks
+         (usually its "total")
         :return: number of positive tests, number of total tests run
         """
         detections = 0
@@ -124,7 +129,8 @@ class VT(IModule, multiprocessing.Process):
 
     def get_url_vt_data(self, url):
         """
-        Function to perform API call to VirusTotal and return the score for the URL.
+        Function to perform API call to VirusTotal and return the
+         score for the URL.
         Response is cached in a dictionary.
         :param url: url to check
         :return: URL ratio
@@ -176,7 +182,8 @@ class VT(IModule, multiprocessing.Process):
         }
         data = {'VirusTotal': vtdata}
 
-        # Add asn (autonomous system number) if it is unknown or not in the Domain info
+        # Add asn (autonomous system number) if it is unknown
+        # or not in the Domain info
         if cached_data and 'asn' not in cached_data:
             data['asn'] = {
                 'number': f'AS{as_owner}'
@@ -191,7 +198,8 @@ class VT(IModule, multiprocessing.Process):
         """
 
         while True:
-            # do not attempt to make more api calls if we already know that the api key is incorrect
+            # do not attempt to make more api calls if we already
+            # know that the api key is incorrect
             if self.incorrect_API_key:
                 return False
             # wait until the queue is populated
@@ -205,10 +213,13 @@ class VT(IModule, multiprocessing.Process):
                 ioc_type = self.get_ioc_type(ioc)
                 if ioc_type == 'ip':
                     cached_data = self.db.get_ip_info(ioc)
-                    # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
+                    # return an IPv4Address or IPv6Address object
+                    # depending on the IP address passed as argument.
                     ip_addr = ipaddress.ip_address(ioc)
-                    # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
-                    # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
+                    # if VT data of this IP (not multicast) is not
+                    # in the IPInfo, ask VT.
+                    # if the IP is not a multicast and 'VirusTotal'
+                    # key is not in the IPInfo, proceed.
                     if (
                             not cached_data or 'VirusTotal' not in cached_data
                     ) and not ip_addr.is_multicast:
@@ -221,7 +232,8 @@ class VT(IModule, multiprocessing.Process):
 
                 elif ioc_type == 'url':
                     cached_data = self.db.getURLData(ioc)
-                    # If VT data of this domain is not in the DomainInfo, ask VT
+                    # If VT data of this domain is not in the
+                    # DomainInfo, ask VT
                     # If 'Virustotal' key is not in the DomainInfo
                     if not cached_data or 'VirusTotal' not in cached_data:
                         # cached data is either False or {}
@@ -246,10 +258,13 @@ class VT(IModule, multiprocessing.Process):
 
     def get_ip_vt_data(self, ip: str):
         """
-        Function to perform API call to VirusTotal and return scores for each of
-        the four processed categories. Response is cached in a dictionary. Private IPs always return (0, 0, 0, 0).
+        Function to perform API call to VirusTotal and return
+         scores for each of
+        the four processed categories. Response is cached in
+        a dictionary. Private IPs always return (0, 0, 0, 0).
         :param ip: IP address to check
-        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
+        :return: 4-tuple of floats: URL ratio, downloaded
+        file ratio, referrer file ratio, communicating file ratio
         """
 
         try:
@@ -271,17 +286,19 @@ class VT(IModule, multiprocessing.Process):
             self.print(
                 f'Problem in the get_ip_vt_data() line {exception_line}', 0, 1
             )
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_stack(),0,1)
 
     def get_domain_vt_data(self, domain: str):
         """
         Function perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary.
         :param domain: Domain address to check
-        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
+        :return: 4-tuple of floats: URL ratio, downloaded file ratio,
+        referrer file ratio, communicating file ratio
         """
         if 'arpa' in domain or '.local' in domain:
-            # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+            # 'local' is a special-use domain name reserved by
+            # the Internet Engineering Task Force (IETF)
             return (0, 0, 0, 0), ''
         try:
             # for unknown address, do the query
@@ -293,11 +310,10 @@ class VT(IModule, multiprocessing.Process):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem in the get_domain_vt_data() line {exception_line}',
-                0,
-                1,
+                f'Problem in the get_domain_vt_data() '
+                f'line {exception_line}',0,1,
             )
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_stack(),0,1)
             return False
 
     def get_ioc_type(self, ioc):
@@ -309,7 +325,8 @@ class VT(IModule, multiprocessing.Process):
         """
         Create request and perform API call
         :param ioc: IP address, domain, or URL to check
-        :param save_data: False by default. Set to True to save each request json in a file named ip.txt
+        :param save_data: False by default. Set to True to save each
+        request json in a file named ip.txt
         :return: Response object
         """
         if self.incorrect_API_key:
@@ -340,33 +357,42 @@ class VT(IModule, multiprocessing.Process):
                 time.sleep(10)
 
         if response.status != 200:
-            # 204 means Request rate limit exceeded. You are making more requests
-            # than allowed. You have exceeded one of your quotas (minute, daily or monthly).
+            # 204 means Request rate limit exceeded.
+            # You are making more requests
+            # than allowed. You have exceeded one of your quotas
+            # (minute, daily or monthly).
             if response.status == 204:
                 # Add to the queue of api calls in case of api limit reached.
                 self.api_call_queue.append(ioc)
-            # 403 means you don't have enough privileges to make the request or wrong API key
+            # 403 means you don't have enough privileges to make
+            # the request or wrong API key
             elif response.status == 403:
-                # don't add to the api call queue because the user will have to restart slips anyway
+                # don't add to the api call queue because the user
+                # will have to restart slips anyway
                 # to add a correct API key and the queue wil be erased
                 self.print('Please check that your API key is correct.', 0, 1)
                 self.incorrect_API_key = True
             else:
-                # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
-                # X-Api-Message is a comprehensive error description, but it is not always present
+                # if the query was unsuccessful but it is not caused
+                # by API limit, abort (this is some unknown error)
+                # X-Api-Message is a comprehensive error description,
+                # but it is not always present
                 if 'X-Api-Message' in response.headers:
                     message = response.headers['X-Api-Message']
-                # Reason is a much shorter description ("Forbidden"), but it is always there
+                # Reason is a much shorter description ("Forbidden"),
+                # but it is always there
                 else:
                     message = response.reason
                 self.print(
-                    f'VT API returned unexpected code: {response.status} - {message}', 0, 2
+                    f'VT API returned unexpected code:'
+                    f' {response.status} - {message}', 0, 2
                 )
 
 
             # report that API limit is reached, wait one minute and try again
             self.print(
-                f'Status code is {response.status} at {time.asctime()}, query id: {self.counter}',
+                f'Status code is {response.status} at '
+                f'{time.asctime()}, query id: {self.counter}',
                 0,2
             )
             # return empty dict because api call isn't successful
@@ -433,19 +459,24 @@ class VT(IModule, multiprocessing.Process):
          ref_file_ratio, com_file_ratio
         """
 
-        # compute how many tests were run on the undetected samples. This will return tuple (0, total)
-        # the numbers 2 and 3 are keys to the dictionary, which is in this only case (probably by mistake) a list
+        # compute how many tests were run on the undetected samples.
+        # This will return tuple (0, total)
+        # the numbers 2 and 3 are keys to the dictionary, which is
+        # in this only case (probably by mistake) a list
         undetected_url_score = self.count_positives(
             response, 'undetected_urls', 2, 3
         )
 
-        # compute how many tests were run on the detected samples. This will return tuple (detections, total)
-        # URLs that have been detected as malicious by one or more antivirus engines
+        # compute how many tests were run on the detected samples.
+        # This will return tuple (detections, total)
+        # URLs that have been detected as malicious by one or more
+        # antivirus engines
         detected_url_score = self.count_positives(
             response, 'detected_urls', 'positives', 'total'
         )
 
-        # sum the previous results, to get the sum of detections and sum of total tests
+        # sum the previous results, to get the sum of detections
+        # and sum of total tests
         url_detections = undetected_url_score[0] + detected_url_score[0]
         if url_total := undetected_url_score[1] + detected_url_score[1]:
             url_ratio = url_detections / url_total
@@ -468,13 +499,13 @@ class VT(IModule, multiprocessing.Process):
             down_file_ratio = down_file_detections / down_file_total
         else:
             down_file_ratio = 0
-        # samples  that were obtained from the same referrer as the file or URL being analyzed,
-        # but have not been detected as malicious
+        # samples  that were obtained from the same referrer as the
+        # file or URL being analyzed,  but have not been detected as malicious
         undetected_ref_score = self.count_positives(
             response, 'undetected_referrer_samples', 'positives', 'total'
         )
-         # that were obtained from the same referrer as the file or URL being analyzed,
-        # that have been detected as malicious
+         # that were obtained from the same referrer as the file or
+        # URL being analyzed, that have been detected as malicious
         detected_ref_score = self.count_positives(
             response, 'detected_referrer_samples', 'positives', 'total'
         )
@@ -535,10 +566,13 @@ class VT(IModule, multiprocessing.Process):
             if not cached_data:
                 cached_data = {}
 
-            # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
+            # return an IPv4Address or IPv6Address object depending on the
+            # IP address passed as argument.
             ip_addr = ipaddress.ip_address(ip)
-            # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
-            # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
+            # if VT data of this IP (not multicast) is not in the IPInfo,
+            # ask VT.  if the IP is not a multicast and 'VirusTotal' key is
+            # not in
+            # the IPInfo, proceed.
             if (
                 'VirusTotal' not in cached_data
                 and not ip_addr.is_multicast
@@ -548,7 +582,8 @@ class VT(IModule, multiprocessing.Process):
 
             # if VT data of this IP is in the IPInfo, check the timestamp.
             elif 'VirusTotal' in cached_data:
-                # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                # If VT is in data, check timestamp. Take time difference,
+                # if not valid, update vt scores.
                 if (
                     time.time()
                     - cached_data['VirusTotal']['timestamp']
@@ -576,7 +611,8 @@ class VT(IModule, multiprocessing.Process):
             elif (
                 domain and cached_data and 'VirusTotal' in cached_data
             ):
-                # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                # If VT is in data, check timestamp. Take time difference,
+                # if not valid, update vt scores.
                 if (
                     time.time()
                     - cached_data['VirusTotal']['timestamp']
@@ -599,7 +635,8 @@ class VT(IModule, multiprocessing.Process):
                 # cached data is either False or {}
                 self.set_url_data_in_URLInfo(url, cached_data)
             elif cached_data and 'VirusTotal' in cached_data:
-                # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                # If VT is in data, check timestamp. Take time difference,
+                # if not valid, update vt scores.
                 if (
                     time.time()
                     - cached_data['VirusTotal']['timestamp']

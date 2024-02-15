@@ -1,5 +1,19 @@
 from slips_files.common.slips_utils import utils
-
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Attacker,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Victim,
+        Proto,
+        Tag
+    )
 
 class VerticalPortscan:
     """
@@ -90,38 +104,52 @@ class VerticalPortscan:
         # reset the dict since we already combined
         self.pending_vertical_ps_evidence = {}
 
+
     def set_evidence_vertical_portscan(self, evidence: dict):
         """Sets the vertical portscan evidence in the db"""
-        attacker_direction = 'srcip'
-        threat_level = 'high'
-        category = 'Recon.Scanning'
-        srcip = evidence['profileid'].split('_')[-1]
+        threat_level = ThreatLevel.HIGH
+        saddr = evidence['profileid'].split('_')[-1]
         confidence = utils.calculate_confidence(evidence['pkts_sent'])
         description = (
-            f'new vertical port scan to IP {evidence["dstip"]} from {srcip}. '
+            f'new vertical port scan to IP {evidence["dstip"]} from {saddr}. '
             f'Total {evidence["amount_of_dports"]} '
             f'dst {evidence["protocol"]} ports '
             f'were scanned. '
             f'Total packets sent to all ports: {evidence["pkts_sent"]}. '
             f'Confidence: {confidence}. by Slips'
         )
-        self.db.setEvidence(
-            'VerticalPortscan',
-            attacker_direction,
-            srcip,
-            threat_level,
-            confidence,
-            description,
-            evidence['timestamp'],
-            category,
-            source_target_tag='Recon',
-            conn_count=evidence['pkts_sent'],
-            proto=evidence['protocol'],
-            profileid=evidence['profileid'],
-            twid=evidence['twid'],
-            uid=evidence['uid'],
-            victim=evidence['dstip']
+
+        attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
             )
+        victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=evidence['dstip']
+            )
+        twid = int(evidence['twid'].replace("timewindow", ""))
+        evidence = Evidence(
+            evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid),
+            uid=evidence['uid'],
+            timestamp=evidence['timestamp'],
+            category=IDEACategory.RECON_SCANNING,
+            conn_count=evidence['pkts_sent'],
+            proto=Proto(evidence['protocol'].lower()),
+            source_target_tag=Tag.RECON,
+            victim=victim
+        )
+
+        self.db.set_evidence(evidence)
+
+
 
     def decide_if_time_to_set_evidence_or_combine(
             self,

@@ -1,5 +1,3 @@
-from slips_files.common.abstracts._module import IModule
-from slips_files.common.imports import *
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
@@ -7,6 +5,21 @@ import pandas as pd
 import json
 import datetime
 import traceback
+
+from slips_files.common.imports import *
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Attacker,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+    )
+
 # Only for debbuging
 # from matplotlib import pyplot as plt
 
@@ -20,7 +33,7 @@ import warnings
 warnings.warn = warn
 
 
-class FlowMLDetection(IModule, multiprocessing.Process):
+class FlowMLDetection(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'Flow ML Detection'
     description = (
@@ -82,7 +95,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
                 )
             except Exception:
                 self.print('Error while calling clf.train()')
-                self.print(traceback.print_exc())
+                self.print(traceback.print_stack())
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
@@ -102,7 +115,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
 
         except Exception:
             self.print('Error in train()', 0 , 1)
-            self.print(traceback.print_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
 
 
     def process_features(self, dataset):
@@ -203,7 +216,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
         except Exception:
             # Stop the timer
             self.print('Error in process_features()')
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_stack(),0,1)
 
     def process_flows(self):
         """
@@ -282,7 +295,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
         except Exception:
             # Stop the timer
             self.print('Error in process_flows()')
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_stack(),0,1)
 
     def process_flow(self):
         """
@@ -299,7 +312,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
         except Exception:
             # Stop the timer
             self.print('Error in process_flow()')
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_stack(),0,1)
 
     def detect(self):
         """
@@ -320,7 +333,7 @@ class FlowMLDetection(IModule, multiprocessing.Process):
             # Stop the timer
             self.print('Error in detect() X_flow:')
             self.print(X_flow)
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_stack(),0,1)
 
     def store_model(self):
         """
@@ -362,22 +375,47 @@ class FlowMLDetection(IModule, multiprocessing.Process):
             )
 
     def set_evidence_malicious_flow(
-        self, saddr, sport, daddr, dport, profileid, twid, uid
-    ):
-        """
-        Set the evidence that a flow was detected as malicious
-        """
-        confidence = 0.1
-        threat_level = 'low'
-        attacker_direction = 'flow'
-        category = 'Anomaly.Traffic'
-        attacker = f'{str(saddr)}:{str(sport)}-{str(daddr)}:{str(dport)}'
-        evidence_type = 'MaliciousFlow'
+            self,
+            saddr: str,
+            sport: str,
+            daddr: str,
+            dport: str,
+            twid: str,
+            uid: str
+            ):
+        confidence: float = 0.1
+        threat_level: ThreatLevel = ThreatLevel.LOW
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
         ip_identification = self.db.get_ip_identification(daddr)
-        description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
-        timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid)
+        description = f'Malicious flow by ML. Src IP {saddr}:{sport} to ' \
+                      f'{daddr}:{dport} {ip_identification}'
+
+        timestamp = utils.convert_format(
+            datetime.datetime.now(),
+            utils.alerts_format
+            )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_FLOW,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[uid],
+            timestamp=timestamp,
+            category=IDEACategory.ANOMALY_TRAFFIC
+        )
+
+        self.db.set_evidence(evidence)
+
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -461,7 +499,6 @@ class FlowMLDetection(IModule, multiprocessing.Process):
                             self.flow_dict['sport'],
                             self.flow_dict['daddr'],
                             self.flow_dict['dport'],
-                            profileid,
                             twid,
                             uid,
                         )

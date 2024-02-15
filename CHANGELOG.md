@@ -1,3 +1,13 @@
+- 1.0.11 (February 2024)
+- Improve the logging of evidence in alerts.json and alerts.log.
+- Optimize the storing of evidence in the Redis database.
+- Fix problem of missing evidence, now all evidence is logged correctly.
+- Fix problem adding flows to incorrect time windows.
+- Fix problem setting SSH version changing evidence.
+- Fix problem closing Redis ports using -k.
+- Fix problem closing the progress bar.
+- Fix problem releasing the terminal when Slips is done.
+
 - 1.0.10 (January 2024)
 - Faster ensembling of evidence.
 - Log accumulated threat levels of each evidence in alerts.json.

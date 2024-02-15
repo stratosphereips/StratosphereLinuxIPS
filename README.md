@@ -1,5 +1,5 @@
 <h1 align="center"> 
-Slips v1.0.10
+Slips v1.0.11
 </h1>
 
 
@@ -125,7 +125,7 @@ or our command-line based interface Kalipso
 
 ##### Web interface
 
-    ./webinteface.sh
+    ./webinterface.sh
 
 Then navigate to ```http://localhost:55000/``` from your browser.
 

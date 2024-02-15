@@ -66,21 +66,21 @@ def test_pcap(
         (
             'dataset/test4-malicious.binetflow',
             2,
-            'horizontal port scan to port  81',
+            'Horizontal port scan to port  81',
             'test4/',
             6662,
         ),
         (
             'dataset/test3-mixed.binetflow',
             20,
-            'horizontal port scan to port  3389',
+            'Horizontal port scan to port  3389/TCP',
             'test3/',
             6663,
         ),
         (
             'dataset/test2-malicious.binetflow',
             1,
-            'Detected Long Connection.',
+            'Detected  Long Connection.',
             'test2/',
             6664,
         ),
@@ -157,9 +157,9 @@ def test_binetflow(
             [
                 'bad SMTP login to 80.75.42.226',
                 'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
-                'multiple empty HTTP connections to bing.com',
-                'suspicious user-agent',
-                'download of an executable',
+                'Multiple empty HTTP connections to google.com',
+                'Suspicious user-agent:',
+                'Download of an executable',
                 'GRE tunnel'
             ],
             'test14-malicious-zeek-dir/',

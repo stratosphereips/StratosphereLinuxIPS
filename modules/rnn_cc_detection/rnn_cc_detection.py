@@ -1,20 +1,33 @@
 # Must imports
-from slips_files.common.imports import *
 import warnings
 import json
-import traceback
-
-# Your imports
 import numpy as np
-import sys
+from typing import Optional
 from tensorflow.python.keras.models import load_model
+
+from slips_files.common.imports import *
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Attacker,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Victim,
+        Proto,
+        Tag
+    )
 
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
-class CCDetection(IModule, multiprocessing.Process):
+class CCDetection(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'RNN C&C Detection'
     description = 'Detect C&C channels based on behavioral letters'
@@ -26,53 +39,58 @@ class CCDetection(IModule, multiprocessing.Process):
             'new_letters': self.c1,
         }
 
-    def set_evidence(
+
+    def set_evidence_cc_channel(
         self,
-        score,
-        confidence,
-        uid,
-        timestamp,
-        tupleid='',
-        profileid='',
-        twid='',
+        score: float,
+        confidence: float,
+        uid: str,
+        timestamp: str,
+        tupleid: str = '',
+        profileid: str = '',
+        twid: str = '',
     ):
         """
         Set an evidence for malicious Tuple
         """
-
         tupleid = tupleid.split('-')
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
-        attacker_direction = 'srcip'
-        attacker = dstip
-        source_target_tag = 'Botnet'
-        evidence_type = 'Command-and-Control-channels-detection'
-        threat_level = 'high'
-        categroy = 'Intrusion.Botnet'
-        portproto = f'{port}/{proto}'
-        port_info = self.db.get_port_info(portproto)
-        ip_identification = self.db.get_ip_identification(dstip)
-        description = (
+        srcip = profileid.split("_")[-1]
+
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=srcip
+            )
+
+        threat_level: ThreatLevel = ThreatLevel.HIGH
+        portproto: str = f'{port}/{proto}'
+        port_info: str = self.db.get_port_info(portproto)
+        ip_identification: str = self.db.get_ip_identification(dstip)
+        description: str = (
             f'C&C channel, destination IP: {dstip} '
             f'port: {port_info.upper() if port_info else ""} {portproto} '
             f'score: {format(score, ".4f")}. {ip_identification}'
         )
-        victim = profileid.split('_')[-1]
-        self.db.setEvidence(
-            evidence_type,
-            attacker_direction,
-            attacker,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            categroy,
-            source_target_tag=source_target_tag,
-            port=port,
-            proto=proto,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-            victim= victim)
+
+        timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[uid],
+            timestamp=timestamp,
+            category=IDEACategory.INTRUSION_BOTNET,
+            source_target_tag=Tag.BOTNET,
+            port=int(port),
+            proto=Proto(proto.lower()) if proto else None,
+        )
+
+        self.db.set_evidence(evidence)
 
 
     def convert_input_for_module(self, pre_behavioral_model):
@@ -170,7 +188,7 @@ class CCDetection(IModule, multiprocessing.Process):
                         )
                     uid = msg['uid']
                     stime = flow['starttime']
-                    self.set_evidence(
+                    self.set_evidence_cc_channel(
                         score,
                         confidence,
                         uid,
@@ -179,16 +197,14 @@ class CCDetection(IModule, multiprocessing.Process):
                         profileid,
                         twid,
                     )
-                    attacker = tupleid.split('-')[0]
-                    # port = int(tupleid.split('-')[1])
                     to_send = {
-                        'attacker': attacker,
-                        'attacker_type': utils.detect_data_type(attacker),
+                        'attacker_type': utils.detect_data_type(flow['daddr']),
                         'profileid' : profileid,
                         'twid' : twid,
                         'flow': flow,
-                        'uid': uid,
                     }
+                    # we only check malicious jarm hashes when there's a CC
+                    # detection
                     self.db.publish('check_jarm_hash', json.dumps(to_send))
 
             """

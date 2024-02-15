@@ -24,9 +24,10 @@ class ICore(IModule, Process):
             **kwargs
             ):
         """
-        contains common initializations in all core files in  slips_files/core/
-        the goal of this is to have one common __init__() for all modules, which is the one
-        in this file
+        contains common initializations in all core files in
+         slips_files/core/
+        the goal of this is to have one common __init__()
+        for all modules, which is the one in this file
         """
         Process.__init__(self)
         self.output_dir = output_dir
@@ -57,7 +58,7 @@ class ICore(IModule, Process):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem in main() line {exception_line}', 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
+            self.print(traceback.print_stack(), 0, 1)
 
         return True
 

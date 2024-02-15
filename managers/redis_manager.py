@@ -6,7 +6,6 @@ import time
 import socket
 import subprocess
 from typing import Dict, Union
-
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
@@ -27,7 +26,7 @@ class RedisManager:
     def get_start_port(self):
         return self.start_port
 
-    def log_redis_server_PID(self, redis_port: int, redis_pid: int):
+    def log_redis_server_pid(self, redis_port: int, redis_pid: int):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         try:
             # used in case we need to remove the line using 6379 from running logfile
@@ -51,7 +50,7 @@ class RedisManager:
             # last run was by root, change the file ownership to non-root
             os.remove(self.running_logfile)
             open(self.running_logfile, 'w').close()
-            self.log_redis_server_PID(redis_port, redis_pid)
+            self.log_redis_server_pid(redis_port, redis_pid)
 
         if redis_port == 6379:
             # remove the old logline using this port
@@ -64,7 +63,7 @@ class RedisManager:
         self.main.input_information = os.path.basename(self.main.args.db)
         redis_pid: int = self.get_pid_of_redis_server(redis_port)
         self.zeek_folder = '""'
-        self.log_redis_server_PID(redis_port, redis_pid)
+        self.log_redis_server_pid(redis_port, redis_pid)
         self.remove_old_logline(redis_port)
 
         print(
@@ -118,12 +117,14 @@ class RedisManager:
             except Exception as ex:
                 # only try to open redis-server twice.
                 if tries == 2:
-                    print(f'[Main] Problem starting redis cache database. \n{ex}\nStopping')
+                    print(f'[Main] Problem starting redis cache database.'
+                          f' \n{ex}\nStopping')
                     self.main.terminate_slips()
                     return False
 
                 print('[Main] Starting redis cache database..')
-                os.system('redis-server config/redis.conf --daemonize yes  > /dev/null 2>&1')
+                os.system('redis-server config/redis.conf --daemonize yes '
+                          ' > /dev/null 2>&1')
                 # give the server time to start
                 time.sleep(1)
                 tries += 1
@@ -131,7 +132,8 @@ class RedisManager:
 
     def get_random_redis_port(self) -> int:
         """
-        Keeps trying to connect to random generated ports until we found an available port.
+        Keeps trying to connect to random generated ports until
+        we found an available port.
         returns the port number
         """
         for port in range(self.start_port, self.end_port+1):
@@ -172,7 +174,8 @@ class RedisManager:
 
     def close_all_ports(self):
         """
-        Closes all the redis ports in running_slips_info.txt and in slips supported range of ports
+        Closes all the redis ports in running_slips_info.txt and
+         in slips supported range of ports
         """
         if not hasattr(self, 'open_servers_PIDs'):
             self.get_open_redis_servers()
@@ -193,7 +196,8 @@ class RedisManager:
                 self.kill_redis_server(pid)
 
 
-        # print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
+        # print(f"Successfully closed all redis servers on ports
+        # {self.start_port} to {self.end_port}")
         print("Successfully closed all open redis servers")
 
         with contextlib.suppress(FileNotFoundError):
@@ -202,21 +206,28 @@ class RedisManager:
         return
 
 
+    def print_port_in_use(self, port: int):
+        print(f"[Main] Port {port} is already in use by another process"
+              f"\nChoose another port using -P <portnumber>"
+              f"\nOr kill your open redis ports using: ./slips.py -k ")
+
+
     def check_if_port_is_in_use(self, port: int) -> bool:
         if port == 6379:
             # even if it's already in use, slips should override it
             return False
 
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("localhost", port))
+        # is it used by another app?
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if sock.connect_ex(("localhost", port)) != 0:
+            # not used
+            sock.close()
             return False
-        except OSError as e:
-            print(f"[Main] Port {port} is already in use by another process."
-                  f" Choose another port using -P <portnumber> \n"
-                  f"Or kill your open redis ports using: ./slips.py -k ")
-            self.main.terminate_slips()
-            return True
+
+        sock.close()
+        self.print_port_in_use(port)
+        self.main.terminate_slips()
+        return True
 
 
     def get_pid_of_redis_server(self, port: int) -> int:
@@ -334,8 +345,10 @@ class RedisManager:
 
     def flush_redis_server(self, pid: int=None, port: int=None):
         """
-        Flush the redis server on this pid, only 1 param should be given, pid or port
-        :param pid: can be False if port is given
+        Flush the redis server on this pid, only 1 param should be
+        given, pid or port
+        :kwarg pid: can be False if port is given
+        :kwarg port: redis server port to flush
         Gets the pid of the port if not given
         """
         if not port and not pid:
@@ -362,10 +375,14 @@ class RedisManager:
                 start_sqlite=False,
                 start_redis_server=False
             )
-            db.rdb.r.flushall()
-            db.rdb.r.flushdb()
-            db.rdb.r.script_flush()
-            return True
+            # if the redis server opened by slips is closed manually by the
+            # user, not by slips, slips won't be able to connect to it
+            # that's why we check for db.rdb
+            if db.rdb:
+                db.rdb.r.flushall()
+                db.rdb.r.flushdb()
+                db.rdb.r.script_flush()
+                return True
         except redis.exceptions.ConnectionError:
             # server already killed!
             return False
