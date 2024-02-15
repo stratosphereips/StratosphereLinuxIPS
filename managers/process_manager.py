@@ -1,27 +1,39 @@
-from multiprocessing import Queue, Event, Process, Semaphore, Pipe, Manager
-from multiprocessing.managers import ValueProxy
-from exclusiveprocess import Lock, CannotAcquireLock
-from collections import OrderedDict
-from typing import List, Tuple
 import asyncio
-import signal
-import time
-import pkgutil
-import inspect
-import modules
 import importlib
+import inspect
 import os
+import pkgutil
+import signal
 import sys
+import time
 import traceback
+from collections import OrderedDict
+from multiprocessing import (
+    Queue,
+    Event,
+    Process,
+    Semaphore,
+    Pipe,
+    )
+from typing import (
+    List,
+    Tuple,
+    )
 
+from exclusiveprocess import (
+    Lock,
+    CannotAcquireLock,
+    )
+
+import modules
+from modules.update_manager.update_manager import UpdateManager
 from slips_files.common.imports import *
-from slips_files.core.output import Output
-from slips_files.core.profiler import Profiler
+from slips_files.common.style import green
 from slips_files.core.evidencehandler import EvidenceHandler
 from slips_files.core.input import Input
-from modules.progress_bar.progress_bar import PBar
-from modules.update_manager.update_manager import UpdateManager
-from slips_files.common.style import green
+from slips_files.core.output import Output
+from slips_files.core.profiler import Profiler
+
 
 class ProcessManager:
     def __init__(self, main):
@@ -47,31 +59,54 @@ class ProcessManager:
         # cant get more lines anymore!
         self.is_profiler_done_event = Event()
         # for the communication between output.py and the progress bar
-        self.pbar_recv_pipe, self.output_send_pipe = Pipe(False)
-        self.manager = Manager()
         # Pipe(False) means the pipe is unidirectional.
         # aka only msgs can go from output -> pbar and not vice versa
         # recv_pipe used only for receiving,
         # send_pipe use donly for sending
-        # using mp manager to be able to change this value
-        # from the PBar class and have it changed here
-        self.has_pbar: ValueProxy = self.manager.Value("has_pbar", False)
+        self.pbar_recv_pipe, self.output_send_pipe = Pipe(False)
+        self.pbar_finished: Event = Event()
+        
+    def is_pbar_supported(self) -> bool:
+        """
+        When running on a pcap, interface, or taking flows from an
+        external module, the total amount of flows is unknown
+        so the pbar is not supported
+        """
+        # input type can be false whne using -S or in unit tests
+        if (
+                not self.main.input_type
+                or self.main.input_type in ('interface', 'pcap', 'stdin')
+                or self.main.mode == 'daemonized'
+        ):
+            return False
 
+
+        if self.main.stdout != '':
+            # this means that stdout was redirected to a file,
+            # no need to print the progress bar
+            return False
+        
+        if (
+                self.main.args.growing
+                or self.main.args.input_module
+                or self.main.args.testing
+        ):
+            return False
+        
+        return True
+    
     def start_output_process(self, current_stdout, stderr, slips_logfile):
-        # only in this instance we'll have to specify the verbose,
-        # debug, std files and input type
-        # since the output is a singleton, the same params will
-        # be set everywhere, no need to pass them everytime
         output_process = Output(
             stdout=current_stdout,
             stderr=stderr,
             slips_logfile=slips_logfile,
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
-            slips_mode=self.main.mode,
             input_type=self.main.input_type,
             sender_pipe=self.output_send_pipe,
-            has_pbar=self.has_pbar,
+            has_pbar=self.is_pbar_supported(),
+            pbar_finished=self.pbar_finished,
+            stop_daemon=self.main.args.stopdaemon
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
@@ -82,11 +117,10 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
-            has_pbar=self.has_pbar,
             stdout=self.main.stdout,
             pipe=self.pbar_recv_pipe,
             slips_mode=self.main.mode,
-            input_type=self.main.input_type,
+            pbar_finished=self.pbar_finished,
         )
         return pbar
     
@@ -98,7 +132,8 @@ class ProcessManager:
             self.termination_event,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
-            is_profiler_done_event= self.is_profiler_done_event
+            is_profiler_done_event= self.is_profiler_done_event,
+            has_pbar=self.is_pbar_supported(),
         )
         profiler_process.start()
         self.main.print(
@@ -488,7 +523,6 @@ class ProcessManager:
     def should_stop(self):
         """
         returns true if the channel received the stop msg
-        :param msg: msgs receive  in the control chanel
         """
         message = self.main.c1.get_message(timeout=0.01)
         if (
@@ -621,8 +655,8 @@ class ProcessManager:
                 self.processes: dict = self.main.db.get_pids()
                 self.shutdown_daemon()
 
-                profilesLen = self.main.db.get_profiles_len()
-                self.main.daemon.print(f"Total analyzed IPs: {profilesLen}.")
+                profiles_len: int = self.main.db.get_profiles_len()
+                self.main.daemon.print(f"Total analyzed IPs: {profiles_len}.")
 
                 # if slips finished normally without stopping the daemon with -S
                 # then we need to delete the pidfile here
@@ -685,7 +719,6 @@ class ProcessManager:
                 format_ = self.main.conf.export_labeled_flows_to().lower()
                 self.main.db.export_labeled_flows(format_)
 
-            self.manager.shutdown()
             self.output_send_pipe.close()
             self.pbar_recv_pipe.close()
 

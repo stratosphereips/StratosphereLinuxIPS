@@ -75,13 +75,13 @@ class ExportingAlerts(IModule):
             with open(self.slack_token_filepath, 'r') as f:
                 self.BOT_TOKEN = f.read()
                 if len(self.BOT_TOKEN) < 5:
+                    del self.BOT_TOKEN
                     raise NameError
         except (FileNotFoundError, NameError):
             self.print(
                 f'Please add slack bot token to '
                 f'{self.slack_token_filepath}. Stopping.'
             )
-            # Stop the module
             self.shutdown_gracefully()
 
 
@@ -96,7 +96,8 @@ class ExportingAlerts(IModule):
         if self.BOT_TOKEN == '':
             # The file is empty
             self.print(
-                f"Can't find SLACK_BOT_TOKEN in {self.slack_token_filepath}.",0,2,
+                f"Can't find SLACK_BOT_TOKEN "
+                f"in {self.slack_token_filepath}.",0,2,
             )
             return False
 
@@ -276,17 +277,14 @@ class ExportingAlerts(IModule):
                 self.is_bundle_created = False
             else:
                 self.print(
-                    f'{self.push_delay} seconds passed, no new alerts in STIX_data.json.', 2, 0
+                    f'{self.push_delay} seconds passed, '
+                    f'no new alerts in STIX_data.json.', 2, 0
                 )
 
     def shutdown_gracefully(self):
         # We need to publish to taxii server before stopping
         if 'stix' in self.export_to:
             self.push_to_TAXII_server()
-
-        if hasattr(self, 'json_file_handle'):
-            self.json_file_handle.close()
-
         if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
             date_time = datetime.datetime.now()
             date_time = utils.convert_format(date_time, utils.alerts_format)

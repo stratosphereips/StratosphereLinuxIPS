@@ -1,5 +1,5 @@
 from multiprocessing.connection import Connection
-from multiprocessing.managers import ValueProxy
+from multiprocessing import Event
 from tqdm.auto import tqdm
 import sys
 
@@ -29,55 +29,21 @@ class PBar(IModule):
     name = 'Progress Bar'
     description = 'Shows a pbar of processed flows'
     authors = ['Alya Gomaa']
-    def init(self,
-            has_pbar: ValueProxy = False,
+    
+    def init(
+            self,
             stdout: str = None,
-            slips_mode: str = None,
             pipe: Connection = None,
-            input_type: str = None):
-        self.has_pbar = has_pbar
+            slips_mode: str = None,
+            pbar_finished: Event = None
+        ):
         self.stdout: str = stdout
         self.slips_mode: str = slips_mode
         self.pipe = pipe
-        input_type: str = input_type
-
-        # this is a shared obj using mp Manager
-        # using mp manager to be able to change this value
-        # here and and have it changed in the Output.py
-        self.supported: bool = self.is_pbar_supported(input_type)
-        if self.supported:
-            self.has_pbar.value = True
-
         self.done_reading_flows = False
-
-    def is_pbar_supported(self, input_type: str) -> bool:
-        """
-        When running on a pcap, interface, or taking flows from an
-        external module, the total amount of flows is unknown
-        so the pbar is not supported
-        """
-        # input type can be false -S or in unit tests
-        if (
-                not input_type
-                or input_type in ('interface', 'pcap', 'stdin')
-                or self.slips_mode == 'daemonized'
-        ):
-            return False
+        self.pbar_finished: Event = pbar_finished
 
 
-        if self.stdout != '':
-            # this means that stdout was redirected to a file,
-            # no need to print the progress bar
-            return False
-
-        params = ('-g', '--growing',
-                  '-im', '--input_module',
-                  '-t' , '--testing')
-        for param in params:
-            if param in sys.argv:
-                return False
-
-        return True
 
     def remove_stats(self):
         # remove the stats from the progress bar
@@ -92,7 +58,6 @@ class PBar(IModule):
         initializes the progress bar when slips is runnning on a file or
          a zeek dir
         ignores pcaps, interface and dirs given to slips if -g is enabled
-        :param bar: dict with input type, total_flows, etc.
         """
         self.total_flows = int(msg['total_flows'])
         # the bar_format arg is to disable ETA and unit display
@@ -138,7 +103,7 @@ class PBar(IModule):
         self.remove_stats()
         tqdm.write("Profiler is done reading all flows. "
                    "Slips is now processing them.")
-        self.has_pbar.value = False
+        self.pbar_finished.set()
 
     def print_to_cli(self, msg: dict):
         """
@@ -155,22 +120,19 @@ class PBar(IModule):
         )
 
 
-    def pre_main(self):
-        if not self.supported:
-            return 1
-
     def shutdown_gracefully(self):
         # to tell output.py to no longer send prints here
-        self.has_pbar.value = False
+        self.pbar_finished.set()
+
 
 
     def main(self):
         """
         keeps receiving events until pbar reaches 100%
         """
-        sth = self.pipe.poll(timeout=0.1)
+        has_new_msg = self.pipe.poll(timeout=0.1)
 
-        if sth:
+        if has_new_msg:
             msg: dict = self.pipe.recv()
 
             event: str = msg['event']
@@ -183,12 +145,8 @@ class PBar(IModule):
             if event == "update_stats":
                 self.update_stats(msg)
 
-            if event == "terminate":
-                self.terminate()
-                return 1
-
             if event == "print":
-                # let tqdm do th eprinting to avoid conflicts with the pbar
+                # let tqdm do the printing to avoid conflicts with the pbar
                 self.print_to_cli(msg)
 
 

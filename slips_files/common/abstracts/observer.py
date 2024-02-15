@@ -1,13 +1,16 @@
 from abc import ABC, abstractmethod
 
+
 class IObserver(ABC):
     """
     gets notified whenever an observable has a new msg for it
     """
+
     @abstractmethod
     def update(self, msg):
-        """gets called whenever there's a new msg"""
+        """is called whenever there's a new msg"""
         pass
+
 
 class IObservable(ABC):
     def __init__(self):

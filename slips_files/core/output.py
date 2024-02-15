@@ -1,6 +1,5 @@
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
-
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -15,9 +14,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
+import traceback
 from threading import Lock
 from multiprocessing.connection import Connection
-from multiprocessing.managers import ValueProxy
+from multiprocessing import Event
 import sys
 import io
 from pathlib import Path
@@ -33,78 +33,74 @@ from slips_files.common.style import red
 
 class Output(IObserver):
     """
-    A class to process the output of everything Slips need. Manages all the output
-    If any Slips module or process needs to output anything to screen, or logs,
-    it should use always the output queue. Then this output class will handle how to deal with it
+    A class to process the output of everything Slips need.
+    Manages all the output
+    If any Slips module or process needs to output anything to screen,
+     or logs, it should use always this process.
+     Then this output class will handle how to deal with it
     """
-
+    
     name = 'Output'
-    _obj = None
     slips_logfile_lock = Lock()
     errors_logfile_lock = Lock()
     cli_lock = Lock()
-    has_pbar = False
 
-    def __new__(
-        cls,
-        verbose=1,
-        debug=0,
-        stdout='',
-        stderr='output/errors.log',
-        slips_logfile='output/slips.log',
-        slips_mode='interactive',
-        input_type=False,
-        sender_pipe: Connection =None,
-        has_pbar: ValueProxy = False,
+    def __init__(self,
+        verbose = 1,
+        debug = 0,
+        stdout = '',
+        stderr = 'output/errors.log',
+        slips_logfile = 'output/slips.log',
+        input_type = False,
+        sender_pipe: Connection = None,
+        has_pbar: bool = False,
+        pbar_finished: Event = None,
+        stop_daemon: bool = None,
     ):
-        if not cls._obj:
-            cls._obj = super().__new__(cls)
-            # when running slips using -e , this var is set and we only
-            # print all msgs with debug lvl less than it
-            cls.verbose = verbose
-            cls.debug = debug
-            cls.input_type = input_type
-            cls.has_pbar = has_pbar
-            cls.sender_pipe = sender_pipe
-            ####### create the log files
-            cls._read_configuration()
-            cls.errors_logfile = stderr
-            cls.slips_logfile = slips_logfile
-            cls.create_logfile(cls.errors_logfile)
-            cls.create_logfile(cls.slips_logfile)
+        super().__init__()
+        # when running slips using -e , this var is set and we only
+        # print all msgs with debug lvl less than it
+        self.verbose = verbose
+        self.debug = debug
+        self.input_type = input_type
+        self.has_pbar = has_pbar
+        self.pbar_finished: Event = pbar_finished
+        self.sender_pipe = sender_pipe
+        self.stop_daemon = stop_daemon
+        self.errors_logfile = stderr
+        self.slips_logfile = slips_logfile
+        # if we're using -S, no need to init all the logfiles
+        # we just need an instance of this class to be able
+        # to start the db from the daemon class
+        if not stop_daemon:
+            self._read_configuration()
+    
+            self.create_logfile(self.errors_logfile)
+            self.log_branch_info(self.errors_logfile)
+            self.create_logfile(self.slips_logfile)
+            self.log_branch_info(self.slips_logfile)
+            
             utils.change_logfiles_ownership(
-                cls.errors_logfile, cls.UID, cls.GID
+                self.errors_logfile, self.UID, self.GID
             )
             utils.change_logfiles_ownership(
-                cls.slips_logfile, cls.UID, cls.GID
+                self.slips_logfile, self.UID, self.GID
             )
-            cls.stdout = stdout
+            self.stdout = stdout
             if stdout != '':
-                cls.change_stdout()
+                self.change_stdout()
+    
+            if self.verbose > 2:
+                print(f'Verbosity: {self.verbose}. Debugging: {self.debug}')
 
 
-            if cls.verbose > 2:
-                print(f'Verbosity: {cls.verbose}. Debugging: {cls.debug}')
-
-
-            cls.done_reading_flows = False
-            # we update the stats printed by slips every 5seconds
-            # this is the last time the stats was printed
-            cls.last_updated_stats_time = float("-inf")
-
-
-        return cls._obj
-
-
-    @classmethod
-    def _read_configuration(cls):
+    def _read_configuration(self):
         conf = ConfigParser()
-        cls.printable_twid_width = conf.get_tw_width()
-        cls.GID = conf.get_GID()
-        cls.UID = conf.get_UID()
+        self.printable_twid_width = conf.get_tw_width()
+        self.GID = conf.get_GID()
+        self.UID = conf.get_UID()
 
-    @classmethod
-    def log_branch_info(cls, logfile: str):
+    def log_branch_info(self, logfile: str):
         """
         logs the branch and commit to the given logfile
         """
@@ -125,8 +121,7 @@ class Output(IObserver):
         with open(logfile, 'a') as f:
             f.write(f'Using {git_info} - {now}\n\n')
 
-    @classmethod
-    def create_logfile(cls, path):
+    def create_logfile(self, path):
         """
         creates slips.log and errors.log if they don't exist
         """
@@ -136,7 +131,7 @@ class Output(IObserver):
             p = Path(os.path.dirname(path))
             p.mkdir(parents=True, exist_ok=True)
             open(path, 'w').close()
-        cls.log_branch_info(path)
+       
 
 
     def log_line(self, msg: dict):
@@ -160,8 +155,7 @@ class Output(IObserver):
         self.slips_logfile_lock.release()
 
 
-    @classmethod
-    def change_stdout(cls):
+    def change_stdout(self):
         """
         to be able to print the stats to the output file
         """
@@ -173,7 +167,7 @@ class Output(IObserver):
         # without it, the file writer keeps the information in a local buffer
         # that's not accessible to the file.
         stdout = io.TextIOWrapper(
-            open(cls.stdout, 'wb', 0),
+            open(self.stdout, 'wb', 0),
             write_through=True
         )
         sys.stdout = stdout
@@ -192,13 +186,14 @@ class Output(IObserver):
         else:
             to_print = txt
 
-        if self.has_pbar.value:
+        if self.has_pbar and not self.is_pbar_finished():
             self.tell_pbar({
                 'event': 'print',
                 'txt': to_print
             })
         else:
             print(to_print, end=end)
+            
         self.cli_lock.release()
 
 
@@ -225,7 +220,7 @@ class Output(IObserver):
         # if we're done reading flows, aka pbar reached 100% or we dont
         # have a pbar
         # we print the stats in a new line, instead of next to the pbar
-        if self.has_pbar.value:
+        if self.has_pbar and not self.is_pbar_finished():
             self.tell_pbar({
                 'event': 'update_stats',
                 'stats': stats
@@ -271,7 +266,6 @@ class Output(IObserver):
             # when printing started processes, don't print a sender
             if 'Start' in txt:
                 sender = ''
-
             self.print(sender, txt)
             self.log_line(msg)
 
@@ -288,7 +282,10 @@ class Output(IObserver):
         will be received by the pbar class
         """
         self.sender_pipe.send(msg)
-
+    
+    def is_pbar_finished(self )-> bool:
+        return self.pbar_finished.is_set()
+    
     def update(self, msg: dict):
         """
         gets called whenever any module need to print something
@@ -300,7 +297,8 @@ class Output(IObserver):
             txt: text to log to the logfiles and/or the cli
             bar_info: {
                 input_type: only given when we send bar:'init',
-                            specifies the type of the input file given to slips
+                            specifies the type of the input file
+                             given to slips
                     eg zeek, argus, etc
                 total_flows: int,
         }
@@ -312,12 +310,14 @@ class Output(IObserver):
                     'total_flows': msg['bar_info']['total_flows'],
                 })
 
-            elif 'update' in msg.get('bar', ''):
+            elif (
+                    'update' in msg.get('bar', '')
+                    and not self.is_pbar_finished()
+            ):
                 # if pbar wasn't supported, inputproc won't send update msgs
                 self.tell_pbar({
                     'event': 'update_bar',
                 })
-
             else:
                 # output to terminal and logs or logs only?
                 if msg.get('log_to_logfiles_only', False):
@@ -327,3 +327,4 @@ class Output(IObserver):
                     self.output_line(msg)
         except Exception as e:
             print(f"Error in output.py: {e}")
+            print(traceback.print_stack())

@@ -61,7 +61,8 @@ class Profiler(ICore):
     def init(self,
              is_profiler_done: multiprocessing.Semaphore = None,
              profiler_queue=None,
-             is_profiler_done_event : multiprocessing.Event =None
+             is_profiler_done_event : multiprocessing.Event =None,
+             has_pbar: bool =False,
              ):
         # when profiler is done processing, it releases this semaphore,
         # that's how the process_manager knows it's done
@@ -74,6 +75,7 @@ class Profiler(ICore):
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
+        self.has_pbar = has_pbar
         self.whitelist = Whitelist(self.logger, self.db)
         # Read the configuration
         self.read_configuration()
@@ -356,22 +358,10 @@ class Profiler(ICore):
         self.is_done_processing()
         return True
 
-    def init_pbar(self, input_type: str, total_flows:int):
+    def init_pbar(self, total_flows:int):
         """
         sends the output.py a msg with the pbar details for initialization
         """
-        # don't init the pbar when given the following
-        # input types because we don't
-        # know the total flows beforehand
-        if (
-                input_type in ('pcap', 'interface', 'stdin')
-                or '-t' in sys.argv
-                or '--testing' in sys.argv
-        ):
-            # pbar not supported
-            self.supported_pbar = False
-            return
-
         # Find the number of flows we're going to receive of input received
         self.notify_observers({
             'bar': 'init',
@@ -418,7 +408,8 @@ class Profiler(ICore):
             if not self.input_type:
                 # Find the type of input received
                 self.input_type = self.define_separator(line, input_type)
-                self.init_pbar(input_type, total_flows)
+                if self.has_pbar:
+                    self.init_pbar(total_flows)
 
             # What type of input do we have?
             if not self.input_type:
@@ -436,8 +427,9 @@ class Profiler(ICore):
             if self.flow:
                 self.add_flow_to_profile()
 
-            # now that one flow is processed tell output.py to update the bar
-            if self.supported_pbar:
+            # now that one flow is processed tell output.py
+            # to update the bar
+            if self.has_pbar:
                 self.notify_observers({'bar': 'update'})
 
             # listen on this channel in case whitelist.conf is changed,
