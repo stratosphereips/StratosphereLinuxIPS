@@ -364,12 +364,10 @@ class Main(IObservable):
         ):
             print(f"[Main] Invalid file path {input_information}. Stopping.")
             sys.exit(-1)
-            return False
 
         if self.mode == "daemonized":
             print("Can't read input from stdin in daemonized mode. " "Stopping")
             sys.exit(-1)
-            return False
         line_type = input_information
         input_type = "stdin"
         return input_type, line_type.lower()
@@ -602,7 +600,7 @@ class Main(IObservable):
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
-            self.redis_man.log_redis_server_PID(self.redis_port, redis_pid)
+            self.redis_man.log_redis_server_pid(self.redis_port, redis_pid)
 
             self.db.set_slips_mode(self.mode)
 
