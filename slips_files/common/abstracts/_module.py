@@ -76,12 +76,13 @@ class IModule(IObservable, ABC, Process):
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format
                     like 'Test {}'.format('here')
+        :param log_to_logfiles_only: logs to slips.log only, not to cli
         """
 
         self.notify_observers(
             {
                 'from': self.name,
-                'txt': text,
+                'txt': str(text),
                 'verbose': verbose,
                 'debug': debug,
                 'log_to_logfiles_only': log_to_logfiles_only
@@ -150,7 +151,9 @@ class IModule(IObservable, ABC, Process):
             self.shutdown_gracefully()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem in main() line {exception_line}', 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(f'Problem in {self.name}\'s main() '
+                       f'line {exception_line}',
+                       0, 1)
+            traceback.print_stack()
 
         return True
