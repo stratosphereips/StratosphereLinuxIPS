@@ -70,7 +70,7 @@ class ExportingAlerts(IModule):
         if not hasattr(self, 'slack_token_filepath'):
             return False
 
-        # slack_bot_token_secret should contain your slack token only
+        # slack_bot_token_secret should contain the slack token only
         try:
             with open(self.slack_token_filepath, 'r') as f:
                 self.BOT_TOKEN = f.read()
@@ -175,7 +175,7 @@ class ExportingAlerts(IModule):
             self.print(f'Successfully exported to TAXII server: {self.TAXII_server}.', 1, 0)
             return True
 
-    def export_to_STIX(self, msg_to_send: tuple) -> bool:
+    def export_to_stix(self, msg_to_send: tuple) -> bool:
         """
         Function to export evidence to a STIX_data.json file in the cwd.
         It keeps appending the given indicator to STIX_data.json until they're sent to the
@@ -307,11 +307,11 @@ class ExportingAlerts(IModule):
             self.send_to_slack(f'{date_time}: Slips started on sensor: {self.sensor_name}.')
 
     def main(self):
-        if msg:= self.get_msg('export_evidence'):
+        if msg := self.get_msg('export_evidence'):
             evidence = json.loads(msg['data'])
-            description = evidence['description']
+            description: str = evidence['description']
             if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
-                srcip = evidence['profileid'].split("_")[-1]
+                srcip = evidence['profile']['ip']
                 msg_to_send = f'Src IP {srcip} Detected {description}'
                 self.send_to_slack(msg_to_send)
 
@@ -322,6 +322,6 @@ class ExportingAlerts(IModule):
                     evidence['attacker'],
                     description,
                 )
-                exported_to_stix = self.export_to_STIX(msg_to_send)
+                exported_to_stix = self.export_to_stix(msg_to_send)
                 if not exported_to_stix:
                     self.print('Problem in export_to_STIX()', 0, 3)
