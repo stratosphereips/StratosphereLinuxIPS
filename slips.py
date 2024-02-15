@@ -18,8 +18,9 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 from __future__ import print_function
-import sys
+
 import os
+import sys
 import time
 import warnings
 
@@ -41,8 +42,6 @@ if __name__ == '__main__':
     from slips.daemon import Daemon
 
     slips = Main()
-    # checker = Checker(slips)
-    # checker.check_python_version()
 
     if slips.args.stopdaemon:
         # -S is provided

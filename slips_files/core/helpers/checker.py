@@ -1,7 +1,9 @@
-import psutil
-import sys
 import os
 import subprocess
+import sys
+
+import psutil
+
 
 class Checker:
     def __init__(self, main):
@@ -20,7 +22,7 @@ class Checker:
         # -I
         if self.main.args.interface:
             input_information = self.main.args.interface
-            input_type = 'interface'
+            input_type = "interface"
             # return input_type, self.main.input_information
             return input_type, input_information, line_type
 
@@ -28,16 +30,15 @@ class Checker:
             self.main.redis_man.load_db()
             return
 
-
         if self.main.args.input_module:
-            input_information = 'input_module'
+            input_information = "input_module"
             input_type = self.main.args.input_module
             # this is the default value of the type of flows slips reads from a module
-            line_type = 'zeek'
+            line_type = "zeek"
             return input_type, input_information, line_type
 
         if not self.main.args.filepath:
-            print('[Main] You need to define an input source.')
+            print("[Main] You need to define an input source.")
             sys.exit(-1)
 
         # -f file/dir/stdin-type
@@ -45,12 +46,9 @@ class Checker:
         if os.path.isfile(input_information) or os.path.isdir(input_information):
             input_type = self.main.get_input_file_type(input_information)
         else:
-            input_type, line_type = self.main.handle_flows_from_stdin(
-                input_information
-            )
+            input_type, line_type = self.main.handle_flows_from_stdin(input_information)
 
         return input_type, input_information, line_type
-
 
     def check_given_flags(self):
         """
@@ -66,27 +64,31 @@ class Checker:
             self.main.terminate_slips()
 
         if self.main.args.interface and self.main.args.filepath:
-            print('Only -i or -f is allowed. Stopping slips.')
+            print("Only -i or -f is allowed. Stopping slips.")
             self.main.terminate_slips()
 
-
-        if (self.main.args.interface or self.main.args.filepath) and self.main.args.input_module:
-            print('You can\'t use --input-module with -f or -i. Stopping slips.')
+        if (
+            self.main.args.interface or self.main.args.filepath
+        ) and self.main.args.input_module:
+            print("You can't use --input-module with -f or -i. Stopping slips.")
             self.main.terminate_slips()
 
         if (self.main.args.save or self.main.args.db) and os.getuid() != 0:
-            print('Saving and loading the database requires root privileges.')
+            print("Saving and loading the database requires root privileges.")
             self.main.terminate_slips()
 
         if (self.main.args.verbose and int(self.main.args.verbose) > 3) or (
             self.main.args.debug and int(self.main.args.debug) > 3
         ):
-            print('Debug and verbose values range from 0 to 3.')
+            print("Debug and verbose values range from 0 to 3.")
             self.main.terminate_slips()
 
         # Check if redis server running
-        if not self.main.args.killall and self.main.redis_man.check_redis_database() is False:
-            print('Redis database is not running. Stopping Slips')
+        if (
+            not self.main.args.killall
+            and self.main.redis_man.check_redis_database() is False
+        ):
+            print("Redis database is not running. Stopping Slips")
             self.main.terminate_slips()
 
         if self.main.args.config and not os.path.exists(self.main.args.config):
@@ -96,11 +98,15 @@ class Checker:
         if self.main.args.interface:
             interfaces = psutil.net_if_addrs().keys()
             if self.main.args.interface not in interfaces:
-                print(f"{self.main.args.interface} is not a valid interface. Stopping Slips")
+                print(
+                    f"{self.main.args.interface} is not a valid interface. Stopping Slips"
+                )
                 self.main.terminate_slips()
 
         # if we're reading flows from some module other than the input process, make sure it exists
-        if self.main.args.input_module and not self.input_module_exists(self.main.args.input_module):
+        if self.main.args.input_module and not self.input_module_exists(
+            self.main.args.input_module
+        ):
             self.main.terminate_slips()
 
         # Clear cache if the parameter was included
@@ -108,7 +114,7 @@ class Checker:
             self.clear_redis_cache()
         # Clear cache if the parameter was included
         if self.main.args.blocking and not self.main.args.interface:
-            print('Blocking is only allowed when running slips using an interface.')
+            print("Blocking is only allowed when running slips using an interface.")
             self.main.terminate_slips()
 
         # kill all open unused redis servers if the parameter was included
@@ -120,21 +126,15 @@ class Checker:
             self.main.print_version()
             self.main.terminate_slips()
 
-        if (
-            self.main.args.interface
-            and self.main.args.blocking
-            and os.geteuid() != 0
-        ):
+        if self.main.args.interface and self.main.args.blocking and os.geteuid() != 0:
             # If the user wants to blocks, we need permission to modify iptables
-            print(
-                'Run Slips with sudo to enable the blocking module.'
-            )
+            print("Run Slips with sudo to enable the blocking module.")
             self.main.terminate_slips()
 
         if self.main.args.clearblocking:
             if os.geteuid() != 0:
                 print(
-                    'Slips needs to be run as root to clear the slipsBlocking chain. Stopping.'
+                    "Slips needs to be run as root to clear the slipsBlocking chain. Stopping."
                 )
             else:
                 self.delete_blocking_chain()
@@ -158,11 +158,13 @@ class Checker:
             child.kill()
 
     def clear_redis_cache(self):
-        print('Deleting Cache DB in Redis.')
+        print("Deleting Cache DB in Redis.")
         self.main.redis_man.clear_redis_cache_database()
-        self.main.input_information = ''
-        self.main.zeek_dir = ''
-        self.main.redis_man.log_redis_server_PID(6379, self.main.redis_man.get_pid_of_redis_server(6379))
+        self.main.input_information = ""
+        self.main.zeek_dir = ""
+        self.main.redis_man.log_redis_server_PID(
+            6379, self.main.redis_man.get_pid_of_redis_server(6379)
+        )
         self.main.terminate_slips()
 
     def input_module_exists(self, module):
@@ -170,15 +172,17 @@ class Checker:
         :param module: this is the one given to slips via --input-module
         check if the module was created in modules/ dir
         """
-        available_modules = os.listdir('modules')
+        available_modules = os.listdir("modules")
 
         if module not in available_modules:
             print(f"{module} module is not available. Stopping slips")
             return False
 
         # this function assumes that the module is created in module/name/name.py
-        if f"{module}.py" not in os.listdir(f'modules/{module}/'):
-            print(f"{module} is not available in modules/{module}/{module}.py. Stopping slips")
+        if f"{module}.py" not in os.listdir(f"modules/{module}/"):
+            print(
+                f"{module} is not available in modules/{module}/{module}.py. Stopping slips"
+            )
             return False
 
         return True
@@ -191,24 +195,24 @@ class Checker:
          current_stdout will be '' if it's not redirected to a file
         """
         # lsof will provide a list of all open fds belonging to slips
-        command = f'lsof -p {self.main.pid}'
+        command = f"lsof -p {self.main.pid}"
         result = subprocess.run(command.split(), capture_output=True)
         # Get command output
-        output = result.stdout.decode('utf-8')
+        output = result.stdout.decode("utf-8")
         # if stdout is being redirected we'll find '1w' in one of the lines
         # 1 means stdout, w means write mode
         # by default, stdout is not redirected
-        current_stdout = ''
+        current_stdout = ""
         for line in output.splitlines():
-            if '1w' in line:
+            if "1w" in line:
                 # stdout is redirected, get the file
-                current_stdout = line.split(' ')[-1]
+                current_stdout = line.split(" ")[-1]
                 break
 
-        if self.main.mode == 'daemonized':
+        if self.main.mode == "daemonized":
             stderr = self.main.daemon.stderr
             slips_logfile = self.main.daemon.stdout
         else:
-            stderr = os.path.join(self.main.args.output, 'errors.log')
-            slips_logfile = os.path.join(self.main.args.output, 'slips.log')
-        return (current_stdout, stderr, slips_logfile)
+            stderr = os.path.join(self.main.args.output, "errors.log")
+            slips_logfile = os.path.join(self.main.args.output, "slips.log")
+        return current_stdout, stderr, slips_logfile
