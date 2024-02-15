@@ -1,4 +1,3 @@
-from slips_files.common.abstracts._module import IModule
 from slips_files.common.imports import *
 from slack import WebClient
 from slack.errors import SlackApiError
@@ -310,6 +309,7 @@ class ExportingAlerts(IModule):
         if msg := self.get_msg('export_evidence'):
             evidence = json.loads(msg['data'])
             description: str = evidence['description']
+            
             if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
                 srcip = evidence['profile']['ip']
                 msg_to_send = f'Src IP {srcip} Detected {description}'
@@ -318,8 +318,8 @@ class ExportingAlerts(IModule):
             if 'stix' in self.export_to:
                 msg_to_send = (
                     evidence['evidence_type'],
-                    evidence['attacker_direction'],
-                    evidence['attacker'],
+                    evidence['attacker']['direction'],
+                    evidence['attacker']['value'],
                     description,
                 )
                 exported_to_stix = self.export_to_stix(msg_to_send)
