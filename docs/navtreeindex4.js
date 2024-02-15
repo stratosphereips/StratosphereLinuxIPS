@@ -1,5 +1,8 @@
 var NAVTREEINDEX4 =
 {
+"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5713f6ce17e0169a3a0a4081aa76079b":[1,0,0,3,1,0,1,0,170],
+"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5d84cee8aaeff122719681eafebd7bf6":[1,0,0,3,1,0,1,0,173],
+"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5e90e3cf7a42210bae0d8c9503405885":[1,0,0,3,1,0,1,0,32],
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5f1e09a6179a50f7b16c2ca1b185476a":[1,0,0,3,1,0,1,0,6],
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5f2c8352508de6566acc064f68f312c4":[1,0,0,3,1,0,1,0,68],
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a6148b30497c8d0a3497632e5e6cf7150":[1,0,0,3,1,0,1,0,64],
@@ -246,8 +249,5 @@ var NAVTREEINDEX4 =
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a6093fba85be7cd6e50eac5ff5eaa8645":[1,0,0,3,1,5,0,14],
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a79b4c6f5f193584fb5b5f5bf78cea3b2":[1,0,0,3,1,5,0,10],
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a86838843e6af7a92ef777002d54640f8":[1,0,0,3,1,5,0,11],
-"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a91a109e913a05f9db8132a695984121f":[1,0,0,3,1,5,0,4],
-"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a95ad14adf2b24086d64f1af465b0504b":[1,0,0,3,1,5,0,2],
-"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a97142e34af55bc6d655c0b2e44d6c052":[1,0,0,3,1,5,0,8],
-"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#ab344b0e3bcd6c3ec31f4db7ba91443fa":[1,0,0,3,1,5,0,17]
+"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a91a109e913a05f9db8132a695984121f":[1,0,0,3,1,5,0,4]
 };
