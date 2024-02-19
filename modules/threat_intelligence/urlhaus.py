@@ -133,7 +133,10 @@ class URLhaus:
         if urlhaus_api_response.status_code != 200:
             return
 
-        response: dict = json.loads(urlhaus_api_response.text)
+        try:
+            response: dict = json.loads(urlhaus_api_response.text)
+        except json.decoder.JSONDecodeError:
+            return
 
         if response['query_status'] in ['no_results', 'invalid_url']:
             # no response or empty response
