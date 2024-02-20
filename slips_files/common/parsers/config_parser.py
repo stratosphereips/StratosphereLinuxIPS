@@ -1,6 +1,7 @@
 from datetime import timedelta
 import sys
 import ipaddress
+from typing import List
 import configparser
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
@@ -607,7 +608,25 @@ class ConfigParser(object):
              'parameters', 'rotation_period', '1 day'
         )
         return utils.sanitize(rotation_period)
-
+    
+    
+    def client_ips(self) -> List[str]:
+        client_ips: str = self.read_configuration(
+             'parameters', 'client_ips', '[]'
+        )
+        client_ips: str = utils.sanitize(client_ips)
+        client_ips: List[str] = (client_ips
+                                 .replace('[', '')
+                                 .replace(']', '')
+                                 .split(",")
+                           )
+        client_ips: List[str] = [client_ip.strip().strip("'") for client_ip
+                                 in client_ips]
+        # Remove empty strings if any
+        client_ips: List[str] = [client_ip for client_ip in client_ips if
+                                 client_ip]
+        return client_ips
+    
     def keep_rotated_files_for(self) -> int:
         """ returns period in seconds"""
         keep_rotated_files_for = self.read_configuration(

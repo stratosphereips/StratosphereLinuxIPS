@@ -1,11 +1,4 @@
 import contextlib
-
-from slips_files.common.abstracts._module import IModule
-from slips_files.common.imports import *
-from .timer_thread import TimerThread
-from .set_evidence import SetEvidnceHelper
-from slips_files.core.helpers.whitelist import Whitelist
-import multiprocessing
 import json
 import threading
 import ipaddress
@@ -15,7 +8,15 @@ import validators
 import collections
 import math
 import time
+
+from slips_files.common.imports import *
+from .timer_thread import TimerThread
+from .set_evidence import SetEvidnceHelper
+from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.common.slips_utils import utils
+from typing import List, \
+    Tuple, \
+    Dict
 
 
 class FlowAlerts(IModule):
@@ -109,6 +110,7 @@ class FlowAlerts(IModule):
         self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
         self.our_ips = utils.get_own_IPs()
         self.shannon_entropy_threshold = conf.get_entropy_threshold()
+        self.client_ips: List[str] = conf.client_ips()
 
     def check_connection_to_local_ip(
             self,
@@ -364,8 +366,6 @@ class FlowAlerts(IModule):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
         This function waits for the ssl.log flow to appear in conn.log before alerting
-        :param wait_time: the time we wait for the ssl conn to appear in conn.log in seconds
-                every time the timer is over, we wait extra 2 min and call the function again
         : param flow: this is the conn.log of the ssl flow we're currently checking
         """
 
@@ -410,22 +410,23 @@ class FlowAlerts(IModule):
 
             return bytes_sent
 
-        all_flows = self.db.get_all_flows_in_profileid(
+        all_flows: Dict[str, dict] = self.db.get_all_flows_in_profileid(
             profileid
         )
         if not all_flows:
             return
+
         bytes_sent: dict = get_sent_bytes(all_flows)
 
         for ip, ip_info in bytes_sent.items():
-            # ip_info is a tuple (bytes_sent, [uids])
+            ip_info: Tuple[int, List[str]]
             uids = ip_info[1]
-
             bytes_uploaded = ip_info[0]
+            
             mbs_uploaded = utils.convert_to_mb(bytes_uploaded)
             if mbs_uploaded < self.data_exfiltration_threshold:
                 continue
-
+            
             self.set_evidence.data_exfiltration(
                 ip,
                 mbs_uploaded,
@@ -599,7 +600,26 @@ class FlowAlerts(IModule):
             # (fb, twitter, microsoft, etc.)
             if self.whitelist.is_ip_in_org(ip, org):
                 return True
-
+            
+    def should_ignore_conn_without_dns(self, flow_type, appproto, daddr) \
+            -> bool:
+        """
+        checks for the cases that we should ignore the connection without dns
+        """
+        # we should ignore this evidence if the ip is ours, whether it's a
+        # private ip or in the list of client_ips
+        return (
+                flow_type != 'conn'
+                or appproto == 'dns'
+                or utils.is_ignored_ip(daddr)
+                # if the daddr is a client ip, it means that this is a conn
+                # from the internet to our ip, the dns res was probably
+                # made on their side before connecting to us,
+                # so we shouldn't be doing this detection on this ip
+                or daddr in self.client_ips
+                # because there's no dns.log to know if the dns was made
+                or self.db.get_input_type() == 'zeek_log_file'
+        )
 
     def check_connection_without_dns_resolution(
         self, flow_type, appproto, daddr, twid, profileid, timestamp, uid
@@ -611,17 +631,8 @@ class FlowAlerts(IModule):
         # 1- Do not check for DNS requests
         # 2- Ignore some IPs like private IPs, multicast, and broadcast
 
-        if (
-                flow_type != 'conn'
-                or appproto == 'dns'
-                or utils.is_ignored_ip(daddr)
-        ):
+        if self.should_ignore_conn_without_dns(flow_type, appproto, daddr):
             return
-
-        # disable this alert when running on a zeek conn.log file
-        # because there's no dns.log to know if the dns was made
-        if self.db.get_input_type() == 'zeek_log_file':
-            return False
 
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to
@@ -652,6 +663,7 @@ class FlowAlerts(IModule):
         # search 24hs back for a dns resolution
         if self.db.is_ip_resolved(daddr, 24):
             return False
+        
         # self.print(f'No DNS resolution in {answers_dict}')
         # There is no DNS resolution, but it can be that Slips is
         # still reading it from the files.
@@ -1096,7 +1108,7 @@ class FlowAlerts(IModule):
 
         for answer in answers:
             if answer in invalid_answers and domain != "localhost":
-                #blocked answer found
+                # blocked answer found
                 self.set_evidence.invalid_dns_answer(
                     domain, answer, daddr, profileid, twid, stime, uid
                 )
