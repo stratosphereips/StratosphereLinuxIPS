@@ -14,7 +14,9 @@ from .timer_thread import TimerThread
 from .set_evidence import SetEvidnceHelper
 from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.common.slips_utils import utils
-from typing import List
+from typing import List, \
+    Tuple, \
+    Dict
 
 
 class FlowAlerts(IModule):
@@ -408,18 +410,19 @@ class FlowAlerts(IModule):
 
             return bytes_sent
 
-        all_flows = self.db.get_all_flows_in_profileid(
+        all_flows: Dict[str, dict] = self.db.get_all_flows_in_profileid(
             profileid
         )
         if not all_flows:
             return
+
         bytes_sent: dict = get_sent_bytes(all_flows)
 
         for ip, ip_info in bytes_sent.items():
-            # ip_info is a tuple (bytes_sent, [uids])
+            ip_info: Tuple[int, List[str]]
             uids = ip_info[1]
-
             bytes_uploaded = ip_info[0]
+            
             mbs_uploaded = utils.convert_to_mb(bytes_uploaded)
             if mbs_uploaded < self.data_exfiltration_threshold:
                 continue
