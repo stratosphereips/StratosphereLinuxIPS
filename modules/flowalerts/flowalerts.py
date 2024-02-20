@@ -1096,7 +1096,7 @@ class FlowAlerts(IModule):
 
         for answer in answers:
             if answer in invalid_answers and domain != "localhost":
-                #blocked answer found
+                # blocked answer found
                 self.set_evidence.invalid_dns_answer(
                     domain, answer, daddr, profileid, twid, stime, uid
                 )
