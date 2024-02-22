@@ -144,7 +144,7 @@ class Trust(IModule):
 
         self.sql_db_name = f'{self.data_dir}trustdb.db'
         if self.rename_sql_db_file:
-            self.sql_db_name += str(pigeon_port)
+            self.sql_db_name += str(self.pigeon_port)
         # todo don't duplicate this dict, move it to slips_utils
         # all evidence slips detects has threat levels of strings
         # each string should have a corresponding int value to be able to calculate
@@ -287,12 +287,14 @@ class Trust(IModule):
         threat_level = data.get('threat_level', False)
         if not threat_level:
             self.print(
-                f"IP {attacker} doesn't have a threat_level. not sharing to the network.", 0,2,
+                f"IP {attacker} doesn't have a threat_level. "
+                f"not sharing to the network.", 0,2,
             )
             return
         if not confidence:
             self.print(
-                f"IP {attacker} doesn't have a confidence. not sharing to the network.", 0, 2,
+                f"IP {attacker} doesn't have a confidence. "
+                f"not sharing to the network.", 0, 2,
             )
             return
 
@@ -316,7 +318,8 @@ class Trust(IModule):
                 network_score,
                 timestamp,
             ) = cached_opinion
-            # if we don't have info about this ip from the p2p network, report it to the p2p netwrok
+            # if we don't have info about this ip from the p2p network,
+            # report it to the p2p netwrok
             if not cached_score:
                 data_already_reported = False
         except KeyError:
@@ -325,7 +328,8 @@ class Trust(IModule):
             # data saved in local db have wrong structure, this is an invalid state
             return
 
-        # TODO: in the future, be smarter and share only when needed. For now, we will always share
+        # TODO: in the future, be smarter and share only when needed.
+        #  For now, we will always share
         if not data_already_reported:
             # Take data and send it to a peer as report.
             p2p_utils.send_evaluation_to_go(
@@ -413,6 +417,7 @@ class Trust(IModule):
     #         # tell other peers that we're blocking this IP
     #         utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
+
     def set_evidence_malicious_ip(self,
                                   ip_info: dict,
                                   threat_level: str,
@@ -420,41 +425,39 @@ class Trust(IModule):
         """
         Set an evidence for a malicious IP met in the timewindow
         ip_info format is json serialized {
-        #             'ip': the source/dst ip
-        #             'profileid' : profile where the alert was generated. It includes the src ip
-        #             'twid' : name of the timewindow when it happened.
-        #             'proto' : protocol
-        #             'ip_state' : is basically the answer to "which one is the
-        #                           blacklisted IP"?'can be 'srcip' or
-        #                            'dstip',
-        #             'stime': Exact time when the evidence happened
-        #             'uid': Zeek uid of the flow that generated the evidence,
-        #             'cache_age': How old is the info about this ip
-        #         }
+                     'ip': the source/dst ip
+                     'profileid' : profile where the alert was generated.
+                        It includes the src ip
+                     'twid' : name of the timewindow when it happened.
+                     'proto' : protocol
+                     'ip_state' : is basically the answer to "which one is the
+                                   blacklisted IP"?'can be 'srcip' or
+                                    'dstip',
+                     'stime': Exact time when the evidence happened
+                     'uid': Zeek uid of the flow that generated the evidence,
+                     'cache_age': How old is the info about this ip
+                 }
         :param threat_level: the threat level we learned form the network
         :param confidence: how confident the network opinion is about this opinion
         """
-
+        
         attacker_ip: str = ip_info.get('ip')
-        ip_state = ip_info.get('ip_state')
-        uid = ip_info.get('uid')
         profileid = ip_info.get('profileid')
-        twid = ip_info.get('twid')
-        timestamp = str(ip_info.get('stime'))
         saddr = profileid.split("_")[-1]
-
-        category = IDEACategory.ANOMALY_TRAFFIC
-
+        
+        threat_level = utils.threat_level_to_string(threat_level)
+        threat_level = ThreatLevel[threat_level.upper()]
+        twid_int = int(ip_info.get('twid').replace("timewindow", ""))
+        
+        # add this ip to our MaliciousIPs hash in the database
+        self.db.set_malicious_ip(attacker_ip, profileid, ip_info.get('twid'))
+        
         ip_identification = self.db.get_ip_identification(attacker_ip)
-        if 'src' in ip_state:
+        
+        if 'src' in ip_info.get('ip_state'):
             description = (
                 f'Connection from blacklisted IP {attacker_ip} '
                 f'({ip_identification}) to {saddr} Source: Slips P2P network.'
-            )
-            attacker = Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=attacker_ip
             )
         else:
             description = (
@@ -462,28 +465,27 @@ class Trust(IModule):
                 f'({ip_identification}) '
                 f'from {saddr} Source: Slips P2P network.'
             )
-            attacker = Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=saddr
+            
+        for ip in (saddr, attacker_ip):
+            evidence = Evidence(
+                evidence_type= EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+                attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=ip
+                ),
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=attacker_ip),
+                timewindow=TimeWindow(number=twid_int),
+                uid=[ip_info.get('uid')],
+                timestamp=str(ip_info.get('stime')),
+                category=IDEACategory.ANOMALY_TRAFFIC,
             )
+        
+            self.db.set_evidence(evidence)
 
-        evidence = Evidence(
-            evidence_type= EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
-            description=description,
-            profile=ProfileID(ip=attacker.value),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=timestamp,
-            category=category,
-        )
-
-        self.db.set_evidence(evidence)
-        # add this ip to our MaliciousIPs hash in the database
-        self.db.set_malicious_ip(attacker, profileid, twid)
 
     def handle_data_request(self, message_data: str) -> None:
         """
