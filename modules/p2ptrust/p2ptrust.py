@@ -48,7 +48,8 @@ def validate_slips_data(message_data: str) -> (str, int):
                     'cache_age': cache_age
                 }
 
-    If the message is correct, the two values are returned as a tuple (str, int).
+    If the message is correct, the two values are
+     returned as a tuple (str, int).
     If not, (None, None) is returned.
     :param message_data: data from slips request channel
     :return: the received msg or None tuple
@@ -62,7 +63,8 @@ def validate_slips_data(message_data: str) -> (str, int):
     except ValueError:
         # message has wrong format
         print(
-            f'The message received from p2p_data_request channel has incorrect format: {message_data}'
+            f'The message received from p2p_data_request channel'
+            f' has incorrect format: {message_data}'
         )
         return None
 
@@ -78,7 +80,8 @@ class Trust(IModule):
     gopy_channel_raw='p2p_gopy'
     pygo_channel_raw='p2p_pygo'
     start_pigeon=True
-    pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips')  # or make sure the binary is in $PATH
+    # or make sure the binary is in $PATH
+    pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips')
     pigeon_key_file='pigeon.keys'
     rename_redis_ip_info=False
     rename_sql_db_file=False
@@ -122,7 +125,8 @@ class Trust(IModule):
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
         self.c1 = self.db.subscribe('report_to_peers')
-        # channel to send msgs to whenever slips needs info from other peers about an ip
+        # channel to send msgs to whenever slips needs
+        # info from other peers about an ip
         self.c2 = self.db.subscribe(self.p2p_data_request_channel)
         # this channel receives peers requests/updates
         self.c3 = self.db.subscribe(self.gopy_channel)
@@ -200,8 +204,10 @@ class Trust(IModule):
             self.sql_db_name,
             drop_tables_on_startup=True
         )
-        self.reputation_model = reputation_model.BaseModel(self.logger, self.trust_db)
-        # print(f"[DEBUGGING] Starting godirector with pygo_channel: {self.pygo_channel}")
+        self.reputation_model = reputation_model.BaseModel(
+            self.logger, self.trust_db)
+        # print(f"[DEBUGGING] Starting godirector with
+        # pygo_channel: {self.pygo_channel}")
         self.go_director = GoDirector(
             self.logger,
             self.trust_db,
@@ -511,16 +517,20 @@ class Trust(IModule):
             combined_confidence,
         ) = self.reputation_model.get_opinion_on_ip(ip_address)
 
-        # no data in db - this happens when testing, if there is not enough data on peers
+        # no data in db - this happens when testing,
+        # if there is not enough data on peers
         if combined_score is None:
             self.print(
-                f'No data received from the network about {ip_address}\n', 0, 2
+                f'No data received from the'
+                f' network about {ip_address}\n', 0, 2
             )
-            # print(f"[DEBUGGING] No data received from the network about {ip_address}\n")
+            # print(f"[DEBUGGING] No data received
+            # from the network about {ip_address}\n")
         else:
             self.print(
                 f'The Network shared some data about {ip_address}, '
-                f'Shared data: score={combined_score}, confidence={combined_confidence} saving it to  now!\n',
+                f'Shared data: score={combined_score}, '
+                f'confidence={combined_confidence} saving it to  now!\n',
                 0,
                 2,
             )
@@ -540,7 +550,8 @@ class Trust(IModule):
                 )
 
     def respond_to_message_request(self, key, reporter):
-        # todo do you mean another peer is asking me about an ip? yes. in override mode
+        # todo do you mean another peer is asking me about
+        #  an ip? yes. in override mode
         """
         Handle data request from a peer (in overriding p2p mode) (set to false by defualt)
         :param key: The ip requested by the peer
@@ -578,7 +589,8 @@ class Trust(IModule):
         # check if it was possible to start up pigeon
         if self.start_pigeon and self.pigeon is None:
             self.print(
-                'Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...'
+                'Module was supposed to start up pigeon but it was not'
+                ' possible to start pigeon! Exiting...'
             )
             return 1
 
@@ -604,7 +616,8 @@ class Trust(IModule):
         ret_code = self.pigeon.poll()
         if ret_code is not None:
             self.print(
-                f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
+                f'Pigeon process suddenly terminated with '
+                f'return code {ret_code}. Stopping module.'
             )
             return 1
 

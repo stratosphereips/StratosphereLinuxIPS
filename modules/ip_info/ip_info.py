@@ -511,16 +511,8 @@ class IPInfo(IModule):
         dport: int = flow['dport']
         dstip: str = flow['daddr']
         saddr: str = flow['saddr']
-        timestamp: float = flow['starttime']
+        timestamp = flow['starttime']
         protocol: str = flow['proto']
-
-        attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-            )
-        threat_level = ThreatLevel.MEDIUM
-        confidence = 0.7
 
         portproto = f'{dport}/{protocol}'
         port_info = self.db.get_port_info(portproto) or ""
@@ -529,17 +521,22 @@ class IPInfo(IModule):
         dstip_id = self.db.get_ip_identification(dstip)
         description = (
             f"Malicious JARM hash detected for destination IP: {dstip}"
-            f" on port: {portproto} {port_info}.  {dstip_id}"
+            f" on port: {portproto} {port_info}. {dstip_id}"
         )
-
+        twid_number = int(twid.replace("timewindow", ""))
+        
         evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_JARM,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
+            attacker=Attacker(
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=dstip
+                ),
+            threat_level=ThreatLevel.MEDIUM,
+            confidence=0.7,
             description=description,
-            profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            profile=ProfileID(ip=dstip),
+            timewindow=TimeWindow(number=twid_number),
             uid=[flow['uid']],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_TRAFFIC,
@@ -548,6 +545,28 @@ class IPInfo(IModule):
             source_target_tag=Tag.MALWARE
         )
 
+        self.db.set_evidence(evidence)
+        
+        evidence = Evidence(
+                evidence_type=EvidenceType.MALICIOUS_JARM,
+                attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                    ),
+                threat_level=ThreatLevel.LOW,
+                confidence=0.7,
+                description=description,
+                profile=ProfileID(ip=saddr),
+                timewindow=TimeWindow(number=twid_number),
+                uid=[flow['uid']],
+                timestamp=timestamp,
+                category=IDEACategory.ANOMALY_TRAFFIC,
+                proto=Proto(protocol.lower()),
+                port=dport,
+                source_target_tag=Tag.MALWARE
+            )
+        
         self.db.set_evidence(evidence)
 
 

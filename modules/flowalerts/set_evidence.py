@@ -1,8 +1,8 @@
-import datetime
 import json
 import sys
 import time
-from typing import List
+from typing import List, \
+    Dict
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import \
@@ -126,7 +126,7 @@ class SetEvidnceHelper:
             self,
             daddr: str,
             portproto: str,
-            profileid: ProfileID,
+            profileid: str,
             timestamp: str,
             twid: str,
             uid: str,
@@ -741,7 +741,7 @@ class SetEvidnceHelper:
 
     def GRE_tunnel(
             self,
-            tunnel_info: dict
+            tunnel_info: Dict[str, str]
     ) -> None:
         profileid: str = tunnel_info['profileid']
         twid: str = tunnel_info['twid']
@@ -1516,7 +1516,7 @@ class SetEvidnceHelper:
     def malicious_ssl(
             self,
             ssl_info: dict,
-            ssl_info_from_db: dict
+            ssl_info_from_db: str
     ) -> None:
         flow: dict = ssl_info['flow']
         ts: str = flow.get('starttime', '')

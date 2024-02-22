@@ -1,4 +1,3 @@
-from slips_files.common.abstracts._module import IModule
 import json
 import ipaddress
 import time

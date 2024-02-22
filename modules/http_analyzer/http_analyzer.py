@@ -1,4 +1,3 @@
-from slips_files.common.abstracts._module import IModule
 import json
 import urllib
 import requests
@@ -92,21 +91,19 @@ class HTTPAnalyzer(IModule):
         )
         for suspicious_ua in suspicious_user_agents:
             if suspicious_ua.lower() in user_agent.lower():
-                threat_level: ThreatLevel = ThreatLevel.HIGH
                 confidence: float = 1
                 saddr = profileid.split('_')[1]
                 description: str = (f'Suspicious user-agent: '
                                     f'{user_agent} while '
                                     f'connecting to {host}{uri}')
-                attacker = Attacker(
+                evidence: Evidence = Evidence(
+                    evidence_type=EvidenceType.SUSPICIOUS_USER_AGENT,
+                    attacker=Attacker(
                         direction=Direction.SRC,
                         attacker_type=IoCType.IP,
                         value=saddr
-                    )
-                evidence: Evidence = Evidence(
-                    evidence_type=EvidenceType.SUSPICIOUS_USER_AGENT,
-                    attacker=attacker,
-                    threat_level=threat_level,
+                        ),
+                    threat_level=ThreatLevel.HIGH,
                     confidence=confidence,
                     description=description,
                     profile=ProfileID(ip=saddr),
@@ -165,21 +162,18 @@ class HTTPAnalyzer(IModule):
 
         uids, connections = self.connections_counter[host]
         if connections == self.empty_connections_threshold:
-            threat_level: ThreatLevel = ThreatLevel.MEDIUM
             confidence: float = 1
             saddr: str = profileid.split('_')[-1]
             description: str = f'Multiple empty HTTP connections to {host}'
 
-            attacker = Attacker(
+            evidence: Evidence = Evidence(
+                evidence_type=EvidenceType.EMPTY_CONNECTIONS,
+                attacker=Attacker(
                     direction=Direction.SRC,
                     attacker_type=IoCType.IP,
                     value=saddr
-                )
-
-            evidence: Evidence = Evidence(
-                evidence_type=EvidenceType.EMPTY_CONNECTIONS,
-                attacker=attacker,
-                threat_level=threat_level,
+                    ),
+                threat_level=ThreatLevel.MEDIUM,
                 confidence=confidence,
                 description=description,
                 profile=ProfileID(ip=saddr),
@@ -206,9 +200,7 @@ class HTTPAnalyzer(IModule):
             twid,
             uid: str
     ):
-        threat_level: ThreatLevel = ThreatLevel.HIGH
         saddr = profileid.split('_')[1]
-        confidence: float = 1
 
         os_type: str = user_agent.get('os_type', '').lower()
         os_name: str = user_agent.get('os_name', '').lower()
@@ -222,17 +214,15 @@ class HTTPAnalyzer(IModule):
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
 
-        attacker: Attacker = Attacker(
-            direction= Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
-
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.INCOMPATIBLE_USER_AGENT,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
+            attacker=Attacker(
+                direction= Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
+            threat_level=ThreatLevel.HIGH,
+            confidence=1,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
@@ -253,30 +243,46 @@ class HTTPAnalyzer(IModule):
             timestamp: str,
             daddr: str
             ):
-        confidence: float = 1
-        threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split('_')[1]
-
-        attacker_obj: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
 
         ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = (
             f'Download of an executable with MIME type: {mime_type} '
             f'by {saddr} from {daddr} {ip_identification}.'
         )
-
+        twid_number = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
-            attacker=attacker_obj,
-            threat_level=threat_level,
-            confidence=confidence,
+            attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                ),
+            threat_level=ThreatLevel.LOW,
+            confidence=1,
             description=description,
             profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[uid],
+            timestamp=timestamp,
+            category=IDEACategory.ANOMALY_FILE,
+            source_target_tag=Tag.EXECUTABLE_MIME_TYPE
+        )
+
+        self.db.set_evidence(evidence)
+        
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
+            attacker=Attacker(
+                    direction=Direction.DST,
+                    attacker_type=IoCType.IP,
+                    value=daddr
+                ),
+            threat_level=ThreatLevel.LOW,
+            confidence=1,
+            description=description,
+            profile=ProfileID(ip=daddr),
+            timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_FILE,
@@ -515,24 +521,20 @@ class HTTPAnalyzer(IModule):
                 # 'Linux' in both UAs, so we shouldn't alert
                 return False
 
-        threat_level: ThreatLevel = ThreatLevel.INFO
-        confidence: float = 1
         saddr: str = profileid.split('_')[1]
-        attacker = Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=saddr
-            )
-
         ua: str = cached_ua.get('user_agent', '')
         description: str = (f'Using multiple user-agents:'
                             f' "{ua}" then "{user_agent}"')
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_USER_AGENT,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
+            attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                ),
+            threat_level=ThreatLevel.INFO,
+            confidence=1,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
@@ -556,26 +558,17 @@ class HTTPAnalyzer(IModule):
           timestamp: str
     ):
         confidence: float = 1
-        threat_level: ThreatLevel = ThreatLevel.LOW
         saddr = profileid.split('_')[-1]
-
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
-
-        victim: Victim = Victim(
-            direction=Direction.DST,
-            victim_type=IoCType.IP,
-            value=daddr
-            )
         description = f'Unencrypted HTTP traffic from {saddr} to {daddr}.'
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.HTTP_TRAFFIC,
-            attacker=attacker,
-            threat_level=threat_level,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
+            threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=saddr),
@@ -584,7 +577,11 @@ class HTTPAnalyzer(IModule):
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.SENDING_UNENCRYPTED_DATA,
-            victim=victim
+            victim= Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=daddr
+                )
         )
 
         self.db.set_evidence(evidence)

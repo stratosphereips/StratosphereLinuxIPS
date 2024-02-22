@@ -163,78 +163,100 @@ class LeakDetector(IModule):
     def set_evidence_yara_match(self, info: dict):
         """
         This function is called when yara finds a match
-        :param info: a dict with info about the matched rule, example keys 'vars_matched', 'index',
+        :param info: a dict with info about the matched rule,
+         example keys 'vars_matched', 'index',
         'rule', 'srings_matched'
         """
         rule = info.get('rule').replace('_', ' ')
         offset = info.get('offset')
         # vars_matched = info.get('vars_matched')
         strings_matched = info.get('strings_matched')
-        # we now know there's a match at offset x, we need to know offset x belongs to which packet
-        if packet_info := self.get_packet_info(offset):
-            srcip, dstip, proto, sport, dport, ts = (
-                packet_info[0],
-                packet_info[1],
-                packet_info[2],
-                packet_info[3],
-                packet_info[4],
-                packet_info[5],
-            )
+        # we now know there's a match at offset x, we need
+        # to know offset x belongs to which packet
+        packet_info = self.get_packet_info(offset)
+        if not packet_info:
+            return
+        
+        srcip, dstip, proto, sport, dport, ts = (
+            packet_info[0],
+            packet_info[1],
+            packet_info[2],
+            packet_info[3],
+            packet_info[4],
+            packet_info[5],
+        )
 
-            portproto = f'{dport}/{proto}'
-            port_info = self.db.get_port_info(portproto)
+        portproto = f'{dport}/{proto}'
+        port_info = self.db.get_port_info(portproto)
 
-            # generate a random uid
-            uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
-                'utf-8'
-            )
-            profileid = f'profile_{srcip}'
-            # sometimes this module tries to find the profile before it's created. so
-            # wait a while before alerting.
-            time.sleep(4)
+        # generate a random uid
+        uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
+            'utf-8'
+        )
+        profileid = f'profile_{srcip}'
+        # sometimes this module tries to find the profile before it's created. so
+        # wait a while before alerting.
+        time.sleep(4)
 
-            ip_identification = self.db.get_ip_identification(dstip)
-            description  = f"{rule} to destination address: {dstip} " \
-                           f"{ip_identification} port: {portproto} " \
-                           f"{port_info or ''}. " \
-                           f"Leaked location: {strings_matched}"
+        ip_identification = self.db.get_ip_identification(dstip)
+        description  = f"{rule} to destination address: {dstip} " \
+                       f"{ip_identification} port: {portproto} " \
+                       f"{port_info or ''}. " \
+                       f"Leaked location: {strings_matched}"
 
-            # in which tw is this ts?
-            twid = self.db.get_tw_of_ts(profileid, ts)
-            # convert ts to a readable format
-            ts = utils.convert_format(ts, utils.alerts_format)
+        # in which tw is this ts?
+        twid = self.db.get_tw_of_ts(profileid, ts)
+        # convert ts to a readable format
+        ts = utils.convert_format(ts, utils.alerts_format)
 
-            if twid:
-                twid = twid[0]
-                source_target_tag = Tag.CC
-                confidence = 0.9
-                threat_level = ThreatLevel.HIGH
+        if not twid:
+            return
+        
+        twid_number = int(twid[0].replace("timewindow", ""))
+        evidence = Evidence(
+            evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=srcip
+                ),
+            threat_level=ThreatLevel.LOW,
+            confidence=0.9,
+            description=description,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[uid],
+            timestamp=ts,
+            proto=Proto(proto.lower()),
+            port=dport,
+            source_target_tag=Tag.CC,
+            category=IDEACategory.MALWARE
+        )
 
-                attacker = Attacker(
-                    direction=Direction.SRC,
-                    attacker_type=IoCType.IP,
-                    value=srcip
-                    )
+        self.db.set_evidence(evidence)
 
-
-                evidence = Evidence(
-                    evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
-                    attacker=attacker,
-                    threat_level=threat_level,
-                    confidence=confidence,
-                    description=description,
-                    profile=ProfileID(ip=srcip),
-                    timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-                    uid=[uid],
-                    timestamp=ts,
-                    proto=Proto(proto.lower()),
-                    port=dport,
-                    source_target_tag=source_target_tag,
-                    category=IDEACategory.MALWARE
-                )
-
-                self.db.set_evidence(evidence)
-
+        evidence = Evidence(
+            evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
+            attacker=Attacker(
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=dstip
+                ),
+            threat_level=ThreatLevel.HIGH,
+            confidence=0.9,
+            description=description,
+            profile=ProfileID(ip=dstip),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[uid],
+            timestamp=ts,
+            proto=Proto(proto.lower()),
+            port=dport,
+            source_target_tag=Tag.CC,
+            category=IDEACategory.MALWARE
+        )
+        
+        self.db.set_evidence(evidence)
+        
 
     def compile_and_save_rules(self):
         """
