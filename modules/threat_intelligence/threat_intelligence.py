@@ -117,9 +117,11 @@ class ThreatIntel(IModule, URLhaus):
         twid: str,
         asn: str,
         asn_info: dict,
+        is_dns_response: bool = False
     ):
         """
-        :param asn_info: the malicious ASN info taken from own_malicious_iocs.csv
+        :param asn_info: the malicious ASN info taken from
+        own_malicious_iocs.csv
         """
 
         confidence: float = 0.8
@@ -134,12 +136,20 @@ class ThreatIntel(IModule, URLhaus):
 
         tags = asn_info.get('tags', '')
         identification: str = self.db.get_ip_identification(daddr)
-
-        description: str = (
-            f'Connection to IP: {daddr} with blacklisted ASN: {asn} '
+        if is_dns_response:
+            description: str = (
+                f'Connection to IP: {daddr} with blacklisted ASN: {asn} '
+            )
+        else:
+            description: str = (
+                f'DNS response with IP: {daddr} with blacklisted ASN: {asn} '
+            )
+        
+        description += (
             f'Description: {asn_info["description"]}, '
             f'Found in feed: {asn_info["source"]}, '
-            f'Confidence: {confidence}. Tags: {tags} {identification}'
+            f'Confidence: {confidence}. '
+            f'Tags: {tags} {identification}'
         )
         twid_int = int(twid.replace("timewindow", ""))
         evidence = Evidence(
@@ -273,7 +283,7 @@ class ThreatIntel(IModule, URLhaus):
             self,
             ip: str,
             uid: str,
-            dstip: str,
+            daddr: str,
             timestamp: str,
             ip_info: dict,
             profileid: str = '',
@@ -285,6 +295,7 @@ class ThreatIntel(IModule, URLhaus):
         :param ip: the ip source file
         :param uid: Zeek uid of the flow that generated the evidence
         :param timestamp: Exact time when the evidence happened
+        :param daddr: dst address of the flow
         :param ip_info: is all the info we have about that IP
                 in the db source, confidence, description, etc.
         :param profileid: profile where the alert was generated. It includes the src ip
@@ -296,26 +307,14 @@ class ThreatIntel(IModule, URLhaus):
             ip_info.get('threat_level', 'medium')
         ]
         threat_level: ThreatLevel = ThreatLevel(threat_level)
-        confidence: float = 1.0
-        srcip = profileid.split("_")[-1]
+        saddr = profileid.split("_")[-1]
 
         if 'src' in ip_state:
             description: str = f'connection from blacklisted ' \
-                               f'IP: {ip} to {dstip}. '
-            attacker = Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=ip
-            )
+                               f'IP: {ip} to {daddr}. '
         elif 'dst' in ip_state:
             description: str = (f'connection to blacklisted '
-                                f'IP: {ip} from {srcip}. ')
-
-            attacker = Attacker(
-                direction=Direction.DST,
-                attacker_type=IoCType.IP,
-                value=ip
-            )
+                                f'IP: {ip} from {saddr}. ')
         else:
             # ip_state is not specified?
             return
@@ -330,20 +329,41 @@ class ThreatIntel(IModule, URLhaus):
         twid_int = int(twid.replace("timewindow", ""))
         evidence = Evidence(
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
-            attacker=attacker,
+            attacker=Attacker(
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=daddr
+            ),
             threat_level=threat_level,
-            confidence=confidence,
+            confidence=1.0,
             description=description,
-            profile=ProfileID(ip=attacker.value),
+            profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
             category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.BLACKLISTED_IP,
         )
-
         self.db.set_evidence(evidence)
-
+        
+        evidence = Evidence(
+            evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
+            threat_level=threat_level,
+            confidence=1.0,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_int),
+            uid=[uid],
+            timestamp=utils.convert_format(timestamp, utils.alerts_format),
+            category=IDEACategory.ANOMALY_TRAFFIC,
+            source_target_tag=Tag.BLACKLISTED_IP,
+        )
+        self.db.set_evidence(evidence)
 
         # mark this ip as malicious in our database
         ip_info = {'threatintelligence': ip_info}
@@ -351,6 +371,8 @@ class ThreatIntel(IModule, URLhaus):
 
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(ip, profileid, twid)
+        
+        
 
     def set_evidence_malicious_domain(
         self,
@@ -928,7 +950,8 @@ class ThreatIntel(IModule, URLhaus):
             return spamhaus_res
 
     def ip_has_blacklisted_ASN(
-            self, ip, uid, timestamp, profileid, twid, ip_state
+            self, ip, uid, timestamp, profileid, twid,
+            is_dns_response: bool = False,
     ):
         """
         Check if this ip has any of our blacklisted ASNs.
@@ -956,6 +979,7 @@ class ThreatIntel(IModule, URLhaus):
                 twid,
                 asn,
                 asn_info,
+                is_dns_response=is_dns_response,
             )
 
     def ip_belongs_to_blacklisted_range(
@@ -1182,11 +1206,9 @@ class ThreatIntel(IModule, URLhaus):
         self.circllu_calls_thread.start()
 
     def main(self):
-        # The channel now can receive an IP address or a domain name
+        # The channel can receive an IP address or a domain name
         if msg:= self.get_msg('give_threat_intelligence'):
-            # Data is sent in the channel as a json dict so we need to deserialize it first
             data = json.loads(msg['data'])
-            # Extract data from dict
             profileid = data.get('profileid')
             twid = data.get('twid')
             timestamp = data.get('stime')
@@ -1197,10 +1219,11 @@ class ThreatIntel(IModule, URLhaus):
             # the query is needed when a malicious answer is found,
             # for more detailed description of the evidence
             is_dns_response = data.get('is_dns_response')
-            self.dns_query = data.get('dns_query')
+            dns_query = data.get('dns_query')
             # IP is the IP that we want the TI for. It can be a SRC or DST IP
             to_lookup = data.get('to_lookup', '')
-            # detect the type given because sometimes, http.log host field has ips OR domains
+            # detect the type given because sometimes,
+            # http.log host field has ips OR domains
             type_ = utils.detect_data_type(to_lookup)
 
             # ip_state will say if it is a srcip or if it was a dst_ip
@@ -1224,7 +1247,7 @@ class ThreatIntel(IModule, URLhaus):
                         ip, uid, daddr, timestamp, profileid, twid, ip_state
                         )
                     self.ip_has_blacklisted_ASN(
-                        ip, uid, timestamp, profileid, twid, ip_state,
+                        ip, uid, timestamp, profileid, twid,
                         is_dns_response=is_dns_response
                         )
             elif type_ == 'domain':
