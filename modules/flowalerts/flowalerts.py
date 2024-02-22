@@ -1,4 +1,8 @@
 import contextlib
+from typing import List
+
+from slips_files.common.imports import *
+
 import json
 import threading
 import ipaddress
@@ -69,7 +73,8 @@ class FlowAlerts(IModule):
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
         self.password_guessing_cache = {}
-        # in pastebin download detection, we wait for each conn.log flow of the seen ssl flow to appear
+        # in pastebin download detection, we wait for each conn.log flow
+        # of the seen ssl flow to appear
         # this is the dict of ssl flows we're waiting for
         self.pending_ssl_flows = multiprocessing.Queue()
         # thread that waits for ssl flows to appear in conn.log
@@ -801,7 +806,7 @@ class FlowAlerts(IModule):
         # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
-        for ip in answers:
+        for ip in self.extract_ips_from_dns_answers(answers):
             # self.print(f'Checking if we have a connection to ip {ip}')
             if (
                 ip in contacted_ips
@@ -1264,7 +1269,9 @@ class FlowAlerts(IModule):
             profileid, twid, current_reconnections
         )
 
-    def detect_young_domains(self, domain, stime, profileid, twid, uid):
+    def detect_young_domains(self, domain, answers: List[str], stime,
+        profileid,
+        twid, uid):
         """
         Detect domains that are too young.
         The threshold is 60 days
@@ -1290,12 +1297,27 @@ class FlowAlerts(IModule):
         age = domain_info['Age']
         if age >= age_threshold:
             return False
-
+        
+        
+        ips_returned_in_answer: List[str] = (
+            self.extract_ips_from_dns_answers(answers)
+        )
+        
         self.set_evidence.young_domain(
-            domain, age, stime, profileid, twid, uid
+            domain, age, stime, profileid, twid, uid, ips_returned_in_answer
         )
         return True
-
+    
+    def extract_ips_from_dns_answers(self, answers: List[str]) -> List[str]:
+        """
+        extracts ipv4 and 6 from DNS answers
+        """
+        ips = []
+        for answer in answers:
+            if validators.ipv4(answer) or validators.ipv6(answer):
+                ips.append(answer)
+        return ips
+    
     def check_smtp_bruteforce(
             self,
             profileid,
@@ -2141,7 +2163,7 @@ class FlowAlerts(IModule):
             # TODO: not sure how to make sure IP_info is
             #  done adding domain age to the db or not
             self.detect_young_domains(
-                domain, stime, profileid, twid, uid
+                domain, answers, stime, profileid, twid, uid
             )
             self.check_dns_arpa_scan(
                 domain, stime, profileid, twid, uid
