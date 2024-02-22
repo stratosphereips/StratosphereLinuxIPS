@@ -384,14 +384,6 @@ class FlowMLDetection(IModule):
             uid: str
             ):
         confidence: float = 0.1
-        threat_level: ThreatLevel = ThreatLevel.LOW
-
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
-
         ip_identification = self.db.get_ip_identification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to ' \
                       f'{daddr}:{dport} {ip_identification}'
@@ -403,8 +395,12 @@ class FlowMLDetection(IModule):
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_FLOW,
-            attacker=attacker,
-            threat_level=threat_level,
+            attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                ),
+            threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=saddr),

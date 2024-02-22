@@ -56,14 +56,6 @@ class CCDetection(IModule):
         tupleid = tupleid.split('-')
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
         srcip = profileid.split("_")[-1]
-
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=srcip
-            )
-
-        threat_level: ThreatLevel = ThreatLevel.HIGH
         portproto: str = f'{port}/{proto}'
         port_info: str = self.db.get_port_info(portproto)
         ip_identification: str = self.db.get_ip_identification(dstip)
@@ -74,14 +66,19 @@ class CCDetection(IModule):
         )
 
         timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
+        twid_int = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
-            attacker=attacker,
-            threat_level=threat_level,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=srcip
+            ),
+            threat_level=ThreatLevel.HIGH,
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.INTRUSION_BOTNET,
@@ -89,7 +86,28 @@ class CCDetection(IModule):
             port=int(port),
             proto=Proto(proto.lower()) if proto else None,
         )
+        self.db.set_evidence(evidence)
 
+        evidence: Evidence = Evidence(
+                evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
+                attacker=Attacker(
+                    direction=Direction.DST,
+                    attacker_type=IoCType.IP,
+                    value=dstip
+                ),
+                threat_level=ThreatLevel.HIGH,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=dstip),
+                timewindow=TimeWindow(number=twid_int),
+                uid=[uid],
+                timestamp=timestamp,
+                category=IDEACategory.INTRUSION_BOTNET,
+                source_target_tag=Tag.CC,
+                port=int(port),
+                proto=Proto(proto.lower()) if proto else None,
+            )
+    
         self.db.set_evidence(evidence)
 
 
