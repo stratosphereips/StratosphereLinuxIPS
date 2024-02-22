@@ -1619,25 +1619,6 @@ class FlowAlerts(IModule):
             ssl_info, ssl_info_from_db
         )
 
-    def check_weird_http_method(self, msg):
-        """
-        detect weird http methods in zeek's weird.log
-        """
-        flow = msg['flow']
-        profileid = msg['profileid']
-        twid = msg['twid']
-
-        # what's the weird.log about
-        name = flow['name']
-
-        if 'unknown_HTTP_method' not in name:
-            return False
-
-        self.set_evidence.weird_http_method(
-            profileid,
-            twid,
-            flow
-        )
 
     def check_non_http_port_80_conns(
             self,
@@ -2201,10 +2182,7 @@ class FlowAlerts(IModule):
                 role='SSH::SERVER'
             )
 
-        if msg := self.get_msg('new_weird'):
-            msg = json.loads(msg['data'])
-            self.check_weird_http_method(msg)
-
+     
         if msg := self.get_msg('new_tunnel'):
             msg = json.loads(msg['data'])
             self.check_GRE_tunnel(msg)

@@ -2,7 +2,8 @@ from slips_files.common.abstracts._module import IModule
 import json
 import urllib
 import requests
-from typing import Union
+from typing import Union, \
+    Dict
 
 from slips_files.common.imports import *
 from slips_files.core.evidence_structure.evidence import \
@@ -29,8 +30,10 @@ class HTTPAnalyzer(IModule):
 
     def init(self):
         self.c1 = self.db.subscribe('new_http')
+        self.c2 = self.db.subscribe('new_weird')
         self.channels = {
-            'new_http': self.c1
+            'new_http': self.c1,
+            'new_weird': self.c2
         }
         self.connections_counter = {}
         self.empty_connections_threshold = 4
@@ -637,8 +640,79 @@ class HTTPAnalyzer(IModule):
 
             self.db.set_evidence(evidence)
             return True
+    
+    def set_evidence_weird_http_method(
+            self,
+            profileid: str,
+            twid: str,
+            flow: dict
+    ) -> None:
+        daddr: str = flow['daddr']
+        weird_method: str = flow['addl']
+        uid: str = flow['uid']
+        timestamp: str = flow['starttime']
 
+        confidence = 0.9
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+        saddr: str = profileid.split("_")[-1]
 
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'Weird HTTP method "{weird_method}" to IP: ' \
+                           f'{daddr} {ip_identification}. by Zeek.'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.WEIRD_HTTP_METHOD,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            category=IDEACategory.ANOMALY_TRAFFIC,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[uid],
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.set_evidence(evidence)
+        
+        
+    def check_weird_http_method(self, msg: Dict[str]):
+        """
+        detect weird http methods in zeek's weird.log
+        """
+        flow = msg['flow']
+        profileid = msg['profileid']
+        twid = msg['twid']
+
+        # what's the weird.log about
+        name = flow['name']
+
+        if 'unknown_HTTP_method' not in name:
+            return False
+
+        self.set_evidence_weird_http_method(
+            profileid,
+            twid,
+            flow
+        )
+
+    
     def pre_main(self):
         utils.drop_root_privs()
 
@@ -736,3 +810,7 @@ class HTTPAnalyzer(IModule):
                 uid,
                 timestamp
             )
+        
+        if msg := self.get_msg('new_weird'):
+            msg = json.loads(msg['data'])
+            self.check_weird_http_method(msg)
