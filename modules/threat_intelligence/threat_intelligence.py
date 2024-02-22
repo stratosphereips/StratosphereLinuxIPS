@@ -372,6 +372,19 @@ class ThreatIntel(IModule, URLhaus):
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(ip, profileid, twid)
         
+    def set_evidence_malicious_dns_query(self,
+        CNAME: str,
+        domain,
+        uid: str,
+        timestamp: str,
+        domain_info: dict,
+        is_subdomain: bool,
+        profileid: str = '',
+        twid: str = ''):
+        description: str = (f'DNS answer with a blacklisted '
+                            f'CNAME: {domain} '
+                            f'for query: {query} ')
+
         
 
     def set_evidence_malicious_domain(
@@ -385,7 +398,7 @@ class ThreatIntel(IModule, URLhaus):
         twid: str = '',
     ):
         """
-        Set an evidence for a malicious domain met in the timewindow
+        Set an evidence for a malicious domain
         :param source_file: is the domain source file
         :param domain_info: is all the info we have about
         this domain in the db source, confidence , description etc...
@@ -406,18 +419,10 @@ class ThreatIntel(IModule, URLhaus):
                 domain_info.get('threat_level', 'high')
             ]
         threat_level: ThreatLevel = ThreatLevel(threat_level)
-
-
-        if self.is_dns_response:
-            description: str = (f'DNS answer with a blacklisted '
-                                f'CNAME: {domain} '
-                                f'for query: {self.dns_query} ')
-        else:
-            description: str = f'connection to a blacklisted domain {domain}. '
-
-        description += f'Description: {domain_info.get("description", "")},' \
-                       f' Found in feed: {domain_info["source"]}, ' \
-                       f'Confidence: {confidence}. '
+        description: str = (f'connection to a blacklisted domain {domain}. '
+                            f'Description: {domain_info.get("description", "")},'
+                            f'Found in feed: {domain_info["source"]}, '
+                            f'Confidence: {confidence}. ')
 
         tags = domain_info.get('tags', None)
         if tags:
@@ -997,6 +1002,7 @@ class ThreatIntel(IModule, URLhaus):
             ranges_starting_with_octet = self.cached_ipv6_ranges.get(first_octet, [])
         else:
             return False
+        
         for range in ranges_starting_with_octet:
             if ip_obj in ipaddress.ip_network(range):
                 # ip was found in one of the blacklisted ranges
@@ -1121,6 +1127,7 @@ class ThreatIntel(IModule, URLhaus):
         if not url_info:
             # not malicious
             return False
+        
         self.set_evidence_malicious_url(
             url_info,
             uid,
@@ -1128,7 +1135,46 @@ class ThreatIntel(IModule, URLhaus):
             profileid,
             twid
         )
+        
+    def is_malicious_cname(self,
+            dns_query,
+            cname,
+            uid,
+            timestamp,
+            profileid,
+            twid,
+        ):
+        """
+        :param cname: is the dns answer we're looking up
+        :param dns_query: the query we asked the DNS server for when the
+        server returned the given sname
+        """
+        
+        if self.is_ignored_domain(cname):
+            return False
 
+        domain_info, is_subdomain = self.search_offline_for_domain(cname)
+        if not domain_info:
+            return False
+        
+        self.set_evidence_malicious_dns_query(
+            dns_query,
+            uid,
+            timestamp,
+            domain_info,
+            is_subdomain,
+            profileid,
+            twid,
+        )
+        # mark this domain as malicious in our database
+        domain_info = {
+            'threatintelligence': domain_info
+        }
+        self.db.setInfoForDomains(cname, domain_info)
+
+        # add this domain to our MaliciousDomains hash in the database
+        self.db.set_malicious_domain(cname, profileid, twid)
+      
 
     def is_malicious_domain(
             self,
@@ -1136,7 +1182,7 @@ class ThreatIntel(IModule, URLhaus):
             uid,
             timestamp,
             profileid,
-            twid
+            twid,
     ):
         if self.is_ignored_domain(domain):
             return False
@@ -1144,7 +1190,7 @@ class ThreatIntel(IModule, URLhaus):
         domain_info, is_subdomain = self.search_offline_for_domain(domain)
         if not domain_info:
             return False
-
+        
         self.set_evidence_malicious_domain(
                 domain,
                 uid,
@@ -1159,14 +1205,10 @@ class ThreatIntel(IModule, URLhaus):
         domain_info = {
             'threatintelligence': domain_info
         }
-        self.db.setInfoForDomains(
-            domain, domain_info
-        )
+        self.db.setInfoForDomains(domain, domain_info)
 
         # add this domain to our MaliciousDomains hash in the database
-        self.db.set_malicious_domain(
-            domain, profileid, twid
-        )
+        self.db.set_malicious_domain(domain, profileid, twid)
 
 
     def update_local_file(self, filename):
@@ -1204,7 +1246,13 @@ class ThreatIntel(IModule, URLhaus):
             self.update_local_file(local_file)
 
         self.circllu_calls_thread.start()
-
+        
+    def should_lookup(self, ip: str, protocol: str, ip_state: str) \
+            -> bool:
+        """return whther slips should lookup the given ip or notd"""
+        return (utils.is_ignored_ip(ip) or
+                self.is_outgoing_icmp_packet(protocol, ip_state))
+    
     def main(self):
         # The channel can receive an IP address or a domain name
         if msg:= self.get_msg('give_threat_intelligence'):
@@ -1231,12 +1279,10 @@ class ThreatIntel(IModule, URLhaus):
 
             # If given an IP, ask for it
             # Block only if the traffic isn't outgoing ICMP port unreachable packet
+            
             if type_ == 'ip':
                 ip = to_lookup
-                if not (
-                        utils.is_ignored_ip(ip)
-                        or self.is_outgoing_icmp_packet(protocol, ip_state)
-                    ):
+                if not self.should_lookup(ip, protocol, ip_state):
                     self.is_malicious_ip(
                         ip, uid, daddr, timestamp, profileid, twid,
                         ip_state,
@@ -1251,13 +1297,22 @@ class ThreatIntel(IModule, URLhaus):
                         is_dns_response=is_dns_response
                         )
             elif type_ == 'domain':
-                self.is_malicious_domain(
-                    to_lookup,
-                    uid,
-                    timestamp,
-                    profileid,
-                    twid
-                )
+                if is_dns_response:
+                    self.is_malicious_cname(
+                        dns_query,
+                        to_lookup,
+                        uid,
+                        timestamp,
+                        profileid,
+                        twid)
+                else:
+                    self.is_malicious_domain(
+                        to_lookup,
+                        uid,
+                        timestamp,
+                        profileid,
+                        twid
+                    )
             elif type_ == 'url':
                 self.is_malicious_url(
                     to_lookup,
