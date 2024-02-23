@@ -199,7 +199,7 @@ class EvidenceHandler(ICore):
             return True
         except Exception:
             self.print('Error in add_to_json_log_file()')
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
 
     def add_to_log_file(self, data):
         """
@@ -215,7 +215,7 @@ class EvidenceHandler(ICore):
             return True
         except Exception:
             self.print('Error in add_to_log_file()')
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def get_domains_of_flow(self, flow: dict):
         """

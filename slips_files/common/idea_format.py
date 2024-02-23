@@ -163,4 +163,4 @@ def idea_format(evidence: Evidence):
         return idea_dict
     except Exception as e:
         print(f"Error in idea_format(): {e}")
-        print(traceback.print_stack())
+        print(traceback.format_exc())

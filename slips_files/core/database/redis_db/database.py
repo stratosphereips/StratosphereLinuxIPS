@@ -628,10 +628,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                         and last_report_about_this_ip['confidence'] == confidence
                 ):
                     report_time = report_data['report_time']
-                    # score and confidence are the same as the last report, only update the time
+                    # score and confidence are the same as the last report,
+                    # only update the time
                     last_report_about_this_ip['report_time'] = report_time
                 else:
-                    # score and confidence are the different from the last report, add report to the list
+                    # score and confidence are the different from the last
+                    # report, add report to the list
                     cached_p2p_reports[reporter].append(report_data)
             else:
                 # ip was reported before, but not by the same peer
@@ -797,7 +799,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 # no CNAME came with this query
                 pass
 
-            self.setInfoForDomains(query, domaindata, mode='add')
+            self.set_info_for_domains(query, domaindata, mode='add')
             self.set_domain_resolution(query, ips_to_add)
 
     def set_domain_resolution(self, domain, ips):
@@ -1078,7 +1080,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             self.r.hset('default_gateway', address_type, address)
 
 
-    def get_domain_resolution(self, domain):
+    def get_domain_resolution(self, domain) -> List[str]:
         """
         Returns the IPs resolved by this domain
         """

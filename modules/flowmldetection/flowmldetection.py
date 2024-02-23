@@ -95,7 +95,7 @@ class FlowMLDetection(IModule):
                 )
             except Exception:
                 self.print('Error while calling clf.train()')
-                self.print(traceback.print_stack())
+                self.print(traceback.format_exc(), 0, 1)
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
@@ -115,7 +115,7 @@ class FlowMLDetection(IModule):
 
         except Exception:
             self.print('Error in train()', 0 , 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
 
 
     def process_features(self, dataset):
@@ -216,7 +216,7 @@ class FlowMLDetection(IModule):
         except Exception:
             # Stop the timer
             self.print('Error in process_features()')
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def process_flows(self):
         """
@@ -295,7 +295,7 @@ class FlowMLDetection(IModule):
         except Exception:
             # Stop the timer
             self.print('Error in process_flows()')
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def process_flow(self):
         """
@@ -312,7 +312,7 @@ class FlowMLDetection(IModule):
         except Exception:
             # Stop the timer
             self.print('Error in process_flow()')
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def detect(self):
         """
@@ -333,7 +333,7 @@ class FlowMLDetection(IModule):
             # Stop the timer
             self.print('Error in detect() X_flow:')
             self.print(X_flow)
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def store_model(self):
         """
@@ -384,14 +384,6 @@ class FlowMLDetection(IModule):
             uid: str
             ):
         confidence: float = 0.1
-        threat_level: ThreatLevel = ThreatLevel.LOW
-
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
-
         ip_identification = self.db.get_ip_identification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to ' \
                       f'{daddr}:{dport} {ip_identification}'
@@ -403,8 +395,12 @@ class FlowMLDetection(IModule):
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_FLOW,
-            attacker=attacker,
-            threat_level=threat_level,
+            attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                ),
+            threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=saddr),

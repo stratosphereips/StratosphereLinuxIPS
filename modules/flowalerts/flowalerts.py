@@ -1,4 +1,8 @@
 import contextlib
+from typing import List
+
+from slips_files.common.imports import *
+
 import json
 import threading
 import ipaddress
@@ -69,7 +73,8 @@ class FlowAlerts(IModule):
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
         self.password_guessing_cache = {}
-        # in pastebin download detection, we wait for each conn.log flow of the seen ssl flow to appear
+        # in pastebin download detection, we wait for each conn.log flow
+        # of the seen ssl flow to appear
         # this is the dict of ssl flows we're waiting for
         self.pending_ssl_flows = multiprocessing.Queue()
         # thread that waits for ssl flows to appear in conn.log
@@ -774,7 +779,7 @@ class FlowAlerts(IModule):
         # with AAAA, and the computer chooses the A address.
         # Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
-        if prev_domain_resolutions := self.db.getDomainData(domain):
+        if prev_domain_resolutions := self.db.get_domain_data(domain):
             prev_domain_resolutions = prev_domain_resolutions.get('IPs',[])
             # if there's a domain in the cache
             # (prev_domain_resolutions) that is not in the
@@ -801,7 +806,7 @@ class FlowAlerts(IModule):
         # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
-        for ip in answers:
+        for ip in self.extract_ips_from_dns_answers(answers):
             # self.print(f'Checking if we have a connection to ip {ip}')
             if (
                 ip in contacted_ips
@@ -1263,22 +1268,37 @@ class FlowAlerts(IModule):
         self.db.setReconnections(
             profileid, twid, current_reconnections
         )
-
-    def detect_young_domains(self, domain, stime, profileid, twid, uid):
+    
+    def should_detect_young_domain(self, domain):
+        """
+        returns true if it's ok to detect young domains for the given
+        domain
+        """
+        return (
+                domain
+                and not domain.endswith(".local")
+                and not domain.endswith('.arpa')
+        )
+    
+    def detect_young_domains(
+            self,
+            domain,
+            answers: List[str],
+            stime,
+            profileid,
+            twid,
+            uid
+        ):
         """
         Detect domains that are too young.
         The threshold is 60 days
         """
-        if not domain:
+        if not self.should_detect_young_domain(domain):
             return False
 
         age_threshold = 60
 
-        # Ignore arpa and local domains
-        if domain.endswith('.arpa') or domain.endswith('.local'):
-            return False
-
-        domain_info: dict = self.db.getDomainData(domain)
+        domain_info: dict = self.db.get_domain_data(domain)
         if not domain_info:
             return False
 
@@ -1290,12 +1310,26 @@ class FlowAlerts(IModule):
         age = domain_info['Age']
         if age >= age_threshold:
             return False
-
+        
+        
+        ips_returned_in_answer: List[str] = (
+            self.extract_ips_from_dns_answers(answers)
+        )
         self.set_evidence.young_domain(
-            domain, age, stime, profileid, twid, uid
+            domain, age, stime, profileid, twid, uid, ips_returned_in_answer
         )
         return True
-
+    
+    def extract_ips_from_dns_answers(self, answers: List[str]) -> List[str]:
+        """
+        extracts ipv4 and 6 from DNS answers
+        """
+        ips = []
+        for answer in answers:
+            if validators.ipv4(answer) or validators.ipv6(answer):
+                ips.append(answer)
+        return ips
+    
     def check_smtp_bruteforce(
             self,
             profileid,
@@ -1477,7 +1511,6 @@ class FlowAlerts(IModule):
             daddr,
             ja3,
             ja3s,
-            profileid,
             twid,
             uid,
             timestamp
@@ -1495,21 +1528,20 @@ class FlowAlerts(IModule):
                 twid,
                 uid,
                 timestamp,
-                daddr,
                 saddr,
-                type_='ja3',
+                daddr,
                 ja3=ja3,
-            )
+                )
+         
 
         if ja3s in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3(
+            self.set_evidence.malicious_ja3s(
                 malicious_ja3_dict,
                 twid,
                 uid,
                 timestamp,
                 saddr,
                 daddr,
-                type_='ja3s',
                 ja3=ja3s,
             )
 
@@ -1597,25 +1629,6 @@ class FlowAlerts(IModule):
             ssl_info, ssl_info_from_db
         )
 
-    def check_weird_http_method(self, msg):
-        """
-        detect weird http methods in zeek's weird.log
-        """
-        flow = msg['flow']
-        profileid = msg['profileid']
-        twid = msg['twid']
-
-        # what's the weird.log about
-        name = flow['name']
-
-        if 'unknown_HTTP_method' not in name:
-            return False
-
-        self.set_evidence.weird_http_method(
-            profileid,
-            twid,
-            flow
-        )
 
     def check_non_http_port_80_conns(
             self,
@@ -2077,7 +2090,6 @@ class FlowAlerts(IModule):
                 daddr,
                 ja3,
                 ja3s,
-                profileid,
                 twid,
                 uid,
                 timestamp
@@ -2141,7 +2153,7 @@ class FlowAlerts(IModule):
             # TODO: not sure how to make sure IP_info is
             #  done adding domain age to the db or not
             self.detect_young_domains(
-                domain, stime, profileid, twid, uid
+                domain, answers, stime, profileid, twid, uid
             )
             self.check_dns_arpa_scan(
                 domain, stime, profileid, twid, uid
@@ -2179,10 +2191,7 @@ class FlowAlerts(IModule):
                 role='SSH::SERVER'
             )
 
-        if msg := self.get_msg('new_weird'):
-            msg = json.loads(msg['data'])
-            self.check_weird_http_method(msg)
-
+     
         if msg := self.get_msg('new_tunnel'):
             msg = json.loads(msg['data'])
             self.check_GRE_tunnel(msg)

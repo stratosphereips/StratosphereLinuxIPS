@@ -149,9 +149,9 @@ def test_setInfoForDomains():
     """ tests setInfoForDomains, setNewDomain and getDomainData """
     domain = 'www.google.com'
     domain_data = {'threatintelligence': 'sample data'}
-    db.setInfoForDomains(domain, domain_data)
+    db.set_info_for_domains(domain, domain_data)
 
-    stored_data = db.getDomainData(domain)
+    stored_data = db.get_domain_data(domain)
     assert 'threatintelligence' in stored_data
     assert stored_data['threatintelligence'] == 'sample data'
 

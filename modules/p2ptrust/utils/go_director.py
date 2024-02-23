@@ -488,11 +488,6 @@ class GoDirector(IObservable):
         set evidence for the newly created attacker
         profile stating that it attacked another peer
         """
-        attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=ip
-            )
         threat_level = utils.threat_level_to_string(score)
 
         # confidence depends on how long the connection
@@ -521,7 +516,11 @@ class GoDirector(IObservable):
         timestamp = utils.convert_format(timestamp, utils.alerts_format)
         evidence = Evidence(
             evidence_type=EvidenceType.P2P_REPORT,
-            attacker=attacker,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=ip
+                ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
