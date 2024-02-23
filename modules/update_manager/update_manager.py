@@ -1509,18 +1509,22 @@ class UpdateManager(IModule):
                     # every function call to update_TI_file is now running concurrently instead of serially
                     # so when a server's taking a while to give us the TI feed, we proceed
                     # to download the next file instead of being idle
-                    task = asyncio.create_task(self.update_TI_file(file_to_download))
+                    task = asyncio.create_task(
+                        self.update_TI_file(file_to_download)
+                        )
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
-            if self.check_if_update("riskiq_domains", self.riskiq_update_period):
+            if self.check_if_update("riskiq_domains",
+                                    self.riskiq_update_period):
                 self.update_riskiq_feed()
 
             # wait for all TI files to update
             try:
                 await task
             except UnboundLocalError:
-                # in case all our files are updated, we don't have task defined, skip
+                # in case all our files are updated, we don't
+                # have task defined, skip
                 pass
 
             self.db.set_loaded_ti_files(self.loaded_ti_files)
@@ -1533,10 +1537,12 @@ class UpdateManager(IModule):
         """
         Update TI files and store them in database before slips starts
         """
-        # create_task is used to run update() function concurrently instead of serially
+        # create_task is used to run update() function
+        # concurrently instead of serially
         self.update_finished = asyncio.create_task(self.update())
         await self.update_finished
-        self.print(f"{self.db.get_loaded_ti_files()} TI files successfully loaded.")
+        self.print(f"{self.db.get_loaded_ti_files()} "
+                   f"TI files successfully loaded.")
 
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed

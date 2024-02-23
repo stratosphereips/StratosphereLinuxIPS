@@ -37,7 +37,6 @@ class Main(IObservable):
         self.redis_man = RedisManager(self)
         self.ui_man = UIManager(self)
         self.metadata_man = MetadataManager(self)
-        self.proc_man = ProcessManager(self)
         self.conf = ConfigParser()
         self.version = self.get_slips_version()
         # will be filled later
@@ -45,6 +44,7 @@ class Main(IObservable):
         self.branch = "None"
         self.last_updated_stats_time = datetime.now()
         self.input_type = False
+        self.proc_man = ProcessManager(self)
         # in testing mode we manually set the following params
         if not testing:
             self.args = self.conf.get_args()
@@ -554,6 +554,7 @@ class Main(IObservable):
                 current_stdout, stderr, slips_logfile
             )
             self.add_observer(self.logger)
+            
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -580,6 +581,17 @@ class Main(IObservable):
                     "branch": self.branch,
                 }
             )
+            self.print(
+                f"Using redis server on " f"port: "
+                f"{green(self.redis_port)}", 1,  1
+            )
+            self.print(
+                f'Started {green("Main")} process ' f"[PID"
+                f" {green(self.pid)}]", 1,  1
+            )
+            # start progress bar before all modules so it doesn't miss
+            # any prints in its queue and slips wouldn't seem like it's frozen
+            self.proc_man.start_progress_bar()
 
             self.cpu_profiler_init()
             self.memory_profiler_init()
@@ -593,7 +605,7 @@ class Main(IObservable):
                     )
                 else:
                     self.print(
-                        f"Running on a growing zeek dir:" f" {self.input_information}"
+                        f"Running on a growing zeek dir: {self.input_information}"
                     )
                     self.db.set_growing_zeek_dir()
 
@@ -620,13 +632,7 @@ class Main(IObservable):
 
             self.db.store_std_file(**std_files)
 
-            self.print(
-                f"Using redis server on " f"port: {green(self.redis_port)}", 1, 0
-            )
-            self.print(
-                f'Started {green("Main")} process ' f"[PID {green(self.pid)}]", 1, 0
-            )
-            self.print("Starting modules", 1, 0)
+            
 
             # if slips is given a .rdb file, don't load the
             # modules as we don't need them
@@ -638,7 +644,11 @@ class Main(IObservable):
                 self.proc_man.start_update_manager(
                     local_files=True, TI_feeds=self.conf.wait_for_TI_to_finish()
                 )
+                self.print("Starting modules",1, 1)
                 self.proc_man.load_modules()
+                # give outputprocess time to print all the started modules
+                time.sleep(0.5)
+                self.proc_man.print_disabled_modules()
 
             if self.args.webinterface:
                 self.ui_man.start_webinterface()

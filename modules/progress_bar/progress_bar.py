@@ -124,8 +124,6 @@ class PBar(IModule):
         # to tell output.py to no longer send prints here
         self.pbar_finished.set()
 
-
-
     def main(self):
         """
         keeps receiving events until pbar reaches 100%
