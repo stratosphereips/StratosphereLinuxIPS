@@ -291,7 +291,7 @@ class ProcessManager:
             except ImportError as e:
                 print(f"Something wrong happened while "
                       f"importing the module {module_name}: {e}")
-                print(traceback.print_stack())
+                print(traceback.format_exc())
                 failed_to_load_modules += 1
 
                 continue

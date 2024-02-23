@@ -426,7 +426,7 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f"Problem on update_TI_file() line {exception_line}", 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
         return False
 
     def get_e_tag(self, response):
@@ -635,7 +635,7 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f"Problem on update_TI_file() line {exception_line}", 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
             return False
 
     def update_riskiq_feed(self):
@@ -865,7 +865,7 @@ class UpdateManager(IModule):
 
         except Exception:
             self.print("Problem in parse_ja3_feed()", 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
             return False
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
@@ -1347,7 +1347,7 @@ class UpdateManager(IModule):
                 0,
                 1,
             )
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
             return False
 
     def check_if_update_org(self, file):

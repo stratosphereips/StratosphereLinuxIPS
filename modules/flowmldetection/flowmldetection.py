@@ -95,7 +95,7 @@ class FlowMLDetection(IModule):
                 )
             except Exception:
                 self.print('Error while calling clf.train()')
-                self.print(traceback.print_stack())
+                self.print(traceback.format_exc(), 0, 1)
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
@@ -115,7 +115,7 @@ class FlowMLDetection(IModule):
 
         except Exception:
             self.print('Error in train()', 0 , 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
 
 
     def process_features(self, dataset):
@@ -216,7 +216,7 @@ class FlowMLDetection(IModule):
         except Exception:
             # Stop the timer
             self.print('Error in process_features()')
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def process_flows(self):
         """
@@ -295,7 +295,7 @@ class FlowMLDetection(IModule):
         except Exception:
             # Stop the timer
             self.print('Error in process_flows()')
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def process_flow(self):
         """
@@ -312,7 +312,7 @@ class FlowMLDetection(IModule):
         except Exception:
             # Stop the timer
             self.print('Error in process_flow()')
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def detect(self):
         """
@@ -333,7 +333,7 @@ class FlowMLDetection(IModule):
             # Stop the timer
             self.print('Error in detect() X_flow:')
             self.print(X_flow)
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def store_model(self):
         """

@@ -290,4 +290,4 @@ class SymbolHandler(IObservable):
             # For some reason we can not use the output queue here.. check
             self.print('Error in compute_symbol in Profiler Process.',
                        0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)

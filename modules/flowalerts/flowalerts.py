@@ -1523,7 +1523,7 @@ class FlowAlerts(IModule):
         malicious_ja3_dict = self.db.get_ja3_in_IoC()
 
         if ja3 in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3s(
+            self.set_evidence.malicious_ja3(
                 malicious_ja3_dict,
                 twid,
                 uid,
@@ -1535,7 +1535,7 @@ class FlowAlerts(IModule):
          
 
         if ja3s in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3(
+            self.set_evidence.malicious_ja3s(
                 malicious_ja3_dict,
                 twid,
                 uid,

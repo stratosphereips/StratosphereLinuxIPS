@@ -134,7 +134,7 @@ class IModule(IObservable, ABC, Process):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem in pre_main() line {exception_line}', 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
             return True
 
         try:
@@ -150,10 +150,6 @@ class IModule(IObservable, ABC, Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
         except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem in {self.name}\'s main() '
-                       f'line {exception_line}',
-                       0, 1)
-            traceback.print_stack()
-
+            self.print(f'Problem in {self.name}',0, 1)
+            self.print(traceback.format_exc(),  0, 1)
         return True

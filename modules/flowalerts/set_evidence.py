@@ -1335,8 +1335,8 @@ class SetEvidnceHelper:
         description = f'Malicious JA3: {ja3} from source address ' \
                       f'{saddr} {ip_identification}'
         if ja3_description != 'None':
-            description += f'description: {ja3_description} '
-        description += f'tags: {tags}'
+            description += f' description: {ja3_description} '
+        description += f' tags: {tags}'
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_JA3,
