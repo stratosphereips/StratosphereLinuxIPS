@@ -5,9 +5,12 @@ from ..slips import *
 
 def test_load_modules():
     proc_manager = ModuleFactory().create_process_manager_obj()
-    failed_to_load_modules = proc_manager.get_modules(
-        ['template', 'mldetection-1', 'ensembling']
-    )[1]
+    proc_manager.modules_to_ignore = [
+        'template',
+        'mldetection-1',
+        'ensembling'
+    ]
+    failed_to_load_modules = proc_manager.get_modules()[1]
     assert failed_to_load_modules == 0
 #
 # @pytest.mark.skipif(IS_IN_A_DOCKER_CONTAINER, reason='This functionality is not supported in docker')
