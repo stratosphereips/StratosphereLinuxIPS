@@ -1119,7 +1119,7 @@ class ProfileHandler(IObservable):
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getT2ForProfileTW in database.py line " f"{exception_line}",
+                f"Error in getT2ForProfileTW in database.py line {exception_line}",
                 0,
                 1,
             )
