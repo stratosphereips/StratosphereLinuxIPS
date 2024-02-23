@@ -151,8 +151,8 @@ class SQLiteDB(IObservable):
         """
         condition = f'profileid = "{profileid}"'
         flows = self.select('flows', condition=condition)
+        all_flows: Dict[str, dict] = {}
         if flows:
-            all_flows: Dict[str, dict] = {}
             for flow in flows:
                 uid = flow[0]
                 flow: str = flow[1]
