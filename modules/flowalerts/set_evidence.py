@@ -53,7 +53,7 @@ class SetEvidnceHelper:
                     threat_level=ThreatLevel.LOW,
                     category=IDEACategory.ANOMALY_TRAFFIC,
                     description=description,
-                    profile=ProfileID(ip=attacker.value),
+                    profile=ProfileID(ip=attacker),
                     timewindow=TimeWindow(number=twid_number),
                     uid=[uid],
                     timestamp=stime,
@@ -1292,18 +1292,17 @@ class SetEvidnceHelper:
         )
 
         self.db.set_evidence(evidence)
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_JA3S,
-            attacker=attacker,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=attacker.value),
+            profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
@@ -1339,25 +1338,22 @@ class SetEvidnceHelper:
             description += f'description: {ja3_description} '
         description += f'tags: {tags}'
 
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
-        victim: Victim = Victim(
-                direction= Direction.DST,
-                victim_type=IoCType.IP,
-                value=daddr
-        )
-        confidence: float = 1
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_JA3,
-            attacker=attacker,
-            victim=victim,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
+            victim=Victim(
+                    direction= Direction.DST,
+                    victim_type=IoCType.IP,
+                    value=daddr
+            ),
             threat_level=threat_level,
-            confidence=confidence,
+            confidence=1,
             description=description,
-            profile=ProfileID(ip=attacker.value),
+            profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
@@ -1376,26 +1372,25 @@ class SetEvidnceHelper:
         uid: List[str],
         timestamp
     ) -> None:
-        confidence: float = 0.6
         saddr: str = profileid.split("_")[-1]
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
         ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = f'Large data upload. {src_mbs} MBs ' \
                            f'sent to {daddr} {ip_identification}'
         timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
-
+        twid_number = int(twid.replace("timewindow", ""))
+        
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.DATA_UPLOAD,
-            attacker=attacker,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
             threat_level=ThreatLevel.INFO,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=attacker.value),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
             uid=uid,
             timestamp=timestamp,
             category=IDEACategory.MALWARE,
@@ -1404,19 +1399,18 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
         
-        attacker: Attacker = Attacker(
-            direction=Direction.DST,
-            attacker_type=IoCType.IP,
-            value=daddr
-        )
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.DATA_UPLOAD,
-            attacker=attacker,
+            attacker=Attacker(
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=daddr
+            ),
             threat_level=ThreatLevel.HIGH,
-            confidence=confidence,
+            confidence=0.6,
             description=description,
-            profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            profile=ProfileID(ip=daddr),
+            timewindow=TimeWindow(number=twid_number),
             uid=uid,
             timestamp=timestamp,
             category=IDEACategory.MALWARE,

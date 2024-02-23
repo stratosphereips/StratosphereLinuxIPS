@@ -1,5 +1,5 @@
 """Unit test for slips_files/core/performance_profiler.py"""
-import ipaddress
+from unittest.mock import Mock
 
 from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing
@@ -154,6 +154,7 @@ def test_define_separator_nfdump(nfdump_file,
 )
 def test_process_line(file, flow_type, mock_db):
     profiler = ModuleFactory().create_profiler_obj(mock_db)
+    profiler.symbol = Mock()
     # we're testing another functionality here
     profiler.whitelist.is_whitelisted_flow = do_nothing
     profiler.input_type = 'zeek'
@@ -172,11 +173,9 @@ def test_process_line(file, flow_type, mock_db):
         'type': flow_type
     }
 
-    # process it
     profiler.flow = profiler.input_handler.process_line(sample_flow)
-    assert profiler.flow
+    assert profiler.flow is not None
 
-    # add to profile
     added_to_prof = profiler.add_flow_to_profile()
     assert added_to_prof is True
 
