@@ -163,7 +163,7 @@ def test_detect_young_domains(
     answers = ['192.168.1.1', '192.168.1.2', '192.168.1.3', 'CNAME_HERE.com']
 
     # age in days
-    mock_db.getDomainData.return_value = {'Age': 50}
+    mock_db.get_domain_data.return_value = { 'Age': 50}
     assert (
           flowalerts.detect_young_domains(
             domain,
@@ -176,7 +176,7 @@ def test_detect_young_domains(
     )
 
     # more than the age threshold
-    mock_db.getDomainData.return_value = {'Age': 1000}
+    mock_db.get_domain_data.return_value = { 'Age': 1000}
     assert (
         flowalerts.detect_young_domains(
             domain,

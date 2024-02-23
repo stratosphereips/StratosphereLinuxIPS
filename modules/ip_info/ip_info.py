@@ -358,7 +358,7 @@ class IPInfo(IModule):
             # tld not supported
             return False
 
-        cached_data = self.db.getDomainData(domain)
+        cached_data = self.db.get_domain_data(domain)
         if cached_data and 'Age' in cached_data:
             # we already have age info about this domain
             return False
@@ -385,8 +385,7 @@ class IPInfo(IModule):
             today,
             return_type='days'
         )
-
-        self.db.setInfoForDomains(domain, {'Age': age})
+        self.db.set_info_for_domains(domain, { 'Age': age})
         return age
 
     def shutdown_gracefully(self):

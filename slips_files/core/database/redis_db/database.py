@@ -799,7 +799,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 # no CNAME came with this query
                 pass
 
-            self.setInfoForDomains(query, domaindata, mode='add')
+            self.set_info_for_domains(query, domaindata, mode='add')
             self.set_domain_resolution(query, ips_to_add)
 
     def set_domain_resolution(self, domain, ips):

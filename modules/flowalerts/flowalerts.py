@@ -779,7 +779,7 @@ class FlowAlerts(IModule):
         # with AAAA, and the computer chooses the A address.
         # Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
-        if prev_domain_resolutions := self.db.getDomainData(domain):
+        if prev_domain_resolutions := self.db.get_domain_data(domain):
             prev_domain_resolutions = prev_domain_resolutions.get('IPs',[])
             # if there's a domain in the cache
             # (prev_domain_resolutions) that is not in the
@@ -1268,24 +1268,37 @@ class FlowAlerts(IModule):
         self.db.setReconnections(
             profileid, twid, current_reconnections
         )
-
-    def detect_young_domains(self, domain, answers: List[str], stime,
-        profileid,
-        twid, uid):
+    
+    def should_detect_young_domain(self, domain):
+        """
+        returns true if it's ok to detect young domains for the given
+        domain
+        """
+        return (
+                domain
+                and not domain.endswith(".local")
+                and not domain.endswith('.arpa')
+        )
+    
+    def detect_young_domains(
+            self,
+            domain,
+            answers: List[str],
+            stime,
+            profileid,
+            twid,
+            uid
+        ):
         """
         Detect domains that are too young.
         The threshold is 60 days
         """
-        if not domain:
+        if not self.should_detect_young_domain(domain):
             return False
 
         age_threshold = 60
 
-        # Ignore arpa and local domains
-        if domain.endswith('.arpa') or domain.endswith('.local'):
-            return False
-
-        domain_info: dict = self.db.getDomainData(domain)
+        domain_info: dict = self.db.get_domain_data(domain)
         if not domain_info:
             return False
 
@@ -1302,7 +1315,6 @@ class FlowAlerts(IModule):
         ips_returned_in_answer: List[str] = (
             self.extract_ips_from_dns_answers(answers)
         )
-        
         self.set_evidence.young_domain(
             domain, age, stime, profileid, twid, uid, ips_returned_in_answer
         )

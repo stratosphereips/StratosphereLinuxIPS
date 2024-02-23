@@ -1266,7 +1266,7 @@ class ThreatIntel(IModule, URLhaus):
         domain_info = {
             'threatintelligence': domain_info
         }
-        self.db.setInfoForDomains(cname, domain_info)
+        self.db.set_info_for_domains(cname, domain_info)
 
         # add this domain to our MaliciousDomains hash in the database
         self.db.set_malicious_domain(cname, profileid, twid)
@@ -1301,7 +1301,7 @@ class ThreatIntel(IModule, URLhaus):
         domain_info = {
             'threatintelligence': domain_info
         }
-        self.db.setInfoForDomains(domain, domain_info)
+        self.db.set_info_for_domains(domain, domain_info)
 
         # add this domain to our MaliciousDomains hash in the database
         self.db.set_malicious_domain(domain, profileid, twid)

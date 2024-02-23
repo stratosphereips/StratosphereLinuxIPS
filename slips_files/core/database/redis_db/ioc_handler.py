@@ -348,7 +348,7 @@ class IoCHandler():
             # We use the empty dictionary to find if an URL exists or not
             self.rcache.hset('URLsInfo', url, '{}')
 
-    def getDomainData(self, domain):
+    def get_domain_data(self, domain):
         """
         Return information about this domain
         Returns a dictionary or False if there is no domain in the database
@@ -367,7 +367,7 @@ class IoCHandler():
         2- Publishes in the channels that there is a new domain, and that we want
             data from the Threat Intelligence modules
         """
-        data = self.getDomainData(domain)
+        data = self.get_domain_data(domain)
         if data is False:
             # If there is no data about this domain
             # Set this domain for the first time in the DomainsInfo
@@ -376,7 +376,7 @@ class IoCHandler():
             # We use the empty dictionary to find if a domain exists or not
             self.rcache.hset('DomainsInfo', domain, '{}')
 
-    def setInfoForDomains(self, domain: str, info_to_set: dict, mode='leave'):
+    def set_info_for_domains(self, domain: str, info_to_set: dict, mode= 'leave'):
         """
         Store information for this domain
         :param info_to_set: a dictionary, such as {'geocountry': 'rumania'} that we are
@@ -388,12 +388,12 @@ class IoCHandler():
         """
 
         # Get the previous info already stored
-        domain_data = self.getDomainData(domain)
+        domain_data = self.get_domain_data(domain)
         if not domain_data:
             # This domain is not in the dictionary, add it first:
             self.setNewDomain(domain)
             # Now get the data, which should be empty, but just in case
-            domain_data = self.getDomainData(domain)
+            domain_data = self.get_domain_data(domain)
 
         # Let's check each key stored for this domain
         for key in iter(info_to_set):

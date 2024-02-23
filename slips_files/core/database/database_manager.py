@@ -534,14 +534,14 @@ class DBManager(IObservable):
     def setNewURL(self, *args, **kwargs):
         return self.rdb.setNewURL(*args, **kwargs)
 
-    def getDomainData(self, *args, **kwargs):
-        return self.rdb.getDomainData(*args, **kwargs)
+    def get_domain_data(self, *args, **kwargs):
+        return self.rdb.get_domain_data(*args, **kwargs)
 
     def setNewDomain(self, *args, **kwargs):
         return self.rdb.setNewDomain(*args, **kwargs)
 
-    def setInfoForDomains(self, *args, **kwargs):
-        return self.rdb.setInfoForDomains(*args, **kwargs)
+    def set_info_for_domains(self, *args, **kwargs):
+        return self.rdb.set_info_for_domains(*args, **kwargs)
 
     def setInfoForURLs(self, *args, **kwargs):
         return self.rdb.setInfoForURLs(*args, **kwargs)

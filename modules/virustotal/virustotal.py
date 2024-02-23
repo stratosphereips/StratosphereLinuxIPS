@@ -188,7 +188,7 @@ class VT(IModule):
             data['asn'] = {
                 'number': f'AS{as_owner}'
             }
-        self.db.setInfoForDomains(domain, data)
+        self.db.set_info_for_domains(domain, data)
 
     def API_calls_thread(self):
         """
@@ -226,7 +226,7 @@ class VT(IModule):
                         self.set_vt_data_in_IPInfo(ioc, cached_data)
 
                 elif ioc_type == 'domain':
-                    cached_data = self.db.getDomainData(ioc)
+                    cached_data = self.db.get_domain_data(ioc)
                     if not cached_data or 'VirusTotal' not in cached_data:
                         self.set_domain_data_in_DomainInfo(ioc, cached_data)
 
@@ -601,7 +601,7 @@ class VT(IModule):
             )   # this is a dict {'uid':json flow data}
             domain = flow_data.get('query', False)
 
-            cached_data = self.db.getDomainData(domain)
+            cached_data = self.db.get_domain_data(domain)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
             if domain and (
