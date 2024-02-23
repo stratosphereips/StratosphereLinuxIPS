@@ -55,7 +55,7 @@ class ModuleFactory:
         self.profiler_queue = Queue()
         self.input_queue = Queue()
         self.dummy_termination_event = Event()
-        self.logger = Output()
+        self.logger = Mock() # Output()
 
 
     def get_default_db(self):

@@ -1,9 +1,10 @@
 import json
 import urllib
 import requests
-from typing import Union, \
+from typing import (
+    Union,
     Dict
-
+    )
 from slips_files.common.imports import *
 from slips_files.core.evidence_structure.evidence import \
     (
@@ -689,7 +690,7 @@ class HTTPAnalyzer(IModule):
         self.db.set_evidence(evidence)
         
         
-    def check_weird_http_method(self, msg: Dict[str]):
+    def check_weird_http_method(self, msg: Dict[str, str]):
         """
         detect weird http methods in zeek's weird.log
         """

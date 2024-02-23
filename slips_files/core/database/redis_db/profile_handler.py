@@ -1125,7 +1125,6 @@ class ProfileHandler(IObservable):
             )
             self.print(type(e), 0, 1)
             self.print(e, 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
