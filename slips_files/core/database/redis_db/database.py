@@ -1080,7 +1080,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             self.r.hset('default_gateway', address_type, address)
 
 
-    def get_domain_resolution(self, domain):
+    def get_domain_resolution(self, domain) -> List[str]:
         """
         Returns the IPs resolved by this domain
         """

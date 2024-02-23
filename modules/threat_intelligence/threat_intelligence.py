@@ -6,7 +6,8 @@ import dns
 import requests
 import threading
 import time
-from typing import Dict
+from typing import Dict, \
+    List
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.imports import *
@@ -432,9 +433,9 @@ class ThreatIntel(IModule, URLhaus):
         )
 
         self.db.set_evidence(evidence)
-
-        domain_resolution: str = self.db.get_domain_resolution(domain)
+        domain_resolution: List[str] = self.db.get_domain_resolution(domain)
         if domain_resolution:
+            domain_resolution: str = domain_resolution[0]
             evidence = Evidence(
                 evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN,
                 attacker=Attacker(
