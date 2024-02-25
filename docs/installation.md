@@ -212,7 +212,7 @@ The main limitation of running Slips in a Docker is that every time the containe
 
 First, you need to check which image is suitable for your architecture.
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/docker_images.png" width="850px"
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/docker_images.png" width="850px">
 
 
 Before building the docker locally from the Dockerfile, first you should clone Slips repo or download the code directly: 
