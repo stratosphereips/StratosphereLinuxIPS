@@ -6,7 +6,8 @@ import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict
+from typing import Dict, \
+    Optional
 import json
 import sys
 import socket
@@ -19,6 +20,7 @@ import modules.p2ptrust.utils.utils as p2p_utils
 from modules.p2ptrust.utils.go_director import GoDirector
 from slips_files.core.evidence_structure.evidence import \
     (
+        dict_to_evidence,
         Evidence,
         ProfileID,
         TimeWindow,
@@ -262,7 +264,44 @@ class Trust(IModule):
 
 
             # print(f"[debugging] runnning pigeon: {executable}")
+    
+    def extract_confidence(self, evidence: Dict[str, str]) -> Optional[float]:
+        """
+        returns the confidence of the given evidence or None if no
+        confidence was found
+        """
+        confidence: float = evidence.get('confidence', False)
 
+        if confidence:
+            return confidence
+        
+        attacker_ip: str = evidence['attacker']['value']
+        self.print(
+            f"IP {attacker_ip} doesn't have a confidence. "
+            f"not sharing to the network.", 0, 2,
+        )
+
+        return
+    def extract_threat_level(self, evidence: Dict[str, str]) -> Optional[str]:
+        """
+        returns the confidence of the given evidence or None if no
+        confidence was found
+        """
+        confidence: float = evidence.get('confidence', False)
+
+        if confidence:
+            return confidence
+        
+        attacker_ip: str = evidence['attacker']['value']
+        self.print(
+            f"IP {attacker_ip} doesn't have a confidence. "
+            f"not sharing to the network.", 0, 2,
+        )
+
+        return
+
+    
+    
     def new_evidence_callback(self, msg: Dict[str, str]):
         """
         This function is called whenever a msg arrives to the
@@ -272,39 +311,38 @@ class Trust(IModule):
         # TODO add the format of this msg here!
         """
         try:
-            data = json.loads(msg['data'])
+            evidence: Dict[str, str] = json.loads(msg['data'])
+            evidence: Evidence = dict_to_evidence(evidence)
+            print(f"@@@@@@@@@@@@@@@@ done converting dict evience back to "
+                  f"evidence obj {evidence} .. {type(evidence)}")
         except json.decoder.JSONDecodeError:
-            # not a valid json dict
             return
 
-        # example: dstip srcip dport sport dstdomain
-        attacker_direction = data.get('attacker_direction')
-        if 'ip' not in attacker_direction:   # and not 'domain' in attacker_direction:
-            # todo do we share domains too?
-            # the detection is a srcport, dstport, etc. don't share
-            return
-
-        evidence_type = data.get('evidence_type')
-        if 'P2PReport' in evidence_type:
+        
+        evidence_type: str = evidence.get('evidence_type')
+        if evidence_type == EvidenceType.P2P_REPORT:
             # we shouldn't re-share evidence reported by other peers
             return
 
+        attacker: Dict[str, str] = evidence.get('attacker')
+        attacker_type: str = attacker['attacker_type']
+        if attacker_type != IoCType.IP:
+            # we only share ips with other peers.
+            return
 
-        attacker = data.get('attacker')
-        confidence = data.get('confidence', False)
-        threat_level = data.get('threat_level', False)
+        # confidence: float = evidence.get('confidence', False)
+        confidence = self.extract_confidence(evidence)
+        if not confidence:
+            return
+        
+        threat_level: str = evidence.get('threat_level', False)
         if not threat_level:
             self.print(
                 f"IP {attacker} doesn't have a threat_level. "
                 f"not sharing to the network.", 0,2,
             )
             return
-        if not confidence:
-            self.print(
-                f"IP {attacker} doesn't have a confidence. "
-                f"not sharing to the network.", 0, 2,
-            )
-            return
+        
 
         # get the int representing this threat_level
         score = self.threat_levels[threat_level]
@@ -333,7 +371,8 @@ class Trust(IModule):
         except KeyError:
             data_already_reported = False
         except IndexError:
-            # data saved in local db have wrong structure, this is an invalid state
+            # data saved in local db have wrong structure,
+            # this is an invalid state
             return
 
         # TODO: in the future, be smarter and share only when needed.
@@ -341,7 +380,8 @@ class Trust(IModule):
         if not data_already_reported:
             # Take data and send it to a peer as report.
             p2p_utils.send_evaluation_to_go(
-                attacker, score, confidence, '*', self.pygo_channel, self.db
+                attacker, score, confidence, '*',
+                self.pygo_channel, self.db
             )
 
     def gopy_callback(self, msg: Dict):
