@@ -318,7 +318,6 @@ class Trust(IModule):
         if not confidence:
             return False
         
-        
         threat_level: str = self.extract_threat_level(evidence)
         if not threat_level:
             return False

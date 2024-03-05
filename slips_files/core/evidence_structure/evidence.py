@@ -322,7 +322,7 @@ def dict_to_evidence(evidence: dict):
         'evidence_type': EvidenceType[evidence["evidence_type"]],
         'description': evidence['description'],
         'attacker': Attacker(**evidence['attacker']),
-        'threat_level': ThreatLevel[evidence['threat_level']],
+        'threat_level': ThreatLevel[evidence['threat_level'].upper()],
         'category': IDEACategory[evidence['category']],
         'victim': Victim(**evidence['victim']) if 'victim' in evidence
         and evidence['victim'] else None,

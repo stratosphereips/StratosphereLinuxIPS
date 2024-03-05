@@ -476,7 +476,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def set_local_network(self, saddr):
         # set the local network used in the db
-        # For now the local network is only ipv4, but it could be ipv6 in the future. Todo.
+        # For now the local network is only ipv4, but it
+        # could be ipv6 in the future. Todo.
 
         if self.is_localnet_set:
             return
