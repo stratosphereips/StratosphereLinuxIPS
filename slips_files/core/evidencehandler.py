@@ -758,6 +758,8 @@ class EvidenceHandler(ICore):
                     )
 
                 evidence_dict: dict = evidence_to_dict(evidence)
+                print(f"@@@@@@@@@@@@@@@@ reporting this to other"
+                      f" peers {evidence_dict}")
                 self.db.publish('report_to_peers', json.dumps(evidence_dict))
 
 

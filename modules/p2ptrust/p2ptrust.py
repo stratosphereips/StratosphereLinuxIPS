@@ -263,11 +263,13 @@ class Trust(IModule):
 
             # print(f"[debugging] runnning pigeon: {executable}")
 
-    def new_evidence_callback(self, msg: Dict):
+    def new_evidence_callback(self, msg: Dict[str, str]):
         """
-        This function is called whenever a msg arrives to the report_to_peers channel,
-        It compares the score and confidence of the given IP and decides whether or not to
-        share it accordingly
+        This function is called whenever a msg arrives to the
+        report_to_peers channel,
+        It compares the score and confidence of the given IP and decides to
+        share it or not accordingly
+        # TODO add the format of this msg here!
         """
         try:
             data = json.loads(msg['data'])
@@ -603,14 +605,13 @@ class Trust(IModule):
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
     def main(self):
-        """main loop function"""
-        if msg:= self.get_msg('report_to_peers'):
+        if msg := self.get_msg('report_to_peers'):
             self.new_evidence_callback(msg)
 
-        if msg:= self.get_msg(self.p2p_data_request_channel):
+        if msg := self.get_msg(self.p2p_data_request_channel):
             self.data_request_callback(msg)
 
-        if msg:= self.get_msg(self.gopy_channel):
+        if msg := self.get_msg(self.gopy_channel):
             self.gopy_callback(msg)
 
         ret_code = self.pigeon.poll()
