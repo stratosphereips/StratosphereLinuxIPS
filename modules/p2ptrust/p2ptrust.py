@@ -312,7 +312,8 @@ class Trust(IModule):
 
         if evidence.attacker.attacker_type != IoCType.IP:
             # we only share ips with other peers.
-            print(f"@@@@@@@@@@@@@@@@ won't share {evidence} because we only share ips with other peers.")
+            print(f"@@@@@@@@@@@@@@@@ won't share {evidence} ..{evidence.attacker.attacker_type} because we "
+                  f"only share ips with other peers.")
             return False
 
         confidence = self.extract_confidence(evidence)
