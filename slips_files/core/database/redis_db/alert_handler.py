@@ -167,20 +167,11 @@ class AlertHandler:
 
         # an evidence is generated for this profile
         # update the threat level of this profile
-        if evidence.attacker.direction == Direction.SRC:
-            # the srcip is the malicious one
-            self.update_threat_level(
-                str(evidence.profile),
-                str(evidence.threat_level),
-                evidence.confidence
-                )
-        elif evidence.attacker.direction == Direction.DST:
-            # the dstip is the malicious one
-            self.update_threat_level(
-                str(evidence.attacker.profile),
-                str(evidence.threat_level),
-                evidence.confidence
-                )
+        self.update_threat_level(
+            str(evidence.attacker.profile),
+            str(evidence.threat_level),
+            evidence.confidence
+            )
 
         return True
 
