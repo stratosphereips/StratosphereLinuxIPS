@@ -80,7 +80,7 @@ def test_pcap(
         (
             'dataset/test2-malicious.binetflow',
             1,
-            'Detected  Long Connection.',
+            'Detected Long Connection.',
             'test2/',
             6664,
         ),
