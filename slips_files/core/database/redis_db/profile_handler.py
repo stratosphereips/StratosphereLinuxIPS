@@ -309,10 +309,6 @@ class ProfileHandler(IObservable):
         ip = str(flow.daddr)
         spkts = flow.spkts
         state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
-        # dpkts = columns['dpkts']
-        # daddr = columns['daddr']
-        # saddr = columns['saddr']
-        # sbytes = columns['sbytes']
 
         if "^" in state_hist:
             # The majority of the FP with horizontal port scan detection happen because a
