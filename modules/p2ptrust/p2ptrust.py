@@ -312,14 +312,19 @@ class Trust(IModule):
 
         if evidence.attacker.attacker_type != IoCType.IP:
             # we only share ips with other peers.
+            print(f"@@@@@@@@@@@@@@@@ won't share {evidence} because we only share ips with other peers.")
             return False
 
         confidence = self.extract_confidence(evidence)
         if not confidence:
+            print(f"@@@@@@@@@@@@@@@@ won't share {evidence} because no "
+                  f"confidence?.")
             return False
         
         threat_level: str = self.extract_threat_level(evidence)
         if not threat_level:
+            print(f"@@@@@@@@@@@@@@@@ won't share {evidence} because no "
+                  f"tl?.")
             return False
         
         return True
@@ -369,11 +374,26 @@ class Trust(IModule):
             # report it to the p2p network
             if not cached_score:
                 data_already_reported = False
+                print(f"@@@@@@@@@@@@@@@@ sharing  {evidence.description} "
+                      f"{evidence.threat_level} because no cached network "
+                      f"opinion found")
+            else:
+                print(f"@@@@@@@@@@@@@@@@ NOT sharing  {evidence.description} "
+                      f"{evidence.threat_level} because we have cached "
+                      f"opinion! cached_score: {cached_score}"
+                      f" cached_confidence: {cached_confidence}"
+                      f" network_score: {network_score}")
         except KeyError:
             data_already_reported = False
+            print(f"@@@@@@@@@@@@@@@@ sharing  {evidence.description} "
+                  f"{evidence.threat_level} because no cached network "
+                  f"opinion found")
         except IndexError:
             # data saved in local db have wrong structure,
             # this is an invalid state
+            print(f"@@@@@@@@@@@@@@@@ NOT sharing  {evidence.description} "
+                  f"{evidence.threat_level} because data saved in local db "
+                  f"have wrong structure")
             return
 
         if not data_already_reported:
