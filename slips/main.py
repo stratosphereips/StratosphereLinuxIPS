@@ -583,11 +583,11 @@ class Main(IObservable):
             )
             self.print(
                 f"Using redis server on " f"port: "
-                f"{green(self.redis_port)}", 1,  1
+                f"{green(self.redis_port)}", 1,  0
             )
             self.print(
                 f'Started {green("Main")} process ' f"[PID"
-                f" {green(self.pid)}]", 1,  1
+                f" {green(self.pid)}]", 1,  0
             )
             # start progress bar before all modules so it doesn't miss
             # any prints in its queue and slips wouldn't seem like it's frozen
@@ -644,7 +644,7 @@ class Main(IObservable):
                 self.proc_man.start_update_manager(
                     local_files=True, TI_feeds=self.conf.wait_for_TI_to_finish()
                 )
-                self.print("Starting modules",1, 1)
+                self.print("Starting modules",1, 0)
                 self.proc_man.load_modules()
                 # give outputprocess time to print all the started modules
                 time.sleep(0.5)
