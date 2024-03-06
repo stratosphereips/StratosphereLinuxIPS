@@ -502,7 +502,7 @@ class GoDirector(IObservable):
             reporter_ip = ''
 
         description = f'attacking another peer: {reporter_ip} ' \
-                      f'({reporter}). threat level: {threat_level} ' \
+                      f'({reporter}). ' \
                       f'confidence: {confidence} {ip_identification}'
 
         # get the tw of this report time

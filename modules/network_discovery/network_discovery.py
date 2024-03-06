@@ -320,7 +320,6 @@ class NetworkDiscovery(IModule):
         description = (
             f'Performing a DHCP scan by requesting '
             f'{number_of_requested_addrs} different IP addresses. '
-            f'Threat Level: {threat_level}. '
             f'Confidence: {confidence}. by Slips'
         )
         twid_number = int(twid.replace("timewindow", ""))
