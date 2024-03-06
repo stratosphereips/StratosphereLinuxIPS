@@ -22,15 +22,12 @@ from slips_files.core.evidence_structure.evidence import \
         Evidence,
         ProfileID,
         TimeWindow,
-        Victim,
         Attacker,
-        Proto,
         ThreatLevel,
         EvidenceType,
         IoCType,
         Direction,
         IDEACategory,
-        Tag
     )
 
 
@@ -306,10 +303,12 @@ class Trust(IModule):
 
         # get the int representing this threat_level
         score = self.threat_levels[threat_level]
-        # todo what we're currently sharing is the threat level(int) of the evidence caused by this ip
+        # todo what we're currently sharing is the threat level(int)
+        #  of the evidence caused by this ip
 
         # todo when we generate a new evidence,
-        #  we give it a score and a tl, but we don't update the IP_Info and give this ip a score in th db!
+        #  we give it a score and a tl, but we don't update the IP_Info
+        #  and give this ip a score in th db!
 
         # TODO: discuss - only share score if confidence is high enough?
         # compare slips data with data in go

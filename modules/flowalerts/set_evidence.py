@@ -41,8 +41,9 @@ class SetEvidnceHelper:
         twid_number: int =  int(twid.replace("timewindow", ""))
         description: str =  (f'connection to a young domain: {domain} '
                              f'registered {age} days ago.')
-        if answers:
-            attacker = answers[0]
+        # set evidence for all the young domain dns answers
+        for attacker in answers:
+            attacker: str
             evidence = Evidence(
                     evidence_type=EvidenceType.YOUNG_DOMAIN,
                     attacker=Attacker(
@@ -1387,7 +1388,7 @@ class SetEvidnceHelper:
                 value=saddr
             ),
             threat_level=ThreatLevel.INFO,
-            confidence=confidence,
+            confidence=0.6,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
