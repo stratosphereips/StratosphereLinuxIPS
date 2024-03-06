@@ -940,50 +940,42 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """ Did slips mark the given dir as growing?"""
         return 'yes' in str(self.r.get('growing_zeek_dir'))
 
-    def get_ip_identification(self, ip: str, get_ti_data=True):
+    def get_ip_identification(self, ip: str, get_ti_data=True) -> str:
         """
         Return the identification of this IP based
-        on the data stored so far
+        on the AS, rDNS, and SNI of the IP.
+        
+        :param ip: The IP address to retrieve information for.
         :param get_ti_data: do we want to get info about this IP from out TI lists?
+        :return: string containing AS, rDNS, and SNI of the IP.
         """
-        current_data = self.get_ip_info(ip)
-        identification = ''
-        if current_data:
-            if 'asn' in current_data:
-                asn_details = ''
-                if asnorg := current_data['asn'].get('org', ''):
-                    asn_details += f'{asnorg} '
+        ip_info = self.get_ip_info(ip)
+        id = ''
+        if not ip_info:
+            return id
+        
+        asn = ip_info.get('asn', '')
+        if asn:
+            asn_org = asn.get('org', '')
+            asn_number = asn.get('number', '')
+            id += f'AS: {asn_org} {asn_number}'
 
-                if number := current_data['asn'].get('number', ''):
-                    asn_details += f'{number} '
+        sni = ip_info.get('SNI', '')
+        if sni:
+            sni = sni[0] if isinstance(sni, list) else sni
+            id += f'SNI: {sni["server_name"]}, '
 
-                if len(asn_details) > 1:
-                    identification += f'AS: {asn_details}'
+        rdns = ip_info.get('reverse_dns', '')
+        if rdns:
+            id += f'rDNS: {rdns}, '
+        
+        threat_intel = ip_info.get('threatintelligence', '')
+        if threat_intel and get_ti_data:
+            id += f"IP seen in blacklist: {threat_intel['source']}."
 
-            if 'SNI' in current_data:
-                sni = current_data['SNI']
-                if type(sni) == list:
-                    sni = sni[0]
-                identification += 'SNI: ' + sni['server_name'] + ', '
-
-            if 'reverse_dns' in current_data:
-                identification += 'rDNS: ' + current_data['reverse_dns'] + ', '
-
-            if 'threatintelligence' in current_data and get_ti_data:
-                identification += (
-                    'Description: '
-                    + current_data['threatintelligence']['description']
-                    + ', '
-                    )
-
-                tags: list = current_data['threatintelligence'].get('tags', False)
-                # remove brackets
-                if tags:
-                    identification += f'tags= {tags}  '
-
-        identification = identification[:-2]
-        return identification
-
+        id = id.rstrip(', ')
+        return id
+    
     def get_multiaddr(self):
         """
         this is can only be called when p2p is enabled, this value is set by p2p pigeon
