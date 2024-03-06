@@ -1546,7 +1546,6 @@ class ProfileHandler(IObservable):
             self.r.hset(profileid, "duration", duration)
             # When a new profiled is created assign threat level = 0
             # and confidence = 0.05
-            # self.r.hset(profileid, 'threat_level', 0)
             confidence = 0.05
             self.update_threat_level(profileid, "info", confidence)
             self.r.hset(profileid, "confidence", confidence)
