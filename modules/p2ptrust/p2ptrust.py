@@ -589,14 +589,17 @@ class Trust(IModule):
             combined_confidence,
         ) = self.reputation_model.get_opinion_on_ip(ip_address)
         
-        self.process_network_response(combined_score,
+        self.process_network_response(ip_address,
+                                      combined_score,
                                       combined_confidence,
                                       network_score,
                                       confidence,
                                       ip_info)
         
-    def process_network_response(self, ip, combined_score,
-        combined_confidence, network_score, confidence, ip_info):
+    def process_network_response(
+        self, ip, combined_score, combined_confidence, network_score,
+        confidence, ip_info
+        ):
         """
         stores the reported score and confidence about the ip and adds an
         evidence if necessary
