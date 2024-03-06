@@ -389,55 +389,66 @@ class FlowAlerts(IModule):
             # maybe an empty file is downloaded
             return False
 
+    def get_sent_bytes(self, all_flows: Dict[str, dict]) \
+            -> Dict[str, Tuple[int, List[str], str]] :
+        """
+        Returns a dict of sent bytes to all ips in the all_flows dict
+         {
+            contacted_ip: (
+                sum_of_mbs_sent,
+                [uids],
+                last_ts_of_flow_containging_this_contacted_ip
+            )
+        }
+         """
+        bytes_sent = {}
+        for uid, flow in all_flows.items():
+            daddr = flow['daddr']
+            sbytes: int = flow.get('sbytes', 0)
+            ts: str = flow.get('starttime', '')
 
+            if self.is_ignored_ip_data_upload(daddr) or not sbytes:
+                continue
+
+            if daddr in bytes_sent:
+                mbs_sent, uids, _= bytes_sent[daddr]
+                mbs_sent += sbytes
+                uids.append(uid)
+                bytes_sent[daddr] = (mbs_sent, uids, ts)
+            else:
+                bytes_sent[daddr] = (sbytes, [uid], ts)
+
+        return bytes_sent
+    
     def detect_data_upload_in_twid(self, profileid, twid):
         """
         For each contacted ip in this twid,
         check if the total bytes sent to this ip is >= data_exfiltration_threshold
         """
-        def get_sent_bytes(all_flows: dict):
-            """Returns a dict of sent bytes to all ips {contacted_ip: (mbs_sent, [uids])}"""
-            bytes_sent = {}
-            for uid, flow in all_flows.items():
-                daddr = flow['daddr']
-                sbytes: int = flow.get('sbytes', 0)
-
-                if self.is_ignored_ip_data_upload(daddr) or not sbytes:
-                    continue
-
-                if daddr in bytes_sent:
-                    mbs_sent, uids = bytes_sent[daddr]
-                    mbs_sent += sbytes
-                    uids.append(uid)
-                    bytes_sent[daddr] = (mbs_sent, uids)
-                else:
-                    bytes_sent[daddr] = (sbytes, [uid])
-
-            return bytes_sent
-
         all_flows: Dict[str, dict] = self.db.get_all_flows_in_profileid(
             profileid
         )
         if not all_flows:
             return
 
-        bytes_sent: dict = get_sent_bytes(all_flows)
+        bytes_sent: Dict[str, Tuple[int, List[str], str]]
+        bytes_sent = self.get_sent_bytes(all_flows)
 
         for ip, ip_info in bytes_sent.items():
-            ip_info: Tuple[int, List[str]]
-            uids = ip_info[1]
-            bytes_uploaded = ip_info[0]
+            ip_info: Tuple[int, List[str], str]
+            bytes_uploaded, uids, ts = ip_info
             
             mbs_uploaded = utils.convert_to_mb(bytes_uploaded)
             if mbs_uploaded < self.data_exfiltration_threshold:
                 continue
-            
+                
             self.set_evidence.data_exfiltration(
                 ip,
                 mbs_uploaded,
                 profileid,
                 twid,
                 uids,
+                ts
             )
 
 
@@ -863,7 +874,7 @@ class FlowAlerts(IModule):
             )
             daddr = ssh_flow_dict['daddr']
             saddr = ssh_flow_dict['saddr']
-            size = ssh_flow_dict['allbytes']
+            size = ssh_flow_dict['sbytes'] + ssh_flow_dict['dbytes']
             self.set_evidence.ssh_successful(
                 twid,
                 saddr,
@@ -2107,7 +2118,7 @@ class FlowAlerts(IModule):
 
         if msg := self.get_msg('tw_closed'):
             profileid_tw = msg['data'].split('_')
-            profileid = f'{profileid_tw[0]}_{profileid_tw[1]}',
+            profileid = f'{profileid_tw[0]}_{profileid_tw[1]}'
             twid = profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)
 
