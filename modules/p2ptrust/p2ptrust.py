@@ -310,7 +310,7 @@ class Trust(IModule):
             # we shouldn't re-share evidence reported by other peers
             return False
 
-        if evidence.attacker.attacker_type != IoCType.IP:
+        if evidence.attacker.attacker_type != IoCType.IP.name:
             # we only share ips with other peers.
             print(f"@@@@@@@@@@@@@@@@ won't share {evidence} ..{evidence.attacker.attacker_type} because we "
                   f"only share ips with other peers.")
