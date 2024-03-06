@@ -178,6 +178,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         cls.deletePrevdb: bool = conf.deletePrevdb()
         cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.width = conf.get_tw_width_as_float()
+        cls.client_ips: List[str] = conf.client_ips()
 
     @classmethod
     def set_slips_internal_time(cls, timestamp):
@@ -475,36 +476,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return int(hrs*3600/self.width)
     
-    def should_set_localnet(self, saddr) -> bool:
-        is_private_ip = validators.ipv4(saddr) and utils.is_private_ip(
-            ipaddress.ip_address(saddr))
-            
-        if (
-                self.is_localnet_set
-                or saddr in ('0.0.0.0', '255.255.255.255')
-                or not is_private_ip
-        ):
-            return False
-        return True
     
-    def set_local_network(self, saddr):
-        # set the local network used in the db
-        # For now the local network is only ipv4, but it
-        # could be ipv6 in the future. Todo.
+    
+    def set_local_network(self, cidr):
+        """
+        set the local network used in the db
+        """
+        self.r.set("local_network", cidr)
 
-       if not self.should_set_localnet(saddr):
-           return False
-        
-        # get the local network of this saddr
-        if network_range := utils.get_cidr_of_ip(saddr):
-            self.r.set("local_network", network_range)
-            self.is_localnet_set = True
+    def get_local_network(self):
+         return self.r.get("local_network")
 
     def get_used_port(self):
         return int(self.r.config_get('port')['port'])
 
-    def get_local_network(self):
-         return self.r.get("local_network")
 
     def get_label_count(self, label):
         """
