@@ -1419,7 +1419,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         self.rcache.hset('p2p-received-blame-reports', ip, network_evaluation)
 
     def store_zeek_path(self, path):
-        """used to store the path of zeek log files slips is currently using"""
+        """used to store the path of zeek log
+        files slips is currently using"""
         self.r.set('zeek_path', path)
 
     def get_zeek_path(self) -> str:

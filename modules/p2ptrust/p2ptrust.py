@@ -348,8 +348,6 @@ class Trust(IModule):
         if not self.should_share(evidence):
             return
 
-        # get the int representing this threat_level
-        score: float = utils.threat_levels[evidence.threat_level.lower()]
         # todo what we're currently sharing is the threat level(int)
         #  of the evidence caused by this ip
 
@@ -398,10 +396,10 @@ class Trust(IModule):
             return
 
         if not data_already_reported:
-            # send to the peer report to other peers
+            # send the peer report to other peers
             p2p_utils.send_evaluation_to_go(
                 evidence.attacker.value,
-                score,
+                evidence.threat_level.value,
                 evidence.confidence,
                 '*',
                 self.pygo_channel,
