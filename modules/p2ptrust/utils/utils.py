@@ -142,7 +142,8 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
 
 
 
-def save_ip_report_to_db(ip, score, confidence, network_trust, db, timestamp=None):
+def save_ip_report_to_db(ip, score, confidence, network_trust,
+    db, timestamp=None):
     if timestamp is None:
         timestamp = time.time()
 
@@ -154,7 +155,8 @@ def save_ip_report_to_db(ip, score, confidence, network_trust, db, timestamp=Non
     }
 
     # store it in p2p_reports key
-    # print(f"*** [debugging p2p] ***  stored a report about {ip} in p2p_Reports and IPsInfo keys")
+    # print(f"*** [debugging p2p] ***  stored a report about
+    # {ip} in p2p_Reports and IPsInfo keys")
     db.store_p2p_report(ip, report_data)
 
     # store it in IPsInfo key
