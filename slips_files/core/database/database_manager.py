@@ -537,23 +537,23 @@ class DBManager(IObservable):
     def get_domain_data(self, *args, **kwargs):
         return self.rdb.get_domain_data(*args, **kwargs)
 
-    def setNewDomain(self, *args, **kwargs):
-        return self.rdb.setNewDomain(*args, **kwargs)
+    def set_new_domain(self, *args, **kwargs):
+        return self.rdb.set_new_domain(*args, **kwargs)
 
     def set_info_for_domains(self, *args, **kwargs):
         return self.rdb.set_info_for_domains(*args, **kwargs)
 
-    def setInfoForURLs(self, *args, **kwargs):
-        return self.rdb.setInfoForURLs(*args, **kwargs)
+    def set_info_for_urls(self, *args, **kwargs):
+        return self.rdb.set_info_for_urls(*args, **kwargs)
 
     def get_data_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_data_from_profile_tw(*args, **kwargs)
 
-    def getOutTuplesfromProfileTW(self, *args, **kwargs):
-        return self.rdb.getOutTuplesfromProfileTW(*args, **kwargs)
+    def get_outtuples_from_profile_tw(self, *args, **kwargs):
+        return self.rdb.get_outtuples_from_profile_tw(*args, **kwargs)
 
-    def getInTuplesfromProfileTW(self, *args, **kwargs):
-        return self.rdb.getInTuplesfromProfileTW(*args, **kwargs)
+    def get_intuples_from_profile_tw(self, *args, **kwargs):
+        return self.rdb.get_intuples_from_profile_tw(*args, **kwargs)
 
     def get_dhcp_flows(self, *args, **kwargs):
         return self.rdb.get_dhcp_flows(*args, **kwargs)
@@ -573,8 +573,8 @@ class DBManager(IObservable):
     def add_port(self, *args, **kwargs):
         return self.rdb.add_port(*args, **kwargs)
 
-    def getFinalStateFromFlags(self, *args, **kwargs):
-        return self.rdb.getFinalStateFromFlags(*args, **kwargs)
+    def get_final_state_from_flags(self, *args, **kwargs):
+        return self.rdb.get_final_state_from_flags(*args, **kwargs)
 
     def add_ips(self, *args, **kwargs):
         return self.rdb.add_ips(*args, **kwargs)
@@ -642,14 +642,14 @@ class DBManager(IObservable):
     def get_number_of_tws_in_profile(self, *args, **kwargs):
         return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
 
-    def getSrcIPsfromProfileTW(self, *args, **kwargs):
-        return self.rdb.getSrcIPsfromProfileTW(*args, **kwargs)
+    def get_srcips_from_profile_tw(self, *args, **kwargs):
+        return self.rdb.get_srcips_from_profile_tw(*args, **kwargs)
 
-    def getDstIPsfromProfileTW(self, *args, **kwargs):
-        return self.rdb.getDstIPsfromProfileTW(*args, **kwargs)
+    def get_dstips_from_profile_tw(self, *args, **kwargs):
+        return self.rdb.get_dstips_from_profile_tw(*args, **kwargs)
 
-    def getT2ForProfileTW(self, *args, **kwargs):
-        return self.rdb.getT2ForProfileTW(*args, **kwargs)
+    def get_t2_for_profile_tw(self, *args, **kwargs):
+        return self.rdb.get_t2_for_profile_tw(*args, **kwargs)
 
     def has_profile(self, *args, **kwargs):
         return self.rdb.has_profile(*args, **kwargs)
@@ -675,14 +675,14 @@ class DBManager(IObservable):
     def get_tw_start_time(self, *args, **kwargs):
         return self.rdb.get_tw_start_time(*args, **kwargs)
 
-    def getAmountTW(self, *args, **kwargs):
-        return self.rdb.getAmountTW(*args, **kwargs)
+    def get_number_of_tws(self, *args, **kwargs):
+        return self.rdb.get_number_of_tws(*args, **kwargs)
 
-    def getModifiedTWSinceTime(self, *args, **kwargs):
-        return self.rdb.getModifiedTWSinceTime(*args, **kwargs)
+    def get_modified_tw_since_time(self, *args, **kwargs):
+        return self.rdb.get_modified_tw_since_time(*args, **kwargs)
 
-    def getModifiedProfilesSince(self, *args, **kwargs):
-        return self.rdb.getModifiedProfilesSince(*args, **kwargs)
+    def get_modified_profiles_since(self, *args, **kwargs):
+        return self.rdb.get_modified_profiles_since(*args, **kwargs)
 
     def add_mac_addr_to_profile(self, *args, **kwargs):
         return self.rdb.add_mac_addr_to_profile(*args, **kwargs)
@@ -714,17 +714,17 @@ class DBManager(IObservable):
     def set_profile_module_label(self, *args, **kwargs):
         return self.rdb.set_profile_module_label(*args, **kwargs)
 
-    def check_TW_to_close(self, *args, **kwargs):
-        return self.rdb.check_TW_to_close(*args, **kwargs)
+    def check_tw_to_close(self, *args, **kwargs):
+        return self.rdb.check_tw_to_close(*args, **kwargs)
 
     def check_health(self):
         self.rdb.pubsub.check_health()
 
-    def markProfileTWAsClosed(self, *args, **kwargs):
-        return self.rdb.markProfileTWAsClosed(*args, **kwargs)
+    def mark_profile_tw_as_closed(self, *args, **kwargs):
+        return self.rdb.mark_profile_tw_as_closed(*args, **kwargs)
 
-    def markProfileTWAsModified(self, *args, **kwargs):
-        return self.rdb.markProfileTWAsModified(*args, **kwargs)
+    def mark_profile_tw_as_modified(self, *args, **kwargs):
+        return self.rdb.mark_profile_tw_as_modified(*args, **kwargs)
 
     def add_tuple(self, *args, **kwargs):
         return self.rdb.add_tuple(*args, **kwargs)
@@ -857,9 +857,6 @@ class DBManager(IObservable):
 
     def select(self, *args, **kwargs):
         return self.sqlite.select(*args, **kwargs)
-
-    def execute_query(self, *args, **kwargs):
-        return self.sqlite.execute_query(*args, **kwargs)
 
     def get_pid_of(self, *args, **kwargs):
         return self.rdb.get_pid_of(*args, **kwargs)

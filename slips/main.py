@@ -722,7 +722,7 @@ class Main(IObservable):
                 self.update_stats()
 
                 # Check if we need to close any TWs
-                self.db.check_TW_to_close()
+                self.db.check_tw_to_close()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_running_stats()[1]

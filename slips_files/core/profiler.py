@@ -226,7 +226,7 @@ class Profiler(ICore):
 
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
-        self.db.markProfileTWAsModified(self.profileid, self.twid, '')
+        self.db.mark_profile_tw_as_modified(self.profileid, self.twid, '')
 
     def store_features_going_in(self, profileid: str, twid: str):
         """
@@ -271,7 +271,7 @@ class Profiler(ICore):
             twid=twid,
             label=self.label,
         )
-        self.db.markProfileTWAsModified(profileid, twid, '')
+        self.db.mark_profile_tw_as_modified(profileid, twid, '')
 
     def handle_in_flows(self):
         """

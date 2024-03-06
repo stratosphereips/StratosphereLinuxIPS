@@ -633,7 +633,7 @@ class ProcessManager:
             timeout_seconds: float = timeout * 60
 
             # close all tws
-            self.main.db.check_TW_to_close(close_all=True)
+            self.main.db.check_tw_to_close(close_all=True)
             analysis_time = self.get_analysis_time()
             self.main.print(
                 f"Analysis of {self.main.input_information} "
