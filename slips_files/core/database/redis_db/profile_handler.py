@@ -309,10 +309,6 @@ class ProfileHandler(IObservable):
         ip = str(flow.daddr)
         spkts = flow.spkts
         state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
-        # dpkts = columns['dpkts']
-        # daddr = columns['daddr']
-        # saddr = columns['saddr']
-        # sbytes = columns['sbytes']
 
         if "^" in state_hist:
             # The majority of the FP with horizontal port scan detection happen because a
@@ -737,7 +733,7 @@ class ProfileHandler(IObservable):
         """
         Get all the contacted IPs in a given profile and TW
         """
-        all_flows: dict = self.db.get_all_flows_in_profileid_twid(profileid, twid)
+        all_flows: dict = self.get_all_flows_in_profileid_twid(profileid, twid)
         if not all_flows:
             return {}
         contacted_ips = {}
@@ -834,7 +830,7 @@ class ProfileHandler(IObservable):
             self.set_input_metadata({"file_start": flow.starttime})
             self.first_flow = False
 
-        self.db.set_local_network(flow.saddr)
+        self.set_local_network(flow.saddr)
 
         # dont send arp flows in this channel, they have their own new_arp channel
         if flow.type_ != "arp":
