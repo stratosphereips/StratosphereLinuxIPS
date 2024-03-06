@@ -1,6 +1,4 @@
 import contextlib
-from typing import List
-
 from slips_files.common.imports import *
 
 import json
@@ -749,7 +747,6 @@ class FlowAlerts(IModule):
     ):
         """
         Makes sure all cached DNS answers are used in contacted_ips
-        :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
         ## - All reverse dns resolutions
         ## - All .local domains
@@ -987,6 +984,7 @@ class FlowAlerts(IModule):
         """
         if not issuer:
             return False
+        
         found_org_in_cn = ''
         for org in utils.supported_orgs:
             if org not in issuer.lower():
@@ -1126,7 +1124,7 @@ class FlowAlerts(IModule):
             if answer in invalid_answers and domain != "localhost":
                 # blocked answer found
                 self.set_evidence.invalid_dns_answer(
-                    domain, answer, daddr, profileid, twid, stime, uid
+                    domain, answer, profileid, twid, stime, uid
                 )
                 # delete answer from redis cache to prevent
                 # associating this dns answer with this domain/query and
@@ -1674,8 +1672,8 @@ class FlowAlerts(IModule):
     def check_GRE_tunnel(self, tunnel_info: dict):
         """
         Detects GRE tunnels
-        @param tunnel_flow: dict containing tunnel zeek flow
-        @return: None
+        :param tunnel_info: dict containing tunnel zeek flow
+        :return: None
         """
         tunnel_flow = tunnel_info['flow']
         tunnel_type = tunnel_flow['tunnel_type']

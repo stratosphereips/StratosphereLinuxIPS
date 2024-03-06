@@ -697,7 +697,7 @@ class SetEvidnceHelper:
             self,
             proto: str,
             daddr: str,
-            dport: str,
+            dport: int,
             saddr: str,
             twid: str,
             uid: str,
@@ -838,7 +838,7 @@ class SetEvidnceHelper:
             twid: str,
             saddr: str,
             daddr: str,
-            size,
+            size: int,
             uid: str,
             timestamp: str,
             by='',
@@ -848,6 +848,7 @@ class SetEvidnceHelper:
         This is not strictly a detection, but we don't have
         a better way to show it.
         The threat_level is 0.01 to show that this is not a detection
+        :param size: src and dst bytes sent and recieved
         """
 
         confidence: float = 0.8
@@ -857,7 +858,7 @@ class SetEvidnceHelper:
         ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = (
             f'SSH successful to IP {daddr}. {ip_identification}. '
-            f'From IP {saddr}. Size: {str(size)}. Detection model {by}.'
+            f'From IP {saddr}. Sent bytes: {str(size)}. Detection model {by}.'
             f' Confidence {confidence}'
         )
 
