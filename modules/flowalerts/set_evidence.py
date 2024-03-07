@@ -138,7 +138,8 @@ class SetEvidnceHelper:
         'srcip' outside the localnet or the 'dstip'?
         """
         srcip = profileid.split('_')[-1]
-        # the attacker here is the IP found to be private and outside the localnet
+        # the attacker here is the IP found to be
+        # private and outside the localnet
         if ip_outside_localnet == 'srcip':
             attacker = Attacker(
                 direction=Direction.SRC,
@@ -150,6 +151,7 @@ class SetEvidnceHelper:
                 victim_type=IoCType.IP,
                 value=daddr
             )
+            threat_level = ThreatLevel.LOW
             description = f'A connection from a private IP ({srcip}) ' \
                           f'outside of the used local network ' \
                           f'{self.db.get_local_network()}. To IP: {daddr} '
@@ -164,6 +166,7 @@ class SetEvidnceHelper:
                 victim_type=IoCType.IP,
                 value=srcip
             )
+            threat_level = ThreatLevel.HIGH
             description = f'A connection to a private IP ({daddr}) ' \
                           f'outside of the used local network ' \
                           f'{self.db.get_local_network()}. ' \
@@ -173,8 +176,8 @@ class SetEvidnceHelper:
 
 
         confidence = 1.0
-        threat_level = ThreatLevel.HIGH
-
+        
+        twid_number = int(twid.replace("timewindow", ""))
         evidence = Evidence(
             evidence_type=EvidenceType.DIFFERENT_LOCALNET,
             attacker=attacker,
@@ -183,7 +186,7 @@ class SetEvidnceHelper:
             description=description,
             victim=victim,
             profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
             conn_count=1,
