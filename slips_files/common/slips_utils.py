@@ -69,7 +69,7 @@ class Utils(object):
     def get_cidr_of_private_ip(self, ip):
         """
         returns the cidr/range of the given private ip
-        :param ip: should be a private ip
+        :param ip: should be a private ipv4
         """
         if validators.ipv4(ip):
             first_octet = ip.split('.')[0]

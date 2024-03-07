@@ -1,7 +1,5 @@
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
-import multiprocessing
-
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -294,16 +292,22 @@ class Profiler(ICore):
         returns true only if the saddr of the current flow is ipv4, private
         and we don't have the local_net set already
         """
-        is_ipv4 = validators.ipv4(self.flow.saddr)
+        if self.is_localnet_set:
+            return False
+        
+        if self.get_private_client_ips():
+            # if we have private client ips, we're ready to set the
+            # localnetwork
+            return True
+        
+        if not validators.ipv4(self.flow.saddr):
+            return False
+        
         saddr_obj: ipaddress = ipaddress.ip_address(self.flow.saddr)
         is_private_ip = utils.is_private_ip(saddr_obj)
-
-        if (
-                self.is_localnet_set
-                or not is_ipv4
-                or not is_private_ip
-        ):
+        if not is_private_ip:
             return False
+        
         return True
     
 
@@ -444,7 +448,7 @@ class Profiler(ICore):
             try:
                 # this msg can be a str only when it's a 'stop' msg indicating
                 # that this module should stop
-                msg: dict = self.profiler_queue.get(timeout=1, block=False)
+                msg = self.profiler_queue.get(timeout=1, block=False)
                 # ALYA, DO NOT REMOVE THIS CHECK
                 # without it, there's no way thi module will know it's time to
                 # stop and no new fows are coming

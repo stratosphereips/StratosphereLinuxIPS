@@ -830,8 +830,6 @@ class ProfileHandler(IObservable):
             self.set_input_metadata({"file_start": flow.starttime})
             self.first_flow = False
 
-        self.set_local_network(flow.saddr)
-
         # dont send arp flows in this channel, they have their own new_arp channel
         if flow.type_ != "arp":
             self.publish("new_flow", to_send)
