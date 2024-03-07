@@ -95,7 +95,7 @@ class SymbolHandler(IObservable):
 
             # Get the time of the last flow in this tuple, and the last last
             # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
-            (last_last_ts, last_ts) = self.db.getT2ForProfileTW(
+            (last_last_ts, last_ts) = self.db.get_t2_for_profile_tw(
                 profileid, twid, tupleid, tuple_key
             )
             # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)

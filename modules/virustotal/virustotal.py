@@ -165,7 +165,7 @@ class VT(IModule):
         # Score of this url didn't change
         vtdata = {'URL': score, 'timestamp': time.time()}
         data = {'VirusTotal': vtdata}
-        self.db.setInfoForURLs(url, data)
+        self.db.set_info_for_urls(url, data)
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
         """

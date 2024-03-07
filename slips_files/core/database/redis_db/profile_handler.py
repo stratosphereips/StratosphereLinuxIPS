@@ -54,11 +54,11 @@ class ProfileHandler(IObservable):
             {"from": self.name, "txt": text, "verbose": verbose, "debug": debug}
         )
 
-    def getOutTuplesfromProfileTW(self, profileid, twid):
+    def get_outtuples_from_profile_tw(self, profileid, twid):
         """Get the out tuples"""
         return self.r.hget(profileid + self.separator + twid, "OutTuples")
 
-    def getInTuplesfromProfileTW(self, profileid, twid):
+    def get_intuples_from_profile_tw(self, profileid, twid):
         """Get the in tuples"""
         return self.r.hget(profileid + self.separator + twid, "InTuples")
 
@@ -329,7 +329,7 @@ class ProfileHandler(IObservable):
         ip_key = "srcips" if role == "Server" else "dstips"
 
         # Get the state. Established, NotEstablished
-        summaryState = self.getFinalStateFromFlags(state, pkts)
+        summaryState = self.get_final_state_from_flags(state, pkts)
 
         old_profileid_twid_data = self.get_data_from_profile_tw(
             profileid, twid, port_type, summaryState, proto, role, "Ports"
@@ -370,9 +370,9 @@ class ProfileHandler(IObservable):
         hash_key = f"{profileid}{self.separator}{twid}"
         key_name = f"{port_type}Ports{role}{proto}{summaryState}"
         self.r.hset(hash_key, key_name, str(data))
-        self.markProfileTWAsModified(profileid, twid, starttime)
+        self.mark_profile_tw_as_modified(profileid, twid, starttime)
 
-    def getFinalStateFromFlags(self, state, pkts):
+    def get_final_state_from_flags(self, state, pkts):
         """
         Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
         We receive the pakets to distinguish some Reset connections
@@ -698,7 +698,7 @@ class ProfileHandler(IObservable):
         self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
-        summaryState = self.getFinalStateFromFlags(flow.state, flow.pkts)
+        summaryState = self.get_final_state_from_flags(flow.state, flow.pkts)
         key_name = f"{direction}IPs{role}{flow.proto.upper()}{summaryState}"
         # Get the previous data about this key
         old_profileid_twid_data = self.get_data_from_profile_tw(
@@ -733,7 +733,7 @@ class ProfileHandler(IObservable):
         """
         Get all the contacted IPs in a given profile and TW
         """
-        all_flows: dict = self.db.get_all_flows_in_profileid_twid(profileid, twid)
+        all_flows: dict = self.get_all_flows_in_profileid_twid(profileid, twid)
         if not all_flows:
             return {}
         contacted_ips = {}
@@ -782,7 +782,7 @@ class ProfileHandler(IObservable):
         The profileid is the main profile that this flow is related too.
         : param new_profile_added : is set to True for everytime we see a new srcaddr
         """
-        summaryState = self.getFinalStateFromFlags(flow.state, flow.pkts)
+        summary_state = self.get_final_state_from_flags(flow.state, flow.pkts)
         flow_dict = {
             "ts": flow.starttime,
             "dur": flow.dur,
@@ -792,7 +792,7 @@ class ProfileHandler(IObservable):
             "dport": flow.dport,
             "proto": flow.proto,
             "origstate": flow.state,
-            "state": summaryState,
+            "state": summary_state,
             "pkts": flow.pkts,
             "allbytes": flow.bytes,
             "spkts": flow.spkts,
@@ -829,8 +829,6 @@ class ProfileHandler(IObservable):
         if self.first_flow:
             self.set_input_metadata({"file_start": flow.starttime})
             self.first_flow = False
-
-        self.set_local_network(flow.saddr)
 
         # dont send arp flows in this channel, they have their own new_arp channel
         if flow.type_ != "arp":
@@ -1085,19 +1083,19 @@ class ProfileHandler(IObservable):
         """
         return len(self.getTWsfromProfile(profileid)) if profileid else 0
 
-    def getSrcIPsfromProfileTW(self, profileid, twid):
+    def get_srcips_from_profile_tw(self, profileid, twid):
         """
         Get the src ip for a specific TW for a specific profileid
         """
         return self.r.hget(profileid + self.separator + twid, "SrcIPs")
 
-    def getDstIPsfromProfileTW(self, profileid, twid):
+    def get_dstips_from_profile_tw(self, profileid, twid):
         """
         Get the dst ip for a specific TW for a specific profileid
         """
         return self.r.hget(profileid + self.separator + twid, "DstIPs")
 
-    def getT2ForProfileTW(self, profileid, twid, tupleid, tuple_key: str):
+    def get_t2_for_profile_tw(self, profileid, twid, tupleid, tuple_key: str):
         """
         Get T1 and the previous_time for this previous_time, twid and tupleid
         """
@@ -1250,11 +1248,11 @@ class ProfileHandler(IObservable):
         # sorted set is encoded
         return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
 
-    def getAmountTW(self, profileid):
+    def get_number_of_tws(self, profileid):
         """Return the number of tws for this profile id"""
         return self.r.zcard(f"tws{profileid}") if profileid else False
 
-    def getModifiedTWSinceTime(self, time: float) -> List[Tuple[str, float]]:
+    def get_modified_tw_since_time(self, time: float) -> List[Tuple[str, float]]:
         """
         Return the list of modified timewindows since a certain time
         """
@@ -1264,10 +1262,10 @@ class ProfileHandler(IObservable):
         data = self.r.zrangebyscore("ModifiedTW", time, float("+inf"), withscores=True)
         return data or []
 
-    def getModifiedProfilesSince(self, time: float) -> Tuple[Set[str], float]:
+    def get_modified_profiles_since(self, time: float) -> Tuple[Set[str], float]:
         """Returns a set of modified profiles since a certain time and
         the time of the last modified profile"""
-        modified_tws: List[Tuple[str, float]] = self.getModifiedTWSinceTime(time)
+        modified_tws: List[Tuple[str, float]] = self.get_modified_tw_since_time(time)
         if not modified_tws:
             # no modified tws, and no time_of_last_modified_tw
             return [], 0
@@ -1569,7 +1567,7 @@ class ProfileHandler(IObservable):
         data = json.dumps(data)
         self.r.hset(profileid, "modules_labels", data)
 
-    def check_TW_to_close(self, close_all=False):
+    def check_tw_to_close(self, close_all=False):
         """
         Check if we should close some TW
         Search in the modifed tw list and compare when they
@@ -1601,9 +1599,9 @@ class ProfileHandler(IObservable):
                 3,
                 0,
             )
-            self.markProfileTWAsClosed(profile_tw_to_close_id)
+            self.mark_profile_tw_as_closed(profile_tw_to_close_id)
 
-    def markProfileTWAsClosed(self, profileid_tw):
+    def mark_profile_tw_as_closed(self, profileid_tw):
         """
         Mark the TW as closed so tools can work on its data
         """
@@ -1611,7 +1609,7 @@ class ProfileHandler(IObservable):
         self.r.zrem("ModifiedTW", profileid_tw)
         self.publish("tw_closed", profileid_tw)
 
-    def markProfileTWAsModified(self, profileid, twid, timestamp):
+    def mark_profile_tw_as_modified(self, profileid, twid, timestamp):
         """
         Mark a TW in a profile as modified
         This means:
@@ -1626,7 +1624,7 @@ class ProfileHandler(IObservable):
         self.r.zadd("ModifiedTW", data)
         self.publish("tw_modified", f"{profileid}:{twid}")
         # Check if we should close some TW
-        self.check_TW_to_close()
+        self.check_tw_to_close()
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow
@@ -1737,7 +1735,7 @@ class ProfileHandler(IObservable):
 
             prev_symbols = json.dumps(prev_symbols)
             self.r.hset(profileid_twid, direction, prev_symbols)
-            self.markProfileTWAsModified(profileid, twid, flow.starttime)
+            self.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -1768,7 +1766,7 @@ class ProfileHandler(IObservable):
         mapping = {data: timestamp}
         self.r.zadd(key, mapping)
         # Mark the tw as modified since the timeline line is new data in the TW
-        self.markProfileTWAsModified(profileid, twid, timestamp="")
+        self.mark_profile_tw_as_modified(profileid, twid, timestamp="")
 
     def get_timeline_last_lines(
         self, profileid, twid, first_index: int

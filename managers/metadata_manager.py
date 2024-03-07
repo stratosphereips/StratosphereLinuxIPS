@@ -159,7 +159,7 @@ class MetadataManager:
         # this is the modification time of the last timewindow
         last_modified_tw_time: float
         modified_profiles, last_modified_tw_time = (
-            self.main.db.getModifiedProfilesSince(slips_internal_time)
+            self.main.db.get_modified_profiles_since(slips_internal_time)
         )
         modified_ips_in_the_last_tw = len(modified_profiles)
         self.main.db.set_input_metadata(

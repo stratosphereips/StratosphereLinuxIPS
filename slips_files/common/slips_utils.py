@@ -66,10 +66,10 @@ class Utils(object):
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
 
-    def get_cidr_of_ip(self, ip):
+    def get_cidr_of_private_ip(self, ip):
         """
         returns the cidr/range of the given private ip
-        :param ip: should be  a private ips
+        :param ip: should be a private ipv4
         """
         if validators.ipv4(ip):
             first_octet = ip.split('.')[0]
@@ -322,7 +322,7 @@ class Utils(object):
     def convert_to_mb(self, bytes):
         return int(bytes)/(10**6)
 
-    def is_private_ip(self, ip_obj:ipaddress) -> bool:
+    def is_private_ip(self, ip_obj: ipaddress) -> bool:
         """
         This function replaces the ipaddress library 'is_private'
         because it does not work correctly and it does not ignore
@@ -331,7 +331,8 @@ class Utils(object):
         # Is it a well-formed ipv4 or ipv6?
         r_value = False
         if ip_obj and ip_obj.is_private:
-            if ip_obj != ipaddress.ip_address('0.0.0.0') and ip_obj != ipaddress.ip_address('255.255.255.255'):
+            if (ip_obj != ipaddress.ip_address('0.0.0.0')
+                    and ip_obj != ipaddress.ip_address('255.255.255.255')):
                 r_value = True
         return r_value
 

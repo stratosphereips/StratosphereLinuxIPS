@@ -361,7 +361,7 @@ class IoCHandler():
         data = json.loads(data) if data or data == {} else False
         return data
 
-    def setNewDomain(self, domain: str):
+    def set_new_domain(self, domain: str):
         """
         1- Stores this new domain in the Domains hash
         2- Publishes in the channels that there is a new domain, and that we want
@@ -391,7 +391,7 @@ class IoCHandler():
         domain_data = self.get_domain_data(domain)
         if not domain_data:
             # This domain is not in the dictionary, add it first:
-            self.setNewDomain(domain)
+            self.set_new_domain(domain)
             # Now get the data, which should be empty, but just in case
             domain_data = self.get_domain_data(domain)
 
@@ -451,7 +451,7 @@ class IoCHandler():
             # Publish the changes
             self.r.publish('dns_info_change', domain)
 
-    def setInfoForURLs(self, url: str, urldata: dict):
+    def set_info_for_urls(self, url: str, urldata: dict):
         """
         Store information for this URL
         We receive a dictionary, such as {'VirusTotal': {'URL':score}} that we are
