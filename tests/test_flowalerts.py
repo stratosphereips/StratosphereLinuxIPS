@@ -2,6 +2,7 @@
 from tests.module_factory import ModuleFactory
 import json
 from numpy import arange
+import pytest
 
 # dummy params used for testing
 profileid = 'profile_192.168.1.1'
@@ -155,9 +156,7 @@ def test_detect_DGA(
     assert dga_detected is True
 
 
-def test_detect_young_domains(
-        mock_db
-        ):
+def test_detect_young_domains(mock_db):
     flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
     domain = 'example.com'
     answers = ['192.168.1.1', '192.168.1.2', '192.168.1.3', 'CNAME_HERE.com']
@@ -187,3 +186,20 @@ def test_detect_young_domains(
             uid
         ) is False
     )
+
+
+@pytest.mark.parametrize(
+    'sbytes, daddr, expected_return',
+    [
+        (50, '239.255.255.255', False),
+        (50, '1.1.1.1', False),
+        (100, '169.254.0.1',  False),
+        (100*(10**6), '1.1.1.1', True),
+        (2000, 'foo', False),
+     ]
+)
+def test_check_data_upload(mock_db, sbytes, daddr, expected_return):
+    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+    assert flowalerts.check_data_upload(
+        sbytes, daddr, '1234', profileid, twid, timestamp
+        ) == expected_return
