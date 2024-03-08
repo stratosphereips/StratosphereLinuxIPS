@@ -124,16 +124,16 @@ class Trust(IModule):
         self.storage_name = 'IPsInfo'
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
-        self.c1 = self.db.subscribe('report_to_peers')
+        c1 = self.db.subscribe('report_to_peers')
         # channel to send msgs to whenever slips needs
         # info from other peers about an ip
-        self.c2 = self.db.subscribe(self.p2p_data_request_channel)
+        c2 = self.db.subscribe(self.p2p_data_request_channel)
         # this channel receives peers requests/updates
-        self.c3 = self.db.subscribe(self.gopy_channel)
+        c3 = self.db.subscribe(self.gopy_channel)
         self.channels = {
-            'report_to_peers': self.c1,
-            self.p2p_data_request_channel: self.c2,
-            self.gopy_channel: self.c3,
+            'report_to_peers': c1,
+            self.p2p_data_request_channel: c2,
+            self.gopy_channel: c3,
         }
 
         # they have to be defined here because the variable name utils is already taken

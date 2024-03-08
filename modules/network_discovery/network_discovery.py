@@ -33,13 +33,13 @@ class NetworkDiscovery(IModule):
     def init(self):
         self.horizontal_ps = HorizontalPortscan(self.db)
         self.vertical_ps = VerticalPortscan(self.db)
-        self.c1 = self.db.subscribe('tw_modified')
-        self.c2 = self.db.subscribe('new_notice')
-        self.c3 = self.db.subscribe('new_dhcp')
+        c1 = self.db.subscribe('tw_modified')
+        c2 = self.db.subscribe('new_notice')
+        c3 = self.db.subscribe('new_dhcp')
         self.channels = {
-            'tw_modified': self.c1,
-            'new_notice': self.c2,
-            'new_dhcp': self.c3,
+            'tw_modified': c1,
+            'new_notice': c2,
+            'new_dhcp': c3,
         }
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not

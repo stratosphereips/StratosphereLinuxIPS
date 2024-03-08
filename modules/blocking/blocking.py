@@ -17,9 +17,9 @@ class Blocking(IModule):
     description = 'Block malicious IPs connecting to this device'
     authors = ['Sebastian Garcia, Alya Gomaa']
     def init(self):
-        self.c1 = self.db.subscribe('new_blocking')
+        c1 = self.db.subscribe('new_blocking')
         self.channels = {
-            'new_blocking': self.c1,
+            'new_blocking': c1,
         }
         self.os = platform.system()
         if self.os == 'Darwin':

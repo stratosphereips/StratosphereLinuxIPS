@@ -82,9 +82,9 @@ class Profiler(ICore):
         # there has to be a timeout or it will wait forever and never
         # receive a new line
         self.timeout = 0.0000001
-        self.c1 = self.db.subscribe('reload_whitelist')
+        c1 = self.db.subscribe('reload_whitelist')
         self.channels = {
-            'reload_whitelist': self.c1,
+            'reload_whitelist': c1,
         }
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue

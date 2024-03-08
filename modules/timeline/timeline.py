@@ -17,9 +17,9 @@ class Timeline(IModule):
     def init(self):
         self.separator = self.db.get_field_separator()
         # Subscribe to 'new_flow' channel
-        self.c1 = self.db.subscribe('new_flow')
+        c1 = self.db.subscribe('new_flow')
         self.channels = {
-            'new_flow': self.c1,
+            'new_flow': c1,
         }
         # Read information how we should print timestamp.
         conf = ConfigParser()

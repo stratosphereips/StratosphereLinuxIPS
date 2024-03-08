@@ -47,15 +47,15 @@ class IPInfo(IModule):
         self.JARM = JARM()
         # Set the output queue of our database instance
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        self.c1 = self.db.subscribe('new_ip')
-        self.c2 = self.db.subscribe('new_MAC')
-        self.c3 = self.db.subscribe('new_dns')
-        self.c4 = self.db.subscribe('check_jarm_hash')
+        c1 = self.db.subscribe('new_ip')
+        c2 = self.db.subscribe('new_MAC')
+        c3 = self.db.subscribe('new_dns')
+        c4 = self.db.subscribe('check_jarm_hash')
         self.channels = {
-            'new_ip': self.c1,
-            'new_MAC': self.c2,
-            'new_dns': self.c3,
-            'check_jarm_hash': self.c4,
+            'new_ip': c1,
+            'new_MAC': c2,
+            'new_dns': c3,
+            'check_jarm_hash': c4,
         }
         # update asn every 1 month
         self.update_period = 2592000

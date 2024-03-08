@@ -74,11 +74,11 @@ class EvidenceHandler(ICore):
             else:
                 self.popup_alerts = False
 
-        self.c1 = self.db.subscribe('evidence_added')
-        self.c2 = self.db.subscribe('new_blame')
+        c1 = self.db.subscribe('evidence_added')
+        c2 = self.db.subscribe('new_blame')
         self.channels = {
-            'evidence_added': self.c1,
-            'new_blame': self.c2,
+            'evidence_added': c1,
+            'new_blame': c2,
         }
 
         # clear output/alerts.log

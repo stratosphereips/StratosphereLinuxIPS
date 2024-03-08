@@ -18,9 +18,9 @@ class CESNET(IModule):
 
     def init(self):
         self.read_configuration()
-        self.c1 = self.db.subscribe('export_evidence')
+        c1 = self.db.subscribe('export_evidence')
         self.channels = {
-            'export_evidence' : self.c1,
+            'export_evidence' : c1,
         }
         self.stop_module = False
 

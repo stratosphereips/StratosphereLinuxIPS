@@ -29,9 +29,9 @@ class Template(IModule):
         # - tw_modified
         # - evidence_added
         # Remember to subscribe to this channel in database.py
-        self.c1 = self.db.subscribe('new_ip')
+        c1 = self.db.subscribe('new_ip')
         self.channels = {
-            'new_ip': self.c1,
+            'new_ip': c1,
         }
 
     def pre_main(self):

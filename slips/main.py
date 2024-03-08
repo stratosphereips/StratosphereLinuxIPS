@@ -439,7 +439,8 @@ class Main(IObservable):
                     # is it zeek log file or binetflow file?
 
                     # zeek tab files are separated by several spaces or tabs
-                    sequential_spaces_found = re.search("\s{1,}-\s{1,}", first_line)
+                    sequential_spaces_found = re.search(
+                        "\s{1,}-\s{1,}", first_line)
                     tabs_found = re.search("\t{1,}", first_line)
 
                     if "->" in first_line or "StartTime" in first_line:
@@ -498,11 +499,11 @@ class Main(IObservable):
         self.last_updated_stats_time = now
         now = utils.convert_format(now, "%Y/%m/%d %H:%M:%S")
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
-        profilesLen = self.db.get_profiles_len()
+        profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         msg = (
             f"Total analyzed IPs so far: "
-            f"{green(profilesLen)}. "
+            f"{green(profiles_len)}. "
             f"Evidence Added: {green(evidence_number)}. "
             f"IPs sending traffic in the last "
             f"{self.twid_width}: {green(modified_ips_in_the_last_tw)}. "
@@ -510,16 +511,16 @@ class Main(IObservable):
         )
         self.print(msg)
 
-    def update_host_ip(self, hostIP: str, modified_profiles: Set[str]) -> str:
+    def update_host_ip(self, host_ip: str, modified_profiles: Set[str]) -> str:
         """
         when running on an interface we keep track of the host IP.
         If there was no  modified TWs in the host IP, we check if the
         network was changed.
         """
-        if self.is_interface and hostIP not in modified_profiles:
-            if hostIP := self.metadata_man.get_host_ip():
-                self.db.set_host_ip(hostIP)
-        return hostIP
+        if self.is_interface and host_ip not in modified_profiles:
+            if host_ip := self.metadata_man.get_host_ip():
+                self.db.set_host_ip(host_ip)
+        return host_ip
 
     def is_total_flows_unknown(self) -> bool:
         """
@@ -696,7 +697,7 @@ class Main(IObservable):
                 "of traffic by querying TI sites."
             )
 
-            hostIP = self.metadata_man.store_host_ip()
+            host_ip = self.metadata_man.store_host_ip()
 
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
@@ -727,7 +728,7 @@ class Main(IObservable):
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_running_stats()[1]
                 )
-                hostIP: str = self.update_host_ip(hostIP, modified_profiles)
+                host_ip: str = self.update_host_ip(host_ip, modified_profiles)
 
                 # don't move this line up because we still need to print the
                 # stats and check tws anyway
