@@ -8,7 +8,7 @@ import os
 import shutil
 import json
 from datetime import datetime
-from typing import Tuple, List, Set
+from typing import Tuple, Set
 
 class MetadataManager:
     def __init__(self, main):
@@ -87,6 +87,7 @@ class MetadataManager:
         self.info_path = os.path.join(metadata_dir, 'info.txt')
         with open(self.info_path, 'w') as f:
             f.write(f'Slips version: {self.main.version}\n'
+                    f'Command: {" ".join(sys.argv)}\n'
                     f'File: {self.main.input_information}\n'
                     f'Branch: {self.main.db.get_branch()}\n'
                     f'Commit: {self.main.db.get_commit()}\n'
