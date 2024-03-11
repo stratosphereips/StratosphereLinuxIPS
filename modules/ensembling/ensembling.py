@@ -11,9 +11,9 @@ class Ensembling(IModule):
         # Retrieve the labels
         self.normal_label = self.db.get_normal_label()
         self.malicious_label = self.db.get_malicious_label()
-        self.c1 = self.db.subscribe('tw_closed')
+        c1 = self.db.subscribe('tw_closed')
         self.channels = {
-            'tw_closed': self.c1
+            'tw_closed': c1
         }
         self.separator = self.db.get_separator()
 

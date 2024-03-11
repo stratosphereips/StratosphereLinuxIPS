@@ -1,5 +1,4 @@
 import contextlib
-import json
 import multiprocessing
 import os
 import re
@@ -372,83 +371,101 @@ class Main(IObservable):
         input_type = "stdin"
         return input_type, line_type.lower()
 
+
     def get_input_file_type(self, given_path):
         """
         given_path: given file
         returns binetflow, pcap, nfdump, zeek_folder, suricata, etc.
         """
-        # default value
-        input_type = "file"
-        # Get the type of file
-        cmd_result = subprocess.run(["file", given_path], stdout=subprocess.PIPE)
-        # Get command output
-        cmd_result = cmd_result.stdout.decode("utf-8")
-        if (
-            "pcap capture file" in cmd_result or "pcapng capture file" in cmd_result
-        ) and os.path.isfile(given_path):
-            input_type = "pcap"
-        elif (
-            "dBase" in cmd_result or "nfcap" in given_path or "nfdump" in given_path
-        ) and os.path.isfile(given_path):
-            input_type = "nfdump"
-            if shutil.which("nfdump") is None:
-                # If we do not have nfdump, terminate Slips.
-                print("nfdump is not installed. terminating slips.")
-                self.terminate_slips()
-        elif "CSV" in cmd_result and os.path.isfile(given_path):
-            input_type = "binetflow"
-        elif "directory" in cmd_result and os.path.isdir(given_path):
-            from slips_files.core.input import SUPPORTED_LOGFILES
+        input_type = "file"  # Default value
 
-            for log_file in os.listdir(given_path):
-                # if there is at least 1 supported log file inside the
-                # given directory, start slips normally
-                # otherwise, stop slips
-                if log_file.replace(".log", "") in SUPPORTED_LOGFILES:
-                    input_type = "zeek_folder"
+        file_checks = {
+            "pcap": {
+                "keywords": ["pcap capture file", "pcapng capture file"],
+                "validator_func": self.is_file,
+            },
+            "nfdump": {
+                "keywords": ["dBase", "nfcap", "nfdump"],
+                "validator_func": self.is_file,
+            },
+            "binetflow": {
+                "keywords": ["CSV"],
+                "validator_func": self.is_file,
+            },
+            "zeek_folder": {
+                "keywords": ["directory"],
+                "validator_func": os.path.isdir,
+            },
+            "suricata": {
+                "keywords": ["flow_id"],
+                "validator_func": self.check_suricata,
+            },
+            "zeek_log_file": {
+                "keywords": [],
+                "validator_func": self.check_zeek_log,
+            },
+            "binetflow-tabs": {
+                "keywords": [],
+                "validator_func": self.check_binetflow_tabs,
+            }
+        }
+
+        for file_type, info in file_checks.items():
+            info: dict
+            file_cmd_output: str = self.run_file_cmd(given_path)
+            if any(cond in file_cmd_output for cond in info["keywords"]):
+                if info["validator_func"](given_path):
+                    input_type = file_type
                     break
-            else:
-                # zeek dir filled with unsupported logs
-                # or .labeled logs that slips can't read.
+                    
+        # make sure we have supported log files in the given zeek dir
+        if input_type == "zeek_folder":
+            from slips_files.core.input import SUPPORTED_LOGFILES
+            if not any(log_file.replace(".log", "")
+                       in SUPPORTED_LOGFILES
+                       for log_file in os.listdir(given_path)):
                 print(
                     f"Log files in {given_path} are not supported \n"
                     f"Make sure all log files inside the given "
                     f"directory end with .log .. Stopping."
                 )
                 sys.exit(-1)
-        else:
-            # is it a zeek log file or suricata, binetflow tabs,
-            # or binetflow comma separated file?
-            # use first line to determine
-            with open(given_path, "r") as f:
-                while True:
-                    # get the first line that isn't a comment
-                    first_line = f.readline().replace("\n", "")
-                    if not first_line.startswith("#"):
-                        break
-            if "flow_id" in first_line and os.path.isfile(given_path):
-                input_type = "suricata"
-            elif os.path.isfile(given_path):
-                # this is a text file, it can be binetflow or zeek_log_file
-                try:
-                    # is it a json log file
-                    json.loads(first_line)
-                    input_type = "zeek_log_file"
-                except json.decoder.JSONDecodeError:
-                    # this is a tab separated file
-                    # is it zeek log file or binetflow file?
-
-                    # zeek tab files are separated by several spaces or tabs
-                    sequential_spaces_found = re.search("\s{1,}-\s{1,}", first_line)
-                    tabs_found = re.search("\t{1,}", first_line)
-
-                    if "->" in first_line or "StartTime" in first_line:
-                        # tab separated files are usually binetflow tab files
-                        input_type = "binetflow-tabs"
-                    elif sequential_spaces_found or tabs_found:
-                        input_type = "zeek_log_file"
 
         return input_type
+
+    def run_file_cmd(self, path):
+        cmd_result = subprocess.run(["file", path],
+                                    stdout=subprocess.PIPE)
+        return cmd_result.stdout.decode("utf-8")
+
+    def is_file(self, path: str) -> bool:
+        return "file" in self.run_file_cmd(path)
+
+    def check_suricata(self, path):
+        if not os.path.isfile(path):
+            return
+        with open(path) as f:
+            first_line = f.readline()
+            
+        return "flow_id" in first_line
+
+    def check_zeek_log(self, path):
+        if not os.path.isfile(path):
+            return
+        with open(path) as f:
+            first_line = f.readline()
+        return any(
+            re.match(pattern, first_line) for pattern in ["->", "StartTime"]
+            )
+
+    def check_binetflow_tabs(self, path):
+        if not os.path.isfile(path):
+            return
+        with open(path) as f:
+            first_line = f.readline()
+
+        return "->" in first_line
+        
 
     def setup_print_levels(self):
         """
@@ -498,11 +515,11 @@ class Main(IObservable):
         self.last_updated_stats_time = now
         now = utils.convert_format(now, "%Y/%m/%d %H:%M:%S")
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
-        profilesLen = self.db.get_profiles_len()
+        profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         msg = (
             f"Total analyzed IPs so far: "
-            f"{green(profilesLen)}. "
+            f"{green(profiles_len)}. "
             f"Evidence Added: {green(evidence_number)}. "
             f"IPs sending traffic in the last "
             f"{self.twid_width}: {green(modified_ips_in_the_last_tw)}. "
@@ -510,16 +527,16 @@ class Main(IObservable):
         )
         self.print(msg)
 
-    def update_host_ip(self, hostIP: str, modified_profiles: Set[str]) -> str:
+    def update_host_ip(self, host_ip: str, modified_profiles: Set[str]) -> str:
         """
         when running on an interface we keep track of the host IP.
         If there was no  modified TWs in the host IP, we check if the
         network was changed.
         """
-        if self.is_interface and hostIP not in modified_profiles:
-            if hostIP := self.metadata_man.get_host_ip():
-                self.db.set_host_ip(hostIP)
-        return hostIP
+        if self.is_interface and host_ip not in modified_profiles:
+            if host_ip := self.metadata_man.get_host_ip():
+                self.db.set_host_ip(host_ip)
+        return host_ip
 
     def is_total_flows_unknown(self) -> bool:
         """
@@ -696,7 +713,7 @@ class Main(IObservable):
                 "of traffic by querying TI sites."
             )
 
-            hostIP = self.metadata_man.store_host_ip()
+            host_ip = self.metadata_man.store_host_ip()
 
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
@@ -727,7 +744,7 @@ class Main(IObservable):
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_running_stats()[1]
                 )
-                hostIP: str = self.update_host_ip(hostIP, modified_profiles)
+                host_ip: str = self.update_host_ip(host_ip, modified_profiles)
 
                 # don't move this line up because we still need to print the
                 # stats and check tws anyway

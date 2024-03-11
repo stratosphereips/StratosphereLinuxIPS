@@ -66,8 +66,9 @@ class FlowAlerts(IModule):
         self.dns_arpa_queries = {}
         # after this number of arpa queries, slips will detect an arpa scan
         self.arpa_scan_threshold = 10
-        # If 1 flow uploaded this amount of MBs or more, slips will alert data upload
-        self.flow_upload_threshold = 100
+        # If 1 flow uploaded this amount of MBs or more,
+        # slips will alert data upload
+        self.data_upload_threshold = 100
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
         self.password_guessing_cache = {}
@@ -80,29 +81,29 @@ class FlowAlerts(IModule):
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
     def subscribe_to_channels(self):
-        self.c1 = self.db.subscribe('new_flow')
-        self.c2 = self.db.subscribe('new_ssh')
-        self.c3 = self.db.subscribe('new_notice')
-        self.c4 = self.db.subscribe('new_ssl')
-        self.c5 = self.db.subscribe('tw_closed')
-        self.c6 = self.db.subscribe('new_dns')
-        self.c7 = self.db.subscribe('new_downloaded_file')
-        self.c8 = self.db.subscribe('new_smtp')
-        self.c9 = self.db.subscribe('new_software')
-        self.c10 = self.db.subscribe('new_weird')
-        self.c11 = self.db.subscribe('new_tunnel')
+        c1 = self.db.subscribe('new_flow')
+        c2 = self.db.subscribe('new_ssh')
+        c3 = self.db.subscribe('new_notice')
+        c4 = self.db.subscribe('new_ssl')
+        c5 = self.db.subscribe('tw_closed')
+        c6 = self.db.subscribe('new_dns')
+        c7 = self.db.subscribe('new_downloaded_file')
+        c8 = self.db.subscribe('new_smtp')
+        c9 = self.db.subscribe('new_software')
+        c10 = self.db.subscribe('new_weird')
+        c11 = self.db.subscribe('new_tunnel')
         self.channels = {
-            'new_flow': self.c1,
-            'new_ssh': self.c2,
-            'new_notice': self.c3,
-            'new_ssl': self.c4,
-            'tw_closed': self.c5,
-            'new_dns': self.c6,
-            'new_downloaded_file': self.c7,
-            'new_smtp': self.c8,
-            'new_software': self.c9,
-            'new_weird': self.c10,
-            'new_tunnel': self.c11,
+            'new_flow': c1,
+            'new_ssh': c2,
+            'new_notice': c3,
+            'new_ssl': c4,
+            'tw_closed': c5,
+            'new_dns': c6,
+            'new_downloaded_file': c7,
+            'new_smtp': c8,
+            'new_software': c9,
+            'new_weird': c10,
+            'new_tunnel': c11,
         }
 
     def read_configuration(self):
@@ -276,13 +277,16 @@ class FlowAlerts(IModule):
         return False
 
 
-
     def is_ignored_ip_data_upload(self, ip):
         """
         Ignore the IPs that we shouldn't alert about
         """
 
-        ip_obj = ipaddress.ip_address(ip)
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        
         if (
             ip == self.gateway
             or ip_obj.is_multicast
@@ -291,8 +295,9 @@ class FlowAlerts(IModule):
         ):
             return True
 
-    def check_data_upload(self, sbytes, daddr, uid: str, profileid, twid,
-                          timestamp):
+    def check_data_upload(
+        self, sbytes, daddr, uid: str, profileid, twid, timestamp
+        ) -> bool:
         """
         Set evidence when 1 flow is sending >= the flow_upload_threshold bytes
         """
@@ -304,7 +309,7 @@ class FlowAlerts(IModule):
             return False
 
         src_mbs = utils.convert_to_mb(int(sbytes))
-        if src_mbs >= self.flow_upload_threshold:
+        if src_mbs >= self.data_upload_threshold:
             self.set_evidence.data_exfiltration(
                 daddr,
                 src_mbs,
@@ -314,6 +319,7 @@ class FlowAlerts(IModule):
                 timestamp,
             )
             return True
+        return False
 
     def wait_for_ssl_flows_to_appear_in_connlog(self):
         """

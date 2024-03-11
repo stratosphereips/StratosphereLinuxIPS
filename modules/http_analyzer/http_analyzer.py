@@ -29,11 +29,11 @@ class HTTPAnalyzer(IModule):
     authors = ['Alya Gomaa']
 
     def init(self):
-        self.c1 = self.db.subscribe('new_http')
-        self.c2 = self.db.subscribe('new_weird')
+        c1 = self.db.subscribe('new_http')
+        c2 = self.db.subscribe('new_weird')
         self.channels = {
-            'new_http': self.c1,
-            'new_weird': self.c2
+            'new_http': c1,
+            'new_weird': c2
         }
         self.connections_counter = {}
         self.empty_connections_threshold = 4

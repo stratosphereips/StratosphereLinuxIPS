@@ -490,7 +490,7 @@ class ConfigParser(object):
             'flowmldetection', 'mode', 'test'
         )
 
-    def RiskIQ_credentials_path(self):
+    def risk_iq_credentials_path(self):
         return self.read_configuration(
             'threatintelligence', 'RiskIQ_credentials_path', ''
         )

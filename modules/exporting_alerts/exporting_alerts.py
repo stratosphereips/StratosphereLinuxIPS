@@ -22,9 +22,9 @@ class ExportingAlerts(IModule):
 
     def init(self):
         self.port = None
-        self.c1 = self.db.subscribe('export_evidence')
+        c1 = self.db.subscribe('export_evidence')
         self.channels = {
-            'export_evidence': self.c1
+            'export_evidence': c1
         }
         self.read_configuration()
         if 'slack' in self.export_to:

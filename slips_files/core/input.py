@@ -97,8 +97,8 @@ class Input(ICore):
             target=self.remove_old_zeek_files, daemon=True
         )
         self.open_file_handlers = {}
-        self.c1 = self.db.subscribe("remove_old_files")
-        self.channels = {"remove_old_files": self.c1}
+        c1 = self.db.subscribe("remove_old_files")
+        self.channels = {"remove_old_files": c1}
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []

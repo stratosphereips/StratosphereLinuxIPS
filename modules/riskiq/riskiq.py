@@ -13,18 +13,17 @@ class RiskIQ(IModule):
     authors = ['Alya Gomaa']
 
     def init(self):
-        self.c1 = self.db.subscribe('new_ip')
+        c1 = self.db.subscribe('new_ip')
         self.channels = {
-            'new_ip': self.c1,
+            'new_ip': c1,
         }
         self.read_configuration()
 
     def read_configuration(self):
         conf = ConfigParser()
-        # Read the riskiq api key
-        RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
+        risk_iq_credentials_path = conf.risk_iq_credentials_path()
         try:
-            with open(RiskIQ_credentials_path, 'r') as f:
+            with open(risk_iq_credentials_path, 'r') as f:
                 self.riskiq_email = f.readline().replace('\n', '')
                 self.riskiq_key = f.readline().replace('\n', '')
                 if len(self.riskiq_key) != 64:

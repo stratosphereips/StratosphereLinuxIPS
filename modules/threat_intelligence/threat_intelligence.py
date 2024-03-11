@@ -38,11 +38,11 @@ class ThreatIntel(IModule, URLhaus):
     def init(self):
         # Get a separator from the database
         self.separator = self.db.get_field_separator()
-        self.c1 = self.db.subscribe('give_threat_intelligence')
-        self.c2 = self.db.subscribe('new_downloaded_file')
+        c1 = self.db.subscribe('give_threat_intelligence')
+        c2 = self.db.subscribe('new_downloaded_file')
         self.channels = {
-            'give_threat_intelligence': self.c1,
-            'new_downloaded_file': self.c2,
+            'give_threat_intelligence': c1,
+            'new_downloaded_file': c2,
         }
         self.__read_configuration()
         self.get_malicious_ip_ranges()

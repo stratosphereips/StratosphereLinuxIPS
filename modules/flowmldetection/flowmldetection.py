@@ -43,9 +43,9 @@ class FlowMLDetection(IModule):
 
     def init(self):
         # Subscribe to the channel
-        self.c1 = self.db.subscribe('new_flow')
+        c1 = self.db.subscribe('new_flow')
         self.channels = {
-            'new_flow': self.c1
+            'new_flow': c1
         }
         self.fieldseparator = self.db.get_field_separator()
         # Set the output queue of our database instance

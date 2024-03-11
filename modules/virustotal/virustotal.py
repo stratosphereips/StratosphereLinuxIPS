@@ -23,13 +23,13 @@ class VT(IModule):
     ]
 
     def init(self):
-        self.c1 = self.db.subscribe('new_flow')
-        self.c2 = self.db.subscribe('new_dns')
-        self.c3 = self.db.subscribe('new_url')
+        c1 = self.db.subscribe('new_flow')
+        c2 = self.db.subscribe('new_dns')
+        c3 = self.db.subscribe('new_url')
         self.channels = {
-            'new_flow': self.c1,
-            'new_dns': self.c2,
-            'new_url': self.c3,
+            'new_flow': c1,
+            'new_dns': c2,
+            'new_url': c3,
         }
 
         # Read the conf file
