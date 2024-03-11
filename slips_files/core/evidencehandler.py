@@ -27,7 +27,7 @@ import time
 import platform
 import traceback
 from slips_files.common.idea_format import idea_format
-from slips_files.common.style import red, green, cyan
+from slips_files.common.style import red, cyan
 from slips_files.common.imports import *
 from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
@@ -37,14 +37,9 @@ from slips_files.core.evidence_structure.evidence import (
     evidence_to_dict,
     ProfileID,
     Evidence,
-    Direction,
     Victim,
-    IoCType,
     EvidenceType,
-    IDEACategory,
     TimeWindow,
-    Proto,
-    Tag
     )
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
@@ -173,7 +168,12 @@ class EvidenceHandler(ICore):
         if path.exists(logfile_path):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')
+    
+    def handle_unable_to_log_evidence(self):
+        self.print('Error in add_to_json_log_file()')
+        self.print(traceback.format_exc(), 0, 1)
 
+    
     def add_to_json_log_file(
              self,
              idea_dict: dict,
@@ -186,6 +186,10 @@ class EvidenceHandler(ICore):
         :param idea_dict: dict containing 1 alert
         :param all_uids: the uids of the flows causing this evidence
         """
+        if not idea_dict:
+            self.handle_unable_to_log_evidence()
+            return
+        
         try:
             # we add extra fields to alerts.json that are not in the IDEA format
             idea_dict.update({
@@ -198,8 +202,7 @@ class EvidenceHandler(ICore):
         except KeyboardInterrupt:
             return True
         except Exception:
-            self.print('Error in add_to_json_log_file()')
-            self.print(traceback.format_exc(), 0, 1)
+            self.handle_unable_to_log_evidence()
 
     def add_to_log_file(self, data):
         """
@@ -257,21 +260,6 @@ class EvidenceHandler(ICore):
             pass
 
         return domains_to_check_dst, domains_to_check_src
-
-    def show_popup(self, alert_to_log: str):
-        """
-        Function to display a popup with the alert depending on the OS
-        """
-        if platform.system() == 'Linux':
-            #  is notify_cmd is set in setup_notifications function
-            #  depending on the user
-            os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
-        elif platform.system() == 'Darwin':
-            os.system(
-                f'osascript -e \'display notification "{alert_to_log}" '
-                f'with title "Slips"\' '
-            )
-
 
     def format_evidence_causing_this_alert(
             self,
@@ -342,7 +330,6 @@ class EvidenceHandler(ICore):
     def decide_blocking(self, profileid) -> bool:
         """
         Decide whether to block or not and send to the blocking module
-        :param ip: IP to block
         """
 
         # now since this source ip(profileid) caused an alert,
@@ -715,7 +702,7 @@ class EvidenceHandler(ICore):
                 # below.
                 # to avoid this, we only alert about processed evidence
                 self.db.mark_evidence_as_processed(evidence.id)
-                # Ignore alert if IP is whitelisted
+                # Ignore evidence if IP is whitelisted
                 if self.whitelist.is_whitelisted_evidence(evidence):
                     self.db.cache_whitelisted_evidence_ID(evidence.id)
                     # Modules add evidence to the db before
