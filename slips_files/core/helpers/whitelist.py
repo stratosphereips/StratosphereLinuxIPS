@@ -1,5 +1,8 @@
 import json
 import ipaddress
+from typing import Optional, \
+    Dict
+
 import validators
 from slips_files.common.imports import *
 from slips_files.common.abstracts.observer import IObservable
@@ -765,32 +768,34 @@ class Whitelist(IObservable):
         return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, \
             whitelisted_macs
 
-
+    
+    def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
+        whitelist = self.db.get_all_whitelist()
+        max_tries = 10
+        # if this module is loaded before profilerProcess or before we're
+        # done processing the whitelist in general
+        # the database won't return the whitelist
+        # so we need to try several times until the db returns the
+        # populated whitelist
+        # empty dicts evaluate to False
+        while not bool(whitelist) and max_tries != 0:
+            # try max 10 times to get the whitelist, if it's still empty
+                # hen it's not empty by mistake
+            max_tries -= 1
+            return self.db.get_all_whitelist()
+        
+        if max_tries == 0:
+            # we tried 10 times to get the whitelist, it's probably empty.
+            return
+        
+    
     def is_whitelisted_evidence(
             self, evidence: Evidence
         ) -> bool:
         """
         Checks if an evidence is whitelisted
         """
-
-        # self.print(f'Checking the whitelist of {srcip}: {data}
-            # {attacker_direction} {description} ')
-
-        whitelist = self.db.get_all_whitelist()
-        max_tries = 10
-            # if this module is loaded before profilerProcess or before we're
-            # done processing the whitelist in general
-            # the database won't return the whitelist
-            # so we need to try several times until the db returns the
-            # populated whitelist
-            # empty dicts evaluate to False
-        while not bool(whitelist) and max_tries != 0:
-            # try max 10 times to get the whitelist, if it's still empty
-                # hen it's not empty by mistake
-            max_tries -= 1
-            whitelist = self.db.get_all_whitelist()
-        if max_tries == 0:
-            # we tried 10 times to get the whitelist, it's probably empty.
+        if not self.get_all_whitelist():
             return False
 
         if self.check_whitelisted_attacker(evidence.attacker):
