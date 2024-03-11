@@ -10,14 +10,9 @@ from slips_files.core.output import Output
 import tld
 import os
 from slips_files.core.evidence_structure.evidence import (
-    dict_to_evidence,
     Evidence,
     Direction,
     IoCType,
-    EvidenceType,
-    IDEACategory,
-    Proto,
-    Tag,
     Attacker,
     Victim
     )
@@ -782,12 +777,13 @@ class Whitelist(IObservable):
             # try max 10 times to get the whitelist, if it's still empty
                 # hen it's not empty by mistake
             max_tries -= 1
-            return self.db.get_all_whitelist()
+            whitelist = self.db.get_all_whitelist()
         
         if max_tries == 0:
             # we tried 10 times to get the whitelist, it's probably empty.
             return
         
+        return whitelist
     
     def is_whitelisted_evidence(
             self, evidence: Evidence
@@ -805,14 +801,12 @@ class Whitelist(IObservable):
                 hasattr(evidence, 'victim')
                 and self.check_whitelisted_victim(evidence.victim)
         ):
-                return True
+            return True
 
-    def check_whitelisted_victim(self, victim: Victim):
+
+    def check_whitelisted_victim(self, victim: Victim) -> bool:
         if not victim:
             return False
-
-        whitelist = self.db.get_all_whitelist()
-        whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
         if (
                 victim.victim_type == IoCType.IP.name
@@ -827,11 +821,7 @@ class Whitelist(IObservable):
         ):
                 return True
 
-
-        if(
-                whitelisted_orgs
-                and self.is_part_of_a_whitelisted_org(victim)
-        ):
+        if self.is_part_of_a_whitelisted_org(victim):
             return True
 
 
@@ -885,7 +875,7 @@ class Whitelist(IObservable):
             asn_cache: dict = self.db.get_asn_cache()
             org_asn = []
             # asn_cache is a dict sorted by first octet
-            for octet, range_info in asn_cache.items:
+            for octet, range_info in asn_cache.items():
                 # range_info is a serialized dict of ranges
                 range_info = json.loads(range_info)
                 for range, asn_info in range_info.items():
@@ -978,33 +968,83 @@ class Whitelist(IObservable):
             whitelist_direction: str = whitelisted_ips[ip]['from']
             what_to_ignore = whitelisted_ips[ip]['what_to_ignore']
             ignore_alerts = self.should_ignore_alerts(what_to_ignore)
-
-            ignore_alerts_from_ip = (
-                ignore_alerts
-                and direction == Direction.SRC
-                and self.should_ignore_from(whitelist_direction)
-            )
-            ignore_alerts_to_ip = (
-                ignore_alerts
-                and direction == Direction.DST
-                and self.should_ignore_to(whitelist_direction)
-            )
-            if ignore_alerts_from_ip or ignore_alerts_to_ip:
+        
+            if self.ignore_alert(
+                    direction,
+                    ignore_alerts,
+                    whitelist_direction
+                ):
                 # self.print(f'Whitelisting src IP {srcip} for evidence'
                 #            f' about {ip}, due to a connection related to {data} '
                 #            f'in {description}')
                 return True
 
-                # Now we know this ipv4 or ipv6 isn't whitelisted
-                # is the mac address of this ip whitelisted?
+            # Now we know this ipv4 or ipv6 isn't whitelisted
+            # is the mac address of this ip whitelisted?
             if whitelisted_macs and self.profile_has_whitelisted_mac(
                 ip, whitelisted_macs, direction
             ):
                 return True
+    
+    def ignore_alert(self, direction, ignore_alerts, whitelist_direction) -> bool:
+        """
+        determines whether or not we should ignore the given alert based
+         on the ip's direction and the whitelist direction
+         """
+        if (
+                self.ignore_alerts_from_ip(
+                    direction, ignore_alerts, whitelist_direction
+                )
+                or self.ignore_alerts_to_ip(
+                    direction, ignore_alerts, whitelist_direction
+                )
+                or self.ignore_alerts_from_both_directions(
+                    ignore_alerts, whitelist_direction
+                )
+        ):
+            return True
+
+    def ignore_alerts_from_both_directions(
+            self,
+            ignore_alerts: bool,
+            whitelist_direction: str
+        ) -> bool:
+        return ignore_alerts and 'both' in whitelist_direction
+    
+    def ignore_alerts_from_ip(
+            self,
+            direction: Direction,
+            ignore_alerts: bool,
+            whitelist_direction: str
+        ) -> bool:
+        if not ignore_alerts:
+            return False
+        
+        if (
+                direction == Direction.SRC
+                and self.should_ignore_from(whitelist_direction)
+        ):
+            return True
+        
+    def ignore_alerts_to_ip(
+        self,
+        direction: Direction,
+        ignore_alerts: bool,
+        whitelist_direction: str
+        ) -> bool:
+        
+        if not ignore_alerts:
+            return False
+        
+        if (
+                direction == Direction.DST
+                and self.should_ignore_to(whitelist_direction)
+        ):
+            return True
+
 
     def is_domain_whitelisted(self, domain: str, direction: Direction):
         # todo differentiate between this and is_whitelisted_Domain()
-
         # extract the top level domain
         try:
             domain = tld.get_fld(domain, fix_protocol=True)
@@ -1074,8 +1114,7 @@ class Whitelist(IObservable):
 
 
             ioc_type: IoCType = ioc.attacker_type if isinstance(ioc, Attacker) \
-                else \
-                ioc.victim_type
+                else ioc.victim_type
             # Check if the IP in the alert belongs to a whitelisted organization
             if ioc_type == IoCType.DOMAIN.name:
                 # Method 3 Check if the domains of this flow belong to this org domains
