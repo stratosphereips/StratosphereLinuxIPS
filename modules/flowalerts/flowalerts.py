@@ -966,8 +966,6 @@ class FlowAlerts(IModule):
         else:
             self.detect_successful_ssh_by_slips(uid, timestamp, profileid, twid, auth_success)
 
-
-
     def detect_incompatible_CN(
             self,
             daddr,

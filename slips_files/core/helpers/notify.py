@@ -36,8 +36,10 @@ class Notify:
             self.notify_cmd = 'notify-send -t 5000 '
             return False
 
-        # Get the used display (if the user has only 1 screen it will be set to 0), if not we should know which screen is slips running on.
-        # A "display" is the address for your screen. Any program that wants to write to your screen has to know the address.
+        # Get the used display (if the user has only 1 screen it will be
+        # set to 0), if not we should know which screen is slips running on.
+        # A "display" is the address for your screen. Any program that
+        # wants to write to your screen has to know the address.
         used_display = psutil.Process().environ()['DISPLAY']
 
         # when you login as user x in linux, no user other than x is authorized to write to your display, not even root
@@ -60,15 +62,18 @@ class Notify:
         # run notify-send as user using the used_display and give it the dbus addr
         self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} ' \
                           f'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 '
-
+        
+        
     def show_popup(self, alert_to_log: str):
         """
         Function to display a popup with the alert depending on the OS
         """
         if platform.system() == 'Linux':
-            #  is notify_cmd is set in setup_notifications function depending on the user
+            #  is notify_cmd is set in
+            #  setup_notifications function depending on the user
             os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
         elif platform.system() == 'Darwin':
             os.system(
-                f'osascript -e \'display notification "{alert_to_log}" with title "Slips"\' '
+                f'osascript -e \'display notification'
+                f' "{alert_to_log}" with title "Slips"\' '
             )
