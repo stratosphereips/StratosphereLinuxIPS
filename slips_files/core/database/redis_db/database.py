@@ -1179,7 +1179,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         else:
             return self.rcache.hgetall('cached_asn')
 
-    def store_process_PID(self, process, pid):
+    def store_pid(self, process, pid):
         """
         Stores each started process or module with it's PID
         :param pid: int

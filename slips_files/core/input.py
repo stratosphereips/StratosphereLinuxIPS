@@ -660,7 +660,7 @@ class Input(ICore):
         # Give Zeek some time to generate at least 1 file.
         time.sleep(3)
 
-        self.db.store_process_PID("Zeek", self.zeek_pid)
+        self.db.store_pid("Zeek", self.zeek_pid)
         if not hasattr(self, "is_zeek_tabs"):
             self.is_zeek_tabs = False
         self.lines = self.read_zeek_files()
