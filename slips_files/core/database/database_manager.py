@@ -306,8 +306,8 @@ class DBManager(IObservable):
     def get_asn_cache(self, *args, **kwargs):
         return self.rdb.get_asn_cache(*args, **kwargs)
 
-    def store_process_PID(self, *args, **kwargs):
-        return self.rdb.store_process_PID(*args, **kwargs)
+    def store_pid(self, *args, **kwargs):
+        return self.rdb.store_pid(*args, **kwargs)
 
     def get_pids(self, *args, **kwargs):
         return self.rdb.get_pids(*args, **kwargs)

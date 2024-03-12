@@ -128,7 +128,7 @@ class ProcessManager:
             pbar_finished=self.pbar_finished,
         )
         pbar.start()
-        self.main.db.store_process_PID(pbar.name, int(pbar.pid))
+        self.main.db.store_pid(pbar.name, int(pbar.pid))
         self.main.print(f"Started {green('PBar')} process ["
                         f"PID {green(pbar.pid)}]")
         return pbar
@@ -151,7 +151,7 @@ class ProcessManager:
             1,
             0,
         )
-        self.main.db.store_process_PID("Profiler", int(profiler_process.pid))
+        self.main.db.store_pid("Profiler", int(profiler_process.pid))
         return profiler_process
 
     def start_evidence_process(self):
@@ -168,7 +168,7 @@ class ProcessManager:
             1,
             0,
         )
-        self.main.db.store_process_PID("Evidence", int(evidence_process.pid))
+        self.main.db.store_pid("Evidence", int(evidence_process.pid))
         return evidence_process
 
     def start_input_process(self):
@@ -193,7 +193,7 @@ class ProcessManager:
             1,
             0,
         )
-        self.main.db.store_process_PID("Input", int(input_process.pid))
+        self.main.db.store_pid("Input", int(input_process.pid))
         return input_process
 
     def kill_process_tree(self, pid: int):
@@ -350,7 +350,7 @@ class ProcessManager:
                 self.termination_event,
             )
             module.start()
-            self.main.db.store_process_PID(module_name, int(module.pid))
+            self.main.db.store_pid(module_name, int(module.pid))
             self.print_started_module(
                 module_name, module.pid, modules_to_call[module_name]["description"]
             )
