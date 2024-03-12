@@ -30,7 +30,8 @@ class MetadataManager:
 
     def get_pid_using_port(self, port):
         """
-        Returns the PID of the process using the given port or False if no process is using it
+        Returns the PID of the process using the given port or
+        False if no process is using it
         """
         port = int(port)
         for conn in psutil.net_connections():

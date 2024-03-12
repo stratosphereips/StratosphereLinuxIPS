@@ -332,9 +332,10 @@ class Utils(object):
         if sock.connect_ex(("localhost", port)) != 0:
             # not used
             sock.close()
-            return True
+            return False
+        
         sock.close()
-        return False
+        return True
     
     def is_private_ip(self, ip_obj: ipaddress) -> bool:
         """
