@@ -1,4 +1,2 @@
 #!/bin/bash
-# run webinterface
-#cd webinterface
-python3 webinterface/app.py
+python3 -m webinterface.app

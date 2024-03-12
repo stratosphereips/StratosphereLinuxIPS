@@ -45,8 +45,9 @@ class UIManager:
             # starting the wbeinterface using the shell script results
             # in slips not being able to
             # get the PID of the python proc started by the .sh script
-            command = ['python3', 'webinterface/app.py']
-            print(f"@@@@@@@@@@@@@@@@ CWD: {os.getcwd()}")
+            # so we'll start it with python instead
+            command = ['python3', '-m', 'webinterface.app']
+
             webinterface = subprocess.Popen(
                 command,
                 stdout=subprocess.DEVNULL,
