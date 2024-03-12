@@ -78,7 +78,7 @@ class UIManager:
                 for line in error.strip().decode().splitlines():
                     self.main.print(f"{line}")
         
-        if not utils.is_port_in_use(55000):
+        if utils.is_port_in_use(55000):
             pid = self.main.metadata_man.get_pid_using_port(55000)
             self.main.print(f"Failed to start web interface. Port 55000 is "
                             f"used by PID {pid}")
