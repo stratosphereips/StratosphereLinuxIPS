@@ -2,9 +2,8 @@ from flask import Blueprint
 from flask import render_template
 import json
 from collections import defaultdict
-from datetime import datetime
 from typing import Dict, List
-from database.database import __database__
+from ..database.database import __database__
 from slips_files.common.slips_utils import utils
 
 analysis = Blueprint('analysis',
@@ -32,7 +31,7 @@ def get_all_tw_with_ts(profileid):
         tw_ts = tw_tuple[1]
         tw_date = ts_to_date(tw_ts)
         dict_tws[tw_n]["tw"] = tw_n
-        dict_tws[tw_n]["name"] = "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
+        dict_tws[tw_n]["name"] = "TW " + tw_n.split("timewindow")[1] + ":" + tw_date
         dict_tws[tw_n]["blocked"] = False  # needed to color profiles
     return dict_tws
 
