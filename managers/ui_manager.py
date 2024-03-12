@@ -1,3 +1,4 @@
+from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 
 import subprocess
@@ -73,16 +74,18 @@ class UIManager:
                 # set false as the return value of this thread
                 self.webinterface_return_value.put(False)
 
-                self.main.print (f"Web interface error:\n")
+                self.main.print(f"Web interface error:")
                 for line in error.strip().decode().splitlines():
-                    self.main.print (f"{line}")
-
-                pid = self.main.metadata_man.get_pid_using_port(55000)
-                self.main.print(f"Port 55000 is used by PID {pid}")
-
-        # if there's an error, this will be set to false,
-        # and the error will be printed
-        # otherwise we assume that the interface started
+                    self.main.print(f"{line}")
+        
+        if not utils.is_port_in_use(55000):
+            pid = self.main.metadata_man.get_pid_using_port(55000)
+            self.main.print(f"Failed to start web interface. Port 55000 is "
+                            f"used by PID {pid}")
+            return
+            
+        # if there's an error, this webinterface_return_value will be set
+        # to false, and the error will be printed
         self.webinterface_return_value = Queue()
         self.webinterface_thread = threading.Thread(
             target=run_webinterface,
