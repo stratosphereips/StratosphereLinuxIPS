@@ -217,16 +217,10 @@ class RedisManager:
             # even if it's already in use, slips should override it
             return False
 
-        # is it used by another app?
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if sock.connect_ex(("localhost", port)) != 0:
-            # not used
-            sock.close()
-            return False
-
-        sock.close()
-        self.print_port_in_use(port)
-        self.main.terminate_slips()
+        if utils.is_port_in_use(port):
+            self.print_port_in_use(port)
+            self.main.terminate_slips()
+            
         return True
 
 
