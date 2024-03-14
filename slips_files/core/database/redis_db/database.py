@@ -206,12 +206,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             if not cls.connect_to_redis_server():
                 return False
 
-            # Set the memory limits of the output buffer,  For normal clients: no limits
-            # for pub-sub 4GB maximum buffer size
-            # and 2GB for soft limit
-            # The original values were 50MB for maxmem and 8MB for soft limit.
-            # don't flush the loaded db when using '-db'
-            # don't flush the db when starting or stopping the daemon, or when testing
             if (
                     cls.deletePrevdb
                     and not ('-S' in sys.argv
@@ -223,6 +217,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 # the PIDS to close slips files
                 cls.r.flushdb()
 
+            # Set the memory limits of the output buffer,
+            # For normal clients: no limits
+            # for pub-sub 4GB maximum buffer size and 2GB for soft limit
+            # The original values were 50MB for maxmem and 8MB for soft limit.
             cls.change_redis_limits(cls.r)
             cls.change_redis_limits(cls.rcache)
 
@@ -292,9 +290,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             os.kill(int(server_pid), signal.SIGKILL)
 
     @classmethod
-    def change_redis_limits(cls, client):
+    def change_redis_limits(cls, client: redis.StrictRedis):
         """
-        To fix redis closing/resetting the pub/sub connection, change redis soft and hard limits
+        changes redis soft and hard limits to fix redis closing/resetting
+        the pub/sub connection,
         """
         # maximum buffer size for pub/sub clients:  = 4294967296 Bytes = 4GBs,
         # when msgs in queue reach this limit, Redis will
@@ -303,9 +302,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         # soft limit for pub/sub clients: 2147483648 Bytes = 2GB over 10 mins,
         # means if the client has an output buffer bigger than 2GB
         # for, continuously, 10 mins, the connection gets closed.
-        client.config_set('client-output-buffer-limit', "normal 0 0 0 "
-                                                        "slave 268435456 67108864 60 "
-                                                        "pubsub 4294967296 2147483648 600")
+        # format is client hard_limit soft_limit
+        client.config_set('client-output-buffer-limit',
+                          "normal 0 0 0 "
+                          "slave 268435456 67108864 60 "
+                          "pubsub 4294967296 2147483648 600")
 
     @classmethod
     def _set_slips_start_time(cls):

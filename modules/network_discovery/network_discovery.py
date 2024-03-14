@@ -423,15 +423,20 @@ class NetworkDiscovery(IModule):
 
             # 1. Vertical port scan:
             # (single IP being scanned for multiple ports)
-            # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
+            # - 1 srcip sends not established flows to > 3 dst ports in the
+            # same dst ip. Any number of packets
             # 2. Horizontal port scan:
             #  (scan against a group of IPs for a single port)
-            # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
+            # - 1 srcip sends not established flows to the same dst ports in
+            # > 3 dst ip.
             # 3. Too many connections???:
-            # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
-            # 4. Slow port scan. Same as the others but distributed in multiple time windows
+            # - 1 srcip sends not established flows to the same dst ports,
+            # > 3 pkts, to the same dst ip
+            # 4. Slow port scan. Same as the others but distributed in
+            # multiple time windows
 
-            # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
+            # Remember that in slips all these port scans can happen
+            # for traffic going IN to an IP or going OUT from the IP.
 
             self.horizontal_ps.check(profileid, twid)
             self.vertical_ps.check(profileid, twid)
