@@ -31,14 +31,18 @@ RUN apt update && apt install -y --no-install-recommends \
     git \
     curl \
     gnupg \
+    lsb-release \
  && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list \
- && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+ && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor > /etc/apt/trusted.gpg.d/security_zeek.gpg \
+ && curl -fsSL https://packages.redis.io/gpg |  gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list
+
 
 # Install Slips dependencies.
-RUN apt update && apt install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
-    redis-server \
     zeek \
+    redis \
     python3-pip \
     python3-certifi \
     python3-dev \
@@ -46,8 +50,8 @@ RUN apt update && apt install -y --no-install-recommends \
     file \
     lsof \
     net-tools \
-    iproute2 \
     iptables \
+    iproute2 \
     python3-tzlocal \
     nfdump \
     tshark \
@@ -56,6 +60,7 @@ RUN apt update && apt install -y --no-install-recommends \
     vim \
     yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
 
 
 # Install python dependencies

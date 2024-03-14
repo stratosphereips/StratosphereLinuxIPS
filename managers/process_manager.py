@@ -515,10 +515,29 @@ class ProcessManager:
 
         start_time = self.main.db.get_slips_start_time()
         return utils.get_time_diff(start_time, end_date, return_type="minutes")
-
-    def should_stop(self):
+    
+    def stop_slips(self) -> bool:
         """
-        returns true if the channel received the stop msg
+        determines whether slips should stop
+        based on the following:
+        1. is slips still receiving new flows?
+        2. did slips the control channel recv the stop_slips
+        3. is a debugger present?
+        """
+        if self.should_run_non_stop():
+            return False
+        
+        if (
+                self.stop_slips_received()
+                or self.slips_is_done_receiving_new_flows()
+        ):
+            return True
+        
+        return False
+
+    def stop_slips_received(self):
+        """
+        returns true if the channel received the 'stop_slips' msg
         """
         message = self.main.c1.get_message(timeout=0.01)
         if (

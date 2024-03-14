@@ -1,5 +1,4 @@
 from slips_files.common.abstracts._module import IModule
-import multiprocessing
 import socket
 import json
 import os
@@ -149,7 +148,7 @@ class Module(IModule):
         self.close_connection()
         # if slips is done, slips shouldn't expect more flows or send evidence
         # it should terminate
-        self.db.publish('control_channel', 'stop_slips')
+        self.db.publish_stop()
         return
 
     def pre_main(self):
