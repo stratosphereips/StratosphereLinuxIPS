@@ -148,7 +148,7 @@ class MetadataManager:
         self.main.db.set_input_metadata(info)
 
 
-    def update_slips_running_stats(self) -> Tuple[int, Set[str]] :
+    def update_slips_stats_in_the_db(self) -> Tuple[int, Set[str]] :
         """
         updates the number of processed ips, slips internal time,
          and modified tws so far in the db
