@@ -238,7 +238,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     @staticmethod
     def start_redis_instance(port: int, db: int) -> redis.StrictRedis:
         # set health_check_interval to avoid redis ConnectionReset errors:
-        # if the connection is idle for more than 30 seconds,
+        # if the connection is idle for more than health_check_interval seconds,
         # a round trip PING/PONG will be attempted before next redis cmd.
         # If the PING/PONG fails, the connection will re-established
 
