@@ -44,23 +44,23 @@ sudo apt install -y --no-install-recommends \
   yara \
   libnotify-bin
 
-echo "[+] Installing zeek ...\n"
+echo "[+] Installing zeek ..."
 # create a symlink to zeek so that slips can find it
 sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 export PATH=$PATH:/usr/local/zeek/bin
 echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
 
 
-echo "[+] Executing 'python3 -m pip install --upgrade pip'\n"
+echo "[+] Executing 'python3 -m pip install --upgrade pip'"
 python3 -m pip install --upgrade pip
-echo "[+] Executing 'pip3 install -r install/requirements.txt'\n"
+echo "[+] Executing 'pip3 install -r install/requirements.txt'"
 pip3 install -r install/requirements.txt
-echo "[+] Executing pip3 install --ignore-installed six\n"
+echo "[+] Executing pip3 install --ignore-installed six"
 pip3 install --ignore-installed six
 
 # For Kalipso
 echo "[+] Downloading nodejs v19 and npm dependencies"
-curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
+curl -fsSL https://deb.nodesource.com/setup_21.x |  sudo -E bash - && sudo apt install -y --no-install-recommends nodejs
 cd ./modules/kalipso && npm install
 cd ../..
 
