@@ -72,7 +72,7 @@ RUN pip3 install -r install/requirements.txt
 
 
 # For Kalipso:
-RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
+RUN curl -fsSL https://deb.nodesource.com/setup_21.x |  bash -  && apt install -y --no-install-recommends nodejs
 
 # Switch to kalipso dir to install node dependencies
 WORKDIR ${SLIPS_DIR}/modules/kalipso
