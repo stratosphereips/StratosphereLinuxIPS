@@ -7,7 +7,10 @@ from typing import Dict, List
 from database.database import __database__
 from slips_files.common.slips_utils import utils
 
-analysis = Blueprint('analysis', __name__, static_folder='static', static_url_path='/analysis/static',
+analysis = Blueprint('analysis',
+                     __name__,
+                     static_folder='static',
+                     static_url_path='/analysis/static',
                      template_folder='templates')
 
 
