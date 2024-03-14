@@ -353,7 +353,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
             if self.connection_retry >= self.max_retries:
                 self.publish_stop()
-                self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 1, 1)
+                self.print(f'Stopping slips due to '
+                           f'redis.exceptions.ConnectionError: {ex}',
+                           1, 1)
             else:
                 # don't log this each retry
                 if self.connection_retry % 10 == 0:

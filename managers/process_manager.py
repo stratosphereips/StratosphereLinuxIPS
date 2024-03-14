@@ -529,7 +529,7 @@ class ProcessManager:
         
         if (
                 self.stop_slips_received()
-                and self.slips_is_done_receiving_new_flows()
+                or self.slips_is_done_receiving_new_flows()
         ):
             return True
         
