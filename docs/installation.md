@@ -294,7 +294,7 @@ _Note: for those using a different base image, you need to also install tensorfl
 
 As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs v19. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
 
-    curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
+    curl -fsSL https://deb.nodesource.com/setup_21.x |  sudo -E bash - && sudo apt install -y --no-install-recommends nodejs
     cd modules/kalipso &&  npm install
 
 ####  Installing Zeek
