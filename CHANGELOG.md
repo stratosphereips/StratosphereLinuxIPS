@@ -1,3 +1,20 @@
+- 1.0.12 (March 2024)
+- Add an option to specify the current client IP in slips.conf to help avoid false positives.
+- Better handling of URLhaus threat intelligence.
+- Change how slips determines the local network of the current client IP.
+- Fix issues with the progress bar.
+- Fix problem logging alerts and errors to alerts.log and erros.log.
+- Fix problem reporting evidence to other peers.
+- Fix problem starting the web interface.
+- Fix whitelists.
+- Improve how the evidence for young domain detections is set. 
+- Remove the description of blacklisted IPs from the evidence description and add the source TI feed instead.
+- Set evidence to all young domain IPs when a connection to a young domain is found.
+- Set two evidence in some detections e.g. when the source address connects to a blacklisted IP, evidence is set for both.
+- Use blacklist name instead of IP description in all evidence. 
+- Use the latest Redis and NodeJS version in all docker images.
+
+
 - 1.0.11 (February 2024)
 - Improve the logging of evidence in alerts.json and alerts.log.
 - Optimize the storing of evidence in the Redis database.
