@@ -74,7 +74,6 @@ class NetworkDiscovery(IModule):
         Use our own Zeek scripts to detect ICMP scans.
         Threshold is on the scripts and it is 25 ICMP flows
         """
-
         if 'TimestampScan' in note:
             evidence_type = EvidenceType.ICMP_TIMESTAMP_SCAN
         elif 'ICMPAddressScan' in note:
@@ -88,21 +87,17 @@ class NetworkDiscovery(IModule):
         hosts_scanned = int(msg.split('on ')[1].split(' hosts')[0])
         # get the confidence from 0 to 1 based on the number of hosts scanned
         confidence = 1 / (255 - 5) * (hosts_scanned - 255) + 1
-        threat_level = ThreatLevel.MEDIUM
         saddr = profileid.split('_')[1]
-
-        # this is the last IP scanned
-        attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-            )
 
         # this one is detected by Zeek, so we can't track the UIDs causing it
         evidence = Evidence(
             evidence_type=evidence_type,
-            attacker=attacker,
-            threat_level=threat_level,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+                ),
+            threat_level=ThreatLevel.MEDIUM,
             confidence=confidence,
             description=msg,
             profile=ProfileID(ip=saddr),
@@ -321,29 +316,25 @@ class NetworkDiscovery(IModule):
             uids,
             number_of_requested_addrs
     ):
-        threat_level = ThreatLevel.MEDIUM
-        confidence = 0.8
         srcip = profileid.split('_')[-1]
-        attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=srcip
-            )
         description = (
             f'Performing a DHCP scan by requesting '
             f'{number_of_requested_addrs} different IP addresses. '
-            f'Threat Level: {threat_level}. '
             f'Confidence: {confidence}. by Slips'
         )
-
+        twid_number = int(twid.replace("timewindow", ""))
         evidence = Evidence(
             evidence_type=EvidenceType.DHCP_SCAN,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=srcip
+                ),
+            threat_level=ThreatLevel.MEDIUM,
+            confidence=0.8,
             description=description,
             profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            timewindow=TimeWindow(number=twid_number),
             uid=uids,
             timestamp=timestamp,
             category=IDEACategory.RECON_SCANNING,
@@ -363,7 +354,8 @@ class NetworkDiscovery(IModule):
         flow = flow_info['flow']
         requested_addr = flow['requested_addr']
         if not requested_addr:
-            # we are only interested in DHCPREQUEST flows, where a client is requesting an IP
+            # we are only interested in DHCPREQUEST flows,
+            # where a client is requesting an IP
             return
 
         profileid = flow_info['profileid']
@@ -400,7 +392,8 @@ class NetworkDiscovery(IModule):
         # we alert every 4,8,12, etc. requested IPs
         number_of_requested_addrs = len(dhcp_flows)
         if number_of_requested_addrs % self.minimum_requested_addrs == 0:
-            # get the uids of all the flows where this client was requesting an addr in this tw
+            # get the uids of all the flows where this client
+            # was requesting an addr in this tw
 
             for uids_list in dhcp_flows.values():
                 uids.append(uids_list[0])
@@ -430,15 +423,20 @@ class NetworkDiscovery(IModule):
 
             # 1. Vertical port scan:
             # (single IP being scanned for multiple ports)
-            # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
+            # - 1 srcip sends not established flows to > 3 dst ports in the
+            # same dst ip. Any number of packets
             # 2. Horizontal port scan:
             #  (scan against a group of IPs for a single port)
-            # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
+            # - 1 srcip sends not established flows to the same dst ports in
+            # > 3 dst ip.
             # 3. Too many connections???:
-            # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
-            # 4. Slow port scan. Same as the others but distributed in multiple time windows
+            # - 1 srcip sends not established flows to the same dst ports,
+            # > 3 pkts, to the same dst ip
+            # 4. Slow port scan. Same as the others but distributed in
+            # multiple time windows
 
-            # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
+            # Remember that in slips all these port scans can happen
+            # for traffic going IN to an IP or going OUT from the IP.
 
             self.horizontal_ps.check(profileid, twid)
             self.vertical_ps.check(profileid, twid)

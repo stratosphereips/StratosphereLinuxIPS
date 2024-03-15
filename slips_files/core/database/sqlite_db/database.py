@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, \
+    Dict
 import os.path
 import sqlite3
 import json
@@ -143,14 +144,14 @@ class SQLiteDB(IObservable):
             res[uid] = json.loads(flow)
         return res
 
-    def get_all_flows_in_profileid(self, profileid):
+    def get_all_flows_in_profileid(self, profileid) -> Dict[str, dict]:
         """
         Return a list of all the flows in this profileid
         [{'uid':flow},...]
         """
         condition = f'profileid = "{profileid}"'
         flows = self.select('flows', condition=condition)
-        all_flows = {}
+        all_flows: Dict[str, dict] = {}
         if flows:
             for flow in flows:
                 uid = flow[0]

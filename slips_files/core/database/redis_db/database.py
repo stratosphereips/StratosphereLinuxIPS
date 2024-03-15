@@ -15,7 +15,8 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-from typing import List
+from typing import List, \
+    Dict
 
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -177,6 +178,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         cls.deletePrevdb: bool = conf.deletePrevdb()
         cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.width = conf.get_tw_width_as_float()
+        cls.client_ips: List[str] = conf.client_ips()
 
     @classmethod
     def set_slips_internal_time(cls, timestamp):
@@ -204,12 +206,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             if not cls.connect_to_redis_server():
                 return False
 
-            # Set the memory limits of the output buffer,  For normal clients: no limits
-            # for pub-sub 4GB maximum buffer size
-            # and 2GB for soft limit
-            # The original values were 50MB for maxmem and 8MB for soft limit.
-            # don't flush the loaded db when using '-db'
-            # don't flush the db when starting or stopping the daemon, or when testing
             if (
                     cls.deletePrevdb
                     and not ('-S' in sys.argv
@@ -221,6 +217,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 # the PIDS to close slips files
                 cls.r.flushdb()
 
+            # Set the memory limits of the output buffer,
+            # For normal clients: no limits
+            # for pub-sub 4GB maximum buffer size and 2GB for soft limit
+            # The original values were 50MB for maxmem and 8MB for soft limit.
             cls.change_redis_limits(cls.r)
             cls.change_redis_limits(cls.rcache)
 
@@ -238,7 +238,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     @staticmethod
     def start_redis_instance(port: int, db: int) -> redis.StrictRedis:
         # set health_check_interval to avoid redis ConnectionReset errors:
-        # if the connection is idle for more than 30 seconds,
+        # if the connection is idle for more than health_check_interval seconds,
         # a round trip PING/PONG will be attempted before next redis cmd.
         # If the PING/PONG fails, the connection will re-established
 
@@ -290,9 +290,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             os.kill(int(server_pid), signal.SIGKILL)
 
     @classmethod
-    def change_redis_limits(cls, client):
+    def change_redis_limits(cls, client: redis.StrictRedis):
         """
-        To fix redis closing/resetting the pub/sub connection, change redis soft and hard limits
+        changes redis soft and hard limits to fix redis closing/resetting
+        the pub/sub connection,
         """
         # maximum buffer size for pub/sub clients:  = 4294967296 Bytes = 4GBs,
         # when msgs in queue reach this limit, Redis will
@@ -301,9 +302,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         # soft limit for pub/sub clients: 2147483648 Bytes = 2GB over 10 mins,
         # means if the client has an output buffer bigger than 2GB
         # for, continuously, 10 mins, the connection gets closed.
-        client.config_set('client-output-buffer-limit', "normal 0 0 0 "
-                                                        "slave 268435456 67108864 60 "
-                                                        "pubsub 4294967296 2147483648 600")
+        # format is client hard_limit soft_limit
+        client.config_set('client-output-buffer-limit',
+                          "normal 0 0 0 "
+                          "slave 268435456 67108864 60 "
+                          "pubsub 4294967296 2147483648 600")
 
     @classmethod
     def _set_slips_start_time(cls):
@@ -350,7 +353,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
             if self.connection_retry >= self.max_retries:
                 self.publish_stop()
-                self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}', 1, 1)
+                self.print(f'Stopping slips due to '
+                           f'redis.exceptions.ConnectionError: {ex}',
+                           1, 1)
             else:
                 # don't log this each retry
                 if self.connection_retry % 10 == 0:
@@ -473,32 +478,21 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         for example if the tw width is 1h, and hrs is 24, this function returns 24
         """
         return int(hrs*3600/self.width)
+    
+    
+    
+    def set_local_network(self, cidr):
+        """
+        set the local network used in the db
+        """
+        self.r.set("local_network", cidr)
 
-    def set_local_network(self, saddr):
-        # set the local network used in the db
-        # For now the local network is only ipv4, but it could be ipv6 in the future. Todo.
-
-        if self.is_localnet_set:
-            return
-
-        if saddr in ('0.0.0.0', '255.255.255.255'):
-            return
-
-        if not (
-                validators.ipv4(saddr)
-                and utils.is_private_ip(ipaddress.ip_address(saddr))
-        ):
-            return
-        # get the local network of this saddr
-        if network_range := utils.get_cidr_of_ip(saddr):
-            self.r.set("local_network", network_range)
-            self.is_localnet_set = True
+    def get_local_network(self):
+         return self.r.get("local_network")
 
     def get_used_port(self):
         return int(self.r.config_get('port')['port'])
 
-    def get_local_network(self):
-         return self.r.get("local_network")
 
     def get_label_count(self, label):
         """
@@ -608,18 +602,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def store_p2p_report(self, ip: str, report_data: dict):
         """
         stores answers about IPs slips asked other peers for.
+        updates the p2p_reports key only
         """
-        # reports in the db are sorted by reporter bydefault
+        # reports in the db are sorted by reporter by default
         reporter = report_data['reporter']
         del report_data['reporter']
 
         # if we have old reports about this ip, append this one to them
         # cached_p2p_reports is a dict
-        if cached_p2p_reports := self.get_p2p_reports_about_ip(ip):
+        cached_p2p_reports: Dict[str, List[dict]] =  (
+            self.get_p2p_reports_about_ip(ip))
+        if cached_p2p_reports:
             # was this ip reported by the same peer before?
             if reporter in cached_p2p_reports:
                 # ip was reported before, by the same peer
-                # did the same peer report the same score and confidence about the same ip twice in a row?
+                # did the same peer report the same score and
+                # confidence about the same ip twice in a row?
                 last_report_about_this_ip = cached_p2p_reports[reporter][-1]
                 score = report_data['score']
                 confidence = report_data['confidence']
@@ -628,10 +626,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                         and last_report_about_this_ip['confidence'] == confidence
                 ):
                     report_time = report_data['report_time']
-                    # score and confidence are the same as the last report, only update the time
+                    # score and confidence are the same as the last report,
+                    # only update the time
                     last_report_about_this_ip['report_time'] = report_time
                 else:
-                    # score and confidence are the different from the last report, add report to the list
+                    # score and confidence are the different from the last
+                    # report, add report to the list
                     cached_p2p_reports[reporter].append(report_data)
             else:
                 # ip was reported before, but not by the same peer
@@ -744,7 +744,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # get stored DNS resolution from our db
             ip_info_from_db = self.get_dns_resolution(answer)
             if ip_info_from_db == {}:
-                # if the domain(query) we have isn't already in DNSresolution in the db
+                # if the domain(query) we have isn't already in
+                # DNSresolution in the db
                 resolved_by = [srcip]
                 domains = []
                 timewindows = [profileid_twid]
@@ -760,14 +761,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 if profileid_twid not in timewindows:
                     timewindows.append(profileid_twid)
 
-                # we'll be appending the current answer to these cached domains
+                # we'll be appending the current answer
+                # to these cached domains
                 domains = ip_info_from_db.get('domains', [])
 
-            # if the domain(query) we have isn't already in DNSresolution in the db, add it
+            # if the domain(query) we have isn't already in
+            # DNSresolution in the db, add it
             if query not in domains:
                 domains.append(query)
 
-            # domains should be a list, not a string!, so don't use json.dumps here
+            # domains should be a list, not a string!,
+            # so don't use json.dumps here
             ip_info = {
                 'ts': ts,
                 'uid': uid,
@@ -797,7 +801,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 # no CNAME came with this query
                 pass
 
-            self.setInfoForDomains(query, domaindata, mode='add')
+            self.set_info_for_domains(query, domaindata, mode='add')
             self.set_domain_resolution(query, ips_to_add)
 
     def set_domain_resolution(self, domain, ips):
@@ -842,7 +846,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         this number is updated in the db every 5s by slips.py
         used for printing running stats in slips.py or outputprocess
         """
-        if modified_ips := self.r.hget('analysis', 'modified_ips_in_the_last_tw'):
+        if modified_ips := self.r.hget('analysis',
+                                       'modified_ips_in_the_last_tw'):
             return modified_ips
         else:
             return 0
@@ -852,7 +857,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def mark_connection_error_as_logged(self):
         """
-        When redis connection error occurs, to prevent every module from logging it to slips.log and the console,
+        When redis connection error occurs, to prevent
+        every module from logging it to slips.log and the console,
         set this variable in the db
         """
         self.r.set('logged_connection_error', 'True')
@@ -873,13 +879,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         Marks the given ip as seen in conn.log
         keeps track of private ipv4 only.
-        if an ip is not present in this set, it means we may have seen it but not in conn.log
+        if an ip is not present in this set, it means we may
+         have seen it but not in conn.log
         """
         self.r.sadd("srcips_seen_in_connlog", ip)
 
     def is_gw_mac(self, mac_addr: str, ip: str) -> bool:
         """
-        Detects the MAC of the gateway if 1 mac is seen assigned to 1 public destination IP
+        Detects the MAC of the gateway if 1 mac is seen
+        assigned to 1 public destination IP
         :param ip: dst ip that should be associated with the given MAC info
         """
 
@@ -890,7 +898,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # gateway MAC already set using this function
             return self.get_gateway_mac() == mac_addr
 
-        # since we don't have a mac gw in the db, see eif this given mac is the gw mac
+        # since we don't have a mac gw in the db, see if
+        # this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
         if not utils.is_private_ip(ip_obj):
             # now we're given a public ip and a MAC that's supposedly belongs to it
@@ -930,7 +939,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def set_growing_zeek_dir(self):
         """
-        Mark a dir as growing so it can be treated like the zeek logs generated by an interface
+        Mark a dir as growing so it can be treated like the zeek
+         logs generated by an interface
         """
         self.r.set('growing_zeek_dir', 'yes')
 
@@ -938,50 +948,42 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """ Did slips mark the given dir as growing?"""
         return 'yes' in str(self.r.get('growing_zeek_dir'))
 
-    def get_ip_identification(self, ip: str, get_ti_data=True):
+    def get_ip_identification(self, ip: str, get_ti_data=True) -> str:
         """
         Return the identification of this IP based
-        on the data stored so far
+        on the AS, rDNS, and SNI of the IP.
+        
+        :param ip: The IP address to retrieve information for.
         :param get_ti_data: do we want to get info about this IP from out TI lists?
+        :return: string containing AS, rDNS, and SNI of the IP.
         """
-        current_data = self.get_ip_info(ip)
-        identification = ''
-        if current_data:
-            if 'asn' in current_data:
-                asn_details = ''
-                if asnorg := current_data['asn'].get('org', ''):
-                    asn_details += f'{asnorg} '
+        ip_info = self.get_ip_info(ip)
+        id = ''
+        if not ip_info:
+            return id
+        
+        asn = ip_info.get('asn', '')
+        if asn:
+            asn_org = asn.get('org', '')
+            asn_number = asn.get('number', '')
+            id += f'AS: {asn_org} {asn_number}'
 
-                if number := current_data['asn'].get('number', ''):
-                    asn_details += f'{number} '
+        sni = ip_info.get('SNI', '')
+        if sni:
+            sni = sni[0] if isinstance(sni, list) else sni
+            id += f'SNI: {sni["server_name"]}, '
 
-                if len(asn_details) > 1:
-                    identification += f'AS: {asn_details}'
+        rdns = ip_info.get('reverse_dns', '')
+        if rdns:
+            id += f'rDNS: {rdns}, '
+        
+        threat_intel = ip_info.get('threatintelligence', '')
+        if threat_intel and get_ti_data:
+            id += f"IP seen in blacklist: {threat_intel['source']}."
 
-            if 'SNI' in current_data:
-                sni = current_data['SNI']
-                if type(sni) == list:
-                    sni = sni[0]
-                identification += 'SNI: ' + sni['server_name'] + ', '
-
-            if 'reverse_dns' in current_data:
-                identification += 'rDNS: ' + current_data['reverse_dns'] + ', '
-
-            if 'threatintelligence' in current_data and get_ti_data:
-                identification += (
-                    'Description: '
-                    + current_data['threatintelligence']['description']
-                    + ', '
-                    )
-
-                tags: list = current_data['threatintelligence'].get('tags', False)
-                # remove brackets
-                if tags:
-                    identification += f'tags= {tags}  '
-
-        identification = identification[:-2]
-        return identification
-
+        id = id.rstrip(', ')
+        return id
+    
     def get_multiaddr(self):
         """
         this is can only be called when p2p is enabled, this value is set by p2p pigeon
@@ -1023,12 +1025,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def set_organization_of_port(self, organization, ip: str, portproto: str):
         """
-        Save in the DB a port with its organization and the ip/ range used by this organization
+        Save in the DB a port with its organization and the ip/
+        range used by this organization
         :param portproto: portnumber + / + protocol.lower()
         :param ip: can be a single org ip, or a range or ''
         """
         if org_info := self.get_organization_of_port(portproto):
-            # this port and proto was used with another organization, append to it
+            # this port and proto was used with another
+            # organization, append to it
             org_info = json.loads(org_info)
             org_info['ip'].append(ip)
             org_info['org_name'].append(organization)
@@ -1078,7 +1082,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             self.r.hset('default_gateway', address_type, address)
 
 
-    def get_domain_resolution(self, domain):
+    def get_domain_resolution(self, domain) -> List[str]:
         """
         Returns the IPs resolved by this domain
         """
@@ -1159,7 +1163,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         }
         """
         if cached_asn := self.get_asn_cache(first_octet=first_octet):
-            # we already have a cached asn of a range that starts with the same first octet
+            # we already have a cached asn of a range that
+            # starts with the same first octet
             cached_asn: dict = json.loads(cached_asn)
             cached_asn.update(range_info)
             self.rcache.hset('cached_asn', first_octet, json.dumps(cached_asn))
@@ -1177,7 +1182,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         else:
             return self.rcache.hgetall('cached_asn')
 
-    def store_process_PID(self, process, pid):
+    def store_pid(self, process, pid):
         """
         Stores each started process or module with it's PID
         :param pid: int
@@ -1203,17 +1208,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def set_org_info(self, org, org_info, info_type):
         """
         store ASN, IP and domains of an org in the db
-        :param org: supported orgs are ('google', 'microsoft', 'apple', 'facebook', 'twitter')
+        :param org: supported orgs are ('google', 'microsoft',
+        'apple', 'facebook', 'twitter')
         : param org_info: a json serialized list of asns or ips or domains
         :param info_type: supported types are 'asn', 'domains', 'IPs'
         """
-        # info will be stored in OrgInfo key {'facebook_asn': .., 'twitter_domains': ...}
+        # info will be stored in OrgInfo key {'facebook_asn': ..,
+        # 'twitter_domains': ...}
         self.rcache.hset('OrgInfo', f'{org}_{info_type}', org_info)
 
     def get_org_info(self, org, info_type) -> str:
         """
         get the ASN, IP and domains of an org from the db
-        :param org: supported orgs are ('google', 'microsoft', 'apple', 'facebook', 'twitter')
+        :param org: supported orgs are ('google', 'microsoft', 'apple',
+         'facebook', 'twitter')
         :param info_type: supported types are 'asn', 'domains'
         " returns a json serialized dict with info
         """
@@ -1246,8 +1254,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def get_whitelist(self, key):
         """
-        Whitelist supports different keys like : IPs domains and organizations
-        this function is used to check if we have any of the above keys whitelisted
+        Whitelist supports different keys like : IPs domains
+        and organizations
+        this function is used to check if we have any of the
+        above keys whitelisted
         """
         if whitelist := self.r.hget('whitelist', key):
             return json.loads(whitelist)
@@ -1294,7 +1304,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             return True
 
         print(
-            f'[DB] Error Saving: Cannot find the redis database directory {redis_db_path}'
+            f'[DB] Error Saving: Cannot find the redis '
+            f'database directory {redis_db_path}'
         )
         return False
 
@@ -1336,7 +1347,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # Stop the server first in order for redis to load another db
             os.system(f'{self.sudo}service redis-server stop')
 
-            # Start the server again, but make sure it's flushed and doesnt have any keys
+            # Start the server again, but make sure it's flushed
+            # and doesnt have any keys
             os.system('redis-server redis.conf > /dev/null 2>&1')
             return True
         except Exception:
@@ -1383,12 +1395,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def store_blame_report(self, ip, network_evaluation):
         """
-        :param network_evaluation: a dict with {'score': ..,'confidence': .., 'ts': ..} taken from a blame report
+        :param network_evaluation: a dict with {'score': ..,
+        'confidence':
+        .., 'ts': ..} taken from a blame report
         """
         self.rcache.hset('p2p-received-blame-reports', ip, network_evaluation)
 
     def store_zeek_path(self, path):
-        """used to store the path of zeek log files slips is currently using"""
+        """used to store the path of zeek log
+        files slips is currently using"""
         self.r.set('zeek_path', path)
 
     def get_zeek_path(self) -> str:

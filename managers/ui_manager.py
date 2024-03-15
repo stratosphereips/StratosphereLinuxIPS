@@ -1,3 +1,4 @@
+from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 
 import subprocess
@@ -34,25 +35,33 @@ class UIManager:
         """
         def detach_child():
             """
-            Detach the web interface from the parent process group(slips.py), the child(web interface)
-             will no longer receive signals and should be manually killed in shutdown_gracefully()
+            Detach the web interface from the parent process group(slips.py),
+             the child(web interface)
+             will no longer receive signals and should be manually killed in
+             shutdown_gracefully()
             """
             os.setpgrp()
 
         def run_webinterface():
-            # starting the wbeinterface using the shell script results in slips not being able to
+            # starting the wbeinterface using the shell script results
+            # in slips not being able to
             # get the PID of the python proc started by the .sh script
-            command = ['python3', 'webinterface/app.py']
+            # so we'll start it with python instead
+            command = ['python3', '-m', 'webinterface.app']
+
             webinterface = subprocess.Popen(
                 command,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL,
-                preexec_fn=detach_child
+                preexec_fn=detach_child,
+                cwd=os.getcwd()
+                
             )
-            # self.webinterface_pid = webinterface.pid
-            self.main.db.store_process_PID('Web Interface', webinterface.pid)
-            # we'll assume that it started, and if not, the return value will immediately change and this thread will
+
+            self.main.db.store_pid('Web Interface', webinterface.pid)
+            # we'll assume that it started, and if not, the return value will
+            # immediately change and this thread will
             # print an error
             self.webinterface_return_value.put(True)
 
@@ -60,21 +69,23 @@ class UIManager:
             # we will never get the return value of this thread
             error = webinterface.communicate()[1]
             if error:
-                # pop the True we just added
+                # pop the return value we just added
                 self.webinterface_return_value.get()
                 # set false as the return value of this thread
                 self.webinterface_return_value.put(False)
 
-                self.main.print (f"Web interface error:\n")
+                self.main.print(f"Web interface error:")
                 for line in error.strip().decode().splitlines():
-                    self.main.print (f"{line}")
-
-                pid = self.main.metadata_man.get_pid_using_port(55000)
-                self.main.print(f"Port 55000 is used by PID {pid}")
-
-        # if there's an error, this will be set to false, and the error will be printed
-        # otherwise we assume that the interface started
-        # self.webinterface_started = True
+                    self.main.print(f"{line}")
+        
+        if utils.is_port_in_use(55000):
+            pid = self.main.metadata_man.get_pid_using_port(55000)
+            self.main.print(f"Failed to start web interface. Port 55000 is "
+                            f"used by PID {pid}")
+            return
+            
+        # if there's an error, this webinterface_return_value will be set
+        # to false, and the error will be printed
         self.webinterface_return_value = Queue()
         self.webinterface_thread = threading.Thread(
             target=run_webinterface,

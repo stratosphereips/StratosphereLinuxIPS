@@ -248,7 +248,7 @@ There are two options how to run Kalipso Locally:
 
 You can run Kalipso as a shell script in another terminal using the command:
 
-	```./kalipso.sh```
+	./kalipso.sh
 
 
 In docker, you can open a new terminal inside the slips container and execute ```./kalipso.sh```
@@ -276,14 +276,14 @@ The traffic of IP is splitted into time windows. each time window is 1h long of 
 
 You can press Enter of any of them to view the list of flows in the timewindow.
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px">
 
 You can switch to the flows view in kalipso by pressing TAB, now you can scroll on flows using arrows
 
 
 On the very top you can see the ASN, the GEO location, and the virustotal score of each IP if available
 
-Check how to setup virustotal in Slips here https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications
+Check how to setup virustotal in Slips [here](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications).
 
 
 ### The Web Interface

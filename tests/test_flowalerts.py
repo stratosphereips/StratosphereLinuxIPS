@@ -1,5 +1,4 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
-from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
 import json
 from numpy import arange
@@ -161,15 +160,30 @@ def test_detect_young_domains(
         ):
     flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
     domain = 'example.com'
+    answers = ['192.168.1.1', '192.168.1.2', '192.168.1.3', 'CNAME_HERE.com']
 
     # age in days
-    mock_db.getDomainData.return_value = {'Age': 50}
+    mock_db.get_domain_data.return_value = { 'Age': 50}
     assert (
-        flowalerts.detect_young_domains(domain, timestamp, profileid, twid, uid) is True
+          flowalerts.detect_young_domains(
+            domain,
+            answers,
+            timestamp,
+            profileid,
+            twid,
+            uid
+        ) is True
     )
 
     # more than the age threshold
-    mock_db.getDomainData.return_value = {'Age': 1000}
+    mock_db.get_domain_data.return_value = { 'Age': 1000}
     assert (
-        flowalerts.detect_young_domains(domain, timestamp, profileid, twid, uid) is False
+        flowalerts.detect_young_domains(
+            domain,
+            answers,
+            timestamp,
+            profileid,
+            twid,
+            uid
+        ) is False
     )

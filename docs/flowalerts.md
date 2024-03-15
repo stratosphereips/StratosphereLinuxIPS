@@ -319,6 +319,17 @@ For example if the currently used local network is: 192.168.1.0/24
 
 and slips sees a forged packet going from 192.168.1.2 to 10.0.0.1, it will alert
 
+Slips detects the current local network by using the local network of the private
+ips specified in ```client_ips``` parameter in ```slips.conf```
+
+If no IPs are specified, slips uses the local network of the first private source ip 
+found in the traffic.
+
+This threat level of this detection is low if the source ip is the one outside of local network 
+because it's unlikely.
+and high if the destination ip is the one outside of local network. 
+
+
 ## High entropy DNS TXT answers 
 
 Slips check every DNS answer with TXT record for high entropy

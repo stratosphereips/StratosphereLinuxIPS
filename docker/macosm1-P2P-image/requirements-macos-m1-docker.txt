@@ -23,7 +23,7 @@ pytest-mock
 pytest-xdist
 slackclient
 scipy
-sklearn
+scikit-learn
 GitPython
 protobuf
 blinker

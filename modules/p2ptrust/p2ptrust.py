@@ -6,7 +6,9 @@ import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict
+from typing import Dict, \
+    Optional, \
+    Tuple
 import json
 import sys
 import socket
@@ -19,18 +21,16 @@ import modules.p2ptrust.utils.utils as p2p_utils
 from modules.p2ptrust.utils.go_director import GoDirector
 from slips_files.core.evidence_structure.evidence import \
     (
+        dict_to_evidence,
         Evidence,
         ProfileID,
         TimeWindow,
-        Victim,
         Attacker,
-        Proto,
         ThreatLevel,
         EvidenceType,
         IoCType,
         Direction,
         IDEACategory,
-        Tag
     )
 
 
@@ -48,7 +48,8 @@ def validate_slips_data(message_data: str) -> (str, int):
                     'cache_age': cache_age
                 }
 
-    If the message is correct, the two values are returned as a tuple (str, int).
+    If the message is correct, the two values are
+     returned as a tuple (str, int).
     If not, (None, None) is returned.
     :param message_data: data from slips request channel
     :return: the received msg or None tuple
@@ -62,7 +63,8 @@ def validate_slips_data(message_data: str) -> (str, int):
     except ValueError:
         # message has wrong format
         print(
-            f'The message received from p2p_data_request channel has incorrect format: {message_data}'
+            f'The message received from p2p_data_request channel'
+            f' has incorrect format: {message_data}'
         )
         return None
 
@@ -78,7 +80,8 @@ class Trust(IModule):
     gopy_channel_raw='p2p_gopy'
     pygo_channel_raw='p2p_pygo'
     start_pigeon=True
-    pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips')  # or make sure the binary is in $PATH
+    # or make sure the binary is in $PATH
+    pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips')
     pigeon_key_file='pigeon.keys'
     rename_redis_ip_info=False
     rename_sql_db_file=False
@@ -122,7 +125,8 @@ class Trust(IModule):
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
         self.c1 = self.db.subscribe('report_to_peers')
-        # channel to send msgs to whenever slips needs info from other peers about an ip
+        # channel to send msgs to whenever slips needs
+        # info from other peers about an ip
         self.c2 = self.db.subscribe(self.p2p_data_request_channel)
         # this channel receives peers requests/updates
         self.c3 = self.db.subscribe(self.gopy_channel)
@@ -144,7 +148,7 @@ class Trust(IModule):
 
         self.sql_db_name = f'{self.data_dir}trustdb.db'
         if self.rename_sql_db_file:
-            self.sql_db_name += str(pigeon_port)
+            self.sql_db_name += str(self.pigeon_port)
         # todo don't duplicate this dict, move it to slips_utils
         # all evidence slips detects has threat levels of strings
         # each string should have a corresponding int value to be able to calculate
@@ -200,8 +204,10 @@ class Trust(IModule):
             self.sql_db_name,
             drop_tables_on_startup=True
         )
-        self.reputation_model = reputation_model.BaseModel(self.logger, self.trust_db)
-        # print(f"[DEBUGGING] Starting godirector with pygo_channel: {self.pygo_channel}")
+        self.reputation_model = reputation_model.BaseModel(
+            self.logger, self.trust_db)
+        # print(f"[DEBUGGING] Starting godirector with
+        # pygo_channel: {self.pygo_channel}")
         self.go_director = GoDirector(
             self.logger,
             self.trust_db,
@@ -256,80 +262,124 @@ class Trust(IModule):
 
 
             # print(f"[debugging] runnning pigeon: {executable}")
-
-    def new_evidence_callback(self, msg: Dict):
+    
+    def extract_confidence(self, evidence: Evidence) -> Optional[float]:
         """
-        This function is called whenever a msg arrives to the report_to_peers channel,
-        It compares the score and confidence of the given IP and decides whether or not to
-        share it accordingly
+        returns the confidence of the given evidence or None if no
+        confidence was found
+        """
+        confidence: float = evidence.confidence
+
+        if confidence:
+            return confidence
+        
+        attacker_ip: str = evidence.attacker.value
+        self.print(
+            f"IP {attacker_ip} doesn't have a confidence. "
+            f"not sharing to the network.", 0, 2,
+        )
+        return
+    
+    def extract_threat_level(self, evidence: Evidence) -> Optional[ThreatLevel]:
+        """
+        returns the confidence of the given evidence or None if no
+        confidence was found
+        """
+        threat_level: ThreatLevel = evidence.threat_level
+
+        if threat_level:
+            return threat_level
+        
+        attacker_ip: str = evidence.attacker.value
+        self.print(
+                f"IP {attacker_ip} doesn't have a threat_level. "
+                f"not sharing to the network.", 0,2,
+        )
+
+        return
+    
+    def should_share(self, evidence: Evidence) -> bool:
+        """
+        decides whether or not to report the given evidence to other
+        peers
+        """
+        if evidence.evidence_type == EvidenceType.P2P_REPORT:
+            # we shouldn't re-share evidence reported by other peers
+            return False
+
+        if evidence.attacker.attacker_type != IoCType.IP.name:
+            # we only share ips with other peers.
+            return False
+
+        confidence = self.extract_confidence(evidence)
+        if not confidence:
+            return False
+        
+        threat_level: ThreatLevel = self.extract_threat_level(evidence)
+        if not threat_level:
+            return False
+        
+        return True
+        
+    
+    def new_evidence_callback(self, msg: Dict[str, str]):
+        """
+        Decides to share an evidence generated by slips to other peers or not
+        depending on whether we have info about this ip from the p2p
+        network or not
+        It is called whenever a msg arrives to the
+        report_to_peers channel,
         """
         try:
-            data = json.loads(msg['data'])
+            evidence: Dict[str, str] = json.loads(msg['data'])
         except json.decoder.JSONDecodeError:
-            # not a valid json dict
+            return
+        evidence: Evidence = dict_to_evidence(evidence)
+
+        if not self.should_share(evidence):
             return
 
-        # example: dstip srcip dport sport dstdomain
-        attacker_direction = data.get('attacker_direction')
-        if 'ip' not in attacker_direction:   # and not 'domain' in attacker_direction:
-            # todo do we share domains too?
-            # the detection is a srcport, dstport, etc. don't share
-            return
-
-        evidence_type = data.get('evidence_type')
-        if 'P2PReport' in evidence_type:
-            # we shouldn't re-share evidence reported by other peers
-            return
-
-
-        attacker = data.get('attacker')
-        confidence = data.get('confidence', False)
-        threat_level = data.get('threat_level', False)
-        if not threat_level:
-            self.print(
-                f"IP {attacker} doesn't have a threat_level. not sharing to the network.", 0,2,
-            )
-            return
-        if not confidence:
-            self.print(
-                f"IP {attacker} doesn't have a confidence. not sharing to the network.", 0, 2,
-            )
-            return
-
-        # get the int representing this threat_level
-        score = self.threat_levels[threat_level]
-        # todo what we're currently sharing is the threat level(int) of the evidence caused by this ip
+        # todo what we're currently sharing is the threat level(int)
+        #  of the evidence caused by this ip
 
         # todo when we generate a new evidence,
-        #  we give it a score and a tl, but we don't update the IP_Info and give this ip a score in th db!
+        #  we give it a score and a tl, but we don't update the
+        #  IP_Info and give this ip a score in th db!
 
         # TODO: discuss - only share score if confidence is high enough?
         # compare slips data with data in go
         data_already_reported = True
         try:
-            cached_opinion = self.trust_db.get_cached_network_opinion(
-                'ip', attacker
+            cached_opinion: Tuple = self.trust_db.get_cached_network_opinion(
+                'ip', evidence.attacker.value
             )
+            # get the cached network opinion about this ip
             (
                 cached_score,
                 cached_confidence,
                 network_score,
                 timestamp,
             ) = cached_opinion
-            # if we don't have info about this ip from the p2p network, report it to the p2p netwrok
+            # if we don't have info about this ip from the p2p network,
+            # report it to the p2p network
             if not cached_score:
                 data_already_reported = False
         except KeyError:
             data_already_reported = False
         except IndexError:
-            # data saved in local db have wrong structure, this is an invalid state
+            # data saved in local db have wrong structure,
+            # this is an invalid state
             return
 
-        # TODO: in the future, be smarter and share only when needed. For now, we will always share
         if not data_already_reported:
-            # Take data and send it to a peer as report.
+            # send the peer report to other peers
             p2p_utils.send_evaluation_to_go(
-                attacker, score, confidence, '*', self.pygo_channel, self.db
+                evidence.attacker.value,
+                evidence.threat_level.value,
+                evidence.confidence,
+                '*',
+                self.pygo_channel,
+                self.db
             )
 
     def gopy_callback(self, msg: Dict):
@@ -360,58 +410,6 @@ class Trust(IModule):
         except Exception as e:
             self.print(f'Exception {e} in data_request_callback', 0, 1)
 
-    # def handle_update(self, ip_address: str) -> None:
-    #     """
-    #     Handle IP scores changing in Slips received from the ip_info_change channel
-    #
-    #     This method checks if Slips has a new score that are different
-    #     from the scores known to the network, and if so, it means that it is worth
-    #     sharing and it will be shared.
-    #     Additionally, if the score is serious, the node will be blamed(blocked)
-    #     :param ip_address: The IP address sent through the ip_info_change channel (if it is not valid IP, it returns)
-    #     """
-    #
-    #     # abort if the IP is not valid
-    #     if not utils.validate_ip_address(ip_address):
-    #         self.print("IP validation failed")
-    #         return
-    #
-    #     score, confidence = utils.get_ip_info_from_slips(ip_address)
-    #     if score is None:
-    #         self.print("IP doesn't have any score/confidence values in DB")
-    #         return
-    #
-    #     # insert data from slips to database
-    #     self.trust_db.insert_slips_score(ip_address, score, confidence)
-    #
-    #     # TODO: discuss - only share score if confidence is high enough?
-    #
-    #     # compare slips data with data in go
-    #     data_already_reported = True
-    #     try:
-    #         cached_opinion = self.trust_db.get_cached_network_opinion("ip", ip_address)
-    #         cached_score, cached_confidence, network_score, timestamp = cached_opinion
-    #         if cached_score is None:
-    #             data_already_reported = False
-    #         elif abs(score - cached_score) < 0.1:
-    #             data_already_reported = False
-    #     except KeyError:
-    #         data_already_reported = False
-    #     except IndexError:
-    #         # data saved in local db have wrong structure, this is an invalid state
-    #         return
-    #
-    #     # TODO: in the future, be smarter and share only when needed. For now, we will always share
-    #     if not data_already_reported:
-    #         utils.send_evaluation_to_go(ip_address, score, confidence, "*", self.pygo_channel)
-    #
-    #     # TODO: discuss - based on what criteria should we start blaming?
-    #     # decide whether or not to block
-    #     if score > 0.8 and confidence > 0.6:
-    #         #todo finish the blocking logic and actually block the ip
-    #
-    #         # tell other peers that we're blocking this IP
-    #         utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
     def set_evidence_malicious_ip(self,
                                   ip_info: dict,
@@ -420,41 +418,39 @@ class Trust(IModule):
         """
         Set an evidence for a malicious IP met in the timewindow
         ip_info format is json serialized {
-        #             'ip': the source/dst ip
-        #             'profileid' : profile where the alert was generated. It includes the src ip
-        #             'twid' : name of the timewindow when it happened.
-        #             'proto' : protocol
-        #             'ip_state' : is basically the answer to "which one is the
-        #                           blacklisted IP"?'can be 'srcip' or
-        #                            'dstip',
-        #             'stime': Exact time when the evidence happened
-        #             'uid': Zeek uid of the flow that generated the evidence,
-        #             'cache_age': How old is the info about this ip
-        #         }
+                     'ip': the source/dst ip
+                     'profileid' : profile where the alert was generated.
+                        It includes the src ip
+                     'twid' : name of the timewindow when it happened.
+                     'proto' : protocol
+                     'ip_state' : is basically the answer to "which one is the
+                                   blacklisted IP"?'can be 'srcip' or
+                                    'dstip',
+                     'stime': Exact time when the evidence happened
+                     'uid': Zeek uid of the flow that generated the evidence,
+                     'cache_age': How old is the info about this ip
+                 }
         :param threat_level: the threat level we learned form the network
         :param confidence: how confident the network opinion is about this opinion
         """
-
+        
         attacker_ip: str = ip_info.get('ip')
-        ip_state = ip_info.get('ip_state')
-        uid = ip_info.get('uid')
         profileid = ip_info.get('profileid')
-        twid = ip_info.get('twid')
-        timestamp = str(ip_info.get('stime'))
         saddr = profileid.split("_")[-1]
-
-        category = IDEACategory.ANOMALY_TRAFFIC
-
+        
+        threat_level = utils.threat_level_to_string(threat_level)
+        threat_level = ThreatLevel[threat_level.upper()]
+        twid_int = int(ip_info.get('twid').replace("timewindow", ""))
+        
+        # add this ip to our MaliciousIPs hash in the database
+        self.db.set_malicious_ip(attacker_ip, profileid, ip_info.get('twid'))
+        
         ip_identification = self.db.get_ip_identification(attacker_ip)
-        if 'src' in ip_state:
+        
+        if 'src' in ip_info.get('ip_state'):
             description = (
                 f'Connection from blacklisted IP {attacker_ip} '
                 f'({ip_identification}) to {saddr} Source: Slips P2P network.'
-            )
-            attacker = Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=attacker_ip
             )
         else:
             description = (
@@ -462,37 +458,38 @@ class Trust(IModule):
                 f'({ip_identification}) '
                 f'from {saddr} Source: Slips P2P network.'
             )
-            attacker = Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=saddr
+            
+        for ip in (saddr, attacker_ip):
+            evidence = Evidence(
+                evidence_type= EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+                attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=ip
+                ),
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=attacker_ip),
+                timewindow=TimeWindow(number=twid_int),
+                uid=[ip_info.get('uid')],
+                timestamp=str(ip_info.get('stime')),
+                category=IDEACategory.ANOMALY_TRAFFIC,
             )
+        
+            self.db.set_evidence(evidence)
 
-        evidence = Evidence(
-            evidence_type= EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
-            description=description,
-            profile=ProfileID(ip=attacker.value),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=timestamp,
-            category=category,
-        )
-
-        self.db.set_evidence(evidence)
-        # add this ip to our MaliciousIPs hash in the database
-        self.db.set_malicious_ip(attacker, profileid, twid)
 
     def handle_data_request(self, message_data: str) -> None:
         """
-        Process the request from Slips, ask the network and process the network response.
+        Process the request from Slips, ask the network and
+        process the network response.
 
         Three `arguments` are expected in the redis channel:
             ip_address: str,
             cache_age: int [seconds]
-        The return value is sent to the redis channel `p2p_data_response` in the format:
+        The return value is sent to the redis channel
+         `p2p_data_response` in the format:
             ip_address: str,
             timestamp: int [time of assembling the response],
             network_opinion: float,
@@ -503,11 +500,13 @@ class Trust(IModule):
         This method will check if any data not older than `cache_age`
         is saved in cache. If yes, this data is returned.
         If not, the database is checked.
-        An ASK query is sent to the network and responses are collected and saved into
-        the redis database.
+        An ASK query is sent to the network and responses
+        are collected and saved into the redis database.
 
-        :param message_data: The data received from the redis channel `p2p_data_response`
-        :return: None, the result is saved into the redis database under key `p2p4slips`
+        :param message_data: The data received from the redis
+         channel `p2p_data_response`
+        :return: None, the result is saved into the redis
+            database under key `p2p4slips`
         """
 
         # make sure that IP address is valid
@@ -515,8 +514,10 @@ class Trust(IModule):
         ip_info = validate_slips_data(message_data)
         if ip_info is None:
             # IP address is not valid, aborting
-            # print(f"DEBUGGING: IP address is not valid: {ip_info}, not asking the network")
+            # print(f"DEBUGGING: IP address is not valid:
+            # {ip_info}, not asking the network")
             return
+        
         # ip_info is {
         #             'ip': str(saddr),
         #             'profileid' : str(profileid),
@@ -542,10 +543,12 @@ class Trust(IModule):
             # print("DEBUGGING:  cached value is ok, not asking the network.")
             return
 
-        # if cached value is old, ask the peers
+        # since cached value is old, ask the peers
 
-        # TODO: in some cases, it is not necessary to wait, specify that and implement it
-        #       I do not remember writing this comment. I have no idea in which cases there is no need to wait? Maybe
+        # TODO: in some cases, it is not necessary to wait, specify
+        #  that and implement it
+        #       I do not remember writing this comment. I have no idea
+        #       in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
         p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.db)
         self.print(f'[Slips -> The Network] request about {ip_address}')
@@ -561,37 +564,57 @@ class Trust(IModule):
             combined_score,
             combined_confidence,
         ) = self.reputation_model.get_opinion_on_ip(ip_address)
-
-        # no data in db - this happens when testing, if there is not enough data on peers
+        
+        self.process_network_response(ip_address,
+                                      combined_score,
+                                      combined_confidence,
+                                      network_score,
+                                      confidence,
+                                      ip_info)
+        
+    def process_network_response(
+        self, ip, combined_score, combined_confidence, network_score,
+        confidence, ip_info
+        ):
+        """
+        stores the reported score and confidence about the ip and adds an
+        evidence if necessary
+        """
+        # no data in db - this happens when testing,
+        # if there is not enough data on peers
         if combined_score is None:
             self.print(
-                f'No data received from the network about {ip_address}\n', 0, 2
+                f'No data received from the'
+                f' network about {ip}\n', 0, 2
             )
-            # print(f"[DEBUGGING] No data received from the network about {ip_address}\n")
-        else:
-            self.print(
-                f'The Network shared some data about {ip_address}, '
-                f'Shared data: score={combined_score}, confidence={combined_confidence} saving it to  now!\n',
-                0,
-                2,
-            )
+            return
+        
+        self.print(
+            f'The Network shared some data about {ip}, '
+            f'Shared data: score={combined_score}, '
+            f'confidence={combined_confidence} saving it to  now!\n',
+            0,
+            2,
+        )
 
-            # save it to IPsInfo hash in p2p4slips key in the db AND p2p_reports key
-            p2p_utils.save_ip_report_to_db(
-                ip_address,
-                combined_score,
-                combined_confidence,
-                network_score,
-                self.db,
-                self.storage_name,
+        # save it to IPsInfo hash in p2p4slips key in the db
+        # AND p2p_reports key
+        p2p_utils.save_ip_report_to_db(
+            ip,
+            combined_score,
+            combined_confidence,
+            network_score,
+            self.db,
+            self.storage_name,
+        )
+        if int(combined_score) * int(confidence) > 0:
+            self.set_evidence_malicious_ip(
+                ip_info, combined_score, confidence
             )
-            if int(combined_score) * int(confidence) > 0:
-                self.set_evidence_malicious_ip(
-                    ip_info, combined_score, confidence
-                )
 
     def respond_to_message_request(self, key, reporter):
-        # todo do you mean another peer is asking me about an ip? yes. in override mode
+        # todo do you mean another peer is asking me about
+        #  an ip? yes. in override mode
         """
         Handle data request from a peer (in overriding p2p mode) (set to false by defualt)
         :param key: The ip requested by the peer
@@ -629,7 +652,8 @@ class Trust(IModule):
         # check if it was possible to start up pigeon
         if self.start_pigeon and self.pigeon is None:
             self.print(
-                'Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...'
+                'Module was supposed to start up pigeon but it was not'
+                ' possible to start pigeon! Exiting...'
             )
             return 1
 
@@ -642,20 +666,20 @@ class Trust(IModule):
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
     def main(self):
-        """main loop function"""
-        if msg:= self.get_msg('report_to_peers'):
+        if msg := self.get_msg('report_to_peers'):
             self.new_evidence_callback(msg)
 
-        if msg:= self.get_msg(self.p2p_data_request_channel):
+        if msg := self.get_msg(self.p2p_data_request_channel):
             self.data_request_callback(msg)
 
-        if msg:= self.get_msg(self.gopy_channel):
+        if msg := self.get_msg(self.gopy_channel):
             self.gopy_callback(msg)
 
         ret_code = self.pigeon.poll()
         if ret_code is not None:
             self.print(
-                f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
+                f'Pigeon process suddenly terminated with '
+                f'return code {ret_code}. Stopping module.'
             )
             return 1
 

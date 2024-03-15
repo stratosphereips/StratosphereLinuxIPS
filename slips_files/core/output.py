@@ -286,6 +286,24 @@ class Output(IObserver):
     def is_pbar_finished(self )-> bool:
         return self.pbar_finished.is_set()
     
+    
+    def forward_progress_bar_msgs(self, msg: dict):
+        """
+        passes init and update msgs to pbar module
+        """
+        pbar_event: str = msg['bar']
+        if pbar_event == 'init':
+            self.tell_pbar({
+                'event': pbar_event,
+                'total_flows': msg['bar_info']['total_flows'],
+            })
+            return
+
+        if pbar_event == 'update' and not self.is_pbar_finished():
+            self.tell_pbar({
+                'event': 'update_bar',
+            })
+    
     def update(self, msg: dict):
         """
         gets called whenever any module need to print something
@@ -303,28 +321,22 @@ class Output(IObserver):
                 total_flows: int,
         }
         """
-        try:
-            if 'init' in msg.get('bar', ''):
-                self.tell_pbar({
-                    'event': 'init',
-                    'total_flows': msg['bar_info']['total_flows'],
-                })
+        # if pbar wasn't supported, inputproc won't send update msgs
 
-            elif (
-                    'update' in msg.get('bar', '')
-                    and not self.is_pbar_finished()
-            ):
-                # if pbar wasn't supported, inputproc won't send update msgs
-                self.tell_pbar({
-                    'event': 'update_bar',
-                })
-            else:
-                # output to terminal and logs or logs only?
-                if msg.get('log_to_logfiles_only', False):
-                    self.log_line(msg)
-                else:
-                    # output to terminal
-                    self.output_line(msg)
-        except Exception as e:
-            print(f"Error in output.py: {e}")
-            print(traceback.print_stack())
+        # try:
+        if 'bar' in msg:
+            self.forward_progress_bar_msgs(msg)
+            return
+            
+        # output to terminal and logs or logs only?
+        if msg.get('log_to_logfiles_only', False):
+            self.log_line(msg)
+        else:
+            # output to terminal
+            self.output_line(msg)
+            
+            
+#         except Exception as e:
+#             print(f"Error in output.py: {e} {type(e)}")
+#             traceback.print_stack()
+

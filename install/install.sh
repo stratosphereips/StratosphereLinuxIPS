@@ -1,32 +1,29 @@
 #!/bin/sh
 
-echo "[+] Installing zeek ...\n"
+sudo apt-get update
+echo "[+] Installing slips dependencies ...\n"
 sudo apt-get install cmake make gcc g++ flex bison libpcap-dev libssl-dev python3 python3-dev swig zlib1g-dev
 sudo apt install -y --no-install-recommends \
     wget \
     ca-certificates \
     git \
     curl \
-    gnupg
+    gnupg \
+    lsb-release
+
 echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
 curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
-sudo apt update
-sudo apt install zeek
 
+curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
 
-# create a symlink to zeek so that slips can find it
-echo "[+] Executing 'ln -s /opt/zeek/bin/zeek /usr/local/bin/bro'\n"
-sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
-echo "[+] Executing 'export PATH=$PATH:/usr/local/zeek/bin'\n"
-export PATH=$PATH:/usr/local/zeek/bin
-echo "[+] Adding /usr/local/zeek/bin to ~/.bashrc\n"
-echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
+sudo apt-get update
 
 
 echo "[+] Installing Slips dependencies ...\n"
 sudo apt install -y --no-install-recommends \
   python3 \
-  redis-server \
+  redis \
   zeek \
   python3-pip \
   python3-certifi \
@@ -47,17 +44,23 @@ sudo apt install -y --no-install-recommends \
   yara \
   libnotify-bin
 
+echo "[+] Installing zeek ..."
+# create a symlink to zeek so that slips can find it
+sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+export PATH=$PATH:/usr/local/zeek/bin
+echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
 
-echo "[+] Executing 'python3 -m pip install --upgrade pip'\n"
+
+echo "[+] Executing 'python3 -m pip install --upgrade pip'"
 python3 -m pip install --upgrade pip
-echo "[+] Executing 'pip3 install -r install/requirements.txt'\n"
+echo "[+] Executing 'pip3 install -r install/requirements.txt'"
 pip3 install -r install/requirements.txt
-echo "[+] Executing pip3 install --ignore-installed six\n"
+echo "[+] Executing pip3 install --ignore-installed six"
 pip3 install --ignore-installed six
 
 # For Kalipso
 echo "[+] Downloading nodejs v19 and npm dependencies"
-curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
+curl -fsSL https://deb.nodesource.com/setup_21.x |  sudo -E bash - && sudo apt install -y --no-install-recommends nodejs
 cd ./modules/kalipso && npm install
 cd ../..
 

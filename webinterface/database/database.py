@@ -1,6 +1,6 @@
 import redis
 from .signals import message_sent
-from utils import *
+from webinterface.utils import *
 
 
 class Database(object):

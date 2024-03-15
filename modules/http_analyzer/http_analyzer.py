@@ -1,9 +1,10 @@
-from slips_files.common.abstracts._module import IModule
 import json
 import urllib
 import requests
-from typing import Union
-
+from typing import (
+    Union,
+    Dict
+    )
 from slips_files.common.imports import *
 from slips_files.core.evidence_structure.evidence import \
     (
@@ -29,8 +30,10 @@ class HTTPAnalyzer(IModule):
 
     def init(self):
         self.c1 = self.db.subscribe('new_http')
+        self.c2 = self.db.subscribe('new_weird')
         self.channels = {
-            'new_http': self.c1
+            'new_http': self.c1,
+            'new_weird': self.c2
         }
         self.connections_counter = {}
         self.empty_connections_threshold = 4
@@ -89,21 +92,19 @@ class HTTPAnalyzer(IModule):
         )
         for suspicious_ua in suspicious_user_agents:
             if suspicious_ua.lower() in user_agent.lower():
-                threat_level: ThreatLevel = ThreatLevel.HIGH
                 confidence: float = 1
                 saddr = profileid.split('_')[1]
                 description: str = (f'Suspicious user-agent: '
                                     f'{user_agent} while '
                                     f'connecting to {host}{uri}')
-                attacker = Attacker(
+                evidence: Evidence = Evidence(
+                    evidence_type=EvidenceType.SUSPICIOUS_USER_AGENT,
+                    attacker=Attacker(
                         direction=Direction.SRC,
                         attacker_type=IoCType.IP,
                         value=saddr
-                    )
-                evidence: Evidence = Evidence(
-                    evidence_type=EvidenceType.SUSPICIOUS_USER_AGENT,
-                    attacker=attacker,
-                    threat_level=threat_level,
+                        ),
+                    threat_level=ThreatLevel.HIGH,
                     confidence=confidence,
                     description=description,
                     profile=ProfileID(ip=saddr),
@@ -162,21 +163,18 @@ class HTTPAnalyzer(IModule):
 
         uids, connections = self.connections_counter[host]
         if connections == self.empty_connections_threshold:
-            threat_level: ThreatLevel = ThreatLevel.MEDIUM
             confidence: float = 1
             saddr: str = profileid.split('_')[-1]
             description: str = f'Multiple empty HTTP connections to {host}'
 
-            attacker = Attacker(
+            evidence: Evidence = Evidence(
+                evidence_type=EvidenceType.EMPTY_CONNECTIONS,
+                attacker=Attacker(
                     direction=Direction.SRC,
                     attacker_type=IoCType.IP,
                     value=saddr
-                )
-
-            evidence: Evidence = Evidence(
-                evidence_type=EvidenceType.EMPTY_CONNECTIONS,
-                attacker=attacker,
-                threat_level=threat_level,
+                    ),
+                threat_level=ThreatLevel.MEDIUM,
                 confidence=confidence,
                 description=description,
                 profile=ProfileID(ip=saddr),
@@ -203,9 +201,7 @@ class HTTPAnalyzer(IModule):
             twid,
             uid: str
     ):
-        threat_level: ThreatLevel = ThreatLevel.HIGH
         saddr = profileid.split('_')[1]
-        confidence: float = 1
 
         os_type: str = user_agent.get('os_type', '').lower()
         os_name: str = user_agent.get('os_name', '').lower()
@@ -219,17 +215,15 @@ class HTTPAnalyzer(IModule):
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
 
-        attacker: Attacker = Attacker(
-            direction= Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
-
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.INCOMPATIBLE_USER_AGENT,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
+            attacker=Attacker(
+                direction= Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
+            threat_level=ThreatLevel.HIGH,
+            confidence=1,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
@@ -250,30 +244,46 @@ class HTTPAnalyzer(IModule):
             timestamp: str,
             daddr: str
             ):
-        confidence: float = 1
-        threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split('_')[1]
-
-        attacker_obj: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
 
         ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = (
             f'Download of an executable with MIME type: {mime_type} '
             f'by {saddr} from {daddr} {ip_identification}.'
         )
-
+        twid_number = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
-            attacker=attacker_obj,
-            threat_level=threat_level,
-            confidence=confidence,
+            attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                ),
+            threat_level=ThreatLevel.LOW,
+            confidence=1,
             description=description,
             profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[uid],
+            timestamp=timestamp,
+            category=IDEACategory.ANOMALY_FILE,
+            source_target_tag=Tag.EXECUTABLE_MIME_TYPE
+        )
+
+        self.db.set_evidence(evidence)
+        
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
+            attacker=Attacker(
+                    direction=Direction.DST,
+                    attacker_type=IoCType.IP,
+                    value=daddr
+                ),
+            threat_level=ThreatLevel.LOW,
+            confidence=1,
+            description=description,
+            profile=ProfileID(ip=daddr),
+            timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_FILE,
@@ -512,24 +522,20 @@ class HTTPAnalyzer(IModule):
                 # 'Linux' in both UAs, so we shouldn't alert
                 return False
 
-        threat_level: ThreatLevel = ThreatLevel.INFO
-        confidence: float = 1
         saddr: str = profileid.split('_')[1]
-        attacker = Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=saddr
-            )
-
         ua: str = cached_ua.get('user_agent', '')
         description: str = (f'Using multiple user-agents:'
                             f' "{ua}" then "{user_agent}"')
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_USER_AGENT,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
+            attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                ),
+            threat_level=ThreatLevel.INFO,
+            confidence=1,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
@@ -553,26 +559,17 @@ class HTTPAnalyzer(IModule):
           timestamp: str
     ):
         confidence: float = 1
-        threat_level: ThreatLevel = ThreatLevel.LOW
         saddr = profileid.split('_')[-1]
-
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
-
-        victim: Victim = Victim(
-            direction=Direction.DST,
-            victim_type=IoCType.IP,
-            value=daddr
-            )
         description = f'Unencrypted HTTP traffic from {saddr} to {daddr}.'
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.HTTP_TRAFFIC,
-            attacker=attacker,
-            threat_level=threat_level,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
+            threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=saddr),
@@ -581,7 +578,11 @@ class HTTPAnalyzer(IModule):
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.SENDING_UNENCRYPTED_DATA,
-            victim=victim
+            victim= Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=daddr
+                )
         )
 
         self.db.set_evidence(evidence)
@@ -637,8 +638,79 @@ class HTTPAnalyzer(IModule):
 
             self.db.set_evidence(evidence)
             return True
+    
+    def set_evidence_weird_http_method(
+            self,
+            profileid: str,
+            twid: str,
+            flow: dict
+    ) -> None:
+        daddr: str = flow['daddr']
+        weird_method: str = flow['addl']
+        uid: str = flow['uid']
+        timestamp: str = flow['starttime']
 
+        confidence = 0.9
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+        saddr: str = profileid.split("_")[-1]
 
+        attacker: Attacker = Attacker(
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=saddr
+        )
+
+        victim: Victim = Victim(
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=daddr
+        )
+
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = f'Weird HTTP method "{weird_method}" to IP: ' \
+                           f'{daddr} {ip_identification}. by Zeek.'
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.WEIRD_HTTP_METHOD,
+            attacker=attacker,
+            victim=victim,
+            threat_level=threat_level,
+            category=IDEACategory.ANOMALY_TRAFFIC,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[uid],
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=confidence
+        )
+
+        self.db.set_evidence(evidence)
+        
+        
+    def check_weird_http_method(self, msg: Dict[str, str]):
+        """
+        detect weird http methods in zeek's weird.log
+        """
+        flow = msg['flow']
+        profileid = msg['profileid']
+        twid = msg['twid']
+
+        # what's the weird.log about
+        name = flow['name']
+
+        if 'unknown_HTTP_method' not in name:
+            return False
+
+        self.set_evidence_weird_http_method(
+            profileid,
+            twid,
+            flow
+        )
+
+    
     def pre_main(self):
         utils.drop_root_privs()
 
@@ -736,3 +808,7 @@ class HTTPAnalyzer(IModule):
                 uid,
                 timestamp
             )
+        
+        if msg := self.get_msg('new_weird'):
+            msg = json.loads(msg['data'])
+            self.check_weird_http_method(msg)

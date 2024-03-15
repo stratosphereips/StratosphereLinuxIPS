@@ -37,7 +37,6 @@ class Main(IObservable):
         self.redis_man = RedisManager(self)
         self.ui_man = UIManager(self)
         self.metadata_man = MetadataManager(self)
-        self.proc_man = ProcessManager(self)
         self.conf = ConfigParser()
         self.version = self.get_slips_version()
         # will be filled later
@@ -45,6 +44,7 @@ class Main(IObservable):
         self.branch = "None"
         self.last_updated_stats_time = datetime.now()
         self.input_type = False
+        self.proc_man = ProcessManager(self)
         # in testing mode we manually set the following params
         if not testing:
             self.args = self.conf.get_args()
@@ -498,11 +498,11 @@ class Main(IObservable):
         self.last_updated_stats_time = now
         now = utils.convert_format(now, "%Y/%m/%d %H:%M:%S")
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
-        profilesLen = self.db.get_profiles_len()
+        profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         msg = (
             f"Total analyzed IPs so far: "
-            f"{green(profilesLen)}. "
+            f"{green(profiles_len)}. "
             f"Evidence Added: {green(evidence_number)}. "
             f"IPs sending traffic in the last "
             f"{self.twid_width}: {green(modified_ips_in_the_last_tw)}. "
@@ -510,16 +510,16 @@ class Main(IObservable):
         )
         self.print(msg)
 
-    def update_host_ip(self, hostIP: str, modified_profiles: Set[str]) -> str:
+    def update_host_ip(self, host_ip: str, modified_profiles: Set[str]) -> str:
         """
         when running on an interface we keep track of the host IP.
         If there was no  modified TWs in the host IP, we check if the
         network was changed.
         """
-        if self.is_interface and hostIP not in modified_profiles:
-            if hostIP := self.metadata_man.get_host_ip():
-                self.db.set_host_ip(hostIP)
-        return hostIP
+        if self.is_interface and host_ip not in modified_profiles:
+            if host_ip := self.metadata_man.get_host_ip():
+                self.db.set_host_ip(host_ip)
+        return host_ip
 
     def is_total_flows_unknown(self) -> bool:
         """
@@ -554,6 +554,7 @@ class Main(IObservable):
                 current_stdout, stderr, slips_logfile
             )
             self.add_observer(self.logger)
+            
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -580,6 +581,17 @@ class Main(IObservable):
                     "branch": self.branch,
                 }
             )
+            self.print(
+                f"Using redis server on " f"port: "
+                f"{green(self.redis_port)}", 1,  0
+            )
+            self.print(
+                f'Started {green("Main")} process ' f"[PID"
+                f" {green(self.pid)}]", 1,  0
+            )
+            # start progress bar before all modules so it doesn't miss
+            # any prints in its queue and slips wouldn't seem like it's frozen
+            self.proc_man.start_progress_bar()
 
             self.cpu_profiler_init()
             self.memory_profiler_init()
@@ -593,7 +605,7 @@ class Main(IObservable):
                     )
                 else:
                     self.print(
-                        f"Running on a growing zeek dir:" f" {self.input_information}"
+                        f"Running on a growing zeek dir: {self.input_information}"
                     )
                     self.db.set_growing_zeek_dir()
 
@@ -620,13 +632,7 @@ class Main(IObservable):
 
             self.db.store_std_file(**std_files)
 
-            self.print(
-                f"Using redis server on " f"port: {green(self.redis_port)}", 1, 0
-            )
-            self.print(
-                f'Started {green("Main")} process ' f"[PID {green(self.pid)}]", 1, 0
-            )
-            self.print("Starting modules", 1, 0)
+            
 
             # if slips is given a .rdb file, don't load the
             # modules as we don't need them
@@ -638,7 +644,11 @@ class Main(IObservable):
                 self.proc_man.start_update_manager(
                     local_files=True, TI_feeds=self.conf.wait_for_TI_to_finish()
                 )
+                self.print("Starting modules",1, 0)
                 self.proc_man.load_modules()
+                # give outputprocess time to print all the started modules
+                time.sleep(0.5)
+                self.proc_man.print_disabled_modules()
 
             if self.args.webinterface:
                 self.ui_man.start_webinterface()
@@ -663,7 +673,7 @@ class Main(IObservable):
             # obtain the list of active processes
             self.proc_man.processes = multiprocessing.active_children()
 
-            self.db.store_process_PID("slips.py", int(self.pid))
+            self.db.store_pid("slips.py", int(self.pid))
             self.metadata_man.set_input_metadata()
 
             if self.conf.use_p2p() and not self.args.interface:
@@ -686,7 +696,7 @@ class Main(IObservable):
                 "of traffic by querying TI sites."
             )
 
-            hostIP = self.metadata_man.store_host_ip()
+            host_ip = self.metadata_man.store_host_ip()
 
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
@@ -694,10 +704,7 @@ class Main(IObservable):
                 self.args.interface or self.db.is_growing_zeek_dir()
             )
 
-            while (
-                not self.proc_man.should_stop()
-                and not self.proc_man.slips_is_done_receiving_new_flows()
-            ):
+            while not self.proc_man.stop_slips():
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
@@ -705,26 +712,18 @@ class Main(IObservable):
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return
                 # value very quickly before
-                # the webinterface thread sets it. so don't
+                # the webinterface thread sets it. so don't:D
                 self.ui_man.check_if_webinterface_started()
 
-                # update the text we show in the cli
                 self.update_stats()
 
-                # Check if we need to close any TWs
-                self.db.check_TW_to_close()
+                self.db.check_tw_to_close()
 
                 modified_profiles: Set[str] = (
-                    self.metadata_man.update_slips_running_stats()[1]
+                    self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
-                hostIP: str = self.update_host_ip(hostIP, modified_profiles)
-
-                # don't move this line up because we still need to print the
-                # stats and check tws anyway
-                if self.proc_man.should_run_non_stop():
-                    continue
-
-                self.db.check_health()
+                
+                self.update_host_ip(host_ip, modified_profiles)
 
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while

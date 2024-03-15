@@ -1,4 +1,3 @@
-from slips_files.common.abstracts._module import IModule
 import json
 import ipaddress
 import time
@@ -379,7 +378,7 @@ class ARP(IModule):
             # We're sure this is unsolicited arp
             # it may be arp spoofing
             confidence: float = 0.8
-            threat_level: ThreatLevel = ThreatLevel.INFO
+            threat_level: ThreatLevel = ThreatLevel.LOW
             description: str = 'broadcasting unsolicited ARP'
 
             saddr: str = profileid.split('_')[-1]

@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from typing import Tuple
 
 import psutil
 
@@ -187,7 +188,7 @@ class Checker:
 
         return True
 
-    def check_output_redirection(self) -> tuple:
+    def check_output_redirection(self) -> Tuple[str,str,str]:
         """
         Determine where slips will place stdout,
          stderr and logfile based on slips mode

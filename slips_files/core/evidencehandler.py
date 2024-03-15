@@ -27,7 +27,7 @@ import time
 import platform
 import traceback
 from slips_files.common.idea_format import idea_format
-from slips_files.common.style import red, green, cyan
+from slips_files.common.style import red, cyan
 from slips_files.common.imports import *
 from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
@@ -37,14 +37,9 @@ from slips_files.core.evidence_structure.evidence import (
     evidence_to_dict,
     ProfileID,
     Evidence,
-    Direction,
     Victim,
-    IoCType,
     EvidenceType,
-    IDEACategory,
     TimeWindow,
-    Proto,
-    Tag
     )
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
@@ -173,7 +168,12 @@ class EvidenceHandler(ICore):
         if path.exists(logfile_path):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')
+    
+    def handle_unable_to_log_evidence(self):
+        self.print('Error in add_to_json_log_file()')
+        self.print(traceback.format_exc(), 0, 1)
 
+    
     def add_to_json_log_file(
              self,
              idea_dict: dict,
@@ -186,6 +186,10 @@ class EvidenceHandler(ICore):
         :param idea_dict: dict containing 1 alert
         :param all_uids: the uids of the flows causing this evidence
         """
+        if not idea_dict:
+            self.handle_unable_to_log_evidence()
+            return
+        
         try:
             # we add extra fields to alerts.json that are not in the IDEA format
             idea_dict.update({
@@ -198,8 +202,7 @@ class EvidenceHandler(ICore):
         except KeyboardInterrupt:
             return True
         except Exception:
-            self.print('Error in add_to_json_log_file()')
-            self.print(traceback.print_stack(), 0, 1)
+            self.handle_unable_to_log_evidence()
 
     def add_to_log_file(self, data):
         """
@@ -215,7 +218,7 @@ class EvidenceHandler(ICore):
             return True
         except Exception:
             self.print('Error in add_to_log_file()')
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
 
     def get_domains_of_flow(self, flow: dict):
         """
@@ -241,8 +244,6 @@ class EvidenceHandler(ICore):
         except (KeyError, TypeError):
             pass
         try:
-            # self.print(f"DNS of src IP {self.column_values['saddr']}:
-            # {self.db.get_dns_resolution(self.column_values['saddr'])}")
             src_dns_domains = self.db.get_dns_resolution(flow['saddr'])
             src_dns_domains = src_dns_domains.get('domains', [])
 
@@ -259,21 +260,6 @@ class EvidenceHandler(ICore):
             pass
 
         return domains_to_check_dst, domains_to_check_src
-
-    def show_popup(self, alert_to_log: str):
-        """
-        Function to display a popup with the alert depending on the OS
-        """
-        if platform.system() == 'Linux':
-            #  is notify_cmd is set in setup_notifications function
-            #  depending on the user
-            os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
-        elif platform.system() == 'Darwin':
-            os.system(
-                f'osascript -e \'display notification "{alert_to_log}" '
-                f'with title "Slips"\' '
-            )
-
 
     def format_evidence_causing_this_alert(
             self,
@@ -322,8 +308,10 @@ class EvidenceHandler(ICore):
 
         for evidence in all_evidence.values():
             evidence: Evidence
-            description: str = evidence.description
-            evidence_string = self.line_wrap(f'Detected {description}')
+            evidence: Evidence = (
+                self.add_threat_level_to_evidence_description(evidence)
+            )
+            evidence_string = self.line_wrap(f'Detected {evidence.description}')
             alert_to_print += cyan(f'\t- {evidence_string}\n')
 
         # Add the timestamp to the alert.
@@ -342,7 +330,6 @@ class EvidenceHandler(ICore):
     def decide_blocking(self, profileid) -> bool:
         """
         Decide whether to block or not and send to the blocking module
-        :param ip: IP to block
         """
 
         # now since this source ip(profileid) caused an alert,
@@ -390,19 +377,19 @@ class EvidenceHandler(ICore):
         now = utils.convert_format(now, utils.alerts_format)
         ip = profileid.split('_')[-1].strip()
 
-        msg = f'{flow_datetime}: Src IP {ip:26}. '
+        line = f'{flow_datetime}: Src IP {ip:26}. '
         if blocked:
             self.db.markProfileTWAsBlocked(profileid, twid)
             # Add to log files that this srcip is being blocked
-            msg += 'Blocked '
+            line += 'Blocked '
         else:
-            msg += 'Generated an alert '
+            line += 'Generated an alert '
 
-        msg += (f'given enough evidence on timewindow '
+        line += (f'given enough evidence on timewindow '
                 f'{twid.split("timewindow")[1]}. (real time {now})')
 
         # log in alerts.log
-        self.add_to_log_file(msg)
+        self.add_to_log_file(line)
 
         # Add a json field stating that this ip is blocked in alerts.json
         # replace the evidence description with slips msg that this is a
@@ -411,7 +398,7 @@ class EvidenceHandler(ICore):
         IDEA_dict['Category'] = 'Alert'
         IDEA_dict['profileid'] = profileid
         IDEA_dict['threat_level'] = accumulated_threat_level
-        IDEA_dict['Attach'][0]['Content'] = msg
+        IDEA_dict['Attach'][0]['Content'] = line
 
         # add to alerts.json
         self.add_to_json_log_file(
@@ -446,7 +433,7 @@ class EvidenceHandler(ICore):
         return evidence.attacker.direction != 'SRC'
 
     def get_evidence_for_tw(self, profileid: str, twid: str) \
-            -> Dict[str, dict]:
+            -> Optional[Dict[str, Evidence]]:
         """
         filters and returns all the evidence for this profile in this TW
         returns the dict with filtered evidence
@@ -455,7 +442,7 @@ class EvidenceHandler(ICore):
             profileid, twid
         )
         if not tw_evidence:
-            return False
+            return
 
         past_evidence_ids: List[str] = \
             self.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
@@ -613,30 +600,35 @@ class EvidenceHandler(ICore):
     def get_evidence_to_log(
                 self, evidence: Evidence, flow_datetime
         ) -> str:
-            timewindow_number: int = evidence.timewindow.number
+        """
+        returns the line of evidence that we log to alerts logfiles only.
+        not the cli
+        """
+        timewindow_number: int = evidence.timewindow.number
 
-            # to keep the alignment of alerts.json ip + hostname
-            # combined should take no more than 26 chars
-            evidence_str = f'{flow_datetime} (TW {timewindow_number}): Src ' \
-                           f'IP {evidence.profile.ip:26}. Detected ' \
-                           f' {evidence.description}'
+        # to keep the alignment of alerts.json ip + hostname
+        # combined should take no more than 26 chars
+        evidence_str = (f'{flow_datetime} (TW {timewindow_number}): Src '
+                        f'IP {evidence.profile.ip:26}. Detected'
+                        f' {evidence.description} ')
+                        
 
-            # sometimes slips tries to get the hostname of a
-            # profile before ip_info stores it in the db
-            # there's nothing we can do about it
-            hostname: Optional[str] = self.db.get_hostname_from_profile(
-                str(evidence.profile)
-                )
-            if not hostname:
-                return evidence_str
-
-            padding_len = 26 - len(evidence.profile.ip) - len(hostname) - 3
-            # fill the rest of the 26 characters with spaces to keep the alignment
-            evidence_str = f'{flow_datetime} (TW {timewindow_number}): Src IP' \
-                       f' {evidence.profile.ip} ({hostname}) {" "*padding_len}. ' \
-                       f'Detected {evidence.description}'
-
+        # sometimes slips tries to get the hostname of a
+        # profile before ip_info stores it in the db
+        # there's nothing we can do about it
+        hostname: Optional[str] = self.db.get_hostname_from_profile(
+            str(evidence.profile)
+            )
+        if not hostname:
             return evidence_str
+
+        padding_len = 26 - len(evidence.profile.ip) - len(hostname) - 3
+        # fill the rest of the 26 characters with spaces to keep the alignment
+        evidence_str = (f'{flow_datetime} (TW {timewindow_number}): Src IP'
+                        f' {evidence.profile.ip} ({hostname})'
+                        f' {" "*padding_len}. '
+                        f'Detected {evidence.description} ')
+        return evidence_str
 
     def increment_attack_counter(
             self,
@@ -685,6 +677,13 @@ class EvidenceHandler(ICore):
             .replace(Style.RESET_ALL, '')
         )
         self.notify.show_popup(alert)
+    
+    
+    def add_threat_level_to_evidence_description(
+        self, evidence: Evidence) -> Evidence:
+        evidence.description += (f' threat level: '
+                                 f'{evidence.threat_level.name.lower()}.')
+        return evidence
 
     def main(self):
         while not self.should_stop():
@@ -703,7 +702,7 @@ class EvidenceHandler(ICore):
                 # below.
                 # to avoid this, we only alert about processed evidence
                 self.db.mark_evidence_as_processed(evidence.id)
-                # Ignore alert if IP is whitelisted
+                # Ignore evidence if IP is whitelisted
                 if self.whitelist.is_whitelisted_evidence(evidence):
                     self.db.cache_whitelisted_evidence_ID(evidence.id)
                     # Modules add evidence to the db before
@@ -721,12 +720,17 @@ class EvidenceHandler(ICore):
                         )
                 flow_datetime = utils.convert_format(timestamp, 'iso')
 
+                evidence: Evidence = (
+                    self.add_threat_level_to_evidence_description(evidence)
+                )
+                
                 evidence_to_log: str = self.get_evidence_to_log(
                     evidence,
                     flow_datetime,
                 )
                 # Add the evidence to alerts.log
                 self.add_to_log_file(evidence_to_log)
+
                 self.increment_attack_counter(
                     evidence.profile.ip,
                     evidence.victim,

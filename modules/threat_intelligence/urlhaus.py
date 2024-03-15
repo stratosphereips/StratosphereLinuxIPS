@@ -80,7 +80,8 @@ class URLhaus:
                 threat_level = virustotal_percent
                 # virustotal_result = virustotal_info.get("result", "")
                 # virustotal_result.replace('\',''')
-                description += f'and was marked by {virustotal_percent}% of virustotal\'s AVs as malicious'
+                description += (f'and was marked by {virustotal_percent}% '
+                                f'of virustotal\'s AVs as malicious')
 
         except (KeyError, IndexError):
             # no payloads available
@@ -133,7 +134,10 @@ class URLhaus:
         if urlhaus_api_response.status_code != 200:
             return
 
-        response: dict = json.loads(urlhaus_api_response.text)
+        try:
+            response: dict = json.loads(urlhaus_api_response.text)
+        except json.decoder.JSONDecodeError:
+            return
 
         if response['query_status'] in ['no_results', 'invalid_url']:
             # no response or empty response
@@ -145,7 +149,6 @@ class URLhaus:
             return self.parse_urlhaus_url_response(response, ioc)
 
     def set_evidence_malicious_hash(self, file_info: Dict[str, Any]) -> None:
-
         flow: Dict[str, Any] = file_info['flow']
 
         daddr: str = flow["daddr"]
@@ -174,47 +177,77 @@ class URLhaus:
             f" by URLhaus."
         )
 
-        threat_level: float = file_info.get("threat_level", 0)
+        threat_level: float = file_info.get("threat_level")
         if threat_level:
             # Threat level here is the VT percentage from URLhaus
             description += f" Virustotal score: {threat_level}% malicious"
             threat_level: str = utils.threat_level_to_string(float(
                 threat_level) / 100)
+            threat_level: ThreatLevel = ThreatLevel[threat_level.upper()]
         else:
-            threat_level = 'high'
-
-        threat_level: ThreatLevel= ThreatLevel[threat_level.upper()]
+            threat_level: ThreatLevel = ThreatLevel.HIGH
 
         confidence: float = 0.7
         saddr: str = file_info['profileid'].split("_")[-1]
 
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
-        )
         timestamp: str = flow["starttime"]
-        twid: str = file_info["twid"]
-
-        # Assuming you have an instance of the Evidence class in your class
+        twid_int = int(file_info["twid"].replace("timewindow", ""))
         evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
-            attacker=attacker,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr
+            ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
             timestamp=timestamp,
             category=IDEACategory.MALWARE,
             profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            timewindow=TimeWindow(number=twid_int),
             uid=[flow["uid"]]
         )
 
         self.db.set_evidence(evidence)
-
+        
+        evidence = Evidence(
+                evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
+                attacker=Attacker(
+                    direction=Direction.DST,
+                    attacker_type=IoCType.IP,
+                    value=daddr
+                ),
+                threat_level=threat_level,
+                confidence=confidence,
+                description=description,
+                timestamp=timestamp,
+                category=IDEACategory.MALWARE,
+                profile=ProfileID(ip=daddr),
+                timewindow=TimeWindow(number=twid_int),
+                uid=[flow["uid"]]
+            )
+        
+        self.db.set_evidence(evidence)
+    
+    def get_threat_level(self, url_info: dict) -> ThreatLevel:
+        threat_level = url_info.get('threat_level', '')
+        if not threat_level:
+            return ThreatLevel.MEDIUM
+        
+        # Convert percentage reported by URLhaus (VirusTotal) to
+        # a valid SLIPS confidence
+        try:
+            threat_level = int(threat_level) / 100
+            threat_level: str = utils.threat_level_to_string(threat_level)
+            return ThreatLevel[threat_level.upper()]
+        except ValueError:
+            return ThreatLevel.MEDIUM
+        
 
     def set_evidence_malicious_url(
             self,
+            daddr: str,
             url_info: Dict[str, Any],
             uid: str,
             timestamp: str,
@@ -224,42 +257,42 @@ class URLhaus:
             """
             Set evidence for a malicious URL based on the provided URL info
             """
-            threat_level: str = url_info.get('threat_level', '')
+            threat_level: ThreatLevel = self.get_threat_level(url_info)
             description: str = url_info.get('description', '')
-
-            confidence: float = 0.7
-
-            if not threat_level:
-                threat_level = 'medium'
-            else:
-                # Convert percentage reported by URLhaus (VirusTotal) to
-                # a valid SLIPS confidence
-                try:
-                    threat_level = int(threat_level) / 100
-                    threat_level = utils.threat_level_to_string(threat_level)
-                except ValueError:
-                    threat_level = 'medium'
-
-            threat_level: ThreatLevel = ThreatLevel[threat_level.upper()]
             saddr: str = profileid.split("_")[-1]
-
-            attacker: Attacker = Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=saddr
-            )
-
-            # Assuming you have an instance of the Evidence class in your class
+            twid_int = int(twid.replace("timewindow", ""))
             evidence = Evidence(
-                evidence_type=EvidenceType.MALICIOUS_URL,
-                attacker=attacker,
+                evidence_type=EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL,
+                attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr
+                ),
                 threat_level=threat_level,
-                confidence=confidence,
+                confidence=0.7,
                 description=description,
                 timestamp=timestamp,
                 category=IDEACategory.MALWARE,
                 profile=ProfileID(ip=saddr),
-                timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                timewindow=TimeWindow(number=twid_int),
+                uid=[uid]
+            )
+            self.db.set_evidence(evidence)
+
+            evidence = Evidence(
+                evidence_type=EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL,
+                attacker=Attacker(
+                    direction=Direction.DST,
+                    attacker_type=IoCType.IP,
+                    value=daddr
+                ),
+                threat_level=threat_level,
+                confidence=0.7,
+                description=description,
+                timestamp=timestamp,
+                category=IDEACategory.MALWARE,
+                profile=ProfileID(ip=saddr),
+                timewindow=TimeWindow(number=twid_int),
                 uid=[uid]
             )
 

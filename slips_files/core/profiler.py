@@ -1,7 +1,5 @@
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
-import multiprocessing
-
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -19,10 +17,12 @@ import multiprocessing
 # stratosphere@aic.fel.cvut.cz
 from dataclasses import asdict
 import queue
-import sys
 import ipaddress
 import pprint
 from datetime import datetime
+from typing import List
+
+import validators
 
 from slips_files.common.imports import *
 from slips_files.common.abstracts.core import ICore
@@ -33,8 +33,7 @@ from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
-
-
+from slips_files.core.output import Output
 
 
 SUPPORTED_INPUT_TYPES = {
@@ -57,7 +56,7 @@ SEPARATORS = {
 class Profiler(ICore):
     """A class to create the profiles for IPs"""
     name = 'Profiler'
-
+    
     def init(self,
              is_profiler_done: multiprocessing.Semaphore = None,
              profiler_queue=None,
@@ -75,9 +74,9 @@ class Profiler(ICore):
         self.input_type = False
         self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
+        self.is_localnet_set = False
         self.has_pbar = has_pbar
         self.whitelist = Whitelist(self.logger, self.db)
-        # Read the configuration
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never
@@ -99,6 +98,8 @@ class Profiler(ICore):
         self.analysis_direction = conf.analysis_direction()
         self.label = conf.label()
         self.width = conf.get_tw_width_as_float()
+        self.client_ips: List[str] = conf.client_ips()
+
 
     def convert_starttime_to_epoch(self):
         try:
@@ -226,7 +227,7 @@ class Profiler(ICore):
 
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
-        self.db.markProfileTWAsModified(self.profileid, self.twid, '')
+        self.db.mark_profile_tw_as_modified(self.profileid, self.twid, '')
 
     def store_features_going_in(self, profileid: str, twid: str):
         """
@@ -271,7 +272,7 @@ class Profiler(ICore):
             twid=twid,
             label=self.label,
         )
-        self.db.markProfileTWAsModified(profileid, twid, '')
+        self.db.mark_profile_tw_as_modified(profileid, twid, '')
 
     def handle_in_flows(self):
         """
@@ -284,6 +285,31 @@ class Profiler(ICore):
             return
         rev_profileid, rev_twid = self.get_rev_profile()
         self.store_features_going_in(rev_profileid, rev_twid)
+    
+
+    def should_set_localnet(self) -> bool:
+        """
+        returns true only if the saddr of the current flow is ipv4, private
+        and we don't have the local_net set already
+        """
+        if self.is_localnet_set:
+            return False
+        
+        if self.get_private_client_ips():
+            # if we have private client ips, we're ready to set the
+            # localnetwork
+            return True
+        
+        if not validators.ipv4(self.flow.saddr):
+            return False
+        
+        saddr_obj: ipaddress = ipaddress.ip_address(self.flow.saddr)
+        is_private_ip = utils.is_private_ip(saddr_obj)
+        if not is_private_ip:
+            return False
+        
+        return True
+    
 
     def define_separator(self, line: dict, input_type: str):
         """
@@ -371,16 +397,58 @@ class Profiler(ICore):
             }
         })
         self.supported_pbar = True
+    
+    def get_private_client_ips(self) -> List[str]:
+        """
+        returns the private ips found in the client_ips param
+        in the config file
+        """
+        private_clients = []
+        for ip in self.client_ips:
+            if utils.is_private_ip(ipaddress.ip_address(ip)):
+                private_clients.append(ip)
+        return private_clients
+        
 
+    def get_local_net(self) -> str:
+        """
+        gets the local network from client_ip param in the config file,
+        or by using the localnetwork of the first private
+        srcip seen in the traffic
+        """
+        # For now the local network is only ipv4, but it
+        # could be ipv6 in the future. Todo.
+        private_client_ips: List[str] = self.get_private_client_ips()
+        if private_client_ips:
+            # all client ips should belong to the same local network,
+            # it doesn't make sense to have ips belonging to different
+            # networks in the config file!
+            ip = private_client_ips[0]
+        else:
+            ip = self.flow.saddr
+
+        self.is_localnet_set = True
+        return utils.get_cidr_of_private_ip(ip)
+        
+    def handle_setting_local_net(self):
+        """
+        stores the local network if possible
+        """
+        if not self.should_set_localnet():
+            return
+        
+        local_net: str = self.get_local_net()
+        self.db.set_local_network(local_net)
+    
     def pre_main(self):
         utils.drop_root_privs()
-
+    
     def main(self):
         while not self.should_stop():
             try:
                 # this msg can be a str only when it's a 'stop' msg indicating
                 # that this module should stop
-                msg: dict = self.profiler_queue.get(timeout=1, block=False)
+                msg = self.profiler_queue.get(timeout=1, block=False)
                 # ALYA, DO NOT REMOVE THIS CHECK
                 # without it, there's no way thi module will know it's time to
                 # stop and no new fows are coming
@@ -426,6 +494,7 @@ class Profiler(ICore):
             self.flow = self.input.process_line(line)
             if self.flow:
                 self.add_flow_to_profile()
+                self.handle_setting_local_net()
 
             # now that one flow is processed tell output.py
             # to update the bar

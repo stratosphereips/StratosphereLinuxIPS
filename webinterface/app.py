@@ -1,12 +1,11 @@
 from flask import Flask, render_template, redirect, url_for, current_app
 
-from database.database import __database__
-from database.signals import message_sent
-from analysis.analysis import analysis
-from general.general import general
-from documentation.documentation import documentation
-from utils import *
-
+from .database.database import __database__
+from .database.signals import message_sent
+from .analysis.analysis import analysis
+from .general.general import general
+from .documentation.documentation import documentation
+from .utils import *
 
 
 def create_app():
@@ -53,11 +52,6 @@ def set_pcap_info():
 
 
 if __name__ == '__main__':
-    # parser = ArgumentParser()
-    # parser.add_argument('-p')
-    # args = parser.parse_args()
-    # port = args.p
-
     app.register_blueprint(analysis, url_prefix="/analysis")
 
     app.register_blueprint(general, url_prefix="/general")

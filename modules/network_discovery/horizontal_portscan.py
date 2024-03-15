@@ -304,7 +304,6 @@ class HorizontalPortscan():
             f'Horizontal port scan to port {port_info} {portproto}. '
             f'From {srcip} to {evidence["amount_of_dips"]} unique destination IPs. '
             f'Total packets sent: {evidence["pkts_sent"]}. '
-            f'Threat Level: {threat_level}. '
             f'Confidence: {confidence}. by Slips'
         )
 

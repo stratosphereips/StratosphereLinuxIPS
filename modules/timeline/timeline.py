@@ -358,7 +358,7 @@ class Timeline(IModule):
             self.print(
                 f'Problem on process_flow() line {exception_line}', 0, 1
             )
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
             return True
 
     def pre_main(self):

@@ -83,9 +83,10 @@ class EvidenceType(Enum):
     COMMAND_AND_CONTROL_CHANNEL = auto()
     THREAT_INTELLIGENCE_BLACKLISTED_ASN = auto()
     THREAT_INTELLIGENCE_BLACKLISTED_IP = auto()
+    THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER = auto()
     THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN = auto()
     MALICIOUS_DOWNLOADED_FILE = auto()
-    MALICIOUS_URL = auto()
+    THREAT_INTELLIGENCE_MALICIOUS_URL = auto()
 
     def __str__(self):
         return self.name
@@ -321,7 +322,7 @@ def dict_to_evidence(evidence: dict):
         'evidence_type': EvidenceType[evidence["evidence_type"]],
         'description': evidence['description'],
         'attacker': Attacker(**evidence['attacker']),
-        'threat_level': ThreatLevel[evidence['threat_level']],
+        'threat_level': ThreatLevel[evidence['threat_level'].upper()],
         'category': IDEACategory[evidence['category']],
         'victim': Victim(**evidence['victim']) if 'victim' in evidence
         and evidence['victim'] else None,

@@ -30,7 +30,8 @@ class MetadataManager:
 
     def get_pid_using_port(self, port):
         """
-        Returns the PID of the process using the given port or False if no process is using it
+        Returns the PID of the process using the given port or
+        False if no process is using it
         """
         port = int(port)
         for conn in psutil.net_connections():
@@ -148,7 +149,7 @@ class MetadataManager:
         self.main.db.set_input_metadata(info)
 
 
-    def update_slips_running_stats(self) -> Tuple[int, Set[str]] :
+    def update_slips_stats_in_the_db(self) -> Tuple[int, Set[str]] :
         """
         updates the number of processed ips, slips internal time,
          and modified tws so far in the db
@@ -159,7 +160,7 @@ class MetadataManager:
         # this is the modification time of the last timewindow
         last_modified_tw_time: float
         modified_profiles, last_modified_tw_time = (
-            self.main.db.getModifiedProfilesSince(slips_internal_time)
+            self.main.db.get_modified_profiles_since(slips_internal_time)
         )
         modified_ips_in_the_last_tw = len(modified_profiles)
         self.main.db.set_input_metadata(

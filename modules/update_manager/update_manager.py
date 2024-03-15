@@ -426,7 +426,7 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f"Problem on update_TI_file() line {exception_line}", 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
         return False
 
     def get_e_tag(self, response):
@@ -635,7 +635,7 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f"Problem on update_TI_file() line {exception_line}", 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
             return False
 
     def update_riskiq_feed(self):
@@ -865,7 +865,7 @@ class UpdateManager(IModule):
 
         except Exception:
             self.print("Problem in parse_ja3_feed()", 0, 1)
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
             return False
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
@@ -1347,7 +1347,7 @@ class UpdateManager(IModule):
                 0,
                 1,
             )
-            self.print(traceback.print_stack(), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
             return False
 
     def check_if_update_org(self, file):
@@ -1509,18 +1509,22 @@ class UpdateManager(IModule):
                     # every function call to update_TI_file is now running concurrently instead of serially
                     # so when a server's taking a while to give us the TI feed, we proceed
                     # to download the next file instead of being idle
-                    task = asyncio.create_task(self.update_TI_file(file_to_download))
+                    task = asyncio.create_task(
+                        self.update_TI_file(file_to_download)
+                        )
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
-            if self.check_if_update("riskiq_domains", self.riskiq_update_period):
+            if self.check_if_update("riskiq_domains",
+                                    self.riskiq_update_period):
                 self.update_riskiq_feed()
 
             # wait for all TI files to update
             try:
                 await task
             except UnboundLocalError:
-                # in case all our files are updated, we don't have task defined, skip
+                # in case all our files are updated, we don't
+                # have task defined, skip
                 pass
 
             self.db.set_loaded_ti_files(self.loaded_ti_files)
@@ -1533,10 +1537,12 @@ class UpdateManager(IModule):
         """
         Update TI files and store them in database before slips starts
         """
-        # create_task is used to run update() function concurrently instead of serially
+        # create_task is used to run update() function
+        # concurrently instead of serially
         self.update_finished = asyncio.create_task(self.update())
         await self.update_finished
-        self.print(f"{self.db.get_loaded_ti_files()} TI files successfully loaded.")
+        self.print(f"{self.db.get_loaded_ti_files()} "
+                   f"TI files successfully loaded.")
 
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed

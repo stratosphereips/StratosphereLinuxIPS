@@ -133,5 +133,5 @@ class Argus(IInputType):
             self.print(
                 f'\tProblem in define_columns() line {exception_line}', 0, 1
             )
-            self.print(traceback.print_stack(),0,1)
+            self.print(traceback.format_exc(),0,1)
             sys.exit(1)

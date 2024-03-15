@@ -71,19 +71,19 @@ def check_for_text(txt, output_dir):
     return False
 
 
-def check_error_keywords(line):
+def has_error_keywords(line):
     """
     these keywords indicate that an error needs to
     be fixed and should fail the integration tests when found
     """
     error_keywords = ('<class', 'error', 'Error', 'Traceback')
     for keyword in error_keywords:
-        if keyword in line:
+        if keyword in line or keyword.lower() in line:
             return True
     return False
 
 
-def check_for_ignored_errors(line):
+def has_ignored_errors(line):
     """
     These are connection errors, empty feeds, download errors etc that don't
     indicate that something is wrong with slips code
@@ -109,10 +109,10 @@ def has_errors(output_dir):
     for file in error_files:
         with open(file, 'r') as f:
             for line in f:
-                if check_for_ignored_errors(line):
+                if has_ignored_errors(line):
                     continue
 
-                if check_error_keywords(line):
+                if has_error_keywords(line):
                     return True
 
     return False

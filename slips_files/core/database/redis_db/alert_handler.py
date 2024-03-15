@@ -167,20 +167,11 @@ class AlertHandler:
 
         # an evidence is generated for this profile
         # update the threat level of this profile
-        if evidence.attacker.direction == Direction.SRC:
-            # the srcip is the malicious one
-            self.update_threat_level(
-                str(evidence.profile),
-                str(evidence.threat_level),
-                evidence.confidence
-                )
-        elif evidence.attacker.direction == Direction.DST:
-            # the dstip is the malicious one
-            self.update_threat_level(
-                str(evidence.attacker.profile),
-                str(evidence.threat_level),
-                evidence.confidence
-                )
+        self.update_threat_level(
+            str(evidence.attacker.profile),
+            str(evidence.threat_level),
+            evidence.confidence
+            )
 
         return True
 
@@ -318,7 +309,7 @@ class AlertHandler:
         ) -> float:
         """
         given the current threat level of a profileid, this method sets the
-        max_threaty_level value to the given val if that max is less than
+        max_threat_level value to the given val if that max is less than
         the given
         :returns: the numerical val of the max threat level
         """
@@ -341,33 +332,27 @@ class AlertHandler:
             return threat_level_float
 
         return old_max_threat_level_float
-
-
-    def update_threat_level(
-            self, profileid: str, threat_level: str, confidence: float
-            ):
+    
+    def update_past_threat_levels(
+            self, profileid, threat_level, confidence
+        ):
         """
-        Update the threat level of a certain profile
-        Updates the profileid key and the IPsInfo key with the
-         new score and confidence of this profile
-        :param threat_level: available options are 'low', 'medium' 'critical' etc
+        updates the past_threat_levels key of the given profileid
+        if the past threat level and confidence
+        are the same as the ones we wanna store, we replace the timestamp only
         """
-
-        self.r.hset(profileid, 'threat_level', threat_level)
-
         now = utils.convert_format(time.time(), utils.alerts_format)
         confidence = f'confidence: {confidence}'
-
         # this is what we'll be storing in the db, tl, ts, and confidence
         threat_level_data = (threat_level, now, confidence)
 
-        past_threat_levels: List[Tuple] = self.r.hget(
+        past_threat_levels: str = self.r.hget(
             profileid,
             'past_threat_levels'
         )
         if past_threat_levels:
             # get the list of ts and past threat levels
-            past_threat_levels = json.loads(past_threat_levels)
+            past_threat_levels: List[Tuple] = json.loads(past_threat_levels)
 
             latest: Tuple = past_threat_levels[-1]
             latest_threat_level: str = latest[0]
@@ -391,19 +376,16 @@ class AlertHandler:
 
         past_threat_levels = json.dumps(past_threat_levels)
         self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
-
-        max_threat_lvl: float = self.update_max_threat_level(
-            profileid, threat_level
-            )
-
-        score_confidence = {
-            # get the numerical value of this threat level
-            'score': max_threat_lvl,
-            'confidence': confidence
-        }
+        
+        
+    def update_ips_info(self, profileid, max_threat_lvl, confidence):
         # set the score and confidence of the given ip in the db
         # when it causes an evidence
         # these 2 values will be needed when sharing with peers
+        score_confidence = {
+            'score': max_threat_lvl,
+            'confidence': confidence
+        }
         ip = profileid.split('_')[-1]
 
         if cached_ip_info := self.get_ip_info(ip):
@@ -412,4 +394,28 @@ class AlertHandler:
             score_confidence = cached_ip_info
 
         self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
+        
+        
+    def update_threat_level(
+            self, profileid: str, threat_level: str, confidence: float
+            ):
+        """
+        Update the threat level of a certain profile
+        Updates the profileid key and the IPsInfo key with the
+         new score and confidence of this profile
+        Stores the max threat level of the given profile as the score
+        in IPsInfo
+        :param threat_level: available options are 'low',
+         'medium' 'critical' etc
+        """
+
+        self.r.hset(profileid, 'threat_level', threat_level)
+
+        self.update_past_threat_levels(profileid, threat_level, confidence)
+
+        max_threat_lvl: float = self.update_max_threat_level(
+            profileid, threat_level
+            )
+
+        self.update_ips_info(profileid, max_threat_lvl, confidence)
 

@@ -11,9 +11,10 @@ import os
 import sys
 import ipaddress
 import aid_hash
-from typing import Any, Union
-from dataclasses import is_dataclass, asdict, fields
-from enum import Enum, auto
+from typing import Any, \
+    Optional
+from dataclasses import is_dataclass, asdict
+from enum import Enum
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -66,10 +67,10 @@ class Utils(object):
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
 
-    def get_cidr_of_ip(self, ip):
+    def get_cidr_of_private_ip(self, ip):
         """
         returns the cidr/range of the given private ip
-        :param ip: should be  a private ips
+        :param ip: should be a private ipv4
         """
         if validators.ipv4(ip):
             first_octet = ip.split('.')[0]
@@ -250,7 +251,7 @@ class Utils(object):
         )
 
 
-    def define_time_format(self, time: str) -> str:
+    def define_time_format(self, time: str) -> Optional[str]:
 
         if self.is_datetime_obj(time):
             return 'datetimeobj'
@@ -321,8 +322,22 @@ class Utils(object):
 
     def convert_to_mb(self, bytes):
         return int(bytes)/(10**6)
-
-    def is_private_ip(self, ip_obj:ipaddress) -> bool:
+    
+    
+    def is_port_in_use(self, port: int) -> bool:
+        """
+        return True if the given port is used by another app
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if sock.connect_ex(("localhost", port)) != 0:
+            # not used
+            sock.close()
+            return False
+        
+        sock.close()
+        return True
+    
+    def is_private_ip(self, ip_obj: ipaddress) -> bool:
         """
         This function replaces the ipaddress library 'is_private'
         because it does not work correctly and it does not ignore
@@ -331,7 +346,8 @@ class Utils(object):
         # Is it a well-formed ipv4 or ipv6?
         r_value = False
         if ip_obj and ip_obj.is_private:
-            if ip_obj != ipaddress.ip_address('0.0.0.0') and ip_obj != ipaddress.ip_address('255.255.255.255'):
+            if (ip_obj != ipaddress.ip_address('0.0.0.0')
+                    and ip_obj != ipaddress.ip_address('255.255.255.255')):
                 r_value = True
         return r_value
 
