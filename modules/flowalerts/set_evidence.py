@@ -410,7 +410,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def DNS_without_conn(
+    def dns_without_conn(
         self,
         domain: str,
         timestamp: str,

@@ -740,14 +740,11 @@ class FlowAlerts(IModule):
                 if ip in contacted_ips:
                     return True
         return False
-
-    def check_dns_without_connection(
-            self, domain, answers: list, rcode_name: str,
-            timestamp: str, profileid, twid, uid
-    ):
+    
+    def should_detect_dns_without_conn(self, domain: str, rcode_name: str) \
+            -> bool:
         """
-        Makes sure all cached DNS answers are used in contacted_ips
-        """
+        returns False in the following cases
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
@@ -759,7 +756,7 @@ class FlowAlerts(IModule):
         ## - The WPAD domain of windows
         # - When there is an NXDOMAIN as answer, it means
         # the domain isn't resolved, so we should not expect any connection later
-
+        """
         if (
             'arpa' in domain
             or '.local' in domain
@@ -771,6 +768,19 @@ class FlowAlerts(IModule):
 
         ):
             return False
+        return True
+        
+
+    def check_dns_without_connection(
+            self, domain, answers: list, rcode_name: str,
+            timestamp: str, profileid, twid, uid
+    ):
+        """
+        Makes sure all cached DNS answers are used in contacted_ips
+        """
+        if not self.should_detect_dns_without_conn(domain, rcode_name):
+            return False
+        
         # One DNS query may not be answered exactly by UID,
         # but the computer can re-ask the domain,
         # and the next DNS resolution can be
@@ -801,6 +811,7 @@ class FlowAlerts(IModule):
             # the computer to connect to anything
             # self.print(f'No ips in the answer, so ignoring')
             return False
+        
         # self.print(f'The extended DNS query to {domain} had as answers {answers} ')
 
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
@@ -851,7 +862,7 @@ class FlowAlerts(IModule):
         else:
             # It means we already checked this dns with the Timer process
             # but still no connection for it.
-            self.set_evidence.DNS_without_conn(
+            self.set_evidence.dns_without_conn(
                 domain, timestamp, profileid, twid, uid
             )
             # This UID will never appear again, so we can remove it and
