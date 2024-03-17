@@ -52,7 +52,11 @@ RUN apt update && apt install -y --no-install-recommends \
 
 
 RUN git clone -b master https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
-RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
+
+WORKDIR ${SLIPS_DIR}
+RUN git submodule sync && git pull --recurse-submodules
+# Switch to Slips installation dir when login.
+RUN chmod 774 slips.py &&  git submodule init && git submodule update
 
 # Change the configuration file to have use_p2p = yes
 RUN sed -i "s/use_p2p = no/use_p2p = yes/g" ${SLIPS_DIR}/config/slips.conf
@@ -74,4 +78,5 @@ RUN npm install
 WORKDIR ${SLIPS_DIR}
 
 #CMD redis-server --daemonize yes && /bin/bash
-CMD /bin/bash
+CMD redis-server --daemonize yes && /bin/bash
+#CMD /bin/bash
