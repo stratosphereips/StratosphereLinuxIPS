@@ -56,7 +56,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 
-RUN git clone -b m1-p2p-improve https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
+RUN git clone -b master https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
 WORKDIR ${SLIPS_DIR}
 RUN git submodule sync && git pull --recurse-submodules
 # Switch to Slips installation dir when login.
