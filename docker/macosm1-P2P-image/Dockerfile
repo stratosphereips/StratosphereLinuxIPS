@@ -52,17 +52,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iputils-ping \
     yara \
     tmux \
+    golang \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 
 RUN git clone -b master https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
-RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
+WORKDIR ${SLIPS_DIR}
+RUN git submodule sync && git pull --recurse-submodules
+# Switch to Slips installation dir when login.
+RUN chmod 774 slips.py &&  git submodule init && git submodule update
 
 # Change the configuration file to have use_p2p = yes
 RUN sed -i "s/use_p2p = no/use_p2p = yes/g" ${SLIPS_DIR}/config/slips.conf
-# Change the configuration file to have analysis_direction = out
-RUN sed -i "s/analysis_direction = out/analysis_direction = yes/g" ${SLIPS_DIR}/config/slips.conf
 
+# Change the configuration file to have analysis_direction = out
+RUN sed -i "s/analysis_direction = out/analysis_direction = all/g" ${SLIPS_DIR}/config/slips.conf
+
+# build the pigeon and Add pigeon to path
+SHELL ["/bin/bash", "-c"]
+RUN cd p2p4slips && go build && echo "export PATH=$PATH:/StratosphereLinuxIPS/p2p4slips/" >> ~/.bashrc && source ~/.bashrc
+
+WORKDIR ${SLIPS_DIR}
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
 RUN pip3 install -r ${SLIPS_DIR}/docker/macosm1-P2P-image/requirements-macos-m1-docker.txt
@@ -76,6 +86,4 @@ RUN npm install
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
-
-#CMD redis-server --daemonize yes && /bin/bash
-CMD /bin/bash
+CMD redis-server --daemonize yes && /bin/bash
