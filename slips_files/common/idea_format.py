@@ -19,7 +19,7 @@ def get_ip_version(ip: str) -> str:
     elif validators.ipv6(ip):
         ip_version = "IP6"
     return ip_version
-
+    
 
 def extract_cc_server_ip(evidence: Evidence) -> Tuple[str, str]:
     """
@@ -45,27 +45,28 @@ def extract_cc_botnet_ip(evidence: Evidence) -> Tuple[str, str]:
     return srcip, get_ip_version(srcip)
 
 
-def extract_victim(evidence: Evidence) -> Tuple[str, str]:
-    ip = evidence.victim.value
+def extract_role_type(evidence: Evidence, role=None) -> str:
+    """
+    extracts the attacker or victim's ip/domain/url from the evidence
+    :param role: can be "victim" or "attacker"
+    """
+    if role == "attacker":
+        ioc = evidence.attacker.value
+        ioc_type = evidence.attacker.attacker_type
+    elif role == "victim":
+        ioc = evidence.victim.value
+        ioc_type = evidence.victim.victim_type
+        
+    if ioc_type == IoCType.IP.name:
+        return ioc, get_ip_version(ioc)
+    
     # map of slips victim types to IDEA supported types
-    cases = {
-        IoCType.IP.name: get_ip_version(ip),
+    idea_type = {
         IoCType.DOMAIN.name: "Hostname",
         IoCType.URL.name: "URL",
-    }
-    return ip, cases[evidence.victim.victim_type]
-
-
-def extract_attacker(evidence: Evidence) -> Tuple[str, str]:
-    ip = evidence.attacker.value
-    # map of slips victim types to IDEA supported types
-    cases = {
-        IoCType.IP.name: get_ip_version(ip),
-        IoCType.DOMAIN.name: "Hostname",
-        IoCType.URL.name: "URL",
-    }
-    return ip, cases[evidence.attacker.attacker_type]
-
+        }
+    return ioc, idea_type[ioc_type]
+    
 
 def idea_format(evidence: Evidence):
     """
@@ -87,7 +88,7 @@ def idea_format(evidence: Evidence):
             "Source": [{}],
         }
 
-        attacker, attacker_type = extract_attacker(evidence)
+        attacker, attacker_type = extract_role_type(evidence, role="attacker")
         idea_dict["Source"][0].update({attacker_type: [attacker]})
 
         # according to the IDEA format
@@ -119,7 +120,7 @@ def idea_format(evidence: Evidence):
             # is the dstip ipv4/ipv6 or mac?
             victims_ip: str
             victim_type: str
-            victims_ip, victim_type = extract_victim(evidence)
+            victims_ip, victim_type = extract_role_type(evidence, role="victim")
             idea_dict["Target"] = [{victim_type: [victims_ip]}]
 
         # update the dstip description if specified in the evidence
