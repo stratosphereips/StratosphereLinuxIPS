@@ -17,11 +17,6 @@ import os
 
 alerts_file = 'alerts.log'
 
-
-
-
-
-
 @pytest.mark.parametrize(
     'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
     [
