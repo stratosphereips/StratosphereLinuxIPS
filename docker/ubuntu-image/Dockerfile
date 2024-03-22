@@ -55,9 +55,9 @@ COPY . $SLIPS_DIR
 
 RUN pip3 install --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
-    && cd modules/kalipso \
-    && npm install \
     && git init \
-    && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git
+    && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
+    && cd modules/kalipso \
+    && npm install
 
 CMD redis-server --daemonize yes && /bin/bash
