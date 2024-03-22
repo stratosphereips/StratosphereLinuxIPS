@@ -497,6 +497,16 @@ class ConfigParser(object):
         )
 
     def analysis_direction(self):
+        """
+        Controls which traffic flows are processed and analyzed by SLIPS.
+        
+        Determines whether SLIPS should focus on:
+        - 'out' mode: Analyzes only outbound traffic (potential data exfiltration)
+        - 'all' mode: Analyzes traffic in both directions (inbound and outbound)
+    
+        Returns:
+            str or False: The value of the 'analysis_direction' parameter, or False if not found.
+        """
         return self.read_configuration(
             "parameters", "analysis_direction", False
         )
