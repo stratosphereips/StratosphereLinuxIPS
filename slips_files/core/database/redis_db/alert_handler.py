@@ -34,7 +34,7 @@ class AlertHandler:
         """
         victim = '' if not victim else victim
         self.r.hincrby(
-            f'{attacker}_evidence_sumamry',
+            f'{attacker}_evidence_summary',
             f"{victim}_{evidence_type}",
             1)
 
