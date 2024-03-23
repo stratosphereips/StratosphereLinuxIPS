@@ -31,8 +31,9 @@ class AlertHandler:
         """
         victim = "" if not victim else victim
         self.r.hincrby(
-            f"{attacker}_evidence_sumamry", f"{victim}_{evidence_type}", 1
-        )
+            f'{attacker}_evidence_summary',
+            f"{victim}_{evidence_type}",
+            1)
 
     def mark_profile_as_malicious(self, profileid: str):
         """keeps track of profiles that generated an alert"""
