@@ -42,3 +42,4 @@ pytest-sugar
 memray
 aid_hash
 tensorflow
+pre-commit

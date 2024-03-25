@@ -42,3 +42,4 @@ yappi
 pytest-sugar
 memray
 aid_hash
+pre-commit
