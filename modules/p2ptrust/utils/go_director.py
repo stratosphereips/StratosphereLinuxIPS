@@ -158,7 +158,8 @@ class GoDirector(IObservable):
         If a message does not comply with the format, the reporter's reputation is lowered.
         """
         # "message_type":"go_data",
-        # "message_contents":{"reporter":"aconcagua","report_time":1649445643,"message":"eyJtZXNzYWdlX3R5cGUiOiAicmVxdWVzdCIsICJrZXlfdHlwZSI6ICJpcCIsICJrZXkiOiAiMTQ3LjMyLjgzLjEzMiIsICJldmFsdWF0aW9uX3R5cGUiOiAic2NvcmVfY29uZmlkZW5jZSJ9"}}
+        # "message_contents":{"reporter":"aconcagua","report_time":1649445643,"message":
+        # "eyJtZXNzY..."}}
 
         # check that the data was parsed correctly in the go part of the app
         # if there were any issues, the reports list will be empty
