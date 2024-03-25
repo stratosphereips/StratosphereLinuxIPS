@@ -12,7 +12,6 @@ from modules.p2ptrust.utils.utils import (
     validate_timestamp,
     get_ip_info_from_slips,
     send_evaluation_to_go,
-    send_empty_evaluation_to_go,
 )
 from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.common.imports import *
@@ -21,8 +20,6 @@ from slips_files.core.evidence_structure.evidence import (
         ProfileID,
         TimeWindow,
         Attacker,
-        ThreatLevel,
-        Victim,
         EvidenceType,
         IoCType,
         Direction,
