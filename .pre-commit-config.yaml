@@ -2,11 +2,27 @@ repos:
 -   repo: https://github.com/Yelp/detect-secrets
     rev: v1.4.0
     hooks:
-    -   id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: .*dataset/.*|
+        - id: detect-secrets
+          args: ['--baseline', '.secrets.baseline']
+          exclude: .*dataset/.*|
                   (?x)(
                          ^config/local_ti_files/own_malicious_JA3.csv$|
                           .*test.* |
                          .*\.md$
-                  )
+                      )
+
+-     repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v3.1.0
+      hooks:
+        - id: trailing-whitespace
+        - id: check-added-large-files
+        - id: check-docstring-first
+        - id: check-merge-conflict
+        - id: end-of-file-fixer
+        - id: detect-private-key
+          exclude: .*dataset/.*|
+                (?x)(
+                     ^config/$|
+                      .*test.* |
+                     .*\.md$
+              )
