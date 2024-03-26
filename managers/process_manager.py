@@ -129,8 +129,9 @@ class ProcessManager:
         )
         pbar.start()
         self.main.db.store_pid(pbar.name, int(pbar.pid))
-        self.main.print(f"Started {green('PBar')} process ["
-                        f"PID {green(pbar.pid)}]")
+        self.main.print(
+            f"Started {green('PBar')} process [" f"PID {green(pbar.pid)}]"
+        )
         return pbar
 
     def start_profiler_process(self):
@@ -189,7 +190,8 @@ class ProcessManager:
         )
         input_process.start()
         self.main.print(
-            f'Started {green("Input Process")} ' f"[PID {green(input_process.pid)}]",
+            f'Started {green("Input Process")} '
+            f"[PID {green(input_process.pid)}]",
             1,
             0,
         )
@@ -230,7 +232,6 @@ class ProcessManager:
             self.print_stopped_module(module_name)
 
     def is_ignored_module(self, module_name: str) -> bool:
-
         for ignored_module in self.modules_to_ignore:
             ignored_module = (
                 ignored_module.replace(" ", "")
@@ -241,7 +242,9 @@ class ProcessManager:
             # this version of the module name wont contain
             # _ or spaces so we can
             # easily match it with the ignored module name
-            curr_module_name = module_name.replace("_", "").replace("-", "").lower()
+            curr_module_name = (
+                module_name.replace("_", "").replace("-", "").lower()
+            )
             if curr_module_name.__contains__(ignored_module):
                 return True
         return False
@@ -302,7 +305,8 @@ class ProcessManager:
             for member_name, member_object in inspect.getmembers(module):
                 # Check if current member is a class.
                 if inspect.isclass(member_object) and (
-                    issubclass(member_object, IModule) and member_object is not IModule
+                    issubclass(member_object, IModule)
+                    and member_object is not IModule
                 ):
                     plugins[member_object.name] = dict(
                         obj=member_object,
@@ -352,7 +356,9 @@ class ProcessManager:
             module.start()
             self.main.db.store_pid(module_name, int(module.pid))
             self.print_started_module(
-                module_name, module.pid, modules_to_call[module_name]["description"]
+                module_name,
+                module.pid,
+                modules_to_call[module_name]["description"],
             )
 
     def print_started_module(
@@ -422,7 +428,9 @@ class ProcessManager:
         if self.warning_printed_once:
             return
 
-        pending_module_names: List[str] = [proc.name for proc in pending_modules]
+        pending_module_names: List[str] = [
+            proc.name for proc in pending_modules
+        ]
         self.main.print(
             f"The following modules are busy working on your data."
             f"\n\n{pending_module_names}\n\n"
@@ -460,7 +468,9 @@ class ProcessManager:
             pids_to_kill_last.append(self.main.db.get_pid_of("Blocking"))
 
         if "exporting_alerts" not in self.main.db.get_disabled_modules():
-            pids_to_kill_last.append(self.main.db.get_pid_of("Exporting Alerts"))
+            pids_to_kill_last.append(
+                self.main.db.get_pid_of("Exporting Alerts")
+            )
 
         # remove all None PIDs
         pids_to_kill_last: List[int] = [
@@ -515,7 +525,7 @@ class ProcessManager:
 
         start_time = self.main.db.get_slips_start_time()
         return utils.get_time_diff(start_time, end_date, return_type="minutes")
-    
+
     def stop_slips(self) -> bool:
         """
         determines whether slips should stop
@@ -526,13 +536,13 @@ class ProcessManager:
         """
         if self.should_run_non_stop():
             return False
-        
+
         if (
-                self.stop_slips_received()
-                or self.slips_is_done_receiving_new_flows()
+            self.stop_slips_received()
+            or self.slips_is_done_receiving_new_flows()
         ):
             return True
-        
+
         return False
 
     def stop_slips_received(self):
@@ -612,7 +622,9 @@ class ProcessManager:
         """
         # try to acquire the semaphore without blocking
         input_done_processing: bool = self.is_input_done.acquire(block=False)
-        profiler_done_processing: bool = self.is_profiler_done.acquire(block=False)
+        profiler_done_processing: bool = self.is_profiler_done.acquire(
+            block=False
+        )
 
         if input_done_processing and profiler_done_processing:
             return True
@@ -691,7 +703,10 @@ class ProcessManager:
                 try:
                     # Wait timeout_seconds for all the processes to finish
                     while time.time() - method_start_time < timeout_seconds:
-                        to_kill_first, to_kill_last = self.shutdown_interactive(
+                        (
+                            to_kill_first,
+                            to_kill_last,
+                        ) = self.shutdown_interactive(
                             to_kill_first, to_kill_last
                         )
                         if not to_kill_first and not to_kill_last:

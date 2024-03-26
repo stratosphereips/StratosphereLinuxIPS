@@ -10,20 +10,21 @@ import json
 from datetime import datetime
 from typing import Tuple, List, Set
 
+
 class MetadataManager:
     def __init__(self, main):
         self.main = main
-    
+
     def get_host_ip(self):
         """
         Recognize the IP address of the machine
         """
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(('1.1.1.1', 80))
+            s.connect(("1.1.1.1", 80))
             ipaddr_check = s.getsockname()[0]
             s.close()
-        except (socket.error):
+        except socket.error:
             # not connected to the internet
             return None
         return ipaddr_check
@@ -36,14 +37,16 @@ class MetadataManager:
         port = int(port)
         for conn in psutil.net_connections():
             if conn.laddr.port == port:
-                return psutil.Process(conn.pid).pid #.name()
+                return psutil.Process(conn.pid).pid  # .name()
         return None
-    
+
     def store_host_ip(self):
         """
         Store the host IP address if input type is interface
         """
-        running_on_interface = '-i' in sys.argv or self.main.db.is_growing_zeek_dir()
+        running_on_interface = (
+            "-i" in sys.argv or self.main.db.is_growing_zeek_dir()
+        )
         if not running_on_interface:
             return
 
@@ -54,7 +57,7 @@ class MetadataManager:
                 break
             except redis.exceptions.DataError:
                 self.main.print(
-                    'Not Connected to the internet. Reconnecting in 10s.'
+                    "Not Connected to the internet. Reconnecting in 10s."
                 )
                 time.sleep(10)
                 hostIP = self.get_host_ip()
@@ -67,7 +70,7 @@ class MetadataManager:
         if not self.enable_metadata:
             return
 
-        metadata_dir = os.path.join(self.main.args.output, 'metadata')
+        metadata_dir = os.path.join(self.main.args.output, "metadata")
         try:
             os.mkdir(metadata_dir)
         except FileExistsError:
@@ -75,7 +78,7 @@ class MetadataManager:
             pass
 
         # Add a copy of slips.conf
-        config_file = self.main.args.config or 'config/slips.conf'
+        config_file = self.main.args.config or "config/slips.conf"
         shutil.copy(config_file, metadata_dir)
 
         # Add a copy of whitelist.conf
@@ -85,16 +88,17 @@ class MetadataManager:
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
 
-        self.info_path = os.path.join(metadata_dir, 'info.txt')
-        with open(self.info_path, 'w') as f:
-            f.write(f'Slips version: {self.main.version}\n'
-                    f'File: {self.main.input_information}\n'
-                    f'Branch: {self.main.db.get_branch()}\n'
-                    f'Commit: {self.main.db.get_commit()}\n'
-                    f'Slips start date: {now}\n'
-                    )
+        self.info_path = os.path.join(metadata_dir, "info.txt")
+        with open(self.info_path, "w") as f:
+            f.write(
+                f"Slips version: {self.main.version}\n"
+                f"File: {self.main.input_information}\n"
+                f"Branch: {self.main.db.get_branch()}\n"
+                f"Commit: {self.main.db.get_commit()}\n"
+                f"Slips start date: {now}\n"
+            )
 
-        self.main.print(f'Metadata added to {metadata_dir}')
+        self.main.print(f"Metadata added to {metadata_dir}")
         return self.info_path
 
     def set_analysis_end_date(self):
@@ -104,12 +108,12 @@ class MetadataManager:
         """
         self.enable_metadata = self.main.conf.enable_metadata()
         end_date = utils.convert_format(datetime.now(), utils.alerts_format)
-        self.main.db.set_input_metadata({'analysis_end': end_date})
+        self.main.db.set_input_metadata({"analysis_end": end_date})
         if self.enable_metadata:
             # add slips end date in the metadata dir
             try:
-                with open(self.info_path, 'a') as f:
-                    f.write(f'Slips end date: {end_date}\n')
+                with open(self.info_path, "a") as f:
+                    f.write(f"Slips end date: {end_date}\n")
             except (NameError, AttributeError):
                 pass
         return end_date
@@ -121,35 +125,36 @@ class MetadataManager:
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
         info = {
-            'slips_version': self.main.version,
-            'name': self.main.input_information,
-            'analysis_start': now,
-            'disabled_modules': json.dumps(to_ignore),
-            'output_dir': self.main.args.output,
-            'input_type': self.main.input_type,
-            'evidence_detection_threshold': self.main.conf.evidence_detection_threshold(),
+            "slips_version": self.main.version,
+            "name": self.main.input_information,
+            "analysis_start": now,
+            "disabled_modules": json.dumps(to_ignore),
+            "output_dir": self.main.args.output,
+            "input_type": self.main.input_type,
+            "evidence_detection_threshold": self.main.conf.evidence_detection_threshold(),
         }
 
-        if hasattr(self.main, 'zeek_dir'):
-            info.update({
-                'zeek_dir': self.main.zeek_dir
-            })
+        if hasattr(self.main, "zeek_dir"):
+            info.update({"zeek_dir": self.main.zeek_dir})
 
-        size_in_mb = '-'
-        if self.main.args.filepath not in (False, None) and os.path.exists(self.main.args.filepath):
+        size_in_mb = "-"
+        if self.main.args.filepath not in (False, None) and os.path.exists(
+            self.main.args.filepath
+        ):
             size = os.stat(self.main.args.filepath).st_size
             size_in_mb = float(size) / (1024 * 1024)
-            size_in_mb = format(float(size_in_mb), '.2f')
+            size_in_mb = format(float(size_in_mb), ".2f")
 
-        info.update({
-            'size_in_MB': size_in_mb,
-        })
+        info.update(
+            {
+                "size_in_MB": size_in_mb,
+            }
+        )
         # analysis end date will be set in shutdown_gracefully
         # file(pcap,netflow, etc.) start date will be set in
         self.main.db.set_input_metadata(info)
 
-
-    def update_slips_stats_in_the_db(self) -> Tuple[int, Set[str]] :
+    def update_slips_stats_in_the_db(self) -> Tuple[int, Set[str]]:
         """
         updates the number of processed ips, slips internal time,
          and modified tws so far in the db
@@ -159,19 +164,18 @@ class MetadataManager:
         # Get the amount of modified profiles since we last checked
         # this is the modification time of the last timewindow
         last_modified_tw_time: float
-        modified_profiles, last_modified_tw_time = (
-            self.main.db.get_modified_profiles_since(slips_internal_time)
-        )
+        (
+            modified_profiles,
+            last_modified_tw_time,
+        ) = self.main.db.get_modified_profiles_since(slips_internal_time)
         modified_ips_in_the_last_tw = len(modified_profiles)
         self.main.db.set_input_metadata(
-            {'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw}
-            )
+            {"modified_ips_in_the_last_tw": modified_ips_in_the_last_tw}
+        )
         # last_modified_tw_time is 0 the moment we start slips
         # or if we don't have modified tw since the last slips_internal_time
         if last_modified_tw_time != 0:
-            self.main.db.set_slips_internal_time(
-                last_modified_tw_time
-            )
+            self.main.db.set_slips_internal_time(last_modified_tw_time)
         return modified_ips_in_the_last_tw, modified_profiles
 
     def enable_metadata(self):

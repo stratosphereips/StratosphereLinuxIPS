@@ -30,7 +30,6 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.style import red
 
 
-
 class Output(IObserver):
     """
     A class to process the output of everything Slips need.
@@ -39,19 +38,20 @@ class Output(IObserver):
      or logs, it should use always this process.
      Then this output class will handle how to deal with it
     """
-    
-    name = 'Output'
+
+    name = "Output"
     slips_logfile_lock = Lock()
     errors_logfile_lock = Lock()
     cli_lock = Lock()
 
-    def __init__(self,
-        verbose = 1,
-        debug = 0,
-        stdout = '',
-        stderr = 'output/errors.log',
-        slips_logfile = 'output/slips.log',
-        input_type = False,
+    def __init__(
+        self,
+        verbose=1,
+        debug=0,
+        stdout="",
+        stderr="output/errors.log",
+        slips_logfile="output/slips.log",
+        input_type=False,
         sender_pipe: Connection = None,
         has_pbar: bool = False,
         pbar_finished: Event = None,
@@ -74,12 +74,12 @@ class Output(IObserver):
         # to start the db from the daemon class
         if not stop_daemon:
             self._read_configuration()
-    
+
             self.create_logfile(self.errors_logfile)
             self.log_branch_info(self.errors_logfile)
             self.create_logfile(self.slips_logfile)
             self.log_branch_info(self.slips_logfile)
-            
+
             utils.change_logfiles_ownership(
                 self.errors_logfile, self.UID, self.GID
             )
@@ -87,12 +87,11 @@ class Output(IObserver):
                 self.slips_logfile, self.UID, self.GID
             )
             self.stdout = stdout
-            if stdout != '':
+            if stdout != "":
                 self.change_stdout()
-    
-            if self.verbose > 2:
-                print(f'Verbosity: {self.verbose}. Debugging: {self.debug}')
 
+            if self.verbose > 2:
+                print(f"Verbosity: {self.verbose}. Debugging: {self.debug}")
 
     def _read_configuration(self):
         conf = ConfigParser()
@@ -110,29 +109,26 @@ class Output(IObserver):
             return
         commit, branch = branch_info
 
-
-        git_info = ''
+        git_info = ""
         if branch:
             git_info += branch
         if commit:
-            git_info += f' ({commit})'
+            git_info += f" ({commit})"
 
         now = datetime.now()
-        with open(logfile, 'a') as f:
-            f.write(f'Using {git_info} - {now}\n\n')
+        with open(logfile, "a") as f:
+            f.write(f"Using {git_info} - {now}\n\n")
 
     def create_logfile(self, path):
         """
         creates slips.log and errors.log if they don't exist
         """
         try:
-            open(path, 'a').close()
+            open(path, "a").close()
         except FileNotFoundError:
             p = Path(os.path.dirname(path))
             p.mkdir(parents=True, exist_ok=True)
-            open(path, 'w').close()
-       
-
+            open(path, "w").close()
 
     def log_line(self, msg: dict):
         """
@@ -144,16 +140,15 @@ class Output(IObserver):
         if "-D" in sys.argv:
             return
 
-        sender, msg = msg['from'], msg['txt']
+        sender, msg = msg["from"], msg["txt"]
 
         date_time = datetime.now()
         date_time = utils.convert_format(date_time, utils.alerts_format)
 
         self.slips_logfile_lock.acquire()
-        with open(self.slips_logfile, 'a') as slips_logfile:
-            slips_logfile.write(f'{date_time} [{sender}] {msg}\n')
+        with open(self.slips_logfile, "a") as slips_logfile:
+            slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
         self.slips_logfile_lock.release()
-
 
     def change_stdout(self):
         """
@@ -167,13 +162,12 @@ class Output(IObserver):
         # without it, the file writer keeps the information in a local buffer
         # that's not accessible to the file.
         stdout = io.TextIOWrapper(
-            open(self.stdout, 'wb', 0),
-            write_through=True
+            open(self.stdout, "wb", 0), write_through=True
         )
         sys.stdout = stdout
         return stdout
 
-    def print(self, sender: str, txt: str, end='\n'):
+    def print(self, sender: str, txt: str, end="\n"):
         """
         prints the given txt whether using tqdm or using print()
         """
@@ -182,20 +176,16 @@ class Output(IObserver):
         # we print alerts at the very botttom of the screen using print
         # instead of printing alerts at the top of the pbar using tqdm
         if sender:
-            to_print = f'[{sender}] {txt}'
+            to_print = f"[{sender}] {txt}"
         else:
             to_print = txt
 
         if self.has_pbar and not self.is_pbar_finished():
-            self.tell_pbar({
-                'event': 'print',
-                'txt': to_print
-            })
+            self.tell_pbar({"event": "print", "txt": to_print})
         else:
             print(to_print, end=end)
-            
-        self.cli_lock.release()
 
+        self.cli_lock.release()
 
     def log_error(self, msg: dict):
         """
@@ -205,10 +195,9 @@ class Output(IObserver):
         date_time = utils.convert_format(date_time, utils.alerts_format)
 
         self.errors_logfile_lock.acquire()
-        with open(self.errors_logfile, 'a') as errors_logfile:
+        with open(self.errors_logfile, "a") as errors_logfile:
             errors_logfile.write(f'{date_time} [{msg["from"]}] {msg["txt"]}\n')
         self.errors_logfile_lock.release()
-
 
     def handle_printing_stats(self, stats: str):
         """
@@ -221,15 +210,10 @@ class Output(IObserver):
         # have a pbar
         # we print the stats in a new line, instead of next to the pbar
         if self.has_pbar and not self.is_pbar_finished():
-            self.tell_pbar({
-                'event': 'update_stats',
-                'stats': stats
-            })
+            self.tell_pbar({"event": "update_stats", "stats": stats})
         else:
             # print the stats with no sender
-            self.print('', stats, end="\r")
-
-
+            self.print("", stats, end="\r")
 
     def enough_verbose(self, verbose: int):
         """
@@ -248,24 +232,23 @@ class Output(IObserver):
         Prints to terminal and logfiles depending on the debug and verbose
         levels
         """
-        verbose = msg.get('verbose', self.verbose)
-        debug = msg.get('debug', self.debug)
-        sender, txt = msg['from'], msg['txt']
+        verbose = msg.get("verbose", self.verbose)
+        debug = msg.get("debug", self.debug)
+        sender, txt = msg["from"], msg["txt"]
 
         # if debug level is 3 make it red
         if debug == 3:
             msg = red(msg)
 
-        if 'analyzed IPs' in txt:
+        if "analyzed IPs" in txt:
             self.handle_printing_stats(txt)
             return
-
 
         # There should be a level 0 that we never print. So its >, and not >=
         if self.enough_verbose(verbose) or self.enough_debug(debug):
             # when printing started processes, don't print a sender
-            if 'Start' in txt:
-                sender = ''
+            if "Start" in txt:
+                sender = ""
             self.print(sender, txt)
             self.log_line(msg)
 
@@ -282,28 +265,31 @@ class Output(IObserver):
         will be received by the pbar class
         """
         self.sender_pipe.send(msg)
-    
-    def is_pbar_finished(self )-> bool:
+
+    def is_pbar_finished(self) -> bool:
         return self.pbar_finished.is_set()
-    
-    
+
     def forward_progress_bar_msgs(self, msg: dict):
         """
         passes init and update msgs to pbar module
         """
-        pbar_event: str = msg['bar']
-        if pbar_event == 'init':
-            self.tell_pbar({
-                'event': pbar_event,
-                'total_flows': msg['bar_info']['total_flows'],
-            })
+        pbar_event: str = msg["bar"]
+        if pbar_event == "init":
+            self.tell_pbar(
+                {
+                    "event": pbar_event,
+                    "total_flows": msg["bar_info"]["total_flows"],
+                }
+            )
             return
 
-        if pbar_event == 'update' and not self.is_pbar_finished():
-            self.tell_pbar({
-                'event': 'update_bar',
-            })
-    
+        if pbar_event == "update" and not self.is_pbar_finished():
+            self.tell_pbar(
+                {
+                    "event": "update_bar",
+                }
+            )
+
     def update(self, msg: dict):
         """
         gets called whenever any module need to print something
@@ -324,19 +310,18 @@ class Output(IObserver):
         # if pbar wasn't supported, inputproc won't send update msgs
 
         # try:
-        if 'bar' in msg:
+        if "bar" in msg:
             self.forward_progress_bar_msgs(msg)
             return
-            
+
         # output to terminal and logs or logs only?
-        if msg.get('log_to_logfiles_only', False):
+        if msg.get("log_to_logfiles_only", False):
             self.log_line(msg)
         else:
             # output to terminal
             self.output_line(msg)
-            
-            
+
+
 #         except Exception as e:
 #             print(f"Error in output.py: {e} {type(e)}")
 #             traceback.print_stack()
-

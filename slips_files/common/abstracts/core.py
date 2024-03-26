@@ -7,22 +7,24 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
 
+
 class ICore(IModule, Process):
     """
     Interface for all Core files placed in slips_files/core/
     """
-    name = ''
-    description = 'Short description of the core class purpose'
-    authors = ['Name of the author creating the class']
+
+    name = ""
+    description = "Short description of the core class purpose"
+    authors = ["Name of the author creating the class"]
 
     def __init__(
-            self,
-            logger: Output,
-            output_dir,
-            redis_port,
-            termination_event,
-            **kwargs
-            ):
+        self,
+        logger: Output,
+        output_dir,
+        redis_port,
+        termination_event,
+        **kwargs,
+    ):
         """
         contains common initializations in all core files in
          slips_files/core/
@@ -56,7 +58,6 @@ class ICore(IModule, Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
         except Exception:
-            self.print(f'Problem in {self.name}',0, 1)
-            self.print(traceback.format_exc(),  0, 1)
+            self.print(f"Problem in {self.name}", 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
         return True
-

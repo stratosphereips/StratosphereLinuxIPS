@@ -9,7 +9,7 @@ from slips_files.core.evidence_structure.evidence import (
     Evidence,
     IoCType,
     EvidenceType,
-    )
+)
 
 
 def get_ip_version(ip: str) -> str:
@@ -107,7 +107,10 @@ def idea_format(evidence: Evidence):
         # the idx of the daddr, in CC detections, it's the second one
         idx = (
             1
-            if (evidence.evidence_type == EvidenceType.COMMAND_AND_CONTROL_CHANNEL)
+            if (
+                evidence.evidence_type
+                == EvidenceType.COMMAND_AND_CONTROL_CHANNEL
+            )
             else 0
         )
         if evidence.port:
@@ -123,9 +126,14 @@ def idea_format(evidence: Evidence):
             idea_dict["Target"] = [{victim_type: [victims_ip]}]
 
         # update the dstip description if specified in the evidence
-        if hasattr(evidence, "source_target_tag") and evidence.source_target_tag:
+        if (
+            hasattr(evidence, "source_target_tag")
+            and evidence.source_target_tag
+        ):
             # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
-            idea_dict["Source"][0].update({"Type": [evidence.source_target_tag.value]})
+            idea_dict["Source"][0].update(
+                {"Type": [evidence.source_target_tag.value]}
+            )
 
         # add the description
         attachment = {

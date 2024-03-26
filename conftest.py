@@ -2,6 +2,7 @@
 This file will contain the fixtures that are commonly needed by all other test files
 for example: setting up the database, input_queue, output_queue, etc..
 """
+
 import pytest
 import os, sys, inspect
 from multiprocessing import Queue
@@ -19,22 +20,23 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
 
-
 @pytest.fixture
 def mock_db():
     # Create a mock version of the database object
-    with patch('slips_files.core.database.database_manager.DBManager') as mock:
+    with patch("slips_files.core.database.database_manager.DBManager") as mock:
         yield mock.return_value
+
 
 def do_nothing(*arg):
     """Used to override the print function because using the self.print causes
     broken pipes"""
     pass
 
+
 @pytest.fixture
 def input_queue():
     """This input_queue will be passed to all module constructors that need
-     it"""
+    it"""
     input_queue = Queue()
     input_queue.put = do_nothing
     return input_queue
@@ -51,27 +53,34 @@ def profiler_queue():
 
 @pytest.fixture
 def database():
-    db = DBManager(Output(), 'output/', 6379)
+    db = DBManager(Output(), "output/", 6379)
     db.print = do_nothing
     return db
+
 
 @pytest.fixture
 def flow():
     """returns a dummy flow for testing"""
     return Conn(
-        '1601998398.945854',
-        '1234',
-        '192.168.1.1',
-        '8.8.8.8',
+        "1601998398.945854",
+        "1234",
+        "192.168.1.1",
+        "8.8.8.8",
         5,
-        'TCP',
-        'dhcp',
-        80,88,
-        20,20,
-        20,20,
-        '','',
-        'Established',''
+        "TCP",
+        "dhcp",
+        80,
+        88,
+        20,
+        20,
+        20,
+        20,
+        "",
+        "",
+        "Established",
+        "",
     )
+
 
 # Define a fixture to run before each test
 @pytest.fixture(autouse=True)

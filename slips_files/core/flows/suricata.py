@@ -3,7 +3,6 @@ from slips_files.common.slips_utils import utils
 from datetime import datetime, timedelta
 import json
 
-"""
 #     suricata available event_type values:
 #     -flow
 #     -tls
@@ -12,7 +11,6 @@ import json
 #     -alert
 #     -fileinfo
 #     -stats (only one line - it is conclusion of entire capture)
-"""
 
 
 @dataclass
@@ -48,19 +46,20 @@ class SuricataFlow:
     state: str
 
     # required to be able to add_flow
-    smac: str = ''
-    dmac: str = ''
-    dir_: str = '->'
-    type_: str = 'conn'
+    smac: str = ""
+    dmac: str = ""
+    dir_: str = "->"
+    type_: str = "conn"
 
     def __post_init__(self):
         self.dur = (
-               utils.convert_to_datetime(self.endtime)
-               - utils.convert_to_datetime(self.starttime)
-            ).total_seconds() or 0
+            utils.convert_to_datetime(self.endtime)
+            - utils.convert_to_datetime(self.starttime)
+        ).total_seconds() or 0
         self.pkts = self.dpkts + self.spkts
         self.bytes = self.dbytes + self.sbytes
         self.uid = str(self.uid)
+
 
 @dataclass
 class SuricataHTTP:
@@ -88,12 +87,14 @@ class SuricataHTTP:
     request_body_len: int
     response_body_len: int
 
-    status_msg: str = ''
-    resp_mime_types: str = ''
-    resp_fuids: str = ''
-    type_:str = 'http'
+    status_msg: str = ""
+    resp_mime_types: str = ""
+    resp_fuids: str = ""
+    type_: str = "http"
+
     def __post_init__(self):
         self.uid = str(self.uid)
+
 
 @dataclass
 class SuricataDNS:
@@ -115,9 +116,10 @@ class SuricataDNS:
     answers: list
 
     # these alues are not present in eve.json
-    qclass_name: str = ''
-    rcode_name: str = ''
-    type_: str = 'dns'
+    qclass_name: str = ""
+    rcode_name: str = ""
+    type_: str = "dns"
+
     def __post_init__(self):
         self.uid = str(self.uid)
 
@@ -145,7 +147,8 @@ class SuricataTLS:
     notbefore: str
     notafter: str
 
-    type_: str = 'ssl'
+    type_: str = "ssl"
+
     def __post_init__(self):
         self.uid = str(self.uid)
 
@@ -165,16 +168,18 @@ class SuricataFile:
     appproto: str
 
     size: int
-    type_: str = 'files'
+    type_: str = "files"
     # required to match zeek files.log
-    md5: str = ''
-    sha1: str = ''
-    source: str =''
-    analyzers: str =''
-    tx_hosts: str = ''
-    rx_hosts: str = ''
+    md5: str = ""
+    sha1: str = ""
+    source: str = ""
+    analyzers: str = ""
+    tx_hosts: str = ""
+    rx_hosts: str = ""
+
     def __post_init__(self):
         self.uid = str(self.uid)
+
 
 @dataclass
 class SuricataSSH:
@@ -195,16 +200,16 @@ class SuricataSSH:
     server: str
 
     # these fields aren't available in suricata, they're available in zeek only
-    auth_success: str = ''
-    auth_attempts: str = ''
-    cipher_alg: str = ''
-    mac_alg: str = ''
-    kex_alg: str = ''
-    compression_alg: str = ''
-    host_key_alg: str = ''
-    host_key: str = ''
+    auth_success: str = ""
+    auth_attempts: str = ""
+    cipher_alg: str = ""
+    mac_alg: str = ""
+    kex_alg: str = ""
+    compression_alg: str = ""
+    host_key_alg: str = ""
+    host_key: str = ""
 
-    type_: str = 'ssh'
+    type_: str = "ssh"
+
     def __post_init__(self):
         self.uid = str(self.uid)
-

@@ -16,17 +16,15 @@ from modules.p2ptrust.utils.utils import (
 from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.common.imports import *
 from slips_files.core.evidence_structure.evidence import (
-        Evidence,
-        ProfileID,
-        TimeWindow,
-        Attacker,
-        EvidenceType,
-        IoCType,
-        Direction,
-        IDEACategory,
-    )
-
-
+    Evidence,
+    ProfileID,
+    TimeWindow,
+    Attacker,
+    EvidenceType,
+    IoCType,
+    Direction,
+    IDEACategory,
+)
 
 
 class GoDirector(IObservable):
@@ -36,7 +34,9 @@ class GoDirector(IObservable):
     Requests from other peers are validated, data is read from the database and from slips, and the response is sent.
     If peer sends invalid data, his reputation is lowered.
     """
-    name = 'P2P Go Director'
+
+    name = "P2P Go Director"
+
     def __init__(
         self,
         logger: Output,
@@ -46,9 +46,9 @@ class GoDirector(IObservable):
         override_p2p: bool = False,
         report_func=None,
         request_func=None,
-        gopy_channel: str = 'p2p_gopy',
-        pygo_channel: str = 'p2p_pygo',
-        p2p_reports_logfile: str = 'p2p_reports.log',
+        gopy_channel: str = "p2p_gopy",
+        pygo_channel: str = "p2p_pygo",
+        p2p_reports_logfile: str = "p2p_reports.log",
     ):
         self.logger = logger
         IObservable.__init__(self)
@@ -56,7 +56,7 @@ class GoDirector(IObservable):
         # todo what is override_p2p
         if override_p2p and not (report_func and request_func):
             raise Exception(
-                'Override_p2p set but not provided appropriate functions'
+                "Override_p2p set but not provided appropriate functions"
             )
         self.trustdb = trustdb
         self.pygo_channel = pygo_channel
@@ -65,14 +65,14 @@ class GoDirector(IObservable):
         self.report_func = report_func
         self.request_func = request_func
         # clear the logfile
-        open(p2p_reports_logfile, 'w').close()
-        self.reports_logfile = open(p2p_reports_logfile, 'a')
+        open(p2p_reports_logfile, "w").close()
+        self.reports_logfile = open(p2p_reports_logfile, "a")
         self.print(f"Storing peer reports in {p2p_reports_logfile}")
         # TODO: there should be some better mechanism to add new processing functions.. Maybe load from files?
         self.evaluation_processors = {
-            'score_confidence': self.process_evaluation_score_confidence
+            "score_confidence": self.process_evaluation_score_confidence
         }
-        self.key_type_processors = {'ip': validate_ip_address}
+        self.key_type_processors = {"ip": validate_ip_address}
         self.read_configuration()
         self.db = db
 
@@ -94,10 +94,10 @@ class GoDirector(IObservable):
         """
         self.notify_observers(
             {
-                'from': self.name,
-                'txt': text,
-                'verbose': verbose,
-                'debug': debug
+                "from": self.name,
+                "txt": text,
+                "verbose": verbose,
+                "debug": debug,
             }
         )
 
@@ -105,32 +105,33 @@ class GoDirector(IObservable):
         conf = ConfigParser()
         self.width = conf.get_tw_width_as_float()
 
-
     def log(self, text: str):
         """
         Writes the log text to p2p_reports.log
         """
         now = time.time()
-        human_readable_datetime = utils.convert_format(now, utils.alerts_format)
-        self.reports_logfile.write(f'{human_readable_datetime} - {text}\n')
+        human_readable_datetime = utils.convert_format(
+            now, utils.alerts_format
+        )
+        self.reports_logfile.write(f"{human_readable_datetime} - {text}\n")
 
     def handle_gopy_data(self, data_dict: dict):
         """
         Method that receives raw data from peers sent into p2p_gopy redis channel
         """
         try:
-            message_type = data_dict['message_type']
-            message_contents = data_dict['message_contents']
-            if message_type == 'peer_update':
+            message_type = data_dict["message_type"]
+            message_contents = data_dict["message_contents"]
+            if message_type == "peer_update":
                 # update in peers reliability or IP address.
                 self.process_go_update(message_contents)
 
-            elif message_type == 'go_data':
+            elif message_type == "go_data":
                 # a peer request or update
                 self.process_go_data(message_contents)
 
             else:
-                self.print(f'Invalid command: {message_type}', 0, 2)
+                self.print(f"Invalid command: {message_type}", 0, 2)
 
         except json.decoder.JSONDecodeError:
             self.print(
@@ -142,7 +143,7 @@ class GoDirector(IObservable):
         except KeyError:
             self.print(
                 f"Json from the pigeon: {data_dict} doesn't contain "
-                'expected values message_type or message_contents',
+                "expected values message_type or message_contents",
                 0,
                 1,
             )
@@ -164,18 +165,17 @@ class GoDirector(IObservable):
         # report is the dictionary containing reporter, report_time and message
 
         # if intersection of a set of expected keys and the actual keys has four items, it means all keys are there
-        key_reporter = 'reporter'
-        key_report_time = 'report_time'
-        key_message = 'message'
+        key_reporter = "reporter"
+        key_report_time = "report_time"
+        key_message = "message"
 
         expected_keys = {key_reporter, key_report_time, key_message}
         # if the overlap of the two sets is smaller than the set of keys, some keys are missing. The & operator
         # picks the items that are present in both sets: {2, 4, 6, 8, 10, 12} & {3, 6, 9, 12, 15} = {3, 12}
 
-
         report_time = validate_timestamp(report[key_report_time])
         if report_time is None:
-            self.print('Invalid timestamp', 0, 2)
+            self.print("Invalid timestamp", 0, 2)
             return
 
         reporter = report[key_reporter]
@@ -184,18 +184,18 @@ class GoDirector(IObservable):
         message_type, data = self.validate_message(message)
 
         self.print(
-            f'[The Network -> Slips] Received msg {data} from peer {reporter}'
+            f"[The Network -> Slips] Received msg {data} from peer {reporter}"
         )
 
-        if message_type == 'report':
+        if message_type == "report":
             # a peer reporting an IP
             self.process_message_report(reporter, report_time, data)
 
-        elif message_type == 'request':
+        elif message_type == "request":
             # a peer requesting info about an ip
             self.process_message_request(reporter, report_time, data)
 
-        elif message_type == 'blame':
+        elif message_type == "blame":
             # TODO SLIPS doesn't getthis kind of msgs at all. all reports are treated as one
             # self.print("blame is not implemented yet", 0, 2)
             # calls process_message_report in p2ptrust.py
@@ -205,9 +205,11 @@ class GoDirector(IObservable):
         else:
             # TODO: lower reputation
             self.print(
-                f'Peer {report} sent unknown message type {message_type}: {data}', 0,2
+                f"Peer {report} sent unknown message type {message_type}: {data}",
+                0,
+                2,
             )
-            self.print('Peer sent unknown message type', 0, 2)
+            self.print("Peer sent unknown message type", 0, 2)
 
     def validate_message(self, message: str) -> (str, dict):
         """
@@ -221,34 +223,34 @@ class GoDirector(IObservable):
         try:
             decoded = base64.b64decode(message)
             data = json.loads(decoded)
-            return data['message_type'], data
+            return data["message_type"], data
 
         except binascii.Error:
-            self.print('base64 cannot be parsed properly', 0, 2)
+            self.print("base64 cannot be parsed properly", 0, 2)
 
         except json.decoder.JSONDecodeError:
-            self.print('Peer sent invalid json', 0, 2)
+            self.print("Peer sent invalid json", 0, 2)
 
         except KeyError:
             self.print("Peer didn't specify message type", 0, 2)
 
-        return '', {}
+        return "", {}
 
     def validate_message_request(self, data: Dict) -> bool:
         """
         Validate keys in message request. Check for corrupted fields and also supported fields
         """
         try:
-            key = data['key']
-            key_type = data['key_type']
-            evaluation_type = data['evaluation_type']
+            key = data["key"]
+            key_type = data["key_type"]
+            evaluation_type = data["evaluation_type"]
         except KeyError:
-            self.print('Correct keys are missing in the message', 0, 2)
+            self.print("Correct keys are missing in the message", 0, 2)
             # TODO: lower reputation
             return False
 
         # validate key_type and key
-        if key_type != 'ip':
+        if key_type != "ip":
             self.print(f"Module can't process key type {key_type}", 0, 2)
             return False
 
@@ -262,7 +264,7 @@ class GoDirector(IObservable):
             return False
 
         # validate evaluation type
-        if evaluation_type != 'score_confidence':
+        if evaluation_type != "score_confidence":
             self.print(
                 f"Module can't process evaluation type {evaluation_type}", 0, 2
             )
@@ -288,9 +290,9 @@ class GoDirector(IObservable):
         if not self.validate_message_request(data):
             return
 
-        key = data['key']
+        key = data["key"]
         self.print(
-            f'[The Network -> Slips] request about {key} from: {reporter}',
+            f"[The Network -> Slips] request about {key} from: {reporter}",
         )
 
         #  override_p2p is false by default
@@ -312,8 +314,8 @@ class GoDirector(IObservable):
                 key, score, confidence, reporter, self.pygo_channel, self.db
             )
             self.print(
-                f'[Slips -> The Network] Slips responded with info score={score} '
-                f'confidence={confidence} about IP: {key} to {reporter}.',
+                f"[Slips -> The Network] Slips responded with info score={score} "
+                f"confidence={confidence} about IP: {key} to {reporter}.",
                 2,
                 0,
             )
@@ -322,7 +324,7 @@ class GoDirector(IObservable):
         else:
             # send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
             self.print(
-                f'[Slips -> The Network] Slips has no info about IP: {key}. Not responding to {reporter}',
+                f"[Slips -> The Network] Slips has no info about IP: {key}. Not responding to {reporter}",
                 2,
                 0,
             )
@@ -343,12 +345,12 @@ class GoDirector(IObservable):
 
         # validate keys in message
         try:
-            key = data['key']
-            key_type = data['key_type']
-            evaluation_type = data['evaluation_type']
-            evaluation = data['evaluation']
+            key = data["key"]
+            key_type = data["key_type"]
+            evaluation_type = data["evaluation_type"]
+            evaluation = data["evaluation"]
         except KeyError:
-            self.print('Correct keys are missing in the message', 0, 2)
+            self.print("Correct keys are missing in the message", 0, 2)
             # TODO: lower reputation
             return
 
@@ -379,10 +381,10 @@ class GoDirector(IObservable):
             reporter, report_time, key_type, key, evaluation
         )
         if evaluation is not None:
-            msg = f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
+            msg = f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}"
             self.print(msg)
             # log the reporter too
-            msg += f' from peer: {reporter}'
+            msg += f" from peer: {reporter}"
             self.log(msg)
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
@@ -410,36 +412,36 @@ class GoDirector(IObservable):
 
         if evaluation is None:
             self.print(
-                f'Peer {reporter} has no data to share about {key}', 2, 0
+                f"Peer {reporter} has no data to share about {key}", 2, 0
             )
             return
 
         if type(evaluation) != dict:
-            self.print('Evaluation is not a dictionary', 0, 2)
+            self.print("Evaluation is not a dictionary", 0, 2)
             # TODO: lower reputation
             return
 
         # check that fields are present and with correct type
         try:
-            score = float(evaluation['score'])
-            confidence = float(evaluation['confidence'])
+            score = float(evaluation["score"])
+            confidence = float(evaluation["confidence"])
         except KeyError:
-            self.print('Score or confidence are missing', 0, 2)
+            self.print("Score or confidence are missing", 0, 2)
             # TODO: lower reputation
             return
         except ValueError:
-            self.print('Score or confidence have wrong data type', 0, 2)
+            self.print("Score or confidence have wrong data type", 0, 2)
             # TODO: lower reputation
             return
 
         # validate value ranges (must be from <0, 1>)
         if score < -1 or score > 1:
-            self.print('Score value is out of bounds', 0, 2)
+            self.print("Score value is out of bounds", 0, 2)
             # TODO: lower reputation
             return
 
         if confidence < 0 or confidence > 1:
-            self.print('Confidence value is out of bounds', 0, 2)
+            self.print("Confidence value is out of bounds", 0, 2)
             # TODO: lower reputation
             return
 
@@ -447,9 +449,9 @@ class GoDirector(IObservable):
             reporter, key_type, key, score, confidence, report_time
         )
         result = (
-            f'Data processing ok: reporter {reporter}, report time '
-            f'{report_time}, key {key} ({key_type}), '
-            f'score {score}, confidence {confidence}'
+            f"Data processing ok: reporter {reporter}, report time "
+            f"{report_time}, key {key} ({key_type}), "
+            f"score {score}, confidence {confidence}"
         )
         self.print(result, 2, 0)
         # print(f"*** [debugging p2p] ***  stored a report about about
@@ -457,30 +459,36 @@ class GoDirector(IObservable):
         # save all report info in the db
         # convert ts to human readable format
         report_info = {
-            'reporter': reporter,
-            'report_time': utils.convert_format(report_time, utils.alerts_format),
+            "reporter": reporter,
+            "report_time": utils.convert_format(
+                report_time, utils.alerts_format
+            ),
         }
         report_info.update(evaluation)
         self.db.store_p2p_report(key, report_info)
 
         # create a new profile for the reported ip
         # with the width from slips.conf and the starttime as the report time
-        if key_type == 'ip':
-            profileid_of_attacker = f'profile_{key}'
+        if key_type == "ip":
+            profileid_of_attacker = f"profile_{key}"
             self.db.add_profile(profileid_of_attacker, report_time, self.width)
-            self.set_evidence_p2p_report(key, reporter, score,
-                                         confidence,
-                                         report_time,
-                                         profileid_of_attacker)
+            self.set_evidence_p2p_report(
+                key,
+                reporter,
+                score,
+                confidence,
+                report_time,
+                profileid_of_attacker,
+            )
 
     def set_evidence_p2p_report(
-            self: str,
-            ip: str,
-            reporter: str,
-            score: float,
-            confidence: float,
-            timestamp: str,
-            profileid_of_attacker: str
+        self: str,
+        ip: str,
+        reporter: str,
+        score: float,
+        confidence: float,
+        timestamp: str,
+        profileid_of_attacker: str,
     ):
         """
         set evidence for the newly created attacker
@@ -490,18 +498,22 @@ class GoDirector(IObservable):
 
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
-        ip_identification = self.db.get_ip_identification(ip, get_ti_data=False)
+        ip_identification = self.db.get_ip_identification(
+            ip, get_ti_data=False
+        )
         last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
 
         # this should never happen. if we have a report,
         # we will have a reporter and will have the ip of the reporter
         # but just in case
         if not reporter_ip:
-            reporter_ip = ''
+            reporter_ip = ""
 
-        description = f'attacking another peer: {reporter_ip} ' \
-                      f'({reporter}). ' \
-                      f'confidence: {confidence} {ip_identification}'
+        description = (
+            f"attacking another peer: {reporter_ip} "
+            f"({reporter}). "
+            f"confidence: {confidence} {ip_identification}"
+        )
 
         # get the tw of this report time
         if twid := self.db.get_tw_of_ts(profileid_of_attacker, timestamp):
@@ -515,23 +527,19 @@ class GoDirector(IObservable):
         evidence = Evidence(
             evidence_type=EvidenceType.P2P_REPORT,
             attacker=Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=ip
-                ),
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=ip
+            ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=ip),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[''],
+            uid=[""],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_CONNECTION,
         )
 
         self.db.set_evidence(evidence)
-
-
 
     def process_go_update(self, data: dict) -> None:
         """
@@ -545,49 +553,55 @@ class GoDirector(IObservable):
         :param message: A string sent from go, should be json as specified above
         :return: None
         """
-        ip_address, reliability, peerid, timestamp = '', '', '', ''
+        ip_address, reliability, peerid, timestamp = "", "", "", ""
         try:
-            peerid = data['peerid']
+            peerid = data["peerid"]
         except KeyError:
-            self.print('Peerid missing', 0, 1)
+            self.print("Peerid missing", 0, 1)
             return
 
         # timestamp is optional. If it is not provided (or is wrong), it is set to None, and None timestamp is replaced
         # with current time in the database
         try:
-            timestamp = data['timestamp']
+            timestamp = data["timestamp"]
             timestamp = validate_timestamp(timestamp)
             if timestamp is None:
-                self.print('Timestamp is invalid', 2, 0)
+                self.print("Timestamp is invalid", 2, 0)
         except KeyError:
-            self.print(f'Timestamp is missing from data {data}', 2, 0)
+            self.print(f"Timestamp is missing from data {data}", 2, 0)
             timestamp = None
 
         try:
-            reliability = float(data['reliability'])
+            reliability = float(data["reliability"])
             self.trustdb.insert_go_reliability(
                 peerid, reliability, timestamp=timestamp
             )
         except KeyError:
-            self.print('Reliability missing', 2, 0)
+            self.print("Reliability missing", 2, 0)
         except ValueError:
-            self.print('Reliability is not a float', 2, 0)
+            self.print("Reliability is not a float", 2, 0)
 
         try:
-            ip_address = data['ip']
+            ip_address = data["ip"]
             if not validate_ip_address(ip_address):
-                self.print(f'IP address {ip_address} is invalid', 2, 0)
+                self.print(f"IP address {ip_address} is invalid", 2, 0)
                 return
             self.trustdb.insert_go_ip_pairing(
                 peerid, ip_address, timestamp=timestamp
             )
-            msg = f'[The Network -> Slips] Peer update or new peer {peerid} ' \
-                  f'with IP: {ip_address} ' \
-                  f'Reliability: {reliability } '
+            msg = (
+                f"[The Network -> Slips] Peer update or new peer {peerid} "
+                f"with IP: {ip_address} "
+                f"Reliability: {reliability } "
+            )
 
-            self.print(msg,2,0,)
+            self.print(
+                msg,
+                2,
+                0,
+            )
             self.log(msg)
 
         except KeyError:
-            self.print('IP address missing', 2, 0)
+            self.print("IP address missing", 2, 0)
             return

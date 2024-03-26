@@ -20,7 +20,6 @@ repos:
         - id: check-merge-conflict
         - id: end-of-file-fixer
         - id: detect-private-key
-        - id: double-quote-string-fixer
           exclude: .*dataset/.*|
                 (?x)(
                      ^config/$|
@@ -37,3 +36,10 @@ repos:
                       .*test.* |
                      .*\.md$
               )
+
+-     repo: https://github.com/psf/black-pre-commit-mirror
+      rev: 24.3.0
+      hooks:
+        - id: black
+          args: ['--line-length' , '79']
+          language_version: python3.8
