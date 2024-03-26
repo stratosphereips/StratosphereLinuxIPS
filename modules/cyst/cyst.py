@@ -1,4 +1,4 @@
-from slips_files.common.abstracts._module import IModule
+from slips_files.common.abstracts.module import IModule
 import socket
 import json
 import os

@@ -1,5 +1,4 @@
-from slips_files.common.abstracts._module import IModule
-from slips_files.common.imports import *
+from slips_files.common.abstracts.module import IModule
 import platform
 import sys
 import os
@@ -218,7 +217,7 @@ class Blocking(IModule):
         By default this function blocks all traffic from and to the given ip.
         """
 
-        if type(ip_to_block) != str:
+        if not isinstance(ip_to_block, str):
             return False
 
         # Make sure ip isn't already blocked before blocking

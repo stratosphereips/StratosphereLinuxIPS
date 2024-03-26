@@ -1,5 +1,5 @@
-from slips_files.common.abstracts._module import IModule
-from slips_files.common.imports import *
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 
 
 class Ensembling(IModule):

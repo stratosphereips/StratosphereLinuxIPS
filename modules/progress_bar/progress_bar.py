@@ -3,7 +3,7 @@ from multiprocessing import Event
 from tqdm.auto import tqdm
 import sys
 
-from slips_files.common.abstracts._module import IModule
+from slips_files.common.abstracts.module import IModule
 
 
 class PBar(IModule):

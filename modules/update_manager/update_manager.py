@@ -15,9 +15,8 @@ from exclusiveprocess import (
 )
 
 from modules.update_manager.timer_manager import InfiniteTimer
-
-# from modules.update_manager.update_file_manager import UpdateFileManager
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist import Whitelist
 

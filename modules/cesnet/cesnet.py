@@ -1,5 +1,5 @@
-from slips_files.common.abstracts._module import IModule
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.abstracts.module import IModule
 from ..cesnet.warden_client import Client, read_cfg
 import os
 import json
@@ -99,7 +99,6 @@ class CESNET(IModule):
 
         description = evidence["description"]
         profileid = evidence["profileid"]
-        twid = evidence["twid"]
         srcip = profileid.split("_")[1]
         evidence_type = evidence["evidence_type"]
         attacker_direction = evidence["attacker_direction"]

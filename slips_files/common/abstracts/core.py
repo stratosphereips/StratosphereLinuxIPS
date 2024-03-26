@@ -1,7 +1,7 @@
 import traceback
 from multiprocessing import Process, Event
 
-from slips_files.common.abstracts._module import IModule
+from slips_files.common.abstracts.module import IModule
 from slips_files.core.database.database_manager import DBManager
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
