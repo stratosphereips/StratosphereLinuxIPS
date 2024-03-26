@@ -1,4 +1,3 @@
-import sys
 import traceback
 from multiprocessing import Process, Event
 

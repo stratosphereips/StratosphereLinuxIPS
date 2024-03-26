@@ -4,7 +4,9 @@ for example: setting up the database, input_queue, output_queue, etc..
 """
 
 import pytest
-import os, sys, inspect
+import os
+import sys
+import inspect
 from multiprocessing import Queue
 from unittest.mock import patch
 from slips_files.core.database.database_manager import DBManager

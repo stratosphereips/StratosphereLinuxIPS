@@ -49,7 +49,7 @@ class SQLiteDB(IObservable):
         """
         returns the number of tables in the current db
         """
-        query = f"SELECT count(*) FROM sqlite_master WHERE type='table';"
+        query = "SELECT count(*) FROM sqlite_master WHERE type='table';"
         self.execute(query)
         x = self.fetchone()
         return x[0]

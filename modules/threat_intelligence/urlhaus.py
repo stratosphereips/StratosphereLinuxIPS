@@ -9,7 +9,6 @@ from slips_files.core.evidence_structure.evidence import (
     TimeWindow,
     Attacker,
     ThreatLevel,
-    Victim,
     EvidenceType,
     IoCType,
     Direction,

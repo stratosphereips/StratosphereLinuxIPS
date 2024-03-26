@@ -1,7 +1,6 @@
 """Unit test for modules/update_manager/update_manager.py"""
 
 from tests.module_factory import ModuleFactory
-import json
 
 
 def test_getting_header_fields(mocker, mock_db):

@@ -4,9 +4,8 @@ Data classes for all types of zeek flows
 
 from dataclasses import dataclass
 from typing import List
-from datetime import datetime, timedelta
+from datetime import timedelta
 from slips_files.common.slips_utils import utils
-import json
 
 
 @dataclass

@@ -8,7 +8,7 @@ import os
 import shutil
 import json
 from datetime import datetime
-from typing import Tuple, List, Set
+from typing import Tuple, Set
 
 
 class MetadataManager:

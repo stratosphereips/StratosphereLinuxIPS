@@ -4,7 +4,6 @@ It checks a random evidence and the total number of profiles in every file
 """
 
 from tests.common_test_utils import (
-    get_total_profiles,
     run_slips,
     is_evidence_present,
     create_output_dir,

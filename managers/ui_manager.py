@@ -77,7 +77,7 @@ class UIManager:
                 # set false as the return value of this thread
                 self.webinterface_return_value.put(False)
 
-                self.main.print(f"Web interface error:")
+                self.main.print("Web interface error:")
                 for line in error.strip().decode().splitlines():
                     self.main.print(f"{line}")
 

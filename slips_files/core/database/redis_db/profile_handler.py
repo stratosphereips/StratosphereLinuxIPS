@@ -567,7 +567,7 @@ class ProfileHandler(IObservable):
                 0,
             )
             return {}
-        except Exception as e:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f"Error in getDataFromProfileTW database.py line {exception_line}",
@@ -1266,7 +1266,7 @@ class ProfileHandler(IObservable):
             # change the threat level of the profile to 0(info)
             # and confidence to 0.05
             self.update_threat_level(profileid, "info", 0.5)
-        except redis.exceptions.ResponseError as e:
+        except redis.exceptions.ResponseError:
             self.print("Error in addNewTW", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
 

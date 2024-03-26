@@ -6,7 +6,6 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     EvidenceType,
-    Direction,
     Victim,
     evidence_to_dict,
 )

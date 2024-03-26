@@ -17,14 +17,13 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import json
-from typing import Union, List, Tuple, Dict, Optional
+from typing import List, Dict, Optional
 from datetime import datetime
 from os import path
 from colorama import Fore, Style
 import sys
 import os
 import time
-import platform
 import traceback
 from slips_files.common.idea_format import idea_format
 from slips_files.common.style import red, cyan

@@ -1,6 +1,5 @@
 """Unit test for ../slips.py"""
 
-from tests.common_test_utils import do_nothing, IS_IN_A_DOCKER_CONTAINER
 from tests.module_factory import ModuleFactory
 from ..slips import *
 

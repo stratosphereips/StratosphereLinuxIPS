@@ -2,7 +2,6 @@
 import warnings
 import json
 import numpy as np
-from typing import Optional
 from tensorflow.python.keras.models import load_model
 
 from slips_files.common.imports import *
@@ -16,7 +15,6 @@ from slips_files.core.evidence_structure.evidence import (
     IoCType,
     Direction,
     IDEACategory,
-    Victim,
     Proto,
     Tag,
 )

@@ -4,9 +4,7 @@ import codecs
 import socket
 import struct
 import os
-import sys
 import random
-import argparse
 import hashlib
 import ipaddress
 
@@ -428,7 +426,7 @@ class JARM:
                 ):
                     raw_ip = True
                     ip = (self.destination_host, self.destination_port)
-            except ValueError as e:
+            except ValueError:
                 ip = (None, None)
                 raw_ip = False
             # Connect the socket
@@ -455,10 +453,10 @@ class JARM:
             sock.close()
             return bytearray(data), ip[0]
         # Timeout errors result in an empty hash
-        except socket.timeout as e:
+        except socket.timeout:
             sock.close()
             return "TIMEOUT", ip[0]
-        except Exception as e:
+        except Exception:
             sock.close()
             return None, ip[0]
 
@@ -494,7 +492,7 @@ class JARM:
             else:
                 return "|||"
 
-        except Exception as e:
+        except Exception:
             return "|||"
 
     # Deciphering the extensions in the server hello
@@ -546,7 +544,7 @@ class JARM:
                     result += "-"
             return result
         # Error handling
-        except IndexError as e:
+        except IndexError:
             result = "|"
             return result
 

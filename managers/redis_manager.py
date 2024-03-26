@@ -282,8 +282,8 @@ class RedisManager:
         """
         open_servers = {}
         to_print = (
-            f"Choose which one to kill [0,1,2 etc..]\n"
-            f"[0] Close all Redis servers\n"
+            "Choose which one to kill [0,1,2 etc..]\n"
+            "[0] Close all Redis servers\n"
         )
         there_are_ports_to_print = False
         try:
@@ -463,7 +463,7 @@ class RedisManager:
             try:
                 server_to_close: int = int(input())
             except ValueError:
-                print(f"Invalid input.")
+                print("Invalid input.")
                 self.main.terminate_slips()
 
             # close all ports in running_slips_logs.txt and in our supported range

@@ -57,11 +57,7 @@ if __name__ == "__main__":
     elif slips.args.daemon:
         daemon = Daemon(slips)
         if daemon.pid is not None:
-            print(
-                "pidfile already exists. Daemon already running?".format(
-                    daemon.pidfile
-                )
-            )
+            print("pidfile already exists. Daemon already running?".format())
         else:
             print("Slips daemon started.")
             daemon.start()

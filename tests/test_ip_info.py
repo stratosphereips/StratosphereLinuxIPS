@@ -1,9 +1,6 @@
 """Unit test for modules/ip_info/ip_info.py"""
 
 from tests.module_factory import ModuleFactory
-from slips_files.core.database.database_manager import DBManager
-import modules.ip_info.asn_info as asn
-from unittest.mock import patch
 import maxminddb
 
 

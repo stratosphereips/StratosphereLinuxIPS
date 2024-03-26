@@ -4,7 +4,10 @@
 # Copyright (C) 2011-2015 Cesnet z.s.p.o
 # Use of this source is governed by a 3-clause BSD-style license, see LICENSE file.
 
-import json, logging, logging.handlers, time
+import json
+import logging
+import logging.handlers
+import time
 import http.client
 from urllib.parse import urlparse
 from urllib.parse import urlencode

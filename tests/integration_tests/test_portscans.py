@@ -5,7 +5,6 @@ import os
 
 
 from tests.common_test_utils import (
-    get_total_profiles,
     run_slips,
     is_evidence_present,
     create_output_dir,
