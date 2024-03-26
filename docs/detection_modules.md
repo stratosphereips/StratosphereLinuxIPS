@@ -319,13 +319,43 @@ File hashes and URLs aren't supported in TI feeds.
 Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
 
 CIRCL.LU
-Slips looks up file hashes (MD5) for downloaded files found in the files using the CIRCL.LU API.log obtained from Zeek. This lookup is handled by the ThreatIntel class's circl_lu function.
 
-Slips creates the following URL for every file that is downloaded: https://hashlookup.circl.lu/lookup/md5/<md5_hash>. This URL is used to query the CIRCL.LU API with the file's MD5 hash.
+Slips looks up for (MD5) files hashes for downloaded files found in the files.log using the ```CIRCL.LU API.log``` obtained from Zeek. This lookup is handled by the ThreatIntel class's ```circl_lu function```.
+
+Slips creates the following URL for every file that is downloaded:```https://hashlookup.circl.lu/lookup/md5/<md5_hash>```. This URL is used to query the CIRCL.LU API with the file's MD5 hash.
+
 It parses the result after sending a GET request to this URL.
+
 Slips collects pertinent data, including confidence level, threat level, and blacklist sources, if the answer indicates that the file is known to be malicious.
+
 After that, it creates an evidence object and stores it in the database, indicating that a malicious file was downloaded, by calling the set_evidence_malicious_hash method.
 
+URLhaus
+
+Slips looks up file hashes (MD5) and URLs for malicious content using the URLhaus API. These lookups are handled by the URLhaus class.
+
+Slips constructs a URL to query the URLhaus API for URLs encountered in http.log or downloaded files found in files.log. It can do this by using the URL itself ```(https://urlhaus-api.abuse.ch/v1)``` or the MD5 hash.
+
+It sends the URL or MD5 hash as the payload of a POST request to the relevant URL.
+
+If the response indicates that the URL or hash is known to be malicious, Slips parses the response to extract pertinent information such as threat level, description, tags, and file details (if applicable).
+
+For malicious URLs, it calls the set_evidence_malicious_url function to create an evidence object and store it in the database, indicating that a malicious URL was accessed.
+
+For malicious file hashes, it calls the set_evidence_malicious_hash function to create an evidence object and store it in the database, indicating that a malicious file was downloaded.
+
+Spamhaus
+
+Slips checks if an IP address is listed as a known source of spam or malicious behavior using the Spamhaus DNS-based Blacklist (DNSBL).
+ 
+This lookup is handled by the spamhaus function of the ThreatIntel class. Slips creates a DNS query for every IP 
+address it encounters by reversing the address and appending .zen.spamhaus.org. For example, the query for IP 1.2.3.4 would be ```4.3.2.1.zen.spamhaus.org```. 
+ 
+Using the dns.resolver.resolve function from the dns Python library, it resolves the DNS for this query. A non-empty result from the resolution indicates that the IP address is listed on one or more Spamhaus blacklists. 
+ 
+Slips parses the response to determine which specific Spamhaus blacklists the IP is listed in and retrieves the corresponding descriptions and threat levels. 
+ 
+It then calls the set_evidence_malicious_ip function to create an evidence object and store it in the database, indicating that a malicious IP was encountered.
 
 ### Matching of IPs
 
