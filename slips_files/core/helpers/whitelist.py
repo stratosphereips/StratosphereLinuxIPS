@@ -509,11 +509,12 @@ class Whitelist(IObservable):
                     # "from","what_to_ignore"]
                     line = line.replace('\n', '').replace(' ', '').split(',')
                     try:
-                        type_, data, from_, what_to_ignore = (
+                        type_, data, from_, what_to_ignore,port = (
                             (line[0]).lower(),
                             line[1],
                             line[2],
                             line[3],
+                            line[4] if len(line) > 4 else None,
                         )
                     except IndexError:
                         # line is missing a column, ignore it.
@@ -563,7 +564,21 @@ class Whitelist(IObservable):
                                     'from': from_,
                                     'what_to_ignore': what_to_ignore,
                                 }
+                        elif 'whitelist' in type_:
+                            # Whitelist IP and Port together
+                            try:
+                                ip,port = data.split(":")
+                                if ip == "*":
+                                    ip = None
+                                if port == "*":
+                                    port = None
 
+                                if validators.ipv4(ip) or validators.ipv6(ip):
+                                    if port is None or (port.isdigit() and 0 <= int(port) <= 65535):
+                                        # Ensures Valid IP and Port Combination
+                                        whitelisted_IPs[(ip,port)] = {'from':from_,'what_to_ignore':what_to_ignore}
+                            except ValueError:
+                                self.print(f'{data} is not a valid ip:port combination.', 1, 0)
                         else:
                             self.print(f'{data} is not a valid {type_}.', 1,
                                        0)
@@ -741,7 +756,7 @@ class Whitelist(IObservable):
 
     def parse_whitelist(self, whitelist):
         """
-        returns a tuple with whitelisted IPs, domains, orgs and MACs
+        returns a tuple with whitelisted IPs, domains, orgs, MACs and IP-port combinations.
         """
         try:
             # Convert each list from str to dict
@@ -760,8 +775,12 @@ class Whitelist(IObservable):
             whitelisted_macs = json.loads(whitelist['mac'])
         except (IndexError, KeyError):
             whitelisted_macs = {}
+        try:
+            whitelisted_ip_ports = json.loads(whitelist['ip_ports'])
+        except (IndexError, KeyError):
+            whitelisted_ip_ports = {}
         return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, \
-            whitelisted_macs
+            whitelisted_macs, whitelisted_ip_ports
 
     
     def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
@@ -954,14 +973,35 @@ class Whitelist(IObservable):
         self.db.set_org_info(org, json.dumps(org_subnets), 'IPs')
         return org_subnets
 
-    def is_ip_whitelisted(self, ip: str, direction: Direction):
+    def is_ip_whitelisted(self, ip: str,port:int, direction: Direction):
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
         """
         whitelist = self.db.get_all_whitelist()
         whitelisted_ips, _, _, whitelisted_macs = self.parse_whitelist(whitelist)
 
-        if ip in whitelisted_ips:
+        # Check if the wildcard '*' is whitelisted
+        if '*' in whitelisted_ips:
+            whitelisted_port = whitelisted_ips['*']['port']
+            if whitelisted_port == '*':
+                # All IPs and Ports are whitelisted
+                return True
+            elif whitelisted_port is None:
+                # All IPs are whitelisted with any port (need to check port if specified in evidence)
+                # Implement logic to check evidence port against allowed ports
+                pass
+            else:
+                # Check if the port matches the whitelist port
+                if port == whitelisted_port:
+                    return True
+                else:
+                    # Wildcard IP but port isn't matching
+                    pass
+        
+        # Check for Whitelisted IP and port combination
+        ip_port = f'{ip}:{port}' if port else ip
+
+        if ip_port in whitelisted_ips:
             # Check if we should ignore src or dst alerts from this ip
             # from_ can be: src, dst, both
             # what_to_ignore can be: alerts or flows or both
@@ -985,7 +1025,7 @@ class Whitelist(IObservable):
                 ip, whitelisted_macs, direction
             ):
                 return True
-    
+            
     def ignore_alert(self, direction, ignore_alerts, whitelist_direction) -> bool:
         """
         determines whether or not we should ignore the given alert based
