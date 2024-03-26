@@ -6,17 +6,13 @@ import pytest
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
-from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
 from slips_files.core.evidence_structure.evidence import (
-    dict_to_evidence,
     Evidence,
     Direction,
     IoCType,
     EvidenceType,
     IDEACategory,
-    Proto,
-    Tag,
     Attacker,
     Victim,
     ThreatLevel,

@@ -33,7 +33,6 @@ from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
-from slips_files.core.output import Output
 
 
 SUPPORTED_INPUT_TYPES = {
@@ -356,14 +355,13 @@ class Profiler(ICore):
         """
         # signal slips.py that this process is done
         self.print(
-            f"Marking Profiler as done processing.", log_to_logfiles_only=True
+            "Marking Profiler as done processing.", log_to_logfiles_only=True
         )
         self.done_processing.release()
-        self.print(f"Profiler is done processing.", log_to_logfiles_only=True)
+        self.print("Profiler is done processing.", log_to_logfiles_only=True)
         self.is_profiler_done_event.set()
         self.print(
-            f"Profiler is done telling input.py "
-            f"that it's done processing.",
+            "Profiler is done telling input.py " "that it's done processing.",
             log_to_logfiles_only=True,
         )
 
@@ -470,7 +468,7 @@ class Profiler(ICore):
                 total_flows: int = msg.get("total_flows", 0)
             except queue.Empty:
                 continue
-            except Exception as e:
+            except Exception:
                 # ValueError is raised when the queue is closed
                 continue
 

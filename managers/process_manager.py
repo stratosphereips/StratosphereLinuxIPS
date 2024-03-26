@@ -412,7 +412,7 @@ class ProcessManager:
                     update_manager.update_org_files()
 
                 if TI_feeds:
-                    update_manager.print(f"Updating TI feeds")
+                    update_manager.print("Updating TI feeds")
                     asyncio.run(update_manager.update_ti_files())
 
         except CannotAcquireLock:
@@ -441,8 +441,8 @@ class ProcessManager:
         # check if update manager is still alive
         if "Update Manager" in pending_module_names:
             self.main.print(
-                f"Update Manager may take several minutes "
-                f"to finish updating 45+ TI files."
+                "Update Manager may take several minutes "
+                "to finish updating 45+ TI files."
             )
 
         self.warning_printed_once = True

@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 from slips_files.common.slips_utils import utils
-from datetime import datetime, timedelta
-import json
 
 #     suricata available event_type values:
 #     -flow

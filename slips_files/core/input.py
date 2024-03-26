@@ -120,13 +120,13 @@ class Input(ICore):
         # tell profiler that this process is
         # done and no more flows are arriving
         self.print(
-            f"Telling Profiler to stop because " f"no more input is arriving.",
+            "Telling Profiler to stop because " "no more input is arriving.",
             log_to_logfiles_only=True,
         )
         self.profiler_queue.put("stop")
-        self.print(f"Waiting for Profiler to stop.", log_to_logfiles_only=True)
+        self.print("Waiting for Profiler to stop.", log_to_logfiles_only=True)
         self.is_profiler_done_event.wait()
-        self.print(f"Input is done processing.", log_to_logfiles_only=True)
+        self.print("Input is done processing.", log_to_logfiles_only=True)
         self.done_processing.release()
 
     def read_configuration(self):

@@ -1,7 +1,4 @@
 import memray
-import glob
-import os
-import subprocess
 from termcolor import colored
 import time
 import multiprocessing

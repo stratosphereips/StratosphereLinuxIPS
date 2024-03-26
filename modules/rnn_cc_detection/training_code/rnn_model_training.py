@@ -1,18 +1,11 @@
-import sys
 import numpy as np
 import pandas as pd
 import argparse
-from sklearn import metrics
-from sklearn.model_selection import train_test_split
-from random import shuffle
 
 import tensorflow as tf
 import sklearn as sk
 from tensorflow.keras import layers
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.preprocessing.text import one_hot
-from tensorflow.keras.models import load_model
-from tensorflow.keras.utils import to_categorical
 
 parser = argparse.ArgumentParser()
 parser.add_argument(

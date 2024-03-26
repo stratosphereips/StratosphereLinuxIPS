@@ -9,7 +9,7 @@ from slips_files.common.abstracts.performance_profiler import (
 import time
 import multiprocessing
 from multiprocessing.managers import SyncManager
-from multiprocessing.synchronize import Lock, Event
+from multiprocessing.synchronize import Lock
 from multiprocessing.sharedctypes import SynchronizedBase
 import threading
 from typing import Dict

@@ -1,6 +1,5 @@
 """Unit test for ../arp.py"""
 
-from unittest.mock import patch
 from tests.module_factory import ModuleFactory
 import json
 

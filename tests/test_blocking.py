@@ -2,7 +2,7 @@
 this file needs sudoroot to run
 """
 
-from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER, do_nothing
+from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER
 from tests.module_factory import ModuleFactory
 import platform
 import pytest

@@ -32,7 +32,7 @@ class Module(IModule):
         sock.bind(self.cyst_UDS)
         failure = sock.listen(2)
         if not failure:
-            self.print(f"Slips is now listening. waiting for CYST to connect.")
+            self.print("Slips is now listening. waiting for CYST to connect.")
         else:
             error = f"Failed to initialize sips socket. Error code: {failure}"
             return False, error
@@ -76,7 +76,7 @@ class Module(IModule):
         # When a recv returns 0 bytes, it means the other side has closed
         # (or is in the process of closing) the connection.
         if not flow:
-            self.print(f"CYST closed the connection.")
+            self.print("CYST closed the connection.")
             self.conn_closed = True
             return False
         try:
@@ -109,7 +109,7 @@ class Module(IModule):
             "ip_to_block": ip_to_block,
         }
 
-        self.print(f"Sending alert to CYST: ")
+        self.print("Sending alert to CYST: ")
         self.print(pp(alert_to_send))
 
         alert_to_send: bytes = json.dumps(alert_to_send).encode()
@@ -122,7 +122,7 @@ class Module(IModule):
             return
 
     def close_connection(self):
-        print(f"Closing connection", 0, 1)
+        print("Closing connection", 0, 1)
         if hasattr(self, "sock"):
             self.sock.close()
         # delete the socket
@@ -157,11 +157,11 @@ class Module(IModule):
             return 1
         self.db.set_cyst_enabled()
         # connect to cyst
-        self.print(f"Initializing socket", 0, 1)
+        self.print("Initializing socket", 0, 1)
         self.sock, self.cyst_conn = self.initialize_unix_socket()
         if not self.sock:
             return 1
-        self.print(f"Done initializing socket", 0, 1)
+        self.print("Done initializing socket", 0, 1)
 
     def main(self):
         """
@@ -180,7 +180,7 @@ class Module(IModule):
                 "module": self.name,  # to know where this flow is coming from aka what's the input module
             }
 
-            self.print(f"Received flow from cyst")
+            self.print("Received flow from cyst")
             self.print(pp(to_send))
 
             self.db.publish("new_module_flow", json.dumps(to_send))
@@ -192,7 +192,7 @@ class Module(IModule):
 
         if msg := self.get_msg("new_alert"):
             self.print(
-                f"Cyst module received a new blocking request . sending to CYST ... "
+                "Cyst module received a new blocking request . sending to CYST ... "
             )
             alert_info: dict = json.loads(msg["data"])
             profileid = alert_info["profileid"]
