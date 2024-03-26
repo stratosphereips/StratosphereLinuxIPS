@@ -19,6 +19,7 @@ import subprocess
 import sys
 import threading
 import time
+
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -158,7 +159,6 @@ class Input(ICore):
             self.total_flows = len(self.nfdump_output.splitlines())
             self.db.set_input_metadata({"total_flows": self.total_flows})
             for nfdump_line in self.nfdump_output.splitlines():
-
                 # this line is taken from stdout we need to remove whitespaces
                 nfdump_line.replace(" ", "")
                 ts = nfdump_line.split(",")[0]
@@ -178,7 +178,9 @@ class Input(ICore):
         if not hasattr(self, "time_rotated"):
             return False
 
-        now = float(utils.convert_format(datetime.datetime.now(), "unixtimestamp"))
+        now = float(
+            utils.convert_format(datetime.datetime.now(), "unixtimestamp")
+        )
         time_to_delete = now >= self.time_rotated + self.keep_rotated_files_for
         if time_to_delete:
             # getting here means that the rotated
@@ -233,7 +235,9 @@ class Input(ICore):
         if self.is_zeek_tabs:
             # It is not JSON format. It is tab format line.
             nline = zeek_line
-            nline_list = nline.split("\t") if "\t" in nline else split(r"\s{2,}", nline)
+            nline_list = (
+                nline.split("\t") if "\t" in nline else split(r"\s{2,}", nline)
+            )
             timestamp = nline_list[0]
         else:
             try:
@@ -438,7 +442,9 @@ class Input(ICore):
 
         # if 1 file is zeek tabs the rest should be the same
         if not hasattr(self, "is_zeek_tabs"):
-            full_path = os.path.join(self.given_path, os.listdir(self.given_path)[0])
+            full_path = os.path.join(
+                self.given_path, os.listdir(self.given_path)[0]
+            )
             self.is_zeek_tabs = self.is_zeek_tabs_file(full_path)
 
         total_flows = 0
@@ -502,7 +508,11 @@ class Input(ICore):
                     self.print("Invalid json line")
                     continue
 
-            line_info = {"type": "stdin", "line_type": self.line_type, "data": line}
+            line_info = {
+                "type": "stdin",
+                "line_type": self.line_type,
+                "data": line,
+            }
             self.print(f"	> Sent Line: {line_info}", 0, 3)
             self.give_profiler(line_info)
             self.lines += 1
@@ -622,11 +632,15 @@ class Input(ICore):
         # some process to tell us which files to read in real time when they appear
         # Get the file eventhandler
         # We have to set event_handler and event_observer before running zeek.
-        event_handler = FileEventHandler(self.zeek_dir, self.input_type, self.db)
+        event_handler = FileEventHandler(
+            self.zeek_dir, self.input_type, self.db
+        )
         # Create an observer
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler
-        self.event_observer.schedule(event_handler, self.zeek_dir, recursive=True)
+        self.event_observer.schedule(
+            event_handler, self.zeek_dir, recursive=True
+        )
         # monitor changes to whitelist
         self.event_observer.schedule(event_handler, "config/", recursive=True)
         # Start the observer
@@ -702,7 +716,9 @@ class Input(ICore):
                 # new log file should be dns.log without the ts
                 old_log_file = changed_files["old_file"]
                 new_log_file = changed_files["new_file"]
-                new_logfile_without_path = new_log_file.split("/")[-1].split(".")[0]
+                new_logfile_without_path = new_log_file.split("/")[-1].split(
+                    "."
+                )[0]
                 # ignored files have no open handle, so we should only delete them from disk
                 if new_logfile_without_path not in SUPPORTED_LOGFILES:
                     # just delete the old file
@@ -726,7 +742,9 @@ class Input(ICore):
                 # delete the old log file (the one with the ts)
                 self.to_be_deleted.append(old_log_file)
                 self.time_rotated = float(
-                    utils.convert_format(datetime.datetime.now(), "unixtimestamp")
+                    utils.convert_format(
+                        datetime.datetime.now(), "unixtimestamp"
+                    )
                 )
                 # os.remove(old_log_file)
                 lock.release()
@@ -801,7 +819,9 @@ class Input(ICore):
 
         # Run zeek on the pcap or interface. The redef is to have json files
         zeek_scripts_dir = os.path.join(os.getcwd(), "zeek-scripts")
-        packet_filter = ["-f ", self.packet_filter] if self.packet_filter else []
+        packet_filter = (
+            ["-f ", self.packet_filter] if self.packet_filter else []
+        )
 
         # 'local' is removed from the command because it
         # loads policy/protocols/ssl/expiring-certs and
@@ -928,7 +948,9 @@ class Input(ICore):
             # Process the file that was given
             input_handlers[self.input_type]()
         except KeyError:
-            self.print(f'Unrecognized file type "{self.input_type}". Stopping.')
+            self.print(
+                f'Unrecognized file type "{self.input_type}". Stopping.'
+            )
             return False
 
         # no logic should be put here

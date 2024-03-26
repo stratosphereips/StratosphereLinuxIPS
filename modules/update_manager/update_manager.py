@@ -12,9 +12,10 @@ import validators
 from exclusiveprocess import (
     Lock,
     CannotAcquireLock,
-    )
+)
 
 from modules.update_manager.timer_manager import InfiniteTimer
+
 # from modules.update_manager.update_file_manager import UpdateFileManager
 from slips_files.common.imports import *
 from slips_files.common.slips_utils import utils
@@ -31,7 +32,9 @@ class UpdateManager(IModule):
         self.read_configuration()
         # Update file manager
         # Timer to update the ThreatIntelligence files
-        self.timer_manager = InfiniteTimer(self.update_period, self.update_ti_files)
+        self.timer_manager = InfiniteTimer(
+            self.update_period, self.update_ti_files
+        )
         # Timer to update the MAC db
         # when update_ti_files is called, it decides what exactly to update, the mac db,
         # online whitelist OT online ti files.
@@ -82,7 +85,9 @@ class UpdateManager(IModule):
             if not RiskIQ_credentials_path:
                 return
 
-            RiskIQ_credentials_path = os.path.join(os.getcwd(), RiskIQ_credentials_path)
+            RiskIQ_credentials_path = os.path.join(
+                os.getcwd(), RiskIQ_credentials_path
+            )
             if not os.path.exists(RiskIQ_credentials_path):
                 return
 
@@ -113,7 +118,9 @@ class UpdateManager(IModule):
         self.mac_db_update_period = conf.mac_db_update_period()
         self.mac_db_link = conf.mac_db_link()
 
-        self.online_whitelist_update_period = conf.online_whitelist_update_period()
+        self.online_whitelist_update_period = (
+            conf.online_whitelist_update_period()
+        )
         self.online_whitelist = conf.online_whitelist()
 
     def get_feed_details(self, feeds_path):
@@ -124,7 +131,9 @@ class UpdateManager(IModule):
             with open(feeds_path, "r") as feeds_file:
                 feeds = feeds_file.read()
         except FileNotFoundError:
-            self.print(f"Error finding {feeds_path}. Feed won't be added to slips.")
+            self.print(
+                f"Error finding {feeds_path}. Feed won't be added to slips."
+            )
             return {}
 
         # this dict will contain every link and its threat_level
@@ -228,7 +237,9 @@ class UpdateManager(IModule):
                     else:
                         # it's a single port
                         portproto = f"{ports_range}/{proto}"
-                        self.db.set_organization_of_port(organization, ip, portproto)
+                        self.db.set_organization_of_port(
+                            organization, ip, portproto
+                        )
 
                 except IndexError:
                     self.print(
@@ -425,7 +436,9 @@ class UpdateManager(IModule):
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f"Problem on update_TI_file() line {exception_line}", 0, 1)
+            self.print(
+                f"Problem on update_TI_file() line {exception_line}", 0, 1
+            )
             self.print(traceback.format_exc(), 0, 1)
         return False
 
@@ -436,7 +449,6 @@ class UpdateManager(IModule):
         return response.headers.get("ETag", False)
 
     def write_file_to_disk(self, response, full_path):
-
         with open(full_path, "w") as f:
             f.write(response.text)
 
@@ -546,7 +558,9 @@ class UpdateManager(IModule):
                         {
                             "description": description,
                             "source": filename,
-                            "threat_level": self.ssl_feeds[url]["threat_level"],
+                            "threat_level": self.ssl_feeds[url][
+                                "threat_level"
+                            ],
                             "tags": self.ssl_feeds[url]["tags"],
                         }
                     )
@@ -596,16 +610,19 @@ class UpdateManager(IModule):
                 link_to_download, full_path
             ):
                 self.print(
-                    f"Error parsing feed {link_to_download}. " f"Updating was aborted.",
+                    f"Error parsing feed {link_to_download}. "
+                    f"Updating was aborted.",
                     0,
                     1,
                 )
                 return False
-            elif link_to_download in self.ssl_feeds and not self.parse_ssl_feed(
-                link_to_download, full_path
+            elif (
+                link_to_download in self.ssl_feeds
+                and not self.parse_ssl_feed(link_to_download, full_path)
             ):
                 self.print(
-                    f"Error parsing feed {link_to_download}. " f"Updating was aborted.",
+                    f"Error parsing feed {link_to_download}. "
+                    f"Updating was aborted.",
                     0,
                     1,
                 )
@@ -619,7 +636,9 @@ class UpdateManager(IModule):
             }
             self.db.set_TI_file_info(link_to_download, file_info)
 
-            self.log(f"Successfully updated in DB the remote file {link_to_download}")
+            self.log(
+                f"Successfully updated in DB the remote file {link_to_download}"
+            )
             self.loaded_ti_files += 1
 
             # done parsing the file, delete it from disk
@@ -634,7 +653,9 @@ class UpdateManager(IModule):
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f"Problem on update_TI_file() line {exception_line}", 0, 1)
+            self.print(
+                f"Problem on update_TI_file() line {exception_line}", 0, 1
+            )
             self.print(traceback.format_exc(), 0, 1)
             return False
 
@@ -655,7 +676,9 @@ class UpdateManager(IModule):
             }
             # Specifying json= here instead of data= ensures that the
             # Content-Type header is application/json, which is necessary.
-            response = requests.get(url, timeout=5, auth=auth, json=data).json()
+            response = requests.get(
+                url, timeout=5, auth=auth, json=data
+            ).json()
             # extract domains only from the response
             try:
                 response = response["indicators"]
@@ -749,7 +772,9 @@ class UpdateManager(IModule):
                         for column in line.split(","):
                             # Listingreason is the description column in  abuse.ch Suricata JA3 Fingerprint Blacklist
                             if "Listingreason" in column.lower():
-                                description_column = line.split(",").index(column)
+                                description_column = line.split(",").index(
+                                    column
+                                )
                     if not line.startswith("#"):
                         # break while statement if it is not a comment (i.e. does not startwith #) or a header line
                         break
@@ -847,7 +872,9 @@ class UpdateManager(IModule):
                             {
                                 "description": description,
                                 "source": filename,
-                                "threat_level": self.ja3_feeds[url]["threat_level"],
+                                "threat_level": self.ja3_feeds[url][
+                                    "threat_level"
+                                ],
                                 "tags": self.ja3_feeds[url]["tags"],
                             }
                         )
@@ -882,7 +909,9 @@ class UpdateManager(IModule):
             malicious_ips_dict = {}
             with open(ti_file_path) as feed:
                 self.print(
-                    f"Reading next lines in the file {ti_file_path} for IoC", 3, 0
+                    f"Reading next lines in the file {ti_file_path} for IoC",
+                    3,
+                    0,
                 )
                 for line in feed.read().splitlines():
                     try:
@@ -908,7 +937,9 @@ class UpdateManager(IModule):
             malicious_domains_dict = {}
             with open(ti_file_path) as feed:
                 self.print(
-                    f"Reading next lines in the file {ti_file_path} for IoC", 3, 0
+                    f"Reading next lines in the file {ti_file_path} for IoC",
+                    3,
+                    0,
                 )
                 try:
                     file = json.loads(feed.read())
@@ -918,7 +949,9 @@ class UpdateManager(IModule):
 
                 for ioc in file:
                     date = ioc["InsertDate"]
-                    diff = utils.get_time_diff(date, time.time(), return_type="days")
+                    diff = utils.get_time_diff(
+                        date, time.time(), return_type="days"
+                    )
 
                     if diff > self.interval:
                         continue
@@ -940,7 +973,13 @@ class UpdateManager(IModule):
         """
         Given the first line of a TI file (header line), try to get the index of the description column
         """
-        description_keywords = ("desc", "collect", "malware", "tags_str", "source")
+        description_keywords = (
+            "desc",
+            "collect",
+            "malware",
+            "tags_str",
+            "source",
+        )
         for column in header.split(","):
             for keyword in description_keywords:
                 if keyword in column:
@@ -1022,7 +1061,13 @@ class UpdateManager(IModule):
         return "Error"
 
     def extract_ioc_from_line(
-        self, line, line_fields, separator, data_column, description_column, file_path
+        self,
+        line,
+        line_fields,
+        separator,
+        data_column,
+        description_column,
+        file_path,
     ) -> tuple:
         """
         Returns the ip/ip range/domain and it's description from the given line
@@ -1090,7 +1135,8 @@ class UpdateManager(IModule):
 
             with open(ti_file_path) as feed:
                 self.print(
-                    f"Reading next lines in the file {ti_file_path} " f"for IoC",
+                    f"Reading next lines in the file {ti_file_path} "
+                    f"for IoC",
                     3,
                     0,
                 )
@@ -1103,7 +1149,9 @@ class UpdateManager(IModule):
                     for keyword in self.header_keywords:
                         if line.startswith(keyword):
                             # looks like the column names, search where is the description column
-                            description_column = self.get_description_column(line)
+                            description_column = self.get_description_column(
+                                line
+                            )
                             break
 
                     if not self.is_ignored_line(line):
@@ -1123,7 +1171,9 @@ class UpdateManager(IModule):
                 data_column = self.get_data_column(
                     amount_of_columns, line_fields, ti_file_path
                 )
-                if data_column == "Error":  # don't use 'if not' because it may be 0
+                if (
+                    data_column == "Error"
+                ):  # don't use 'if not' because it may be 0
                     return False
 
                 # Now that we read the first line, go back so we can process it
@@ -1194,14 +1244,18 @@ class UpdateManager(IModule):
                                 max(
                                     float(old_domain_info["threat_level"]),
                                     float(
-                                        self.url_feeds[link_to_download]["threat_level"]
+                                        self.url_feeds[link_to_download][
+                                            "threat_level"
+                                        ]
                                     ),
                                 )
                             )
                             # Store the ip in our local dict
                             malicious_domains_dict[str(data)] = json.dumps(
                                 {
-                                    "description": old_domain_info["description"],
+                                    "description": old_domain_info[
+                                        "description"
+                                    ],
                                     "source": source,
                                     "threat_level": threat_level,
                                     "tags": tags,
@@ -1213,10 +1267,12 @@ class UpdateManager(IModule):
                                 {
                                     "description": description,
                                     "source": data_file_name,
-                                    "threat_level": self.url_feeds[link_to_download][
-                                        "threat_level"
+                                    "threat_level": self.url_feeds[
+                                        link_to_download
+                                    ]["threat_level"],
+                                    "tags": self.url_feeds[link_to_download][
+                                        "tags"
                                     ],
-                                    "tags": self.url_feeds[link_to_download]["tags"],
                                 }
                             )
                     elif data_type == "ip":
@@ -1232,13 +1288,17 @@ class UpdateManager(IModule):
                         try:
                             self.add_to_ip_ctr(data, ti_file_path)
                             # we already have info about this ip?
-                            old_ip_info = json.loads(malicious_ips_dict[str(data)])
+                            old_ip_info = json.loads(
+                                malicious_ips_dict[str(data)]
+                            )
                             # if the IP appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max threat_level
                             if data_file_name in old_ip_info["source"]:
                                 continue
                             # append the new blacklist name to the current one
-                            source = f'{old_ip_info["source"]}, {data_file_name}'
+                            source = (
+                                f'{old_ip_info["source"]}, {data_file_name}'
+                            )
                             # append the new tag to the old tag
                             tags = f'{old_ip_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
                             # the new threat_level is the max of the 2
@@ -1246,7 +1306,9 @@ class UpdateManager(IModule):
                                 max(
                                     int(old_ip_info["threat_level"]),
                                     int(
-                                        self.url_feeds[link_to_download]["threat_level"]
+                                        self.url_feeds[link_to_download][
+                                            "threat_level"
+                                        ]
                                     ),
                                 )
                             )
@@ -1269,7 +1331,9 @@ class UpdateManager(IModule):
                                     "description": description,
                                     "source": data_file_name,
                                     "threat_level": threat_level,
-                                    "tags": self.url_feeds[link_to_download]["tags"],
+                                    "tags": self.url_feeds[link_to_download][
+                                        "tags"
+                                    ],
                                 }
                             )
                             # set the score and confidence of this ip in ipsinfo
@@ -1293,13 +1357,17 @@ class UpdateManager(IModule):
 
                         try:
                             # we already have info about this range?
-                            old_range_info = json.loads(malicious_ip_ranges[data])
+                            old_range_info = json.loads(
+                                malicious_ip_ranges[data]
+                            )
                             # if the Range appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max threat_level
                             if data_file_name in old_range_info["source"]:
                                 continue
                             # append the new blacklist name to the current one
-                            source = f'{old_range_info["source"]}, {data_file_name}'
+                            source = (
+                                f'{old_range_info["source"]}, {data_file_name}'
+                            )
                             # append the new tag to the old tag
                             tags = f'{old_range_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
                             # the new threat_level is the max of the 2
@@ -1307,13 +1375,17 @@ class UpdateManager(IModule):
                                 max(
                                     int(old_range_info["threat_level"]),
                                     int(
-                                        self.url_feeds[link_to_download]["threat_level"]
+                                        self.url_feeds[link_to_download][
+                                            "threat_level"
+                                        ]
                                     ),
                                 )
                             )
                             malicious_ip_ranges[str(data)] = json.dumps(
                                 {
-                                    "description": old_range_info["description"],
+                                    "description": old_range_info[
+                                        "description"
+                                    ],
                                     "source": source,
                                     "threat_level": threat_level,
                                     "tags": tags,
@@ -1328,10 +1400,12 @@ class UpdateManager(IModule):
                                 {
                                     "description": description,
                                     "source": data_file_name,
-                                    "threat_level": self.url_feeds[link_to_download][
-                                        "threat_level"
+                                    "threat_level": self.url_feeds[
+                                        link_to_download
+                                    ]["threat_level"],
+                                    "tags": self.url_feeds[link_to_download][
+                                        "tags"
                                     ],
-                                    "tags": self.url_feeds[link_to_download]["tags"],
                                 }
                             )
 
@@ -1343,7 +1417,8 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Problem while updating {link_to_download} line " f"{exception_line}",
+                f"Problem while updating {link_to_download} line "
+                f"{exception_line}",
                 0,
                 1,
             )
@@ -1394,9 +1469,9 @@ class UpdateManager(IModule):
     def update_ports_info(self):
         for file in os.listdir("slips_files/ports_info"):
             file = os.path.join("slips_files/ports_info", file)
-            if self.check_if_update_local_file(file) and not self.update_local_file(
+            if self.check_if_update_local_file(
                 file
-            ):
+            ) and not self.update_local_file(file):
                 # update failed
                 self.print(
                     f"An error occurred while updating {file}. Updating "
@@ -1422,9 +1497,15 @@ class UpdateManager(IModule):
                 ips_in_2_bl += 1
             elif blacklists_ip_appeard_in == 3:
                 ips_in_3_bl += 1
-        self.print(f"Number of repeated IPs in 1 blacklist: {ips_in_1_bl}", 2, 0)
-        self.print(f"Number of repeated IPs in 2 blacklists: {ips_in_2_bl}", 2, 0)
-        self.print(f"Number of repeated IPs in 3 blacklists: {ips_in_3_bl}", 2, 0)
+        self.print(
+            f"Number of repeated IPs in 1 blacklist: {ips_in_1_bl}", 2, 0
+        )
+        self.print(
+            f"Number of repeated IPs in 2 blacklists: {ips_in_2_bl}", 2, 0
+        )
+        self.print(
+            f"Number of repeated IPs in 3 blacklists: {ips_in_3_bl}", 2, 0
+        )
 
     def update_mac_db(self):
         """
@@ -1438,7 +1519,11 @@ class UpdateManager(IModule):
         path_to_mac_db = "databases/macaddress-db.json"
 
         # write to file the info as 1 json per line
-        mac_info = response.text.replace("]", "").replace("[", "").replace(",{", "\n{")
+        mac_info = (
+            response.text.replace("]", "")
+            .replace("[", "")
+            .replace(",{", "\n{")
+        )
         with open(path_to_mac_db, "w") as mac_db:
             mac_db.write(mac_info)
 
@@ -1483,7 +1568,9 @@ class UpdateManager(IModule):
         try:
             self.log("Checking if we need to download TI files.")
 
-            if self.check_if_update(self.mac_db_link, self.mac_db_update_period):
+            if self.check_if_update(
+                self.mac_db_link, self.mac_db_update_period
+            ):
                 self.update_mac_db()
 
             if self.check_if_update_online_whitelist():
@@ -1511,12 +1598,13 @@ class UpdateManager(IModule):
                     # to download the next file instead of being idle
                     task = asyncio.create_task(
                         self.update_TI_file(file_to_download)
-                        )
+                    )
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
-            if self.check_if_update("riskiq_domains",
-                                    self.riskiq_update_period):
+            if self.check_if_update(
+                "riskiq_domains", self.riskiq_update_period
+            ):
                 self.update_riskiq_feed()
 
             # wait for all TI files to update
@@ -1541,8 +1629,10 @@ class UpdateManager(IModule):
         # concurrently instead of serially
         self.update_finished = asyncio.create_task(self.update())
         await self.update_finished
-        self.print(f"{self.db.get_loaded_ti_files()} "
-                   f"TI files successfully loaded.")
+        self.print(
+            f"{self.db.get_loaded_ti_files()} "
+            f"TI files successfully loaded."
+        )
 
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed

@@ -6,19 +6,20 @@ import json
 import requests
 import maxminddb
 
+
 class ASN:
     def __init__(self, db=None):
         self.db = db
         # Open the maxminddb ASN offline db
         try:
             self.asn_db = maxminddb.open_database(
-                'databases/GeoLite2-ASN.mmdb'
+                "databases/GeoLite2-ASN.mmdb"
             )
         except Exception:
             # errors are printed in IP_info
             pass
 
-    def get_cached_asn(self, ip) :
+    def get_cached_asn(self, ip):
         """
         If this ip belongs to a cached ip range, return the cached asn info of it
         :param ip: str
@@ -41,13 +42,12 @@ class ASN:
             ip = ipaddress.ip_address(ip)
             if ip in ip_range:
                 asn_info = {
-                    'asn': {
-                        'org': range_info['org'],
-
+                    "asn": {
+                        "org": range_info["org"],
                     }
                 }
-                if 'number' in range_info:
-                    asn_info['asn'].update({"number": range_info['number']})
+                if "number" in range_info:
+                    asn_info["asn"].update({"number": range_info["number"]})
                 return asn_info
 
     def update_asn(self, cached_data, update_period) -> bool:
@@ -58,7 +58,9 @@ class ASN:
         :param cached_data: ip cached info from the database, dict
         """
         try:
-            return (time.time() - cached_data['asn']['timestamp']) > update_period
+            return (
+                time.time() - cached_data["asn"]["timestamp"]
+            ) > update_period
         except (KeyError, TypeError):
             # no there's no cached asn info,or no timestamp, or cached_data is None
             # we should update
@@ -71,20 +73,17 @@ class ASN:
         return a dict with {'asn': {'org':.. , 'number': 'AS123'}}
         """
         ip_info = {}
-        if not hasattr(self, 'asn_db'):
+        if not hasattr(self, "asn_db"):
             return ip_info
 
         asninfo = self.asn_db.get(ip)
 
         try:
             # found info in geolite
-            org = asninfo['autonomous_system_organization']
+            org = asninfo["autonomous_system_organization"]
             number = f'AS{asninfo["autonomous_system_number"]}'
 
-            ip_info['asn'] = {
-                'org': org,
-                'number': number
-            }
+            ip_info["asn"] = {"org": org, "number": number}
         except (KeyError, TypeError):
             # asn info not found in geolite
             pass
@@ -102,17 +101,14 @@ class ASN:
         try:
             # Cache the range of this ip
             whois_info: dict = ipwhois.IPWhois(address=ip).lookup_rdap()
-            asnorg = whois_info.get('asn_description', False)
-            asn_cidr = whois_info.get('asn_cidr', False)
-            asn_number = whois_info.get('asn', False)
+            asnorg = whois_info.get("asn_description", False)
+            asn_cidr = whois_info.get("asn_cidr", False)
+            asn_number = whois_info.get("asn", False)
 
-            if asnorg and asn_cidr not in ('', 'NA'):
+            if asnorg and asn_cidr not in ("", "NA"):
                 self.db.set_asn_cache(asnorg, asn_cidr, asn_number)
                 asn_info = {
-                    'asn': {
-                        'number': f'AS{asn_number}',
-                        'org': asnorg
-                    }
+                    "asn": {"number": f"AS{asn_number}", "org": asnorg}
                 }
                 return asn_info
         except (
@@ -125,7 +121,6 @@ class ASN:
             # or ASN lookup failed with no more methods to try
             return False
 
-
     def get_asn_online(self, ip):
         """
         Get asn of an ip using ip-api.com only if the asn wasn't found in our offline db
@@ -135,33 +130,32 @@ class ASN:
         if utils.is_ignored_ip(ip):
             return asn
 
-        url = 'http://ip-api.com/json/'
+        url = "http://ip-api.com/json/"
         try:
-            response = requests.get(f'{url}/{ip}', timeout=5)
+            response = requests.get(f"{url}/{ip}", timeout=5)
             if response.status_code != 200:
                 return asn
 
             ip_info = json.loads(response.text)
-            if 'as' not in ip_info:
+            if "as" not in ip_info:
                 return asn
 
-            asn_info = ip_info['as'].split()
+            asn_info = ip_info["as"].split()
             if asn_info == []:
                 return
 
             # usually it's somthing like AS15169 Google LLC
             # separate the org name
-            asn.update({
-                'asn': {
-                    'number': asn_info[0],
-                    'org': " ".join(asn_info[1:])
-                }
-            })
+            asn.update(
+                {"asn": {"number": asn_info[0], "org": " ".join(asn_info[1:])}}
+            )
             return asn
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,
-            json.decoder.JSONDecodeError, KeyError, IndexError
+            json.decoder.JSONDecodeError,
+            KeyError,
+            IndexError,
         ):
             # comes here if slips fails to get the as info from the response
             # OR gets it correctly, but the info doesn't contain the fields slip sis expecting
@@ -177,7 +171,7 @@ class ASN:
         asn is a dict with 2 keys 'number' and 'org'
         cached_ip_info: info from 'IPsInfo' key passed from ip_info.py module
         """
-        asn.update({'timestamp': time.time()})
+        asn.update({"timestamp": time.time()})
         cached_ip_info.update(asn)
         # store the ASN we found in 'IPsInfo'
         self.db.setInfoForIPs(ip, cached_ip_info)

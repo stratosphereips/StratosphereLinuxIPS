@@ -7,14 +7,14 @@ class Model:
 
     This class defines a method that trust model is expected to have.
     """
-    name = 'P2P Model'
+
+    name = "P2P Model"
+
     def __init__(
         self,
         trustdb: TrustDB,
-
     ):
         self.trustdb = trustdb
-
 
     def get_opinion_on_ip(self, ipaddr: str) -> (float, float, float):
         """

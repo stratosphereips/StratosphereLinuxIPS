@@ -1,11 +1,13 @@
 """
 Data classes for all types of zeek flows
 """
+
 from dataclasses import dataclass
 from typing import List
 from datetime import datetime, timedelta
 from slips_files.common.slips_utils import utils
 import json
+
 
 @dataclass
 class Conn:
@@ -33,8 +35,8 @@ class Conn:
 
     state: str
     history: str
-    type_: str = 'conn'
-    dir_: str = '->'
+    type_: str = "conn"
+    dir_: str = "->"
 
     def __post_init__(self) -> None:
         endtime = str(self.starttime) + str(timedelta(seconds=self.dur))
@@ -44,6 +46,7 @@ class Conn:
         self.state_hist: str = self.history or self.state
         # AIDs are for conn.log flows only
         self.aid = utils.get_aid(self)
+
 
 @dataclass
 class DNS:
@@ -61,12 +64,15 @@ class DNS:
     answers: str
     TTLs: str
 
-    type_: str = 'dns'
+    type_: str = "dns"
 
     def __post_init__(self) -> None:
         # If the answer is only 1, Zeek gives a string
         # so convert to a list
-        self.answers = [self.answers] if type(self.answers) == str else self.answers
+        self.answers = (
+            [self.answers] if type(self.answers) == str else self.answers
+        )
+
 
 @dataclass
 class HTTP:
@@ -91,10 +97,11 @@ class HTTP:
     resp_mime_types: str
     resp_fuids: str
 
-    type_: str = 'http'
+    type_: str = "http"
 
     def __post_init__(self) -> None:
         pass
+
 
 @dataclass
 class SSL:
@@ -125,7 +132,8 @@ class SSL:
     ja3s: str
     is_DoH: str
 
-    type_: str = 'ssl'
+    type_: str = "ssl"
+
 
 @dataclass
 class SSH:
@@ -151,6 +159,7 @@ class SSH:
 
     type_: str = "ssh"
 
+
 @dataclass
 class DHCP:
     starttime: float
@@ -174,6 +183,7 @@ class DHCP:
         if not self.saddr and not self.daddr:
             self.saddr = self.smac
 
+
 @dataclass
 class FTP:
     starttime: float
@@ -184,6 +194,7 @@ class FTP:
     used_port: int
     type_: str = "ftp"
 
+
 @dataclass
 class SMTP:
     starttime: float
@@ -193,6 +204,7 @@ class SMTP:
 
     last_reply: str
     type_: str = "smtp"
+
 
 @dataclass
 class Tunnel:
@@ -207,7 +219,8 @@ class Tunnel:
     tunnel_type: str
     action: str
 
-    type_: str = 'tunnel'
+    type_: str = "tunnel"
+
 
 @dataclass
 class Notice:
@@ -225,10 +238,11 @@ class Notice:
     scanned_port: str
     scanning_ip: str
 
-    #TODO srsly what is this?
+    # TODO srsly what is this?
     dst: str
 
-    type_: str = 'notice'
+    type_: str = "notice"
+
     def __post_init__(self) -> None:
         # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
         if not self.saddr:
@@ -247,6 +261,8 @@ class Notice:
         if not self.scanned_port:
             # set the dport to the p field if it's there
             self.dport = self.dport
+
+
 @dataclass
 class Files:
     starttime: str
@@ -254,7 +270,7 @@ class Files:
     saddr: str
     daddr: str
 
-    size: int # downloaded file size
+    size: int  # downloaded file size
     md5: str
 
     source: str
@@ -264,7 +280,8 @@ class Files:
     tx_hosts: List[str]
     rx_hosts: List[str]
 
-    type_: str = 'files'
+    type_: str = "files"
+
     def __post_init__(self) -> None:
         if type(self.tx_hosts) != list:
             self.tx_hosts = [self.tx_hosts]
@@ -295,20 +312,22 @@ class ARP:
     # the following fields are necessary for the add_flow() function
     # the main goal is to treal ARP flows as conn.log flows and show
     # them in the timeline #TODO find a better way
-    dur: str = '0'
-    proto: str = 'ARP'
-    state: str = ''
+    dur: str = "0"
+    proto: str = "ARP"
+    state: str = ""
     pkts: int = 0
-    sport: str = ''
-    dport: str = ''
-    bytes: str = ''
-    sbytes: str = ''
-    dbytes: str = ''
-    spkts: str = ''
-    dpkts: str = ''
-    appproto: str = ''
+    sport: str = ""
+    dport: str = ""
+    bytes: str = ""
+    sbytes: str = ""
+    dbytes: str = ""
+    spkts: str = ""
+    dpkts: str = ""
+    appproto: str = ""
 
-    type_: str = 'arp'
+    type_: str = "arp"
+
+
 @dataclass
 class Software:
     starttime: str
@@ -321,12 +340,13 @@ class Software:
     unparsed_version: str
     version_major: str
     version_minor: str
-    type_: str = 'software'
+    type_: str = "software"
 
     def __post_init__(self) -> None:
         # store info about everything except http:broswer
         # we're already reading browser UA from http.log
-        self.http_browser = self.software == 'HTTP::BROWSER'
+        self.http_browser = self.software == "HTTP::BROWSER"
+
 
 @dataclass
 class Weird:
@@ -338,18 +358,4 @@ class Weird:
     name: str
     addl: str
 
-    type_: str = 'weird'
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    type_: str = "weird"

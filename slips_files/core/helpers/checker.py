@@ -44,10 +44,14 @@ class Checker:
 
         # -f file/dir/stdin-type
         input_information = self.main.args.filepath
-        if os.path.isfile(input_information) or os.path.isdir(input_information):
+        if os.path.isfile(input_information) or os.path.isdir(
+            input_information
+        ):
             input_type = self.main.get_input_file_type(input_information)
         else:
-            input_type, line_type = self.main.handle_flows_from_stdin(input_information)
+            input_type, line_type = self.main.handle_flows_from_stdin(
+                input_information
+            )
 
         return input_type, input_information, line_type
 
@@ -71,7 +75,9 @@ class Checker:
         if (
             self.main.args.interface or self.main.args.filepath
         ) and self.main.args.input_module:
-            print("You can't use --input-module with -f or -i. Stopping slips.")
+            print(
+                "You can't use --input-module with -f or -i. Stopping slips."
+            )
             self.main.terminate_slips()
 
         if (self.main.args.save or self.main.args.db) and os.getuid() != 0:
@@ -115,7 +121,9 @@ class Checker:
             self.clear_redis_cache()
         # Clear cache if the parameter was included
         if self.main.args.blocking and not self.main.args.interface:
-            print("Blocking is only allowed when running slips using an interface.")
+            print(
+                "Blocking is only allowed when running slips using an interface."
+            )
             self.main.terminate_slips()
 
         # kill all open unused redis servers if the parameter was included
@@ -127,7 +135,11 @@ class Checker:
             self.main.print_version()
             self.main.terminate_slips()
 
-        if self.main.args.interface and self.main.args.blocking and os.geteuid() != 0:
+        if (
+            self.main.args.interface
+            and self.main.args.blocking
+            and os.geteuid() != 0
+        ):
             # If the user wants to blocks, we need permission to modify iptables
             print("Run Slips with sudo to enable the blocking module.")
             self.main.terminate_slips()
@@ -188,7 +200,7 @@ class Checker:
 
         return True
 
-    def check_output_redirection(self) -> Tuple[str,str,str]:
+    def check_output_redirection(self) -> Tuple[str, str, str]:
         """
         Determine where slips will place stdout,
          stderr and logfile based on slips mode

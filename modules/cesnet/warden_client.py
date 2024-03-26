@@ -14,8 +14,7 @@ from os import path
 from operator import itemgetter
 from pathlib import Path
 
-VERSION = '3.0-beta2'
-
+VERSION = "3.0-beta2"
 
 
 class Error(Exception):
@@ -31,7 +30,6 @@ class Error(Exception):
     """
 
     def __init__(self, method=None, req_id=None, errors=None, **kwargs):
-
         self.errors = []
         if errors:
             self.extend(method, req_id, errors)
@@ -42,17 +40,17 @@ class Error(Exception):
         # We shift method and req_id into each and every error, because
         # we want to be able to simply merge more Error arrays (for
         # returning errors from more Warden calls at once
-        if method and 'method' not in kwargs:
-            kwargs['method'] = method
-        if req_id and 'req_id' not in kwargs:
-            kwargs['req_id'] = req_id
+        if method and "method" not in kwargs:
+            kwargs["method"] = method
+        if req_id and "req_id" not in kwargs:
+            kwargs["req_id"] = req_id
         # Ugly, but be paranoid, don't rely on server reply to be well formed
         try:
-            kwargs['error'] = int(kwargs['error'])
+            kwargs["error"] = int(kwargs["error"])
         except Exception:
-            kwargs['error'] = 0
-        if 'events' in kwargs:
-            evlist = kwargs['events']
+            kwargs["error"] = 0
+        if "events" in kwargs:
+            evlist = kwargs["events"]
             try:
                 evlist_new = []
                 for ev in evlist:
@@ -60,19 +58,19 @@ class Error(Exception):
                         evlist_new.append(int(ev))
                     except Exception:
                         pass
-                kwargs['events'] = evlist_new
+                kwargs["events"] = evlist_new
             except Exception:
-                kwargs['events'] = []
-        if 'events_id' in kwargs:
+                kwargs["events"] = []
+        if "events_id" in kwargs:
             try:
-                iter(kwargs['events_id'])
+                iter(kwargs["events_id"])
             except TypeError:
-                kwargs['events_id'] = [None] * len(kwargs['events'])
-        if 'send_events_limit' in kwargs:
+                kwargs["events_id"] = [None] * len(kwargs["events"])
+        if "send_events_limit" in kwargs:
             try:
-                kwargs['send_events_limit'] = int(kwargs['send_events_limit'])
+                kwargs["send_events_limit"] = int(kwargs["send_events_limit"])
             except Exception:
-                del kwargs['send_events_limit']
+                del kwargs["send_events_limit"]
         self.errors.append(kwargs)
 
     def extend(self, method=None, req_id=None, iterable=None):
@@ -81,12 +79,12 @@ class Error(Exception):
         try:
             iter(iterable)
         except TypeError:
-            iterable = []       # Bad joke from server
+            iterable = []  # Bad joke from server
         for e in iterable:
             try:
                 args = dict(e)
             except TypeError:
-                args = {}       # Not funny!
+                args = {}  # Not funny!
             self.append(method, req_id, **args)
 
     def __len__(self):
@@ -109,7 +107,7 @@ class Error(Exception):
         out = []
         for e in self.errors:
             out.extend((self.str_err(e), self.str_info(e)))
-        return '\n'.join(out)
+        return "\n".join(out)
 
     def log(self, logger=None, prio=logging.ERROR):
         if not logger:
@@ -122,45 +120,65 @@ class Error(Exception):
                 logger.debug(debug)
 
     def str_preamble(self, e):
-        return '%08x/%s' % (e.get('req_id', 0), e.get('method', '?'))
+        return "%08x/%s" % (e.get("req_id", 0), e.get("method", "?"))
 
     def str_err(self, e):
         out = [self.str_preamble(e)]
-        out.append(f" Error({e.get('error', 0)}) {e.get('message', 'Unknown error')} ")
-        if 'exc' in e and e['exc']:
-            out.append(f"(cause was {e['exc'][0].__name__}: {str(e['exc'][1])})")
-        return ''.join(out)
+        out.append(
+            f" Error({e.get('error', 0)}) {e.get('message', 'Unknown error')} "
+        )
+        if "exc" in e and e["exc"]:
+            out.append(
+                f"(cause was {e['exc'][0].__name__}: {str(e['exc'][1])})"
+            )
+        return "".join(out)
 
     def str_info(self, e):
-        ecopy = dict(e)    # shallow copy
-        ecopy.pop('req_id', None)
-        ecopy.pop('method', None)
-        ecopy.pop('error', None)
-        ecopy.pop('message', None)
-        ecopy.pop('exc', None)
+        ecopy = dict(e)  # shallow copy
+        ecopy.pop("req_id", None)
+        ecopy.pop("method", None)
+        ecopy.pop("error", None)
+        ecopy.pop("message", None)
+        ecopy.pop("exc", None)
         return (
-            '%s Detail: %s'
+            "%s Detail: %s"
             % (
                 self.str_preamble(e),
                 json.dumps(ecopy, default=lambda v: str(v)),
             )
             if ecopy
-            else ''
+            else ""
         )
 
     def str_debug(self, e):
         out = [self.str_preamble(e)]
-        if 'exc' not in e or not e['exc']:
-            return ''
-        if exc_tb := e['exc'][2]:
-            out.append('Traceback:\n')
+        if "exc" not in e or not e["exc"]:
+            return ""
+        if exc_tb := e["exc"][2]:
+            out.append("Traceback:\n")
             out.extend(format_tb(exc_tb))
-        return ''.join(out)
+        return "".join(out)
 
 
 class Client(object):
-    def __init__(self, url, certfile=None, keyfile=None, cafile=None, timeout=60, retry=3, pause=5, get_events_limit=6000, send_events_limit=500, errlog=None, syslog=None, filelog=None, idstore=None, name='org.example.warden.test', secret=None):
-
+    def __init__(
+        self,
+        url,
+        certfile=None,
+        keyfile=None,
+        cafile=None,
+        timeout=60,
+        retry=3,
+        pause=5,
+        get_events_limit=6000,
+        send_events_limit=500,
+        errlog=None,
+        syslog=None,
+        filelog=None,
+        idstore=None,
+        name="org.example.warden.test",
+        secret=None,
+    ):
         if errlog is None:
             errlog = {}
         self.name = name
@@ -174,9 +192,9 @@ class Client(object):
         self.conn = None
 
         base = path.join(path.dirname(__file__))
-        self.certfile = path.join(base, certfile or 'cert.pem')
-        self.keyfile = path.join(base, keyfile or 'key.pem')
-        self.cafile = path.join(base, cafile or 'ca.pem')
+        self.certfile = path.join(base, certfile or "cert.pem")
+        self.keyfile = path.join(base, keyfile or "key.pem")
+        self.cafile = path.join(base, cafile or "ca.pem")
         self.timeout = int(timeout)
         self.get_events_limit = int(get_events_limit)
         self.idstore = (
@@ -187,9 +205,8 @@ class Client(object):
         self.retry = int(retry)
         self.pause = int(pause)
 
-        self.ciphers = 'TLS_RSA_WITH_AES_256_CBC_SHA'
+        self.ciphers = "TLS_RSA_WITH_AES_256_CBC_SHA"
         self.getInfo()  # Call to align limits with server opinion
-
 
     def create_file(self, filepath):
         """
@@ -201,8 +218,7 @@ class Client(object):
         # filename = path.basename(filepath)
         p = Path(dir)
         p.mkdir(parents=True, exist_ok=True)
-        open(filepath, 'w').close()
-
+        open(filepath, "w").close()
 
     def init_log(self, errlog: dict, syslog: dict, filelog: dict):
         def loglevel(lev):
@@ -214,57 +230,63 @@ class Client(object):
 
         def facility(fac):
             try:
-                return int(getattr(logging.handlers.SysLogHandler, f'LOG_{fac.upper()}'))
+                return int(
+                    getattr(
+                        logging.handlers.SysLogHandler, f"LOG_{fac.upper()}"
+                    )
+                )
             except (AttributeError, ValueError):
-                self.logger.warning(f'Unknown syslog facility "{fac}", using "local7"')
+                self.logger.warning(
+                    f'Unknown syslog facility "{fac}", using "local7"'
+                )
                 return logging.handlers.SysLogHandler.LOG_LOCAL7
 
         form = (
-            '%(filename)s[%(process)d]: %(name)s (%(levelname)s) %(message)s'
+            "%(filename)s[%(process)d]: %(name)s (%(levelname)s) %(message)s"
         )
         format_notime = logging.Formatter(form)
-        format_time = logging.Formatter(f'%(asctime)s {form}')
+        format_time = logging.Formatter(f"%(asctime)s {form}")
 
         self.logger = logging.getLogger(self.name)
-        self.logger.propagate = False   # Don't bubble up to root logger
+        self.logger.propagate = False  # Don't bubble up to root logger
         self.logger.setLevel(logging.DEBUG)
 
         if errlog is not None:
             # create the file and dir if they don't exist
-            self.create_file(errlog['file'])
+            self.create_file(errlog["file"])
             el = logging.StreamHandler(stderr)
             el.setFormatter(format_time)
-            el.setLevel(loglevel(errlog.get('level', 'info')))
+            el.setLevel(loglevel(errlog.get("level", "info")))
             self.logger.addHandler(el)
 
         if filelog is not None:
             try:
-                self.create_file(filelog['file'])
+                self.create_file(filelog["file"])
                 fl = logging.FileHandler(
-                    filename= filelog['file'],
-                    encoding='utf-8',
+                    filename=filelog["file"],
+                    encoding="utf-8",
                 )
-                fl.setLevel(loglevel(filelog.get('level', 'debug')))
+                fl.setLevel(loglevel(filelog.get("level", "debug")))
                 fl.setFormatter(format_time)
                 self.logger.addHandler(fl)
             except Exception:
                 Error(
-                    message='Unable to setup file logging', exc=exc_info()
+                    message="Unable to setup file logging", exc=exc_info()
                 ).log(self.logger)
 
         if syslog is not None:
-            self.create_file(syslog['file'])
+            self.create_file(syslog["file"])
             try:
                 sl = logging.handlers.SysLogHandler(
-                    address=syslog.get('socket', '/dev/log'),
-                    facility=facility(syslog.get('facility', 'local7')),
+                    address=syslog.get("socket", "/dev/log"),
+                    facility=facility(syslog.get("facility", "local7")),
                 )
-                sl.setLevel(loglevel(syslog.get('level', 'debug')))
+                sl.setLevel(loglevel(syslog.get("level", "debug")))
                 sl.setFormatter(format_notime)
                 self.logger.addHandler(sl)
             except Exception:
                 Error(
-                    message='Unable to setup syslog logging', exc=exc_info()
+                    message="Unable to setup syslog logging", exc=exc_info()
                 ).log(self.logger)
 
         if not (errlog or filelog or syslog):
@@ -279,16 +301,15 @@ class Client(object):
         return err
 
     def connect(self):
-
         try:
-            if self.url.scheme == 'https':
+            if self.url.scheme == "https":
                 conn = http.client.HTTPSConnection(
                     self.url.netloc,
                     key_file=self.keyfile,
                     cert_file=self.certfile,
                     timeout=self.timeout,
                 )
-            elif self.url.scheme == 'http':
+            elif self.url.scheme == "http":
                 conn = http.client.HTTPConnection(
                     self.url.netloc, timeout=self.timeout
                 )
@@ -300,7 +321,7 @@ class Client(object):
                 )
         except Exception:
             return Error(
-                message='HTTP(S) connection failed',
+                message="HTTP(S) connection failed",
                 exc=exc_info(),
                 url=self.url.geturl(),
                 timeout=self.timeout,
@@ -312,35 +333,34 @@ class Client(object):
 
         return conn
 
-    def sendRequest(self, func='', payload=None, **kwargs):
-
+    def sendRequest(self, func="", payload=None, **kwargs):
         if self.secret is None:
-            kwargs['client'] = self.name
+            kwargs["client"] = self.name
         else:
-            kwargs['secret'] = self.secret
+            kwargs["secret"] = self.secret
 
         if kwargs:
             for k in list(kwargs.keys()):
                 if kwargs[k] is None:
                     del kwargs[k]
-            argurl = f'?{urlencode(kwargs, doseq=True)}'
+            argurl = f"?{urlencode(kwargs, doseq=True)}"
         else:
-            argurl = ''
+            argurl = ""
 
         try:
-            data = '' if payload is None else json.dumps(payload)
+            data = "" if payload is None else json.dumps(payload)
         except Exception:
             return Error(
-                message='Serialization to JSON failed',
+                message="Serialization to JSON failed",
                 exc=exc_info(),
                 method=func,
                 payload=payload,
             )
 
         self.headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Content-Length': str(len(data)),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Content-Length": str(len(data)),
         }
 
         # HTTP(S)Connection is oneshot object (and we don't speak "pipelining")
@@ -348,13 +368,13 @@ class Client(object):
         if not conn:
             return conn  # either False of Error instance
 
-        loc = f'{self.url.path}/{func}{argurl}'
+        loc = f"{self.url.path}/{func}{argurl}"
         try:
-            conn.request('POST', loc, data, self.headers)
+            conn.request("POST", loc, data, self.headers)
         except Exception:
             conn.close()
             return Error(
-                message='Sending of request to server failed',
+                message="Sending of request to server failed",
                 exc=exc_info(),
                 method=func,
                 log=loc,
@@ -368,7 +388,7 @@ class Client(object):
             conn.close()
             return Error(
                 method=func,
-                message='HTTP reply failed',
+                message="HTTP reply failed",
                 exc=exc_info(),
                 loc=loc,
                 headers=self.headers,
@@ -381,7 +401,7 @@ class Client(object):
             conn.close()
             return Error(
                 method=func,
-                message='Fetching HTTP data from server failed',
+                message="Fetching HTTP data from server failed",
                 exc=exc_info(),
                 loc=loc,
                 headers=self.headers,
@@ -396,29 +416,27 @@ class Client(object):
             except Exception:
                 data = Error(
                     method=func,
-                    message='JSON message parsing failed',
+                    message="JSON message parsing failed",
                     exc=exc_info(),
                     response=response_data,
                 )
         else:
             try:
                 data = json.loads(response_data)
-                data[
-                    'errors'
-                ]   # trigger exception if not dict or no error key
+                data["errors"]  # trigger exception if not dict or no error key
             except Exception:
                 data = Error(
                     method=func,
-                    message='Generic server HTTP error',
+                    message="Generic server HTTP error",
                     error=res.status,
                     exc=exc_info(),
                     response=response_data,
                 )
             else:
                 data = Error(
-                    method=data.get('method', None),
-                    req_id=data.get('req_id', None),
-                    errors=data.get('errors', []),
+                    method=data.get("method", None),
+                    req_id=data.get("req_id", None),
+                    errors=data.get("errors", []),
                 )
 
         return data
@@ -428,7 +446,7 @@ class Client(object):
         if not idf:
             return False
         try:
-            with open(idf, 'w+') as f:
+            with open(idf, "w+") as f:
                 f.write(str(id))
         except (ValueError, IOError):
             # Use Error instance just for proper logging
@@ -444,7 +462,7 @@ class Client(object):
         if not idf:
             return None
         try:
-            with open(idf, 'r') as f:
+            with open(idf, "r") as f:
                 id = int(f.read())
         except (ValueError, IOError):
             Error(
@@ -456,16 +474,16 @@ class Client(object):
         return id
 
     def getInfo(self):
-        res = self.sendRequest('getInfo')
+        res = self.sendRequest("getInfo")
         if isinstance(res, Error):
             res.log(self.logger)
         else:
             try:
                 self.send_events_limit = min(
-                    res['send_events_limit'], self.send_events_limit
+                    res["send_events_limit"], self.send_events_limit
                 )
                 self.get_events_limit = min(
-                    res['get_events_limit'], self.get_events_limit
+                    res["get_events_limit"], self.get_events_limit
                 )
             except (AttributeError, TypeError, KeyError):
                 pass
@@ -474,7 +492,7 @@ class Client(object):
     def send_events_raw(self, events=None):
         if events is None:
             events = []
-        return self.sendRequest('sendEvents', payload=events)
+        return self.sendRequest("sendEvents", payload=events)
 
     def send_events_chunked(self, events=None):
         """Split potentially long "events" list to send_events_limit
@@ -495,8 +513,8 @@ class Client(object):
             if isinstance(res, Error):
                 # Shift all error indices by offset to correspond with 'events' list
                 for e in res.errors:
-                    evlist = e.get('events', [])
-                    if srv_limit := e.get('send_events_limit'):
+                    evlist = e.get("events", [])
+                    if srv_limit := e.get("send_events_limit"):
                         self.send_events_limit = min(
                             self.send_events_limit, srv_limit
                         )
@@ -522,7 +540,7 @@ class Client(object):
         while ev and attempt:
             if attempt < retry:
                 self.logger.info(
-                    '%d transient errors, retrying (%d to go)'
+                    "%d transient errors, retrying (%d to go)"
                     % (len(ev), attempt)
                 )
                 time.sleep(pause or self.pause)
@@ -533,10 +551,10 @@ class Client(object):
             next_idx_xlat = []
             if isinstance(res, Error):
                 # Sort to process fatal errors first
-                res.errors.sort(key=itemgetter('error'))
+                res.errors.sort(key=itemgetter("error"))
                 for e in res.errors:
-                    errno = e['error']
-                    evlist = e.get('events', range(len(ev)))   # none means all
+                    errno = e["error"]
+                    evlist = e.get("events", range(len(ev)))  # none means all
                     if errno < 500 or not attempt:
                         # Fatal error or last try, translate indices
                         # to original and prepare for returning to caller
@@ -552,8 +570,8 @@ class Client(object):
             idx_xlat = next_idx_xlat
         # add the return value to the queue
         if q:
-            q.put(self.log_err(err) if err.errors else {'saved': len(events)})
-        return self.log_err(err) if err.errors else {'saved': len(events)}
+            q.put(self.log_err(err) if err.errors else {"saved": len(events)})
+        return self.log_err(err) if err.errors else {"saved": len(events)}
 
     def getEvents(
         self,
@@ -567,12 +585,11 @@ class Client(object):
         group=None,
         nogroup=None,
     ):
-
         if not id:
             id = self._loadID(idstore)
 
         if res := self.sendRequest(
-            'getEvents',
+            "getEvents",
             id=id,
             count=count or self.get_events_limit,
             cat=cat,
@@ -583,12 +600,12 @@ class Client(object):
             nogroup=nogroup,
         ):
             try:
-                events = res['events']
-                newid = res['lastid']
+                events = res["events"]
+                newid = res["lastid"]
             except KeyError:
                 events = Error(
-                    method='getEvents',
-                    message='Server returned bogus reply',
+                    method="getEvents",
+                    message="Server returned bogus reply",
                     exc=exc_info(),
                     response=res,
                 )
@@ -599,13 +616,10 @@ class Client(object):
         return self.log_err(events)
 
     def close(self):
-
-        if hasattr(self, 'conn') and hasattr(self.conn, 'close'):
+        if hasattr(self, "conn") and hasattr(self.conn, "close"):
             self.conn.close()
 
     __del__ = close
-
-
 
 
 def format_time(
@@ -613,7 +627,7 @@ def format_time(
 ):
     if utcoffset is None:
         utcoffset = -(time.altzone if time.daylight else time.timezone)
-    tstr = '%04d-%02d-%02dT%02d:%02d:%02d' % (
+    tstr = "%04d-%02d-%02dT%02d:%02d:%02d" % (
         year,
         month,
         day,
@@ -621,18 +635,18 @@ def format_time(
         minute,
         second,
     )
-    usstr = '.' + str(microsec).rstrip('0') if microsec else ''
+    usstr = "." + str(microsec).rstrip("0") if microsec else ""
     offsstr = (
-        ('%+03d:%02d' % divmod((utcoffset + 30) // 60, 60))
+        ("%+03d:%02d" % divmod((utcoffset + 30) // 60, 60))
         if utcoffset
-        else 'Z'
+        else "Z"
     )
     return tstr + usstr + offsstr
 
 
 def read_cfg(cfgfile):
-    with open(cfgfile, 'r') as f:
-        stripcomments = '\n'.join(
-            (l for l in f if not l.lstrip().startswith(('#', '//')))
+    with open(cfgfile, "r") as f:
+        stripcomments = "\n".join(
+            (l for l in f if not l.lstrip().startswith(("#", "//")))
         )
         return json.loads(stripcomments)

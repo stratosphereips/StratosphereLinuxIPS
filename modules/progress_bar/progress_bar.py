@@ -26,32 +26,27 @@ class PBar(IModule):
     once the pbar is done, this proc sets the has_pbar shared var to Flase
     and output.py would know about it and print txt normally
     """
-    name = 'Progress Bar'
-    description = 'Shows a pbar of processed flows'
-    authors = ['Alya Gomaa']
-    
+
+    name = "Progress Bar"
+    description = "Shows a pbar of processed flows"
+    authors = ["Alya Gomaa"]
+
     def init(
-            self,
-            stdout: str = None,
-            pipe: Connection = None,
-            slips_mode: str = None,
-            pbar_finished: Event = None
-        ):
+        self,
+        stdout: str = None,
+        pipe: Connection = None,
+        slips_mode: str = None,
+        pbar_finished: Event = None,
+    ):
         self.stdout: str = stdout
         self.slips_mode: str = slips_mode
         self.pipe = pipe
         self.done_reading_flows = False
         self.pbar_finished: Event = pbar_finished
 
-
-
     def remove_stats(self):
         # remove the stats from the progress bar
-        self.progress_bar.set_postfix_str(
-            '',
-            refresh=True
-        )
-
+        self.progress_bar.set_postfix_str("", refresh=True)
 
     def initialize_pbar(self, msg: dict):
         """
@@ -59,7 +54,7 @@ class PBar(IModule):
          a zeek dir
         ignores pcaps, interface and dirs given to slips if -g is enabled
         """
-        self.total_flows = int(msg['total_flows'])
+        self.total_flows = int(msg["total_flows"])
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the
         # terminal size
@@ -68,15 +63,14 @@ class PBar(IModule):
             leave=True,
             colour="green",
             desc="Flows read",
-            mininterval=0, # defines how long to wait between each refresh.
-            unit=' flow',
+            mininterval=0,  # defines how long to wait between each refresh.
+            unit=" flow",
             smoothing=1,
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} {postfix}",
             position=0,
-            initial=0, #initial value of the flows processed
+            initial=0,  # initial value of the flows processed
             file=sys.stdout,
         )
-
 
     def update_bar(self):
         """
@@ -84,13 +78,13 @@ class PBar(IModule):
         adds 1 to the number of flows processed
         """
 
-        if not hasattr(self, 'progress_bar') :
+        if not hasattr(self, "progress_bar"):
             # this module wont have the progress_bar set if it's running
             # on pcap or interface
             # or if the output is redirected to a file!
             return
 
-        if self.slips_mode == 'daemonized':
+        if self.slips_mode == "daemonized":
             return
 
         self.progress_bar.update(1)
@@ -101,24 +95,21 @@ class PBar(IModule):
         # remove it from the bar because we'll be
         # prining it in a new line
         self.remove_stats()
-        tqdm.write("Profiler is done reading all flows. "
-                   "Slips is now processing them.")
+        tqdm.write(
+            "Profiler is done reading all flows. "
+            "Slips is now processing them."
+        )
         self.pbar_finished.set()
 
     def print_to_cli(self, msg: dict):
         """
         prints using tqdm in order to avoid conflict with the pbar
         """
-        tqdm.write(msg['txt'])
-
+        tqdm.write(msg["txt"])
 
     def update_stats(self, msg: dict):
         """writes the stats sent in the msg as a pbar postfix"""
-        self.progress_bar.set_postfix_str(
-            msg['stats'],
-            refresh=True
-        )
-
+        self.progress_bar.set_postfix_str(msg["stats"], refresh=True)
 
     def shutdown_gracefully(self):
         # to tell output.py to no longer send prints here
@@ -133,7 +124,7 @@ class PBar(IModule):
         if has_new_msg:
             msg: dict = self.pipe.recv()
 
-            event: str = msg['event']
+            event: str = msg["event"]
             if event == "init":
                 self.initialize_pbar(msg)
 
@@ -146,5 +137,3 @@ class PBar(IModule):
             if event == "print":
                 # let tqdm do the printing to avoid conflicts with the pbar
                 self.print_to_cli(msg)
-
-

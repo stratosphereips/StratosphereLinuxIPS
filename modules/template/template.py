@@ -16,9 +16,9 @@ from slips_files.common.imports import *
 
 class Template(IModule):
     # Name: short name of the module. Do not use spaces
-    name = 'Template'
-    description = 'Template module'
-    authors = ['Template Author']
+    name = "Template"
+    description = "Template module"
+    authors = ["Template Author"]
 
     def init(self):
         # To which channels do you wnat to subscribe? When a message
@@ -29,9 +29,9 @@ class Template(IModule):
         # - tw_modified
         # - evidence_added
         # Remember to subscribe to this channel in database.py
-        self.c1 = self.db.subscribe('new_ip')
+        self.c1 = self.db.subscribe("new_ip")
         self.channels = {
-            'new_ip': self.c1,
+            "new_ip": self.c1,
         }
 
     def pre_main(self):
@@ -42,9 +42,8 @@ class Template(IModule):
 
     def main(self):
         """Main loop function"""
-        if msg:= self.get_msg('new_ip'):
+        if msg := self.get_msg("new_ip"):
             # Example of printing the number of profiles in the
             # Database every second
             data = len(self.db.getProfiles())
-            self.print(f'Amount of profiles: {data}', 3, 0)
-
+            self.print(f"Amount of profiles: {data}", 3, 0)
