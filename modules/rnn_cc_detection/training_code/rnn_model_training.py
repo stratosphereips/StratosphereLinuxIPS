@@ -8,11 +8,16 @@ from random import shuffle
 
 import tensorflow as tf
 import sklearn as sk
-from tensorflow.keras import layers
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.preprocessing.text import one_hot
-from tensorflow.keras.models import load_model
-from tensorflow.keras.utils import to_categorical
+# from tensorflow.keras import layers
+# from tensorflow.keras.preprocessing.sequence import pad_sequences
+# from tensorflow.keras.preprocessing.text import one_hot
+# from tensorflow.keras.models import load_model
+# from tensorflow.keras.utils import to_categorical
+from keras import layers
+from keras.preprocessing.sequence import pad_sequences
+from keras.preprocessing.text import one_hot
+from keras.models import load_model
+from keras.utils import to_categorical
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -68,6 +73,7 @@ parser.add_argument(
     help='Where to store the train model',
     type=str,
     required=False,
+    default="model",
 )
 args = parser.parse_args()
 
@@ -128,54 +134,71 @@ vocabulary_size = len(int_of_letters)
 
 
 # Change the letters in the state to an integer representing it uniquely. We 'encode' them.
-df['state'] = df['state'].apply(lambda x: [[int_of_letters[i]] for i in x])
+# df['state'] = df['state'].apply(lambda x: [[int_of_letters[i]] for i in x])
 # So far, only 1 feature per letter
 features_per_sample = 1
 
+# Calculate the maximum sequence length
+max_seq_length = max(len(sequence) for sequence in df['state'])
+
+# One-hot encoding
+x_data = []
+for sequence in df['state']:
+    one_hot_sequence = [to_categorical(int_of_letters[letter[0]], num_classes=vocabulary_size) for letter in sequence]
+    padded_sequence = pad_sequences([one_hot_sequence], maxlen=max_seq_length, padding='post', truncating='post')[0]
+    x_data.append(padded_sequence.flatten())
+# x_data = np.array(x_data)
+
+# x_data_oh = [to_categorical(sample, num_classes=vocabulary_size) for sample in x_data]
+x_data_oh = np.array(x_data)
+# y_data remains the same
+y_data = df['label'].to_numpy()
 
 # Convert the data into the appropriate shape
 # x_data is a list of lists. The 1st dimension is the outtuple, the second the letter. Each letter is now an int value. shape=(num_outuples, features_per_sample)
-x_data = df['state'].to_numpy()
-if args.verbose:
-    print(f'There are {len(x_data)} outtuples')
-# y_data is a list of ints that are 0 or 1. One integer per outtupple. shape=(num_outuples, 1)
-y_data = df['label'].to_numpy()
-if args.verbose:
-    print(f'There are {len(y_data)} labels')
-# Search the sample with max len in the training. It should be already cuted by the csv_read function to a max. Here we just check
-max_length_of_outtupple = max([len(sublist) for sublist in df.state.to_list()])
-if args.verbose:
-    print(
-        f'The max len of the letters in all outtuples is: {max_length_of_outtupple}'
-    )
+# x_data = df['state'].to_numpy()
+# if args.verbose:
+#     print(f'There are {len(x_data)} outtuples')
+# # y_data is a list of ints that are 0 or 1. One integer per outtupple. shape=(num_outuples, 1)
+# y_data = df['label'].to_numpy()
+# if args.verbose:
+#     print(f'There are {len(y_data)} labels')
+# # Search the sample with max len in the training. It should be already cuted by the csv_read function to a max. Here we just check
+# max_length_of_outtupple = max([len(sublist) for sublist in df.state.to_list()])
+# if args.verbose:
+#     print(
+#         f'The max len of the letters in all outtuples is: {max_length_of_outtupple}'
+#     )
 
-# Here x_data is a array of lists [[]]
-if args.verbose:
-    print(
-        f'x_data type {type(x_data)} of shape {x_data.shape}. x_data[0] type is {type(x_data[0])}'
-    )
-    print(f'x_data[0] is {x_data[0]}')
+# # Here x_data is a array of lists [[]]
+# if args.verbose:
+#     print(
+#         f'x_data type {type(x_data)} of shape {x_data.shape}. x_data[0] type is {type(x_data[0])}'
+#     )
+#     print(f'x_data[0] is {x_data[0]}')
 
 
-# Padding.
-# Since not all outtuples have the same amount of letters, we need to add padding at the end
-# Transforms the list to a 2D Numpy array of shape (num_samples, num_timesteps)
-# num_timesteps is either the maxlen argument if provided, or the length of the longest sequence otherwise.
-# Sequences that are shorter than num_timesteps are padded with value at the end.
-# padding: 'pre' or 'post': pad either before or after each sequence.
-# truncating: 'pre' or 'post': remove values from sequences larger than maxlen, either at the beginning or at the end of the sequences.
 
-# If the input is a string
-# padded_x_data = pad_sequences(x_data, maxlen=max_length_of_outtupple, padding='post', value='0', dtype=object )
-
-# If the input are integers
-padded_x_data = pad_sequences(
-    x_data, maxlen=max_length_of_outtupple, padding='post'
-)
-if args.verbose:
-    print(
-        f'padded_x_data is of type {type(padded_x_data)}, of shape {padded_x_data.shape}. padded_x_data[0] type is {type(padded_x_data[0])}. Shape of second list is {padded_x_data[0].shape}'
-    )
+"""Since we are using one hot ecoding, we do not need padding"""
+# # Padding.
+# # Since not all outtuples have the same amount of letters, we need to add padding at the end
+# # Transforms the list to a 2D Numpy array of shape (num_samples, num_timesteps)
+# # num_timesteps is either the maxlen argument if provided, or the length of the longest sequence otherwise.
+# # Sequences that are shorter than num_timesteps are padded with value at the end.
+# # padding: 'pre' or 'post': pad either before or after each sequence.
+# # truncating: 'pre' or 'post': remove values from sequences larger than maxlen, either at the beginning or at the end of the sequences.
+#
+# # If the input is a string
+# # padded_x_data = pad_sequences(x_data, maxlen=max_length_of_outtupple, padding='post', value='0', dtype=object )
+#
+# # If the input are integers
+# padded_x_data = pad_sequences(
+#     x_data, maxlen=max_length_of_outtupple, padding='post'
+# )
+# if args.verbose:
+#     print(
+#         f'padded_x_data is of type {type(padded_x_data)}, of shape {padded_x_data.shape}. padded_x_data[0] type is {type(padded_x_data[0])}. Shape of second list is {padded_x_data[0].shape}'
+#     )
 
 
 # Split the data in training and testing
@@ -184,33 +207,41 @@ if args.verbose:
 # For now, just use all the data
 
 # Split the one-hot
-# train_x_data = x_data_oh
-# train_y_data = y_data
-
-# Split the padded data only without one-hot
-train_x_data = padded_x_data
+train_x_data = x_data_oh
 train_y_data = y_data
 
+# Split the padded data only without one-hot
+# train_x_data = padded_x_data
+# train_y_data = y_data
+
+
+# # Hyperparameters
+# # Real data
+# # Store the dimensions
+# # batch_size = 100 # group of outtuples as a batch
+# num_outtuples = train_x_data.shape[0]   # number_of_outtuples in general
+# # max_length_of_outtupple # max amount of letters in each outtuple (500 now)
+#
+# # In the case of hot-encoding, the amount of features per letter per sample, is 50, which is the vocabulary size
+# # features_per_sample = vocabulary_size # amount of positions of the hot encoding (50 letters, so 50)
+# # print(f'We have as input shape: {num_outtuples}, {max_length_of_outtupple}, {features_per_sample}')
+# # input_shape = (max_length_of_outtupple, features_per_sample)
+#
+# # In the case of not using hot-encoding, the amount of features per sample is 1, because we only have one value
+# # The amount of time steps is the amount of letters, since one letter is one time step, which is the amount of letters max, which 500
+# timesteps = max_length_of_outtupple
+# input_shape = (timesteps, features_per_sample)
+# print(
+#     f'We have as shape: Num of samples: {num_outtuples}, Num of letters per sample (timesteps): {timesteps}, each letter has {features_per_sample} values. The input shape is {input_shape}'
+# )
+
+max_length_of_outtupple = max([len(sublist) for sublist in df.state.to_list()])
 
 # Hyperparameters
-# Real data
-# Store the dimensions
-# batch_size = 100 # group of outtuples as a batch
-num_outtuples = train_x_data.shape[0]   # number_of_outtuples in general
-# max_length_of_outtupple # max amount of letters in each outtuple (500 now)
-
-# In the case of hot-encoding, the amount of features per letter per sample, is 50, which is the vocabulary size
-# features_per_sample = vocabulary_size # amount of positions of the hot encoding (50 letters, so 50)
-# print(f'We have as input shape: {num_outtuples}, {max_length_of_outtupple}, {features_per_sample}')
-# input_shape = (max_length_of_outtupple, features_per_sample)
-
-# In the case of not using hot-encoding, the amount of features per sample is 1, because we only have one value
-# The amount of time steps is the amount of letters, since one letter is one time step, which is the amount of letters max, which 500
+num_outtuples = train_x_data.shape[0]
+# timesteps = train_x_data.shape[1]
 timesteps = max_length_of_outtupple
 input_shape = (timesteps, features_per_sample)
-print(
-    f'We have as shape: Num of samples: {num_outtuples}, Num of letters per sample (timesteps): {timesteps}, each letter has {features_per_sample} values. The input shape is {input_shape}'
-)
 
 # num_epochs = 500
 
@@ -223,6 +254,7 @@ print(
 # Create the model of RNN
 model = tf.keras.models.Sequential()
 model.add(layers.Embedding(vocabulary_size, 16, mask_zero=True))
+# model.add(layers.Embedding(vocabulary_size, 16, mask_zero=True), input_shape=(timesteps, vocabulary_size))
 # GRU is the main RNN layer, inputs: A 3D tensor, with shape [batch, timesteps, feature]
 model.add(
     layers.Bidirectional(
