@@ -42,4 +42,6 @@ yappi
 pytest-sugar
 memray
 aid_hash
+black
+ruff
 pre-commit
