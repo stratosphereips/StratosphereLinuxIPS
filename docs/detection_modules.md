@@ -314,16 +314,17 @@ IncompatibleUserAgent, ICMP-Timestamp-Scan, ICMP-AddressScan, ICMP-AddressMaskSc
 ## Threat Intelligence Module
 
 Slips has a complex system to deal with Threat Intelligence feeds. 
-
 Slips supports different kinds of IoCs from TI feeds (IPs, IP ranges, domains, JA3 hashes, SSL hashes)
-
 File hashes and URLs aren't supported in TI feeds.
-
 Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
 
-URLhaus: for each url seen in http.log and downloaded file seen in files.log
-Spamhaus: for IP lookups
-Circl.lu: for hash lookups (for each downloaded file)
+CIRCL.LU
+Slips looks up file hashes (MD5) for downloaded files found in the files using the CIRCL.LU API.log obtained from Zeek. This lookup is handled by the ThreatIntel class's circl_lu function.
+
+Slips creates the following URL for every file that is downloaded: https://hashlookup.circl.lu/lookup/md5/<md5_hash>. This URL is used to query the CIRCL.LU API with the file's MD5 hash.
+It parses the result after sending a GET request to this URL.
+Slips collects pertinent data, including confidence level, threat level, and blacklist sources, if the answer indicates that the file is known to be malicious.
+After that, it creates an evidence object and stores it in the database, indicating that a malicious file was downloaded, by calling the set_evidence_malicious_hash method.
 
 
 ### Matching of IPs
