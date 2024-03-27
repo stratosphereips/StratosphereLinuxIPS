@@ -1,5 +1,5 @@
-from slips_files.common.abstracts._module import IModule
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.abstracts.module import IModule
 from ..cesnet.warden_client import Client, read_cfg
 import os
 import json
@@ -12,18 +12,17 @@ from slips_files.common.slips_utils import utils
 
 
 class CESNET(IModule):
-    name = 'CESNET'
-    description = 'Send and receive alerts from warden servers.'
-    authors = ['Alya Gomaa']
+    name = "CESNET"
+    description = "Send and receive alerts from warden servers."
+    authors = ["Alya Gomaa"]
 
     def init(self):
         self.read_configuration()
-        self.c1 = self.db.subscribe('export_evidence')
+        self.c1 = self.db.subscribe("export_evidence")
         self.channels = {
-            'export_evidence' : self.c1,
+            "export_evidence": self.c1,
         }
         self.stop_module = False
-
 
     def read_configuration(self):
         """Read importing/exporting preferences from slips.conf"""
@@ -47,7 +46,7 @@ class CESNET(IModule):
         returns evidence_in_IDEA but without the private IPs
         """
 
-        for type_ in ('Source', 'Target'):
+        for type_ in ("Source", "Target"):
             try:
                 alert_field = evidence_in_IDEA[type_]
             except KeyError:
@@ -56,7 +55,7 @@ class CESNET(IModule):
 
             # evidence_in_IDEA['Source'] may contain multiple dicts
             for dict_ in alert_field:
-                for ip_version in ('IP4', 'IP6'):
+                for ip_version in ("IP4", "IP6"):
                     try:
                         # get the ip
                         ip = dict_[ip_version][0]
@@ -64,15 +63,14 @@ class CESNET(IModule):
                         # incorrect version
                         continue
 
-                    if ip_version == 'IP4' and (
+                    if ip_version == "IP4" and (
                         validators.ipv4(ip)
                         and utils.is_private_ip(ipaddress.IPv4Address(ip))
                     ):
                         # private ipv4
                         evidence_in_IDEA[type_].remove(dict_)
-                    elif (
-                        validators.ipv6(ip)
-                        and utils.is_private_ip(ipaddress.IPv6Address(ip))
+                    elif validators.ipv6(ip) and utils.is_private_ip(
+                        ipaddress.IPv6Address(ip)
                     ):
                         # private ipv6
                         evidence_in_IDEA[type_].remove(dict_)
@@ -88,32 +86,30 @@ class CESNET(IModule):
         """
         Make sure we still have a field that contains valid IoCs to export
         """
-        return 'Source' in evidence_in_IDEA or 'Target' in evidence_in_IDEA
+        return "Source" in evidence_in_IDEA or "Target" in evidence_in_IDEA
 
     def export_evidence(self, evidence: dict):
         """
         Exports evidence to warden server
         """
-        threat_level = evidence.get('threat_level')
-        if threat_level == 'info':
+        threat_level = evidence.get("threat_level")
+        if threat_level == "info":
             # don't export alerts of type 'info'
             return False
 
-
-        description = evidence['description']
-        profileid = evidence['profileid']
-        twid = evidence['twid']
-        srcip = profileid.split('_')[1]
-        evidence_type = evidence['evidence_type']
-        attacker_direction = evidence['attacker_direction']
-        attacker = evidence['attacker']
-        ID = evidence['ID']
-        confidence = evidence.get('confidence')
-        category = evidence.get('category')
-        conn_count = evidence.get('conn_count')
-        source_target_tag = evidence.get('source_target_tag')
-        port = evidence.get('port')
-        proto = evidence.get('proto')
+        description = evidence["description"]
+        profileid = evidence["profileid"]
+        srcip = profileid.split("_")[1]
+        evidence_type = evidence["evidence_type"]
+        attacker_direction = evidence["attacker_direction"]
+        attacker = evidence["attacker"]
+        ID = evidence["ID"]
+        confidence = evidence.get("confidence")
+        category = evidence.get("category")
+        conn_count = evidence.get("conn_count")
+        source_target_tag = evidence.get("source_target_tag")
+        port = evidence.get("port")
+        proto = evidence.get("proto")
 
         evidence_in_IDEA = utils.IDEA_format(
             srcip,
@@ -127,7 +123,7 @@ class CESNET(IModule):
             source_target_tag,
             port,
             proto,
-            ID
+            ID,
         )
 
         # remove private ips from the alert
@@ -138,17 +134,14 @@ class CESNET(IModule):
             return False
 
         # add Node info to the alert
-        evidence_in_IDEA.update({'Node': self.node_info})
+        evidence_in_IDEA.update({"Node": self.node_info})
 
         # Add test to the categories because we're still in probation mode
-        evidence_in_IDEA['Category'].append('Test')
-        evidence_in_IDEA.update({'Category': evidence_in_IDEA['Category']})
-
+        evidence_in_IDEA["Category"].append("Test")
+        evidence_in_IDEA.update({"Category": evidence_in_IDEA["Category"]})
 
         # [2] Upload to warden server
-        self.print(
-            'Uploading 1 event to warden server.', 2, 0
-        )
+        self.print("Uploading 1 event to warden server.", 2, 0)
         # create a thread for sending alerts to warden server
         # and don't stop this module until the thread is done
         q = queue.Queue()
@@ -162,7 +155,9 @@ class CESNET(IModule):
         try:
             # no errors
             self.print(
-                f'Done uploading {result["saved"]} events to warden server.\n', 2, 0
+                f'Done uploading {result["saved"]} events to warden server.\n',
+                2,
+                0,
             )
         except KeyError:
             self.print(result, 0, 1)
@@ -171,14 +166,14 @@ class CESNET(IModule):
         events_to_get = 100
 
         cat = [
-            'Availability',
-            'Abusive.Spam',
-            'Attempt.Login',
-            'Attempt',
-            'Information',
-            'Fraud.Scam',
-            'Information',
-            'Fraud.Scam',
+            "Availability",
+            "Abusive.Spam",
+            "Attempt.Login",
+            "Attempt",
+            "Information",
+            "Fraud.Scam",
+            "Information",
+            "Fraud.Scam",
         ]
 
         # cat = ['Abusive.Spam']
@@ -192,7 +187,7 @@ class CESNET(IModule):
         group = []
         nogroup = []
 
-        self.print(f'Getting {events_to_get} events from warden server.')
+        self.print(f"Getting {events_to_get} events from warden server.")
         events = self.wclient.getEvents(
             count=events_to_get,
             cat=cat,
@@ -204,35 +199,35 @@ class CESNET(IModule):
         )
 
         if len(events) == 0:
-            self.print('Error getting event from warden server.')
+            self.print("Error getting event from warden server.")
             return False
 
         # now that we received from warden server,
         # store the received IPs, description, category and node in the db
         src_ips = (
             {}
-        )   # todo is the srcip always the offender? can it be the victim?
+        )  # todo is the srcip always the offender? can it be the victim?
         for event in events:
             # extract event details
-            srcips = event.get('Source', [])
-            description = event.get('Description', '')
-            category = event.get('Category', [])
+            srcips = event.get("Source", [])
+            description = event.get("Description", "")
+            category = event.get("Category", [])
 
             # get the source of this IoC
-            node = event.get('Node', [{}])
+            node = event.get("Node", [{}])
             # node is an array of dicts
             if node == []:
                 # we don't know the source of this info, skip it
                 continue
             # use the node that has a software name defined
-            node_name = node[0].get('Name', '')
-            software = node[0].get('SW', [False])[0]
+            node_name = node[0].get("Name", "")
+            software = node[0].get("SW", [False])[0]
             if not software:
                 # first node doesn't have a software
                 # use the second one
                 try:
-                    node_name = node[1].get('Name', '')
-                    software = node[1].get('SW', [None])[0]
+                    node_name = node[1].get("Name", "")
+                    software = node[1].get("SW", [None])[0]
                 except IndexError:
                     # there's no second node
                     pass
@@ -241,20 +236,20 @@ class CESNET(IModule):
             for srcip in srcips:
                 # store the event info in a form recognizable by slips
                 event_info = {
-                    'description': description,
-                    'source': f'{node_name}, software: {software}',
-                    'threat_level': 'medium',
-                    'tags': category[0],
+                    "description": description,
+                    "source": f"{node_name}, software: {software}",
+                    "threat_level": "medium",
+                    "tags": category[0],
                 }
                 # srcip is a dict, for example
 
                 # IoC can be ipv6 ar v4
-                if 'IP4' in srcip:
-                    srcip = srcip['IP4'][0]
-                elif 'IP6' in srcip:
-                    srcip = srcip['IP6'][0]
+                if "IP4" in srcip:
+                    srcip = srcip["IP4"][0]
+                elif "IP6" in srcip:
+                    srcip = srcip["IP6"][0]
                 else:
-                    srcip = srcip.get('IP', [False])[0]
+                    srcip = srcip.get("IP", [False])[0]
 
                 if not srcip:
                     continue
@@ -284,7 +279,7 @@ class CESNET(IModule):
         # self.print(info, 0, 1)
 
         self.node_info = [
-            {'Name': self.wclient.name, 'Type': ['IPS'], 'SW': ['Slips']}
+            {"Name": self.wclient.name, "Type": ["IPS"], "SW": ["Slips"]}
         ]
 
     def main(self):
@@ -298,8 +293,8 @@ class CESNET(IModule):
                 self.db.set_last_warden_poll_time(now)
 
         # in case of an interface or a file, push every time we get an alert
-        msg = self.get_msg('export_evidence')
+        msg = self.get_msg("export_evidence")
         if msg and self.send_to_warden:
             self.msg_received = True
-            evidence = json.loads(msg['data'])
+            evidence = json.loads(msg["data"])
             self.export_evidence(evidence)

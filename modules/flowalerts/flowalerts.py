@@ -16,18 +16,16 @@ from .timer_thread import TimerThread
 from .set_evidence import SetEvidnceHelper
 from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.common.slips_utils import utils
-from typing import List, \
-    Tuple, \
-    Dict
+from typing import List, Tuple, Dict
 
 
 class FlowAlerts(IModule):
-    name = 'Flow Alerts'
+    name = "Flow Alerts"
     description = (
-        'Alerts about flows: long connection, successful ssh, '
-        'password guessing, self-signed certificate, data exfiltration, etc.'
+        "Alerts about flows: long connection, successful ssh, "
+        "password guessing, self-signed certificate, data exfiltration, etc."
     )
-    authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
+    authors = ["Kamila Babayeva", "Sebastian Garcia", "Alya Gomaa"]
 
     def init(self):
         self.read_configuration()
@@ -79,59 +77,68 @@ class FlowAlerts(IModule):
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
+
     def subscribe_to_channels(self):
-        self.c1 = self.db.subscribe('new_flow')
-        self.c2 = self.db.subscribe('new_ssh')
-        self.c3 = self.db.subscribe('new_notice')
-        self.c4 = self.db.subscribe('new_ssl')
-        self.c5 = self.db.subscribe('tw_closed')
-        self.c6 = self.db.subscribe('new_dns')
-        self.c7 = self.db.subscribe('new_downloaded_file')
-        self.c8 = self.db.subscribe('new_smtp')
-        self.c9 = self.db.subscribe('new_software')
-        self.c10 = self.db.subscribe('new_weird')
-        self.c11 = self.db.subscribe('new_tunnel')
+        self.c1 = self.db.subscribe("new_flow")
+        self.c2 = self.db.subscribe("new_ssh")
+        self.c3 = self.db.subscribe("new_notice")
+        self.c4 = self.db.subscribe("new_ssl")
+        self.c5 = self.db.subscribe("tw_closed")
+        self.c6 = self.db.subscribe("new_dns")
+        self.c7 = self.db.subscribe("new_downloaded_file")
+        self.c8 = self.db.subscribe("new_smtp")
+        self.c9 = self.db.subscribe("new_software")
+        self.c10 = self.db.subscribe("new_weird")
+        self.c11 = self.db.subscribe("new_tunnel")
         self.channels = {
-            'new_flow': self.c1,
-            'new_ssh': self.c2,
-            'new_notice': self.c3,
-            'new_ssl': self.c4,
-            'tw_closed': self.c5,
-            'new_dns': self.c6,
-            'new_downloaded_file': self.c7,
-            'new_smtp': self.c8,
-            'new_software': self.c9,
-            'new_weird': self.c10,
-            'new_tunnel': self.c11,
+            "new_flow": self.c1,
+            "new_ssh": self.c2,
+            "new_notice": self.c3,
+            "new_ssl": self.c4,
+            "tw_closed": self.c5,
+            "new_dns": self.c6,
+            "new_downloaded_file": self.c7,
+            "new_smtp": self.c8,
+            "new_software": self.c9,
+            "new_weird": self.c10,
+            "new_tunnel": self.c11,
         }
 
     def read_configuration(self):
         conf = ConfigParser()
         self.long_connection_threshold = conf.long_connection_threshold()
-        self.ssh_succesful_detection_threshold = conf.ssh_succesful_detection_threshold()
+        self.ssh_succesful_detection_threshold = (
+            conf.ssh_succesful_detection_threshold()
+        )
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
-        self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
+        self.pastebin_downloads_threshold = (
+            conf.get_pastebin_download_threshold()
+        )
         self.our_ips = utils.get_own_IPs()
         self.shannon_entropy_threshold = conf.get_entropy_threshold()
         self.client_ips: List[str] = conf.client_ips()
 
     def check_connection_to_local_ip(
-            self,
-            daddr,
-            dport,
-            proto,
-            saddr,
-            twid,
-            uid,
-            timestamp,
+        self,
+        daddr,
+        dport,
+        proto,
+        saddr,
+        twid,
+        uid,
+        timestamp,
     ):
         """
         Alerts when there's a connection from a private IP to
         another private IP except for DNS connections to the gateway
         """
+
         def is_dns_conn():
-            return dport == 53 and proto.lower() == 'udp' \
+            return (
+                dport == 53
+                and proto.lower() == "udp"
                 and daddr == self.db.get_gateway_ip()
+            )
 
         with contextlib.suppress(ValueError):
             dport = int(dport)
@@ -142,8 +149,8 @@ class FlowAlerts(IModule):
 
         # make sure the 2 ips are private
         if not (
-                utils.is_private_ip(ipaddress.ip_address(saddr))
-                and utils.is_private_ip(ipaddress.ip_address(daddr))
+            utils.is_private_ip(ipaddress.ip_address(saddr))
+            and utils.is_private_ip(ipaddress.ip_address(daddr))
         ):
             return
 
@@ -157,8 +164,6 @@ class FlowAlerts(IModule):
             timestamp,
         )
 
-
-
     def check_long_connection(
         self, dur, daddr, saddr, profileid, twid, uid, timestamp
     ):
@@ -169,8 +174,8 @@ class FlowAlerts(IModule):
         """
 
         if (
-                ipaddress.ip_address(daddr).is_multicast
-                or ipaddress.ip_address(saddr).is_multicast
+            ipaddress.ip_address(daddr).is_multicast
+            or ipaddress.ip_address(saddr).is_multicast
         ):
             # Do not check the duration of the flow
             return
@@ -191,7 +196,7 @@ class FlowAlerts(IModule):
         P2P is defined as following : proto is udp, port numbers are higher than 30000 at least 5 connections to different daddrs
         OR trying to connct to 1 ip on more than 5 unkown 30000+/udp ports
         """
-        if proto.lower() == 'udp' and int(dport) > 30000:
+        if proto.lower() == "udp" and int(dport) > 30000:
             try:
                 # trying to connct to 1 ip on more than 5 unknown ports
                 if self.p2p_daddrs[daddr] >= 6:
@@ -215,9 +220,7 @@ class FlowAlerts(IModule):
         organization or not, and returns true if the daddr belongs to the
         same org as the port
         """
-        organization_info = self.db.get_organization_of_port(
-                portproto
-        )
+        organization_info = self.db.get_organization_of_port(portproto)
         if not organization_info:
             # consider this port as unknown, it doesn't belong to any org
             return False
@@ -227,7 +230,7 @@ class FlowAlerts(IModule):
         organization_info = json.loads(organization_info)
 
         # get the organization ip or range
-        org_ips: list = organization_info['ip']
+        org_ips: list = organization_info["ip"]
 
         # org_name = organization_info['org_name']
 
@@ -245,21 +248,17 @@ class FlowAlerts(IModule):
 
         # not a range either since nothing is specified, e.g. ip is set to ""
         # check the source and dst mac address vendors
-        src_mac_vendor = str(
-            self.db.get_mac_vendor_from_profile(profileid)
-        )
+        src_mac_vendor = str(self.db.get_mac_vendor_from_profile(profileid))
         dst_mac_vendor = str(
-            self.db.get_mac_vendor_from_profile(
-                f'profile_{daddr}'
-            )
+            self.db.get_mac_vendor_from_profile(f"profile_{daddr}")
         )
 
         # get the list of all orgs known to use this port and proto
-        for org_name in organization_info['org_name']:
+        for org_name in organization_info["org_name"]:
             org_name = org_name.lower()
             if (
-                    org_name in src_mac_vendor.lower()
-                    or org_name in dst_mac_vendor.lower()
+                org_name in src_mac_vendor.lower()
+                or org_name in dst_mac_vendor.lower()
             ):
                 return True
 
@@ -275,8 +274,6 @@ class FlowAlerts(IModule):
 
         return False
 
-
-
     def is_ignored_ip_data_upload(self, ip):
         """
         Ignore the IPs that we shouldn't alert about
@@ -291,16 +288,13 @@ class FlowAlerts(IModule):
         ):
             return True
 
-    def check_data_upload(self, sbytes, daddr, uid: str, profileid, twid,
-                          timestamp):
+    def check_data_upload(
+        self, sbytes, daddr, uid: str, profileid, twid, timestamp
+    ):
         """
         Set evidence when 1 flow is sending >= the flow_upload_threshold bytes
         """
-        if (
-            not daddr
-            or self.is_ignored_ip_data_upload(daddr)
-            or not sbytes
-        ):
+        if not daddr or self.is_ignored_ip_data_upload(daddr) or not sbytes:
             return False
 
         src_mbs = utils.convert_to_mb(int(sbytes))
@@ -323,7 +317,7 @@ class FlowAlerts(IModule):
         """
         # this is the time we give ssl flows to appear in conn.log,
         # when this time is over, we check, then wait again, etc.
-        wait_time = 60*2
+        wait_time = 60 * 2
 
         # this thread shouldn't run on interface only because in zeek dirs we
         # we should wait for the conn.log to be read too
@@ -353,7 +347,7 @@ class FlowAlerts(IModule):
                 flow: dict = self.db.get_flow(uid)
                 if flow := flow.get(uid):
                     flow = json.loads(flow)
-                    if 'ts' in flow:
+                    if "ts" in flow:
                         # this means the flow is found in conn.log
                         self.check_pastebin_download(*ssl_flow, flow)
                 else:
@@ -364,7 +358,7 @@ class FlowAlerts(IModule):
             time.sleep(wait_time)
 
     def check_pastebin_download(
-            self, daddr, server_name, uid, ts, profileid, twid, flow
+        self, daddr, server_name, uid, ts, profileid, twid, flow
     ):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
@@ -372,13 +366,15 @@ class FlowAlerts(IModule):
         : param flow: this is the conn.log of the ssl flow we're currently checking
         """
 
-        if 'pastebin' not in server_name:
+        if "pastebin" not in server_name:
             return False
 
         # orig_bytes is number of payload bytes downloaded
-        downloaded_bytes = flow.get('resp_bytes', 0)
+        downloaded_bytes = flow.get("resp_bytes", 0)
         if downloaded_bytes >= self.pastebin_downloads_threshold:
-            self.set_evidence.pastebin_download(downloaded_bytes, ts, profileid, twid, uid)
+            self.set_evidence.pastebin_download(
+                downloaded_bytes, ts, profileid, twid, uid
+            )
             return True
 
         else:
@@ -387,8 +383,9 @@ class FlowAlerts(IModule):
             # maybe an empty file is downloaded
             return False
 
-    def get_sent_bytes(self, all_flows: Dict[str, dict]) \
-            -> Dict[str, Tuple[int, List[str], str]] :
+    def get_sent_bytes(
+        self, all_flows: Dict[str, dict]
+    ) -> Dict[str, Tuple[int, List[str], str]]:
         """
         Returns a dict of sent bytes to all ips in the all_flows dict
          {
@@ -398,18 +395,18 @@ class FlowAlerts(IModule):
                 last_ts_of_flow_containging_this_contacted_ip
             )
         }
-         """
+        """
         bytes_sent = {}
         for uid, flow in all_flows.items():
-            daddr = flow['daddr']
-            sbytes: int = flow.get('sbytes', 0)
-            ts: str = flow.get('starttime', '')
+            daddr = flow["daddr"]
+            sbytes: int = flow.get("sbytes", 0)
+            ts: str = flow.get("starttime", "")
 
             if self.is_ignored_ip_data_upload(daddr) or not sbytes:
                 continue
 
             if daddr in bytes_sent:
-                mbs_sent, uids, _= bytes_sent[daddr]
+                mbs_sent, uids, _ = bytes_sent[daddr]
                 mbs_sent += sbytes
                 uids.append(uid)
                 bytes_sent[daddr] = (mbs_sent, uids, ts)
@@ -417,7 +414,7 @@ class FlowAlerts(IModule):
                 bytes_sent[daddr] = (sbytes, [uid], ts)
 
         return bytes_sent
-    
+
     def detect_data_upload_in_twid(self, profileid, twid):
         """
         For each contacted ip in this twid,
@@ -435,24 +432,17 @@ class FlowAlerts(IModule):
         for ip, ip_info in bytes_sent.items():
             ip_info: Tuple[int, List[str], str]
             bytes_uploaded, uids, ts = ip_info
-            
+
             mbs_uploaded = utils.convert_to_mb(bytes_uploaded)
             if mbs_uploaded < self.data_exfiltration_threshold:
                 continue
-                
+
             self.set_evidence.data_exfiltration(
-                ip,
-                mbs_uploaded,
-                profileid,
-                twid,
-                uids,
-                ts
+                ip, mbs_uploaded, profileid, twid, uids, ts
             )
 
-
     def check_unknown_port(
-            self, dport, proto, daddr,
-            profileid, twid, uid, timestamp, state
+        self, dport, proto, daddr, profileid, twid, uid, timestamp, state
     ):
         """
         Checks dports that are not in our
@@ -460,11 +450,11 @@ class FlowAlerts(IModule):
         """
         if not dport:
             return
-        if state != 'Established':
+        if state != "Established":
             # detect unknown ports on established conns only
             return False
 
-        portproto = f'{dport}/{proto}'
+        portproto = f"{dport}/{proto}"
         if self.db.get_port_info(portproto):
             # it's a known port
             return False
@@ -476,7 +466,7 @@ class FlowAlerts(IModule):
             return False
 
         if (
-            'icmp' not in proto
+            "icmp" not in proto
             and not self.is_p2p(dport, proto, daddr)
             and not self.db.is_ftp_port(dport)
         ):
@@ -500,16 +490,14 @@ class FlowAlerts(IModule):
         dns_resolution = self.db.get_dns_resolution(daddr)
 
         try:
-            if other_ip and other_ip in dns_resolution.get('resolved-by', []):
+            if other_ip and other_ip in dns_resolution.get("resolved-by", []):
                 return True
         except AttributeError:
             # It can be that the dns_resolution sometimes gives back a list and gets this error
             pass
         return False
 
-    def is_connection_made_by_different_version(
-        self, profileid, twid, daddr
-    ):
+    def is_connection_made_by_different_version(self, profileid, twid, daddr):
         """
         :param daddr: the ip this connection is made to (destination ip)
         """
@@ -520,7 +508,7 @@ class FlowAlerts(IModule):
         other_ip = other_ip[0]
         # get the ips contacted by the other_ip
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
-            f'profile_{other_ip}', twid
+            f"profile_{other_ip}", twid
         )
         if not contacted_ips:
             return False
@@ -536,22 +524,26 @@ class FlowAlerts(IModule):
         """
         if not domain:
             return False
-        if not domain.endswith('.in-addr.arpa'):
+        if not domain.endswith(".in-addr.arpa"):
             return False
 
         try:
             # format of this dict is {profileid: [stime of first arpa query, stime eof second, etc..]}
-            timestamps, uids, domains_scanned = self.dns_arpa_queries[profileid]
+            timestamps, uids, domains_scanned = self.dns_arpa_queries[
+                profileid
+            ]
             timestamps.append(stime)
             uids.append(uid)
             uids.append(uid)
             domains_scanned.add(domain)
-            self.dns_arpa_queries[profileid] = (timestamps, uids, domains_scanned)
+            self.dns_arpa_queries[profileid] = (
+                timestamps,
+                uids,
+                domains_scanned,
+            )
         except KeyError:
             # first time for this profileid to perform an arpa query
-            self.dns_arpa_queries[profileid] = (
-                [stime], [uid], {domain}
-            )
+            self.dns_arpa_queries[profileid] = ([stime], [uid], {domain})
             return False
 
         if len(domains_scanned) < self.arpa_scan_threshold:
@@ -559,10 +551,7 @@ class FlowAlerts(IModule):
             return False
 
         # reached the threshold, did the 10 queries happen within 2 seconds?
-        diff = utils.get_time_diff(
-            timestamps[0],
-            timestamps[-1]
-        )
+        diff = utils.get_time_diff(timestamps[0], timestamps[-1])
         if diff > 2:
             # happened within more than 2 seconds
             return False
@@ -581,21 +570,21 @@ class FlowAlerts(IModule):
 
         ip_data = self.db.get_ip_info(ip)
         try:
-            SNI = ip_data['SNI']
+            SNI = ip_data["SNI"]
             if type(SNI) == list:
                 # SNI is a list of dicts, each dict contains the
                 # 'server_name' and 'port'
                 SNI = SNI[0]
-                if SNI in (None, ''):
+                if SNI in (None, ""):
                     SNI = False
                 elif type(SNI) == dict:
-                    SNI = SNI.get('server_name', False)
+                    SNI = SNI.get("server_name", False)
         except (KeyError, TypeError):
             # No SNI data for this ip
             SNI = False
 
         try:
-            rdns = ip_data['reverse_dns']
+            rdns = ip_data["reverse_dns"]
         except (KeyError, TypeError):
             # No SNI data for this ip
             rdns = False
@@ -606,33 +595,35 @@ class FlowAlerts(IModule):
                 return True
 
             # we have the rdns or sni of this flow , now check
-            if flow_domain and self.whitelist.is_domain_in_org(flow_domain, org):
+            if flow_domain and self.whitelist.is_domain_in_org(
+                flow_domain, org
+            ):
                 return True
-
 
             # check if the ip belongs to the range of a well known org
             # (fb, twitter, microsoft, etc.)
             if self.whitelist.is_ip_in_org(ip, org):
                 return True
-            
-    def should_ignore_conn_without_dns(self, flow_type, appproto, daddr) \
-            -> bool:
+
+    def should_ignore_conn_without_dns(
+        self, flow_type, appproto, daddr
+    ) -> bool:
         """
         checks for the cases that we should ignore the connection without dns
         """
         # we should ignore this evidence if the ip is ours, whether it's a
         # private ip or in the list of client_ips
         return (
-                flow_type != 'conn'
-                or appproto == 'dns'
-                or utils.is_ignored_ip(daddr)
-                # if the daddr is a client ip, it means that this is a conn
-                # from the internet to our ip, the dns res was probably
-                # made on their side before connecting to us,
-                # so we shouldn't be doing this detection on this ip
-                or daddr in self.client_ips
-                # because there's no dns.log to know if the dns was made
-                or self.db.get_input_type() == 'zeek_log_file'
+            flow_type != "conn"
+            or appproto == "dns"
+            or utils.is_ignored_ip(daddr)
+            # if the daddr is a client ip, it means that this is a conn
+            # from the internet to our ip, the dns res was probably
+            # made on their side before connecting to us,
+            # so we shouldn't be doing this detection on this ip
+            or daddr in self.client_ips
+            # because there's no dns.log to know if the dns was made
+            or self.db.get_input_type() == "zeek_log_file"
         )
 
     def check_connection_without_dns_resolution(
@@ -659,7 +650,7 @@ class FlowAlerts(IModule):
         # don't alert ConnectionWithoutDNS
         # until 30 minutes has passed
         # after starting slips because the dns may have happened before starting slips
-        if '-i' in sys.argv or self.db.is_growing_zeek_dir():
+        if "-i" in sys.argv or self.db.is_growing_zeek_dir():
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
@@ -669,7 +660,7 @@ class FlowAlerts(IModule):
 
             start_time = self.db.get_slips_start_time()
             now = datetime.datetime.now()
-            diff = utils.get_time_diff(start_time, now, return_type='minutes')
+            diff = utils.get_time_diff(start_time, now, return_type="minutes")
             if diff < self.conn_without_dns_interface_wait_time:
                 # less than 30 minutes have passed
                 return False
@@ -677,7 +668,7 @@ class FlowAlerts(IModule):
         # search 24hs back for a dns resolution
         if self.db.is_ip_resolved(daddr, 24):
             return False
-        
+
         # self.print(f'No DNS resolution in {answers_dict}')
         # There is no DNS resolution, but it can be that Slips is
         # still reading it from the files.
@@ -693,7 +684,15 @@ class FlowAlerts(IModule):
             # thread for this connection before
             # mark this connection as checked
             self.connections_checked_in_conn_dns_timer_thread.append(uid)
-            params = [flow_type, appproto, daddr, twid, profileid, timestamp, uid]
+            params = [
+                flow_type,
+                appproto,
+                daddr,
+                twid,
+                profileid,
+                timestamp,
+                uid,
+            ]
             # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
 
             # time {datetime.datetime.now()}')
@@ -709,7 +708,7 @@ class FlowAlerts(IModule):
             # Sometimes the same computer makes requests using
             # its ipv4 and ipv6 address, check if this is the case
             if self.check_if_resolution_was_made_by_different_version(
-                    profileid, daddr
+                profileid, daddr
             ):
                 return False
             if self.is_well_known_org(daddr):
@@ -723,9 +722,7 @@ class FlowAlerts(IModule):
             # This UID will never appear again, so we can remove it and
             # free some memory
             with contextlib.suppress(ValueError):
-                self.connections_checked_in_conn_dns_timer_thread.remove(
-                    uid
-                )
+                self.connections_checked_in_conn_dns_timer_thread.remove(uid)
 
     def is_CNAME_contacted(self, answers, contacted_ips) -> bool:
         """
@@ -740,9 +737,10 @@ class FlowAlerts(IModule):
                 if ip in contacted_ips:
                     return True
         return False
-    
-    def should_detect_dns_without_conn(self, domain: str, rcode_name: str) \
-            -> bool:
+
+    def should_detect_dns_without_conn(
+        self, domain: str, rcode_name: str
+    ) -> bool:
         """
         returns False in the following cases
         ## - All reverse dns resolutions
@@ -758,29 +756,33 @@ class FlowAlerts(IModule):
         # the domain isn't resolved, so we should not expect any connection later
         """
         if (
-            'arpa' in domain
-            or '.local' in domain
-            or '*' in domain
-            or '.cymru.com' in domain[-10:]
-            or len(domain.split('.')) == 1
-            or domain == 'WPAD'
-            or rcode_name != 'NOERROR'
-
+            "arpa" in domain
+            or ".local" in domain
+            or "*" in domain
+            or ".cymru.com" in domain[-10:]
+            or len(domain.split(".")) == 1
+            or domain == "WPAD"
+            or rcode_name != "NOERROR"
         ):
             return False
         return True
-        
 
     def check_dns_without_connection(
-            self, domain, answers: list, rcode_name: str,
-            timestamp: str, profileid, twid, uid
+        self,
+        domain,
+        answers: list,
+        rcode_name: str,
+        timestamp: str,
+        profileid,
+        twid,
+        uid,
     ):
         """
         Makes sure all cached DNS answers are used in contacted_ips
         """
         if not self.should_detect_dns_without_conn(domain, rcode_name):
             return False
-        
+
         # One DNS query may not be answered exactly by UID,
         # but the computer can re-ask the domain,
         # and the next DNS resolution can be
@@ -798,20 +800,21 @@ class FlowAlerts(IModule):
         # Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
         if prev_domain_resolutions := self.db.get_domain_data(domain):
-            prev_domain_resolutions = prev_domain_resolutions.get('IPs',[])
+            prev_domain_resolutions = prev_domain_resolutions.get("IPs", [])
             # if there's a domain in the cache
             # (prev_domain_resolutions) that is not in the
             # current answers given to this function,
             # append it to the answers list
-            answers.extend([ans for ans in prev_domain_resolutions if ans not in answers])
+            answers.extend(
+                [ans for ans in prev_domain_resolutions if ans not in answers]
+            )
 
-
-        if answers == ['-']:
+        if answers == ["-"]:
             # If no IPs are in the answer, we can not expect
             # the computer to connect to anything
             # self.print(f'No ips in the answer, so ignoring')
             return False
-        
+
         # self.print(f'The extended DNS query to {domain} had as answers {answers} ')
 
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
@@ -829,9 +832,9 @@ class FlowAlerts(IModule):
             # self.print(f'Checking if we have a connection to ip {ip}')
             if (
                 ip in contacted_ips
-                or
-                self.is_connection_made_by_different_version(
-                    profileid, twid, ip)
+                or self.is_connection_made_by_different_version(
+                    profileid, twid, ip
+                )
             ):
                 # this dns resolution has a connection. We can exit
                 return False
@@ -840,7 +843,6 @@ class FlowAlerts(IModule):
         if self.is_CNAME_contacted(answers, contacted_ips):
             # this is not a DNS without resolution
             return False
-
 
         # self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
@@ -852,12 +854,18 @@ class FlowAlerts(IModule):
             # comes here if we haven't started the timer
             # thread for this dns before mark this dns as checked
             self.connections_checked_in_dns_conn_timer_thread.append(uid)
-            params = [domain, answers, rcode_name, timestamp, profileid, twid, uid]
+            params = [
+                domain,
+                answers,
+                rcode_name,
+                timestamp,
+                profileid,
+                twid,
+                uid,
+            ]
             # self.print(f'Starting the timer to check on {domain}, uid {uid}.
             # time {datetime.datetime.now()}')
-            timer = TimerThread(
-                40, self.check_dns_without_connection, params
-            )
+            timer = TimerThread(40, self.check_dns_without_connection, params)
             timer.start()
         else:
             # It means we already checked this dns with the Timer process
@@ -877,12 +885,10 @@ class FlowAlerts(IModule):
         original_ssh_flow = self.db.search_tws_for_flow(profileid, twid, uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
-            ssh_flow_dict = json.loads(
-                original_ssh_flow[original_flow_uid]
-            )
-            daddr = ssh_flow_dict['daddr']
-            saddr = ssh_flow_dict['saddr']
-            size = ssh_flow_dict['sbytes'] + ssh_flow_dict['dbytes']
+            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
+            daddr = ssh_flow_dict["daddr"]
+            saddr = ssh_flow_dict["saddr"]
+            size = ssh_flow_dict["sbytes"] + ssh_flow_dict["dbytes"]
             self.set_evidence.ssh_successful(
                 twid,
                 saddr,
@@ -890,12 +896,10 @@ class FlowAlerts(IModule):
                 size,
                 uid,
                 timestamp,
-                by='Zeek',
+                by="Zeek",
             )
             with contextlib.suppress(ValueError):
-                self.connections_checked_in_ssh_timer_thread.remove(
-                    uid
-                )
+                self.connections_checked_in_ssh_timer_thread.remove(uid)
             return True
 
         elif uid not in self.connections_checked_in_ssh_timer_thread:
@@ -905,16 +909,14 @@ class FlowAlerts(IModule):
             # mark this connection as checked
             # self.print(f'Starting the timer to check on {flow_dict},
             # uid {uid}. time {datetime.datetime.now()}')
-            self.connections_checked_in_ssh_timer_thread.append(
-                uid
-            )
+            self.connections_checked_in_ssh_timer_thread.append(uid)
             params = [uid, timestamp, profileid, twid]
-            timer = TimerThread(
-                15, self.detect_successful_ssh_by_zeek, params
-            )
+            timer = TimerThread(15, self.detect_successful_ssh_by_zeek, params)
             timer.start()
 
-    def detect_successful_ssh_by_slips(self, uid, timestamp, profileid, twid, auth_success):
+    def detect_successful_ssh_by_slips(
+        self, uid, timestamp, profileid, twid, auth_success
+    ):
         """
         Try Slips method to detect if SSH was successful by
         comparing all bytes sent and received to our threshold
@@ -923,13 +925,11 @@ class FlowAlerts(IModule):
         original_ssh_flow = self.db.get_flow(uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
-            ssh_flow_dict = json.loads(
-                original_ssh_flow[original_flow_uid]
-            )
-            size = ssh_flow_dict['sbytes'] + ssh_flow_dict['dbytes']
+            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
+            size = ssh_flow_dict["sbytes"] + ssh_flow_dict["dbytes"]
             if size > self.ssh_succesful_detection_threshold:
-                daddr = ssh_flow_dict['daddr']
-                saddr = ssh_flow_dict['saddr']
+                daddr = ssh_flow_dict["daddr"]
+                saddr = ssh_flow_dict["saddr"]
                 # Set the evidence because there is no
                 # easier way to show how Slips detected
                 # the successful ssh and not Zeek
@@ -940,12 +940,10 @@ class FlowAlerts(IModule):
                     size,
                     uid,
                     timestamp,
-                    by='Slips',
+                    by="Slips",
                 )
                 with contextlib.suppress(ValueError):
-                    self.connections_checked_in_ssh_timer_thread.remove(
-                        uid
-                    )
+                    self.connections_checked_in_ssh_timer_thread.remove(uid)
                 return True
 
         elif uid not in self.connections_checked_in_ssh_timer_thread:
@@ -955,46 +953,37 @@ class FlowAlerts(IModule):
             # mark this connection as checked
             # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
             # time {datetime.datetime.now()}')
-            self.connections_checked_in_ssh_timer_thread.append(
-                uid
-            )
+            self.connections_checked_in_ssh_timer_thread.append(uid)
             params = [uid, timestamp, profileid, twid, auth_success]
-            timer = TimerThread(
-                15, self.check_successful_ssh, params
-            )
+            timer = TimerThread(15, self.check_successful_ssh, params)
             timer.start()
 
     def check_successful_ssh(
-            self, uid, timestamp, profileid, twid, auth_success
-            ):
+        self, uid, timestamp, profileid, twid, auth_success
+    ):
         """
         Function to check if an SSH connection logged in successfully
         """
         # it's true in zeek json files, T in zeke tab files
-        if auth_success in ['true', 'T']:
+        if auth_success in ["true", "T"]:
             self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid)
 
         else:
-            self.detect_successful_ssh_by_slips(uid, timestamp, profileid, twid, auth_success)
+            self.detect_successful_ssh_by_slips(
+                uid, timestamp, profileid, twid, auth_success
+            )
 
     def detect_incompatible_CN(
-            self,
-            daddr,
-            server_name,
-            issuer,
-            profileid,
-            twid,
-            uid,
-            timestamp
-       ):
+        self, daddr, server_name, issuer, profileid, twid, uid, timestamp
+    ):
         """
         Detects if a certificate claims that it's CN (common name) belongs
         to an org that the domain doesn't belong to
         """
         if not issuer:
             return False
-        
-        found_org_in_cn = ''
+
+        found_org_in_cn = ""
         for org in utils.supported_orgs:
             if org not in issuer.lower():
                 continue
@@ -1008,7 +997,9 @@ class FlowAlerts(IModule):
                 return False
 
             # check that the ip belongs to that same org
-            if server_name and self.whitelist.is_domain_in_org(server_name, org):
+            if server_name and self.whitelist.is_domain_in_org(
+                server_name, org
+            ):
                 return False
 
         if not found_org_in_cn:
@@ -1018,20 +1009,11 @@ class FlowAlerts(IModule):
         # it doesn't belong to any of this org's
         # domains or ips
         self.set_evidence.incompatible_CN(
-            found_org_in_cn,
-            timestamp,
-            daddr,
-            profileid,
-            twid,
-            uid
+            found_org_in_cn, timestamp, daddr, profileid, twid, uid
         )
 
-
     def check_multiple_ssh_versions(
-        self,
-        flow: dict,
-        twid,
-        role='SSH::CLIENT'
+        self, flow: dict, twid, role="SSH::CLIENT"
     ):
         """
         checks if this srcip was detected using a different
@@ -1039,7 +1021,7 @@ class FlowAlerts(IModule):
         :param role: can be 'SSH::CLIENT' or 'SSH::SERVER'
         as seen in zeek software.log flows
         """
-        if role not in flow['software']:
+        if role not in flow["software"]:
             return
 
         profileid = f'profile_{flow["saddr"]}'
@@ -1047,17 +1029,17 @@ class FlowAlerts(IModule):
         # returns a dict with
         # software:
         #   { 'version-major': ,'version-minor': ,'uid': }
-        cached_used_sw: dict = self.db.get_software_from_profile(
-            profileid
-        )
+        cached_used_sw: dict = self.db.get_software_from_profile(profileid)
         if not cached_used_sw:
             # we have no previous software info about this saddr in out db
             return False
 
         # these are the versions that this profile once used
-        cached_ssh_versions = cached_used_sw[flow['software']]
-        cached_versions = f"{cached_ssh_versions['version-major']}_" \
-                          f"{cached_ssh_versions['version-minor']}"
+        cached_ssh_versions = cached_used_sw[flow["software"]]
+        cached_versions = (
+            f"{cached_ssh_versions['version-major']}_"
+            f"{cached_ssh_versions['version-minor']}"
+        )
 
         current_versions = f"{flow['version_major']}_{flow['version_minor']}"
         if cached_versions == current_versions:
@@ -1066,15 +1048,15 @@ class FlowAlerts(IModule):
 
         # get the uid of the cached versions, and the uid
         # of the current used versions
-        uids = [cached_ssh_versions['uid'], flow['uid']]
+        uids = [cached_ssh_versions["uid"], flow["uid"]]
         self.set_evidence.multiple_ssh_versions(
-            flow['saddr'],
+            flow["saddr"],
             cached_versions,
             current_versions,
-            flow['starttime'],
+            flow["starttime"],
             twid,
             uids,
-            role=role
+            role=role,
         )
         return True
 
@@ -1093,8 +1075,8 @@ class FlowAlerts(IModule):
         return shannon_entropy_value * -1
 
     def check_suspicious_dns_answers(
-            self, domain, answers, daddr, profileid, twid, stime, uid
-            ):
+        self, domain, answers, daddr, profileid, twid, stime, uid
+    ):
         """
         Uses shannon entropy to detect DNS TXT answers
         with encoded/encrypted strings
@@ -1103,7 +1085,7 @@ class FlowAlerts(IModule):
             return
 
         for answer in answers:
-            if 'TXT' in answer:
+            if "TXT" in answer:
                 # TXT record
                 entropy = self.estimate_shannon_entropy(answer)
                 if entropy >= self.shannon_entropy_threshold:
@@ -1115,17 +1097,17 @@ class FlowAlerts(IModule):
                         profileid,
                         twid,
                         stime,
-                        uid
+                        uid,
                     )
 
     def check_invalid_dns_answers(
-            self, domain, answers, daddr, profileid, twid, stime, uid
-            ):
+        self, domain, answers, daddr, profileid, twid, stime, uid
+    ):
         # this function is used to check for certain IP
         # answers to DNS queries being blocked
         # (perhaps by ad blockers) and set to the following IP values
         # currently hardcoding blocked ips
-        invalid_answers = {"127.0.0.1" , "0.0.0.0"}
+        invalid_answers = {"127.0.0.1", "0.0.0.0"}
         if not answers:
             return
 
@@ -1141,9 +1123,8 @@ class FlowAlerts(IModule):
                 self.db.delete_dns_resolution(answer)
 
     def detect_DGA(
-            self, rcode_name, query, stime, daddr, profileid, twid, uid
-        ):
-
+        self, rcode_name, query, stime, daddr, profileid, twid, uid
+    ):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         alerts when 10 15 20 etc. nxdomains are found
@@ -1152,23 +1133,23 @@ class FlowAlerts(IModule):
         if not rcode_name:
             return
 
-        saddr = profileid.split('_')[-1]
+        saddr = profileid.split("_")[-1]
         # check whitelisted queries because we
         # don't want to count nxdomains to cymru.com or
         # spamhaus as DGA as they're made
         # by slips
         if (
-            'NXDOMAIN' not in rcode_name
+            "NXDOMAIN" not in rcode_name
             or not query
-            or query.endswith('.arpa')
-            or query.endswith('.local')
+            or query.endswith(".arpa")
+            or query.endswith(".local")
             or self.whitelist.is_whitelisted_domain(
-                query, saddr, daddr, 'alerts'
+                query, saddr, daddr, "alerts"
             )
         ):
             return False
 
-        profileid_twid = f'{profileid}_{twid}'
+        profileid_twid = f"{profileid}_{twid}"
 
         # found NXDOMAIN by this profile
         try:
@@ -1194,26 +1175,26 @@ class FlowAlerts(IModule):
                 number_of_nxdomains, stime, profileid, twid, uids
             )
             # clear the list of alerted queries and uids
-            self.nxdomains[profileid_twid] = ([],[])
+            self.nxdomains[profileid_twid] = ([], [])
             return True
 
     def check_conn_to_port_0(
-            self,
-            sport,
-            dport,
-            proto,
-            saddr,
-            daddr,
-            profileid,
-            twid,
-            uid,
-            timestamp
+        self,
+        sport,
+        dport,
+        proto,
+        saddr,
+        daddr,
+        profileid,
+        twid,
+        uid,
+        timestamp,
     ):
         """
         Alerts on connections to or from port 0 using protocols other than
         igmp, icmp
         """
-        if proto.lower() in ('igmp', 'icmp', 'ipv6-icmp', 'arp'):
+        if proto.lower() in ("igmp", "icmp", "ipv6-icmp", "arp"):
             return
 
         if sport != 0 and dport != 0:
@@ -1231,33 +1212,25 @@ class FlowAlerts(IModule):
             uid,
             timestamp,
             victim,
-            attacker
+            attacker,
         )
 
     def check_multiple_reconnection_attempts(
-            self,
-            origstate,
-            saddr,
-            daddr,
-            dport,
-            uid,
-            profileid,
-            twid,
-            timestamp
+        self, origstate, saddr, daddr, dport, uid, profileid, twid, timestamp
     ):
         """
         Alerts when 5+ reconnection attempts from the same source IP to
         the same destination IP occurs
         """
-        if origstate != 'REJ':
+        if origstate != "REJ":
             return
 
-        key = f'{saddr}-{daddr}-{dport}'
+        key = f"{saddr}-{daddr}-{dport}"
 
         # add this conn to the stored number of reconnections
         current_reconnections = self.db.get_reconnections_for_tw(
             profileid, twid
-            )
+        )
 
         try:
             reconnections, uids = current_reconnections[key]
@@ -1271,7 +1244,6 @@ class FlowAlerts(IModule):
         if reconnections < 5:
             return
 
-
         self.set_evidence.multiple_reconnection_attempts(
             profileid,
             twid,
@@ -1283,30 +1255,22 @@ class FlowAlerts(IModule):
         # reset the reconnection attempts of this src->dst
         current_reconnections[key] = (0, [])
 
-        self.db.setReconnections(
-            profileid, twid, current_reconnections
-        )
-    
+        self.db.setReconnections(profileid, twid, current_reconnections)
+
     def should_detect_young_domain(self, domain):
         """
         returns true if it's ok to detect young domains for the given
         domain
         """
         return (
-                domain
-                and not domain.endswith(".local")
-                and not domain.endswith('.arpa')
+            domain
+            and not domain.endswith(".local")
+            and not domain.endswith(".arpa")
         )
-    
+
     def detect_young_domains(
-            self,
-            domain,
-            answers: List[str],
-            stime,
-            profileid,
-            twid,
-            uid
-        ):
+        self, domain, answers: List[str], stime, profileid, twid, uid
+    ):
         """
         Detect domains that are too young.
         The threshold is 60 days
@@ -1320,24 +1284,23 @@ class FlowAlerts(IModule):
         if not domain_info:
             return False
 
-        if 'Age' not in domain_info:
+        if "Age" not in domain_info:
             # we don't have age info about this domain
             return False
 
         # age is in days
-        age = domain_info['Age']
+        age = domain_info["Age"]
         if age >= age_threshold:
             return False
-        
-        
-        ips_returned_in_answer: List[str] = (
-            self.extract_ips_from_dns_answers(answers)
+
+        ips_returned_in_answer: List[str] = self.extract_ips_from_dns_answers(
+            answers
         )
         self.set_evidence.young_domain(
             domain, age, stime, profileid, twid, uid, ips_returned_in_answer
         )
         return True
-    
+
     def extract_ips_from_dns_answers(self, answers: List[str]) -> List[str]:
         """
         extracts ipv4 and 6 from DNS answers
@@ -1347,20 +1310,15 @@ class FlowAlerts(IModule):
             if validators.ipv4(answer) or validators.ipv6(answer):
                 ips.append(answer)
         return ips
-    
-    def check_smtp_bruteforce(
-            self,
-            profileid,
-            twid,
-            flow
-    ):
-        uid = flow['uid']
-        daddr = flow['daddr']
-        saddr = flow['saddr']
-        stime = flow.get('starttime', False)
-        last_reply = flow.get('last_reply', False)
 
-        if 'bad smtp-auth user' not in last_reply:
+    def check_smtp_bruteforce(self, profileid, twid, flow):
+        uid = flow["uid"]
+        daddr = flow["daddr"]
+        saddr = flow["saddr"]
+        stime = flow.get("starttime", False)
+        last_reply = flow.get("last_reply", False)
+
+        if "bad smtp-auth user" not in last_reply:
             return False
 
         try:
@@ -1370,15 +1328,9 @@ class FlowAlerts(IModule):
             self.smtp_bruteforce_cache[profileid] = (timestamps, uids)
         except KeyError:
             # first time for this profileid to make bad smtp login
-            self.smtp_bruteforce_cache.update(
-                {
-                    profileid: ([stime], [uid])
-                }
-            )
+            self.smtp_bruteforce_cache.update({profileid: ([stime], [uid])})
 
-        self.set_evidence.bad_smtp_login(
-            saddr, daddr, stime, twid, uid
-        )
+        self.set_evidence.bad_smtp_login(saddr, daddr, stime, twid, uid)
 
         timestamps = self.smtp_bruteforce_cache[profileid][0]
         uids = self.smtp_bruteforce_cache[profileid][1]
@@ -1388,10 +1340,7 @@ class FlowAlerts(IModule):
             return
 
         # check if they happened within 10 seconds or less
-        diff = utils.get_time_diff(
-            timestamps[0],
-            timestamps[-1]
-        )
+        diff = utils.get_time_diff(timestamps[0], timestamps[-1])
 
         if diff > 10:
             # didnt happen within 10s!
@@ -1409,65 +1358,59 @@ class FlowAlerts(IModule):
         )
 
         # remove all 3 logins that caused this alert
-        self.smtp_bruteforce_cache[profileid] = ([],[])
+        self.smtp_bruteforce_cache[profileid] = ([], [])
 
     def detect_connection_to_multiple_ports(
-            self,
-            saddr,
-            daddr,
-            proto,
-            state,
-            appproto,
-            dport,
-            timestamp,
-            profileid,
-            twid
+        self,
+        saddr,
+        daddr,
+        proto,
+        state,
+        appproto,
+        dport,
+        timestamp,
+        profileid,
+        twid,
     ):
-        if proto != 'tcp' or state != 'Established':
+        if proto != "tcp" or state != "Established":
             return
 
         dport_name = appproto
         if not dport_name:
-            dport_name = self.db.get_port_info(
-                f'{dport}/{proto}'
-            )
+            dport_name = self.db.get_port_info(f"{dport}/{proto}")
 
         if dport_name:
             # dport is known, we are considering only unknown services
             return
 
         # Connection to multiple ports to the destination IP
-        if profileid.split('_')[1] == saddr:
-            direction = 'Dst'
-            state = 'Established'
-            protocol = 'TCP'
-            role = 'Client'
-            type_data = 'IPs'
+        if profileid.split("_")[1] == saddr:
+            direction = "Dst"
+            state = "Established"
+            protocol = "TCP"
+            role = "Client"
+            type_data = "IPs"
 
             # get all the dst ips with established tcp connections
-            daddrs = (
-                self.db.get_data_from_profile_tw(
-                    profileid,
-                    twid,
-                    direction,
-                    state,
-                    protocol,
-                    role,
-                    type_data,
-                )
+            daddrs = self.db.get_data_from_profile_tw(
+                profileid,
+                twid,
+                direction,
+                state,
+                protocol,
+                role,
+                type_data,
             )
 
             # make sure we find established connections to this daddr
             if daddr not in daddrs:
                 return
 
-            dstports = list(
-                daddrs[daddr]['dstports']
-            )
+            dstports = list(daddrs[daddr]["dstports"])
             if len(dstports) <= 1:
                 return
 
-            uids = daddrs[daddr]['uid']
+            uids = daddrs[daddr]["uid"]
 
             victim: str = daddr
             attacker: str = profileid.split("_")[-1]
@@ -1484,54 +1427,37 @@ class FlowAlerts(IModule):
 
         # Connection to multiple port to the Source IP.
         # Happens in the mode 'all'
-        elif profileid.split('_')[-1] == daddr:
-            direction = 'Src'
-            state = 'Established'
-            protocol = 'TCP'
-            role = 'Server'
-            type_data = 'IPs'
+        elif profileid.split("_")[-1] == daddr:
+            direction = "Src"
+            state = "Established"
+            protocol = "TCP"
+            role = "Server"
+            type_data = "IPs"
 
             # get all the src ips with established tcp connections
-            saddrs = (
-                self.db.get_data_from_profile_tw(
-                    profileid,
-                    twid,
-                    direction,
-                    state,
-                    protocol,
-                    role,
-                    type_data,
-                )
+            saddrs = self.db.get_data_from_profile_tw(
+                profileid,
+                twid,
+                direction,
+                state,
+                protocol,
+                role,
+                type_data,
             )
-            dstports = list(
-                saddrs[saddr]['dstports']
-            )
+            dstports = list(saddrs[saddr]["dstports"])
             if len(dstports) <= 1:
                 return
 
-            uids = saddrs[saddr]['uid']
+            uids = saddrs[saddr]["uid"]
             attacker: str = daddr
             victim: str = profileid.split("_")[-1]
 
             self.set_evidence.connection_to_multiple_ports(
-                profileid,
-                twid,
-                uids,
-                timestamp,
-                dstports,
-                victim,
-                attacker
+                profileid, twid, uids, timestamp, dstports, victim, attacker
             )
 
     def detect_malicious_ja3(
-            self,
-            saddr,
-            daddr,
-            ja3,
-            ja3s,
-            twid,
-            uid,
-            timestamp
+        self, saddr, daddr, ja3, ja3s, twid, uid, timestamp
     ):
         if not (ja3 or ja3s):
             # we don't have info about this flow's ja3 or ja3s fingerprint
@@ -1549,8 +1475,7 @@ class FlowAlerts(IModule):
                 saddr,
                 daddr,
                 ja3=ja3,
-                )
-         
+            )
 
         if ja3s in malicious_ja3_dict:
             self.set_evidence.malicious_ja3s(
@@ -1564,45 +1489,38 @@ class FlowAlerts(IModule):
             )
 
     def check_self_signed_certs(
-            self,
-            validation_status,
-            daddr,
-            server_name,
-            profileid,
-            twid,
-            timestamp,
-            uid
+        self,
+        validation_status,
+        daddr,
+        server_name,
+        profileid,
+        twid,
+        timestamp,
+        uid,
     ):
         """
         checks the validation status of every a zeek ssl flow for self
         signed certs
         """
-        if 'self signed' not in validation_status:
+        if "self signed" not in validation_status:
             return
 
         self.set_evidence.self_signed_certificates(
-            profileid,
-            twid,
-            daddr,
-            uid,
-            timestamp,
-            server_name
+            profileid, twid, daddr, uid, timestamp, server_name
         )
 
-
-
     def check_ssh_password_guessing(
-            self, daddr, uid, timestamp, profileid, twid, auth_success
-            ):
+        self, daddr, uid, timestamp, profileid, twid, auth_success
+    ):
         """
         This detection is only done when there's a failed ssh attempt
         alerts ssh pw bruteforce when there's more than
         20 failed attempts by the same ip to the same IP
         """
-        if auth_success in ('true', 'T'):
+        if auth_success in ("true", "T"):
             return False
 
-        cache_key = f'{profileid}-{twid}-{daddr}'
+        cache_key = f"{profileid}-{twid}-{daddr}"
         # update the number of times this ip performed a failed ssh login
         if cache_key in self.password_guessing_cache:
             self.password_guessing_cache[cache_key].append(uid)
@@ -1612,29 +1530,27 @@ class FlowAlerts(IModule):
         conn_count = len(self.password_guessing_cache[cache_key])
 
         if conn_count >= self.pw_guessing_threshold:
-            description = f'SSH password guessing to IP {daddr}'
+            description = f"SSH password guessing to IP {daddr}"
             uids = self.password_guessing_cache[cache_key]
             self.set_evidence.pw_guessing(
-                description, timestamp, twid, uids, by='Slips'
+                description, timestamp, twid, uids, by="Slips"
             )
 
-            #reset the counter
+            # reset the counter
             del self.password_guessing_cache[cache_key]
 
-
-
     def check_malicious_ssl(self, ssl_info):
-        if ssl_info['type'] != 'zeek':
+        if ssl_info["type"] != "zeek":
             # this detection only supports zeek files.log flows
             return False
 
-        flow: dict = ssl_info['flow']
+        flow: dict = ssl_info["flow"]
 
-        source = flow.get('source', '')
-        analyzers = flow.get('analyzers', '')
-        sha1 = flow.get('sha1', '')
+        source = flow.get("source", "")
+        analyzers = flow.get("analyzers", "")
+        sha1 = flow.get("sha1", "")
 
-        if 'SSL' not in source or 'SHA1' not in analyzers:
+        if "SSL" not in source or "SHA1" not in analyzers:
             # not an ssl cert
             return False
 
@@ -1643,22 +1559,19 @@ class FlowAlerts(IModule):
         if not ssl_info_from_db:
             return False
 
-        self.set_evidence.malicious_ssl(
-            ssl_info, ssl_info_from_db
-        )
-
+        self.set_evidence.malicious_ssl(ssl_info, ssl_info_from_db)
 
     def check_non_http_port_80_conns(
-            self,
-            state,
-            daddr,
-            dport,
-            proto,
-            appproto,
-            profileid,
-            twid,
-            uid,
-            timestamp
+        self,
+        state,
+        daddr,
+        dport,
+        proto,
+        appproto,
+        profileid,
+        twid,
+        uid,
+        timestamp,
     ):
         """
         alerts on established connections on port 80 that are not HTTP
@@ -1666,45 +1579,40 @@ class FlowAlerts(IModule):
         # if it was a valid http conn, the 'service' field aka
         # appproto should be 'http'
         if (
-                str(dport) == '80'
-                and proto.lower() == 'tcp'
-                and appproto.lower() != 'http'
-                and state == 'Established'
+            str(dport) == "80"
+            and proto.lower() == "tcp"
+            and appproto.lower() != "http"
+            and state == "Established"
         ):
             self.set_evidence.non_http_port_80_conn(
-                daddr,
-                profileid,
-                timestamp,
-                twid,
-                uid
+                daddr, profileid, timestamp, twid, uid
             )
+
     def check_GRE_tunnel(self, tunnel_info: dict):
         """
         Detects GRE tunnels
         :param tunnel_info: dict containing tunnel zeek flow
         :return: None
         """
-        tunnel_flow = tunnel_info['flow']
-        tunnel_type = tunnel_flow['tunnel_type']
+        tunnel_flow = tunnel_info["flow"]
+        tunnel_type = tunnel_flow["tunnel_type"]
 
-        if tunnel_type != 'Tunnel::GRE':
+        if tunnel_type != "Tunnel::GRE":
             return
 
-        self.set_evidence.GRE_tunnel(
-            tunnel_info
-        )
+        self.set_evidence.GRE_tunnel(tunnel_info)
 
     def check_non_ssl_port_443_conns(
-            self,
-            state,
-            daddr,
-            dport,
-            proto,
-            appproto,
-            profileid,
-            twid,
-            uid,
-            timestamp
+        self,
+        state,
+        daddr,
+        dport,
+        proto,
+        appproto,
+        profileid,
+        twid,
+        uid,
+        timestamp,
     ):
         """
         alerts on established connections on port 443 that are not HTTPS (ssl)
@@ -1712,30 +1620,26 @@ class FlowAlerts(IModule):
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
         if (
-                str(dport) == '443'
-                and proto.lower() == 'tcp'
-                and appproto.lower() != 'ssl'
-                and state == 'Established'
+            str(dport) == "443"
+            and proto.lower() == "tcp"
+            and appproto.lower() != "ssl"
+            and state == "Established"
         ):
             self.set_evidence.non_ssl_port_443_conn(
-                daddr,
-                profileid,
-                timestamp,
-                twid,
-                uid
+                daddr, profileid, timestamp, twid, uid
             )
 
     def check_different_localnet_usage(
-            self,
-            saddr,
-            daddr,
-            dport,
-            proto,
-            profileid,
-            timestamp,
-            twid,
-            uid,
-            what_to_check=''
+        self,
+        saddr,
+        daddr,
+        dport,
+        proto,
+        profileid,
+        timestamp,
+        twid,
+        uid,
+        what_to_check="",
     ):
         """
         alerts when a connection to a private ip that
@@ -1745,7 +1649,7 @@ class FlowAlerts(IModule):
         coming from/to 10.0.0.0/8
         :param what_to_check: can be 'srcip' or 'dstip'
         """
-        ip_to_check = saddr if what_to_check == 'srcip' else daddr
+        ip_to_check = saddr if what_to_check == "srcip" else daddr
         ip_obj = ipaddress.ip_address(ip_to_check)
         own_local_network = self.db.get_local_network()
 
@@ -1764,22 +1668,16 @@ class FlowAlerts(IModule):
 
         self.set_evidence.different_localnet_usage(
             daddr,
-            f'{dport}/{proto}',
+            f"{dport}/{proto}",
             profileid,
             timestamp,
             twid,
             uid,
-            ip_outside_localnet=what_to_check
+            ip_outside_localnet=what_to_check,
         )
 
     def check_device_changing_ips(
-            self,
-            flow_type,
-            smac,
-            profileid,
-            twid,
-            uid,
-            timestamp
+        self, flow_type, smac, profileid, twid, uid, timestamp
     ):
         """
         Every time we have a flow for a new ip
@@ -1787,7 +1685,7 @@ class FlowAlerts(IModule):
         we check if the MAC of this srcip was associated with another ip
         this check is only done once for each source ip slips sees
         """
-        if 'conn' not in flow_type:
+        if "conn" not in flow_type:
             return
 
         if not smac:
@@ -1795,8 +1693,8 @@ class FlowAlerts(IModule):
 
         saddr: str = profileid.split("_")[-1]
         if not (
-                validators.ipv4(saddr)
-                and utils.is_private_ip(ipaddress.ip_address(saddr))
+            validators.ipv4(saddr)
+            and utils.is_private_ip(ipaddress.ip_address(saddr))
         ):
             return
 
@@ -1805,7 +1703,6 @@ class FlowAlerts(IModule):
             # time we're seeing this flow
             return
         self.db.mark_srcip_as_seen_in_connlog(saddr)
-
 
         if old_ip_list := self.db.get_ip_of_mac(smac):
             # old_ip is a list that may contain the ipv6 of this MAC
@@ -1828,42 +1725,38 @@ class FlowAlerts(IModule):
                 # we found this smac associated with an
                 # ip other than this saddr
                 self.set_evidence.device_changing_ips(
-                    smac,
-                    old_ip,
-                    profileid,
-                    twid,
-                    uid,
-                    timestamp
+                    smac, old_ip, profileid, twid, uid, timestamp
                 )
+
     def pre_main(self):
         utils.drop_root_privs()
         self.ssl_waiting_thread.start()
 
     def main(self):
-        if msg:= self.get_msg('new_flow'):
-            new_flow = json.loads(msg['data'])
-            profileid = new_flow['profileid']
-            twid = new_flow['twid']
-            flow = new_flow['flow']
+        if msg := self.get_msg("new_flow"):
+            new_flow = json.loads(msg["data"])
+            profileid = new_flow["profileid"]
+            twid = new_flow["twid"]
+            flow = new_flow["flow"]
             flow = json.loads(flow)
             uid = next(iter(flow))
             flow_dict = json.loads(flow[uid])
             # Flow type is 'conn' or 'dns', etc.
-            flow_type = flow_dict['flow_type']
-            dur = flow_dict['dur']
-            saddr = flow_dict['saddr']
-            daddr = flow_dict['daddr']
-            origstate = flow_dict['origstate']
-            state = flow_dict['state']
-            timestamp = new_flow['stime']
-            sport: int = flow_dict['sport']
-            dport: int = flow_dict.get('dport', None)
-            proto = flow_dict.get('proto')
-            sbytes = flow_dict.get('sbytes', 0)
-            appproto = flow_dict.get('appproto', '')
-            smac = flow_dict.get('smac', '')
-            if not appproto or appproto == '-':
-                appproto = flow_dict.get('type', '')
+            flow_type = flow_dict["flow_type"]
+            dur = flow_dict["dur"]
+            saddr = flow_dict["saddr"]
+            daddr = flow_dict["daddr"]
+            origstate = flow_dict["origstate"]
+            state = flow_dict["state"]
+            timestamp = new_flow["stime"]
+            sport: int = flow_dict["sport"]
+            dport: int = flow_dict.get("dport", None)
+            proto = flow_dict.get("proto")
+            sbytes = flow_dict.get("sbytes", 0)
+            appproto = flow_dict.get("appproto", "")
+            smac = flow_dict.get("smac", "")
+            if not appproto or appproto == "-":
+                appproto = flow_dict.get("type", "")
 
             self.check_long_connection(
                 dur, daddr, saddr, profileid, twid, uid, timestamp
@@ -1876,17 +1769,10 @@ class FlowAlerts(IModule):
                 twid,
                 uid,
                 timestamp,
-                state
+                state,
             )
             self.check_multiple_reconnection_attempts(
-                    origstate,
-                    saddr,
-                    daddr,
-                    dport,
-                    uid,
-                    profileid,
-                    twid,
-                    timestamp
+                origstate, saddr, daddr, dport, uid, profileid, twid, timestamp
             )
             self.check_conn_to_port_0(
                 sport,
@@ -1897,7 +1783,7 @@ class FlowAlerts(IModule):
                 profileid,
                 twid,
                 uid,
-                timestamp
+                timestamp,
             )
             self.check_different_localnet_usage(
                 saddr,
@@ -1908,7 +1794,7 @@ class FlowAlerts(IModule):
                 timestamp,
                 twid,
                 uid,
-                what_to_check='srcip'
+                what_to_check="srcip",
             )
             self.check_different_localnet_usage(
                 saddr,
@@ -1919,7 +1805,7 @@ class FlowAlerts(IModule):
                 timestamp,
                 twid,
                 uid,
-                what_to_check='dstip'
+                what_to_check="dstip",
             )
 
             self.check_connection_without_dns_resolution(
@@ -1935,15 +1821,10 @@ class FlowAlerts(IModule):
                 dport,
                 timestamp,
                 profileid,
-                twid
+                twid,
             )
             self.check_data_upload(
-                sbytes,
-                daddr,
-                uid,
-                profileid,
-                twid,
-                timestamp
+                sbytes, daddr, uid, profileid, twid, timestamp
             )
 
             self.check_non_http_port_80_conns(
@@ -1955,7 +1836,7 @@ class FlowAlerts(IModule):
                 profileid,
                 twid,
                 uid,
-                timestamp
+                timestamp,
             )
             self.check_non_ssl_port_443_conns(
                 state,
@@ -1966,7 +1847,7 @@ class FlowAlerts(IModule):
                 profileid,
                 twid,
                 uid,
-                timestamp
+                timestamp,
             )
 
             self.check_connection_to_local_ip(
@@ -1985,59 +1866,50 @@ class FlowAlerts(IModule):
             self.conn_counter += 1
 
         # --- Detect successful SSH connections ---
-        if msg := self.get_msg('new_ssh'):
-            data = msg['data']
+        if msg := self.get_msg("new_ssh"):
+            data = msg["data"]
             data = json.loads(data)
-            profileid = data['profileid']
-            twid = data['twid']
+            profileid = data["profileid"]
+            twid = data["twid"]
             # Get flow as a json
-            flow = data['flow']
+            flow = data["flow"]
             flow = json.loads(flow)
-            timestamp = flow['stime']
-            uid = flow['uid']
-            daddr = flow['daddr']
+            timestamp = flow["stime"]
+            uid = flow["uid"]
+            daddr = flow["daddr"]
             # it's set to true in zeek json files, T in zeke tab files
-            auth_success = flow['auth_success']
+            auth_success = flow["auth_success"]
 
             self.check_successful_ssh(
-                uid,
-                timestamp,
-                profileid,
-                twid,
-                auth_success
+                uid, timestamp, profileid, twid, auth_success
             )
 
             self.check_ssh_password_guessing(
-                daddr,
-                uid,
-                timestamp,
-                profileid,
-                twid,
-                auth_success
+                daddr, uid, timestamp, profileid, twid, auth_success
             )
         # --- Detect alerts from Zeek: Self-signed certs,
         #       invalid certs, port-scans and address scans,
         #       and password guessing ---
-        if msg:= self.get_msg('new_notice'):
-            data = msg['data']
+        if msg := self.get_msg("new_notice"):
+            data = msg["data"]
             # Convert from json to dict
             data = json.loads(data)
-            profileid = data['profileid']
-            twid = data['twid']
+            profileid = data["profileid"]
+            twid = data["twid"]
             # Get flow as a json
-            flow = data['flow']
+            flow = data["flow"]
             # Convert flow to a dict
             flow = json.loads(flow)
-            timestamp = flow['stime']
-            uid = data['uid']
-            msg = flow['msg']
-            note = flow['note']
+            timestamp = flow["stime"]
+            uid = data["uid"]
+            msg = flow["msg"]
+            note = flow["note"]
 
             # --- Detect port scans from Zeek logs ---
             # We're looking for port scans in notice.log in the note field
-            if 'Port_Scan' in note:
+            if "Port_Scan" in note:
                 # Vertical port scan
-                scanning_ip = flow.get('scanning_ip', '')
+                scanning_ip = flow.get("scanning_ip", "")
                 self.set_evidence.vertical_portscan(
                     msg,
                     scanning_ip,
@@ -2047,7 +1919,7 @@ class FlowAlerts(IModule):
                 )
 
             # --- Detect horizontal portscan by zeek ---
-            if 'Address_Scan' in note:
+            if "Address_Scan" in note:
                 # Horizontal port scan
                 # scanned_port = flow.get('scanned_port', '')
                 self.set_evidence.horizontal_portscan(
@@ -2058,34 +1930,30 @@ class FlowAlerts(IModule):
                     uid,
                 )
             # --- Detect password guessing by zeek ---
-            if 'Password_Guessing' in note:
+            if "Password_Guessing" in note:
                 self.set_evidence.pw_guessing(
-                    msg,
-                    timestamp,
-                    twid,
-                    uid,
-                    by='Zeek'
+                    msg, timestamp, twid, uid, by="Zeek"
                 )
         # --- Detect maliciuos JA3 TLS servers ---
-        if msg:= self.get_msg('new_ssl'):
+        if msg := self.get_msg("new_ssl"):
             # Check for self signed certificates in new_ssl channel (ssl.log)
-            data = msg['data']
+            data = msg["data"]
             # Convert from json to dict
             data = json.loads(data)
             # Get flow as a json
-            flow = data['flow']
+            flow = data["flow"]
             # Convert flow to a dict
             flow = json.loads(flow)
-            uid = flow['uid']
-            timestamp = flow['stime']
-            ja3 = flow.get('ja3', False)
-            ja3s = flow.get('ja3s', False)
-            issuer = flow.get('issuer', False)
-            profileid = data['profileid']
-            twid = data['twid']
-            daddr = flow['daddr']
-            saddr = profileid.split('_')[1]
-            server_name = flow.get('server_name')
+            uid = flow["uid"]
+            timestamp = flow["stime"]
+            ja3 = flow.get("ja3", False)
+            ja3s = flow.get("ja3s", False)
+            issuer = flow.get("issuer", False)
+            profileid = data["profileid"]
+            twid = data["twid"]
+            daddr = flow["daddr"]
+            saddr = profileid.split("_")[1]
+            server_name = flow.get("server_name")
 
             # we'll be checking pastebin downloads of this ssl flow
             # later
@@ -2094,56 +1962,44 @@ class FlowAlerts(IModule):
             )
 
             self.check_self_signed_certs(
-                flow['validation_status'],
+                flow["validation_status"],
                 daddr,
                 server_name,
                 profileid,
                 twid,
                 timestamp,
-                uid
+                uid,
             )
 
             self.detect_malicious_ja3(
-                saddr,
-                daddr,
-                ja3,
-                ja3s,
-                twid,
-                uid,
-                timestamp
+                saddr, daddr, ja3, ja3s, twid, uid, timestamp
             )
 
             self.detect_incompatible_CN(
-                daddr,
-                server_name,
-                issuer,
-                profileid,
-                twid,
-                uid,
-                timestamp
+                daddr, server_name, issuer, profileid, twid, uid, timestamp
             )
 
-        if msg := self.get_msg('tw_closed'):
-            profileid_tw = msg['data'].split('_')
-            profileid = f'{profileid_tw[0]}_{profileid_tw[1]}'
+        if msg := self.get_msg("tw_closed"):
+            profileid_tw = msg["data"].split("_")
+            profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
             twid = profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)
 
         # --- Detect DNS issues: 1) DNS resolutions without
         # connection, 2) DGA, 3) young domains, 4) ARPA SCANs
-        if msg:= self.get_msg('new_dns'):
-            data = json.loads(msg['data'])
-            profileid = data['profileid']
-            twid = data['twid']
-            uid = data['uid']
-            daddr = data.get('daddr', False)
+        if msg := self.get_msg("new_dns"):
+            data = json.loads(msg["data"])
+            profileid = data["profileid"]
+            twid = data["twid"]
+            uid = data["uid"]
+            daddr = data.get("daddr", False)
             flow_data = json.loads(
-                data['flow']
-            )   # this is a dict {'uid':json flow data}
-            domain = flow_data.get('query', False)
-            answers = flow_data.get('answers', False)
-            rcode_name = flow_data.get('rcode_name', False)
-            stime = data.get('stime', False)
+                data["flow"]
+            )  # this is a dict {'uid':json flow data}
+            domain = flow_data.get("query", False)
+            answers = flow_data.get("answers", False)
+            rcode_name = flow_data.get("rcode_name", False)
+            stime = data.get("stime", False)
 
             # only check dns without connection if we have
             # answers(we're sure the query is resolved)
@@ -2151,7 +2007,11 @@ class FlowAlerts(IModule):
             # 1 fo ipv6, both have the
             # same uid, this causes FP dns without connection,
             # so make sure we only check the uid once
-            if answers and uid not in self.connections_checked_in_dns_conn_timer_thread:
+            if (
+                answers
+                and uid
+                not in self.connections_checked_in_dns_conn_timer_thread
+            ):
                 self.check_dns_without_connection(
                     domain, answers, rcode_name, stime, profileid, twid, uid
                 )
@@ -2173,43 +2033,28 @@ class FlowAlerts(IModule):
             self.detect_young_domains(
                 domain, answers, stime, profileid, twid, uid
             )
-            self.check_dns_arpa_scan(
-                domain, stime, profileid, twid, uid
-            )
+            self.check_dns_arpa_scan(domain, stime, profileid, twid, uid)
 
-        if msg := self.get_msg('new_downloaded_file'):
-            ssl_info = json.loads(msg['data'])
+        if msg := self.get_msg("new_downloaded_file"):
+            ssl_info = json.loads(msg["data"])
             self.check_malicious_ssl(ssl_info)
 
         # --- Detect Bad SMTP logins ---
-        if msg := self.get_msg('new_smtp'):
-            smtp_info = json.loads(msg['data'])
-            profileid = smtp_info['profileid']
-            twid = smtp_info['twid']
-            flow: dict = smtp_info['flow']
+        if msg := self.get_msg("new_smtp"):
+            smtp_info = json.loads(msg["data"])
+            profileid = smtp_info["profileid"]
+            twid = smtp_info["twid"]
+            flow: dict = smtp_info["flow"]
 
-            self.check_smtp_bruteforce(
-                profileid,
-                twid,
-                flow
-            )
+            self.check_smtp_bruteforce(profileid, twid, flow)
         # --- Detect multiple used SSH versions ---
-        if msg := self.get_msg('new_software'):
-            msg = json.loads(msg['data'])
-            flow:dict = msg['sw_flow']
-            twid = msg['twid']
-            self.check_multiple_ssh_versions(
-                flow,
-                twid,
-                role='SSH::CLIENT'
-            )
-            self.check_multiple_ssh_versions(
-                flow,
-                twid,
-                role='SSH::SERVER'
-            )
+        if msg := self.get_msg("new_software"):
+            msg = json.loads(msg["data"])
+            flow: dict = msg["sw_flow"]
+            twid = msg["twid"]
+            self.check_multiple_ssh_versions(flow, twid, role="SSH::CLIENT")
+            self.check_multiple_ssh_versions(flow, twid, role="SSH::SERVER")
 
-     
-        if msg := self.get_msg('new_tunnel'):
-            msg = json.loads(msg['data'])
+        if msg := self.get_msg("new_tunnel"):
+            msg = json.loads(msg["data"])
             self.check_GRE_tunnel(msg)

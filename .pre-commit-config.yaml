@@ -1,0 +1,47 @@
+repos:
+-   repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+        - id: detect-secrets
+          args: ['--baseline', '.secrets.baseline']
+          exclude: .*dataset/.*|
+                  (?x)(
+                         ^config/local_ti_files/own_malicious_JA3.csv$|
+                          .*test.* |
+                         .*\.md$
+                      )
+
+-     repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v3.1.0
+      hooks:
+        - id: trailing-whitespace
+        - id: check-added-large-files
+        - id: check-docstring-first
+        - id: check-merge-conflict
+        - id: end-of-file-fixer
+        - id: detect-private-key
+          exclude: .*dataset/.*|
+                (?x)(
+                     ^config/$|
+                      .*test.* |
+                     .*\.md$
+              )
+
+-     repo: https://github.com/astral-sh/ruff-pre-commit
+      # Ruff version.
+      rev: v0.3.4
+      hooks:
+        # Run the linter.
+        - id: ruff
+          args: [ --fix ]
+          # excludes formatting slips_files/common/imports.py
+          exclude: imports
+
+-     repo: https://github.com/psf/black-pre-commit-mirror
+      rev: 24.3.0
+      hooks:
+        - id: black
+          args: ['--line-length' , '79']
+          language_version: python3.8
+          # excludes formatting slips_files/common/imports.py
+          exclude: imports

@@ -10,53 +10,53 @@ from .utils import *
 
 def create_app():
     app = Flask(__name__)
-    app.config['JSON_SORT_KEYS'] = False  # disable sorting of timewindows
+    app.config["JSON_SORT_KEYS"] = False  # disable sorting of timewindows
     return app
 
 
 app = create_app()
 
-@app.route('/redis')
+
+@app.route("/redis")
 def read_redis_port():
     res = read_db_file()
-    return {"data" : res}
+    return {"data": res}
 
-@app.route('/')
+
+@app.route("/")
 def index():
-    return render_template('app.html', title='Slips')
+    return render_template("app.html", title="Slips")
 
-@app.route('/db/<new_port>')
+
+@app.route("/db/<new_port>")
 def get_post_javascript_data(new_port):
-
     message_sent.send(
-        current_app._get_current_object(),
-        port=int(new_port),
-        dbnumber=0
+        current_app._get_current_object(), port=int(new_port), dbnumber=0
     )
-    return redirect(url_for('index'))
+    return redirect(url_for("index"))
 
-@app.route('/info')
+
+@app.route("/info")
 def set_pcap_info():
     """
     Set information about the pcap.
     """
     info = __database__.db.hgetall("analysis")
 
-    profiles = __database__.db.smembers('profiles')
+    profiles = __database__.db.smembers("profiles")
     info["num_profiles"] = len(profiles) if profiles else 0
 
-    alerts_number = __database__.db.get('number_of_alerts')
+    alerts_number = __database__.db.get("number_of_alerts")
     info["num_alerts"] = int(alerts_number) if alerts_number else 0
 
     return info
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.register_blueprint(analysis, url_prefix="/analysis")
 
     app.register_blueprint(general, url_prefix="/general")
-    
+
     app.register_blueprint(documentation, url_prefix="/documentation")
 
     app.run(host="0.0.0.0", port=55000)
-
