@@ -1,63 +1,57 @@
 import json
 import urllib
 import requests
-from typing import (
-    Union,
-    Dict
-    )
+from typing import Union, Dict
 from slips_files.common.imports import *
-from slips_files.core.evidence_structure.evidence import \
-    (
-        Evidence,
-        ProfileID,
-        TimeWindow,
-        Victim,
-        Attacker,
-        ThreatLevel,
-        EvidenceType,
-        IoCType,
-        Direction,
-        IDEACategory,
-        Tag
-    )
+from slips_files.core.evidence_structure.evidence import (
+    Evidence,
+    ProfileID,
+    TimeWindow,
+    Victim,
+    Attacker,
+    ThreatLevel,
+    EvidenceType,
+    IoCType,
+    Direction,
+    IDEACategory,
+    Tag,
+)
 
 
 class HTTPAnalyzer(IModule):
     # Name: short name of the module. Do not use spaces
-    name = 'HTTP Analyzer'
-    description = 'Analyze HTTP flows'
-    authors = ['Alya Gomaa']
+    name = "HTTP Analyzer"
+    description = "Analyze HTTP flows"
+    authors = ["Alya Gomaa"]
 
     def init(self):
-        self.c1 = self.db.subscribe('new_http')
-        self.c2 = self.db.subscribe('new_weird')
-        self.channels = {
-            'new_http': self.c1,
-            'new_weird': self.c2
-        }
+        self.c1 = self.db.subscribe("new_http")
+        self.c2 = self.db.subscribe("new_weird")
+        self.channels = {"new_http": self.c1, "new_weird": self.c2}
         self.connections_counter = {}
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware
         # to check your internet connection
-        self.hosts = ['bing.com',
-                      'google.com',
-                      'yandex.com',
-                      'yahoo.com',
-                      'duckduckgo.com',
-                      'gmail.com']
+        self.hosts = [
+            "bing.com",
+            "google.com",
+            "yandex.com",
+            "yahoo.com",
+            "duckduckgo.com",
+            "gmail.com",
+        ]
         self.read_configuration()
         self.executable_mime_types = [
-            'application/x-msdownload',
-            'application/x-ms-dos-executable',
-            'application/x-ms-exe',
-            'application/x-exe',
-            'application/x-winexe',
-            'application/x-winhlp',
-            'application/x-winhelp',
-            'application/octet-stream',
-            'application/x-dosexec'
+            "application/x-msdownload",
+            "application/x-ms-dos-executable",
+            "application/x-ms-exe",
+            "application/x-exe",
+            "application/x-winexe",
+            "application/x-winhlp",
+            "application/x-winhelp",
+            "application/octet-stream",
+            "application/x-dosexec",
         ]
-
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -84,31 +78,35 @@ class HTTPAnalyzer(IModule):
         """Check unusual user agents and set evidence"""
 
         suspicious_user_agents = (
-            'httpsend',
-            'chm_msdn',
-            'pb',
-            'jndi',
-            'tesseract',
+            "httpsend",
+            "chm_msdn",
+            "pb",
+            "jndi",
+            "tesseract",
         )
         for suspicious_ua in suspicious_user_agents:
             if suspicious_ua.lower() in user_agent.lower():
                 confidence: float = 1
-                saddr = profileid.split('_')[1]
-                description: str = (f'Suspicious user-agent: '
-                                    f'{user_agent} while '
-                                    f'connecting to {host}{uri}')
+                saddr = profileid.split("_")[1]
+                description: str = (
+                    f"Suspicious user-agent: "
+                    f"{user_agent} while "
+                    f"connecting to {host}{uri}"
+                )
                 evidence: Evidence = Evidence(
                     evidence_type=EvidenceType.SUSPICIOUS_USER_AGENT,
                     attacker=Attacker(
                         direction=Direction.SRC,
                         attacker_type=IoCType.IP,
-                        value=saddr
-                        ),
+                        value=saddr,
+                    ),
                     threat_level=ThreatLevel.HIGH,
                     confidence=confidence,
                     description=description,
                     profile=ProfileID(ip=saddr),
-                    timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                    timewindow=TimeWindow(
+                        number=int(twid.replace("timewindow", ""))
+                    ),
                     uid=[uid],
                     timestamp=timestamp,
                     category=IDEACategory.ANOMALY_TRAFFIC,
@@ -127,7 +125,7 @@ class HTTPAnalyzer(IModule):
         timestamp: str,
         request_body_len: int,
         profileid: str,
-        twid: str
+        twid: str,
     ):
         """
         Detects more than 4 empty connections to
@@ -137,18 +135,20 @@ class HTTPAnalyzer(IModule):
         # to test this wget google.com:80 twice
         # wget makes multiple connections per command,
         # 1 to google.com and another one to www.google.com
-        if uri != '/':
+        if uri != "/":
             # emtpy detections are only done when we go to bing.com,
             # bing.com/something seems benign
             return False
 
         for host in self.hosts:
-            if (contacted_host in [host, f'www.{host}']
-                    and request_body_len == 0):
+            if (
+                contacted_host in [host, f"www.{host}"]
+                and request_body_len == 0
+            ):
                 try:
                     # this host has past connections, add to counter
                     uids, connections = self.connections_counter[host]
-                    connections +=1
+                    connections += 1
                     uids.append(uid)
                     self.connections_counter[host] = (uids, connections)
                 except KeyError:
@@ -164,21 +164,23 @@ class HTTPAnalyzer(IModule):
         uids, connections = self.connections_counter[host]
         if connections == self.empty_connections_threshold:
             confidence: float = 1
-            saddr: str = profileid.split('_')[-1]
-            description: str = f'Multiple empty HTTP connections to {host}'
+            saddr: str = profileid.split("_")[-1]
+            description: str = f"Multiple empty HTTP connections to {host}"
 
             evidence: Evidence = Evidence(
                 evidence_type=EvidenceType.EMPTY_CONNECTIONS,
                 attacker=Attacker(
                     direction=Direction.SRC,
                     attacker_type=IoCType.IP,
-                    value=saddr
-                    ),
+                    value=saddr,
+                ),
                 threat_level=ThreatLevel.MEDIUM,
                 confidence=confidence,
                 description=description,
                 profile=ProfileID(ip=saddr),
-                timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                timewindow=TimeWindow(
+                    number=int(twid.replace("timewindow", ""))
+                ),
                 uid=uids,
                 timestamp=timestamp,
                 category=IDEACategory.ANOMALY_CONNECTION,
@@ -191,36 +193,34 @@ class HTTPAnalyzer(IModule):
         return False
 
     def set_evidence_incompatible_user_agent(
-            self,
-            host,
-            uri,
-            vendor,
-            user_agent,
-            timestamp,
-            profileid,
-            twid,
-            uid: str
+        self,
+        host,
+        uri,
+        vendor,
+        user_agent,
+        timestamp,
+        profileid,
+        twid,
+        uid: str,
     ):
-        saddr = profileid.split('_')[1]
+        saddr = profileid.split("_")[1]
 
-        os_type: str = user_agent.get('os_type', '').lower()
-        os_name: str = user_agent.get('os_name', '').lower()
-        browser: str = user_agent.get('browser', '').lower()
-        user_agent: str = user_agent.get('user_agent', '')
+        os_type: str = user_agent.get("os_type", "").lower()
+        os_name: str = user_agent.get("os_name", "").lower()
+        browser: str = user_agent.get("browser", "").lower()
+        user_agent: str = user_agent.get("user_agent", "")
         description: str = (
-            f'using incompatible user-agent ({user_agent}) '
-            f'that belongs to OS: {os_name} '
-            f'type: {os_type} browser: {browser}. '
-            f'while connecting to {host}{uri}. '
-            f'IP has MAC vendor: {vendor.capitalize()}'
+            f"using incompatible user-agent ({user_agent}) "
+            f"that belongs to OS: {os_name} "
+            f"type: {os_type} browser: {browser}. "
+            f"while connecting to {host}{uri}. "
+            f"IP has MAC vendor: {vendor.capitalize()}"
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.INCOMPATIBLE_USER_AGENT,
             attacker=Attacker(
-                direction= Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=saddr
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.HIGH,
             confidence=1,
@@ -234,31 +234,28 @@ class HTTPAnalyzer(IModule):
 
         self.db.set_evidence(evidence)
 
-
     def set_evidence_executable_mime_type(
-            self,
-            mime_type: str,
-            profileid: str,
-            twid: str,
-            uid: str,
-            timestamp: str,
-            daddr: str
-            ):
-        saddr: str = profileid.split('_')[1]
+        self,
+        mime_type: str,
+        profileid: str,
+        twid: str,
+        uid: str,
+        timestamp: str,
+        daddr: str,
+    ):
+        saddr: str = profileid.split("_")[1]
 
         ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = (
-            f'Download of an executable with MIME type: {mime_type} '
-            f'by {saddr} from {daddr} {ip_identification}.'
+            f"Download of an executable with MIME type: {mime_type} "
+            f"by {saddr} from {daddr} {ip_identification}."
         )
         twid_number = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
             attacker=Attacker(
-                    direction=Direction.SRC,
-                    attacker_type=IoCType.IP,
-                    value=saddr
-                ),
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            ),
             threat_level=ThreatLevel.LOW,
             confidence=1,
             description=description,
@@ -267,18 +264,16 @@ class HTTPAnalyzer(IModule):
             uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_FILE,
-            source_target_tag=Tag.EXECUTABLE_MIME_TYPE
+            source_target_tag=Tag.EXECUTABLE_MIME_TYPE,
         )
 
         self.db.set_evidence(evidence)
-        
+
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
             attacker=Attacker(
-                    direction=Direction.DST,
-                    attacker_type=IoCType.IP,
-                    value=daddr
-                ),
+                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+            ),
             threat_level=ThreatLevel.LOW,
             confidence=1,
             description=description,
@@ -287,12 +282,10 @@ class HTTPAnalyzer(IModule):
             uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_FILE,
-            source_target_tag=Tag.EXECUTABLE_MIME_TYPE
+            source_target_tag=Tag.EXECUTABLE_MIME_TYPE,
         )
 
         self.db.set_evidence(evidence)
-
-
 
     def check_incompatible_user_agent(
         self, host, uri, timestamp, profileid, twid, uid: str
@@ -304,7 +297,7 @@ class HTTPAnalyzer(IModule):
         # get the mac vendor
         vendor: Union[str, None] = self.db.get_mac_vendor_from_profile(
             profileid
-            )
+        )
         if not vendor:
             return False
         vendor = vendor.lower()
@@ -313,11 +306,11 @@ class HTTPAnalyzer(IModule):
         if not user_agent or type(user_agent) != dict:
             return False
 
-        os_type = user_agent.get('os_type', '').lower()
-        os_name = user_agent.get('os_name', '').lower()
-        browser = user_agent.get('browser', '').lower()
+        os_type = user_agent.get("os_type", "").lower()
+        os_name = user_agent.get("os_name", "").lower()
+        browser = user_agent.get("browser", "").lower()
         # user_agent = user_agent.get('user_agent', '')
-        if 'safari' in browser and 'apple' not in vendor:
+        if "safari" in browser and "apple" not in vendor:
             self.set_evidence_incompatible_user_agent(
                 host, uri, vendor, user_agent, timestamp, profileid, twid, uid
             )
@@ -326,9 +319,9 @@ class HTTPAnalyzer(IModule):
         # make sure all of them are lowercase
         # no user agent should contain 2 keywords from different tuples
         os_keywords = [
-            ('macos', 'ios', 'apple', 'os x', 'mac', 'macintosh', 'darwin'),
-            ('microsoft', 'windows', 'nt'),
-            ('android', 'google'),
+            ("macos", "ios", "apple", "os x", "mac", "macintosh", "darwin"),
+            ("microsoft", "windows", "nt"),
+            ("android", "google"),
         ]
 
         # check which tuple does the vendor belong to
@@ -356,7 +349,7 @@ class HTTPAnalyzer(IModule):
         # see if the os name and type has any keyword of the rest of the tuples
         for tuple_ in os_keywords:
             for keyword in tuple_:
-                if keyword in f'{os_name} {os_type}':
+                if keyword in f"{os_name} {os_type}":
                     # from the same example,
                     # this means that one of these keywords
                     # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
@@ -379,19 +372,17 @@ class HTTPAnalyzer(IModule):
         Get OS and browser info about a use agent from an online database
          http://useragentstring.com
         """
-        url = 'http://useragentstring.com/'
-        params = {
-            'uas': user_agent,
-            'getJSON':'all'
-        }
+        url = "http://useragentstring.com/"
+        params = {"uas": user_agent, "getJSON": "all"}
         params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
         try:
-
             response = requests.get(url, params=params, timeout=5)
             if response.status_code != 200 or not response.text:
                 raise requests.exceptions.ConnectionError
-        except (requests.exceptions.ConnectionError,
-                requests.exceptions.ReadTimeout):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ReadTimeout,
+        ):
             return False
 
         # returns the following
@@ -426,37 +417,33 @@ class HTTPAnalyzer(IModule):
             # this profile already has a user agent
             return False
 
-        UA_info = {
-            'user_agent': user_agent,
-            'os_type' : '',
-            'os_name': ''
-        }
+        UA_info = {"user_agent": user_agent, "os_type": "", "os_name": ""}
 
         if ua_info := self.get_ua_info_online(user_agent):
             # the above website returns unknown if it has
             # no info about this UA, remove the 'unknown' from the string
             # before storing in the db
             os_type = (
-                ua_info.get('os_type', '')
-                .replace('unknown', '')
-                .replace('  ', '')
+                ua_info.get("os_type", "")
+                .replace("unknown", "")
+                .replace("  ", "")
             )
             os_name = (
-                ua_info.get('os_name', '')
-                .replace('unknown', '')
-                .replace('  ', '')
+                ua_info.get("os_name", "")
+                .replace("unknown", "")
+                .replace("  ", "")
             )
             browser = (
-                ua_info.get('agent_name', '')
-                .replace('unknown', '')
-                .replace('  ', '')
+                ua_info.get("agent_name", "")
+                .replace("unknown", "")
+                .replace("  ", "")
             )
 
             UA_info.update(
                 {
-                    'os_name': os_name,
-                    'os_type': os_type,
-                    'browser': browser,
+                    "os_name": os_name,
+                    "os_type": os_type,
+                    "browser": browser,
                 }
             )
 
@@ -474,19 +461,19 @@ class HTTPAnalyzer(IModule):
 
         # for example: server-bag[macOS,11.5.1,20G80,MacBookAir10,1]
         user_agent = (
-            user_agent.replace('server-bag', '')
-            .replace(']', '')
-            .replace('[', '')
+            user_agent.replace("server-bag", "")
+            .replace("]", "")
+            .replace("[", "")
         )
-        UA_info = {'user_agent': user_agent}
-        os_name = user_agent.split(',')[0]
-        os_type = os_name + user_agent.split(',')[1]
+        UA_info = {"user_agent": user_agent}
+        os_name = user_agent.split(",")[0]
+        os_type = os_name + user_agent.split(",")[1]
         UA_info.update(
             {
-                'os_name': os_name,
-                'os_type': os_type,
+                "os_name": os_name,
+                "os_type": os_type,
                 # server bag UAs don't have browser info
-                'browser': '',
+                "browser": "",
             }
         )
         UA_info = json.dumps(UA_info)
@@ -494,13 +481,14 @@ class HTTPAnalyzer(IModule):
         return UA_info
 
     def check_multiple_UAs(
-            self,
-            cached_ua: dict,
-            user_agent: dict,
-            timestamp,
-            profileid,
-            twid,
-            uid: str):
+        self,
+        cached_ua: dict,
+        user_agent: dict,
+        timestamp,
+        profileid,
+        twid,
+        uid: str,
+    ):
         """
         Detect if the user is using an Apple UA, then android, then linux etc.
         Doesn't check multiple ssh clients
@@ -510,8 +498,8 @@ class HTTPAnalyzer(IModule):
         if not cached_ua or not user_agent:
             return False
 
-        os_type = cached_ua['os_type']
-        os_name = cached_ua['os_name']
+        os_type = cached_ua["os_type"]
+        os_name = cached_ua["os_name"]
 
         for keyword in (os_type, os_name):
             # loop through each word in UA
@@ -522,18 +510,17 @@ class HTTPAnalyzer(IModule):
                 # 'Linux' in both UAs, so we shouldn't alert
                 return False
 
-        saddr: str = profileid.split('_')[1]
-        ua: str = cached_ua.get('user_agent', '')
-        description: str = (f'Using multiple user-agents:'
-                            f' "{ua}" then "{user_agent}"')
+        saddr: str = profileid.split("_")[1]
+        ua: str = cached_ua.get("user_agent", "")
+        description: str = (
+            f"Using multiple user-agents:" f' "{ua}" then "{user_agent}"'
+        )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_USER_AGENT,
             attacker=Attacker(
-                    direction=Direction.SRC,
-                    attacker_type=IoCType.IP,
-                    value=saddr
-                ),
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            ),
             threat_level=ThreatLevel.INFO,
             confidence=1,
             description=description,
@@ -542,32 +529,24 @@ class HTTPAnalyzer(IModule):
             uid=[uid],
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_BEHAVIOUR,
-            source_target_tag=Tag.MULTIPLE_USER_AGENT
+            source_target_tag=Tag.MULTIPLE_USER_AGENT,
         )
 
         self.db.set_evidence(evidence)
 
         return True
 
-
     def set_evidence_http_traffic(
-          self,
-          daddr: str,
-          profileid: str,
-          twid: str,
-          uid: str,
-          timestamp: str
+        self, daddr: str, profileid: str, twid: str, uid: str, timestamp: str
     ):
         confidence: float = 1
-        saddr = profileid.split('_')[-1]
-        description = f'Unencrypted HTTP traffic from {saddr} to {daddr}.'
+        saddr = profileid.split("_")[-1]
+        description = f"Unencrypted HTTP traffic from {saddr} to {daddr}."
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.HTTP_TRAFFIC,
             attacker=Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=saddr
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
@@ -578,27 +557,17 @@ class HTTPAnalyzer(IModule):
             timestamp=timestamp,
             category=IDEACategory.ANOMALY_TRAFFIC,
             source_target_tag=Tag.SENDING_UNENCRYPTED_DATA,
-            victim= Victim(
-                direction=Direction.DST,
-                victim_type=IoCType.IP,
-                value=daddr
-                )
+            victim=Victim(
+                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+            ),
         )
 
         self.db.set_evidence(evidence)
 
         return True
 
-
     def check_pastebin_downloads(
-            self,
-            daddr,
-            response_body_len,
-            method,
-            profileid,
-            twid,
-            timestamp,
-            uid
+        self, daddr, response_body_len, method, profileid, twid, timestamp, uid
     ):
         try:
             response_body_len = int(response_body_len)
@@ -606,69 +575,68 @@ class HTTPAnalyzer(IModule):
             return False
 
         ip_identification = self.db.get_ip_identification(daddr)
-        if ('pastebin' in ip_identification
+        if (
+            "pastebin" in ip_identification
             and response_body_len > self.pastebin_downloads_threshold
-            and method == 'GET'):
+            and method == "GET"
+        ):
             confidence: float = 1
             threat_level: ThreatLevel = ThreatLevel.INFO
-            saddr = profileid.split('_')[1]
+            saddr = profileid.split("_")[1]
 
             response_body_len = utils.convert_to_mb(response_body_len)
-            description: str = f'A downloaded file from pastebin.com. ' \
-                               f'Size: {response_body_len} MBs'
+            description: str = (
+                f"A downloaded file from pastebin.com. "
+                f"Size: {response_body_len} MBs"
+            )
             attacker = Attacker(
-                    direction=Direction.SRC,
-                    attacker_type=IoCType.IP,
-                    value=saddr
-                )
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            )
 
             evidence: Evidence = Evidence(
-                evidence_type= EvidenceType.PASTEBIN_DOWNLOAD,
+                evidence_type=EvidenceType.PASTEBIN_DOWNLOAD,
                 attacker=attacker,
                 threat_level=threat_level,
                 confidence=confidence,
                 description=description,
                 profile=ProfileID(ip=saddr),
-                timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+                timewindow=TimeWindow(
+                    number=int(twid.replace("timewindow", ""))
+                ),
                 uid=[uid],
                 timestamp=timestamp,
                 category=IDEACategory.ANOMALY_BEHAVIOUR,
-                source_target_tag=Tag.MALWARE
+                source_target_tag=Tag.MALWARE,
             )
 
             self.db.set_evidence(evidence)
             return True
-    
+
     def set_evidence_weird_http_method(
-            self,
-            profileid: str,
-            twid: str,
-            flow: dict
+        self, profileid: str, twid: str, flow: dict
     ) -> None:
-        daddr: str = flow['daddr']
-        weird_method: str = flow['addl']
-        uid: str = flow['uid']
-        timestamp: str = flow['starttime']
+        daddr: str = flow["daddr"]
+        weird_method: str = flow["addl"]
+        uid: str = flow["uid"]
+        timestamp: str = flow["starttime"]
 
         confidence = 0.9
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
         saddr: str = profileid.split("_")[-1]
 
         attacker: Attacker = Attacker(
-            direction=Direction.SRC,
-            attacker_type=IoCType.IP,
-            value=saddr
+            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
         )
 
         victim: Victim = Victim(
-            direction=Direction.DST,
-            victim_type=IoCType.IP,
-            value=daddr
+            direction=Direction.DST, victim_type=IoCType.IP, value=daddr
         )
 
         ip_identification: str = self.db.get_ip_identification(daddr)
-        description: str = f'Weird HTTP method "{weird_method}" to IP: ' \
-                           f'{daddr} {ip_identification}. by Zeek.'
+        description: str = (
+            f'Weird HTTP method "{weird_method}" to IP: '
+            f"{daddr} {ip_identification}. by Zeek."
+        )
 
         twid_number: int = int(twid.replace("timewindow", ""))
 
@@ -684,52 +652,46 @@ class HTTPAnalyzer(IModule):
             uid=[uid],
             timestamp=timestamp,
             conn_count=1,
-            confidence=confidence
+            confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
-        
-        
+
     def check_weird_http_method(self, msg: Dict[str, str]):
         """
         detect weird http methods in zeek's weird.log
         """
-        flow = msg['flow']
-        profileid = msg['profileid']
-        twid = msg['twid']
+        flow = msg["flow"]
+        profileid = msg["profileid"]
+        twid = msg["twid"]
 
         # what's the weird.log about
-        name = flow['name']
+        name = flow["name"]
 
-        if 'unknown_HTTP_method' not in name:
+        if "unknown_HTTP_method" not in name:
             return False
 
-        self.set_evidence_weird_http_method(
-            profileid,
-            twid,
-            flow
-        )
+        self.set_evidence_weird_http_method(profileid, twid, flow)
 
-    
     def pre_main(self):
         utils.drop_root_privs()
 
     def main(self):
-        if msg:= self.get_msg('new_http'):
-            message = json.loads(msg['data'])
-            profileid = message['profileid']
-            twid = message['twid']
-            flow = json.loads(message['flow'])
-            uid = flow['uid']
-            host = flow['host']
-            uri = flow['uri']
-            daddr = flow['daddr']
-            timestamp = flow.get('stime', '')
-            user_agent = flow.get('user_agent', False)
-            request_body_len = flow.get('request_body_len')
-            response_body_len = flow.get('response_body_len')
-            method = flow.get('method')
-            resp_mime_types = flow.get('resp_mime_types')
+        if msg := self.get_msg("new_http"):
+            message = json.loads(msg["data"])
+            profileid = message["profileid"]
+            twid = message["twid"]
+            flow = json.loads(message["flow"])
+            uid = flow["uid"]
+            host = flow["host"]
+            uri = flow["uri"]
+            daddr = flow["daddr"]
+            timestamp = flow.get("stime", "")
+            user_agent = flow.get("user_agent", False)
+            request_body_len = flow.get("request_body_len")
+            response_body_len = flow.get("response_body_len")
+            method = flow.get("method")
+            resp_mime_types = flow.get("resp_mime_types")
 
             self.check_suspicious_user_agents(
                 uid, host, uri, timestamp, user_agent, profileid, twid
@@ -739,9 +701,7 @@ class HTTPAnalyzer(IModule):
             )
             # find the UA of this profileid if we don't have it
             # get the last used ua of this profile
-            cached_ua = self.db.get_user_agent_from_profile(
-                profileid
-            )
+            cached_ua = self.db.get_user_agent_from_profile(profileid)
             if cached_ua:
                 self.check_multiple_UAs(
                     cached_ua,
@@ -752,42 +712,25 @@ class HTTPAnalyzer(IModule):
                     uid,
                 )
 
-            if (
-                not cached_ua
-                or (type(cached_ua) == dict
-                    and cached_ua.get('user_agent', '') != user_agent
-                    and 'server-bag' not in user_agent)
+            if not cached_ua or (
+                type(cached_ua) == dict
+                and cached_ua.get("user_agent", "") != user_agent
+                and "server-bag" not in user_agent
             ):
                 # only UAs of type dict are browser UAs,
                 # skips str UAs as they are SSH clients
-                self.get_user_agent_info(
-                    user_agent,
-                    profileid
-                )
+                self.get_user_agent_info(user_agent, profileid)
 
-            if 'server-bag' in user_agent:
-                self.extract_info_from_UA(
-                    user_agent,
-                    profileid
-                )
+            if "server-bag" in user_agent:
+                self.extract_info_from_UA(user_agent, profileid)
 
             if self.detect_executable_mime_types(resp_mime_types):
                 self.set_evidence_executable_mime_type(
-                    resp_mime_types,
-                    profileid,
-                    twid,
-                    uid,
-                    timestamp,
-                    daddr
+                    resp_mime_types, profileid, twid, uid, timestamp, daddr
                 )
 
             self.check_incompatible_user_agent(
-                host,
-                uri,
-                timestamp,
-                profileid,
-                twid,
-                uid
+                host, uri, timestamp, profileid, twid, uid
             )
 
             self.check_pastebin_downloads(
@@ -797,18 +740,13 @@ class HTTPAnalyzer(IModule):
                 profileid,
                 twid,
                 timestamp,
-                uid
+                uid,
             )
-
 
             self.set_evidence_http_traffic(
-                daddr,
-                profileid,
-                twid,
-                uid,
-                timestamp
+                daddr, profileid, twid, uid, timestamp
             )
-        
-        if msg := self.get_msg('new_weird'):
-            msg = json.loads(msg['data'])
+
+        if msg := self.get_msg("new_weird"):
+            msg = json.loads(msg["data"])
             self.check_weird_http_method(msg)

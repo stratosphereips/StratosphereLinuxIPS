@@ -19,7 +19,9 @@ from managers.ui_manager import UIManager
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
-from slips_files.common.performance_profilers.memory_profiler import MemoryProfiler
+from slips_files.common.performance_profilers.memory_profiler import (
+    MemoryProfiler,
+)
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.core.database.database_manager import DBManager
@@ -53,9 +55,11 @@ class Main(IObservable):
 
             if not self.args.stopdaemon:
                 # Check the type of input
-                self.input_type, self.input_information, self.line_type = (
-                    self.checker.check_input_type()
-                )
+                (
+                    self.input_type,
+                    self.input_information,
+                    self.line_type,
+                ) = self.checker.check_input_type()
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
@@ -71,7 +75,10 @@ class Main(IObservable):
         )
         if self.cpuProfilerEnabled:
             try:
-                if self.cpuProfilerMultiprocess and self.cpuProfilerMode == "dev":
+                if (
+                    self.cpuProfilerMultiprocess
+                    and self.cpuProfilerMode == "dev"
+                ):
                     args = sys.argv
                     if args[-1] != "--no-recurse":
                         tracer_entries = str(
@@ -86,13 +93,16 @@ class Main(IObservable):
                             "-o",
                             str(
                                 os.path.join(
-                                    self.args.output, "cpu_profiling_result.json"
+                                    self.args.output,
+                                    "cpu_profiling_result.json",
                                 )
                             ),
                         ]
                         viz_args.extend(args)
                         viz_args.append("--no-recurse")
-                        print("Starting multiprocess profiling recursive subprocess")
+                        print(
+                            "Starting multiprocess profiling recursive subprocess"
+                        )
                         subprocess.run(viz_args)
                         exit(0)
                 else:
@@ -115,7 +125,9 @@ class Main(IObservable):
                 self.cpuProfiler.print()
 
     def memory_profiler_init(self):
-        self.memoryProfilerEnabled = self.conf.get_memory_profiler_enable() == "yes"
+        self.memoryProfilerEnabled = (
+            self.conf.get_memory_profiler_enable() == "yes"
+        )
         memoryProfilerMode = self.conf.get_memory_profiler_mode()
         memoryProfilerMultiprocess = (
             self.conf.get_memory_profiler_multiprocess() == "yes"
@@ -134,7 +146,10 @@ class Main(IObservable):
             self.memoryProfiler.start()
 
     def memory_profiler_release(self):
-        if hasattr(self, "memoryProfilerEnabled") and self.memoryProfilerEnabled:
+        if (
+            hasattr(self, "memoryProfilerEnabled")
+            and self.memoryProfilerEnabled
+        ):
             self.memoryProfiler.stop()
 
     def memory_profiler_multiproc_test(self):
@@ -301,7 +316,9 @@ class Main(IObservable):
         # it should be output/wlp3s0
         self.args.output = os.path.join(
             self.alerts_default_path,
-            os.path.basename(self.input_information),  # get pcap name from path
+            os.path.basename(
+                self.input_information
+            ),  # get pcap name from path
         )
         # add timestamp to avoid conflicts wlp3s0_2022-03-1_03:55
         ts = utils.convert_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
@@ -366,7 +383,9 @@ class Main(IObservable):
             sys.exit(-1)
 
         if self.mode == "daemonized":
-            print("Can't read input from stdin in daemonized mode. " "Stopping")
+            print(
+                "Can't read input from stdin in daemonized mode. " "Stopping"
+            )
             sys.exit(-1)
         line_type = input_information
         input_type = "stdin"
@@ -380,15 +399,20 @@ class Main(IObservable):
         # default value
         input_type = "file"
         # Get the type of file
-        cmd_result = subprocess.run(["file", given_path], stdout=subprocess.PIPE)
+        cmd_result = subprocess.run(
+            ["file", given_path], stdout=subprocess.PIPE
+        )
         # Get command output
         cmd_result = cmd_result.stdout.decode("utf-8")
         if (
-            "pcap capture file" in cmd_result or "pcapng capture file" in cmd_result
+            "pcap capture file" in cmd_result
+            or "pcapng capture file" in cmd_result
         ) and os.path.isfile(given_path):
             input_type = "pcap"
         elif (
-            "dBase" in cmd_result or "nfcap" in given_path or "nfdump" in given_path
+            "dBase" in cmd_result
+            or "nfcap" in given_path
+            or "nfdump" in given_path
         ) and os.path.isfile(given_path):
             input_type = "nfdump"
             if shutil.which("nfdump") is None:
@@ -439,7 +463,9 @@ class Main(IObservable):
                     # is it zeek log file or binetflow file?
 
                     # zeek tab files are separated by several spaces or tabs
-                    sequential_spaces_found = re.search("\s{1,}-\s{1,}", first_line)
+                    sequential_spaces_found = re.search(
+                        "\s{1,}-\s{1,}", first_line
+                    )
                     tabs_found = re.search("\t{1,}", first_line)
 
                     if "->" in first_line or "StartTime" in first_line:
@@ -492,7 +518,10 @@ class Main(IObservable):
 
         # only update the stats every 5s
         now = datetime.now()
-        if utils.get_time_diff(self.last_updated_stats_time, now, "seconds") < 5:
+        if (
+            utils.get_time_diff(self.last_updated_stats_time, now, "seconds")
+            < 5
+        ):
             return
 
         self.last_updated_stats_time = now
@@ -537,7 +566,6 @@ class Main(IObservable):
     def start(self):
         """Main Slips Function"""
         try:
-
             self.print_version()
             print("https://stratosphereips.org")
             print("-" * 27)
@@ -546,15 +574,16 @@ class Main(IObservable):
 
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
-            current_stdout, stderr, slips_logfile = (
-                self.checker.check_output_redirection()
-            )
+            (
+                current_stdout,
+                stderr,
+                slips_logfile,
+            ) = self.checker.check_output_redirection()
             self.stdout = current_stdout
             self.logger = self.proc_man.start_output_process(
                 current_stdout, stderr, slips_logfile
             )
             self.add_observer(self.logger)
-            
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -582,12 +611,18 @@ class Main(IObservable):
                 }
             )
             self.print(
-                f"Using redis server on " f"port: "
-                f"{green(self.redis_port)}", 1,  0
+                f"Using redis server on "
+                f"port: "
+                f"{green(self.redis_port)}",
+                1,
+                0,
             )
             self.print(
-                f'Started {green("Main")} process ' f"[PID"
-                f" {green(self.pid)}]", 1,  0
+                f'Started {green("Main")} process '
+                f"[PID"
+                f" {green(self.pid)}]",
+                1,
+                0,
             )
             # start progress bar before all modules so it doesn't miss
             # any prints in its queue and slips wouldn't seem like it's frozen
@@ -632,8 +667,6 @@ class Main(IObservable):
 
             self.db.store_std_file(**std_files)
 
-            
-
             # if slips is given a .rdb file, don't load the
             # modules as we don't need them
             if not self.args.db:
@@ -642,9 +675,10 @@ class Main(IObservable):
                 # slips will wait untill all TI files are updated before
                 # starting the rest of the modules
                 self.proc_man.start_update_manager(
-                    local_files=True, TI_feeds=self.conf.wait_for_TI_to_finish()
+                    local_files=True,
+                    TI_feeds=self.conf.wait_for_TI_to_finish(),
                 )
-                self.print("Starting modules",1, 0)
+                self.print("Starting modules", 1, 0)
                 self.proc_man.load_modules()
                 # give outputprocess time to print all the started modules
                 time.sleep(0.5)
@@ -722,7 +756,7 @@ class Main(IObservable):
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
-                
+
                 self.update_host_ip(host_ip, modified_profiles)
 
         except KeyboardInterrupt:

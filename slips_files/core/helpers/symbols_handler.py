@@ -4,12 +4,11 @@ import traceback
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
 
-class SymbolHandler(IObservable):
-    name = 'SymbolHandler'
 
-    def __init__(self,
-                 logger:Output,
-                 db):
+class SymbolHandler(IObservable):
+    name = "SymbolHandler"
+
+    def __init__(self, logger: Output, db):
         IObservable.__init__(self)
         self.db = db
         self.logger = logger
@@ -34,12 +33,13 @@ class SymbolHandler(IObservable):
 
         self.notify_observers(
             {
-                'from': self.name,
-                'txt': text,
-                'verbose': verbose,
-                'debug': debug
-           }
+                "from": self.name,
+                "txt": text,
+                "verbose": verbose,
+                "debug": debug,
+            }
         )
+
     def compute(
         self,
         flow,
@@ -59,7 +59,7 @@ class SymbolHandler(IObservable):
         """
         daddr_as_obj = ip_address(flow.daddr)
         profileid = f"profile_{flow.saddr}"
-        tupleid = f'{daddr_as_obj}-{flow.dport}-{flow.proto}'
+        tupleid = f"{daddr_as_obj}-{flow.dport}-{flow.proto}"
 
         current_duration = flow.dur
         current_size = flow.bytes
@@ -69,15 +69,17 @@ class SymbolHandler(IObservable):
             current_size = int(current_size)
             now_ts = float(flow.starttime)
             self.print(
-                'Starting compute symbol. Profileid: {}, '
-                'Tupleid {}, time:{} ({}), dur:{}, size:{}'.format(
+                "Starting compute symbol. Profileid: {}, "
+                "Tupleid {}, time:{} ({}), dur:{}, size:{}".format(
                     profileid,
                     tupleid,
                     twid,
                     type(twid),
                     current_duration,
                     current_size,
-                ),3,0
+                ),
+                3,
+                0,
             )
             # Variables for computing the symbol of each tuple
             T2 = False
@@ -101,10 +103,10 @@ class SymbolHandler(IObservable):
             # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
             def compute_periodicity(
-                        now_ts: float, last_ts: float, last_last_ts: float
-                    ):
+                now_ts: float, last_ts: float, last_last_ts: float
+            ):
                 """Function to compute the periodicity"""
-                zeros = ''
+                zeros = ""
                 if last_last_ts is False or last_ts is False:
                     TD = -1
                     T1 = None
@@ -128,7 +130,7 @@ class SymbolHandler(IObservable):
                         # 7100 / 3600 =~ 1.972  ->  int(1.972) = 1
                         for i in range(int(t2_in_hours)):
                             # Add the zeros to the symbol object
-                            zeros += '0'
+                            zeros += "0"
 
                     # Compute TD
                     try:
@@ -150,10 +152,8 @@ class SymbolHandler(IObservable):
                         # Strongly not periodicity
                         TD = 4
                 self.print(
-                    'Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, '
-                    'T2={}, TD={}'.format(
-                        profileid, tupleid, T1, T2, TD
-                    ),
+                    "Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, "
+                    "T2={}, TD={}".format(profileid, tupleid, T1, T2, TD),
                     3,
                     0,
                 )
@@ -186,32 +186,32 @@ class SymbolHandler(IObservable):
                 # {periodicity: {'size' : {duration: letter, duration: letter, etc.}}
                 periodicity_map = {
                     # every key in this dict represents a periodicity
-                    '-1': {
+                    "-1": {
                         # every key in this dict is a size 1,2,3
                         # 'size' : {duration: letter, diration: letter, etc.}
-                        '1': {'1': '1', '2': '2', '3': '3'},
-                        '2': {'1': '4', '2': '5', '3': '6'},
-                        '3': {'1': '7', '2': '8', '3': '9'},
+                        "1": {"1": "1", "2": "2", "3": "3"},
+                        "2": {"1": "4", "2": "5", "3": "6"},
+                        "3": {"1": "7", "2": "8", "3": "9"},
                     },
-                    '1': {
-                        '1': {'1': 'a', '2': 'b', '3': 'c'},
-                        '2': {'1': 'd', '2': 'e', '3': 'f'},
-                        '3': {'1': 'g', '2': 'h', '3': 'i'},
+                    "1": {
+                        "1": {"1": "a", "2": "b", "3": "c"},
+                        "2": {"1": "d", "2": "e", "3": "f"},
+                        "3": {"1": "g", "2": "h", "3": "i"},
                     },
-                    '2': {
-                        '1': {'1': 'A', '2': 'B', '3': 'C'},
-                        '2': {'1': 'D', '2': 'E', '3': 'F'},
-                        '3': {'1': 'G', '2': 'H', '3': 'I'},
+                    "2": {
+                        "1": {"1": "A", "2": "B", "3": "C"},
+                        "2": {"1": "D", "2": "E", "3": "F"},
+                        "3": {"1": "G", "2": "H", "3": "I"},
                     },
-                    '3': {
-                        '1': {'1': 'r', '2': 's', '3': 't'},
-                        '2': {'1': 'u', '2': 'v', '3': 'w'},
-                        '3': {'1': 'x', '2': 'y', '3': 'z'},
+                    "3": {
+                        "1": {"1": "r", "2": "s", "3": "t"},
+                        "2": {"1": "u", "2": "v", "3": "w"},
+                        "3": {"1": "x", "2": "y", "3": "z"},
                     },
-                    '4': {
-                        '1': {'1': 'R', '2': 'S', '3': 'T'},
-                        '2': {'1': 'U', '2': 'V', '3': 'W'},
-                        '3': {'1': 'X', '2': 'Y', '3': 'Z'},
+                    "4": {
+                        "1": {"1": "R", "2": "S", "3": "T"},
+                        "2": {"1": "U", "2": "V", "3": "W"},
+                        "3": {"1": "X", "2": "Y", "3": "Z"},
                     },
                 }
                 return periodicity_map[str(periodicity)][str(size)][
@@ -224,18 +224,18 @@ class SymbolHandler(IObservable):
                 # {T2}', 0, 5)
                 if not isinstance(T2, bool):
                     if T2 <= timedelta(seconds=5).total_seconds():
-                        return '.'
+                        return "."
                     elif T2 <= timedelta(seconds=60).total_seconds():
-                        return ','
+                        return ","
                     elif T2 <= timedelta(seconds=300).total_seconds():
-                        return '+'
+                        return "+"
                     elif T2 <= timedelta(seconds=3600).total_seconds():
-                        return '*'
+                        return "*"
                     else:
                         # Changed from 0 to ''
-                        return ''
+                        return ""
                 else:
-                    return ''
+                    return ""
 
             # Here begins the function's code
             try:
@@ -248,8 +248,8 @@ class SymbolHandler(IObservable):
                     # ordered?? Are we losing flows?
                     # Put a warning
                     self.print(
-                        'Warning: Coming flows are not sorted -> '
-                        'Some time diff are less than zero.',
+                        "Warning: Coming flows are not sorted -> "
+                        "Some time diff are less than zero.",
                         0,
                         2,
                     )
@@ -270,8 +270,8 @@ class SymbolHandler(IObservable):
             timechar = compute_timechar()
             # self.print("TimeChar: {}".format(timechar), 0, 1)
             self.print(
-                'Profileid: {}, Tuple: {}, Periodicity: {}, '
-                'Duration: {}, Size: {}, Letter: {}. TimeChar: {}'.format(
+                "Profileid: {}, Tuple: {}, Periodicity: {}, "
+                "Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(
                     profileid,
                     tupleid,
                     periodicity,
@@ -280,7 +280,8 @@ class SymbolHandler(IObservable):
                     letter,
                     timechar,
                 ),
-                3, 0,
+                3,
+                0,
             )
             # p = self.db.end_profiling(p)
             symbol = zeros + letter + timechar
@@ -288,6 +289,5 @@ class SymbolHandler(IObservable):
             return symbol, (last_ts, now_ts)
         except Exception:
             # For some reason we can not use the output queue here.. check
-            self.print('Error in compute_symbol in Profiler Process.',
-                       0, 1)
+            self.print("Error in compute_symbol in Profiler Process.", 0, 1)
             self.print(traceback.format_exc(), 0, 1)

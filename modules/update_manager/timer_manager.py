@@ -1,6 +1,7 @@
 from threading import Timer
 import asyncio
 
+
 class InfiniteTimer:
     """
     Timer to update Threat Intelligence Files when Slips starts
@@ -22,7 +23,7 @@ class InfiniteTimer:
     def _start_timer(self):
         if (
             self.timer_running
-        ):   # Code could have been running when cancel was called.
+        ):  # Code could have been running when cancel was called.
             self.thread = Timer(self.seconds, self._handle_target)
             self.thread.start()
 
