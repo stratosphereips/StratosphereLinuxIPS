@@ -1,7 +1,6 @@
 import json
 import ipaddress
-from typing import Optional, \
-    Dict
+from typing import Optional, Dict
 
 import validators
 from slips_files.common.imports import *
@@ -14,21 +13,19 @@ from slips_files.core.evidence_structure.evidence import (
     Direction,
     IoCType,
     Attacker,
-    Victim
-    )
+    Victim,
+)
 
 
 class Whitelist(IObservable):
-    def __init__(self,
-                 logger: Output,
-                 db):
+    def __init__(self, logger: Output, db):
         IObservable.__init__(self)
         self.logger = logger
         self.add_observer(self.logger)
-        self.name = 'whitelist'
+        self.name = "whitelist"
         self.read_configuration()
-        self.org_info_path = 'slips_files/organizations_info/'
-        self.ignored_flow_types = ('arp')
+        self.org_info_path = "slips_files/organizations_info/"
+        self.ignored_flow_types = "arp"
         self.db = db
 
     def print(self, text, verbose=1, debug=0):
@@ -52,11 +49,11 @@ class Whitelist(IObservable):
         # used for logging the msgs too cli and slips log files
         self.notify_observers(
             {
-                'from': self.name,
-                'txt': text,
-                'verbose': verbose,
-                'debug': debug
-           }
+                "from": self.name,
+                "txt": text,
+                "verbose": verbose,
+                "debug": debug,
+            }
         )
 
     def read_configuration(self):
@@ -66,11 +63,11 @@ class Whitelist(IObservable):
     def is_whitelisted_asn(self, ip, org):
         ip_data = self.db.get_ip_info(ip)
         try:
-            ip_asn = ip_data['asn']['asnorg']
-            org_asn = json.loads(self.db.get_org_info(org, 'asn'))
+            ip_asn = ip_data["asn"]["asnorg"]
+            org_asn = json.loads(self.db.get_org_info(org, "asn"))
             if (
                 ip_asn
-                and ip_asn != 'Unknown'
+                and ip_asn != "Unknown"
                 and (org.lower() in ip_asn.lower() or ip_asn in org_asn)
             ):
                 # this ip belongs to a whitelisted org, ignore flow
@@ -89,11 +86,11 @@ class Whitelist(IObservable):
             return True
 
     def is_whitelisted_domain_in_flow(
-            self,
-            whitelisted_domain,
-            direction: Direction,
-            domains_of_flow,
-            ignore_type
+        self,
+        whitelisted_domain,
+        direction: Direction,
+        domains_of_flow,
+        ignore_type,
     ):
         """
         Given the domain of a flow, and a whitelisted domain,
@@ -106,16 +103,21 @@ class Whitelist(IObservable):
         :param domains_of_flow: src domains of the src IP of the flow,
                                 or dst domains of the dst IP of the flow
         """
-        whitelisted_domains = self.db.get_whitelist('domains')
+        whitelisted_domains = self.db.get_whitelist("domains")
         if not whitelisted_domains:
             return False
 
         # do we wanna whitelist flows coming from or going to this domain or both?
-        from_ = whitelisted_domains[whitelisted_domain]['from']
-        from_ = Direction.SRC if 'src' in from_ else Direction.DST
+        from_ = whitelisted_domains[whitelisted_domain]["from"]
+        from_ = Direction.SRC if "src" in from_ else Direction.DST
         # Now check the domains of the src IP
-        if direction == from_ or 'both' in whitelisted_domains[whitelisted_domain]['from']:
-            what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
+        if (
+            direction == from_
+            or "both" in whitelisted_domains[whitelisted_domain]["from"]
+        ):
+            what_to_ignore = whitelisted_domains[whitelisted_domain][
+                "what_to_ignore"
+            ]
 
             for domain_to_check in domains_of_flow:
                 main_domain = domain_to_check[-len(whitelisted_domain) :]
@@ -123,12 +125,14 @@ class Whitelist(IObservable):
                     # We can ignore flows or alerts, what is it?
                     if (
                         ignore_type in what_to_ignore
-                        or 'both' in what_to_ignore
+                        or "both" in what_to_ignore
                     ):
                         return True
         return False
 
-    def is_whitelisted_domain(self, domain_to_check, saddr, daddr, ignore_type):
+    def is_whitelisted_domain(
+        self, domain_to_check, saddr, daddr, ignore_type
+    ):
         """
         Used only when checking whitelisted flows
         (aka domains associated with the src or dstip of a flow)
@@ -138,7 +142,7 @@ class Whitelist(IObservable):
         :param ignore_type: what did the user whitelist? alerts or flows or both
         """
 
-        whitelisted_domains = self.db.get_whitelist('domains')
+        whitelisted_domains = self.db.get_whitelist("domains")
         if not whitelisted_domains:
             return False
 
@@ -152,27 +156,26 @@ class Whitelist(IObservable):
         # {domains_to_check_dst} {domains_to_check_src}')
         # Go through each whitelisted domain and check if what arrived is there
         for whitelisted_domain in list(whitelisted_domains.keys()):
-            what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
+            what_to_ignore = whitelisted_domains[whitelisted_domain][
+                "what_to_ignore"
+            ]
             # Here we iterate over all the domains to check if we can find
             # subdomains. If slack.com was whitelisted, then test.slack.com
             # should be ignored too. But not 'slack.com.test'
             main_domain = domain_to_check[-len(whitelisted_domain) :]
             if whitelisted_domain in main_domain:
                 # We can ignore flows or alerts, what is it?
-                if (
-                    ignore_type in what_to_ignore
-                    or 'both' in what_to_ignore
-                ):
+                if ignore_type in what_to_ignore or "both" in what_to_ignore:
                     # self.print(f'Whitelisting the domain
                     # {domain_to_check} due to whitelist of {domain_to_check}')
                     return True
 
-
             if self.is_whitelisted_domain_in_flow(
-                    whitelisted_domain,
-                    Direction.SRC,
-                    src_domains_of_flow,
-                    ignore_type):
+                whitelisted_domain,
+                Direction.SRC,
+                src_domains_of_flow,
+                ignore_type,
+            ):
                 # self.print(f"Whitelisting the domain
                 # {domain_to_check} because is related"
                 #            f" to domain {domain_to_check}
@@ -180,17 +183,17 @@ class Whitelist(IObservable):
                 return True
 
             if self.is_whitelisted_domain_in_flow(
-                    whitelisted_domain,
-                    Direction.DST,
-                    dst_domains_of_flow,
-                    ignore_type):
+                whitelisted_domain,
+                Direction.DST,
+                dst_domains_of_flow,
+                ignore_type,
+            ):
                 # self.print(f"Whitelisting the domain
                 # {domain_to_check} because is"
                 #            f"related to domain {domain_to_check}
                 #            of src IP {saddr}")
                 return True
         return False
-
 
     def is_whitelisted_flow(self, flow) -> bool:
         """
@@ -211,98 +214,90 @@ class Whitelist(IObservable):
         # Domain names are stored in different zeek files using different names.
         # Try to get the domain from each file.
         domains_to_check = []
-        if flow_type == 'ssl':
+        if flow_type == "ssl":
             domains_to_check.append(flow.server_name)
-        elif flow_type == 'http':
+        elif flow_type == "http":
             domains_to_check.append(flow.host)
-        elif flow_type == 'ssl':
-            domains_to_check.append(flow.subject.replace(
-                'CN=', ''
-            ))
-        elif flow_type == 'dns':
+        elif flow_type == "ssl":
+            domains_to_check.append(flow.subject.replace("CN=", ""))
+        elif flow_type == "dns":
             domains_to_check.append(flow.query)
 
-
         for domain in domains_to_check:
-            if self.is_whitelisted_domain(domain, saddr, daddr, 'flows'):
+            if self.is_whitelisted_domain(domain, saddr, daddr, "flows"):
                 return True
 
-
-
-        if whitelisted_IPs := self.db.get_whitelist('IPs'):
+        if whitelisted_IPs := self.db.get_whitelist("IPs"):
             # self.print('Check the IPs')
             # Check if the IPs are whitelisted
             ips_to_whitelist = list(whitelisted_IPs.keys())
 
             if saddr in ips_to_whitelist:
                 # The flow has the src IP to whitelist
-                from_ = whitelisted_IPs[saddr]['from']
-                what_to_ignore = whitelisted_IPs[saddr]['what_to_ignore']
-                if ('src' in from_ or 'both' in from_) and (
-                        self.should_ignore_flows(what_to_ignore)
+                from_ = whitelisted_IPs[saddr]["from"]
+                what_to_ignore = whitelisted_IPs[saddr]["what_to_ignore"]
+                if ("src" in from_ or "both" in from_) and (
+                    self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"Whitelisting the src IP {column_values['saddr']}")
                     return True
 
-            if daddr in ips_to_whitelist:   # should be if and not elif
+            if daddr in ips_to_whitelist:  # should be if and not elif
                 # The flow has the dst IP to whitelist
-                from_ = whitelisted_IPs[daddr]['from']
-                what_to_ignore = whitelisted_IPs[daddr]['what_to_ignore']
-                if ('dst' in from_ or 'both' in from_) and (
+                from_ = whitelisted_IPs[daddr]["from"]
+                what_to_ignore = whitelisted_IPs[daddr]["what_to_ignore"]
+                if ("dst" in from_ or "both" in from_) and (
                     self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"Whitelisting the dst IP
                     # {column_values['daddr']}")
                     return True
 
-            if flow_type == 'dns':
+            if flow_type == "dns":
                 # check all answers
                 for answer in flow.answers:
                     if answer in ips_to_whitelist:
                         # #TODO the direction doesn't matter here right?
                         # direction = whitelisted_IPs[daddr]['from']
-                        what_to_ignore = whitelisted_IPs[answer]['what_to_ignore']
+                        what_to_ignore = whitelisted_IPs[answer][
+                            "what_to_ignore"
+                        ]
                         if self.should_ignore_flows(what_to_ignore):
                             # self.print(f"Whitelisting the IP {answer}
                             # due to its presence in a dns answer")
                             return True
 
-
-        if whitelisted_macs := self.db.get_whitelist('mac'):
+        if whitelisted_macs := self.db.get_whitelist("mac"):
             # try to get the mac address of the current flow
-            src_mac = flow.smac if hasattr(flow, 'smac') else False
+            src_mac = flow.smac if hasattr(flow, "smac") else False
 
             if not src_mac:
                 if src_mac := self.db.get_mac_addr_from_profile(
-                    f'profile_{saddr}'
+                    f"profile_{saddr}"
                 ):
                     src_mac = src_mac[0]
 
             if src_mac and src_mac in list(whitelisted_macs.keys()):
                 # the src mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_macs[src_mac]['from']
-                what_to_ignore = whitelisted_macs[src_mac]['what_to_ignore']
+                from_ = whitelisted_macs[src_mac]["from"]
+                what_to_ignore = whitelisted_macs[src_mac]["what_to_ignore"]
 
                 if (
-                    ('src' in from_ or 'both' in from_)
-                    and
-                    self.should_ignore_flows(what_to_ignore)
-                ):
+                    "src" in from_ or "both" in from_
+                ) and self.should_ignore_flows(what_to_ignore):
                     # self.print(f"The source MAC of this flow
                     # {src_mac} is whitelisted")
                     return True
 
-            dst_mac = flow.dmac if hasattr(flow, 'smac') else False
+            dst_mac = flow.dmac if hasattr(flow, "smac") else False
             if dst_mac and dst_mac in list(whitelisted_macs.keys()):
                 # the dst mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_macs[dst_mac]['from']
-                what_to_ignore = whitelisted_macs[dst_mac]['what_to_ignore']
+                from_ = whitelisted_macs[dst_mac]["from"]
+                what_to_ignore = whitelisted_macs[dst_mac]["what_to_ignore"]
 
                 if (
-                    ('dst' in from_ or 'both' in from_)
-                    and
-                    self.should_ignore_flows(what_to_ignore)
-                ):
+                    "dst" in from_ or "both" in from_
+                ) and self.should_ignore_flows(what_to_ignore):
                     # self.print(f"The dst MAC of this flow {dst_mac}
                     # is whitelisted")
                     return True
@@ -310,31 +305,31 @@ class Whitelist(IObservable):
         if self.is_ignored_flow_type(flow_type):
             return False
 
-        if whitelisted_orgs := self.db.get_whitelist('organizations'):
+        if whitelisted_orgs := self.db.get_whitelist("organizations"):
             # self.print('Check if the organization is whitelisted')
             # Check if IP belongs to a whitelisted organization range
             # Check if the ASN of this IP is any of these organizations
 
             for org in whitelisted_orgs:
-                from_ = whitelisted_orgs[org]['from']  # src or dst or both
+                from_ = whitelisted_orgs[org]["from"]  # src or dst or both
                 what_to_ignore = whitelisted_orgs[org][
-                    'what_to_ignore'
+                    "what_to_ignore"
                 ]  # flows, alerts or both
                 # self.print(f'Checking {org}, from:{from_} type {what_to_ignore}')
 
                 if self.should_ignore_flows(what_to_ignore):
                     # We want to block flows from this org. get the domains
                     # of this flow based on the direction.
-                    if 'both' in from_:
+                    if "both" in from_:
                         domains_to_check = (
                             domains_to_check_src + domains_to_check_dst
                         )
-                    elif 'src' in from_:
+                    elif "src" in from_:
                         domains_to_check = domains_to_check_src
-                    elif 'dst' in from_:
+                    elif "dst" in from_:
                         domains_to_check = domains_to_check_dst
 
-                    if 'src' in from_ or 'both' in from_:
+                    if "src" in from_ or "both" in from_:
                         # Method 1 Check if src IP belongs to a whitelisted
                         # organization range
                         try:
@@ -356,7 +351,7 @@ class Whitelist(IObservable):
                             # Whitelisted because of ASN.")
                             return True
 
-                    if 'dst' in from_ or 'both' in from_:
+                    if "dst" in from_ or "both" in from_:
                         # Method 1 Check if dst IP belongs to a whitelisted
                         # organization range
                         try:
@@ -393,9 +388,7 @@ class Whitelist(IObservable):
         Checks if the given domains belongs to the given org
         """
         try:
-            org_domains = json.loads(
-                self.db.get_org_info(org, 'domains')
-            )
+            org_domains = json.loads(self.db.get_org_info(org, "domains"))
             if org in domain:
                 # self.print(f"The domain of this flow ({domain}) belongs to
                 # the domains of {org}")
@@ -404,13 +397,13 @@ class Whitelist(IObservable):
             try:
                 flow_TLD = tld.get_tld(domain, as_object=True)
             except tld.exceptions.TldBadUrl:
-                flow_TLD = domain.split('.')[-1]
+                flow_TLD = domain.split(".")[-1]
 
             for org_domain in org_domains:
                 try:
                     org_domain_TLD = tld.get_tld(org_domain, as_object=True)
                 except tld.exceptions.TldBadUrl:
-                    org_domain_TLD = org_domain.split('.')[-1]
+                    org_domain_TLD = org_domain.split(".")[-1]
 
                 # make sure the 2 domains have the same same top level domain
                 if flow_TLD != org_domain_TLD:
@@ -444,10 +437,10 @@ class Whitelist(IObservable):
 
         # since this function can be run when the user modifies whitelist.conf
         # we need to check if the dicts are already there
-        whitelisted_IPs = self.db.get_whitelist('IPs')
-        whitelisted_domains = self.db.get_whitelist('domains')
-        whitelisted_orgs = self.db.get_whitelist('organizations')
-        whitelisted_mac = self.db.get_whitelist('mac')
+        whitelisted_IPs = self.db.get_whitelist("IPs")
+        whitelisted_domains = self.db.get_whitelist("domains")
+        whitelisted_orgs = self.db.get_whitelist("organizations")
+        whitelisted_mac = self.db.get_whitelist("mac")
         # Process lines after comments
         line_number = 0
         try:
@@ -460,15 +453,15 @@ class Whitelist(IObservable):
 
                     # check if the user commented an org, ip or domain that
                     # was whitelisted
-                    if line.startswith('#'):
+                    if line.startswith("#"):
                         if whitelisted_IPs:
                             for ip in list(whitelisted_IPs):
                                 # make sure the user commented the line we
                                 # have in cache exactly
                                 if (
                                     ip in line
-                                    and whitelisted_IPs[ip]['from'] in line
-                                    and whitelisted_IPs[ip]['what_to_ignore']
+                                    and whitelisted_IPs[ip]["from"] in line
+                                    and whitelisted_IPs[ip]["what_to_ignore"]
                                     in line
                                 ):
                                     # remove that entry from whitelisted_ips
@@ -479,10 +472,10 @@ class Whitelist(IObservable):
                             for domain in list(whitelisted_domains):
                                 if (
                                     domain in line
-                                    and whitelisted_domains[domain]['from']
+                                    and whitelisted_domains[domain]["from"]
                                     in line
                                     and whitelisted_domains[domain][
-                                        'what_to_ignore'
+                                        "what_to_ignore"
                                     ]
                                     in line
                                 ):
@@ -494,8 +487,8 @@ class Whitelist(IObservable):
                             for org in list(whitelisted_orgs):
                                 if (
                                     org in line
-                                    and whitelisted_orgs[org]['from'] in line
-                                    and whitelisted_orgs[org]['what_to_ignore']
+                                    and whitelisted_orgs[org]["from"] in line
+                                    and whitelisted_orgs[org]["what_to_ignore"]
                                     in line
                                 ):
                                     # remove that entry from whitelisted_domains
@@ -507,7 +500,7 @@ class Whitelist(IObservable):
                         continue
                     # line should be: ["type","domain/ip/organization",
                     # "from","what_to_ignore"]
-                    line = line.replace('\n', '').replace(' ', '').split(',')
+                    line = line.replace("\n", "").replace(" ", "").split(",")
                     try:
                         type_, data, from_, what_to_ignore = (
                             (line[0]).lower(),
@@ -518,34 +511,36 @@ class Whitelist(IObservable):
                     except IndexError:
                         # line is missing a column, ignore it.
                         self.print(
-                            f'Line {line_number} in whitelist.conf is missing a column. Skipping.'
+                            f"Line {line_number} in whitelist.conf is missing a column. Skipping."
                         )
                         continue
 
                     # Validate the type before processing
                     try:
-                        if 'ip' in type_ and (
+                        if "ip" in type_ and (
                             validators.ip_address.ipv6(data)
                             or validators.ip_address.ipv4(data)
                         ):
                             whitelisted_IPs[data] = {
-                                'from': from_,
-                                'what_to_ignore': what_to_ignore,
+                                "from": from_,
+                                "what_to_ignore": what_to_ignore,
                             }
-                        elif 'domain' in type_ and validators.domain(data):
+                        elif "domain" in type_ and validators.domain(data):
                             whitelisted_domains[data] = {
-                                'from': from_,
-                                'what_to_ignore': what_to_ignore,
+                                "from": from_,
+                                "what_to_ignore": what_to_ignore,
                             }
-                        elif 'mac' in type_ and validators.mac_address(data):
+                        elif "mac" in type_ and validators.mac_address(data):
                             whitelisted_mac[data] = {
-                                'from': from_,
-                                'what_to_ignore': what_to_ignore,
+                                "from": from_,
+                                "what_to_ignore": what_to_ignore,
                             }
-                        elif 'org' in type_:
+                        elif "org" in type_:
                             if data not in utils.supported_orgs:
-                                self.print(f"Whitelisted org {data} is not"
-                                           f" supported in slips")
+                                self.print(
+                                    f"Whitelisted org {data} is not"
+                                    f" supported in slips"
+                                )
                                 continue
                             # organizations dicts look something like this:
                             #  {'google': {'from':'dst',
@@ -553,43 +548,46 @@ class Whitelist(IObservable):
                             #               'IPs': {'34.64.0.0/10': subnet}}
                             try:
                                 # org already whitelisted, update info
-                                whitelisted_orgs[data]['from'] = from_
+                                whitelisted_orgs[data]["from"] = from_
                                 whitelisted_orgs[data][
-                                    'what_to_ignore'
+                                    "what_to_ignore"
                                 ] = what_to_ignore
                             except KeyError:
                                 # first time seeing this org
                                 whitelisted_orgs[data] = {
-                                    'from': from_,
-                                    'what_to_ignore': what_to_ignore,
+                                    "from": from_,
+                                    "what_to_ignore": what_to_ignore,
                                 }
 
                         else:
-                            self.print(f'{data} is not a valid {type_}.', 1,
-                                       0)
+                            self.print(f"{data} is not a valid {type_}.", 1, 0)
                     except Exception:
                         self.print(
-                            f'Line {line_number} in whitelist.conf is invalid.'
-                            f' Skipping. '
+                            f"Line {line_number} in whitelist.conf is invalid."
+                            f" Skipping. "
                         )
         except FileNotFoundError:
             self.print(
                 f"Can't find {self.whitelist_path}, using slips default "
                 f"whitelist.conf instead"
             )
-            if self.whitelist_path != 'config/whitelist.conf':
-                self.whitelist_path = 'config/whitelist.conf'
+            if self.whitelist_path != "config/whitelist.conf":
+                self.whitelist_path = "config/whitelist.conf"
                 self.read_whitelist()
 
         # store everything in the cache db because we'll be needing this
         # info in the evidenceProcess
-        self.db.set_whitelist('IPs', whitelisted_IPs)
-        self.db.set_whitelist('domains', whitelisted_domains)
-        self.db.set_whitelist('organizations', whitelisted_orgs)
-        self.db.set_whitelist('mac', whitelisted_mac)
+        self.db.set_whitelist("IPs", whitelisted_IPs)
+        self.db.set_whitelist("domains", whitelisted_domains)
+        self.db.set_whitelist("organizations", whitelisted_orgs)
+        self.db.set_whitelist("mac", whitelisted_mac)
 
-        return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, \
-            whitelisted_mac
+        return (
+            whitelisted_IPs,
+            whitelisted_domains,
+            whitelisted_orgs,
+            whitelisted_mac,
+        )
 
     def get_domains_of_flow(self, saddr, daddr):
         """
@@ -601,22 +599,24 @@ class Whitelist(IObservable):
         domains_to_check_dst = []
         try:
             if ip_data := self.db.get_ip_info(saddr):
-                if sni_info := ip_data.get('SNI', [{}])[0]:
-                    domains_to_check_src.append(sni_info.get('server_name', ''))
+                if sni_info := ip_data.get("SNI", [{}])[0]:
+                    domains_to_check_src.append(
+                        sni_info.get("server_name", "")
+                    )
         except (KeyError, TypeError):
             pass
         try:
             # self.print(f"DNS of src IP {column_values['saddr']}:
             # {self.db.get_dns_resolution(column_values['saddr'])}")
             src_dns_domains = self.db.get_dns_resolution(saddr)
-            src_dns_domains = src_dns_domains.get('domains', [])
+            src_dns_domains = src_dns_domains.get("domains", [])
             domains_to_check_src.extend(iter(src_dns_domains))
         except (KeyError, TypeError):
             pass
         try:
             if ip_data := self.db.get_ip_info(daddr):
-                if sni_info := ip_data.get('SNI', [{}])[0]:
-                    domains_to_check_dst.append(sni_info.get('server_name'))
+                if sni_info := ip_data.get("SNI", [{}])[0]:
+                    domains_to_check_dst.append(sni_info.get("server_name"))
         except (KeyError, TypeError):
             pass
 
@@ -624,21 +624,21 @@ class Whitelist(IObservable):
             # self.print(f"DNS of dst IP {column_values['daddr']}:
             # {self.db.get_dns_resolution(column_values['daddr'])}")
             dst_dns_domains = self.db.get_dns_resolution(daddr)
-            dst_dns_domains = dst_dns_domains.get('domains', [])
+            dst_dns_domains = dst_dns_domains.get("domains", [])
             domains_to_check_dst.extend(iter(dst_dns_domains))
         except (KeyError, TypeError):
             pass
 
         return domains_to_check_dst, domains_to_check_src
 
-    def is_ip_in_org(self, ip:str, org):
+    def is_ip_in_org(self, ip: str, org):
         """
         Check if the given ip belongs to the given org
         """
         try:
             org_subnets: dict = self.db.get_org_IPs(org)
 
-            first_octet:str = utils.get_first_octet(ip)
+            first_octet: str = utils.get_first_octet(ip)
             if not first_octet:
                 return
             ip_obj = ipaddress.ip_address(ip)
@@ -652,17 +652,15 @@ class Whitelist(IObservable):
             # and ip doesn't have asn info.
             pass
         return False
-    
+
     def profile_has_whitelisted_mac(
-            self, profile_ip, whitelisted_macs, direction: Direction
+        self, profile_ip, whitelisted_macs, direction: Direction
     ) -> bool:
         """
         Checks for alerts whitelist
         """
-        mac = self.db.get_mac_addr_from_profile(
-            f'profile_{profile_ip}'
-        )
-        
+        mac = self.db.get_mac_addr_from_profile(f"profile_{profile_ip}")
+
         if not mac:
             # we have no mac for this profile
             return False
@@ -670,19 +668,16 @@ class Whitelist(IObservable):
         mac = mac[0]
         if mac in list(whitelisted_macs.keys()):
             # src or dst and
-            from_ = whitelisted_macs[mac]['from']
-            what_to_ignore = whitelisted_macs[mac]['what_to_ignore']
+            from_ = whitelisted_macs[mac]["from"]
+            what_to_ignore = whitelisted_macs[mac]["what_to_ignore"]
             # do we want to whitelist alerts?
-            if (
-                'alerts' in what_to_ignore
-                or 'both' in what_to_ignore
-            ):
+            if "alerts" in what_to_ignore or "both" in what_to_ignore:
                 if direction == Direction.DST and (
-                    'src' in from_ or 'both' in from_
+                    "src" in from_ or "both" in from_
                 ):
                     return True
                 if direction == Direction.DST and (
-                    'dst' in from_ or 'both' in from_
+                    "dst" in from_ or "both" in from_
                 ):
                     return True
 
@@ -696,17 +691,14 @@ class Whitelist(IObservable):
         if not ip_data:
             return
         try:
-            ip_asn = ip_data['asn']['number']
+            ip_asn = ip_data["asn"]["number"]
         except KeyError:
             return
 
-        org_asn: list = json.loads(self.db.get_org_info(org, 'asn'))
+        org_asn: list = json.loads(self.db.get_org_info(org, "asn"))
 
         # make sure the asn field contains a value
-        if (
-            org.lower() in ip_asn.lower()
-            or ip_asn in org_asn
-        ):
+        if org.lower() in ip_asn.lower() or ip_asn in org_asn:
             # this ip belongs to a whitelisted org, ignore alert
             # self.print(f'Whitelisting evidence sent by {srcip} about
             # {ip} due to ASN of {ip}
@@ -718,26 +710,26 @@ class Whitelist(IObservable):
         Returns true if the user wants to whitelist alerts/flows from
          this source(ip, org, mac, etc)
         """
-        return ('src' in direction or 'both' in direction)
+        return "src" in direction or "both" in direction
 
     def should_ignore_to(self, direction) -> bool:
         """
         Returns true if the user wants to whitelist alerts/flows to
         this source(ip, org, mac, etc)
         """
-        return ('dst' in direction or 'both' in direction)
+        return "dst" in direction or "both" in direction
 
-    def should_ignore_alerts(self, what_to_ignore)-> bool:
+    def should_ignore_alerts(self, what_to_ignore) -> bool:
         """
         returns true we if the user wants to ignore alerts
         """
-        return 'alerts' in what_to_ignore or 'both' in what_to_ignore
+        return "alerts" in what_to_ignore or "both" in what_to_ignore
 
-    def should_ignore_flows(self, what_to_ignore)-> bool:
+    def should_ignore_flows(self, what_to_ignore) -> bool:
         """
         returns true we if the user wants to ignore alerts
         """
-        return 'flows' in what_to_ignore or 'both' in what_to_ignore
+        return "flows" in what_to_ignore or "both" in what_to_ignore
 
     def parse_whitelist(self, whitelist):
         """
@@ -745,25 +737,28 @@ class Whitelist(IObservable):
         """
         try:
             # Convert each list from str to dict
-            whitelisted_IPs = json.loads(whitelist['IPs'])
+            whitelisted_IPs = json.loads(whitelist["IPs"])
         except (IndexError, KeyError):
             whitelisted_IPs = {}
         try:
-            whitelisted_domains = json.loads(whitelist['domains'])
+            whitelisted_domains = json.loads(whitelist["domains"])
         except (IndexError, KeyError):
             whitelisted_domains = {}
         try:
-            whitelisted_orgs = json.loads(whitelist['organizations'])
+            whitelisted_orgs = json.loads(whitelist["organizations"])
         except (IndexError, KeyError):
             whitelisted_orgs = {}
         try:
-            whitelisted_macs = json.loads(whitelist['mac'])
+            whitelisted_macs = json.loads(whitelist["mac"])
         except (IndexError, KeyError):
             whitelisted_macs = {}
-        return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, \
-            whitelisted_macs
+        return (
+            whitelisted_IPs,
+            whitelisted_domains,
+            whitelisted_orgs,
+            whitelisted_macs,
+        )
 
-    
     def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
         whitelist = self.db.get_all_whitelist()
         max_tries = 10
@@ -775,19 +770,17 @@ class Whitelist(IObservable):
         # empty dicts evaluate to False
         while not bool(whitelist) and max_tries != 0:
             # try max 10 times to get the whitelist, if it's still empty
-                # hen it's not empty by mistake
+            # hen it's not empty by mistake
             max_tries -= 1
             whitelist = self.db.get_all_whitelist()
-        
+
         if max_tries == 0:
             # we tried 10 times to get the whitelist, it's probably empty.
             return
-        
+
         return whitelist
-    
-    def is_whitelisted_evidence(
-            self, evidence: Evidence
-        ) -> bool:
+
+    def is_whitelisted_evidence(self, evidence: Evidence) -> bool:
         """
         Checks if an evidence is whitelisted
         """
@@ -797,45 +790,38 @@ class Whitelist(IObservable):
         if self.check_whitelisted_attacker(evidence.attacker):
             return True
 
-        if (
-                hasattr(evidence, 'victim')
-                and self.check_whitelisted_victim(evidence.victim)
+        if hasattr(evidence, "victim") and self.check_whitelisted_victim(
+            evidence.victim
         ):
             return True
-
 
     def check_whitelisted_victim(self, victim: Victim) -> bool:
         if not victim:
             return False
 
-        if (
-                victim.victim_type == IoCType.IP.name
-                and self.is_ip_whitelisted(victim.value, victim.direction)
+        if victim.victim_type == IoCType.IP.name and self.is_ip_whitelisted(
+            victim.value, victim.direction
         ):
-                return True
+            return True
 
         elif (
-                victim.victim_type == IoCType.DOMAIN.name
-                and self.is_domain_whitelisted(
-                        victim.value, victim.direction)
+            victim.victim_type == IoCType.DOMAIN.name
+            and self.is_domain_whitelisted(victim.value, victim.direction)
         ):
-                return True
+            return True
 
         if self.is_part_of_a_whitelisted_org(victim):
             return True
 
-
     def check_whitelisted_attacker(self, attacker: Attacker):
-
         whitelist = self.db.get_all_whitelist()
         whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
         if (
-                attacker.attacker_type == IoCType.DOMAIN.name
-                and
-                self.is_domain_whitelisted(attacker.value, attacker.direction)
+            attacker.attacker_type == IoCType.DOMAIN.name
+            and self.is_domain_whitelisted(attacker.value, attacker.direction)
         ):
-                return True
+            return True
 
         elif attacker.attacker_type == IoCType.IP.name:
             # Check that the IP in the content of the alert is whitelisted
@@ -843,11 +829,8 @@ class Whitelist(IObservable):
                 return True
 
         # Check orgs
-        if (
-                whitelisted_orgs
-                and self.is_part_of_a_whitelisted_org(attacker)
-        ):
-               return True
+        if whitelisted_orgs and self.is_part_of_a_whitelisted_org(attacker):
+            return True
 
         return False
 
@@ -861,11 +844,11 @@ class Whitelist(IObservable):
         try:
             # Each file is named after the organization's name followed by _asn
             org_asn = []
-            asn_info_file = os.path.join(self.org_info_path, f'{org}_asn')
-            with open(asn_info_file, 'r') as f:
+            asn_info_file = os.path.join(self.org_info_path, f"{org}_asn")
+            with open(asn_info_file, "r") as f:
                 while line := f.readline():
                     # each line will be something like this: 34.64.0.0/10
-                    line = line.replace('\n', '').strip()
+                    line = line.replace("\n", "").strip()
                     # Read all as upper
                     org_asn.append(line.upper())
 
@@ -880,10 +863,10 @@ class Whitelist(IObservable):
                 range_info = json.loads(range_info)
                 for range, asn_info in range_info.items():
                     # we have the asn of this given org cached
-                    if org in asn_info['org'].lower():
+                    if org in asn_info["org"].lower():
                         org_asn.append(org)
 
-        self.db.set_org_info(org, json.dumps(org_asn), 'asn')
+        self.db.set_org_info(org, json.dumps(org_asn), "asn")
         return org_asn
 
     def load_org_domains(self, org):
@@ -896,17 +879,19 @@ class Whitelist(IObservable):
         try:
             domains = []
             # Each file is named after the organization's name followed by _domains
-            domain_info_file = os.path.join(self.org_info_path, f'{org}_domains')
-            with open(domain_info_file, 'r') as f:
+            domain_info_file = os.path.join(
+                self.org_info_path, f"{org}_domains"
+            )
+            with open(domain_info_file, "r") as f:
                 while line := f.readline():
                     # each line will be something like this: 34.64.0.0/10
-                    line = line.replace('\n', '').strip()
+                    line = line.replace("\n", "").strip()
                     domains.append(line.lower())
                     # Store the IPs of this org
         except (FileNotFoundError, IOError):
             return False
 
-        self.db.set_org_info(org, json.dumps(domains), 'domains')
+        self.db.set_org_info(org, json.dumps(domains), "domains")
         return domains
 
     def load_org_IPs(self, org):
@@ -925,10 +910,10 @@ class Whitelist(IObservable):
             # Each file is named after the organization's name
             # Each line of the file contains an ip range, for example: 34.64.0.0/10
             org_subnets = {}
-            with open(org_info_file, 'r') as f:
+            with open(org_info_file, "r") as f:
                 while line := f.readline():
                     # each line will be something like this: 34.64.0.0/10
-                    line = line.replace('\n', '').strip()
+                    line = line.replace("\n", "").strip()
                     try:
                         # make sure this line is a valid network
                         ipaddress.ip_network(line)
@@ -951,7 +936,7 @@ class Whitelist(IObservable):
             return
 
         # Store the IPs of this org
-        self.db.set_org_info(org, json.dumps(org_subnets), 'IPs')
+        self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
         return org_subnets
 
     def is_ip_whitelisted(self, ip: str, direction: Direction):
@@ -959,21 +944,21 @@ class Whitelist(IObservable):
         checks the given IP in the whitelisted IPs read from whitelist.conf
         """
         whitelist = self.db.get_all_whitelist()
-        whitelisted_ips, _, _, whitelisted_macs = self.parse_whitelist(whitelist)
+        whitelisted_ips, _, _, whitelisted_macs = self.parse_whitelist(
+            whitelist
+        )
 
         if ip in whitelisted_ips:
             # Check if we should ignore src or dst alerts from this ip
             # from_ can be: src, dst, both
             # what_to_ignore can be: alerts or flows or both
-            whitelist_direction: str = whitelisted_ips[ip]['from']
-            what_to_ignore = whitelisted_ips[ip]['what_to_ignore']
+            whitelist_direction: str = whitelisted_ips[ip]["from"]
+            what_to_ignore = whitelisted_ips[ip]["what_to_ignore"]
             ignore_alerts = self.should_ignore_alerts(what_to_ignore)
-        
+
             if self.ignore_alert(
-                    direction,
-                    ignore_alerts,
-                    whitelist_direction
-                ):
+                direction, ignore_alerts, whitelist_direction
+            ):
                 # self.print(f'Whitelisting src IP {srcip} for evidence'
                 #            f' about {ip}, due to a connection related to {data} '
                 #            f'in {description}')
@@ -985,63 +970,59 @@ class Whitelist(IObservable):
                 ip, whitelisted_macs, direction
             ):
                 return True
-    
-    def ignore_alert(self, direction, ignore_alerts, whitelist_direction) -> bool:
+
+    def ignore_alert(
+        self, direction, ignore_alerts, whitelist_direction
+    ) -> bool:
         """
         determines whether or not we should ignore the given alert based
          on the ip's direction and the whitelist direction
-         """
+        """
         if (
-                self.ignore_alerts_from_ip(
-                    direction, ignore_alerts, whitelist_direction
-                )
-                or self.ignore_alerts_to_ip(
-                    direction, ignore_alerts, whitelist_direction
-                )
-                or self.ignore_alerts_from_both_directions(
-                    ignore_alerts, whitelist_direction
-                )
+            self.ignore_alerts_from_ip(
+                direction, ignore_alerts, whitelist_direction
+            )
+            or self.ignore_alerts_to_ip(
+                direction, ignore_alerts, whitelist_direction
+            )
+            or self.ignore_alerts_from_both_directions(
+                ignore_alerts, whitelist_direction
+            )
         ):
             return True
 
     def ignore_alerts_from_both_directions(
-            self,
-            ignore_alerts: bool,
-            whitelist_direction: str
-        ) -> bool:
-        return ignore_alerts and 'both' in whitelist_direction
-    
+        self, ignore_alerts: bool, whitelist_direction: str
+    ) -> bool:
+        return ignore_alerts and "both" in whitelist_direction
+
     def ignore_alerts_from_ip(
-            self,
-            direction: Direction,
-            ignore_alerts: bool,
-            whitelist_direction: str
-        ) -> bool:
+        self,
+        direction: Direction,
+        ignore_alerts: bool,
+        whitelist_direction: str,
+    ) -> bool:
         if not ignore_alerts:
             return False
-        
-        if (
-                direction == Direction.SRC
-                and self.should_ignore_from(whitelist_direction)
+
+        if direction == Direction.SRC and self.should_ignore_from(
+            whitelist_direction
         ):
             return True
-        
+
     def ignore_alerts_to_ip(
         self,
         direction: Direction,
         ignore_alerts: bool,
-        whitelist_direction: str
-        ) -> bool:
-        
+        whitelist_direction: str,
+    ) -> bool:
         if not ignore_alerts:
             return False
-        
-        if (
-                direction == Direction.DST
-                and self.should_ignore_to(whitelist_direction)
+
+        if direction == Direction.DST and self.should_ignore_to(
+            whitelist_direction
         ):
             return True
-
 
     def is_domain_whitelisted(self, domain: str, direction: Direction):
         # todo differentiate between this and is_whitelisted_Domain()
@@ -1049,7 +1030,7 @@ class Whitelist(IObservable):
         try:
             domain = tld.get_fld(domain, fix_protocol=True)
         except (tld.exceptions.TldBadUrl, tld.exceptions.TldDomainNotFound):
-            for str_ in ('http://', 'https://','www'):
+            for str_ in ("http://", "https://", "www"):
                 domain = domain.replace(str_, "")
 
         whitelist = self.db.get_all_whitelist()
@@ -1062,11 +1043,12 @@ class Whitelist(IObservable):
             if domain_in_whitelist in sub_domain:
                 # Ignore src or dst
                 whitelist_direction: str = whitelisted_domains[sub_domain][
-                    'from']
+                    "from"
+                ]
                 # Ignore flows or alerts?
                 what_to_ignore = whitelisted_domains[sub_domain][
-                    'what_to_ignore'
-                ]   # alerts or flows
+                    "what_to_ignore"
+                ]  # alerts or flows
                 ignore_alerts = self.should_ignore_alerts(what_to_ignore)
                 ignore_alerts_from_domain = (
                     ignore_alerts
@@ -1098,8 +1080,8 @@ class Whitelist(IObservable):
         whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
         for org in whitelisted_orgs:
-            from_ = whitelisted_orgs[org]['from']
-            what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
+            from_ = whitelisted_orgs[org]["from"]
+            what_to_ignore = whitelisted_orgs[org]["what_to_ignore"]
             ignore_alerts = self.should_ignore_alerts(what_to_ignore)
             ignore_alerts_from_org = (
                 ignore_alerts
@@ -1112,9 +1094,11 @@ class Whitelist(IObservable):
                 and self.should_ignore_to(from_)
             )
 
-
-            ioc_type: IoCType = ioc.attacker_type if isinstance(ioc, Attacker) \
+            ioc_type: IoCType = (
+                ioc.attacker_type
+                if isinstance(ioc, Attacker)
                 else ioc.victim_type
+            )
             # Check if the IP in the alert belongs to a whitelisted organization
             if ioc_type == IoCType.DOMAIN.name:
                 # Method 3 Check if the domains of this flow belong to this org domains

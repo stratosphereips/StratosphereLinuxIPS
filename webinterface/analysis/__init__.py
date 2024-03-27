@@ -1,1 +1,1 @@
-url_prefix='/'
+url_prefix = "/"

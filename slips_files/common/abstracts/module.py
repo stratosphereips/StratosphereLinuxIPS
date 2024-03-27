@@ -8,19 +8,24 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 from slips_files.common.abstracts.observer import IObservable
 
+
 class IModule(IObservable, ABC, Process):
     """
     An interface for all slips modules
     """
-    name = ''
-    description = 'Template module'
-    authors = ['Template Author']
-    def __init__(self,
-                 logger: Output,
-                 output_dir,
-                 redis_port,
-                 termination_event,
-                 **kwargs):
+
+    name = ""
+    description = "Template module"
+    authors = ["Template Author"]
+
+    def __init__(
+        self,
+        logger: Output,
+        output_dir,
+        redis_port,
+        termination_event,
+        **kwargs,
+    ):
         Process.__init__(self)
         self.redis_port = redis_port
         self.output_dir = output_dir
@@ -32,7 +37,6 @@ class IModule(IObservable, ABC, Process):
         IObservable.__init__(self)
         self.add_observer(self.logger)
         self.init(**kwargs)
-
 
     @abstractmethod
     def init(self, **kwargs):
@@ -81,13 +85,14 @@ class IModule(IObservable, ABC, Process):
 
         self.notify_observers(
             {
-                'from': self.name,
-                'txt': str(text),
-                'verbose': verbose,
-                'debug': debug,
-                'log_to_logfiles_only': log_to_logfiles_only
-           }
+                "from": self.name,
+                "txt": str(text),
+                "verbose": verbose,
+                "debug": debug,
+                "log_to_logfiles_only": log_to_logfiles_only,
+            }
         )
+
     def shutdown_gracefully(self):
         """
         Tells slips.py that this module is
@@ -133,7 +138,7 @@ class IModule(IObservable, ABC, Process):
             return True
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem in pre_main() line {exception_line}', 0, 1)
+            self.print(f"Problem in pre_main() line {exception_line}", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
             return True
 
@@ -150,6 +155,6 @@ class IModule(IObservable, ABC, Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
         except Exception:
-            self.print(f'Problem in {self.name}',0, 1)
-            self.print(traceback.format_exc(),  0, 1)
+            self.print(f"Problem in {self.name}", 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
         return True
