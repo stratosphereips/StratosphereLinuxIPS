@@ -329,17 +329,17 @@ Besides searching 40+ TI files for every IP/domain Slips encounters, Slips integ
 
 3. **Circl.lu**: Circl.lu's service is leveraged for hash lookups, particularly for downloaded files. Each file hash extracted from `files.log` is checked against Circl.lu's extensive database of known malicious file hashes. This integration allows Slips to identify and react to the transfer or presence of known malicious files within the monitored network environment.
 
-- **URLhaus Access**:
+**URLhaus Access**:
   - **Purpose**: Identify malicious URLs and files.
   - **Method**: Slips queries the URLhaus API with URLs and file hashes observed in network traffic logs.
   - **Response Handling**: If a URL or file is found in the URLhaus database, Slips generates an alert indicating the presence of a known threat.
 
-- **Spamhaus Access**:
+**Spamhaus Access**:
   - **Purpose**: Assess the reputation of IP addresses.
   - **Method**: IP addresses are queried against Spamhaus's DNSBL (DNS-based Block List).
   - **Response Handling**: Slips interprets the DNSBL response to determine if an IP address is associated with known malicious activities, triggering alerts accordingly.
 
-- **Circl.lu Access**:
+**Circl.lu Access**:
   - **Purpose**: Perform hash lookups for downloaded files.
   - **Method**: File hashes are checked against Circl.lu's database via their API.
   - **Response Handling**: Matches with known malicious hashes result in the generation of alerts to inform about potential threats.
