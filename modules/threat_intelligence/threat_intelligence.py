@@ -464,7 +464,7 @@ class ThreatIntel(IModule, URLhaus):
         Read all the files holding IP addresses and a description
         and store in the db.
         This also helps in having unique ioc across files
-        Returns nothing, but the dictionary should be filled
+        Returns False if there's an error, True otherwise
         :param ti_file_path: full path_to local threat intel file
         """
         data_file_name = ti_file_path.split('/')[-1]
@@ -472,76 +472,68 @@ class ThreatIntel(IModule, URLhaus):
         malicious_asns = {}
         malicious_domains = {}
         malicious_ip_ranges = {}
-        # used for debugging
         line_number = 0
-        with open(ti_file_path) as local_ti_file:
 
-            self.print(f'Reading local file {ti_file_path}', 2, 0)
+        try:
+            with open(ti_file_path) as local_ti_file:
+                self.print(f'Reading local file {ti_file_path}', 2, 0)
 
-            # skip comments
-            while True:
-                line_number += 1
-                line = local_ti_file.readline()
-                if not line.startswith('#'):
-                    break
+                # skip comments
+                while True:
+                    line_number += 1
+                    line = local_ti_file.readline()
+                    if not line.startswith('#'):
+                        break
 
-            for line in local_ti_file:
-                line_number += 1
-                # The format of the file should be
-                # "103.15.53.231","critical", "Karel from our village. He is bad guy."
-                data = line.replace('\n', '').replace('"', '').split(',')
+                for line in local_ti_file:
+                    line_number += 1
+                    # The format of the file should be
+                    # "103.15.53.231","critical", "Karel from our village. He is bad guy."
+                    data = line.replace('\n', '').replace('"', '').split(',')
+                    # the column order is hardcoded because it's our own ti file and we know the format,
+                    # we shouldn't be trying to find it
+                    ioc, threat_level, description = data[0], data[1].lower(), data[2].strip()
 
-                # the column order is hardcoded because it's owr own ti file and we know the format,
-                # we shouldn't be trying to find it
-                ioc, threat_level, description, = (
-                    data[0],
-                    data[1].lower(),
-                    data[2].strip(),
-                )
+                    # validate the threat level taken from the user
+                    if not self.is_valid_threat_level(threat_level):
+                        # default value
+                        threat_level = 'medium'
 
-                # validate the threat level taken from the user
-                if not self.is_valid_threat_level(threat_level):
-                    # default value
-                    threat_level = 'medium'
+                    ioc_info = {
+                        'description': description,
+                        'source': data_file_name,
+                        'threat_level': threat_level,
+                        'tags': 'local TI file',
+                    }
+                    ioc_info = json.dumps(ioc_info)
 
-                ioc_info = {
-                    'description': description,
-                    'source': data_file_name,
-                    'threat_level': threat_level,
-                    'tags': 'local TI file',
-                }
-                ioc_info: str = json.dumps(ioc_info)
+                    data_type = utils.detect_data_type(ioc.strip())
+                    if data_type == 'ip':
+                        ip_address = ipaddress.ip_address(ioc.strip())
+                        # Only use global addresses. Ignore multicast,
+                        # broadcast, private, reserved and undefined
+                        if ip_address.is_global:
+                            malicious_ips[str(ip_address)] = ioc_info
 
-                data_type = utils.detect_data_type(ioc.strip())
-                if data_type == 'ip':
-                    ip_address = ipaddress.ip_address(ioc.strip())
-                    # Only use global addresses. Ignore multicast,
-                    # broadcast, private, reserved and undefined
-                    if ip_address.is_global:
-                        malicious_ips[str(ip_address)] = ioc_info
+                    elif data_type == 'domain':
+                        malicious_domains[ioc] = ioc_info
 
-                elif data_type == 'domain':
-                    malicious_domains[ioc] = ioc_info
+                    elif data_type == 'ip_range':
+                        net_addr = ioc[: ioc.index('/')]
+                        if utils.is_ignored_ip(net_addr) or net_addr in utils.home_networks:
+                            continue
+                        malicious_ip_ranges[ioc] = ioc_info
 
-                elif data_type == 'ip_range':
-                    net_addr = ioc[: ioc.index('/')]
-                    if (
-                        utils.is_ignored_ip(net_addr)
-                        or net_addr in utils.home_networks
-                    ):
-                        continue
-                    malicious_ip_ranges[ioc] = ioc_info
+                    elif data_type == 'asn':
+                        malicious_asns[ioc] = ioc_info
 
-                elif data_type == 'asn':
-                    malicious_asns[ioc] = ioc_info
+                    else:
+                        # invalid ioc, skip it
+                        self.print(f'Error while reading {ti_file_path}. Line {line_number} has invalid data: {ioc}', 0, 1)
 
-                else:
-                    # invalid ioc, skip it
-                    self.print(
-                        f'Error while reading the TI file {ti_file_path}.'
-                        f' Line {line_number} has invalid data: {ioc}',
-                        0, 1
-                    )
+        except Exception as e:
+            self.print(f'Error while reading {ti_file_path}: {e}', 0, 3)
+            return False
 
         # Add all loaded malicious ips to the database
         self.db.add_ips_to_IoC(malicious_ips)
@@ -550,7 +542,7 @@ class ThreatIntel(IModule, URLhaus):
         self.db.add_ip_range_to_IoC(malicious_ip_ranges)
         self.db.add_asn_to_IoC(malicious_asns)
         return True
-
+        
     def __delete_old_source_IPs(self, file):
         """
         When file is updated, delete the old IPs in the cache
