@@ -4,8 +4,9 @@ import time
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
 
+
 class TrustDB(IObservable):
-    name = 'P2P Trust DB'
+    name = "P2P Trust DB"
 
     def __init__(
         self,
@@ -20,7 +21,7 @@ class TrustDB(IObservable):
 
         self.conn = sqlite3.connect(db_file)
         if drop_tables_on_startup:
-            self.print('Dropping tables')
+            self.print("Dropping tables")
             self.delete_tables()
 
         self.create_tables()
@@ -49,66 +50,66 @@ class TrustDB(IObservable):
 
         self.notify_observers(
             {
-                'from': self.name,
-                'txt': text,
-                'verbose': verbose,
-                'debug': debug
-           }
+                "from": self.name,
+                "txt": text,
+                "verbose": verbose,
+                "debug": debug,
+            }
         )
 
     def create_tables(self):
         self.conn.execute(
-            'CREATE TABLE IF NOT EXISTS slips_reputation ('
-            'id INTEGER PRIMARY KEY NOT NULL, '
-            'ipaddress TEXT NOT NULL, '
-            'score REAL NOT NULL, '
-            'confidence REAL NOT NULL, '
-            'update_time REAL NOT NULL);'
+            "CREATE TABLE IF NOT EXISTS slips_reputation ("
+            "id INTEGER PRIMARY KEY NOT NULL, "
+            "ipaddress TEXT NOT NULL, "
+            "score REAL NOT NULL, "
+            "confidence REAL NOT NULL, "
+            "update_time REAL NOT NULL);"
         )
 
         self.conn.execute(
-            'CREATE TABLE IF NOT EXISTS go_reliability ('
-            'id INTEGER PRIMARY KEY NOT NULL, '
-            'peerid TEXT NOT NULL, '
-            'reliability REAL NOT NULL, '
-            'update_time REAL NOT NULL);'
+            "CREATE TABLE IF NOT EXISTS go_reliability ("
+            "id INTEGER PRIMARY KEY NOT NULL, "
+            "peerid TEXT NOT NULL, "
+            "reliability REAL NOT NULL, "
+            "update_time REAL NOT NULL);"
         )
 
         self.conn.execute(
-            'CREATE TABLE IF NOT EXISTS peer_ips ('
-            'id INTEGER PRIMARY KEY NOT NULL, '
-            'ipaddress TEXT NOT NULL, '
-            'peerid TEXT NOT NULL, '
-            'update_time REAL NOT NULL);'
+            "CREATE TABLE IF NOT EXISTS peer_ips ("
+            "id INTEGER PRIMARY KEY NOT NULL, "
+            "ipaddress TEXT NOT NULL, "
+            "peerid TEXT NOT NULL, "
+            "update_time REAL NOT NULL);"
         )
 
         self.conn.execute(
-            'CREATE TABLE IF NOT EXISTS reports ('
-            'id INTEGER PRIMARY KEY NOT NULL, '
-            'reporter_peerid TEXT NOT NULL, '
-            'key_type TEXT NOT NULL, '
-            'reported_key TEXT NOT NULL, '
-            'score REAL NOT NULL, '
-            'confidence REAL NOT NULL, '
-            'update_time REAL NOT NULL);'
+            "CREATE TABLE IF NOT EXISTS reports ("
+            "id INTEGER PRIMARY KEY NOT NULL, "
+            "reporter_peerid TEXT NOT NULL, "
+            "key_type TEXT NOT NULL, "
+            "reported_key TEXT NOT NULL, "
+            "score REAL NOT NULL, "
+            "confidence REAL NOT NULL, "
+            "update_time REAL NOT NULL);"
         )
 
         self.conn.execute(
-            'CREATE TABLE IF NOT EXISTS opinion_cache ('
-            'key_type TEXT NOT NULL, '
-            'reported_key TEXT NOT NULL PRIMARY KEY, '
-            'score REAL NOT NULL, '
-            'confidence REAL NOT NULL, '
-            'network_score REAL NOT NULL, '
-            'update_time DATE NOT NULL);'
+            "CREATE TABLE IF NOT EXISTS opinion_cache ("
+            "key_type TEXT NOT NULL, "
+            "reported_key TEXT NOT NULL PRIMARY KEY, "
+            "score REAL NOT NULL, "
+            "confidence REAL NOT NULL, "
+            "network_score REAL NOT NULL, "
+            "update_time DATE NOT NULL);"
         )
 
     def delete_tables(self):
-        self.conn.execute('DROP TABLE IF EXISTS opinion_cache;')
-        self.conn.execute('DROP TABLE IF EXISTS slips_reputation;')
-        self.conn.execute('DROP TABLE IF EXISTS go_reliability;')
-        self.conn.execute('DROP TABLE IF EXISTS peer_ips;')
-        self.conn.execute('DROP TABLE IF EXISTS reports;')
+        self.conn.execute("DROP TABLE IF EXISTS opinion_cache;")
+        self.conn.execute("DROP TABLE IF EXISTS slips_reputation;")
+        self.conn.execute("DROP TABLE IF EXISTS go_reliability;")
+        self.conn.execute("DROP TABLE IF EXISTS peer_ips;")
+        self.conn.execute("DROP TABLE IF EXISTS reports;")
 
     def insert_slips_score(
         self, ip: str, score: float, confidence: float, timestamp: int = None
@@ -118,11 +119,11 @@ class TrustDB(IObservable):
         else:
             k = 3
         timestamp = time.time()
-        print('###################3Slips score timeout: ', timestamp)
+        print("###################3Slips score timeout: ", timestamp)
         parameters = (ip, score, confidence, timestamp)
         self.conn.execute(
-            'INSERT INTO slips_reputation (ipaddress, score, confidence, update_time) '
-            'VALUES (?, ?, ?, ?);',
+            "INSERT INTO slips_reputation (ipaddress, score, confidence, update_time) "
+            "VALUES (?, ?, ?, ?);",
             parameters,
         )
         self.conn.commit()
@@ -135,8 +136,8 @@ class TrustDB(IObservable):
 
         parameters = (peerid, reliability, timestamp)
         self.conn.execute(
-            'INSERT INTO go_reliability (peerid, reliability, update_time) '
-            'VALUES (?, ?, ?);',
+            "INSERT INTO go_reliability (peerid, reliability, update_time) "
+            "VALUES (?, ?, ?);",
             parameters,
         )
         self.conn.commit()
@@ -149,17 +150,17 @@ class TrustDB(IObservable):
 
         parameters = (ip, peerid, timestamp)
         self.conn.execute(
-            'INSERT INTO peer_ips (ipaddress, peerid, update_time) '
-            'VALUES (?, ?, ?);',
+            "INSERT INTO peer_ips (ipaddress, peerid, update_time) "
+            "VALUES (?, ?, ?);",
             parameters,
         )
         self.conn.commit()
 
     def insert_new_go_data(self, reports: list):
         self.conn.executemany(
-            'INSERT INTO reports '
-            '(reporter_peerid, key_type, reported_key, score, confidence, update_time) '
-            'VALUES (?, ?, ?, ?, ?, ?)',
+            "INSERT INTO reports "
+            "(reporter_peerid, key_type, reported_key, score, confidence, update_time) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             reports,
         )
         self.conn.commit()
@@ -190,9 +191,9 @@ class TrustDB(IObservable):
             timestamp,
         )
         self.conn.execute(
-            'INSERT INTO reports '
-            '(reporter_peerid, key_type, reported_key, score, confidence, update_time) '
-            'VALUES (?, ?, ?, ?, ?, ?)',
+            "INSERT INTO reports "
+            "(reporter_peerid, key_type, reported_key, score, confidence, update_time) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             parameters,
         )
         self.conn.commit()
@@ -206,8 +207,8 @@ class TrustDB(IObservable):
         network_score: float,
     ):
         self.conn.execute(
-            'REPLACE INTO'
-            ' opinion_cache (key_type, reported_key, score, confidence, network_score, update_time)'
+            "REPLACE INTO"
+            " opinion_cache (key_type, reported_key, score, confidence, network_score, update_time)"
             "VALUES (?, ?, ?, ?, ?, strftime('%s','now'));",
             (key_type, reported_key, score, confidence, network_score),
         )
@@ -215,11 +216,11 @@ class TrustDB(IObservable):
 
     def get_cached_network_opinion(self, key_type: str, reported_key: str):
         cache_cur = self.conn.execute(
-            'SELECT score, confidence, network_score, update_time '
-            'FROM opinion_cache '
-            'WHERE key_type = ? '
-            '  AND reported_key = ? '
-            'ORDER BY update_time LIMIT 1;',
+            "SELECT score, confidence, network_score, update_time "
+            "FROM opinion_cache "
+            "WHERE key_type = ? "
+            "  AND reported_key = ? "
+            "ORDER BY update_time LIMIT 1;",
             (key_type, reported_key),
         )
 
@@ -228,37 +229,34 @@ class TrustDB(IObservable):
             result = None, None, None, None
         return result
 
-
     def get_ip_of_peer(self, peerid):
         """
         Returns the latest IP seen associated with the given peerid
         :param peerid: the id of the peer we want the ip of
         """
         cache_cur = self.conn.execute(
-            'SELECT MAX(update_time) AS ip_update_time, ipaddress FROM peer_ips WHERE peerid = ?;',
-            ((peerid),)
+            "SELECT MAX(update_time) AS ip_update_time, ipaddress FROM peer_ips WHERE peerid = ?;",
+            ((peerid),),
         )
         if res := cache_cur.fetchone():
             last_update_time, ip = res
             return last_update_time, ip
         return False, False
 
-
-
     def get_opinion_on_ip(self, ipaddress: str):
         """
         :param ipaddress: The ip we're asking other peers about
         """
         reports_cur = self.conn.execute(
-            'SELECT reports.reporter_peerid AS reporter_peerid,'
-            '       MAX(reports.update_time) AS report_timestamp,'
-            '       reports.score AS report_score,'
-            '       reports.confidence AS report_confidence,'
-            '       reports.reported_key AS reported_ip '
-            'FROM reports '
-            'WHERE reports.reported_key = ?'
+            "SELECT reports.reporter_peerid AS reporter_peerid,"
+            "       MAX(reports.update_time) AS report_timestamp,"
+            "       reports.score AS report_score,"
+            "       reports.confidence AS report_confidence,"
+            "       reports.reported_key AS reported_ip "
+            "FROM reports "
+            "WHERE reports.reported_key = ?"
             "       AND reports.key_type = 'ip' "
-            'GROUP BY reports.reporter_peerid;',
+            "GROUP BY reports.reporter_peerid;",
             (ipaddress,),
         )
 
@@ -272,12 +270,11 @@ class TrustDB(IObservable):
             report_confidence,
             reported_ip,
         ) in reports_cur.fetchall():
-
             # get the ip address the reporting peer had when doing the report
             ip_cur = self.conn.execute(
-                'SELECT MAX(update_time) AS ip_update_time, ipaddress '
-                'FROM peer_ips '
-                'WHERE update_time <= ? AND peerid = ?;',
+                "SELECT MAX(update_time) AS ip_update_time, ipaddress "
+                "FROM peer_ips "
+                "WHERE update_time <= ? AND peerid = ?;",
                 (report_timestamp, reporter_peerid),
             )
             _, reporter_ipaddress = ip_cur.fetchone()
@@ -289,8 +286,8 @@ class TrustDB(IObservable):
 
             # get the most recent score and confidence for the given IP-peerID pair
             parameters_dict = {
-                'peerid': reporter_peerid,
-                'ipaddress': reporter_ipaddress,
+                "peerid": reporter_peerid,
+                "ipaddress": reporter_ipaddress,
             }
 
             # probably what this query means is:
@@ -298,45 +295,45 @@ class TrustDB(IObservable):
             # within this time range: last update time until now
 
             slips_reputation_cur = self.conn.execute(
-                'SELECT * FROM (  '
-                '    SELECT b.update_time AS lower_bound,  '
-                '           COALESCE( '
+                "SELECT * FROM (  "
+                "    SELECT b.update_time AS lower_bound,  "
+                "           COALESCE( "
                 "              MIN(lj.min_update_time), strftime('%s','now')"
-                '           ) AS upper_bound,  '
-                '           b.ipaddress AS ipaddress,  '
-                '           b.peerid AS peerid  '
-                '    FROM peer_ips b  '
-                '        LEFT JOIN(  '
-                '            SELECT a.update_time AS min_update_time  '
-                '            FROM peer_ips a  '
-                '            WHERE a.peerid = :peerid OR a.ipaddress = :ipaddress '
-                '            ORDER BY min_update_time  '
-                '            ) lj  '
-                '            ON lj.min_update_time > b.update_time  '
-                '    WHERE b.peerid = :peerid AND b.ipaddress = :ipaddress  '
-                '    GROUP BY lower_bound  '
-                '    ORDER BY lower_bound DESC  '
-                '    ) x  '
-                'LEFT JOIN slips_reputation sr USING (ipaddress)  '
-                'WHERE sr.update_time <= x.upper_bound AND '
-                '      sr.update_time >= x.lower_bound  '
-                'ORDER BY sr.update_time DESC  '
-                'LIMIT 1  '
-                ';',
+                "           ) AS upper_bound,  "
+                "           b.ipaddress AS ipaddress,  "
+                "           b.peerid AS peerid  "
+                "    FROM peer_ips b  "
+                "        LEFT JOIN(  "
+                "            SELECT a.update_time AS min_update_time  "
+                "            FROM peer_ips a  "
+                "            WHERE a.peerid = :peerid OR a.ipaddress = :ipaddress "
+                "            ORDER BY min_update_time  "
+                "            ) lj  "
+                "            ON lj.min_update_time > b.update_time  "
+                "    WHERE b.peerid = :peerid AND b.ipaddress = :ipaddress  "
+                "    GROUP BY lower_bound  "
+                "    ORDER BY lower_bound DESC  "
+                "    ) x  "
+                "LEFT JOIN slips_reputation sr USING (ipaddress)  "
+                "WHERE sr.update_time <= x.upper_bound AND "
+                "      sr.update_time >= x.lower_bound  "
+                "ORDER BY sr.update_time DESC  "
+                "LIMIT 1  "
+                ";",
                 parameters_dict,
             )
             data = slips_reputation_cur.fetchone()
             if data is None:
-                self.print(f'No slips reputation data for {parameters_dict}')
+                self.print(f"No slips reputation data for {parameters_dict}")
                 continue
 
             go_reliability_cur = self.conn.execute(
-                'SELECT reliability FROM main.go_reliability WHERE peerid = ? ORDER BY update_time DESC LIMIT 1;',
+                "SELECT reliability FROM main.go_reliability WHERE peerid = ? ORDER BY update_time DESC LIMIT 1;",
                 (reporter_peerid,),
             )
             reliability = go_reliability_cur.fetchone()
             if reliability is None:
-                self.print(f'No reliability for {reporter_peerid}')
+                self.print(f"No reliability for {reporter_peerid}")
                 continue
             reliability = reliability[0]
 
@@ -363,5 +360,5 @@ class TrustDB(IObservable):
         return reporters_scores
 
 
-if __name__ == '__main__':
-    trustDB = TrustDB(r'trustdb.db')
+if __name__ == "__main__":
+    trustDB = TrustDB(r"trustdb.db")

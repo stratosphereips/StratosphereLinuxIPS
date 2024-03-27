@@ -11,59 +11,59 @@ import os
 import sys
 import ipaddress
 import aid_hash
-from typing import Any, \
-    Optional
+from typing import Any, Optional
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
-IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+
 
 class Utils(object):
-    name = 'utils'
-    description = 'Common functions used by different modules of slips.'
-    authors = ['Alya Gomaa']
-
+    name = "utils"
+    description = "Common functions used by different modules of slips."
+    authors = ["Alya Gomaa"]
 
     def __init__(self):
         self.home_network_ranges_str = (
-            '192.168.0.0/16',
-            '172.16.0.0/12',
-            '10.0.0.0/8',
+            "192.168.0.0/16",
+            "172.16.0.0/12",
+            "10.0.0.0/8",
         )
         # IPv4Network objs
-        self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges_str))
-        self.supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
+        self.home_network_ranges = list(
+            map(ipaddress.ip_network, self.home_network_ranges_str)
         )
-        self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
+        self.supported_orgs = (
+            "google",
+            "microsoft",
+            "apple",
+            "facebook",
+            "twitter",
+        )
+        self.home_networks = ("192.168.0.0", "172.16.0.0", "10.0.0.0")
         self.threat_levels = {
-            'info': 0,
-            'low': 0.2,
-            'medium': 0.5,
-            'high': 0.8,
-            'critical': 1,
+            "info": 0,
+            "low": 0.2,
+            "medium": 0.5,
+            "high": 0.8,
+            "critical": 1,
         }
         self.time_formats = (
-            '%Y-%m-%dT%H:%M:%S.%f%z',
-            '%Y-%m-%d %H:%M:%S.%f',
-            '%Y-%m-%d %H:%M:%S',
-            '%Y-%m-%d %H:%M:%S.%f%z',
-            '%Y/%m/%d %H:%M:%S.%f%z',
-            '%Y/%m/%d %H:%M:%S.%f',
-            '%Y/%m/%d %H:%M:%S',
-            '%Y-%m-%d %H:%M:%S%z',
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%d %H:%M:%S.%f",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S.%f%z",
+            "%Y/%m/%d %H:%M:%S.%f%z",
+            "%Y/%m/%d %H:%M:%S.%f",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S%z",
             "%Y-%m-%dT%H:%M:%S",
-            '%Y-%m-%dT%H:%M:%S%z',
-            '%Y/%m/%d-%H:%M:%S',
-            '%Y-%m-%dT%H:%M:%S'
-
-         )
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y/%m/%d-%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+        )
         # this format will be used accross all modules and logfiles of slips
-        self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
+        self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
 
@@ -73,13 +73,12 @@ class Utils(object):
         :param ip: should be a private ipv4
         """
         if validators.ipv4(ip):
-            first_octet = ip.split('.')[0]
+            first_octet = ip.split(".")[0]
             # see if the first octet of the given ip matches any of the
             # home network ranges
             for network_range in self.home_network_ranges_str:
                 if first_octet in network_range:
                     return network_range
-
 
     def threat_level_to_string(self, threat_level: float) -> str:
         for str_lvl, int_value in self.threat_levels.items():
@@ -93,12 +92,12 @@ class Utils(object):
         """
         Sanitize strings taken from the user
         """
-        string = string.replace(';', '')
-        string = string.replace('\`', '')
-        string = string.replace('&', '')
-        string = string.replace('|', '')
-        string = string.replace('$(', '')
-        string = string.replace('\n', '')
+        string = string.replace(";", "")
+        string = string.replace("\`", "")
+        string = string.replace("&", "")
+        string = string.replace("|", "")
+        string = string.replace("$(", "")
+        string = string.replace("\n", "")
         return string
 
     def detect_data_type(self, data):
@@ -109,52 +108,53 @@ class Utils(object):
         data = data.strip()
         try:
             ipaddress.ip_address(data)
-            return 'ip'
+            return "ip"
         except (ipaddress.AddressValueError, ValueError):
             pass
 
         try:
             ipaddress.ip_network(data)
-            return 'ip_range'
+            return "ip_range"
         except ValueError:
             pass
 
         if validators.md5(data):
-            return 'md5'
+            return "md5"
 
         if validators.domain(data):
-            return 'domain'
+            return "domain"
 
         # some ti files have / at the end of domains, remove it
-        if data.endswith('/'):
+        if data.endswith("/"):
             data = data[:-1]
 
         domain = data
-        if domain.startswith('http://'):
+        if domain.startswith("http://"):
             data = data[7:]
-        elif domain.startswith('https://'):
+        elif domain.startswith("https://"):
             data = data[8:]
 
         if validators.domain(data):
-            return 'domain'
-        elif '/' in data:
-            return 'url'
+            return "domain"
+        elif "/" in data:
+            return "url"
 
         if validators.sha256(data):
-            return 'sha256'
+            return "sha256"
 
         if data.startswith("AS"):
-            return 'asn'
+            return "asn"
 
     def get_first_octet(self, ip):
         # the ranges stored are sorted by first octet
-        if '.' in ip:
-            return ip.split('.')[0]
-        elif ':' in ip:
-            return ip.split(':')[0]
+        if "." in ip:
+            return ip.split(".")[0]
+        elif ":" in ip:
+            return ip.split(":")[0]
         else:
             # invalid ip
             return
+
     def calculate_confidence(self, pkts_sent):
         """
         calculates the evidence confidence based on the pkts sent
@@ -168,19 +168,18 @@ class Utils(object):
             confidence = pkts_sent / 10.0
         return confidence
 
-
     def drop_root_privs(self):
         """
         Drop root privileges if the module doesn't need them
         Shouldn't be called from __init__ because then, it affects the parent process too
         """
 
-        if platform.system() != 'Linux':
+        if platform.system() != "Linux":
             return
         try:
             # Get the uid/gid of the user that launched sudo
-            sudo_uid = int(os.getenv('SUDO_UID'))
-            sudo_gid = int(os.getenv('SUDO_GID'))
+            sudo_uid = int(os.getenv("SUDO_UID"))
+            sudo_gid = int(os.getenv("SUDO_GID"))
         except TypeError:
             # env variables are not set, you're not root
             return
@@ -189,7 +188,6 @@ class Utils(object):
         os.setresgid(sudo_gid, sudo_gid, -1)
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
-
 
     def convert_format(self, ts, required_format: str):
         """
@@ -200,15 +198,15 @@ class Utils(object):
         if given_format == required_format:
             return ts
 
-        if given_format == 'datetimeobj':
+        if given_format == "datetimeobj":
             datetime_obj = ts
         else:
             datetime_obj = self.convert_to_datetime(ts)
 
         # convert to the req format
-        if required_format == 'iso':
+        if required_format == "iso":
             return datetime_obj.astimezone().isoformat()
-        elif required_format == 'unixtimestamp':
+        elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
         else:
             return datetime_obj.strftime(required_format)
@@ -234,7 +232,7 @@ class Utils(object):
         checks if the given ts is a datetime obj
         """
         try:
-            ts.strftime('%Y-%m-%dT%H:%M:%S.%f%z')
+            ts.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
             return True
         except AttributeError:
             return False
@@ -246,23 +244,20 @@ class Utils(object):
         given_format = self.define_time_format(ts)
         return (
             datetime.fromtimestamp(float(ts))
-            if given_format == 'unixtimestamp'
+            if given_format == "unixtimestamp"
             else datetime.strptime(ts, given_format)
         )
 
-
     def define_time_format(self, time: str) -> Optional[str]:
-
         if self.is_datetime_obj(time):
-            return 'datetimeobj'
+            return "datetimeobj"
 
         try:
             # Try unix timestamp in seconds.
             datetime.fromtimestamp(float(time))
-            return 'unixtimestamp'
+            return "unixtimestamp"
         except ValueError:
             pass
-
 
         for time_format in self.time_formats:
             try:
@@ -280,17 +275,17 @@ class Utils(object):
         """
         Returns a list of our local and public IPs
         """
-        if '-i' not in sys.argv:
+        if "-i" not in sys.argv:
             # this method is only valid when running on an interface
             return []
 
         IPs = []
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            s.connect(('10.255.255.255', 1))
+            s.connect(("10.255.255.255", 1))
             IPs.append(s.getsockname()[0])
         except Exception:
-            IPs.append('127.0.0.1')
+            IPs.append("127.0.0.1")
         finally:
             s.close()
 
@@ -298,32 +293,31 @@ class Utils(object):
 
         try:
             response = requests.get(
-                'http://ipinfo.io/json',
+                "http://ipinfo.io/json",
                 timeout=5,
             )
         except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ChunkedEncodingError,
-                requests.exceptions.ReadTimeout
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            requests.exceptions.ReadTimeout,
         ):
             return IPs
 
         if response.status_code != 200:
             return IPs
-        if 'Connection timed out' in response.text:
+        if "Connection timed out" in response.text:
             return IPs
         try:
             response = json.loads(response.text)
         except json.decoder.JSONDecodeError:
             return IPs
-        public_ip = response['ip']
+        public_ip = response["ip"]
         IPs.append(public_ip)
         return IPs
 
     def convert_to_mb(self, bytes):
-        return int(bytes)/(10**6)
-    
-    
+        return int(bytes) / (10**6)
+
     def is_port_in_use(self, port: int) -> bool:
         """
         return True if the given port is used by another app
@@ -333,10 +327,10 @@ class Utils(object):
             # not used
             sock.close()
             return False
-        
+
         sock.close()
         return True
-    
+
     def is_private_ip(self, ip_obj: ipaddress) -> bool:
         """
         This function replaces the ipaddress library 'is_private'
@@ -346,8 +340,9 @@ class Utils(object):
         # Is it a well-formed ipv4 or ipv6?
         r_value = False
         if ip_obj and ip_obj.is_private:
-            if (ip_obj != ipaddress.ip_address('0.0.0.0')
-                    and ip_obj != ipaddress.ip_address('255.255.255.255')):
+            if ip_obj != ipaddress.ip_address(
+                "0.0.0.0"
+            ) and ip_obj != ipaddress.ip_address("255.255.255.255"):
                 r_value = True
         return r_value
 
@@ -366,7 +361,7 @@ class Utils(object):
                 or self.is_private_ip(ip_obj)
                 or ip_obj.is_link_local
                 or ip_obj.is_reserved
-                or '.255' in ip_obj.exploded
+                or ".255" in ip_obj.exploded
             )
         )
 
@@ -380,7 +375,7 @@ class Utils(object):
         # than `.sha256()` if you wish
         file_hash = hashlib.sha256()
         # Open the file to read it's bytes
-        with open(filename, 'rb') as f:
+        with open(filename, "rb") as f:
             # Read from the file. Take in the amount declared above
             fb = f.read(BLOCK_SIZE)
             # While there is still data being read from the file
@@ -400,8 +395,8 @@ class Utils(object):
 
         return (
             message
-            and type(message['data']) == str
-            and message['channel'] == channel
+            and type(message["data"]) == str
+            and message["channel"] == channel
         )
 
     def change_logfiles_ownership(self, file: str, UID, GID):
@@ -421,7 +416,7 @@ class Utils(object):
         Returns a tuple containing (commit,branch)
         """
         try:
-            repo = Repo('.')
+            repo = Repo(".")
             # add branch name and commit
             branch = repo.active_branch.name
             commit = repo.active_branch.commit.hexsha
@@ -431,8 +426,9 @@ class Utils(object):
             # we can't add repo metadata
             return False
 
-
-    def get_time_diff(self, start_time: float, end_time: float, return_type='seconds') -> float:
+    def get_time_diff(
+        self, start_time: float, end_time: float, return_type="seconds"
+    ) -> float:
         """
         Both times can be in any format
         returns difference in seconds
@@ -449,24 +445,26 @@ class Utils(object):
         # if there are days diff between the flows, diff will be something like 1 day, 17:25:57.458395
         try:
             # calculate the days difference
-            diff_in_days = float(
-                diff.split(', ')[0].split(' ')[0]
-            )
-            diff = diff.split(', ')[1]
+            diff_in_days = float(diff.split(", ")[0].split(" ")[0])
+            diff = diff.split(", ")[1]
         except (IndexError, ValueError):
             # no days different
-            diff = diff.split(', ')[0]
+            diff = diff.split(", ")[0]
             diff_in_days = 0
 
-        diff_in_hrs, diff_in_mins, diff_in_seconds = [float(i) for i in diff.split(':')]
+        diff_in_hrs, diff_in_mins, diff_in_seconds = [
+            float(i) for i in diff.split(":")
+        ]
 
-
-        diff_in_seconds = diff_in_seconds  + (24 * diff_in_days * 60 + diff_in_hrs * 60 + diff_in_mins)*60
+        diff_in_seconds = (
+            diff_in_seconds
+            + (24 * diff_in_days * 60 + diff_in_hrs * 60 + diff_in_mins) * 60
+        )
         units = {
-            'days': diff_in_seconds /(60*60*24),
-            'hours':diff_in_seconds/(60*60),
-            'minutes': diff_in_seconds/60,
-            'seconds':  diff_in_seconds
+            "days": diff_in_seconds / (60 * 60 * 24),
+            "hours": diff_in_seconds / (60 * 60),
+            "minutes": diff_in_seconds / 60,
+            "seconds": diff_in_seconds,
         }
 
         return units[return_type]
@@ -477,12 +475,10 @@ class Utils(object):
         :param ts: time in unix format
         """
         ts = str(ts)
-        if '.' not in ts:
+        if "." not in ts:
             return ts
 
-        return ts.split('.')[0]
-
-
+        return ts.split(".")[0]
 
     def assert_microseconds(self, ts: str):
         """
@@ -490,46 +486,49 @@ class Utils(object):
         :param ts: unix ts
         :return: ts
         """
-        ts = self.convert_format(ts, 'unixtimestamp')
+        ts = self.convert_format(ts, "unixtimestamp")
 
         ts = str(ts)
         # pattern of unix ts with microseconds
-        pattern = r'\b\d+\.\d{6}\b'
+        pattern = r"\b\d+\.\d{6}\b"
         matches = findall(pattern, ts)
 
         if not matches:
             # fill the missing microseconds and milliseconds with 0
             # 6 is the decimals we need after the . in the unix ts
-            ts = ts + "0" * (6 - len(ts.split('.')[-1]))
+            ts = ts + "0" * (6 - len(ts.split(".")[-1]))
         return ts
 
     def get_aid(self, flow):
         """
         calculates the  AID hash of the flow aka All-ID of the flow
         """
-        #TODO document this
+        # TODO document this
         proto = flow.proto.lower()
 
         # aid_hash lib only accepts unix ts
-        ts = utils.convert_format(flow.starttime, 'unixtimestamp')
+        ts = utils.convert_format(flow.starttime, "unixtimestamp")
         ts: str = self.assert_microseconds(ts)
 
         cases = {
-            'tcp': aid_hash.FlowTuple.make_tcp,
-            'udp': aid_hash.FlowTuple.make_udp,
-            'icmp': aid_hash.FlowTuple.make_icmp,
+            "tcp": aid_hash.FlowTuple.make_tcp,
+            "udp": aid_hash.FlowTuple.make_udp,
+            "icmp": aid_hash.FlowTuple.make_icmp,
         }
         try:
-            tpl = cases[proto](ts, flow.saddr, flow.daddr, flow.sport, flow.dport)
+            tpl = cases[proto](
+                ts, flow.saddr, flow.daddr, flow.sport, flow.dport
+            )
             return self.aid.calc(tpl)
         except KeyError:
             # proto doesn't have an aid.FlowTuple  method
-            return ''
+            return ""
 
     def to_json_serializable(self, obj: Any) -> Any:
         if is_dataclass(obj):
-            return {k: self.to_json_serializable(v) for k, v in asdict(
-                obj).items()}
+            return {
+                k: self.to_json_serializable(v) for k, v in asdict(obj).items()
+            }
         elif isinstance(obj, Enum):
             return obj.value
         elif isinstance(obj, list):

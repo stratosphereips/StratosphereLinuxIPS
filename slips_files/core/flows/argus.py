@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class ArgusConn:
     starttime: str
@@ -20,7 +21,7 @@ class ArgusConn:
     sbytes: int
     dbytes: int
     # required to be able to add_flow
-    smac: str = ''
-    dmac: str = ''
+    smac: str = ""
+    dmac: str = ""
     uid = False
-    type_: str = 'argus'
+    type_: str = "argus"
