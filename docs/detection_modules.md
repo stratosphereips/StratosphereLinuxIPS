@@ -313,38 +313,18 @@ IncompatibleUserAgent, ICMP-Timestamp-Scan, ICMP-AddressScan, ICMP-AddressMaskSc
 
 ## Threat Intelligence Module
 
-Slips has a complex system to deal with Threat Intelligence feeds. The Threat Intelligence Module in Slips is designed to enhance detection capabilities, utilizing both external and internal thread intelligence sources. 
+Slips has a complex system to deal with Threat Intelligence feeds. 
 
-Slips supports various indicators of compromise (IoCs) from Threat Intelligence (TI) feeds, including IPs, IP ranges, domains, JA3 hashes, and SSL hashes. This provides comprehensive coverage against potential threats
+Slips supports different kinds of IoCs from TI feeds (IPs, IP ranges, domains, JA3 hashes, SSL hashes)
 
-While file hashes and URLs aren't supported in TI feeds directly, Slips compensates by integrating with specialized external services for these types of IoCs.
+File hashes and URLs aren't supported in TI feeds.
 
-### External Threat Intelligence Services
+Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
 
-Besides searching 40+ TI files for every IP/domain Slips encounters, Slips integrates with the following external threat intelligence services to enrich its detection capabilities:
+URLhaus: for each url seen in http.log and downloaded file seen in files.log
+Spamhaus: for IP lookups
+Circl.lu: for hash lookups (for each downloaded file)
 
-1. **URLhaus**: This service is utilized for checking URLs observed in `http.log` and files observed in `files.log` against known malicious URLs and files. URLhaus provides a comprehensive database of malicious URLs, which Slips queries to determine if observed URLs or files are associated with known malware or phishing campaigns.
-
-2. **Spamhaus**: Spamhaus is used for IP lookups to assess the reputation of IP addresses encountered during the analysis. By querying Spamhaus, Slips can identify IP addresses associated with spamming activities, botnets, and other malicious behaviors, enhancing its ability to detect and alert on suspicious network traffic.
-
-3. **Circl.lu**: Circl.lu's service is leveraged for hash lookups, particularly for downloaded files. Each file hash extracted from `files.log` is checked against Circl.lu's extensive database of known malicious file hashes. This integration allows Slips to identify and react to the transfer or presence of known malicious files within the monitored network environment.
-
-- **URLhaus Access**:
-  - **Purpose**: Identify malicious URLs and files.
-  - **Method**: Slips queries the URLhaus API with URLs and file hashes observed in network traffic logs.
-  - **Response Handling**: If a URL or file is found in the URLhaus database, Slips generates an alert indicating the presence of a known threat.
-
-- **Spamhaus Access**:
-  - **Purpose**: Assess the reputation of IP addresses.
-  - **Method**: IP addresses are queried against Spamhaus's DNSBL (DNS-based Block List).
-  - **Response Handling**: Slips interprets the DNSBL response to determine if an IP address is associated with known malicious activities, triggering alerts accordingly.
-
-- **Circl.lu Access**:
-  - **Purpose**: Perform hash lookups for downloaded files.
-  - **Method**: File hashes are checked against Circl.lu's database via their API.
-  - **Response Handling**: Matches with known malicious hashes result in the generation of alerts to inform about potential threats.
-
-By integrating these external services, Slips significantly enhances its detection capabilities, allowing for real-time alerting on threats identified through global intelligence feeds. This integration not only broadens the scope of detectable threats but also contributes to the overall security posture by enabling proactive responses to emerging threats.
 
 ### Matching of IPs
 
