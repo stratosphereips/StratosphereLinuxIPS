@@ -20,7 +20,6 @@ repos:
         - id: check-merge-conflict
         - id: end-of-file-fixer
         - id: detect-private-key
-        - id: double-quote-string-fixer
           exclude: .*dataset/.*|
                 (?x)(
                      ^config/$|
