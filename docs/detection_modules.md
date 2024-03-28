@@ -330,7 +330,7 @@ Slips collects pertinent data, including confidence level, threat level, and bla
 
 After that, it creates an evidence object and stores it in the database, indicating that a malicious file was downloaded, by calling the set_evidence_malicious_hash method.
 
-##URLhaus
+## URLhaus
 
 Slips looks up file hashes (MD5) and URLs for malicious content using the URLhaus API. These lookups are handled by the URLhaus class.
 
