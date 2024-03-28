@@ -502,11 +502,12 @@ class Whitelist(IObservable):
                     # "from","what_to_ignore"]
                     line = line.replace("\n", "").replace(" ", "").split(",")
                     try:
-                        type_, data, from_, what_to_ignore = (
+                        type_, data, from_, what_to_ignore,port = (
                             (line[0]).lower(),
                             line[1],
                             line[2],
                             line[3],
+                            line[4] if len(line) > 4 else None,
                         )
                     except IndexError:
                         # line is missing a column, ignore it.
@@ -558,7 +559,21 @@ class Whitelist(IObservable):
                                     "from": from_,
                                     "what_to_ignore": what_to_ignore,
                                 }
+                        elif 'whitelist' in type_:
+                            # Whitelist IP and Port together
+                            try:
+                                ip,port = data.split(":")
+                                if ip == "*":
+                                    ip = None
+                                if port == "*":
+                                    port = None
 
+                                if validators.ipv4(ip) or validators.ipv6(ip):
+                                    if port is None or (port.isdigit() and 0 <= int(port) <= 65535):
+                                        # Ensures Valid IP and Port Combination
+                                        whitelisted_IPs[(ip,port)] = {'from':from_,'what_to_ignore':what_to_ignore}
+                            except ValueError:
+                                self.print(f'{data} is not a valid ip:port combination.', 1, 0)
                         else:
                             self.print(f"{data} is not a valid {type_}.", 1, 0)
                     except Exception:
@@ -733,7 +748,7 @@ class Whitelist(IObservable):
 
     def parse_whitelist(self, whitelist):
         """
-        returns a tuple with whitelisted IPs, domains, orgs and MACs
+        returns a tuple with whitelisted IPs, domains, orgs, MACs and IP-port combinations.
         """
         try:
             # Convert each list from str to dict
@@ -752,12 +767,13 @@ class Whitelist(IObservable):
             whitelisted_macs = json.loads(whitelist["mac"])
         except (IndexError, KeyError):
             whitelisted_macs = {}
-        return (
-            whitelisted_IPs,
-            whitelisted_domains,
-            whitelisted_orgs,
-            whitelisted_macs,
-        )
+
+        try:
+            whitelisted_ip_ports = json.loads(whitelist['ip_ports'])
+        except (IndexError, KeyError):
+            whitelisted_ip_ports = {}
+        return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, \
+            whitelisted_macs, whitelisted_ip_ports
 
     def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
         whitelist = self.db.get_all_whitelist()
@@ -944,9 +960,17 @@ class Whitelist(IObservable):
         checks the given IP in the whitelisted IPs read from whitelist.conf
         """
         whitelist = self.db.get_all_whitelist()
-        whitelisted_ips, _, _, whitelisted_macs = self.parse_whitelist(
+        whitelisted_ips, _, _, whitelisted_macs, whitelisted_ip_ports = self.parse_whitelist(
             whitelist
         )
+
+        if ip in whitelisted_ip_ports:
+            whitelist_direction = whitelisted_ip_ports[ip]['from']
+            what_to_ignore = whitelisted_ip_ports[ip]['what_to_ignore']
+            ignore_alerts = self.should_ignore_alerts(what_to_ignore)
+
+            if self.ignore_alert(direction,ignore_alerts,whitelist_direction):
+                return True
 
         if ip in whitelisted_ips:
             # Check if we should ignore src or dst alerts from this ip
@@ -970,7 +994,8 @@ class Whitelist(IObservable):
                 ip, whitelisted_macs, direction
             ):
                 return True
-
+            
+        return False
     def ignore_alert(
         self, direction, ignore_alerts, whitelist_direction
     ) -> bool:
