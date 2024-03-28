@@ -955,37 +955,24 @@ class Whitelist(IObservable):
         self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
         return org_subnets
 
-    def is_ip_whitelisted(self, ip: str,port:int, direction: Direction):
+    def is_ip_whitelisted(self, ip: str, direction: Direction):
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
         """
         whitelist = self.db.get_all_whitelist()
-        whitelisted_ips, _, _, whitelisted_macs = self.parse_whitelist(
+        whitelisted_ips, _, _, whitelisted_macs, whitelisted_ip_ports = self.parse_whitelist(
             whitelist
         )
 
-        # Check if the wildcard '*' is whitelisted
-        if '*' in whitelisted_ips:
-            whitelisted_port = whitelisted_ips['*']['port']
-            if whitelisted_port == '*':
-                # All IPs and Ports are whitelisted
-                return True
-            elif whitelisted_port is None:
-                # All IPs are whitelisted with any port (need to check port if specified in evidence)
-                # Implement logic to check evidence port against allowed ports
-                pass
-            else:
-                # Check if the port matches the whitelist port
-                if port == whitelisted_port:
-                    return True
-                else:
-                    # Wildcard IP but port isn't matching
-                    pass
-        
-        # Check for Whitelisted IP and port combination
-        ip_port = f'{ip}:{port}' if port else ip
+        if ip in whitelisted_ip_ports:
+            whitelist_direction = whitelisted_ip_ports[ip]['from']
+            what_to_ignore = whitelisted_ip_ports[ip]['what_to_ignore']
+            ignore_alerts = self.should_ignore_alerts(what_to_ignore)
 
-        if ip_port in whitelisted_ips:
+            if self.ignore_alert(direction,ignore_alerts,whitelist_direction):
+                return True
+
+        if ip in whitelisted_ips:
             # Check if we should ignore src or dst alerts from this ip
             # from_ can be: src, dst, both
             # what_to_ignore can be: alerts or flows or both
@@ -1007,7 +994,8 @@ class Whitelist(IObservable):
                 ip, whitelisted_macs, direction
             ):
                 return True
-
+            
+        return False
     def ignore_alert(
         self, direction, ignore_alerts, whitelist_direction
     ) -> bool:
