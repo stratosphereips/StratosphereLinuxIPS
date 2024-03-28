@@ -810,19 +810,19 @@ class ThreatIntel(IModule, URLhaus):
         # Add all loaded JARM to the database
         self.db.add_jarm_to_IoC(jarm_dict)
         return True
-
+        
     def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
         """
-        Determines whether a local threat intelligence (TI) file needs to be updated based on a comparison of its current hash value against the stored hash value in the database.
+        Determines whether a local threat intelligence (TI) file needs to be updated by comparing its current hash value against the stored hash value in the database.
 
         Parameters:
             path_to_local_ti_file (str): Absolute path to the local TI file.
 
         Returns:
-            bool: True if the file's hash has changed (indicating an update is needed), False otherwise.
+            str or bool: Returns the new hash as a string if the file's hash has changed (indicating an update is needed), or False otherwise.
 
-        The method calculates the hash of the provided file and compares it to the previously stored hash value for that file in the database. If the hashes differ, it implies the file has been updated and should be re-parsed.
-    
+        The method calculates the hash of the provided file and compares it to the previously stored hash value for that file in the database. If the hashes differ, it implies the file has been updated and should be re-parsed. This function is designed to work with the walrus operator in conditional statements, allowing for efficient file update checks.
+
         Note:
         - This method prints messages indicating the file's status (e.g., up to date, updating) to the console.
         - Deletes old source data from the database if the file has been updated.
@@ -830,40 +830,24 @@ class ThreatIntel(IModule, URLhaus):
         filename = os.path.basename(path_to_local_ti_file)
 
         self.print(f"Loading local TI file {path_to_local_ti_file}", 2, 0)
-        # Get what files are stored in cache db and their E-TAG to comapre with current files
         data = self.db.get_TI_file_info(filename)
         old_hash = data.get("hash", False)
 
-        # In the case of the local file, we dont store the e-tag
-        # we calculate the hash
         new_hash = utils.get_hash_from_file(path_to_local_ti_file)
 
         if not new_hash:
-            # Something failed. Do not download
-            self.print(
-                f"Some error ocurred on calculating file hash."
-                f" Not loading the file {path_to_local_ti_file}",
-                0,
-                3,
-            )
+            self.print(f"Some error occurred on calculating file hash. Not loading the file {path_to_local_ti_file}", 0, 3)
             return False
 
         if old_hash == new_hash:
-            # The 2 hashes are identical. File is up to date.
             self.print(f"File {path_to_local_ti_file} is up to date.", 2, 0)
             return False
-
         else:
-            # Our TI file was changed. Load the new one
-            self.print(
-                f"Updating the local TI file {path_to_local_ti_file}", 2, 0
-            )
-
+            self.print(f"Updating the local TI file {path_to_local_ti_file}", 2, 0)
             if old_hash:
-                # File is updated and was in database.
-                # Delete previous data of this file from the db.
                 self.__delete_old_source_data_from_database(filename)
             return new_hash
+
 
     def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
         """
