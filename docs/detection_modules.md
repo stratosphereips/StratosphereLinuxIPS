@@ -318,9 +318,9 @@ Slips supports different kinds of IoCs from TI feeds (IPs, IP ranges, domains, J
 File hashes and URLs aren't supported in TI feeds.
 Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
 
-CIRCL.LU
+## CIRCL.LU
 
-Slips looks up for (MD5) files hashes for downloaded files found in the files.log using the ```CIRCL.LU API.log``` obtained from Zeek. This lookup is handled by the ThreatIntel class's ```circl_lu function```.
+Slips looks up for (MD5) files hashes for downloaded files found in the files.log  ```CIRCL.LU API``` . This lookup is handled by the ThreatIntel class's ```circl_lu function```.
 
 Slips creates the following URL for every file that is downloaded:```https://hashlookup.circl.lu/lookup/md5/<md5_hash>```. This URL is used to query the CIRCL.LU API with the file's MD5 hash.
 
@@ -330,7 +330,7 @@ Slips collects pertinent data, including confidence level, threat level, and bla
 
 After that, it creates an evidence object and stores it in the database, indicating that a malicious file was downloaded, by calling the set_evidence_malicious_hash method.
 
-URLhaus
+##URLhaus
 
 Slips looks up file hashes (MD5) and URLs for malicious content using the URLhaus API. These lookups are handled by the URLhaus class.
 
@@ -344,7 +344,7 @@ For malicious URLs, it calls the set_evidence_malicious_url function to create a
 
 For malicious file hashes, it calls the set_evidence_malicious_hash function to create an evidence object and store it in the database, indicating that a malicious file was downloaded.
 
-Spamhaus
+## Spamhaus
 
 Slips checks if an IP address is listed as a known source of spam or malicious behavior using the Spamhaus DNS-based Blacklist (DNSBL).
  
