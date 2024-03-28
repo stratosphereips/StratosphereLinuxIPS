@@ -1262,6 +1262,7 @@ class ThreatIntel(IModule, URLhaus):
         Side Effects:
             - Records evidence using `set_evidence_malicious_ip` if the IP is found within a blacklisted range.
         """
+        
         ip_obj = ipaddress.ip_address(ip)
         # Malicious IP ranges are stored in slips sorted by the first octet
         # so get the ranges that match the fist octet of the given IP
@@ -1439,15 +1440,16 @@ class ThreatIntel(IModule, URLhaus):
         Side Effects:
             - If the URL is found to be malicious, evidence is recorded using the `set_evidence_malicious_url` method.
         """
-        url_info = self.search_online_for_url(url)
-        if not url_info:
+     url_info = self.search_online_for_url(url)
+     
+     if not url_info:
             # not malicious
-            return False
-
-        self.urlhaus.set_evidence_malicious_url(
+        return False
+     
+     self.urlhaus.set_evidence_malicious_url(
             daddr, url_info, uid, timestamp, profileid, twid
         )
-
+     
     def set_evidence_malicious_cname_in_dns_response(
         self,
         cname: str,
