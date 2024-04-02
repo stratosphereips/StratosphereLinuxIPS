@@ -33,7 +33,7 @@ pytest-dependency
 whois
 wheel
 flask
-tld
+tldextract
 tqdm
 termcolor
 viztracer

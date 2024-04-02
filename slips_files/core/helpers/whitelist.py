@@ -1,9 +1,10 @@
 from typing import Optional, Dict
+import tldextract
 import json
 import ipaddress
 import validators
-import tld
 import os
+
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -383,6 +384,11 @@ class Whitelist(IObservable):
 
         return False
 
+    @staticmethod
+    def get_tld(url: str):
+        """returns the top level domain from the gven url"""
+        return tldextract.extract(url).suffix
+
     def is_domain_in_org(self, domain: str, org: str):
         """
         Checks if the given domains belongs to the given org
@@ -394,36 +400,25 @@ class Whitelist(IObservable):
                 # the domains of {org}")
                 return True
 
-            try:
-                flow_TLD = tld.get_tld(domain, as_object=True)
-            except tld.exceptions.TldBadUrl:
-                flow_TLD = domain.split(".")[-1]
+            flow_tld = self.get_tld(domain)
 
             for org_domain in org_domains:
-                try:
-                    org_domain_TLD = tld.get_tld(org_domain, as_object=True)
-                except tld.exceptions.TldBadUrl:
-                    org_domain_TLD = org_domain.split(".")[-1]
+                org_domain_tld = self.get_tld(org_domain)
 
-                # make sure the 2 domains have the same same top level domain
-                if flow_TLD != org_domain_TLD:
+                if flow_tld != org_domain_tld:
                     continue
 
                 # match subdomains too
                 # if org has org.com, and the flow_domain is xyz.org.com
                 # whitelist it
                 if org_domain in domain:
-                    # self.print(f"The src domain of this flow ({domain})
-                    # is "
-                    #            f"a subdomain of {org} domain: {org_domain}")
                     return True
+
                 # if org has xyz.org.com, and the flow_domain is org.com
                 # whitelist it
                 if domain in org_domain:
-                    # self.print(f"The domain of {org} ({org_domain}) is
-                    # a subdomain of "
-                    #            f"this flow domain ({domain})")
                     return True
+
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have domains in
             # slips/organizations_info (not a famous org)
@@ -437,7 +432,7 @@ class Whitelist(IObservable):
 
         # since this function can be run when the user modifies whitelist.conf
         # we need to check if the dicts are already there
-        whitelisted_IPs = self.db.get_whitelist("IPs")
+        whitelisted_ips = self.db.get_whitelist("IPs")
         whitelisted_domains = self.db.get_whitelist("domains")
         whitelisted_orgs = self.db.get_whitelist("organizations")
         whitelisted_mac = self.db.get_whitelist("mac")
@@ -454,18 +449,18 @@ class Whitelist(IObservable):
                     # check if the user commented an org, ip or domain that
                     # was whitelisted
                     if line.startswith("#"):
-                        if whitelisted_IPs:
-                            for ip in list(whitelisted_IPs):
+                        if whitelisted_ips:
+                            for ip in list(whitelisted_ips):
                                 # make sure the user commented the line we
                                 # have in cache exactly
                                 if (
                                     ip in line
-                                    and whitelisted_IPs[ip]["from"] in line
-                                    and whitelisted_IPs[ip]["what_to_ignore"]
+                                    and whitelisted_ips[ip]["from"] in line
+                                    and whitelisted_ips[ip]["what_to_ignore"]
                                     in line
                                 ):
                                     # remove that entry from whitelisted_ips
-                                    whitelisted_IPs.pop(ip)
+                                    whitelisted_ips.pop(ip)
                                     break
 
                         if whitelisted_domains:
@@ -521,7 +516,7 @@ class Whitelist(IObservable):
                             validators.ip_address.ipv6(data)
                             or validators.ip_address.ipv4(data)
                         ):
-                            whitelisted_IPs[data] = {
+                            whitelisted_ips[data] = {
                                 "from": from_,
                                 "what_to_ignore": what_to_ignore,
                             }
@@ -577,13 +572,13 @@ class Whitelist(IObservable):
 
         # store everything in the cache db because we'll be needing this
         # info in the evidenceProcess
-        self.db.set_whitelist("IPs", whitelisted_IPs)
+        self.db.set_whitelist("IPs", whitelisted_ips)
         self.db.set_whitelist("domains", whitelisted_domains)
         self.db.set_whitelist("organizations", whitelisted_orgs)
         self.db.set_whitelist("mac", whitelisted_mac)
 
         return (
-            whitelisted_IPs,
+            whitelisted_ips,
             whitelisted_domains,
             whitelisted_orgs,
             whitelisted_mac,
@@ -1038,48 +1033,44 @@ class Whitelist(IObservable):
         ):
             return True
 
-    def extract_second_level_domain(self, url: str) -> str:
+    def extract_hostname(self, url: str) -> str:
         """
-        extracts the second level domain from the given domain/url
+        extracts the hostaname from the given domain/url
         """
-        for prefix in ("http://", "https://", "www."):
-            url.replace(prefix, "")
-        sld = url.split(".")[-2]
-        return sld
+        parsed_url = tldextract.extract(url)
+        return f"{parsed_url.domain}.{parsed_url.suffix}"
 
     def _is_domain_whitelisted(self, domain: str, direction: Direction):
         # todo differentiate between this and is_whitelisted_Domain()
-        domain: str = self.extract_second_level_domain(domain)
+        domain: str = self.extract_hostname(domain)
         if not domain:
             return
+
+        if self.is_domain_in_tranco_list(domain):
+            return True
 
         whitelist = self.db.get_all_whitelist()
         if not whitelist:
             return False
 
+        whitelisted_domains: Dict[str, Dict[str, str]]
         whitelisted_domains = self.parse_whitelist(whitelist)[1]
 
         # is domain in whitelisted domains?
-        for whitelisted_domain in whitelisted_domains:
-            if domain not in whitelisted_domain:
-                continue
-            wl_info: Dict[str, str] = whitelisted_domains[whitelisted_domain]
-            # Ignore src or dst
-            dir_from_whitelist: str = wl_info["from"]
-            # Ignore flows or alerts?
-            what_to_ignore = wl_info["what_to_ignore"]
-            if not self.should_ignore_alerts(what_to_ignore):
-                continue
+        if domain not in whitelisted_domains:
+            return False
 
-            if not self.ioc_dir_match_whitelist_dir(
-                direction, dir_from_whitelist
-            ):
-                continue
+        # Ignore flows or alerts?
+        what_to_ignore = whitelisted_domains[domain]["what_to_ignore"]
+        if not self.should_ignore_alerts(what_to_ignore):
+            return False
 
-            return True
+        # Ignore src or dst
+        dir_from_whitelist: str = whitelisted_domains[domain]["from"]
+        if not self.ioc_dir_match_whitelist_dir(direction, dir_from_whitelist):
+            return False
 
-        if self.is_domain_in_tranco_list(domain):
-            return True
+        return True
 
     def is_domain_in_tranco_list(self, domain):
         """
