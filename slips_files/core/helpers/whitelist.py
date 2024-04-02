@@ -383,7 +383,7 @@ class Whitelist(IObservable):
 
         return False
 
-    def is_domain_in_org(self, domain, org):
+    def is_domain_in_org(self, domain: str, org: str):
         """
         Checks if the given domains belongs to the given org
         """
@@ -1046,27 +1046,24 @@ class Whitelist(IObservable):
         ):
             return True
 
-    @staticmethod
-    def get_tld(domain: str) -> str:
+    def extract_second_level_domain(self, url: str) -> str:
         """
-        extracts the top level domain from the given domain
+        extracts the second level domain from the given domain/url
         """
-        try:
-            domain = tld.get_fld(domain, fix_protocol=True)
-        except (tld.exceptions.TldBadUrl, tld.exceptions.TldDomainNotFound):
-            for url_prefix in ("http://", "https://", "www"):
-                domain = domain.replace(url_prefix, "")
-        return domain
+        for prefix in ("http://", "https://", "www."):
+            url.replace(prefix, "")
+        sld = url.split(".")[-2]
+        return sld
 
     def _is_domain_whitelisted(self, domain: str, direction: Direction):
         # todo differentiate between this and is_whitelisted_Domain()
-        # TODO validate domain
+        domain: str = self.extract_second_level_domain(domain)
+        if not domain:
+            return
 
         whitelist = self.db.get_all_whitelist()
         if not whitelist:
             return False
-
-        domain = self.get_tld(domain)
 
         whitelisted_domains = self.parse_whitelist(whitelist)[1]
 
@@ -1107,8 +1104,60 @@ class Whitelist(IObservable):
             # https://tranco-list.eu/list/X5QNN/1000000
             return True
 
+    def ioc_dir_match_org_whitelist_dir(
+        self,
+        ioc_direction: Direction,
+        dir_from_whitelist: str,
+    ) -> bool:
+        """
+        Checks if the ioc direction given (ioc_direction) matches the
+        direction
+        that we
+        should whitelist taken from whitelist.conf (dir_from_whitelist)
+
+        for example
+        if dir_to_check is srs and the dir_from whitelist is both,
+        this function returns true
+
+        :param ioc_direction: Direction obj, this is the dir of the ioc
+        that we wanna check
+        :param dir_from_whitelist: the direction read from whitelist.conf.
+        can be "src", "dst" or "both":
+        """
+        if dir_from_whitelist == "both":
+            return True
+
+        whitelist_src = (
+            "src" in dir_from_whitelist and ioc_direction == Direction.SRC
+        )
+        whitelist_dst = (
+            "dst" in dir_from_whitelist and ioc_direction == Direction.DST
+        )
+
+        return whitelist_src or whitelist_dst
+
+    def is_ip_part_of_a_whitelisted_org(self, ip: str, org: str) -> bool:
+        """
+        returns true if the given ip is a part of the given org
+        by checking the ASN of the ip and by checking if the IP is
+        part of the hardcoded IPs as part of this org in
+        slips_files/organizations_info
+        """
+        if self.is_ip_asn_in_org_asn(ip, org):
+            return True
+
+        # ip doesn't have asn info, search in the list of
+        # organization IPs
+        if self.is_ip_in_org(ip, org):
+            # self.print(f'Whitelisting evidence sent by {srcip}
+            # about {ip}. due to {ip} being in the range of {
+            # org}. {data} in {description}')
+            return True
+
     def is_part_of_a_whitelisted_org(self, ioc):
         """
+        Handles the checking of whitelisted evidence/alerts only
+        doesn't check if we should ignore flows
         :param ioc: can be an Attacker or a Victim object
         """
 
@@ -1118,41 +1167,24 @@ class Whitelist(IObservable):
         whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
         for org in whitelisted_orgs:
-            from_ = whitelisted_orgs[org]["from"]
+            dir_from_whitelist = whitelisted_orgs[org]["from"]
             what_to_ignore = whitelisted_orgs[org]["what_to_ignore"]
-            ignore_alerts = self.should_ignore_alerts(what_to_ignore)
-            ignore_alerts_from_org = (
-                ignore_alerts
-                and ioc.direction == Direction.SRC
-                and self.should_ignore_from(from_)
-            )
-            ignore_alerts_to_org = (
-                ignore_alerts
-                and ioc.direction == Direction.DST
-                and self.should_ignore_to(from_)
-            )
+            if not self.should_ignore_alerts(what_to_ignore):
+                continue
+
+            if not self.ioc_dir_match_org_whitelist_dir(
+                ioc.direction, dir_from_whitelist
+            ):
+                continue
 
             ioc_type: IoCType = (
                 ioc.attacker_type
                 if isinstance(ioc, Attacker)
                 else ioc.victim_type
             )
-            # Check if the IP in the alert belongs to a whitelisted organization
-            if ioc_type == IoCType.DOMAIN.name:
-                # Method 3 Check if the domains of this flow belong to this org domains
-                if self.is_domain_in_org(ioc.value, org):
-                    return True
 
-            elif ioc_type == IoCType.IP.name:
-                if ignore_alerts_from_org or ignore_alerts_to_org:
-                    # Method 1: using asn
-                    self.is_ip_asn_in_org_asn(ioc.value, org)
-
-                    # Method 2 using the organization's list of ips
-                    # ip doesn't have asn info, search in the list of
-                    # organization IPs
-                    if self.is_ip_in_org(ioc.value, org):
-                        # self.print(f'Whitelisting evidence sent by {srcip}
-                        # about {ip}. due to {ip} being in the range of {
-                        # org}. {data} in {description}')
-                        return True
+            cases = {
+                IoCType.DOMAIN.name: self.is_domain_in_org,
+                IoCType.IP.name: self.is_ip_part_of_a_whitelisted_org,
+            }
+            return cases[ioc_type](ioc.value, org)
