@@ -506,30 +506,31 @@ class Whitelist(IObservable):
                     except IndexError:
                         # line is missing a column, ignore it.
                         self.print(
-                            f"Line {line_number} in whitelist.conf is missing a column. Skipping."
+                            f"Line {line_number} in whitelist.conf "
+                            f"is missing a column. Skipping."
                         )
                         continue
 
                     # Validate the type before processing
                     try:
+                        whitelist_line_info = {
+                            "from": from_,
+                            "what_to_ignore": what_to_ignore,
+                        }
                         if "ip" in type_ and (
                             validators.ip_address.ipv6(data)
                             or validators.ip_address.ipv4(data)
                         ):
-                            whitelisted_ips[data] = {
-                                "from": from_,
-                                "what_to_ignore": what_to_ignore,
-                            }
+                            whitelisted_ips[data] = whitelist_line_info
                         elif "domain" in type_ and validators.domain(data):
-                            whitelisted_domains[data] = {
-                                "from": from_,
-                                "what_to_ignore": what_to_ignore,
-                            }
+                            whitelisted_domains[data] = whitelist_line_info
+                            # to be able to whitelist subdomains faster
+                            # the goal is to have an entry for each
+                            # subdomain and its parent domain
+                            hostname = self.extract_hostname(data)
+                            whitelisted_domains[hostname] = whitelist_line_info
                         elif "mac" in type_ and validators.mac_address(data):
-                            whitelisted_mac[data] = {
-                                "from": from_,
-                                "what_to_ignore": what_to_ignore,
-                            }
+                            whitelisted_mac[data] = whitelist_line_info
                         elif "org" in type_:
                             if data not in utils.supported_orgs:
                                 self.print(
@@ -549,10 +550,7 @@ class Whitelist(IObservable):
                                 ] = what_to_ignore
                             except KeyError:
                                 # first time seeing this org
-                                whitelisted_orgs[data] = {
-                                    "from": from_,
-                                    "what_to_ignore": what_to_ignore,
-                                }
+                                whitelisted_orgs[data] = whitelist_line_info
 
                         else:
                             self.print(f"{data} is not a valid {type_}.", 1, 0)
