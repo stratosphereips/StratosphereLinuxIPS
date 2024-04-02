@@ -157,9 +157,9 @@ class Daemon:
         sys.stderr.flush()
 
         # redirect standard file descriptors
-        with open(self.stdin, "r") as stdin, open(self.stdout, "a+") as stdout, open(
-            self.stderr, "a+"
-        ) as stderr:
+        with open(self.stdin, "r") as stdin, open(
+            self.stdout, "a+"
+        ) as stdout, open(self.stderr, "a+") as stderr:
             os.dup2(stdin.fileno(), sys.stdin.fileno())
             os.dup2(stdout.fileno(), sys.stdout.fileno())
             os.dup2(stderr.fileno(), sys.stderr.fileno())
@@ -199,7 +199,11 @@ class Daemon:
                 # read the lines in reverse order to get the last opened daemon
                 for line in f.read().splitlines()[::-1]:
                     # skip comments
-                    if line.startswith("#") or line.startswith("Date") or len(line) < 3:
+                    if (
+                        line.startswith("#")
+                        or line.startswith("Date")
+                        or len(line) < 3
+                    ):
                         continue
                     line = line.split(",")
                     is_daemon = bool(line[7])
@@ -244,11 +248,7 @@ class Daemon:
         )
         self.slips.add_observer(self.logger)
         db = DBManager(
-            self.logger,
-            output_dir,
-            port,
-            start_sqlite=False,
-            flush_db=False
+            self.logger, output_dir, port, start_sqlite=False, flush_db=False
         )
         db.set_slips_mode("daemonized")
         self.slips.set_mode("daemonized", daemon=self)

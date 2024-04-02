@@ -8,59 +8,57 @@ import json
 import shutil
 
 from slips_files.common.imports import *
-from slips_files.core.evidence_structure.evidence import \
-    (
-        Evidence,
-        ProfileID,
-        TimeWindow,
-        Victim,
-        Attacker,
-        Proto,
-        ThreatLevel,
-        EvidenceType,
-        IoCType,
-        Direction,
-        IDEACategory,
-        Tag
-    )
+from slips_files.core.evidence_structure.evidence import (
+    Evidence,
+    ProfileID,
+    TimeWindow,
+    Attacker,
+    Proto,
+    ThreatLevel,
+    EvidenceType,
+    IoCType,
+    Direction,
+    IDEACategory,
+    Tag,
+)
 
 
 class LeakDetector(IModule):
     # Name: short name of the module. Do not use spaces
-    name = 'Leak Detector'
-    description = 'Detect leaks of data in the traffic'
-    authors = ['Alya Gomaa']
+    name = "Leak Detector"
+    description = "Detect leaks of data in the traffic"
+    authors = ["Alya Gomaa"]
 
     def init(self):
         # this module is only loaded when a pcap is given get the pcap path
         try:
-            self.pcap = utils.sanitize(sys.argv[sys.argv.index('-f') + 1])
+            self.pcap = utils.sanitize(sys.argv[sys.argv.index("-f") + 1])
         except ValueError:
             # this error is raised when we start this module in the unit tests so there's no argv
             # ignore it
             pass
-        self.yara_rules_path = 'modules/leak_detector/yara_rules/rules/'
+        self.yara_rules_path = "modules/leak_detector/yara_rules/rules/"
         self.compiled_yara_rules_path = (
-            'modules/leak_detector/yara_rules/compiled/'
+            "modules/leak_detector/yara_rules/compiled/"
         )
         self.bin_found = False
         if self.is_yara_installed():
             self.bin_found = True
 
-
     def is_yara_installed(self) -> bool:
         """
         Checks if notify-send bin is installed
         """
-        cmd = 'yara -h > /dev/null 2>&1'
+        cmd = "yara -h > /dev/null 2>&1"
         returncode = os.system(cmd)
         if returncode in [256, 0]:
             # it is installed
             return True
         # elif returncode == 32512:
-        self.print("yara is not installed. install it using:\nsudo apt-get install yara")
+        self.print(
+            "yara is not installed. install it using:\nsudo apt-get install yara"
+        )
         return False
-
 
     def fix_json_packet(self, json_packet):
         """
@@ -68,8 +66,8 @@ class LeakDetector(IModule):
         but the first packet info is printed in a corrupted json format
         this function fixes the printed packet
         """
-        json_packet = json_packet.replace("Killed", '')
-        json_packet += '}]'
+        json_packet = json_packet.replace("Killed", "")
+        json_packet += "}]"
         try:
             return json.loads(json_packet)
         except json.decoder.JSONDecodeError:
@@ -81,7 +79,7 @@ class LeakDetector(IModule):
         returns  a tuple with packet info (srcip, dstip, proto, sport, dport, ts) or False if not found
         """
         offset = int(offset)
-        with open(self.pcap, 'rb') as f:
+        with open(self.pcap, "rb") as f:
             # every pcap header is 24 bytes
             f.read(24)
             packet_number = 0
@@ -99,7 +97,7 @@ class LeakDetector(IModule):
                 packet_data_length = packet_header[8:12][::-1]
                 # convert the hex into decimal
                 packet_length_in_decimal = int.from_bytes(
-                    packet_data_length, 'big'
+                    packet_data_length, "big"
                 )
 
                 # read until the end of this packet
@@ -115,12 +113,14 @@ class LeakDetector(IModule):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL,
                         stdin=subprocess.PIPE,
-                        shell=True
+                        shell=True,
                     )
 
                     result, error = tshark_proc.communicate()
                     if error:
-                        self.print (f"tshark error {tshark_proc.returncode}: {error.strip()}")
+                        self.print(
+                            f"tshark error {tshark_proc.returncode}: {error.strip()}"
+                        )
                         return
 
                     json_packet = result.decode()
@@ -132,27 +132,29 @@ class LeakDetector(IModule):
 
                     if json_packet:
                         # sometime tshark can't find the desired packet?
-                        json_packet = json_packet[0]['_source']['layers']
+                        json_packet = json_packet[0]["_source"]["layers"]
 
                         # get ip family and used protocol
-                        used_protocols = json_packet['frame'][
-                            'frame.protocols'
+                        used_protocols = json_packet["frame"][
+                            "frame.protocols"
                         ]
-                        ip_family = 'ipv6' if 'ipv6' in used_protocols else 'ip'
-                        if 'tcp' in used_protocols:
-                            proto = 'tcp'
-                        elif 'udp' in used_protocols:
-                            proto = 'udp'
+                        ip_family = (
+                            "ipv6" if "ipv6" in used_protocols else "ip"
+                        )
+                        if "tcp" in used_protocols:
+                            proto = "tcp"
+                        elif "udp" in used_protocols:
+                            proto = "udp"
                         else:
                             # probably ipv6.hopopt
                             return
 
                         try:
-                            ts = json_packet['frame']['frame.time_epoch']
-                            srcip = json_packet[ip_family][f'{ip_family}.src']
-                            dstip = json_packet[ip_family][f'{ip_family}.dst']
-                            sport = json_packet[proto][f'{proto}.srcport']
-                            dport = json_packet[proto][f'{proto}.dstport']
+                            ts = json_packet["frame"]["frame.time_epoch"]
+                            srcip = json_packet[ip_family][f"{ip_family}.src"]
+                            dstip = json_packet[ip_family][f"{ip_family}.dst"]
+                            sport = json_packet[proto][f"{proto}.srcport"]
+                            dport = json_packet[proto][f"{proto}.dstport"]
                         except KeyError:
                             return
 
@@ -167,16 +169,16 @@ class LeakDetector(IModule):
          example keys 'vars_matched', 'index',
         'rule', 'srings_matched'
         """
-        rule = info.get('rule').replace('_', ' ')
-        offset = info.get('offset')
+        rule = info.get("rule").replace("_", " ")
+        offset = info.get("offset")
         # vars_matched = info.get('vars_matched')
-        strings_matched = info.get('strings_matched')
+        strings_matched = info.get("strings_matched")
         # we now know there's a match at offset x, we need
         # to know offset x belongs to which packet
         packet_info = self.get_packet_info(offset)
         if not packet_info:
             return
-        
+
         srcip, dstip, proto, sport, dport, ts = (
             packet_info[0],
             packet_info[1],
@@ -186,23 +188,23 @@ class LeakDetector(IModule):
             packet_info[5],
         )
 
-        portproto = f'{dport}/{proto}'
+        portproto = f"{dport}/{proto}"
         port_info = self.db.get_port_info(portproto)
 
         # generate a random uid
-        uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
-            'utf-8'
-        )
-        profileid = f'profile_{srcip}'
+        uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode("utf-8")
+        profileid = f"profile_{srcip}"
         # sometimes this module tries to find the profile before it's created. so
         # wait a while before alerting.
         time.sleep(4)
 
         ip_identification = self.db.get_ip_identification(dstip)
-        description  = f"{rule} to destination address: {dstip} " \
-                       f"{ip_identification} port: {portproto} " \
-                       f"{port_info or ''}. " \
-                       f"Leaked location: {strings_matched}"
+        description = (
+            f"{rule} to destination address: {dstip} "
+            f"{ip_identification} port: {portproto} "
+            f"{port_info or ''}. "
+            f"Leaked location: {strings_matched}"
+        )
 
         # in which tw is this ts?
         twid = self.db.get_tw_of_ts(profileid, ts)
@@ -211,15 +213,13 @@ class LeakDetector(IModule):
 
         if not twid:
             return
-        
+
         twid_number = int(twid[0].replace("timewindow", ""))
         evidence = Evidence(
             evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
             attacker=Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=srcip
-                ),
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+            ),
             threat_level=ThreatLevel.LOW,
             confidence=0.9,
             description=description,
@@ -230,7 +230,7 @@ class LeakDetector(IModule):
             proto=Proto(proto.lower()),
             port=dport,
             source_target_tag=Tag.CC,
-            category=IDEACategory.MALWARE
+            category=IDEACategory.MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -238,10 +238,8 @@ class LeakDetector(IModule):
         evidence = Evidence(
             evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
             attacker=Attacker(
-                direction=Direction.DST,
-                attacker_type=IoCType.IP,
-                value=dstip
-                ),
+                direction=Direction.DST, attacker_type=IoCType.IP, value=dstip
+            ),
             threat_level=ThreatLevel.HIGH,
             confidence=0.9,
             description=description,
@@ -252,11 +250,10 @@ class LeakDetector(IModule):
             proto=Proto(proto.lower()),
             port=dport,
             source_target_tag=Tag.CC,
-            category=IDEACategory.MALWARE
+            category=IDEACategory.MALWARE,
         )
-        
+
         self.db.set_evidence(evidence)
-        
 
     def compile_and_save_rules(self):
         """
@@ -270,7 +267,7 @@ class LeakDetector(IModule):
 
         for yara_rule in os.listdir(self.yara_rules_path):
             compiled_rule_path = os.path.join(
-                self.compiled_yara_rules_path, f'{yara_rule}_compiled'
+                self.compiled_yara_rules_path, f"{yara_rule}_compiled"
             )
             # if we already have the rule compiled, don't compile again
             if os.path.exists(compiled_rule_path):
@@ -280,12 +277,13 @@ class LeakDetector(IModule):
             # get the complete path of the .yara rule
             rule_path = os.path.join(self.yara_rules_path, yara_rule)
             # compile
-            cmd = f'yarac {rule_path} {compiled_rule_path} >/dev/null 2>&1'
+            cmd = f"yarac {rule_path} {compiled_rule_path} >/dev/null 2>&1"
             return_code = os.system(cmd)
             if return_code != 0:
                 self.print(f"Error compiling {yara_rule}.")
                 return False
         return True
+
     def delete_compiled_rules(self):
         """
         delete old YARA compiled rules when a new version of yara is being used
@@ -296,7 +294,9 @@ class LeakDetector(IModule):
     def find_matches(self):
         """Run yara rules on the given pcap and find matches"""
         for compiled_rule in os.listdir(self.compiled_yara_rules_path):
-            compiled_rule_path = os.path.join(self.compiled_yara_rules_path, compiled_rule)
+            compiled_rule_path = os.path.join(
+                self.compiled_yara_rules_path, compiled_rule
+            )
             # -p 7 means use 7 threads for faster analysis
             # -f to stop searching for strings when they were already found
             # -s prints the found string
@@ -306,18 +306,23 @@ class LeakDetector(IModule):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 stdin=subprocess.PIPE,
-                shell=True
+                shell=True,
             )
 
             lines, error = yara_proc.communicate()
             lines = lines.decode()
             if error:
-                if b'rules were compiled with a different version of YARA' in error.strip():
+                if (
+                    b"rules were compiled with a different version of YARA"
+                    in error.strip()
+                ):
                     self.delete_compiled_rules()
                     # will re-compile and save rules again and try to find matches
                     self.run()
                 else:
-                    self.print (f"YARA error {yara_proc.returncode}: {error.strip()}")
+                    self.print(
+                        f"YARA error {yara_proc.returncode}: {error.strip()}"
+                    )
                     return
 
             if not lines:
@@ -329,20 +334,22 @@ class LeakDetector(IModule):
             # each match (line) should be a separate detection(yara match)
             for line in lines[1:]:
                 # example of a line: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
-                line = line.split(':')
+                line = line.split(":")
                 # offset: pcap index where the rule was matched
                 offset = int(line[0], 16)
                 # var is either $rgx_gps_loc, $rgx_gps_lon or $rgx_gps_lat
-                var = line[1].replace('$', '')
+                var = line[1].replace("$", "")
                 # strings_matched is exactly the string that was found that triggered this detection
                 # starts from the var until the end of the line
-                strings_matched = ' '.join(list(line[2:]))
-                self.set_evidence_yara_match({
-                    'rule': matching_rule,
-                    'vars_matched': var,
-                    'strings_matched': strings_matched,
-                    'offset': offset,
-                })
+                strings_matched = " ".join(list(line[2:]))
+                self.set_evidence_yara_match(
+                    {
+                        "rule": matching_rule,
+                        "vars_matched": var,
+                        "strings_matched": strings_matched,
+                        "offset": offset,
+                    }
+                )
 
     def pre_main(self):
         utils.drop_root_privs()

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class NfdumpConn:
     starttime: str
@@ -27,8 +28,7 @@ class NfdumpConn:
     dmac = False
     appproto = False
     uid = False
-    type_: str = 'nfdump'
-
+    type_: str = "nfdump"
 
     def __post_init__(self):
         self.pkts = self.spkts + self.dpkts

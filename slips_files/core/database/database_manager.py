@@ -6,21 +6,24 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
 
+
 class DBManager(IObservable):
     """
     This class will be calling methods from the appropriate db.
     each method added to any of the dbs should have a
     handler in here
     """
+
     name = "DBManager"
+
     def __init__(
-            self,
-            logger: Output,
-            output_dir,
-            redis_port,
-            start_sqlite=True,
-            start_redis_server=True,
-            **kwargs
+        self,
+        logger: Output,
+        output_dir,
+        redis_port,
+        start_sqlite=True,
+        start_redis_server=True,
+        **kwargs,
     ):
         self.output_dir = output_dir
         self.redis_port = redis_port
@@ -28,17 +31,14 @@ class DBManager(IObservable):
         IObservable.__init__(self)
         self.add_observer(self.logger)
         self.rdb = RedisDB(
-            self.logger,
-            redis_port,
-            start_redis_server,
-            **kwargs)
+            self.logger, redis_port, start_redis_server, **kwargs
+        )
         # in some rare cases we don't wanna start sqlite,
         # like when using -S
         # we just want to connect to redis to get the PIDs
         self.sqlite = None
         if start_sqlite:
             self.sqlite = self.create_sqlite_db(output_dir)
-
 
     def create_sqlite_db(self, output_dir):
         return SQLiteDB(self.logger, output_dir)
@@ -53,7 +53,6 @@ class DBManager(IObservable):
 
     def iterate_flows(self, *args, **kwargs):
         return self.sqlite.iterate_flows(*args, **kwargs)
-
 
     def get_columns(self, *args, **kwargs):
         return self.sqlite.get_columns(*args, **kwargs)
@@ -134,14 +133,11 @@ class DBManager(IObservable):
     def get_input_file(self, *args, **kwargs):
         return self.rdb.get_input_file(*args, **kwargs)
 
-
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
 
-
     def set_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.set_accumulated_threat_level(*args, **kwargs)
-
 
     def update_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
@@ -228,7 +224,7 @@ class DBManager(IObservable):
         return self.rdb.is_growing_zeek_dir(*args, **kwargs)
 
     def get_ip_identification(self, *args, **kwargs):
-        return self.rdb.get_ip_identification(*args,  **kwargs)
+        return self.rdb.get_ip_identification(*args, **kwargs)
 
     def get_multiaddr(self, *args, **kwargs):
         return self.rdb.get_multiaddr(*args, **kwargs)
@@ -257,11 +253,7 @@ class DBManager(IObservable):
     def add_zeek_file(self, *args, **kwargs):
         return self.rdb.add_zeek_file(*args, **kwargs)
 
-    def get_all_zeek_files(
-            self,
-            *args,
-            **kwargs
-            ):
+    def get_all_zeek_files(self, *args, **kwargs):
         return self.rdb.get_all_zeek_files(*args, **kwargs)
 
     def get_gateway_ip(self, *args, **kwargs):
@@ -363,7 +355,6 @@ class DBManager(IObservable):
     def get_stdfile(self, *args, **kwargs):
         return self.rdb.get_stdfile(*args, **kwargs)
 
-
     def set_evidence_causing_alert(self, *args, **kwargs):
         return self.rdb.set_evidence_causing_alert(*args, **kwargs)
 
@@ -400,7 +391,6 @@ class DBManager(IObservable):
 
     def is_evidence_processed(self, *args, **kwargs):
         return self.rdb.is_evidence_processed(*args, **kwargs)
-
 
     def delete_evidence(self, *args, **kwargs):
         return self.rdb.delete_evidence(*args, **kwargs)
@@ -595,7 +585,9 @@ class DBManager(IObservable):
         """
         Get all the contacted IPs in a given profile and TW
         """
-        return self.sqlite.get_all_contacted_ips_in_profileid_twid(*args, **kwargs)
+        return self.sqlite.get_all_contacted_ips_in_profileid_twid(
+            *args, **kwargs
+        )
 
     def markProfileTWAsBlocked(self, *args, **kwargs):
         return self.rdb.markProfileTWAsBlocked(*args, **kwargs)
@@ -735,12 +727,12 @@ class DBManager(IObservable):
         :param go_back: how many hours back to search?
         """
 
-        #TODO test this
+        # TODO test this
         tws_to_search = self.rdb.get_tws_to_search(go_back)
 
-        twid_number: int = int(twid.split('timewindow')[-1])
+        twid_number: int = int(twid.split("timewindow")[-1])
         while twid_number > -1 and tws_to_search > 0:
-            flow = self.sqlite.get_flow(uid, twid=f'timewindow{twid_number}')
+            flow = self.sqlite.get_flow(uid, twid=f"timewindow{twid_number}")
 
             uid = next(iter(flow))
             if flow[uid]:
@@ -762,7 +754,6 @@ class DBManager(IObservable):
     def get_timeline_last_lines(self, *args, **kwargs):
         return self.rdb.get_timeline_last_lines(*args, **kwargs)
 
-
     def mark_profile_as_gateway(self, *args, **kwargs):
         return self.rdb.mark_profile_as_gateway(*args, **kwargs)
 
@@ -781,7 +772,7 @@ class DBManager(IObservable):
         """
         for evidence_id in evidence_ids:
             uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
-            self.set_flow_label(uids, 'malicious')
+            self.set_flow_label(uids, "malicious")
 
     def set_mac_vendor_to_profile(self, *args, **kwargs):
         return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
@@ -826,15 +817,12 @@ class DBManager(IObservable):
         """returns the raw flow as read from the log file"""
         return self.sqlite.get_flow(*args, **kwargs)
 
-    def add_flow(self, flow, profileid: str, twid:str, label='benign'):
+    def add_flow(self, flow, profileid: str, twid: str, label="benign"):
         # stores it in the db
         self.sqlite.add_flow(flow, profileid, twid, label=label)
         # handles the channels and labels etc.
         return self.rdb.add_flow(
-            flow,
-            profileid=profileid,
-            twid=twid,
-            label=label
+            flow, profileid=profileid, twid=twid, label=label
         )
 
     def get_slips_start_time(self):
@@ -887,8 +875,9 @@ class DBManager(IObservable):
         exports the labeled flows and altflows stored in sqlite
         db to json or csv based on the config file
         """
-        self.sqlite.export_labeled_flows(self.get_output_dir(), *args, **kwargs)
-
+        self.sqlite.export_labeled_flows(
+            self.get_output_dir(), *args, **kwargs
+        )
 
     def get_commit(self, *args, **kwargs):
         return self.rdb.get_commit(*args, **kwargs)
@@ -898,11 +887,10 @@ class DBManager(IObservable):
 
     def add_alert(self, alert: dict):
         twid_starttime: float = self.rdb.get_tw_start_time(
-            alert['profileid'],
-            alert['twid']
+            alert["profileid"], alert["twid"]
         )
         twid_endtime: float = twid_starttime + RedisDB.width
-        alert.update({'tw_start': twid_starttime, 'tw_end': twid_endtime})
+        alert.update({"tw_start": twid_starttime, "tw_end": twid_endtime})
         return self.sqlite.add_alert(alert)
 
     def close(self, *args, **kwargs):

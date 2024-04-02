@@ -25,16 +25,15 @@ import time
 import warnings
 
 # Ignore warnings on CPU from tensorflow
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 # Ignore warnings in general
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 
 ####################
 # Main
 ####################
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     if sys.version_info[0] < 3:
         sys.exit("Slips can only run on python3+ .. Stopping.")
 
@@ -54,14 +53,13 @@ if __name__ == '__main__':
             # it takes about 5 seconds for the stop_slips msg
             # to arrive in the channel, so give slips time to stop
             time.sleep(3)
-            print('Daemon stopped.')
+            print("Daemon stopped.")
     elif slips.args.daemon:
         daemon = Daemon(slips)
         if daemon.pid is not None:
-            print('pidfile already exists. Daemon already running?'
-                  .format(daemon.pidfile))
+            print("pidfile already exists. Daemon already running?".format())
         else:
-            print('Slips daemon started.')
+            print("Slips daemon started.")
             daemon.start()
     else:
         # interactive mode

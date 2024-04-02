@@ -11,7 +11,7 @@ from typing import (
     Optional,
     List,
     Set,
-    )
+)
 
 import redis
 import validators
@@ -51,7 +51,12 @@ class ProfileHandler(IObservable):
         """
 
         self.notify_observers(
-            {"from": self.name, "txt": text, "verbose": verbose, "debug": debug}
+            {
+                "from": self.name,
+                "txt": text,
+                "verbose": verbose,
+                "debug": debug,
+            }
         )
 
     def get_outtuples_from_profile_tw(self, profileid, twid):
@@ -77,7 +82,9 @@ class ProfileHandler(IObservable):
         if cached_flows := self.get_dhcp_flows(profileid, twid):
             # we already have flows in this twid, update them
             cached_flows.update(flow)
-            self.r.hset("DHCP_flows", f"{profileid}_{twid}", json.dumps(cached_flows))
+            self.r.hset(
+                "DHCP_flows", f"{profileid}_{twid}", json.dumps(cached_flows)
+            )
         else:
             self.r.hset("DHCP_flows", f"{profileid}_{twid}", json.dumps(flow))
 
@@ -113,7 +120,9 @@ class ProfileHandler(IObservable):
                     floor((flowtime - starttime_of_first_tw) / self.width) + 1
                 )
 
-                tw_start: float = starttime_of_first_tw + (self.width * (tw_number - 1))
+                tw_start: float = starttime_of_first_tw + (
+                    self.width * (tw_number - 1)
+                )
             else:
                 # this is the first timewindow
                 tw_number: int = 1
@@ -362,7 +371,12 @@ class ProfileHandler(IObservable):
                 "totalpkt": pkts,
                 "totalbytes": totbytes,
                 ip_key: {
-                    ip: {"pkts": pkts, "spkts": spkts, "stime": starttime, "uid": [uid]}
+                    ip: {
+                        "pkts": pkts,
+                        "spkts": spkts,
+                        "stime": starttime,
+                        "uid": [uid],
+                    }
                 },
             }
         old_profileid_twid_data[port] = port_data
@@ -477,12 +491,16 @@ class ProfileHandler(IObservable):
                     # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
                     # It can happen that is reseted being not established, but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    return "Not Established" if int(pkts) <= 3 else "Established"
+                    return (
+                        "Not Established" if int(pkts) <= 3 else "Established"
+                    )
                 elif "FIN" in pre:
                     # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
                     # It can happen that is finished being not established, but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    return "Not Established" if int(pkts) <= 3 else "Established"
+                    return (
+                        "Not Established" if int(pkts) <= 3 else "Established"
+                    )
                 else:
                     """
                     Examples:
@@ -549,10 +567,12 @@ class ProfileHandler(IObservable):
                 0,
             )
             return {}
-        except Exception as e:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getDataFromProfileTW database.py line {exception_line}", 0, 1
+                f"Error in getDataFromProfileTW database.py line {exception_line}",
+                0,
+                1,
             )
             self.print(traceback.format_exc(), 0, 1)
 
@@ -1141,7 +1161,9 @@ class ProfileHandler(IObservable):
                 twid, starttime = res[0]
                 return twid, starttime
 
-    def get_first_twid_for_profile(self, profileid: str) -> Optional[Tuple[str, float]]:
+    def get_first_twid_for_profile(
+        self, profileid: str
+    ) -> Optional[Tuple[str, float]]:
         """
         Return the first TW id and the time for the given profile id
         the returned twid may be a negative tw for example tw-1, depends on
@@ -1177,12 +1199,19 @@ class ProfileHandler(IObservable):
         except IndexError:
             # We dont have any last tw?
             data = self.r.zrangebyscore(
-                f"tws{profileid}", 0, float(time), withscores=True, start=0, num=-1
+                f"tws{profileid}",
+                0,
+                float(time),
+                withscores=True,
+                start=0,
+                num=-1,
             )
 
         return data
 
-    def add_new_older_tw(self, profileid: str, tw_start_time: float, tw_number: int):
+    def add_new_older_tw(
+        self, profileid: str, tw_start_time: float, tw_number: int
+    ):
         """
         Creates or adds a new timewindow that is OLDER than the
         first we have
@@ -1237,7 +1266,7 @@ class ProfileHandler(IObservable):
             # change the threat level of the profile to 0(info)
             # and confidence to 0.05
             self.update_threat_level(profileid, "info", 0.5)
-        except redis.exceptions.ResponseError as e:
+        except redis.exceptions.ResponseError:
             self.print("Error in addNewTW", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
 
@@ -1252,20 +1281,28 @@ class ProfileHandler(IObservable):
         """Return the number of tws for this profile id"""
         return self.r.zcard(f"tws{profileid}") if profileid else False
 
-    def get_modified_tw_since_time(self, time: float) -> List[Tuple[str, float]]:
+    def get_modified_tw_since_time(
+        self, time: float
+    ) -> List[Tuple[str, float]]:
         """
         Return the list of modified timewindows since a certain time
         """
         # this ModifiedTW set has all timewindows of all profiles
         #  the score of each tw is the ts it was last updated
         # this ts is not network time, it is local time
-        data = self.r.zrangebyscore("ModifiedTW", time, float("+inf"), withscores=True)
+        data = self.r.zrangebyscore(
+            "ModifiedTW", time, float("+inf"), withscores=True
+        )
         return data or []
 
-    def get_modified_profiles_since(self, time: float) -> Tuple[Set[str], float]:
+    def get_modified_profiles_since(
+        self, time: float
+    ) -> Tuple[Set[str], float]:
         """Returns a set of modified profiles since a certain time and
         the time of the last modified profile"""
-        modified_tws: List[Tuple[str, float]] = self.get_modified_tw_since_time(time)
+        modified_tws: List[Tuple[str, float]] = (
+            self.get_modified_tw_since_time(time)
+        )
         if not modified_tws:
             # no modified tws, and no time_of_last_modified_tw
             return [], 0
@@ -1275,11 +1312,15 @@ class ProfileHandler(IObservable):
 
         # this list will store modified profiles without tws
         profiles = []
-        profiles.extend(modified_tw[0].split("_")[1] for modified_tw in modified_tws)
+        profiles.extend(
+            modified_tw[0].split("_")[1] for modified_tw in modified_tws
+        )
         # return a set of unique profiles
         return set(profiles), time_of_last_modified_tw
 
-    def add_to_the_list_of_ipv6(self, ipv6_to_add: str, cached_ipv6: str) -> list:
+    def add_to_the_list_of_ipv6(
+        self, ipv6_to_add: str, cached_ipv6: str
+    ) -> list:
         """
         adds the given IPv6 to the list of given cached_ipv6
         """
@@ -1458,19 +1499,27 @@ class ProfileHandler(IObservable):
         """
         if not self.r.hexists(profileid, "past_user_agents"):
             # add the first user agent seen to the db
-            self.r.hset(profileid, "past_user_agents", json.dumps([user_agent]))
+            self.r.hset(
+                profileid, "past_user_agents", json.dumps([user_agent])
+            )
             self.r.hset(profileid, "user_agents_count", 1)
         else:
             # we have previous UAs
-            user_agents = json.loads(self.r.hget(profileid, "past_user_agents"))
+            user_agents = json.loads(
+                self.r.hget(profileid, "past_user_agents")
+            )
             if user_agent not in user_agents:
                 # the given ua is not cached. cache it as a str
                 user_agents.append(user_agent)
-                self.r.hset(profileid, "past_user_agents", json.dumps(user_agents))
+                self.r.hset(
+                    profileid, "past_user_agents", json.dumps(user_agents)
+                )
 
                 # incr the number of user agents seen for this profile
                 user_agents_count: int = self.get_user_agents_count(profileid)
-                self.r.hset(profileid, "user_agents_count", user_agents_count + 1)
+                self.r.hset(
+                    profileid, "user_agents_count", user_agents_count + 1
+                )
 
     def get_software_from_profile(self, profileid):
         """
@@ -1665,7 +1714,13 @@ class ProfileHandler(IObservable):
     #
 
     def add_tuple(
-        self, profileid: str, twid: str, tupleid: str, symbol: Tuple, role: str, flow
+        self,
+        profileid: str,
+        twid: str,
+        tupleid: str,
+        symbol: Tuple,
+        role: str,
+        flow,
     ):
         """
         Add the tuple going in or out for this profile
@@ -1714,11 +1769,15 @@ class ProfileHandler(IObservable):
                 # Add it to form the string of letters
                 new_symbol = f"{prev_symbol}{symbol_to_add}"
 
-                self.publish_new_letter(new_symbol, profileid, twid, tupleid, flow)
+                self.publish_new_letter(
+                    new_symbol, profileid, twid, tupleid, flow
+                )
 
                 prev_symbols[tupleid] = (new_symbol, previous_two_timestamps)
                 self.print(
-                    f"\tLetters so far for tuple {tupleid}:" f" {new_symbol}", 3, 0
+                    f"\tLetters so far for tuple {tupleid}:" f" {new_symbol}",
+                    3,
+                    0,
                 )
             except (TypeError, KeyError):
                 # TODO check that this condition is triggered correctly
@@ -1739,7 +1798,11 @@ class ProfileHandler(IObservable):
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f"Error in add_tuple in database.py line {exception_line}", 0, 1)
+            self.print(
+                f"Error in add_tuple in database.py line {exception_line}",
+                0,
+                1,
+            )
             self.print(traceback.format_exc(), 0, 1)
 
     def get_tws_to_search(self, go_back):
@@ -1761,7 +1824,9 @@ class ProfileHandler(IObservable):
     def add_timeline_line(self, profileid, twid, data, timestamp):
         """Add a line to the timeline of this profileid and twid"""
         self.print(f"Adding timeline for {profileid}, {twid}: {data}", 3, 0)
-        key = str(profileid + self.separator + twid + self.separator + "timeline")
+        key = str(
+            profileid + self.separator + twid + self.separator + "timeline"
+        )
         data = json.dumps(data)
         mapping = {data: timestamp}
         self.r.zadd(key, mapping)
@@ -1772,7 +1837,9 @@ class ProfileHandler(IObservable):
         self, profileid, twid, first_index: int
     ) -> Tuple[str, int]:
         """Get only the new items in the timeline."""
-        key = str(profileid + self.separator + twid + self.separator + "timeline")
+        key = str(
+            profileid + self.separator + twid + self.separator + "timeline"
+        )
         # The the amount of lines in this list
         last_index = self.r.zcard(key)
         # Get the data in the list from the index asked (first_index) until the last
