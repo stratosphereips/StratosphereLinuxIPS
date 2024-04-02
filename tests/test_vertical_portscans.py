@@ -5,6 +5,26 @@ import base64
 import os
 from tests.module_factory import ModuleFactory
 
+
+from slips_files.common.slips_utils import utils
+import unittest
+
+from slips_files.core.evidence_structure.evidence import \
+    (
+        Evidence,
+        ProfileID,
+        TimeWindow,
+        Attacker,
+        ThreatLevel,
+        EvidenceType,
+        IoCType,
+        Direction,
+        IDEACategory,
+        Victim,
+        Proto,
+        Tag
+    )
+
 def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
 
@@ -200,6 +220,7 @@ def test_combining_evidence(
         (15, 20, True),
     ]
 )
+
 def test_check_if_enough_dports_to_trigger_an_evidence(
         mock_db,
         prev_amount_of_dports,
@@ -223,3 +244,307 @@ def test_check_if_enough_dports_to_trigger_an_evidence(
     enough: bool = vertical_ps.check_if_enough_dports_to_trigger_an_evidence(
         key, cur_amount_of_dports)
     assert enough == expected_return_val
+
+def test_get_not_established_dst_ips(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+    protocol = "TCP"
+    state = "Not Established"
+    role = "Client"
+    type_data = "IPs"
+    direction = "Dst"
+
+    expected_dstips = {
+        "8.8.8.8": {
+            "totalflows": 10,
+            "totalpkt": 100,
+            "totalbytes": 1000,
+            "stime": "1700828217.314165",
+            "uid": ["uid1", "uid2"],
+            "dstports": {
+                "80": 50,
+                "443": 50
+            }
+        }
+    }
+
+    mock_db.get_data_from_profile_tw.return_value = expected_dstips
+
+    dstips = vertical_ps.get_not_established_dst_ips(protocol, state, profileid, twid)
+    assert dstips == expected_dstips   
+    
+def test_get_cache_key(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+    dstip = "8.8.8.8"
+
+    expected_key = "profile_1.1.1.1:timewindow0:dstip:8.8.8.8:VerticalPortscan"
+    cache_key = vertical_ps.get_cache_key(profileid, twid, dstip)
+    assert cache_key == expected_key
+   
+def test_get_not_established_dst_ips_empty(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    protocol = "TCP"
+    state = "Not Established"
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+
+    mock_db.get_data_from_profile_tw.return_value = {}
+
+    dstips = vertical_ps.get_not_established_dst_ips(protocol, state, profileid, twid)
+
+    assert dstips == {}
+    
+def test_check_no_vertical_portscan(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+
+    mock_db.get_data_from_profile_tw.return_value = {}
+    mock_set_evidence = mock_db.set_evidence
+
+    vertical_ps.check(profileid, twid)
+
+    mock_set_evidence.assert_not_called()
+
+def test_check_vertical_portscan_tcp_udp(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+
+    tcp_dstips = enough_dports_to_reach_the_threshold(mock_db)
+    udp_dstips = enough_dports_to_reach_the_threshold(mock_db)
+
+    mock_db.get_data_from_profile_tw.side_effect = [tcp_dstips, udp_dstips]
+    mock_set_evidence = mock_db.set_evidence
+
+    vertical_ps.check(profileid, twid)
+
+    assert mock_set_evidence.call_count == 1
+    
+def test_combine_evidence_no_pending(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    vertical_ps.pending_vertical_ps_evidence = {}
+    mock_set_evidence = mock_db.set_evidence
+
+    vertical_ps.combine_evidence()
+
+    mock_set_evidence.assert_not_called()
+
+def test_set_evidence_vertical_portscan_udp(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+
+    evidence = {
+        'timestamp': 1700828217.314165,
+        'pkts_sent': 100,
+        'protocol': 'UDP',
+        'profileid': 'profile_1.1.1.1',
+        'twid': 'timewindow0',
+        'uid': ['uid1', 'uid2'],
+        'amount_of_dports': 10,
+        'dstip': '8.8.8.8',
+    }
+
+    mock_set_evidence = mock_db.set_evidence
+    expected_confidence = 0.5
+
+    with unittest.mock.patch('slips_files.common.slips_utils.utils.calculate_confidence') as mock_calculate_confidence:
+        mock_calculate_confidence.return_value = expected_confidence
+        vertical_ps.set_evidence_vertical_portscan(evidence)
+
+    mock_set_evidence.assert_called_once()
+    called_evidence = mock_set_evidence.call_args[0][0]
+    assert called_evidence.proto == Proto.UDP
+
+def test_decide_if_time_to_set_evidence_or_combine_empty(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    evidence = {
+        'timestamp': 1700828217.314165,
+        'pkts_sent': 100,
+        'protocol': 'TCP',
+        'profileid': 'profile_1.1.1.1',
+        'twid': 'timewindow0',
+        'uid': ['uid1', 'uid2'],
+        'amount_of_dports': 10,
+        'dstip': '8.8.8.8',
+        'state': 'Not Established',
+    }
+    cache_key = vertical_ps.get_cache_key(evidence['profileid'], evidence['twid'], evidence['dstip'])
+
+    assert vertical_ps.alerted_once_vertical_ps == {}
+    enough = vertical_ps.decide_if_time_to_set_evidence_or_combine(evidence, cache_key)
+
+    assert enough
+    assert vertical_ps.alerted_once_vertical_ps[cache_key]
+
+def test_check_if_enough_dports_to_trigger_an_evidence_equal(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = 'profile_1.1.1.1'
+    timewindow = 'timewindow0'
+    dstip = '8.8.8.8'
+    amount_of_dports = 10
+    cache_key = vertical_ps.get_cache_key(profileid, timewindow, dstip)
+    vertical_ps.cached_tw_thresholds[cache_key] = amount_of_dports
+
+    enough = vertical_ps.check_if_enough_dports_to_trigger_an_evidence(cache_key, amount_of_dports)
+
+    assert not enough
+
+
+def test_get_cache_key_empty_values(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = ""
+    twid = ""
+    dstip = ""
+
+    cache_key = vertical_ps.get_cache_key(profileid, twid, dstip)
+
+    assert cache_key == "::dstip::VerticalPortscan"
+    
+def test_combine_evidence_multiple_keys(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    vertical_ps.pending_vertical_ps_evidence = {
+        "profile_1.1.1.1-timewindow0-Not Established-TCP-8.8.8.8": [
+            (1700828217.314165, 100, ["uid1", "uid2"], 10),
+            (1700828217.314165, 200, ["uid3", "uid4"], 10),
+            (1700828217.314165, 300, ["uid5", "uid6"], 10)
+        ],
+        "profile_2.2.2.2-timewindow1-Not Established-UDP-9.9.9.9": [
+            (1700828217.314165, 400, ["uid7", "uid8"], 20),
+            (1700828217.314165, 500, ["uid9", "uid10"], 20),
+            (1700828217.314165, 600, ["uid11", "uid12"], 20)
+        ]
+    }
+
+    mock_set_evidence = mock_db.set_evidence
+    vertical_ps.combine_evidence()
+    assert mock_set_evidence.call_count == 2
+
+
+def test_decide_if_time_to_set_evidence_or_combine_new_cache_key(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    evidence = {
+        'timestamp': 1700828217.314165,
+        'pkts_sent': 100,
+        'protocol': 'TCP',
+        'profileid': 'profile_1.1.1.1',
+        'twid': 'timewindow0',
+        'uid': ['uid1', 'uid2'],
+        'amount_of_dports': 10,
+        'dstip': '8.8.8.8',
+        'state': 'Not Established',
+    }
+    cache_key = 'new_cache_key'
+
+    mock_set_evidence = mock_db.set_evidence
+
+    enough = vertical_ps.decide_if_time_to_set_evidence_or_combine(evidence, cache_key)
+
+    assert enough
+    assert vertical_ps.alerted_once_vertical_ps[cache_key]
+    mock_set_evidence.assert_called_once()
+    
+def test_check_no_connections(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+
+    mock_db.get_data_from_profile_tw.return_value = {}
+    mock_set_evidence = mock_db.set_evidence
+
+    vertical_ps.check(profileid, twid)
+
+    mock_set_evidence.assert_not_called()
+    
+def test_get_not_established_dst_ips_invalid_protocol(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+    protocol = "INVALID"
+    state = "Not Established"
+    role = "Client"
+    type_data = "IPs"
+    direction = "Dst"
+
+   
+    mock_db.get_data_from_profile_tw.return_value = {}
+
+    dstips = vertical_ps.get_not_established_dst_ips(protocol, state, profileid, twid)
+
+    assert dstips == {}     
+    
+def test_check_if_enough_dports_to_trigger_an_evidence_large_values(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = 'profile_1.1.1.1'
+    timewindow = 'timewindow0'
+    dstip = '8.8.8.8'
+    cache_key = vertical_ps.get_cache_key(profileid, timewindow, dstip)
+
+    
+    amount_of_dports = 65536
+    enough = vertical_ps.check_if_enough_dports_to_trigger_an_evidence(cache_key, amount_of_dports)
+    assert enough
+
+   
+    amount_of_dports = 1
+    enough = vertical_ps.check_if_enough_dports_to_trigger_an_evidence(cache_key, amount_of_dports)
+    assert not enough    
+  
+
+def test_get_not_established_dst_ips_db_exception(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    protocol = "TCP"
+    state = "Not Established"
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+
+    mock_db.get_data_from_profile_tw.side_effect = Exception("Database error")
+
+    with pytest.raises(Exception):
+        vertical_ps.get_not_established_dst_ips(protocol, state, profileid, twid)
+        
+def test_check_overlapping_dstports(mock_db):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+    profileid = "profile_1.1.1.1"
+    twid = "timewindow0"
+
+    tcp_dstips = enough_dports_to_reach_the_threshold(mock_db)
+    udp_dstips = enough_dports_to_reach_the_threshold(mock_db)
+
+    common_dports = set(tcp_dstips['8.8.8.8']['dstports'].keys()) & set(udp_dstips['8.8.8.8']['dstports'].keys())
+    for dport in common_dports:
+        tcp_dstips['8.8.8.8']['dstports'][dport] += udp_dstips['8.8.8.8']['dstports'][dport]
+
+    mock_db.get_data_from_profile_tw.side_effect = [tcp_dstips, udp_dstips]
+    mock_set_evidence = mock_db.set_evidence
+
+    vertical_ps.check(profileid, twid)
+
+    assert mock_set_evidence.call_count == 1   
+
+def test_set_evidence_vertical_portscan_confidence_exception(mock_db, monkeypatch):
+    vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
+
+    evidence = {
+        'timestamp': 1700828217.314165,
+        'pkts_sent': 100,
+        'protocol': 'TCP',
+        'profileid': 'profile_1.1.1.1',
+        'twid': 'timewindow0',
+        'uid': ['uid1', 'uid2'],
+        'amount_of_dports': 10,
+        'dstip': '8.8.8.8',
+    }
+
+    mock_set_evidence = mock_db.set_evidence
+
+    def mock_calculate_confidence(pkts_sent):
+        raise ValueError("Invalid packet count")
+
+    monkeypatch.setattr(utils, "calculate_confidence", mock_calculate_confidence)
+
+    with pytest.raises(ValueError):
+        vertical_ps.set_evidence_vertical_portscan(evidence)
+    mock_set_evidence.assert_not_called()
