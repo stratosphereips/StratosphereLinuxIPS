@@ -1060,43 +1060,36 @@ class Whitelist(IObservable):
         whitelisted_domains = self.parse_whitelist(whitelist)[1]
 
         # is domain in whitelisted domains?
-        for domain_in_whitelist in whitelisted_domains:
-            # We go one by one so we can match substrings in the domains
-            sub_domain = domain[-len(domain_in_whitelist) :]
-            if domain_in_whitelist in sub_domain:
-                # Ignore src or dst
-                whitelist_direction: str = whitelisted_domains[sub_domain][
-                    "from"
-                ]
-                # Ignore flows or alerts?
-                what_to_ignore = whitelisted_domains[sub_domain][
-                    "what_to_ignore"
-                ]
-                ignore_alerts = self.should_ignore_alerts(what_to_ignore)
-                ignore_alerts_from_domain = (
-                    ignore_alerts
-                    and direction == Direction.SRC
-                    and self.should_ignore_from(whitelist_direction)
-                )
-                ignore_alerts_to_domain = (
-                    ignore_alerts
-                    and direction == Direction.DST
-                    and self.should_ignore_to(whitelist_direction)
-                )
-                if ignore_alerts_from_domain or ignore_alerts_to_domain:
-                    # self.print(f'Whitelisting evidence about '
-                    #            f'{domain_in_whitelist}, due to a connection '
-                    #            f'related to {data} in {description}')
-                    return True
+        for whitelisted_domain in whitelisted_domains:
+            if domain not in whitelisted_domain:
+                continue
+            wl_info: Dict[str, str] = whitelisted_domains[whitelisted_domain]
+            # Ignore src or dst
+            dir_from_whitelist: str = wl_info["from"]
+            # Ignore flows or alerts?
+            what_to_ignore = wl_info["what_to_ignore"]
+            if not self.should_ignore_alerts(what_to_ignore):
+                continue
 
-        if self.db.is_whitelisted_tranco_domain(domain):
-            # todo the db shouldn't be checking this, we should check it here
+            if not self.ioc_dir_match_whitelist_dir(
+                direction, dir_from_whitelist
+            ):
+                continue
 
-            # tranco list contains the top 10k known benign domains
-            # https://tranco-list.eu/list/X5QNN/1000000
             return True
 
-    def ioc_dir_match_org_whitelist_dir(
+        if self.is_domain_in_tranco_list(domain):
+            return True
+
+    def is_domain_in_tranco_list(self, domain):
+        """
+        The Tranco list contains the top 10k known benign domains
+        https://tranco-list.eu/list/X5QNN/1000000
+        """
+        # todo the db shouldn't be checking this, we should check it here
+        return self.db.is_whitelisted_tranco_domain(domain)
+
+    def ioc_dir_match_whitelist_dir(
         self,
         ioc_direction: Direction,
         dir_from_whitelist: str,
@@ -1159,7 +1152,7 @@ class Whitelist(IObservable):
             if not self.should_ignore_alerts(what_to_ignore):
                 continue
 
-            if not self.ioc_dir_match_org_whitelist_dir(
+            if not self.ioc_dir_match_whitelist_dir(
                 ioc.direction, dir_from_whitelist
             ):
                 continue
