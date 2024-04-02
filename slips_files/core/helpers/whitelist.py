@@ -1,19 +1,19 @@
+from typing import Optional, Dict
 import json
 import ipaddress
-from typing import Optional, Dict
-
 import validators
-from slips_files.common.imports import *
-from slips_files.common.abstracts.observer import IObservable
-from slips_files.core.output import Output
 import tld
 import os
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.output import Output
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     Direction,
     IoCType,
     Attacker,
-    Victim,
 )
 
 
@@ -784,42 +784,49 @@ class Whitelist(IObservable):
         """
         Checks if an evidence is whitelisted
         """
-        if not self.get_all_whitelist():
+        if self.is_whitelisted_attacker(evidence):
+            return True
+
+        if self.is_whitelisted_victim(evidence):
+            return True
+
+    def is_whitelisted_victim(self, evidence: Evidence) -> bool:
+        if not hasattr(evidence, "victim"):
             return False
 
-        if self.check_whitelisted_attacker(evidence.attacker):
-            return True
-
-        if hasattr(evidence, "victim") and self.check_whitelisted_victim(
-            evidence.victim
-        ):
-            return True
-
-    def check_whitelisted_victim(self, victim: Victim) -> bool:
+        victim = evidence.victim
         if not victim:
             return False
 
-        if victim.victim_type == IoCType.IP.name and self.is_ip_whitelisted(
-            victim.value, victim.direction
-        ):
+        if self.is_ip_whitelisted(victim.value, victim.direction):
             return True
 
-        elif (
+        if (
             victim.victim_type == IoCType.DOMAIN.name
-            and self.is_domain_whitelisted(victim.value, victim.direction)
+            and self._is_domain_whitelisted(victim.value, victim.direction)
         ):
             return True
 
         if self.is_part_of_a_whitelisted_org(victim):
             return True
 
-    def check_whitelisted_attacker(self, attacker: Attacker):
+    def is_whitelisted_attacker(self, evidence: Evidence):
+        if not hasattr(evidence, "attacker"):
+            return False
+
+        attacker: Attacker = evidence.attacker
+        if not attacker:
+            return False
+
         whitelist = self.db.get_all_whitelist()
+        if not whitelist:
+            return False
+
         whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
         if (
             attacker.attacker_type == IoCType.DOMAIN.name
-            and self.is_domain_whitelisted(attacker.value, attacker.direction)
+            and self._is_domain_whitelisted(attacker.value, attacker.direction)
         ):
             return True
 
@@ -939,11 +946,26 @@ class Whitelist(IObservable):
         self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
         return org_subnets
 
+    @staticmethod
+    def is_valid_ip(ip: str):
+        try:
+            ipaddress.ip_address(ip)
+            return True
+        except ValueError:
+            return False
+
     def is_ip_whitelisted(self, ip: str, direction: Direction):
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
         """
+        # TODO validate IP
+        if not self.is_valid_ip(ip):
+            return False
+
         whitelist = self.db.get_all_whitelist()
+        if not whitelist:
+            return False
+
         whitelisted_ips, _, _, whitelisted_macs = self.parse_whitelist(
             whitelist
         )
@@ -1024,16 +1046,28 @@ class Whitelist(IObservable):
         ):
             return True
 
-    def is_domain_whitelisted(self, domain: str, direction: Direction):
-        # todo differentiate between this and is_whitelisted_Domain()
-        # extract the top level domain
+    @staticmethod
+    def get_tld(domain: str) -> str:
+        """
+        extracts the top level domain from the given domain
+        """
         try:
             domain = tld.get_fld(domain, fix_protocol=True)
         except (tld.exceptions.TldBadUrl, tld.exceptions.TldDomainNotFound):
-            for str_ in ("http://", "https://", "www"):
-                domain = domain.replace(str_, "")
+            for url_prefix in ("http://", "https://", "www"):
+                domain = domain.replace(url_prefix, "")
+        return domain
+
+    def _is_domain_whitelisted(self, domain: str, direction: Direction):
+        # todo differentiate between this and is_whitelisted_Domain()
+        # TODO validate domain
 
         whitelist = self.db.get_all_whitelist()
+        if not whitelist:
+            return False
+
+        domain = self.get_tld(domain)
+
         whitelisted_domains = self.parse_whitelist(whitelist)[1]
 
         # is domain in whitelisted domains?
@@ -1048,7 +1082,7 @@ class Whitelist(IObservable):
                 # Ignore flows or alerts?
                 what_to_ignore = whitelisted_domains[sub_domain][
                     "what_to_ignore"
-                ]  # alerts or flows
+                ]
                 ignore_alerts = self.should_ignore_alerts(what_to_ignore)
                 ignore_alerts_from_domain = (
                     ignore_alerts
@@ -1067,6 +1101,8 @@ class Whitelist(IObservable):
                     return True
 
         if self.db.is_whitelisted_tranco_domain(domain):
+            # todo the db shouldn't be checking this, we should check it here
+
             # tranco list contains the top 10k known benign domains
             # https://tranco-list.eu/list/X5QNN/1000000
             return True
@@ -1077,6 +1113,8 @@ class Whitelist(IObservable):
         """
 
         whitelist = self.db.get_all_whitelist()
+        if not whitelist:
+            return False
         whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
         for org in whitelisted_orgs:
