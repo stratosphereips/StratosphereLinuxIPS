@@ -696,14 +696,7 @@ class Whitelist(IObservable):
             return
 
         org_asn: list = json.loads(self.db.get_org_info(org, "asn"))
-
-        # make sure the asn field contains a value
-        if org.lower() in ip_asn.lower() or ip_asn in org_asn:
-            # this ip belongs to a whitelisted org, ignore alert
-            # self.print(f'Whitelisting evidence sent by {srcip} about
-            # {ip} due to ASN of {ip}
-            # related to {org}. {data} in {description}')
-            return True
+        return org.lower() in ip_asn.lower() or ip_asn in org_asn
 
     def should_ignore_from(self, direction) -> bool:
         """
@@ -835,7 +828,6 @@ class Whitelist(IObservable):
             if self.is_ip_whitelisted(attacker.value, attacker.direction):
                 return True
 
-        # Check orgs
         if whitelisted_orgs and self.is_part_of_a_whitelisted_org(attacker):
             return True
 
@@ -1146,13 +1138,8 @@ class Whitelist(IObservable):
         if self.is_ip_asn_in_org_asn(ip, org):
             return True
 
-        # ip doesn't have asn info, search in the list of
-        # organization IPs
-        if self.is_ip_in_org(ip, org):
-            # self.print(f'Whitelisting evidence sent by {srcip}
-            # about {ip}. due to {ip} being in the range of {
-            # org}. {data} in {description}')
-            return True
+        # search in the list of organization IPs
+        return self.is_ip_in_org(ip, org)
 
     def is_part_of_a_whitelisted_org(self, ioc):
         """
@@ -1177,7 +1164,7 @@ class Whitelist(IObservable):
             ):
                 continue
 
-            ioc_type: IoCType = (
+            ioc_type: str = (
                 ioc.attacker_type
                 if isinstance(ioc, Attacker)
                 else ioc.victim_type

@@ -228,7 +228,6 @@ class SetEvidnceHelper:
     def non_http_port_80_conn(
         self, daddr: str, profileid: str, timestamp: str, twid: str, uid: str
     ) -> None:
-        confidence = 0.8
         saddr: str = profileid.split("_")[-1]
         ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = (
@@ -243,6 +242,11 @@ class SetEvidnceHelper:
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=daddr,
+            ),
             threat_level=ThreatLevel.LOW,
             category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
@@ -251,7 +255,7 @@ class SetEvidnceHelper:
             uid=[uid],
             timestamp=timestamp,
             conn_count=1,
-            confidence=confidence,
+            confidence=0.8,
         )
         self.db.set_evidence(evidence)
 
@@ -259,6 +263,9 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+            ),
+            victim=Victim(
+                direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.MEDIUM,
             category=IDEACategory.ANOMALY_TRAFFIC,
@@ -268,7 +275,7 @@ class SetEvidnceHelper:
             uid=[uid],
             timestamp=timestamp,
             conn_count=1,
-            confidence=confidence,
+            confidence=0.8,
         )
 
         self.db.set_evidence(evidence)
@@ -388,7 +395,6 @@ class SetEvidnceHelper:
     def dns_without_conn(
         self, domain: str, timestamp: str, profileid: str, twid: str, uid: str
     ) -> None:
-        confidence: float = 0.8
         saddr: str = profileid.split("_")[-1]
         description: str = f"domain {domain} resolved with no connection"
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -398,6 +404,11 @@ class SetEvidnceHelper:
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.DOMAIN,
+                value=domain,
+            ),
             threat_level=ThreatLevel.LOW,
             category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
@@ -406,7 +417,7 @@ class SetEvidnceHelper:
             uid=[uid],
             timestamp=timestamp,
             conn_count=1,
-            confidence=confidence,
+            confidence=0.8,
         )
 
         self.db.set_evidence(evidence)
