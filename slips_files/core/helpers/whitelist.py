@@ -1033,18 +1033,19 @@ class Whitelist(IObservable):
 
     def extract_hostname(self, url: str) -> str:
         """
-        extracts the hostaname from the given domain/url
+        extracts the parent domain from the given domain/url
         """
         parsed_url = tldextract.extract(url)
         return f"{parsed_url.domain}.{parsed_url.suffix}"
 
     def _is_domain_whitelisted(self, domain: str, direction: Direction):
         # todo differentiate between this and is_whitelisted_Domain()
-        domain: str = self.extract_hostname(domain)
-        if not domain:
+        # extracts the parent domain
+        parent_domain: str = self.extract_hostname(domain)
+        if not parent_domain:
             return
 
-        if self.is_domain_in_tranco_list(domain):
+        if self.is_domain_in_tranco_list(parent_domain):
             return True
 
         whitelist = self.db.get_all_whitelist()
@@ -1055,16 +1056,18 @@ class Whitelist(IObservable):
         whitelisted_domains = self.parse_whitelist(whitelist)[1]
 
         # is domain in whitelisted domains?
-        if domain not in whitelisted_domains:
+        if parent_domain not in whitelisted_domains:
+            # if the parent domain not in whitelisted domains, then the
+            # child definetely isn't
             return False
 
         # Ignore flows or alerts?
-        what_to_ignore = whitelisted_domains[domain]["what_to_ignore"]
+        what_to_ignore = whitelisted_domains[parent_domain]["what_to_ignore"]
         if not self.should_ignore_alerts(what_to_ignore):
             return False
 
         # Ignore src or dst
-        dir_from_whitelist: str = whitelisted_domains[domain]["from"]
+        dir_from_whitelist: str = whitelisted_domains[parent_domain]["from"]
         if not self.ioc_dir_match_whitelist_dir(direction, dir_from_whitelist):
             return False
 
