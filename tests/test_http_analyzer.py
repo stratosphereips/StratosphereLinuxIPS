@@ -2,6 +2,7 @@
 
 from tests.module_factory import ModuleFactory
 import random
+import pytest
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -25,6 +26,7 @@ def get_random_MAC():
 
 def test_check_suspicious_user_agents(mock_db):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    
     # create a flow with suspicious user agent
     assert (
         http_analyzer.check_suspicious_user_agents(
@@ -38,6 +40,36 @@ def test_check_suspicious_user_agents(mock_db):
         )
         is True
     )
+
+@pytest.mark.parametrize("user_agent, expected_result", [
+    # Edge Cases
+    ("", False),  # Empty string
+    ("a" * 10000, False),  # Extremely long string
+    (None, False),  # Non-string input (None)
+    # Negative Testing
+    ("Mozilla/5.0 something sendbutnotsuspicious", False),
+    # Boundary Testing with special characters
+    ("Mozilla/5.0 (Windows NT 10.0; <script>alert(1)</script>)", False),
+    ("Mozilla/5.0 (Windows NT 10.0; 😃)", False),
+    # Positive Testing for suspicious UAs
+    ("CHM_MSDN", True),
+    ("httpsend", True),
+])
+
+def test_check_suspicious_user_agents_parametrized(mock_db, user_agent, expected_result):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    
+    result = http_analyzer.check_suspicious_user_agents(
+        uid,
+        "147.32.80.7",
+        "/wpad.dat",
+        timestamp,
+        user_agent,
+        profileid,
+        twid,
+    )
+    
+    assert result is expected_result
 
 
 def test_check_multiple_google_connections(mock_db):
