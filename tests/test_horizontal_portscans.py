@@ -466,7 +466,7 @@ def test_set_evidence_horizontal_portscan(mock_db):
     )
     assert call_args.profile.ip == "1.1.1.1"
     assert call_args.timewindow.number == 0
-    assert set(call_args.uid) == set(["uid1", "uid2"])
+    assert set(call_args.uid) == (["uid1", "uid2"])
     assert call_args.timestamp == "1234.56"
     assert call_args.category == IDEACategory.RECON_SCANNING
     assert call_args.conn_count == 100
