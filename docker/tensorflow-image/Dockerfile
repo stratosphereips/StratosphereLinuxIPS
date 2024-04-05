@@ -53,7 +53,9 @@ WORKDIR ${SLIPS_DIR}
 
 COPY . $SLIPS_DIR
 
-RUN pip3 install --no-cache-dir -r install/requirements.txt \
+# we're excluding black here because it has conflicts with the tensorflow version required in requirements.txt
+# this is temporary until we upgrade tensorflow to the latest version
+RUN grep -v 'black' install/requirements.txt | xargs pip3 install  --no-cache-dir \
     && pip3 install --ignore-installed tensorflow==2.4.1 \
     && chmod 774 slips.py \
     && git init \
@@ -62,4 +64,3 @@ RUN pip3 install --no-cache-dir -r install/requirements.txt \
     && npm install
 
 CMD redis-server --daemonize yes && /bin/bash
-
