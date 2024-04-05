@@ -61,18 +61,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
-
-
-# Install python dependencies
-
 # you should build the image using
 # docker build --no-cache -t slips_dependencies -f docker/dependency-image/Dockerfile .
 # or this step won't be able to find requirements.txt
-COPY install/requirements.txt ${SLIPS_DIR}/
+COPY install/requirements.txt ${SLIPS_DIR}/install/requirements.txt
 
 # Upgrade pip3 and install slips requirements
-RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir -r ${SLIPS_DIR}/install/requirements.txt
+RUN pip3 install --no-cache-dir --upgrade pip  \
+    && pip3 install --no-cache-dir -r ${SLIPS_DIR}/install/requirements.txt
 
 
 CMD redis-server --daemonize yes && /bin/bash

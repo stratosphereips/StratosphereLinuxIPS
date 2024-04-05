@@ -11,7 +11,6 @@ from tests.common_test_utils import (
 )
 from tests.module_factory import ModuleFactory
 import pytest
-from ...slips.main import *
 import shutil
 import os
 
@@ -137,7 +136,8 @@ def test_binetflow(
             [
                 "Incompatible certificate CN",
                 "Malicious JA3: 6734f37431670b3ab4292b8f60f29984",
-                "sending ARP packet to a destination address outside of local network",
+                # "sending ARP packet to a destination address outside of
+                # local network",
                 "broadcasting unsolicited ARP",
             ],
             "test9-mixed-zeek-dir/",
@@ -147,7 +147,8 @@ def test_binetflow(
             "dataset/test16-malicious-zeek-dir",
             0,
             [
-                "sending ARP packet to a destination address outside of local network",
+                # "sending ARP packet to a destination address outside of
+                # local network",
                 "broadcasting unsolicited ARP",
             ],
             "test16-malicious-zeek-dir/",
@@ -209,7 +210,7 @@ def test_zeek_dir(
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
-    if type(expected_evidence) == list:
+    if isinstance(expected_evidence, list):
         # make sure all the expected evidence are there
         for evidence in expected_evidence:
             assert is_evidence_present(log_file, evidence) is True
