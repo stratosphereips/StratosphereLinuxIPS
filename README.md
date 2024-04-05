@@ -183,7 +183,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
 ##### [Analyse your own traffic with P2P ](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux)
 
 
-#### [Analyse a pcap without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#analyze-your-pcap-file)
+##### [Analyse a pcap without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#analyze-your-pcap-file)
 
 
 
@@ -201,7 +201,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
 ##### [Analyse your own traffic with using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
 
 
-#### [Analyse a PCAP without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#id2)
+##### [Analyse a PCAP without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#id2)
 
 
 
@@ -300,17 +300,6 @@ Contributors:
 https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/CHANGELOG.md
 
 
-# Roadmap
-
-**In Progress**:
-* Global P2P
-
-
-**Future goals for Slips**:
-* Easier installation with a package manager like snap or apt
-* More ML detection models
-
-
 # Demos
 The following videos contain demos of Slips in action in various events:
 
@@ -332,6 +321,7 @@ We are grateful for the generous support and funding provided by the following o
 - Artificial Intelligence Centre at the Czech Technical University in Prague, https://www.aic.fel.cvut.cz/
 - Avast, https://www.avast.com/
 - CESNET, https://www.cesnet.cz/
+- Google Summer of Code (2023, 2024), https://summerofcode.withgoogle.com/
  
 Their funding has played a crucial role in the development and success of this project. 
 We sincerely appreciate their commitment to advancing technology and their recognition of
