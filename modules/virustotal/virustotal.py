@@ -8,7 +8,8 @@ import ipaddress
 import threading
 import validators
 
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
 
 
@@ -61,7 +62,8 @@ class VT(IModule):
         except (FileNotFoundError, TypeError):
             self.print(
                 f"The file with API key {self.key_file} "
-                f"could not be loaded. VT module is stopping."
+                f"could not be loaded. VT module is stopping.",
+                log_to_logfiles_only=True,
             )
             return False
 
@@ -133,7 +135,7 @@ class VT(IModule):
         """
 
         def is_valid_response(response: dict) -> bool:
-            if type(response) != dict:
+            if not isinstance(response, dict):
                 return False
 
             response_code = response.get("response_code", -1)
@@ -397,7 +399,7 @@ class VT(IModule):
         else:
             # query successful
             data = json.loads(response.data)
-            if type(data) == list:
+            if isinstance(data, list):
                 # response.data is an empty list,
                 # vt sometimes returns it with status code 200
                 data = {}

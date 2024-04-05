@@ -1,4 +1,6 @@
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from slack import WebClient
 from slack.errors import SlackApiError
 import os
@@ -14,7 +16,8 @@ import datetime
 class ExportingAlerts(IModule):
     """
     Module to export alerts to slack and/or STIX
-    You need to have the token in your environment variables to use this module
+    You need to have the token in your environment
+    variables to use this module
     """
 
     name = "Exporting Alerts"
@@ -26,9 +29,8 @@ class ExportingAlerts(IModule):
         self.c1 = self.db.subscribe("export_evidence")
         self.channels = {"export_evidence": self.c1}
         self.read_configuration()
-        if "slack" in self.export_to:
-            self.get_slack_token()
-        # This bundle should be created once and we should append all indicators to it
+        # This bundle should be created once and we should
+        # append all indicators to it
         self.is_bundle_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
@@ -36,7 +38,7 @@ class ExportingAlerts(IModule):
             "-i" in sys.argv or self.db.is_growing_zeek_dir()
         )
         self.export_to_taxii_thread = threading.Thread(
-            target=self.send_to_server, daemon=True
+            target=self.schedule_sending_to_taxii_server, daemon=True
         )
 
     def read_configuration(self):
@@ -50,7 +52,7 @@ class ExportingAlerts(IModule):
             self.slack_channel_name = conf.slack_channel_name()
             self.sensor_name = conf.sensor_name()
 
-        if "stix" in self.export_to:
+        if self.should_export_to_stix():
             self.TAXII_server = conf.taxii_server()
             self.port = conf.taxii_port()
             self.use_https = conf.use_https()
@@ -63,14 +65,14 @@ class ExportingAlerts(IModule):
             self.taxii_password = conf.taxii_password()
             self.jwt_auth_path = conf.jwt_auth_path()
             # push delay exists -> create thread that waits
-            # push delay doesnt exist -> running using file not interface -> only push to taxii server once before
+            # push delay doesnt exist -> running using file not interface
+            # -> only push to taxii server once before
             # stopping
 
     def get_slack_token(self):
         if not hasattr(self, "slack_token_filepath"):
             return False
 
-        # slack_bot_token_secret should contain the slack token only
         try:
             with open(self.slack_token_filepath, "r") as f:
                 self.BOT_TOKEN = f.read()
@@ -78,11 +80,7 @@ class ExportingAlerts(IModule):
                     del self.BOT_TOKEN
                     raise NameError
         except (FileNotFoundError, NameError):
-            self.print(
-                f"Please add slack bot token to "
-                f"{self.slack_token_filepath}. Stopping."
-            )
-            self.shutdown_gracefully()
+            return False
 
     def ip_exists_in_stix_file(self, ip):
         """Searches for ip in STIX_data.json to avoid exporting duplicates"""
@@ -90,7 +88,8 @@ class ExportingAlerts(IModule):
 
     def send_to_slack(self, msg_to_send: str) -> bool:
         # Msgs sent in this channel will be exported to slack
-        # Token to login to your slack bot. it should be set in slack_bot_token_secret
+        # Token to login to your slack bot. it should be
+        # set in slack_bot_token_secret
         if self.BOT_TOKEN == "":
             # The file is empty
             self.print(
@@ -115,12 +114,14 @@ class ExportingAlerts(IModule):
             # You will get a SlackApiError if "ok" is False
             assert e.response[
                 "error"
-            ], "Problem while exporting to slack."  # str like 'invalid_auth', 'channel_not_found'
+            ], "Problem while exporting to slack."  # str like
+            # 'invalid_auth', 'channel_not_found'
             return False
 
-    def push_to_TAXII_server(self):
+    def push_to_taxii_server(self):
         """
-        Use Inbox Service (TAXII Service to Support Producer-initiated pushes of cyber threat information) to publish
+        Use Inbox Service (TAXII Service to Support Producer-initiated
+         pushes of cyber threat information) to publish
         our STIX_data.json file
         """
         # Create a cabby client
@@ -167,7 +168,8 @@ class ExportingAlerts(IModule):
         # Make sure we don't push empty files
         if len(stix_data) > 0:
             binding = "urn:stix.mitre.org:json:2.1"
-            # URI is the path to the inbox service we want to use in the taxii server
+            # URI is the path to the inbox service we want to
+            # use in the taxii server
             client.push(
                 stix_data,
                 binding,
@@ -175,7 +177,8 @@ class ExportingAlerts(IModule):
                 uri=self.inbox_path,
             )
             self.print(
-                f"Successfully exported to TAXII server: {self.TAXII_server}.",
+                f"Successfully exported to TAXII server: "
+                f"{self.TAXII_server}.",
                 1,
                 0,
             )
@@ -184,15 +187,19 @@ class ExportingAlerts(IModule):
     def export_to_stix(self, msg_to_send: tuple) -> bool:
         """
         Function to export evidence to a STIX_data.json file in the cwd.
-        It keeps appending the given indicator to STIX_data.json until they're sent to the
+        It keeps appending the given indicator to STIX_data.json until they're
+         sent to the
         taxii server
-        msg_to_send is a tuple: (evidence_type, attacker_direction,attacker, description)
+        msg_to_send is a tuple: (evidence_type, attacker_direction,attacker,
+         description)
             evidence_type: e.g PortScan, ThreatIntelligence etc
             attacker_direction: e.g dip sip dport sport
             attacker: ip or port  OR ip:port:proto
-            description: e.g 'New horizontal port scan detected to port 23. Not Estab TCP from IP: ip-address. Tot pkts sent all IPs: 9'
+            description: e.g 'New horizontal port scan detected to port 23.
+             Not Estab TCP from IP: ip-address. Tot pkts sent all IPs: 9'
         """
-        # self.print(f"Exporting STIX data to {self.TAXII_server} every {self.push_delay} seconds.")
+        # self.print(f"Exporting STIX data to {self.TAXII_server} every
+        # {self.push_delay} seconds.")
         # ---------------- set name attribute ----------------
         evidence_type, attacker_direction, attacker, description = (
             msg_to_send[0],
@@ -200,18 +207,21 @@ class ExportingAlerts(IModule):
             msg_to_send[2],
             msg_to_send[3],
         )
-        # In case of ssh connection, evidence_type is set to SSHSuccessful-by-ip (special case) , ip here is variable
+        # In case of ssh connection, evidence_type is set to
+        # SSHSuccessful-by-ip (special case) , ip here is variable
         # So we change that to be able to access it in the below dict
         if "SSHSuccessful" in evidence_type:
             evidence_type = "SSHSuccessful"
-        # This dict contains each type and the way we should describe it in STIX name attribute
+        # This dict contains each type and the way we should describe
+        # it in STIX name attribute
 
         # Get the right description to use in stix
         name = evidence_type
 
         # ---------------- set pattern attribute ----------------
         if "port" in attacker_direction:
-            # attacker is a port probably coming from a portscan we need the ip instead
+            # attacker is a port probably coming from a
+            # portscan we need the ip instead
             attacker = description[
                 description.index("IP: ") + 4 : description.index(" Tot") - 1
             ]
@@ -229,18 +239,22 @@ class ExportingAlerts(IModule):
         else:
             self.print(f"Can't set pattern for STIX. {attacker}", 0, 3)
             return False
-        # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
-        # Valid_from, created and modified attribute will be set to the current time
+        # Required Indicator Properties: type, spec_version, id, created,
+        # modified , all are set automatically
+        # Valid_from, created and modified attribute will
+        # be set to the current time
         # ID will be generated randomly
         # ref https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_6khi84u7y58g
         indicator = Indicator(
             name=name, pattern=pattern, pattern_type="stix"
         )  # the pattern language that the indicator pattern is expressed in.
-        # Create and Populate Bundle. All our indicators will be inside bundle['objects'].
+        # Create and Populate Bundle.
+        # All our indicators will be inside bundle['objects'].
         bundle = Bundle()
         if not self.is_bundle_created:
             bundle = Bundle(indicator)
-            # Clear everything in the existing STIX_data.json if it's not empty
+            # Clear everything in the existing STIX_data.json
+            # if it's not empty
             open("STIX_data.json", "w").close()
             # Write the bundle.
             with open("STIX_data.json", "w") as stix_file:
@@ -250,7 +264,8 @@ class ExportingAlerts(IModule):
             # Bundle is already created just append to it
             # r+ to delete last 4 chars
             with open("STIX_data.json", "r+") as stix_file:
-                # delete the last 4 characters in the file ']\n}\n' so we can append to the objects array and add them back later
+                # delete the last 4 characters in the file ']\n}\n' so we
+                # can append to the objects array and add them back later
                 stix_file.seek(0, os.SEEK_END)
                 stix_file.seek(stix_file.tell() - 4, 0)
                 stix_file.truncate()
@@ -265,7 +280,7 @@ class ExportingAlerts(IModule):
         self.print("Indicator added to STIX_data.json", 2, 0)
         return True
 
-    def send_to_server(self):
+    def schedule_sending_to_taxii_server(self):
         """
         Responsible for publishing STIX_data.json to the taxii server every
         self.push_delay seconds when running on an interface only
@@ -274,10 +289,11 @@ class ExportingAlerts(IModule):
             # on an interface, we use the push delay from slips.conf
             # on files, we push once when slips is stopping
             time.sleep(self.push_delay)
-            # Sometimes the time's up and we need to send to server again but there's no
+            # Sometimes the time's up and we need to send to
+            # server again but there's no
             # new alerts in stix_data.json yet
             if os.path.exists("STIX_data.json"):
-                self.push_to_TAXII_server()
+                self.push_to_taxii_server()
                 # Delete stix_data.json file so we don't send duplicates
                 os.remove("STIX_data.json")
                 self.is_bundle_created = False
@@ -289,11 +305,18 @@ class ExportingAlerts(IModule):
                     0,
                 )
 
+    def should_export_to_stix(self) -> bool:
+        return "stix" in self.export_to
+
+    def should_export_to_slack(self) -> bool:
+        return "slack" in self.export_to
+
     def shutdown_gracefully(self):
         # We need to publish to taxii server before stopping
-        if "stix" in self.export_to:
-            self.push_to_TAXII_server()
-        if "slack" in self.export_to and hasattr(self, "BOT_TOKEN"):
+        if self.should_export_to_stix():
+            self.push_to_taxii_server()
+
+        if self.should_export_to_slack() and hasattr(self, "BOT_TOKEN"):
             date_time = datetime.datetime.now()
             date_time = utils.convert_format(date_time, utils.alerts_format)
             self.send_to_slack(
@@ -302,30 +325,43 @@ class ExportingAlerts(IModule):
 
     def pre_main(self):
         utils.drop_root_privs()
-        if self.is_running_on_interface and "stix" in self.export_to:
+        if self.should_export_to_slack():
+            if not self.get_slack_token():
+                self.print(
+                    f"Please add slack bot token to "
+                    f"{self.slack_token_filepath}. Exporting to Slack "
+                    f"aborted..",
+                    0,
+                    1,
+                )
+
+            if hasattr(self, "BOT_TOKEN"):
+                date_time = datetime.datetime.now()
+                date_time = utils.convert_format(
+                    date_time, utils.alerts_format
+                )
+                self.send_to_slack(
+                    f"{date_time}: Slips started on sensor:"
+                    f" {self.sensor_name}."
+                )
+
+        if self.is_running_on_interface and self.should_export_to_stix():
             # This thread is responsible for waiting n seconds before
             # each push to the stix server
             # it starts the timer when the first alert happens
             self.export_to_taxii_thread.start()
-
-        if "slack" in self.export_to and hasattr(self, "BOT_TOKEN"):
-            date_time = datetime.datetime.now()
-            date_time = utils.convert_format(date_time, utils.alerts_format)
-            self.send_to_slack(
-                f"{date_time}: Slips started on sensor: {self.sensor_name}."
-            )
 
     def main(self):
         if msg := self.get_msg("export_evidence"):
             evidence = json.loads(msg["data"])
             description: str = evidence["description"]
 
-            if "slack" in self.export_to and hasattr(self, "BOT_TOKEN"):
+            if self.should_export_to_slack() and hasattr(self, "BOT_TOKEN"):
                 srcip = evidence["profile"]["ip"]
                 msg_to_send = f"Src IP {srcip} Detected {description}"
                 self.send_to_slack(msg_to_send)
 
-            if "stix" in self.export_to:
+            if self.should_export_to_stix():
                 msg_to_send = (
                     evidence["evidence_type"],
                     evidence["attacker"]["direction"],
