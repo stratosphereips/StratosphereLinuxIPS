@@ -1,6 +1,6 @@
-# Ignore all .log files in output/ dir
-output/*.log
-**/alerts.json
+# Ignore all .log files, no matter where they're located
+
+**/*.log
 **/.git
 
 #node modules
