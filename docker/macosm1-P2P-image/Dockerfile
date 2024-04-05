@@ -58,7 +58,11 @@ WORKDIR ${SLIPS_DIR}
 
 COPY . $SLIPS_DIR
 
-RUN pip3 install --no-cache-dir -r docker/macosm1-P2P-image/requirements-macos-m1-docker.txt \
+
+
+# we're excluding black here because it has conflicts with the tensorflow version required in requirements.txt
+# this is temporary until we upgrade tensorflow to the latest version
+RUN grep -v 'black' docker/macosm1-P2P-image/requirements-macos-m1-docker.txt | xargs pip3 install  --no-cache-dir \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
