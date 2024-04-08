@@ -742,7 +742,20 @@ class ThreatIntel(IModule, URLhaus):
 
     def spamhaus(self, ip):
         """
-        Supports IP lookups only
+        
+        Check if the given IP address is listed on the Spamhaus DNS-based Blacklist (DNSBL).
+
+        This function constructs a DNS query for the given IP address using the Spamhaus
+        DNSBL format, resolves the query using the `dns` library, and parses the response
+        to determine if the IP is listed on one or more Spamhaus blacklists.
+
+        Args:
+             ip (str): The IP address to check against the Spamhaus blacklists.
+
+        Returns:
+        [dict]: A dictionary containing the source dataset (list of blacklists),
+                description, threat level, and tags if the IP is listed on a Spamhaus
+                blacklist. If the IP is not listed or an error occurs, returns None.
         """
         # these are spamhaus datasets
         lists_names = {
@@ -890,7 +903,21 @@ class ThreatIntel(IModule, URLhaus):
 
     def circl_lu(self, flow_info: dict):
         """
-        Supports lookup of MD5 hashes on Circl.lu
+          
+        Look up the MD5 hash of a downloaded file on the CIRCL.LU API.
+
+        This function constructs the URL for the CIRCL.LU API endpoint
+        based on the provided MD5 hash, sends a GET request to the API,
+        and processes the response to determine if the file is malicious.
+
+        Args:
+        flow_info (dict): A dictionary containing information about the file,
+        including the MD5 hash.
+
+        Returns:
+        [dict]: A dictionary containing the threat level, confidence,
+                and blacklist information if the file is found to be malicious.
+                If the file is not malicious or an error occurs, returns None.
         """
 
         def calculate_threat_level(circl_trust: str):
