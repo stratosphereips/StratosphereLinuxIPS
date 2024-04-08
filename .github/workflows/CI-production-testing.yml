@@ -42,28 +42,33 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         grep -v 'black' install/requirements.txt | xargs pip3 install  --no-cache-dir
+        pip install coverage
 
     - name: Start redis server
       run: redis-server --daemonize yes
 
     - name: Run unit tests
-      run: python3  -m pytest tests/ --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+      run: coverage run --source=./ -m pytest tests/ --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+
 
     - name: Run database unit tests
-      run: python3  -m pytest tests/test_database.py -p no:warnings -vv
+      run: coverage run --source=./ -m pytest tests/test_database.py -p no:warnings -vv
 
     - name: Clear redis cache
       run: ./slips.py -cc
 
     - name: Portscan tests
-      run: python3 -m pytest -s tests/integration_tests/test_portscans.py  -p no:warnings -vv
+      run:  coverage run --source=./ -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
 
     - name: Integration tests
-      run: python3 -m pytest -s tests/integration_tests/test_dataset.py  -p no:warnings -vv
+      run: coverage run --source=./ -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
 
     - name: Config file tests
-      run: python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
+      run: coverage run --source=./ -m pytest -s tests/integration_tests/test_config_files.py -p no:warnings -vv
 
+    - name: Generate coverage report
+      run: |
+        coverage xml -o coverage.xml
 
     - name: Upload Artifact
       # run this job whether the above jobs failed or passed
@@ -73,3 +78,4 @@ jobs:
         name: test_slips_locally-integration-tests-output
         path: |
           output/integration_tests
+          coverage.xml
