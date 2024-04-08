@@ -1,6 +1,6 @@
 import ipaddress
 
-from slips_files.common.imports import *
+from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -88,10 +88,10 @@ class HorizontalPortscan:
         self, protocol: str, state: str, profileid: str, twid: str
     ) -> dict:
         """
-        Get the list of dstports that we tried to connect to (not established
-        flows)
-          these unknowns are the info this function retrieves
-          profileid -> unknown_dstip:unknown_dstports
+        Get the list of dstports that we tried to connect
+         to (not established flows)
+         these unknowns are the info this function retrieves
+         profileid -> unknown_dstip:unknown_dstports
 
          here, the profileid given is the client.
          :return: the following dict
@@ -120,6 +120,8 @@ class HorizontalPortscan:
         return dports
 
     def get_cache_key(self, profileid: str, twid: str, dport):
+        if not dport:
+            return False
         return f"{profileid}:{twid}:dport:{dport}:HorizontalPortscan"
 
     def get_packets_sent(self, dstips: dict) -> int:
@@ -138,7 +140,8 @@ class HorizontalPortscan:
         for dstip in dstips:
             if "spkts" not in dstips[dstip]:
                 # In argus files there are no src pkts, only pkts.
-                # So it is better to have the total pkts than to have no packets count
+                # So it is better to have the total pkts than
+                # to have no packets count
                 pkts_sent += int(dstips[dstip]["pkts"])
             else:
                 pkts_sent += int(dstips[dstip]["spkts"])
@@ -171,7 +174,8 @@ class HorizontalPortscan:
 
     def get_uids(self, dstips: dict):
         """
-        returns all the uids of flows sent on a sigle port ti different dstination IPs
+        returns all the uids of flows sent on a sigle port
+        to different destination IPs
         """
         uids = []
         for dstip in dstips:
@@ -184,7 +188,8 @@ class HorizontalPortscan:
         try:
             saddr_obj = ipaddress.ip_address(saddr)
             if saddr == "255.255.255.255" or saddr_obj.is_multicast:
-                # don't report port scans on the broadcast or multicast addresses
+                # don't report port scans on the
+                # broadcast or multicast addresses
                 return False
         except ValueError:
             # it's a mac
@@ -211,6 +216,8 @@ class HorizontalPortscan:
                     dstips.pop(ip)
 
                 cache_key: str = self.get_cache_key(profileid, twid, dport)
+                if not cache_key:
+                    continue
                 amount_of_dips = len(dstips)
 
                 if self.check_if_enough_dstips_to_trigger_an_evidence(
