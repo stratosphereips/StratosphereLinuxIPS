@@ -123,7 +123,7 @@ tr:nth-child(even) {
     <td>module to detect malicious flows using machine learning</td>
     <td>✅</td>
   </tr>
-  
+
 </table>
 
 
@@ -137,17 +137,17 @@ To use it you need to add your virustotal API key in ```config/vt_api_key```
 ### RiskIQ Module
 
 This module is used to get different information (passive DNS, IoCs, etc.) from [RiskIQ](https://www.riskiq.com/)
-To use this module your RiskIQ email and API key should be stored in ```config/RiskIQ_credentials```  
-  
-the format of this file should be the following:  
-  
-```  
-example@domain.com  
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  
-```  
-  
-The hash should be your 64 character API Key.  
-  
+To use this module your RiskIQ email and API key should be stored in ```config/RiskIQ_credentials```
+
+the format of this file should be the following:
+
+```
+example@domain.com
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+```
+
+The hash should be your 64 character API Key.
+
 The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.conf```
 
 ## RNN C&C Detection Module
@@ -173,7 +173,7 @@ The **letter** is the key part in a Stratoletter string. It is derived from a di
 
 A visual representation of the dictionary from which letter is derived
 
-In this image, each block represents the possible values of the letter, 
+In this image, each block represents the possible values of the letter,
 We choose the block based on the periodicity
 and choose the letter from the block based on the duration(number of row) and size (number of column).
 
@@ -203,7 +203,7 @@ letter = Z          # uppercase letter for periodicity 2(Weakly periodicity) and
 
 Stratoletters represent details of current flow and past available flow with latest on left. The current flow symbol is concise of three parts.
 
-each symbol consists of hrs passed since last flow + a letter that represents the periodicity,size and dur of the 
+each symbol consists of hrs passed since last flow + a letter that represents the periodicity,size and dur of the
 flow + a char showing the time passed since last flow
 
 ```
@@ -222,7 +222,7 @@ No of hours passed since last flow = 2
 periodicity = 2     # Weakly not periodicity
 duration = 1
 size = 1
-timechar = 
+timechar =
 stratoletter of last flow = 9*z*
 letter = A
 symbol = 00A9*z*
@@ -238,9 +238,9 @@ symbol = u*e.
 ```
 Then the model will predict how secure each flow is based on the Stratoletter
 ```commandline
-symbol = 99*z*i.i* 
+symbol = 99*z*i.i*
 model_score = 0.9573354
-symbol = 99. 
+symbol = 99.
 model_score = 0.9063127
 symbol = 77*g.g*g*g.g.g.g*x*x*x*g.g.
 model_score = 0.96772265
@@ -255,13 +255,13 @@ You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` a
 
 ## Blocking Module
 
-To enable blocking in slips, start slips with the ```-p``` flag. 
+To enable blocking in slips, start slips with the ```-p``` flag.
 
 This feature is only supported in linux using iptables.
 
 ## Exporting Alerts Module
 
-Slips supports exporting alerts to other systems using different modules (ExportingAlerts, CESNET sharing etc.) 
+Slips supports exporting alerts to other systems using different modules (ExportingAlerts, CESNET sharing etc.)
 
 
 For now the supported systems are:
@@ -279,12 +279,12 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 ## Flowalerts Module
 
 This module is responsible for detecting malicious behaviours in your traffic.
-    
+
 Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/flowalerts.html) for detailed explanation of what Slips detects and how it detects.
 
 ## Disabled alerts
 
-All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.conf``` 
+All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.conf```
 
 Slips support disabling unwanted alerts, simply add the detection you want to disable in
 the ```disabled_detections``` list and slips will not generate any alerts of this type.
@@ -297,23 +297,25 @@ for example:
 Supported detections are:
 
 
-ARPScan, ARP-outside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful, 
+ARPScan, ARP-outside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful,
 LongConnection, MultipleReconnectionAttempts,
-ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, 
+ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection,
 ConnectionWithoutDNS, DNSWithoutConnection,
-MaliciousJA3, DataExfiltration, SelfSignedCertificate, VerticalPortscan, 
+MaliciousJA3, DataExfiltration, SelfSignedCertificate, VerticalPortscan,
 HorizontalPortscan, Password_Guessing, MaliciousFlow,
-SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, 
+SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked,
  Command-and-Control-channels-detection,
 ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP,
 MaliciousDownloadedFile, DGA, MaliciousSSLCert, YoungDomain, MultipleSSHVersions
-DNS-ARPA-Scan, SMTPLoginBruteforce, BadSMTPLogin, 
+DNS-ARPA-Scan, SMTPLoginBruteforce, BadSMTPLogin,
 IncompatibleUserAgent, ICMP-Timestamp-Scan, ICMP-AddressScan, ICMP-AddressMaskScan
 
 
 ## Threat Intelligence Module
 
-Slips has a complex system to deal with Threat Intelligence feeds. The Threat Intelligence Module in Slips is designed to enhance detection capabilities, utilizing both external and internal thread intelligence sources. 
+Slips has a complex system to deal with Threat Intelligence feeds. The Threat Intelligence Module in Slips is designed
+to enhance detection capabilities, utilizing both external and internal threat
+intelligence sources.
 
 Slips supports various indicators of compromise (IoCs) from Threat Intelligence (TI) feeds, including IPs, IP ranges, domains, JA3 hashes, and SSL hashes. This provides comprehensive coverage against potential threats
 
@@ -349,10 +351,10 @@ By integrating these external services, Slips significantly enhances its detecti
 
 ### Matching of IPs
 
-Slips gets every IP it can find in the network (DNS answers, HTTP destination IPs, SSH destination IPs, etc.) 
+Slips gets every IP it can find in the network (DNS answers, HTTP destination IPs, SSH destination IPs, etc.)
 and tries to see if it is in any blacklist.
 
-If a match is found, it generates an evidence, if no exact match is found, 
+If a match is found, it generates an evidence, if no exact match is found,
 it searches the Blacklisted ranges taken from different TI feeds.
 
 
@@ -365,13 +367,13 @@ The domains are currently taken from:
 - HTTP host names
 - TLS SNI
 
-Once a domain is found, it is verified against the downloaded list of domains 
-from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.conf```. 
+Once a domain is found, it is verified against the downloaded list of domains
+from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.conf```.
 which is ```config/TI_feeds.csv``` by default.
-If an exact match is found, then an evidence is generated. 
+If an exact match is found, then an evidence is generated.
 
 If an exact match is not found, then Slips verifies if the verified domain is a
-subdomain of any domain in the blacklist. 
+subdomain of any domain in the blacklist.
 
 
 For example, if the domain in the traffic is _here.testing.com_,
@@ -400,12 +402,12 @@ You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```conf
 Every time Slips sees a new IP, it stores info about it in the db, for example its organization, RDNs, and ASN.
 If the ASN of an IP matches a blacklisted ASN, slips alerts.
 
-Blacklisted ASNs are read from out local TI file ```config/local_data_files/own_malicious_iocs.csv```, 
+Blacklisted ASNs are read from out local TI file ```config/local_data_files/own_malicious_iocs.csv```,
 so you can update them or add your own.
 
 ### Local Threat Intelligence files
 
-Slips has a local file for adding IoCs of your own, 
+Slips has a local file for adding IoCs of your own,
 it's located in ```config/local_data_files/own_malicious_iocs.csv``` by default,
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```.
 
@@ -417,13 +419,13 @@ Refer to the [architecture section of the docs](https://stratospherelinuxips.rea
 
 
 Example:
-    
+
     "23.253.126.58","high","Simda CC"
     "bncv00.no-ip.info", "critical", "Variant.Zusy"
 
 ### Local JA3 hashes
 
-Slips has a local file for adding JA3 hashes of your own, 
+Slips has a local file for adding JA3 hashes of your own,
 it's located in ```config/local_data_files/own_malicious_JA3.csv``` by default.
 
 The format of the file is "JA3 hash", "Threat level", "Description"
@@ -441,14 +443,14 @@ Example:
 ### Adding your own remote feed
 
 
-We update the remote ones regularly. The list of remote threat intelligence 
+We update the remote ones regularly. The list of remote threat intelligence
 files is set in the path of ```ti_files``` variable in ```config/slips.conf```.
 The path of all the TI feeds is in ```config/TI_feeds.csv``` by default.
 
 You can add your own remote threat intelligence feeds in this variable.
 Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
 
-Each URL should be added with a threat_level and a tag, the format is (url,threat_level,tag) 
+Each URL should be added with a threat_level and a tag, the format is (url,threat_level,tag)
 
 tag is which category is this feed e.g. phishing, adtrackers, etc..
 
@@ -457,15 +459,15 @@ Threat level available options: info, low, medium, high, critical
 Refer to the [architecture section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html) for detailed explanation of Slips threat levels.
 
 
-TI files commented using # may be processed as they're still in our database. 
+TI files commented using # may be processed as they're still in our database.
 
 Use ```;``` for commenting TI files in ```config/slips.conf``` instead of ```#```.
 
 Commented TI files (lines starting with ;) will be completely removed from our database.
 
 
-The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```. 
-By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
+The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```.
+By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/```
 are deleted after slips is done reading them.
 
 
@@ -474,7 +476,7 @@ are deleted after slips is done reading them.
 If you have a remote file link that you wish to comment and remove from the database
 you can do so by adding ';' to the line that contains the feed link in ```config/TI_feeds.csv```, don't use the '#'
 for example to comment the ```bruteforcelogin``` feed you should do the following:
-    
+
     ;https://lists.blocklist.de/lists/bruteforcelogin.txt, medium,['honeypot']
 
 instead of:
@@ -484,24 +486,24 @@ instead of:
 ## Update Manager Module
 
 To make sure Slips is up to date with the most recent IoCs in all feeds,
-all feeds are loaded, parsed and updated periodically and automatically by 
+all feeds are loaded, parsed and updated periodically and automatically by
 Slips every 24 hours, which requires no user interaction.
 
 The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.conf```
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
 
-By default, local slips files (organization_info, ports_info, etc.) are 
+By default, local slips files (organization_info, ports_info, etc.) are
 cached to avoid loading and parsing
 
-then everytime we start slips. However, they are updated automatically by 
+then everytime we start slips. However, they are updated automatically by
 the update manager if they were changed on disk.
 
 Only one slips instance is allowed to be using the update manager at a time to avoid race conditions.
 
 By default, slips starts without the TI files, and runs the Update Manager in the background
  if the ```wait_for_TI_to_finish``` option in slips.conf is set to yes, slips will not start until the update manager is done
- and all TI files are loaded successfully, 
+ and all TI files are loaded successfully,
 this is useful if you want to ensure that slips doesn't miss
 the detection of any blacklisted IPs, but it adds some time to the startup of slips
 since it will be downloading, parsing, and caching 45+ different TI feeds.
@@ -512,30 +514,30 @@ since it will be downloading, parsing, and caching 45+ different TI feeds.
 The IP info module has several ways of getting information about an IP address, it includes:
 
 - ASN
-- Country by Geolocation 
-- Given a MAC, its Vendor 
+- Country by Geolocation
+- Given a MAC, its Vendor
 - Reverse DNS
 
 ### ASN
 
-Slips is shipped with an offline database (GeoLite2) in ```databases/GeoLite2-ASN.mmdb``` 
+Slips is shipped with an offline database (GeoLite2) in ```databases/GeoLite2-ASN.mmdb```
 to search for ASNs, if
 the ASN of a given IP is not in the GeoLite2 database, we try to get the ASN online
 using the online database using the ```ipwhois``` library.
 However, to reduce the amount of requests, we retrieve the range of the IP and we cache the whole range.
-To search and cache the whole range of an IP, the module uses the ipwhois library. 
-The ipwhois library gets the range of this IP by making a connection to the server ```cymru.com``` using a TXT DNS query. 
-The DNS server is the one set up in the operating system. For example to get the ASN of the IP 13.32.98.150, 
+To search and cache the whole range of an IP, the module uses the ipwhois library.
+The ipwhois library gets the range of this IP by making a connection to the server ```cymru.com``` using a TXT DNS query.
+The DNS server is the one set up in the operating system. For example to get the ASN of the IP 13.32.98.150,
 you will see a DNS connection asking for the TXT record of the domain ```150.98.32.13.origin.asn.cymru.com```.
 
-### Country by Geolocation 
+### Country by Geolocation
 
-Slips is shipped with an offline database (GeoLite2) in ```databases/GeoLite2-Country.mmdb``` 
+Slips is shipped with an offline database (GeoLite2) in ```databases/GeoLite2-Country.mmdb```
 to search for Geolocation.
 
 ### Mac Vendors
 
-Slips is shipped with an offline database ```databases/macaddress-db.json``` for 
+Slips is shipped with an offline database ```databases/macaddress-db.json``` for
 MAC address vendor mapping.
 
 Slips updates this database by default every 2 weeks using the following online db
@@ -551,7 +553,7 @@ database using the OUI.
 If the vendor isn't found in the offline MAC database,
 Slips tries to get the MAc using the online database https://www.macvendorlookup.com
 
-The offline database is updated manually and shipped with slips, you can find it in 
+The offline database is updated manually and shipped with slips, you can find it in
 the ```databases/``` dir.
 
 Slips makes sure it doesn't perform duplicate searches of the same MAC Address either online, or offline.
@@ -563,7 +565,7 @@ This is obtained by doing a standard in-addr.arpa DNS request.
 
 This module is used to check for ARP attacks in your network traffic.
 
-By default, zeek doesn't generate and log ARP flows, but Slips is shipped with it's 
+By default, zeek doesn't generate and log ARP flows, but Slips is shipped with it's
 own zeek scripts that enable the logging of ARP flows in ```arp.log```
 
 The detection techniques are:
@@ -575,12 +577,12 @@ The detection techniques are:
 
 ### ARP Scans
 
-Slips considers an IP performing an ARP scan if it sends 5 
+Slips considers an IP performing an ARP scan if it sends 5
 or more non-gratuitous ARP to different destination addresses in 30 seconds or less.
 
 ### ARP to a destination IP outside of local network
 
-Slips alerts when an ARP flow is being sent to an IP outside of local network as it's a weird behaviour 
+Slips alerts when an ARP flow is being sent to an IP outside of local network as it's a weird behaviour
 that shouldn't be happening.
 
 ### Unsolicited ARP
@@ -590,7 +592,7 @@ threat level 'info', so we don't consider it malicious, we simply notify you abo
 
 ### MITM ARP attack
 
-Slips detects when a MAC with IP A, is trying to tell others that now that MAC 
+Slips detects when a MAC with IP A, is trying to tell others that now that MAC
 is also for IP B (ARP cache attack)
 
 
@@ -598,11 +600,11 @@ is also for IP B (ARP cache attack)
 
 This module is responsible for importing and exporting alerts from and to warden server
 
-Refer to the [exporting section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html) 
+Refer to the [exporting section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html)
 for detailed instructions on CESNET exporting and the format of the configuration files.
 
 To enable the importing alerts from warden servers,
-set ```receive_alerts```  to ```yes``` in config/slips.conf  
+set ```receive_alerts```  to ```yes``` in config/slips.conf
 
 Slips imports 100 alerts from warden servers each day, and automatically stores the IoCs in our database
 
@@ -641,7 +643,7 @@ and evidence.
 
 Our current list of user agents has:
 ['httpsend', 'chm_msdn', 'pb', 'jndi', 'tesseract']
-  
+
 ### Incompatible user agents
 
 Slips uses and offline MAC address database to detect the type of device based on the MAC OUI.
@@ -649,7 +651,7 @@ Slips uses and offline MAC address database to detect the type of device based o
 First, Slips store the MAC address and vendor of every IP it sees (if available)
 
 Second, When slips encounters a user agent in HTTP traffic it performs an online
-query to http://useragentstring.com to get more info about this user agent, 
+query to http://useragentstring.com to get more info about this user agent,
 like the os type, name and browser.
 
 Third, When slips has both information available (MAC vendor and user agent),
@@ -657,14 +659,14 @@ it compares them to detect incompatibility using a list of keywords for each ope
 
 Available keywords for Apple: ('macos', 'ios', 'apple', 'os x', 'mac', 'macintosh', 'darwin')
 
-Available keywords for Microsoft: ('microsoft', 'windows', 'nt') 
+Available keywords for Microsoft: ('microsoft', 'windows', 'nt')
 
 Available keywords for Android: ('android', 'google')
 
 ### Multiple user agents
 
-Slips stores the MAC address and vendor of every IP it sees 
-(if available) in the redis database. Then, when an IP iss seen 
+Slips stores the MAC address and vendor of every IP it sees
+(if available) in the redis database. Then, when an IP iss seen
 using a different user agent than the one stored in the database, it tries to extract
 os info from the user agent string, either by performing an online
 query to http://useragentstring.com or by using zeek.
@@ -677,9 +679,9 @@ slips detects this with 'low' threat level
 
 ### Pastebin downloads
 
-Some malware use pastebin as the host of their malicious payloads. 
+Some malware use pastebin as the host of their malicious payloads.
 
-Slips detects downloads of files from pastebin through HTTP with size >= 700 bytes. 
+Slips detects downloads of files from pastebin through HTTP with size >= 700 bytes.
 
 This value can be customized in slips.conf by changing ```pastebin_download_threshold```
 
@@ -688,7 +690,7 @@ When found, slips alerts pastebin download with threat level low because not all
 
 ### Unencrypted HTTP traffic
 
-When slip sees an HTTP unencrypted traffic in zeek's http.log it generates 
+When slip sees an HTTP unencrypted traffic in zeek's http.log it generates
 an evidence with threat_level low
 
 ## Leak Detector Module
@@ -706,7 +708,7 @@ In order for this module to run you need:
   <li>tshark</li>
 </ul>
 
-using 
+using
 ```sudo apt install yara```
 
 You can install tshark by running
@@ -724,9 +726,9 @@ This module works by
   4. Once we find a match, we get the packet containing this match and set evidence.
 
 
-### Extending 
+### Extending
 
-You can extend the module be adding more YARA rules in ```modules/leak_detector/yara_rules/rules/```. 
+You can extend the module be adding more YARA rules in ```modules/leak_detector/yara_rules/rules/```.
 
 The rules will be automatically detected, compiled and run on the given PCAP.
 
@@ -757,7 +759,7 @@ The total number of _packets_ in all flows in the scan give us the confidence of
 
 Slips considers an IP performing a horizontal port scan if it contacted more than 6 destination IPs on the same
 specific port with not established connections. Slips checks both TCP and UDP connections for horizontal port scans.
-The initial threshold is now 6 destination IPs using the same destination ports. 
+The initial threshold is now 6 destination IPs using the same destination ports.
 
 After detecting a horizontal port scan, Slips waits 10 seconds to see if more flows arrive,
 since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
@@ -770,13 +772,13 @@ Slips ignores the broadcast IP 255.255.255.255 has destination of port scans.
 ### PING Sweeps
 
 ICMP messages can be used to find out which hosts are alive in a network.
-Slips relies on Zeek detections for this, but it is done with our own Zeek scripts located in 
+Slips relies on Zeek detections for this, but it is done with our own Zeek scripts located in
 zeek-scripts/icmps-scans.zeek. The scripts detects three types of ICMP scans: 'ICMP-Timestamp', 'ICMP-Address', 'ICMP-AddressMask'.
 
-We detect a scan every threshold. So we generate an evidence when there is 
+We detect a scan every threshold. So we generate an evidence when there is
 5,10,15, .. etc. ICMP established connections to different IPs.
 
-Slips does this detection using Slips' own zeek script located in 
+Slips does this detection using Slips' own zeek script located in
 zeek-scripts/icmps-scans.zeek for zeek and pcap files and using the portscan module for binetflow files.
 
 ### DHCP Scans
@@ -796,7 +798,7 @@ macvendorlookup.com -> For getting MAC vendor info if no info was found in the l
 maclookup.app -> For getting MAC vendor info if no info was found in the local maxmind db
 ip-api.com -> For getting ASN info about IPs if no info was found in our Redis DB
 ipinfo.io -> For getting your public IP
-virustotal.com -> For getting scores about domains, IPs and URLs 
+virustotal.com -> For getting scores about domains, IPs and URLs
 urlhaus-api.abuse.ch -> For getting info about URLs and downloaded files
 check.torproject.org -> For getting info about tor exist nodes.
 cert.pl -> Used in our list of TI files.
@@ -809,7 +811,7 @@ If you want to contribute: improve existing Slips detection modules or implement
 
 ## Zeek Scripts
 
-Slips is shipped with it's own custom zeek scripts to be able to extend zeek functionality and 
+Slips is shipped with it's own custom zeek scripts to be able to extend zeek functionality and
 customize the detections
 
 ### Detect DoH
@@ -822,13 +824,13 @@ and times out the connection after 1h so that the connection won't take too long
 
 ### Detect ICMP Scans
 
-In the ```zeek-scripts/icmps-scans.zeek``` script, we 
+In the ```zeek-scripts/icmps-scans.zeek``` script, we
 check the type of ICMP in every ICMP packet seen in the network,
 
 and we detect 3 types of ICMP scans: ICMP-Timestamp-Scan, ICMP-AddressScan,
 and ICMP-AddressMaskScan based on the icmp type
 
-We detect a scan every threshold. So we generate an evidence when there is 
+We detect a scan every threshold. So we generate an evidence when there is
 5,10,15, .. etc. ICMP established connections to different IPs.
 
 
@@ -836,5 +838,3 @@ We detect a scan every threshold. So we generate an evidence when there is
 
 The ```zeek-scripts/log_gw.zeek``` script is responsible for recognizing the gateway address using zeek, and logging it to
 notice.log
-
-
