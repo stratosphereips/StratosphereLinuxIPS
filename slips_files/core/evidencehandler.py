@@ -19,15 +19,16 @@
 import json
 from typing import List, Dict, Optional
 from datetime import datetime
-from os import path
 from colorama import Fore, Style
+from os import path
 import sys
 import os
 import time
 import traceback
 from slips_files.common.idea_format import idea_format
 from slips_files.common.style import red, cyan
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
 from slips_files.common.abstracts.core import ICore
@@ -463,8 +464,7 @@ class EvidenceHandler(ICore):
             if self.is_filtered_evidence(evidence, past_evidence_ids):
                 continue
 
-            whitelisted: bool = self.db.is_whitelisted_evidence(id)
-            if whitelisted:
+            if self.db.is_whitelisted_evidence(id):
                 continue
 
             # delete not processed evidence
@@ -473,8 +473,7 @@ class EvidenceHandler(ICore):
             # to fix this, we keep track of processed evidence
             # that came to new_evidence channel and were processed by it.
             # so they are ready to be a part of an alert
-            processed: bool = self.db.is_evidence_processed(id)
-            if not processed:
+            if not self.db.is_evidence_processed(id):
                 continue
 
             evidence_id: str = evidence.id

@@ -1230,8 +1230,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         self.r.hset("whitelist", type_, json.dumps(whitelist_dict))
 
-    def get_all_whitelist(self):
-        """Return dict of 3 keys: IPs, domains, organizations or mac"""
+    def get_all_whitelist(self) -> Dict[str, dict]:
+        """Returns a dict of 3 keys: IPs, domains, organizations or mac"""
         return self.r.hgetall("whitelist")
 
     def get_whitelist(self, key):
