@@ -8,13 +8,13 @@ from enum import Enum
 import sys
 import pytest
 
+
 def test_get_hash_from_file():
     utils = ModuleFactory().create_utils_obj()
     # a file that we know doesn't change
     assert (
         utils.get_hash_from_file('modules/template/__init__.py')
-        == '879d569533ed70a30c2a2e77fe5ae14d5a30606df470f1c354685ee40471140b'
-    )
+        == '879d569533ed70a30c2a2e77fe5ae14d5a30606df470f1c354685ee40471140b')
     
 def test_get_hash_from_nonexistent_file():
     utils = ModuleFactory().create_utils_obj()

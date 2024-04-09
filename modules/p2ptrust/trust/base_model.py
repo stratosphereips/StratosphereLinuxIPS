@@ -2,9 +2,6 @@ from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
 
 
-
-
-
 class BaseModel(IObservable):
     """
     This class implements a set of methods that get data from the database and compute a reputation based on that. Methods
@@ -39,11 +36,11 @@ class BaseModel(IObservable):
 
         self.notify_observers(
             {
-                'from': self.name,
-                'txt': text,
-                'verbose': verbose,
-                'debug': debug
-           }
+                "from": self.name,
+                "txt": text,
+                "verbose": verbose,
+                "debug": debug,
+            }
         )
 
     def get_opinion_on_ip(self, ipaddr: str) -> (float, float, float):
@@ -68,7 +65,7 @@ class BaseModel(IObservable):
         )
 
         self.trustdb.update_cached_network_opinion(
-            'ip', ipaddr, combined_score, combined_confidence, 0
+            "ip", ipaddr, combined_score, combined_confidence, 0
         )
         return combined_score, combined_confidence
 
@@ -141,7 +138,9 @@ class BaseModel(IObservable):
 
         weighted_reporters = self.normalize_peer_reputations(reporters)
 
-        combined_score = sum(r[0] * w for r, w, in zip(reports, weighted_reporters))
+        combined_score = sum(
+            r[0] * w for r, w, in zip(reports, weighted_reporters)
+        )
         combined_confidence = sum(
             [max(0, r[1] * w) for r, w, in zip(reports, reporters)]
         ) / len(reporters)

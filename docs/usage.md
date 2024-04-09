@@ -509,8 +509,16 @@ Each IP address that appears in the network traffic of the input is represented 
 
 **Analysis Direction**
 
-
 ```analysis_direction``` can either be ```out``` or ```all```
+
+The ```analysis_direction``` parameter controls which traffic flows are processed and analyzed by SLIPS. It determines whether SLIPS should focus on outbound traffic (potential data exfiltration), inbound traffic (incoming attacks), or analyze traffic in both directions.
+In ```all``` mode, SLIPS creates profiles for both internal (A) and external (B) IP addresses, and analyzes traffic in both directions (inbound and outbound).
+
+In ```out``` mode, SLIPS still creates profiles for internal (A) and external (B) IP addresses, but only analyzes the outgoing traffic from the internal (A) profiles to external (B) destinations.
+
+This parameter allows you to tailor SLIPS's analysis focus based on your specific monitoring requirements, such as detecting potential data exfiltration attempts (```out``` mode) or performing comprehensive network monitoring in both directions (```all``` mode).
+
+
 
 <div class="zoom">
 <img style="max-width:500px;max-height:500px;" src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/directions.png" title="Figure 1. Out and all directions">

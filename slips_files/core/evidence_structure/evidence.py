@@ -1,6 +1,7 @@
 """
 Contains evidence dataclass that is used in slips
 """
+
 import ipaddress
 from dataclasses import dataclass, field, asdict, is_dataclass
 from enum import Enum, auto
@@ -13,21 +14,26 @@ from slips_files.common.slips_utils import utils
 def validate_ip(ip):
     ipaddress.ip_address(ip)
 
+
 def validate_timestamp(ts) -> str:
     """
     the ts of all evidence should be in
      the alerts time format, if not, raise an exception
-     """
+    """
     if utils.define_time_format(ts) == utils.alerts_format:
         return ts
     else:
-        raise ValueError(f"Invalid timestamp format: {ts}. "
-                         f"Expected format: '%Y/%m/%d %H:%M:%S.%f%z'.")
+        raise ValueError(
+            f"Invalid timestamp format: {ts}. "
+            f"Expected format: '%Y/%m/%d %H:%M:%S.%f%z'."
+        )
+
 
 class EvidenceType(Enum):
     """
     These are the types of evidence slips can detect
     """
+
     ARP_SCAN = auto()
     ARP_OUTSIDE_LOCALNET = auto()
     UNSOLICITED_ARP = auto()
@@ -97,7 +103,6 @@ class Direction(Enum):
     SRC = auto()
 
 
-
 class IoCType(Enum):
     IP = auto()
     URL = auto()
@@ -107,6 +112,7 @@ class IoCType(Enum):
 
 class ThreatLevel(Enum):
     """determines the importance of the evidence"""
+
     INFO = 0
     LOW = 0.2
     MEDIUM = 0.5
@@ -121,6 +127,7 @@ class Anomaly(Enum):
     """
     https://idea.cesnet.cz/en/classifications
     """
+
     TRAFFIC = "Anomaly.Traffic"
     FILE = "Anomaly.File"
     CONNECTION = "Anomaly.Connection"
@@ -130,8 +137,6 @@ class Anomaly(Enum):
 class Recon(Enum):
     RECON = "Recon"
     SCANNING = "Recon.Scanning"
-
-
 
 
 class Attempt(Enum):
@@ -148,26 +153,28 @@ class Tag(Enum):
     this is optional in an evidence because it shouldn't
     be used with dports and sports Attacker.Direction
     """
-    SUSPICIOUS_USER_AGENT = 'SuspiciousUserAgent'
-    INCOMPATIBLE_USER_AGENT = 'IncompatibleUserAgent'
-    EXECUTABLE_MIME_TYPE = 'ExecutableMIMEType'
-    MULTIPLE_USER_AGENT = 'MultipleUserAgent'
-    SENDING_UNENCRYPTED_DATA = 'SendingUnencryptedData'
-    MALWARE = 'Malware'
-    RECON = 'Recon'
-    MITM = 'MITM'
-    ORIGIN_MALWARE = 'OriginMalware'
-    CC = 'CC'
-    BOTNET = 'Botnet'
-    BLACKLISTED_ASN = 'BlacklistedASN'
-    BLACKLISTED_IP = 'BlacklistedIP'
-    BLACKLISTED_DOMAIN = 'BlacklistedDomain'
+
+    SUSPICIOUS_USER_AGENT = "SuspiciousUserAgent"
+    INCOMPATIBLE_USER_AGENT = "IncompatibleUserAgent"
+    EXECUTABLE_MIME_TYPE = "ExecutableMIMEType"
+    MULTIPLE_USER_AGENT = "MultipleUserAgent"
+    SENDING_UNENCRYPTED_DATA = "SendingUnencryptedData"
+    MALWARE = "Malware"
+    RECON = "Recon"
+    MITM = "MITM"
+    ORIGIN_MALWARE = "OriginMalware"
+    CC = "CC"
+    BOTNET = "Botnet"
+    BLACKLISTED_ASN = "BlacklistedASN"
+    BLACKLISTED_IP = "BlacklistedIP"
+    BLACKLISTED_DOMAIN = "BlacklistedDomain"
 
 
 class Proto(Enum):
-    TCP = 'tcp'
-    UDP = 'udp'
-    ICMP = 'icmp'
+    TCP = "tcp"
+    UDP = "udp"
+    ICMP = "icmp"
+
 
 @dataclass
 class Victim:
@@ -185,6 +192,7 @@ class IDEACategory(Enum):
     The evidence category according to IDEA categories
     https://idea.cesnet.cz/en/classifications
     """
+
     ANOMALY_TRAFFIC = "Anomaly.Traffic"
     ANOMALY_FILE = "Anomaly.File"
     ANOMALY_CONNECTION = "Anomaly.Connection"
@@ -197,13 +205,12 @@ class IDEACategory(Enum):
     INTRUSION_BOTNET = "Intrusion.Botnet"
 
 
-
 @dataclass
 class ProfileID:
     ip: str
 
     def __setattr__(self, name, value):
-        if name == 'ip':
+        if name == "ip":
             assert ipaddress.ip_address(value)
         self.__dict__[name] = value
 
@@ -216,7 +223,7 @@ class Attacker:
     direction: Direction
     attacker_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
-    profile: ProfileID = ''
+    profile: ProfileID = ""
 
     def __post_init__(self):
         if self.attacker_type == IoCType.IP:
@@ -232,8 +239,10 @@ class TimeWindow:
 
     def __post_init__(self):
         if not isinstance(self.number, int):
-            raise ValueError(f"timewindow number must be an int. "
-                             f"{self.number} is invalid!")
+            raise ValueError(
+                f"timewindow number must be an int. "
+                f"{self.number} is invalid!"
+            )
 
     def __repr__(self):
         return f"timewindow{self.number}"
@@ -252,10 +261,8 @@ class Evidence:
     # the uids of the flows causing this evidence
     uid: List[str]
     timestamp: str = field(
-        metadata={
-            'validate': lambda x: validate_timestamp(x)
-            }
-        )
+        metadata={"validate": lambda x: validate_timestamp(x)}
+    )
     victim: Optional[Victim] = field(default=False)
     proto: Optional[Proto] = field(default=False)
     port: int = field(default=None)
@@ -264,32 +271,22 @@ class Evidence:
     id: str = field(default_factory=lambda: str(uuid4()))
     # the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
     conn_count: int = field(
-        default=1,
-        metadata={
-            'validate': lambda x: isinstance(x, int)
-            }
-        )
+        default=1, metadata={"validate": lambda x: isinstance(x, int)}
+    )
     # the confidence of this evidence on a scale from 0 to 1.
     # How sure you are that this evidence is what you say it is?
     confidence: float = field(
-          default=0.0,
-          metadata={
-              'validate': lambda x: 0 <= x <= 1
-            }
-        )
-
+        default=0.0, metadata={"validate": lambda x: 0 <= x <= 1}
+    )
 
     def __post_init__(self):
-        if (
-                not isinstance(self.uid, list)
-                or
-                not all(isinstance(uid, str) for uid in self.uid)
+        if not isinstance(self.uid, list) or not all(
+            isinstance(uid, str) for uid in self.uid
         ):
             raise ValueError(f"uid must be a list of strings .. {self}")
         else:
             # remove duplicate uids
             self.uid = list(set(self.uid))
-
 
 
 def evidence_to_dict(obj):
@@ -312,6 +309,7 @@ def evidence_to_dict(obj):
 
     return obj
 
+
 def dict_to_evidence(evidence: dict):
     """
     Convert a dictionary to an Evidence object.
@@ -319,27 +317,39 @@ def dict_to_evidence(evidence: dict):
     returns an instance of the Evidence class.
     """
     evidence_attributes = {
-        'evidence_type': EvidenceType[evidence["evidence_type"]],
-        'description': evidence['description'],
-        'attacker': Attacker(**evidence['attacker']),
-        'threat_level': ThreatLevel[evidence['threat_level'].upper()],
-        'category': IDEACategory[evidence['category']],
-        'victim': Victim(**evidence['victim']) if 'victim' in evidence
-        and evidence['victim'] else None,
-        'profile': ProfileID(evidence['profile']['ip'])
-                    if 'profile' in evidence else None,
-        'timewindow': TimeWindow(evidence['timewindow']['number']),
-        'uid': evidence['uid'],
-        'timestamp': evidence['timestamp'],
-        'proto': Proto[evidence['proto'].upper()] if 'proto' in evidence and
-                                             evidence['proto'] else None,
-        'port': evidence['port'],
-        'source_target_tag': Tag[evidence['source_target_tag']] if \
-            'source_target_tag' in evidence and evidence['source_target_tag']
-                    else None,
-        'id': evidence['id'],
-        'conn_count': evidence['conn_count'],
-        'confidence': evidence['confidence']
+        "evidence_type": EvidenceType[evidence["evidence_type"]],
+        "description": evidence["description"],
+        "attacker": Attacker(**evidence["attacker"]),
+        "threat_level": ThreatLevel[evidence["threat_level"].upper()],
+        "category": IDEACategory[evidence["category"]],
+        "victim": (
+            Victim(**evidence["victim"])
+            if "victim" in evidence and evidence["victim"]
+            else None
+        ),
+        "profile": (
+            ProfileID(evidence["profile"]["ip"])
+            if "profile" in evidence
+            else None
+        ),
+        "timewindow": TimeWindow(evidence["timewindow"]["number"]),
+        "uid": evidence["uid"],
+        "timestamp": evidence["timestamp"],
+        "proto": (
+            Proto[evidence["proto"].upper()]
+            if "proto" in evidence and evidence["proto"]
+            else None
+        ),
+        "port": evidence["port"],
+        "source_target_tag": (
+            Tag[evidence["source_target_tag"]]
+            if "source_target_tag" in evidence
+            and evidence["source_target_tag"]
+            else None
+        ),
+        "id": evidence["id"],
+        "conn_count": evidence["conn_count"],
+        "confidence": evidence["confidence"],
     }
 
     return Evidence(**evidence_attributes)

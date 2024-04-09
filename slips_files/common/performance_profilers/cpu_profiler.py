@@ -6,15 +6,22 @@ import io
 import pstats
 import os
 
-from slips_files.common.abstracts.performance_profiler import IPerformanceProfiler
+from slips_files.common.abstracts.performance_profiler import (
+    IPerformanceProfiler,
+)
 
 
 class CPUProfiler(IPerformanceProfiler):
     def __init__(self, db, output, mode="dev", limit=20, interval=20):
         valid_modes = ["dev", "live"]
         if mode not in valid_modes:
-            print("cpu_profiler_mode = " + mode + " is invalid, must be one of " +
-                            str(valid_modes) + ", CPU Profiling will be disabled")
+            print(
+                "cpu_profiler_mode = "
+                + mode
+                + " is invalid, must be one of "
+                + str(valid_modes)
+                + ", CPU Profiling will be disabled"
+            )
         if mode == "dev":
             self.profiler = DevProfiler(output)
         if mode == "live":
@@ -34,11 +41,12 @@ class CPUProfiler(IPerformanceProfiler):
     def print(self):
         self.profiler.print()
 
+
 class DevProfiler(IPerformanceProfiler):
     def __init__(self, output):
         self.profiler = self._create_profiler()
         self.output = output
-    
+
     def _create_profiler(self):
         return viztracer.VizTracer()
 
@@ -49,8 +57,9 @@ class DevProfiler(IPerformanceProfiler):
         self.profiler.stop()
 
     def print(self):
-        result_path = os.path.join(self.output, 'cpu_profiling_result.json' )
+        result_path = os.path.join(self.output, "cpu_profiling_result.json")
         self.profiler.save(result_path)
+
 
 class LiveProfiler(IPerformanceProfiler):
     def __init__(self, db, limit=20, interval=20):
@@ -78,7 +87,7 @@ class LiveProfiler(IPerformanceProfiler):
 
     def print(self):
         self.stats.print_stats(self.limit)
-    
+
     def _sampling_loop(self):
         stringio = io.StringIO()
         while self.is_running:
@@ -88,9 +97,10 @@ class LiveProfiler(IPerformanceProfiler):
             time.sleep(self.interval)
 
             self.stats = pstats.Stats(stream=stringio)
-            self.stats.add(self.profiler.convert2pstats(self.profiler.get_func_stats()))
-            self.stats.sort_stats('cumulative')
-            self.print() #prints to stringio, not stdout
+            self.stats.add(
+                self.profiler.convert2pstats(self.profiler.get_func_stats())
+            )
+            self.stats.sort_stats("cumulative")
+            self.print()  # prints to stringio, not stdout
 
-            self.db.publish('cpu_profile', stringio.getvalue())
-            
+            self.db.publish("cpu_profile", stringio.getvalue())

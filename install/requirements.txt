@@ -34,7 +34,7 @@ pytest-dependency
 whois
 wheel
 flask
-tld
+tldextract
 tqdm
 termcolor
 viztracer
@@ -42,3 +42,6 @@ yappi
 pytest-sugar
 memray
 aid_hash
+black
+ruff
+pre-commit
