@@ -2,57 +2,55 @@
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
+
 from tests.common_test_utils import (
-        get_total_profiles,
-        run_slips,
-        is_evidence_present,
-        create_output_dir,
-        has_errors,
+    run_slips,
+    is_evidence_present,
+    create_output_dir,
+    has_errors,
 )
 from tests.module_factory import ModuleFactory
 import pytest
-from ...slips.main import *
 import shutil
 import os
 
-alerts_file = 'alerts.log'
-
-
-
-
+alerts_file = "alerts.log"
 
 
 @pytest.mark.parametrize(
-    'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
+    "pcap_path, expected_profiles, output_dir, expected_evidence, redis_port",
     [
         (
-            'dataset/test7-malicious.pcap',
+            "dataset/test7-malicious.pcap",
             15,
-            'test7/',
+            "test7/",
             # Detected A device changing IPs. IP 192.168.2.12 was found with MAC address
             # 68:5b:35:b1:55:93 but the MAC belongs originally to IP: 169.254.242.182
-            'A device changing IPs',
+            "A device changing IPs",
             6666,
         ),
-        ('dataset/test8-malicious.pcap',
-         3,
-         'test8/',
-         'performing an arp scan',
-         6665
-         ),
+        (
+            "dataset/test8-malicious.pcap",
+            3,
+            "test8/",
+            "performing an arp scan",
+            6665,
+        ),
     ],
 )
 def test_pcap(
     pcap_path, expected_profiles, output_dir, expected_evidence, redis_port
 ):
     output_dir = create_output_dir(output_dir)
-    output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py  -e 1 -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    output_file = os.path.join(output_dir, "slips_output.txt")
+    command = f"./slips.py  -e 1 -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    db = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
+    db = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir
+    )
     profiles = db.get_profiles_len()
     assert profiles > expected_profiles
 
@@ -60,37 +58,38 @@ def test_pcap(
     assert is_evidence_present(log_file, expected_evidence) is True
     shutil.rmtree(output_dir)
 
+
 @pytest.mark.parametrize(
-    'binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port',
+    "binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port",
     [
         (
-            'dataset/test4-malicious.binetflow',
+            "dataset/test4-malicious.binetflow",
             2,
-            'Horizontal port scan to port  81',
-            'test4/',
+            "Horizontal port scan to port  81",
+            "test4/",
             6662,
         ),
         (
-            'dataset/test3-mixed.binetflow',
+            "dataset/test3-mixed.binetflow",
             20,
-            'Horizontal port scan to port  3389/TCP',
-            'test3/',
+            "Horizontal port scan to port  3389/TCP",
+            "test3/",
             6663,
         ),
         (
-            'dataset/test2-malicious.binetflow',
+            "dataset/test2-malicious.binetflow",
             1,
-            'Detected Long Connection.',
-            'test2/',
+            "Detected Long Connection.",
+            "test2/",
             6664,
         ),
         (
-            'dataset/test5-mixed.binetflow',
-             4,
-             'Long Connection',
-             'test5/',
-             6655
-         ),
+            "dataset/test5-mixed.binetflow",
+            4,
+            "Long Connection",
+            "test5/",
+            6655,
+        ),
         # (
         #     'dataset/test11-portscan.binetflow',
         #     0,
@@ -109,14 +108,16 @@ def test_binetflow(
 ):
     output_dir = create_output_dir(output_dir)
 
-    output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py  -e 1 -t -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
+    output_file = os.path.join(output_dir, "slips_output.txt")
+    command = f"./slips.py  -e 1 -t -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
 
     assert has_errors(output_dir) is False
 
-    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir
+    )
     profiles = database.get_profiles_len()
     assert profiles > expected_profiles
 
@@ -127,60 +128,62 @@ def test_binetflow(
 
 
 @pytest.mark.parametrize(
-    'zeek_dir_path,expected_profiles, expected_evidence,  output_dir, redis_port',
+    "zeek_dir_path,expected_profiles, expected_evidence,  output_dir, redis_port",
     [
         (
-            'dataset/test9-mixed-zeek-dir',
+            "dataset/test9-mixed-zeek-dir",
             4,
             [
-                'Incompatible certificate CN',
-                'Malicious JA3: 6734f37431670b3ab4292b8f60f29984',
-                'sending ARP packet to a destination address outside of local network',
-                'broadcasting unsolicited ARP',
+                "Incompatible certificate CN",
+                "Malicious JA3: 6734f37431670b3ab4292b8f60f29984",
+                # "sending ARP packet to a destination address outside of
+                # local network",
+                "broadcasting unsolicited ARP",
             ],
-            'test9-mixed-zeek-dir/',
+            "test9-mixed-zeek-dir/",
             6661,
         ),
         (
-            'dataset/test16-malicious-zeek-dir',
+            "dataset/test16-malicious-zeek-dir",
             0,
             [
-                'sending ARP packet to a destination address outside of local network',
-                'broadcasting unsolicited ARP',
+                # "sending ARP packet to a destination address outside of
+                # local network",
+                "broadcasting unsolicited ARP",
             ],
-            'test16-malicious-zeek-dir/',
+            "test16-malicious-zeek-dir/",
             6671,
         ),
         (
-            'dataset/test14-malicious-zeek-dir',
+            "dataset/test14-malicious-zeek-dir",
             2,
             [
-                'bad SMTP login to 80.75.42.226',
-                'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
-                'Multiple empty HTTP connections to google.com',
-                'Suspicious user-agent:',
-                'Download of an executable',
-                'GRE tunnel'
+                "bad SMTP login to 80.75.42.226",
+                "SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds",
+                "Multiple empty HTTP connections to google.com",
+                "Suspicious user-agent:",
+                "Download of an executable",
+                "GRE tunnel",
             ],
-            'test14-malicious-zeek-dir/',
-            6670
+            "test14-malicious-zeek-dir/",
+            6670,
         ),
         (
-            'dataset/test15-malicious-zeek-dir',
+            "dataset/test15-malicious-zeek-dir",
             2,
             [
-                'SSH client version changing',
-                'Incompatible certificate CN',
-                'Malicious JA3: 6734f37431670b3ab4292b8f60f29984',
+                "SSH client version changing",
+                "Incompatible certificate CN",
+                "Malicious JA3: 6734f37431670b3ab4292b8f60f29984",
             ],
-            'test15-malicious-zeek-dir',
-            2345
+            "test15-malicious-zeek-dir",
+            2345,
         ),
         (
-            'dataset/test10-mixed-zeek-dir',
+            "dataset/test10-mixed-zeek-dir",
             20,
-            'horizontal port scan',
-            'test10-mixed-zeek-dir/',
+            "horizontal port scan",
+            "test10-mixed-zeek-dir/",
             6660,
         ),
     ],
@@ -192,21 +195,22 @@ def test_zeek_dir(
     output_dir,
     redis_port,
 ):
-
     output_dir = create_output_dir(output_dir)
 
-    output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py  -e 1 -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    output_file = os.path.join(output_dir, "slips_output.txt")
+    command = f"./slips.py  -e 1 -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir
+    )
     profiles = database.get_profiles_len()
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
-    if type(expected_evidence) == list:
+    if isinstance(expected_evidence, list):
         # make sure all the expected evidence are there
         for evidence in expected_evidence:
             assert is_evidence_present(log_file, evidence) is True
@@ -216,20 +220,20 @@ def test_zeek_dir(
 
 
 @pytest.mark.parametrize(
-    'conn_log_path, expected_profiles, expected_evidence,  output_dir, redis_port',
+    "conn_log_path, expected_profiles, expected_evidence,  output_dir, redis_port",
     [
         (
-            'dataset/test9-mixed-zeek-dir/conn.log',
+            "dataset/test9-mixed-zeek-dir/conn.log",
             4,
-            'non-HTTP established connection',
-            'test9-conn_log_only/',
+            "non-HTTP established connection",
+            "test9-conn_log_only/",
             6659,
         ),
         (
-            'dataset/test10-mixed-zeek-dir/conn.log',
+            "dataset/test10-mixed-zeek-dir/conn.log",
             5,
-            'non-SSL established connection',
-            'test10-conn_log_only/',
+            "non-SSL established connection",
+            "test10-conn_log_only/",
             6658,
         ),
     ],
@@ -243,13 +247,15 @@ def test_zeek_conn_log(
 ):
     output_dir = create_output_dir(output_dir)
 
-    output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py  -e 1 -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    output_file = os.path.join(output_dir, "slips_output.txt")
+    command = f"./slips.py  -e 1 -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir
+    )
     profiles = database.get_profiles_len()
     assert profiles > expected_profiles
 
@@ -259,27 +265,22 @@ def test_zeek_conn_log(
 
 
 @pytest.mark.parametrize(
-    'suricata_path,  output_dir, redis_port, expected_evidence',
+    "suricata_path,  output_dir, redis_port, expected_evidence",
     [
         (
-                'dataset/test6-malicious.suricata.json',
-                'test6/',
-                6657,
-                [
-                    'Connection to unknown destination port',
-                    'vertical port scan',
-                    'Connecting to private IP',
-                    'non-HTTP established connection'
-                ]
+            "dataset/test6-malicious.suricata.json",
+            "test6/",
+            6657,
+            [
+                "Connection to unknown destination port",
+                "vertical port scan",
+                "Connecting to private IP",
+                "non-HTTP established connection",
+            ],
         )
     ],
 )
-def test_suricata(
-        suricata_path,
-        output_dir,
-        redis_port,
-        expected_evidence
-        ):
+def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
     output_dir = create_output_dir(output_dir)
     # we have an established flow in suricata file to this port 8760/udp
     # {"timestamp":"2021-06-06T15:57:37.272281+0200","flow_id":1630350322382106,"event_type":"flow",
@@ -288,16 +289,18 @@ def test_suricata(
     # "bytes_toclient":468,"start":"2021-06-07T04:26:27.668954+0200","end":"2021-06-07T04:26:27.838624+0200"
     # ,"age":0,"state":"established","reason":"shutdown","alerted":false},"host":"stratosphere.org"}
 
-    output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py  -e 1 -t -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    output_file = os.path.join(output_dir, "slips_output.txt")
+    command = f"./slips.py  -e 1 -t -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
 
     assert has_errors(output_dir) is False
 
-    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir
+    )
     profiles = database.get_profiles_len()
-    #todo the profiles should be way more than 10, maybe 76, but it varies each run, we need to sy why
+    # todo the profiles should be way more than 10, maybe 76, but it varies each run, we need to sy why
     assert profiles > 10
 
     log_file = os.path.join(output_dir, alerts_file)
@@ -306,17 +309,13 @@ def test_suricata(
 
 
 @pytest.mark.skipif(
-    'nfdump' not in shutil.which('nfdump'), reason='nfdump is not installed'
+    "nfdump" not in shutil.which("nfdump"), reason="nfdump is not installed"
 )
 @pytest.mark.parametrize(
-    'nfdump_path,  output_dir, redis_port',
-    [('dataset/test1-normal.nfdump', 'test1/', 6656)],
+    "nfdump_path,  output_dir, redis_port",
+    [("dataset/test1-normal.nfdump", "test1/", 6656)],
 )
-def test_nfdump(
-        nfdump_path,
-        output_dir,
-        redis_port
-        ):
+def test_nfdump(nfdump_path, output_dir, redis_port):
     """
     checks that slips is reading nfdump no issue,
      the file is not malicious so there's no evidence that should be present
@@ -325,12 +324,14 @@ def test_nfdump(
 
     # expected_evidence = 'Connection to unknown destination port 902/TCP'
 
-    output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -e 1 -t -f {nfdump_path}  -o {output_dir} -P {redis_port} > {output_file} 2>&1'
+    output_file = os.path.join(output_dir, "slips_output.txt")
+    command = f"./slips.py -e 1 -t -f {nfdump_path}  -o {output_dir} -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
 
-    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir
+    )
     profiles = database.get_profiles_len()
     assert has_errors(output_dir) is False
     # make sure slips generated profiles for this file (can't

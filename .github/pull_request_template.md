@@ -18,6 +18,15 @@
 [ ] - Not correct; marked as **not** done
 -->
 
+
+## Steps you followed to test the changes purposed in this PR:
+
+
+* 
+*
+
+
+
 ## Check List (Check all the applicable boxes) <!-- Follow the above conventions to check the box -->
 
 - [ ] My code follows the code style of this project.
@@ -30,6 +39,8 @@
 ## Screenshots
 
 <!-- Add all the screenshots which support your changes -->
+
+<!-- Add screenshots with the passing unit and integration tests locally -->
 
 ## Note to reviewers
 

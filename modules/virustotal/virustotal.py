@@ -8,28 +8,29 @@ import ipaddress
 import threading
 import validators
 
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
 
 
 class VT(IModule):
-    name = 'Virustotal'
-    description = 'IP, domain and file hash lookup on Virustotal'
+    name = "Virustotal"
+    description = "IP, domain and file hash lookup on Virustotal"
     authors = [
-        'Dita Hollmannova',
-        'Kamila Babayeva',
-        'Alya Gomaa',
-        'Sebastian Garcia',
+        "Dita Hollmannova",
+        "Kamila Babayeva",
+        "Alya Gomaa",
+        "Sebastian Garcia",
     ]
 
     def init(self):
-        self.c1 = self.db.subscribe('new_flow')
-        self.c2 = self.db.subscribe('new_dns')
-        self.c3 = self.db.subscribe('new_url')
+        self.c1 = self.db.subscribe("new_flow")
+        self.c2 = self.db.subscribe("new_dns")
+        self.c3 = self.db.subscribe("new_url")
         self.channels = {
-            'new_flow': self.c1,
-            'new_dns': self.c2,
-            'new_url': self.c3,
+            "new_flow": self.c1,
+            "new_dns": self.c2,
+            "new_url": self.c3,
         }
 
         # Read the conf file
@@ -42,7 +43,7 @@ class VT(IModule):
         # The certificate provides a bundle of trusted CAs,
         # the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(
-            cert_reqs='CERT_REQUIRED', ca_certs=certifi.where()
+            cert_reqs="CERT_REQUIRED", ca_certs=certifi.where()
         )
         # create the queue thread
         self.api_calls_thread = threading.Thread(
@@ -55,13 +56,14 @@ class VT(IModule):
     def read_api_key(self):
         self.key = None
         try:
-            with open(self.key_file, 'r') as f:
+            with open(self.key_file, "r") as f:
                 self.key = f.read(64)
             return True
         except (FileNotFoundError, TypeError):
             self.print(
-                f'The file with API key {self.key_file} '
-                f'could not be loaded. VT module is stopping.'
+                f"The file with API key {self.key_file} "
+                f"could not be loaded. VT module is stopping.",
+                log_to_logfiles_only=True,
             )
             return False
 
@@ -69,7 +71,6 @@ class VT(IModule):
         conf = ConfigParser()
         self.key_file = conf.vt_api_key_file()
         self.update_period = conf.virustotal_update_period()
-
 
     def count_positives(
         self, response: dict, response_key: str, positive_key, total_key
@@ -108,21 +109,18 @@ class VT(IModule):
 
         ts = time.time()
         vtdata = {
-            'URL': vt_scores[0],
-            'down_file': vt_scores[1],
-            'ref_file': vt_scores[2],
-            'com_file': vt_scores[3],
-            'timestamp': ts,
+            "URL": vt_scores[0],
+            "down_file": vt_scores[1],
+            "ref_file": vt_scores[2],
+            "com_file": vt_scores[3],
+            "timestamp": ts,
         }
 
-        data = {'VirusTotal': vtdata}
+        data = {"VirusTotal": vtdata}
 
-        if as_owner and cached_data and 'asn' not in cached_data:
+        if as_owner and cached_data and "asn" not in cached_data:
             # we dont have ASN info about this ip
-            data['asn'] = {
-                'number': f'AS{as_owner}',
-                'timestamp': ts
-            }
+            data["asn"] = {"number": f"AS{as_owner}", "timestamp": ts}
 
         self.db.setInfoForIPs(ip, data)
         self.db.set_passive_dns(ip, passive_dns)
@@ -137,21 +135,21 @@ class VT(IModule):
         """
 
         def is_valid_response(response: dict) -> bool:
-            if type(response) != dict:
+            if not isinstance(response, dict):
                 return False
 
-            response_code = response.get('response_code', -1)
+            response_code = response.get("response_code", -1)
             if response_code == -1:
                 return False
-            verbose_msg = response.get('verbose_msg', '')
-            return 'Resource does not exist' not in verbose_msg
+            verbose_msg = response.get("verbose_msg", "")
+            return "Resource does not exist" not in verbose_msg
 
         response = self.api_query_(url)
         # Can't get url report
         if not is_valid_response(response):
             return 0
         try:
-            score = int(response['positives']) / int(response['total'])
+            score = int(response["positives"]) / int(response["total"])
         except (ZeroDivisionError, TypeError, KeyError):
             score = 0
         self.counter += 1
@@ -163,8 +161,8 @@ class VT(IModule):
         """
         score = self.get_url_vt_data(url)
         # Score of this url didn't change
-        vtdata = {'URL': score, 'timestamp': time.time()}
-        data = {'VirusTotal': vtdata}
+        vtdata = {"URL": score, "timestamp": time.time()}
+        data = {"VirusTotal": vtdata}
         self.db.set_info_for_urls(url, data)
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
@@ -174,20 +172,18 @@ class VT(IModule):
         """
         vt_scores, as_owner = self.get_domain_vt_data(domain)
         vtdata = {
-            'URL': vt_scores[0],
-            'down_file': vt_scores[1],
-            'ref_file': vt_scores[2],
-            'com_file': vt_scores[3],
-            'timestamp': time.time(),
+            "URL": vt_scores[0],
+            "down_file": vt_scores[1],
+            "ref_file": vt_scores[2],
+            "com_file": vt_scores[3],
+            "timestamp": time.time(),
         }
-        data = {'VirusTotal': vtdata}
+        data = {"VirusTotal": vtdata}
 
         # Add asn (autonomous system number) if it is unknown
         # or not in the Domain info
-        if cached_data and 'asn' not in cached_data:
-            data['asn'] = {
-                'number': f'AS{as_owner}'
-            }
+        if cached_data and "asn" not in cached_data:
+            data["asn"] = {"number": f"AS{as_owner}"}
         self.db.set_info_for_domains(domain, data)
 
     def API_calls_thread(self):
@@ -211,7 +207,7 @@ class VT(IModule):
                 # get the first element in the queue
                 ioc = self.api_call_queue.pop(0)
                 ioc_type = self.get_ioc_type(ioc)
-                if ioc_type == 'ip':
+                if ioc_type == "ip":
                     cached_data = self.db.get_ip_info(ioc)
                     # return an IPv4Address or IPv6Address object
                     # depending on the IP address passed as argument.
@@ -221,31 +217,30 @@ class VT(IModule):
                     # if the IP is not a multicast and 'VirusTotal'
                     # key is not in the IPInfo, proceed.
                     if (
-                            not cached_data or 'VirusTotal' not in cached_data
+                        not cached_data or "VirusTotal" not in cached_data
                     ) and not ip_addr.is_multicast:
                         self.set_vt_data_in_IPInfo(ioc, cached_data)
 
-                elif ioc_type == 'domain':
+                elif ioc_type == "domain":
                     cached_data = self.db.get_domain_data(ioc)
-                    if not cached_data or 'VirusTotal' not in cached_data:
+                    if not cached_data or "VirusTotal" not in cached_data:
                         self.set_domain_data_in_DomainInfo(ioc, cached_data)
 
-                elif ioc_type == 'url':
+                elif ioc_type == "url":
                     cached_data = self.db.getURLData(ioc)
                     # If VT data of this domain is not in the
                     # DomainInfo, ask VT
                     # If 'Virustotal' key is not in the DomainInfo
-                    if not cached_data or 'VirusTotal' not in cached_data:
+                    if not cached_data or "VirusTotal" not in cached_data:
                         # cached data is either False or {}
                         self.set_url_data_in_URLInfo(ioc, cached_data)
-
 
     def get_as_owner(self, response):
         """
         Get as (autonomous system) owner of the IP
         :param response: json dictionary with response data
         """
-        response_key = 'asn'
+        response_key = "asn"
         return response[response_key] if response_key in response else False
 
     def get_passive_dns(self, response):
@@ -253,8 +248,8 @@ class VT(IModule):
         Get passive dns from virustotal response
         :param response: json dictionary with response data
         """
-        response_key = 'resolutions'
-        return response[response_key][:10] if response_key in response else ''
+        response_key = "resolutions"
+        return response[response_key][:10] if response_key in response else ""
 
     def get_ip_vt_data(self, ip: str):
         """
@@ -270,9 +265,9 @@ class VT(IModule):
         try:
             addr = ipaddress.ip_address(ip)
             if utils.is_private_ip(addr):
-                self.print(f'[{ip}] is private, skipping', 0, 2)
+                self.print(f"[{ip}] is private, skipping", 0, 2)
                 scores = 0, 0, 0, 0
-                return scores, '', ''
+                return scores, "", ""
 
             # for unknown address, do the query
             response = self.api_query_(ip)
@@ -284,9 +279,9 @@ class VT(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem in the get_ip_vt_data() line {exception_line}', 0, 1
+                f"Problem in the get_ip_vt_data() line {exception_line}", 0, 1
             )
-            self.print(traceback.format_exc(),0,1)
+            self.print(traceback.format_exc(), 0, 1)
 
     def get_domain_vt_data(self, domain: str):
         """
@@ -296,10 +291,10 @@ class VT(IModule):
         :return: 4-tuple of floats: URL ratio, downloaded file ratio,
         referrer file ratio, communicating file ratio
         """
-        if 'arpa' in domain or '.local' in domain:
+        if "arpa" in domain or ".local" in domain:
             # 'local' is a special-use domain name reserved by
             # the Internet Engineering Task Force (IETF)
-            return (0, 0, 0, 0), ''
+            return (0, 0, 0, 0), ""
         try:
             # for unknown address, do the query
             response = self.api_query_(domain)
@@ -310,16 +305,18 @@ class VT(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem in the get_domain_vt_data() '
-                f'line {exception_line}',0,1,
+                f"Problem in the get_domain_vt_data() "
+                f"line {exception_line}",
+                0,
+                1,
             )
-            self.print(traceback.format_exc(),0,1)
+            self.print(traceback.format_exc(), 0, 1)
             return False
 
     def get_ioc_type(self, ioc):
         """Check the type of ioc, returns url, ip, domain or hash type"""
         # don't move this to utils, this is the only module that supports urls
-        return 'url' if validators.url(ioc) else utils.detect_data_type(ioc)
+        return "url" if validators.url(ioc) else utils.detect_data_type(ioc)
 
     def api_query_(self, ioc, save_data=False):
         """
@@ -332,17 +329,17 @@ class VT(IModule):
         if self.incorrect_API_key:
             return {}
 
-        params = {'apikey': self.key}
+        params = {"apikey": self.key}
         ioc_type = self.get_ioc_type(ioc)
-        if ioc_type == 'ip':
-            self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
-            params['ip'] = ioc
-        elif ioc_type == 'domain':
-            self.url = 'https://www.virustotal.com/vtapi/v2/domain/report'
-            params['domain'] = ioc
-        elif ioc_type == 'url':
-            self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
-            params['resource'] = ioc
+        if ioc_type == "ip":
+            self.url = "https://www.virustotal.com/vtapi/v2/ip-address/report"
+            params["ip"] = ioc
+        elif ioc_type == "domain":
+            self.url = "https://www.virustotal.com/vtapi/v2/domain/report"
+            params["domain"] = ioc
+        elif ioc_type == "url":
+            self.url = "https://www.virustotal.com/vtapi/v2/url/report"
+            params["resource"] = ioc
         else:
             # unsupported ioc
             return {}
@@ -350,10 +347,10 @@ class VT(IModule):
         # wait for network
         while True:
             try:
-                response = self.http.request('GET', self.url, fields=params)
+                response = self.http.request("GET", self.url, fields=params)
                 break
             except urllib3.exceptions.MaxRetryError:
-                self.print('Network is not available, waiting 10s', 2, 0)
+                self.print("Network is not available, waiting 10s", 2, 0)
                 time.sleep(10)
 
         if response.status != 200:
@@ -370,44 +367,46 @@ class VT(IModule):
                 # don't add to the api call queue because the user
                 # will have to restart slips anyway
                 # to add a correct API key and the queue wil be erased
-                self.print('Please check that your API key is correct.', 0, 1)
+                self.print("Please check that your API key is correct.", 0, 1)
                 self.incorrect_API_key = True
             else:
                 # if the query was unsuccessful but it is not caused
                 # by API limit, abort (this is some unknown error)
                 # X-Api-Message is a comprehensive error description,
                 # but it is not always present
-                if 'X-Api-Message' in response.headers:
-                    message = response.headers['X-Api-Message']
+                if "X-Api-Message" in response.headers:
+                    message = response.headers["X-Api-Message"]
                 # Reason is a much shorter description ("Forbidden"),
                 # but it is always there
                 else:
                     message = response.reason
                 self.print(
-                    f'VT API returned unexpected code:'
-                    f' {response.status} - {message}', 0, 2
+                    f"VT API returned unexpected code:"
+                    f" {response.status} - {message}",
+                    0,
+                    2,
                 )
-
 
             # report that API limit is reached, wait one minute and try again
             self.print(
-                f'Status code is {response.status} at '
-                f'{time.asctime()}, query id: {self.counter}',
-                0,2
+                f"Status code is {response.status} at "
+                f"{time.asctime()}, query id: {self.counter}",
+                0,
+                2,
             )
             # return empty dict because api call isn't successful
             data = {}
         else:
             # query successful
             data = json.loads(response.data)
-            if type(data) == list:
+            if isinstance(data, list):
                 # response.data is an empty list,
                 # vt sometimes returns it with status code 200
                 data = {}
             # optionally, save data to file
-            if save_data and ioc_type == 'ip':
-                if filename := f'{ioc}.txt':
-                    with open(filename, 'w') as f:
+            if save_data and ioc_type == "ip":
+                if filename := f"{ioc}.txt":
+                    with open(filename, "w") as f:
                         json.dump(data, f)
 
         return data
@@ -464,7 +463,7 @@ class VT(IModule):
         # the numbers 2 and 3 are keys to the dictionary, which is
         # in this only case (probably by mistake) a list
         undetected_url_score = self.count_positives(
-            response, 'undetected_urls', 2, 3
+            response, "undetected_urls", 2, 3
         )
 
         # compute how many tests were run on the detected samples.
@@ -472,7 +471,7 @@ class VT(IModule):
         # URLs that have been detected as malicious by one or more
         # antivirus engines
         detected_url_score = self.count_positives(
-            response, 'detected_urls', 'positives', 'total'
+            response, "detected_urls", "positives", "total"
         )
 
         # sum the previous results, to get the sum of detections
@@ -485,29 +484,30 @@ class VT(IModule):
 
         # following categories  are computed in the same way
         undetected_download_score = self.count_positives(
-            response, 'undetected_downloaded_samples', 'positives', 'total'
+            response, "undetected_downloaded_samples", "positives", "total"
         )
         detected_download_score = self.count_positives(
-            response, 'detected_downloaded_samples', 'positives', 'total'
+            response, "detected_downloaded_samples", "positives", "total"
         )
         down_file_detections = (
-                undetected_download_score[0] + detected_download_score[0]
+            undetected_download_score[0] + detected_download_score[0]
         )
         # samples downloaded from this ip
         if down_file_total := (
-                undetected_download_score[1] + detected_download_score[1]):
+            undetected_download_score[1] + detected_download_score[1]
+        ):
             down_file_ratio = down_file_detections / down_file_total
         else:
             down_file_ratio = 0
         # samples  that were obtained from the same referrer as the
         # file or URL being analyzed,  but have not been detected as malicious
         undetected_ref_score = self.count_positives(
-            response, 'undetected_referrer_samples', 'positives', 'total'
+            response, "undetected_referrer_samples", "positives", "total"
         )
-         # that were obtained from the same referrer as the file or
+        # that were obtained from the same referrer as the file or
         # URL being analyzed, that have been detected as malicious
         detected_ref_score = self.count_positives(
-            response, 'detected_referrer_samples', 'positives', 'total'
+            response, "detected_referrer_samples", "positives", "total"
         )
         ref_file_detections = undetected_ref_score[0] + detected_ref_score[0]
         if ref_file_total := undetected_ref_score[1] + detected_ref_score[1]:
@@ -517,11 +517,11 @@ class VT(IModule):
 
         # non-malicious files communicating with this IP
         undetected_com_score = self.count_positives(
-            response, 'undetected_communicating_samples', 'positives', 'total'
+            response, "undetected_communicating_samples", "positives", "total"
         )
         # malicious files communicating with this IP
         detected_com_score = self.count_positives(
-            response, 'detected_communicating_samples', 'positives', 'total'
+            response, "detected_communicating_samples", "positives", "total"
         )
         com_file_detections = undetected_com_score[0] + detected_com_score[0]
         if com_file_total := undetected_com_score[1] + detected_com_score[1]:
@@ -539,7 +539,7 @@ class VT(IModule):
 
     def pre_main(self):
         utils.drop_root_privs()
-        if not self.read_api_key() or self.key in ('', None):
+        if not self.read_api_key() or self.key in ("", None):
             # We don't have a virustotal key
             return 1
         self.api_calls_thread.start()
@@ -549,19 +549,19 @@ class VT(IModule):
             self.shutdown_gracefully()
             return 1
 
-        if msg:= self.get_msg('new_flow'):
-            data = msg['data']
+        if msg := self.get_msg("new_flow"):
+            data = msg["data"]
             data = json.loads(data)
             # profileid = data['profileid']
             # twid = data['twid']
             # stime = data['stime']
             flow = json.loads(
-                data['flow']
-            )   # this is a dict {'uid':json flow data}
+                data["flow"]
+            )  # this is a dict {'uid':json flow data}
             # there is only one pair key-value in the dictionary
             for key, value in flow.items():
                 flow_data = json.loads(value)
-            ip = flow_data['daddr']
+            ip = flow_data["daddr"]
             cached_data = self.db.get_ip_info(ip)
             if not cached_data:
                 cached_data = {}
@@ -574,71 +574,62 @@ class VT(IModule):
             # not in
             # the IPInfo, proceed.
             if (
-                'VirusTotal' not in cached_data
+                "VirusTotal" not in cached_data
                 and not ip_addr.is_multicast
                 and not utils.is_private_ip(ip_addr)
             ):
                 self.set_vt_data_in_IPInfo(ip, cached_data)
 
             # if VT data of this IP is in the IPInfo, check the timestamp.
-            elif 'VirusTotal' in cached_data:
+            elif "VirusTotal" in cached_data:
                 # If VT is in data, check timestamp. Take time difference,
                 # if not valid, update vt scores.
                 if (
-                    time.time()
-                    - cached_data['VirusTotal']['timestamp']
+                    time.time() - cached_data["VirusTotal"]["timestamp"]
                 ) > self.update_period:
                     self.set_vt_data_in_IPInfo(ip, cached_data)
 
-        if msg:= self.get_msg('new_dns'):
-            data = msg['data']
+        if msg := self.get_msg("new_dns"):
+            data = msg["data"]
             data = json.loads(data)
             # profileid = data['profileid']
             # twid = data['twid']
             # uid = data['uid']
             flow_data = json.loads(
-                data['flow']
-            )   # this is a dict {'uid':json flow data}
-            domain = flow_data.get('query', False)
+                data["flow"]
+            )  # this is a dict {'uid':json flow data}
+            domain = flow_data.get("query", False)
 
             cached_data = self.db.get_domain_data(domain)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
-            if domain and (
-                not cached_data or 'VirusTotal' not in cached_data
-            ):
+            if domain and (not cached_data or "VirusTotal" not in cached_data):
                 self.set_domain_data_in_DomainInfo(domain, cached_data)
-            elif (
-                domain and cached_data and 'VirusTotal' in cached_data
-            ):
+            elif domain and cached_data and "VirusTotal" in cached_data:
                 # If VT is in data, check timestamp. Take time difference,
                 # if not valid, update vt scores.
                 if (
-                    time.time()
-                    - cached_data['VirusTotal']['timestamp']
+                    time.time() - cached_data["VirusTotal"]["timestamp"]
                 ) > self.update_period:
-                    self.set_domain_data_in_DomainInfo(
-                        domain, cached_data
-                    )
+                    self.set_domain_data_in_DomainInfo(domain, cached_data)
 
-        if msg:= self.get_msg('new_url'):
-            data = msg['data']
+        if msg := self.get_msg("new_url"):
+            data = msg["data"]
             data = json.loads(data)
             # profileid = data['profileid']
             # twid = data['twid']
-            flow_data = json.loads(data['flow'])
+            flow_data = json.loads(data["flow"])
             url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
             cached_data = self.db.getURLData(url)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
-            if not cached_data or 'VirusTotal' not in cached_data:
+            if not cached_data or "VirusTotal" not in cached_data:
                 # cached data is either False or {}
                 self.set_url_data_in_URLInfo(url, cached_data)
-            elif cached_data and 'VirusTotal' in cached_data:
+            elif cached_data and "VirusTotal" in cached_data:
                 # If VT is in data, check timestamp. Take time difference,
                 # if not valid, update vt scores.
                 if (
-                    time.time()
-                    - cached_data['VirusTotal']['timestamp']
+                    time.time() - cached_data["VirusTotal"]["timestamp"]
                 ) > self.update_period:
                     self.set_url_data_in_URLInfo(url, cached_data)

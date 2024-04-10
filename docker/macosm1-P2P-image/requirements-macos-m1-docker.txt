@@ -8,6 +8,7 @@ tzlocal
 cabby
 stix2
 certifi
+tensorflow
 colorama
 Keras
 validators
@@ -33,7 +34,7 @@ pytest-dependency
 whois
 wheel
 flask
-tld
+tldextract
 tqdm
 termcolor
 viztracer
@@ -41,4 +42,6 @@ yappi
 pytest-sugar
 memray
 aid_hash
-tensorflow
+black
+ruff
+pre-commit
