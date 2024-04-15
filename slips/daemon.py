@@ -270,30 +270,59 @@ class Daemon:
         return True
 
     def stop(self):
-        """Stop the daemon"""
-        # this file has to be deleted first because sigterm will terminate slips
-        self.delete_pidfile()
-        self.killdaemon()
-        info = self.get_last_opened_daemon_info()
-        if not info:
-            return
-        port, output_dir, self.pid = info
-        self.stderr = "errors.log"
-        self.stdout = "slips.log"
-        self.logsfile = "slips.log"
-        self.prepare_std_streams(output_dir)
-        self.logger = self.slips.proc_man.start_output_process(
-            self.stdout, self.stderr, self.logsfile
-        )
-        self.slips.add_observer(self.logger)
-        db = DBManager(
-            self.logger, output_dir, port, start_sqlite=False, flush_db=False
-        )
-        db.set_slips_mode("daemonized")
-        self.slips.set_mode("daemonized", daemon=self)
-        # used in shutdown gracefully to print the name of the stopped file in slips.log
-        self.slips.input_information = db.get_input_file()
-        self.slips.db = db
-        # set file used by proc_manto log if slips was shutdown gracefully
-        self.slips.proc_man.slips_logfile = self.logsfile
-        self.slips.proc_man.shutdown_gracefully()
+        """Stops the daemon"""
+        try:
+            with Lock(name=self.daemon_stop_lock):
+
+                if not self._is_running():
+                    return {
+                        "stopped": False,
+                        "error": "Daemon is not running.",
+                    }
+
+                self.killdaemon()
+
+                info: Tuple[str] = self.get_last_opened_daemon_info()
+                if not info:
+                    return {
+                        "stopped": False,
+                        "error": "Can't get the info of the last opened "
+                        "Slips daemon.",
+                    }
+
+                port, output_dir, self.pid = info
+
+                self.stderr = "errors.log"
+                self.stdout = "slips.log"
+                self.logsfile = "slips.log"
+                self.prepare_std_streams(output_dir)
+                self.logger = self.slips.proc_man.start_output_process(
+                    self.stdout, self.stderr, self.logsfile
+                )
+                self.slips.add_observer(self.logger)
+                self.db = DBManager(
+                    self.logger,
+                    output_dir,
+                    port,
+                    start_sqlite=False,
+                    flush_db=False,
+                )
+                self.db.set_slips_mode("daemonized")
+                self.slips.set_mode("daemonized", daemon=self)
+                # used in shutdown gracefully to print the name of the
+                # stopped file in slips.log
+                self.slips.input_information = self.db.get_input_file()
+                self.slips.args = self.slips.conf.get_args()
+                self.slips.db = self.db
+                self.slips.proc_man.slips_logfile = self.logsfile
+
+                # WARNING: this function shouldn't call shutdown gracefully.
+                # it should send sigint to the opened daemon, and the
+                # opened daemon should call shutdown gracefully
+                return {
+                    "stopped": True,
+                    "error": None,
+                }
+        except CannotAcquireLock:
+            # another instance of slips daemon is running
+            pass
