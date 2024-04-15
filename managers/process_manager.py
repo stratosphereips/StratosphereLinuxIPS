@@ -656,15 +656,27 @@ class ProcessManager:
             self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name)
 
+    def get_print_function(self):
+        """
+        returns the print() function to use based on the curr slips mode
+        because the daemon's print isn't the same as the normal slips' print()
+        """
+        if self.main.mode == "daemonized":
+            return self.main.daemon.print
+        else:
+            return self.main.print
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing
         or kill them after 15 mins
         """
         try:
+            print = self.get_print_function()
+
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
-            self.main.print("Stopping Slips")
+            print("Stopping Slips")
 
             # by default, 15 mins from this time, all modules should be killed
             method_start_time = time.time()
@@ -676,7 +688,7 @@ class ProcessManager:
             # close all tws
             self.main.db.check_tw_to_close(close_all=True)
             analysis_time = self.get_analysis_time()
-            self.main.print(
+            print(
                 f"Analysis of {self.main.input_information} "
                 f"finished in {analysis_time:.2f} minutes"
             )
@@ -690,7 +702,7 @@ class ProcessManager:
 
             else:
                 flows_count: int = self.main.db.get_flows_count()
-                self.main.print(
+                print(
                     f"Total flows read (without altflows): " f"{flows_count}",
                     log_to_logfiles_only=True,
                 )
@@ -736,7 +748,7 @@ class ProcessManager:
                         f"Killing modules that took more than {timeout}"
                         f" mins to finish."
                     )
-                    self.main.print(reason)
+                    print(reason)
                     graceful_shutdown = False
 
                 self.kill_all_children()
@@ -750,7 +762,6 @@ class ProcessManager:
 
             self.output_send_pipe.close()
             self.pbar_recv_pipe.close()
-
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
             self.main.store_zeek_dir_copy()
@@ -759,14 +770,13 @@ class ProcessManager:
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
             self.main.db.close()
-
             if graceful_shutdown:
-                self.main.print(
+                print(
                     "[Process Manager] Slips shutdown gracefully\n",
                     log_to_logfiles_only=True,
                 )
             else:
-                self.main.print(
+                print(
                     f"[Process Manager] Slips didn't "
                     f"shutdown gracefully - {reason}\n",
                     log_to_logfiles_only=True,
