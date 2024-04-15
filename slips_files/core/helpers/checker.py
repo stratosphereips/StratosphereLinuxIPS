@@ -58,7 +58,8 @@ class Checker:
     def check_given_flags(self):
         """
         check the flags that don't require starting slips
-        for ex: clear db, clearing the blocking chain, killing all servers, stopping the daemon, etc.
+        for example: clear db, clearing the blocking chain, killing all
+        servers, etc.
         """
 
         if self.main.args.help:
@@ -67,7 +68,6 @@ class Checker:
             arg_parser.parse_arguments()
             arg_parser.print_help()
             self.main.terminate_slips()
-
         if self.main.args.interface and self.main.args.filepath:
             print("Only -i or -f is allowed. Stopping slips.")
             self.main.terminate_slips()
