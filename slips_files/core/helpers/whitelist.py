@@ -396,7 +396,6 @@ class Whitelist(IObservable):
         """
         try:
             org_domains = json.loads(self.db.get_org_info(org, "domains"))
-
             flow_tld = self.get_tld(domain)
 
             for org_domain in org_domains:
