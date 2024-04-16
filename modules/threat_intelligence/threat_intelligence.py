@@ -1705,8 +1705,8 @@ class ThreatIntel(IModule, URLhaus):
         profileid: str = "",
         twid: str = "",
     ):
-        """Records evidence that a CNAME found in a DNS response is associated with a
-        known malicious domain.
+        """Records evidence that a CNAME found in a DNS
+        response is associated with a known malicious domain.
 
         Parameters:
             - cname (str): The CNAME that was looked up and found to be
@@ -1758,13 +1758,16 @@ class ThreatIntel(IModule, URLhaus):
         if tags:
             description += f"with tags: {tags}. "
 
-        attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
-        )
-
         evidence = Evidence(
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER,
-            attacker=attacker,
+            attacker=Attacker(
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+            ),
+            victim=Victim(
+                victim_type=IoCType.DOMAIN,
+                direction=Direction.DST,
+                value=dns_query,
+            ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
