@@ -957,20 +957,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         if asn:
             asn_org = asn.get("org", "")
             asn_number = asn.get("number", "")
-            id += f"AS: {asn_org} {asn_number}"
+            id += f" AS: {asn_org} {asn_number}"
 
         sni = ip_info.get("SNI", "")
         if sni:
             sni = sni[0] if isinstance(sni, list) else sni
-            id += f'SNI: {sni["server_name"]}, '
+            id += f' SNI: {sni["server_name"]}, '
 
         rdns = ip_info.get("reverse_dns", "")
         if rdns:
-            id += f"rDNS: {rdns}, "
+            id += f" rDNS: {rdns}, "
 
         threat_intel = ip_info.get("threatintelligence", "")
         if threat_intel and get_ti_data:
-            id += f"IP seen in blacklist: {threat_intel['source']}."
+            id += f" IP seen in blacklist: {threat_intel['source']}."
 
         id = id.rstrip(", ")
         return id
