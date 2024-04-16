@@ -14,7 +14,6 @@ validators
 ipwhois
 matplotlib
 recommonmark
-scikit_learn
 slackclient
 psutil
 six
@@ -23,7 +22,7 @@ pytest-mock
 pytest-xdist
 slackclient
 scipy
-scikit-learn
+sklearn
 GitPython
 protobuf
 blinker
@@ -33,7 +32,7 @@ pytest-dependency
 whois
 wheel
 flask
-tld
+tldextract
 tqdm
 termcolor
 viztracer
@@ -42,3 +41,5 @@ pytest-sugar
 memray
 aid_hash
 tensorflow
+black
+pre-commit

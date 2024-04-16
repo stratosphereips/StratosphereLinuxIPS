@@ -1,8 +1,13 @@
 import os
 import sys
 from signal import SIGTERM
+from typing import Tuple, Optional
+from exclusiveprocess import (
+    Lock,
+    CannotAcquireLock,
+)
 
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.database_manager import DBManager
 
 
@@ -14,9 +19,11 @@ class Daemon:
         self.slips = slips
         # tell Main class that we're running in daemonized mode
         self.slips.set_mode("daemonized", daemon=self)
-
-        # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
+        # this is a conf file used to store the pid of the daemon and
+        # is deleted when the daemon stops
         self.pidfile_dir = "/var/lock"
+        self.daemon_start_lock = "slips_daemon_start"
+        self.daemon_stop_lock = "slips_daemon_stop"
         self.pidfile = os.path.join(self.pidfile_dir, "slips_daemon.lock")
         self.read_configuration()
         if not self.slips.args.stopdaemon:
@@ -68,7 +75,8 @@ class Daemon:
         if "-o" in sys.argv:
             self.prepare_std_streams(self.slips.args.output)
         else:
-            # if we have acess to '/var/log/slips/' store the logfiles there, if not , store it in the output/ dir
+            # if we have acess to '/var/log/slips/' store the logfiles there,
+            # if not , store it in the output/ dir
             try:
                 output_dir = "/var/log/slips/"
                 try:
@@ -157,14 +165,15 @@ class Daemon:
         sys.stderr.flush()
 
         # redirect standard file descriptors
-        with open(self.stdin, "r") as stdin, open(self.stdout, "a+") as stdout, open(
-            self.stderr, "a+"
-        ) as stderr:
+        with open(self.stdin, "r") as stdin, open(
+            self.stdout, "a+"
+        ) as stdout, open(self.stderr, "a+") as stderr:
             os.dup2(stdin.fileno(), sys.stdin.fileno())
             os.dup2(stdout.fileno(), sys.stdout.fileno())
             os.dup2(stderr.fileno(), sys.stderr.fileno())
 
-        # write the pid of the daemon to a file so we can check if it's already opened before re-opening
+        # write the pid of the daemon to a file so we can
+        # check if it's already opened before re-opening
         if not os.path.exists(self.pidfile_dir):
             os.mkdir(self.pidfile_dir)
 
@@ -174,32 +183,52 @@ class Daemon:
         with open(self.pidfile, "w+") as pidfile:
             pidfile.write(self.pid)
 
-        # Register a function to be executed if sys.exit() is called or the main module’s execution completes
+        # Register a function to be executed if sys.exit()
+        # is called or the main module’s execution completes
         # atexit.register(self.terminate)
 
     def start(self):
-        """Main function, Starts the daemon and starts slips normally."""
-        self.print("Daemon starting...")
-
-        # Start the daemon
-        self.daemonize()
-
-        # any code run after daemonizing will be run inside the daemon and have the same PID as slips.py
-        self.print(f"Slips Daemon is running. [PID {self.pid}]\n")
-
-        # start slips normally
-        self.slips.start()
-
-    def get_last_opened_daemon_info(self):
         """
-        get information about the last opened slips daemon from running_slips_info.txt
+        Main function
+        Starts the daemon and starts slips normally.
+        """
+        try:
+            with Lock(name=self.daemon_start_lock):
+                if self.pid is not None:
+                    self.print(
+                        "pidfile already exists. Daemon already " "running?"
+                    )
+                    return
+
+                self.print("Daemon starting...")
+
+                # Starts the daemon
+                self.daemonize()
+
+                # any code run after daemonizing will be run inside
+                # the daemon and have the same PID as slips.py
+                self.print(f"Slips Daemon is running. [PID {self.pid}]\n")
+                self.slips.start()
+        except CannotAcquireLock:
+            # another instance of slips daemon is running
+            return
+
+    def get_last_opened_daemon_info(self) -> Optional[Tuple[str]]:
+        """
+        get information about the last opened slips daemon from
+         running_slips_info.txt
         """
         try:
             with open(self.slips.redis_man.running_logfile, "r") as f:
-                # read the lines in reverse order to get the last opened daemon
+                # read the lines in reverse order to get the
+                # last opened daemon
                 for line in f.read().splitlines()[::-1]:
                     # skip comments
-                    if line.startswith("#") or line.startswith("Date") or len(line) < 3:
+                    if (
+                        line.startswith("#")
+                        or line.startswith("Date")
+                        or len(line) < 3
+                    ):
                         continue
                     line = line.split(",")
                     is_daemon = bool(line[7])
@@ -213,11 +242,11 @@ class Daemon:
                 f"Warning: {self.slips.redis_man.running_logfile} is not found. Can't get daemon info."
                 f" Slips won't be completely killed."
             )
-            return False
 
     def killdaemon(self):
         """Kill the damon process only (aka slips.py)"""
-        # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
+        # sending SIGINT to self.pid will only kill slips.py
+        # and the rest of it's children will be zombies
         # sending SIGKILL to self.pid will only kill slips.py and the rest of
         # it's children will stay open in memory (not even zombies)
         try:
@@ -226,35 +255,74 @@ class Daemon:
             # daemon was killed manually
             pass
 
+    def _is_running(self) -> bool:
+        """
+        returns true if the daemon lock is released
+         and the daemon pidfile is deleted
+        """
+        try:
+            with Lock(name=self.daemon_start_lock):
+                if not self.pid:
+                    return False
+        except CannotAcquireLock:
+            # another instance of slips daemon is running
+            pass
+        return True
+
     def stop(self):
-        """Stop the daemon"""
-        # this file has to be deleted first because sigterm will terminate slips
-        self.delete_pidfile()
-        self.killdaemon()
-        info = self.get_last_opened_daemon_info()
-        if not info:
-            return
-        port, output_dir, self.pid = info
-        self.stderr = "errors.log"
-        self.stdout = "slips.log"
-        self.logsfile = "slips.log"
-        self.prepare_std_streams(output_dir)
-        self.logger = self.slips.proc_man.start_output_process(
-            self.stdout, self.stderr, self.logsfile
-        )
-        self.slips.add_observer(self.logger)
-        db = DBManager(
-            self.logger,
-            output_dir,
-            port,
-            start_sqlite=False,
-            flush_db=False
-        )
-        db.set_slips_mode("daemonized")
-        self.slips.set_mode("daemonized", daemon=self)
-        # used in shutdown gracefully to print the name of the stopped file in slips.log
-        self.slips.input_information = db.get_input_file()
-        self.slips.db = db
-        # set file used by proc_manto log if slips was shutdown gracefully
-        self.slips.proc_man.slips_logfile = self.logsfile
-        self.slips.proc_man.shutdown_gracefully()
+        """Stops the daemon"""
+        try:
+            with Lock(name=self.daemon_stop_lock):
+
+                if not self._is_running():
+                    return {
+                        "stopped": False,
+                        "error": "Daemon is not running.",
+                    }
+
+                self.killdaemon()
+
+                info: Tuple[str] = self.get_last_opened_daemon_info()
+                if not info:
+                    return {
+                        "stopped": False,
+                        "error": "Can't get the info of the last opened "
+                        "Slips daemon.",
+                    }
+
+                port, output_dir, self.pid = info
+
+                self.stderr = "errors.log"
+                self.stdout = "slips.log"
+                self.logsfile = "slips.log"
+                self.prepare_std_streams(output_dir)
+                self.logger = self.slips.proc_man.start_output_process(
+                    self.stdout, self.stderr, self.logsfile
+                )
+                self.slips.add_observer(self.logger)
+                self.db = DBManager(
+                    self.logger,
+                    output_dir,
+                    port,
+                    start_sqlite=False,
+                    flush_db=False,
+                )
+                self.db.set_slips_mode("daemonized")
+                self.slips.set_mode("daemonized", daemon=self)
+                # used in shutdown gracefully to print the name of the
+                # stopped file in slips.log
+                self.slips.input_information = self.db.get_input_file()
+                self.slips.args = self.slips.conf.get_args()
+                self.slips.db = self.db
+                self.slips.proc_man.slips_logfile = self.logsfile
+
+                # WARNING: this function shouldn't call shutdown gracefully.
+                # it should send sigint to the opened daemon, and the
+                # opened daemon should call shutdown gracefully
+                return {
+                    "stopped": True,
+                    "error": None,
+                }
+        except CannotAcquireLock:
+            # another instance of slips daemon is running
+            pass

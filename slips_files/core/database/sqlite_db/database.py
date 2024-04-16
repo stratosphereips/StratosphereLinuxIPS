@@ -1,5 +1,4 @@
-from typing import List, \
-    Dict
+from typing import List, Dict
 import os.path
 import sqlite3
 import json
@@ -10,20 +9,20 @@ from time import sleep
 from slips_files.core.output import Output
 from slips_files.common.abstracts.observer import IObservable
 
+
 class SQLiteDB(IObservable):
     """Stores all the flows slips reads and handles labeling them"""
+
     name = "SQLiteDB"
     # used to lock each call to commit()
     cursor_lock = Lock()
     trial = 0
 
-    def __init__(self,
-                 logger: Output,
-                 output_dir: str):
+    def __init__(self, logger: Output, output_dir: str):
         IObservable.__init__(self)
         self.logger = logger
         self.add_observer(self.logger)
-        self._flows_db = os.path.join(output_dir, 'flows.sqlite')
+        self._flows_db = os.path.join(output_dir, "flows.sqlite")
         self.connect()
 
     def connect(self):
@@ -37,7 +36,9 @@ class SQLiteDB(IObservable):
             self._init_db()
 
         # you can get multithreaded access on a single pysqlite connection by passing "check_same_thread=False"
-        self.conn = sqlite3.connect(self._flows_db, check_same_thread=False, timeout=20)
+        self.conn = sqlite3.connect(
+            self._flows_db, check_same_thread=False, timeout=20
+        )
 
         self.cursor = self.conn.cursor()
         if db_newly_created:
@@ -48,7 +49,7 @@ class SQLiteDB(IObservable):
         """
         returns the number of tables in the current db
         """
-        query = f"SELECT count(*) FROM sqlite_master WHERE type='table';"
+        query = "SELECT count(*) FROM sqlite_master WHERE type='table';"
         self.execute(query)
         x = self.fetchone()
         return x[0]
@@ -56,10 +57,10 @@ class SQLiteDB(IObservable):
     def init_tables(self):
         """creates the tables we're gonna use"""
         table_schema = {
-            'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, aid TEXT",
-            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT",
-            'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
-            }
+            "flows": "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, aid TEXT",
+            "altflows": "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT",
+            "alerts": "alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT",
+        }
         for table_name, schema in table_schema.items():
             self.create_table(table_name, schema)
 
@@ -67,7 +68,7 @@ class SQLiteDB(IObservable):
         """
         creates the db if it doesn't exist and clears it if it exists
         """
-        open(self._flows_db,'w').close()
+        open(self._flows_db, "w").close()
 
     def create_table(self, table_name, schema):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
@@ -92,11 +93,11 @@ class SQLiteDB(IObservable):
         try:
             self.notify_observers(
                 {
-                    'from': self.name,
-                    'txt': text,
-                    'verbose': verbose,
-                    'debug': debug
-               }
+                    "from": self.name,
+                    "txt": text,
+                    "verbose": verbose,
+                    "debug": debug,
+                }
             )
         except AttributeError:
             pass
@@ -107,11 +108,10 @@ class SQLiteDB(IObservable):
         """
         return self._flows_db
 
-
     def get_altflow_from_uid(self, profileid, twid, uid) -> dict:
-        """ Given a uid, get the alternative flow associated with it """
+        """Given a uid, get the alternative flow associated with it"""
         condition = f'uid = "{uid}"'
-        altflow = self.select('altflows', condition=condition)
+        altflow = self.select("altflows", condition=condition)
         if altflow:
             flow: str = altflow[0][1]
             return json.loads(flow)
@@ -126,15 +126,13 @@ class SQLiteDB(IObservable):
         contacted_ips = {}
         for uid, flow in all_flows.items():
             # get the daddr of this flow
-            daddr = flow['daddr']
+            daddr = flow["daddr"]
             contacted_ips[daddr] = uid
         return contacted_ips
 
-
     def get_all_flows_in_profileid_twid(self, profileid, twid):
-        condition = f'profileid = "{profileid}" ' \
-                    f'AND twid = "{twid}"'
-        all_flows: list = self.select('flows', condition=condition)
+        condition = f'profileid = "{profileid}" ' f'AND twid = "{twid}"'
+        all_flows: list = self.select("flows", condition=condition)
         if not all_flows:
             return False
         res = {}
@@ -150,7 +148,7 @@ class SQLiteDB(IObservable):
         [{'uid':flow},...]
         """
         condition = f'profileid = "{profileid}"'
-        flows = self.select('flows', condition=condition)
+        flows = self.select("flows", condition=condition)
         all_flows: Dict[str, dict] = {}
         if flows:
             for flow in flows:
@@ -165,7 +163,7 @@ class SQLiteDB(IObservable):
         Returns a list with all the flows in all profileids and twids
         Each element in the list is a flow
         """
-        flows = self.select('flows')
+        flows = self.select("flows")
         flow_list = []
         if flows:
             for flow in flows:
@@ -181,16 +179,18 @@ class SQLiteDB(IObservable):
             query = f'UPDATE flows SET label="{new_label}" WHERE uid="{uid}"'
             self.execute(query)
             # add the label to the altflow (dns, http, whatever it is)
-            query = f'UPDATE altflows SET label="{new_label}" WHERE uid="{uid}"'
+            query = (
+                f'UPDATE altflows SET label="{new_label}" WHERE uid="{uid}"'
+            )
             self.execute(query)
 
     def export_labeled_flows(self, output_dir, format):
-        if 'tsv' in format:
-            csv_output_file = os.path.join(output_dir, 'labeled_flows.tsv')
-            header: list = self.get_columns('flows')
+        if "tsv" in format:
+            csv_output_file = os.path.join(output_dir, "labeled_flows.tsv")
+            header: list = self.get_columns("flows")
 
-            with open(csv_output_file, 'w', newline='') as tsv_file:
-                writer = csv.writer(tsv_file, delimiter='\t')
+            with open(csv_output_file, "w", newline="") as tsv_file:
+                writer = csv.writer(tsv_file, delimiter="\t")
 
                 # write the header
                 writer.writerow(header)
@@ -199,21 +199,21 @@ class SQLiteDB(IObservable):
                 for row in self.iterate_flows():
                     writer.writerow(row)
 
-        if 'json' in format:
-            json_output_file = os.path.join(output_dir, 'labeled_flows.json')
+        if "json" in format:
+            json_output_file = os.path.join(output_dir, "labeled_flows.json")
 
-            with open(json_output_file, 'w', newline='') as json_file:
+            with open(json_output_file, "w", newline="") as json_file:
                 # Fetch rows one by one and write them to the file
                 for row in self.iterate_flows():
                     json_labeled_flow = {
-                        'uid': row[0],
-                        'flow': row[1],
-                        'label': row[2],
-                        'profileid': row[3],
-                        'twid': row[4],
-                        }
+                        "uid": row[0],
+                        "flow": row[1],
+                        "label": row[2],
+                        "profileid": row[3],
+                        "twid": row[4],
+                    }
                     json.dump(json_labeled_flow, json_file)
-                    json_file.write('\n')
+                    json_file.write("\n")
 
     def get_columns(self, table) -> list:
         """returns a list with column names in the given table"""
@@ -222,11 +222,14 @@ class SQLiteDB(IObservable):
         return [column[1] for column in columns]
 
     def iterate_flows(self):
-        """returns an iterator """
+        """returns an iterator"""
+
         # generator function to iterate over the rows
         def row_generator():
             # select all flows and altflows
-            self.execute('SELECT * FROM flows UNION SELECT uid, flow, label, profileid, twid FROM altflows')
+            self.execute(
+                "SELECT * FROM flows UNION SELECT uid, flow, label, profileid, twid FROM altflows"
+            )
 
             while True:
                 row = self.fetchone()
@@ -246,26 +249,37 @@ class SQLiteDB(IObservable):
         if twid:
             condition += f'AND twid = "{twid}"'
 
-        res = self.select('flows', condition=condition)
+        res = self.select("flows", condition=condition)
         res = res[0][1] if res else {}
         return {uid: res}
 
-    def add_flow(
-            self, flow, profileid: str, twid:str, label='benign'
-            ):
-        if hasattr(flow, 'aid'):
-            parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label, flow.aid)
+    def add_flow(self, flow, profileid: str, twid: str, label="benign"):
+        if hasattr(flow, "aid"):
+            parameters = (
+                profileid,
+                twid,
+                flow.uid,
+                json.dumps(asdict(flow)),
+                label,
+                flow.aid,
+            )
             self.execute(
-                'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label, aid) '
-                'VALUES (?, ?, ?, ?, ?, ?);',
+                "INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label, aid) "
+                "VALUES (?, ?, ?, ?, ?, ?);",
                 parameters,
             )
         else:
-            parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label)
+            parameters = (
+                profileid,
+                twid,
+                flow.uid,
+                json.dumps(asdict(flow)),
+                label,
+            )
 
             self.execute(
-                'INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) '
-                'VALUES (?, ?, ?, ?, ?);',
+                "INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) "
+                "VALUES (?, ?, ?, ?, ?);",
                 parameters,
             )
 
@@ -274,7 +288,7 @@ class SQLiteDB(IObservable):
         returns the total number of flows
          in the db for this profileid and twid if given
         """
-        condition = ''
+        condition = ""
         if profileid:
             condition = f'profileid="{profileid}"'
         elif twid and not profileid:
@@ -282,18 +296,22 @@ class SQLiteDB(IObservable):
         elif profileid and twid:
             condition += f'AND twid= "{twid}"'
 
-        flows = self.get_count('flows', condition=condition)
+        flows = self.get_count("flows", condition=condition)
         # flows += self.get_count('altflows', condition=condition)
         return flows
 
-
-    def add_altflow(
-            self, flow, profileid: str, twid:str, label='benign'
-            ):
-        parameters = (profileid, twid, flow.uid, json.dumps(asdict(flow)), label, flow.type_)
+    def add_altflow(self, flow, profileid: str, twid: str, label="benign"):
+        parameters = (
+            profileid,
+            twid,
+            flow.uid,
+            json.dumps(asdict(flow)),
+            label,
+            flow.type_,
+        )
         self.execute(
-            'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label, flow_type) '
-            'VALUES (?, ?, ?, ?, ?, ?);',
+            "INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label, flow_type) "
+            "VALUES (?, ?, ?, ?, ?, ?);",
             parameters,
         )
 
@@ -306,33 +324,30 @@ class SQLiteDB(IObservable):
         # 'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT,
         # timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
         self.execute(
-            'INSERT OR REPLACE INTO alerts (alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?);',
-            (alert['alert_ID'],
-             alert['profileid'].split()[-1],
-             alert['twid'],
-             alert['tw_start'],
-             alert['tw_end'],
-             alert['label'],
-             alert['time_detected'])
+            "INSERT OR REPLACE INTO alerts (alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?);",
+            (
+                alert["alert_ID"],
+                alert["profileid"].split()[-1],
+                alert["twid"],
+                alert["tw_start"],
+                alert["tw_end"],
+                alert["label"],
+                alert["time_detected"],
+            ),
         )
-
-
 
     def insert(self, table_name, values):
         query = f"INSERT INTO {table_name} VALUES ({values})"
         self.execute(query)
 
-
     def update(self, table_name, set_clause, condition):
         query = f"UPDATE {table_name} SET {set_clause} WHERE {condition}"
         self.execute(query)
 
-
     def delete(self, table_name, condition):
         query = f"DELETE FROM {table_name} WHERE {condition}"
         self.execute(query)
-
 
     def select(self, table_name, columns="*", condition=None):
         query = f"SELECT {columns} FROM {table_name}"
@@ -354,7 +369,6 @@ class SQLiteDB(IObservable):
         self.execute(query)
         return self.fetchone()[0]
 
-
     def close(self):
         self.cursor.close()
         self.conn.close()
@@ -368,7 +382,6 @@ class SQLiteDB(IObservable):
         self.cursor_lock.release()
         return res
 
-
     def fetchone(self):
         """
         wrapper for sqlite fetchone to be able to use a lock
@@ -376,8 +389,8 @@ class SQLiteDB(IObservable):
         self.cursor_lock.acquire(True)
         res = self.cursor.fetchone()
         self.cursor_lock.release()
-        return res    
-    
+        return res
+
     def execute(self, query, params=None):
         """
         wrapper for sqlite execute() To avoid 'Recursive use of cursors not allowed' error
@@ -387,8 +400,8 @@ class SQLiteDB(IObservable):
         """
         try:
             self.cursor_lock.acquire(True)
-            #start a transaction
-            self.cursor.execute('BEGIN')
+            # start a transaction
+            self.cursor.execute("BEGIN")
 
             if not params:
                 self.cursor.execute(query)
@@ -408,7 +421,11 @@ class SQLiteDB(IObservable):
                 # tried 2 times to exec a query and it's still failing
                 self.trial = 0
                 # discard query
-                self.print(f"Error executing query: {query} - {e}. Query discarded", 0, 1)
+                self.print(
+                    f"Error executing query: {query} - {e}. Query discarded",
+                    0,
+                    1,
+                )
 
             elif "database is locked" in str(e):
                 # keep track of failed trials
@@ -424,7 +441,3 @@ class SQLiteDB(IObservable):
                 # keep track of failed trials
                 self.trial += 1
                 self.execute(query, params=params)
-
-
-
-        

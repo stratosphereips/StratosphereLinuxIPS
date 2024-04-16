@@ -1,26 +1,28 @@
-# slips generated alerts
-output/alerts.log
-output/alerts.json
-2021-*/
-2022-*/
+# Ignore all .log files in output/ dir
+output/*.log
+**/alerts.json
+**/.git
+
+#node modules
+**/node_modules
 
 
-# zeek log files
-zeek_files/*.log
+# files with API keys/tokens
+config/slack_bot_token_secret
+config/warden.conf
+config/RiskIQ_credentials
 
-yara-python/*
 
 Datasett/
+Dataset/
 
 # virtual env files
 ENV/*
+env/*
 
 # compiled yara rules
 modules/leak_detector/yara_rules/compiled/
 
-# api keys
-modules/RiskIQ/api_key_secret
-modules/virustotal/api_key_secret
 
 .git/
 .cache/
@@ -30,16 +32,12 @@ __pycache__/
 
 # CESNET module logs
 *.log
-modules/CESNET/*.log
 
 # redis backups
-redis_backups/*.rdb
+**/*.rdb
 
 # for IntelliJ IDE
 .idea/
 
 # for vscode
 .vscode/
-
-
-
