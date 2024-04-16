@@ -4,7 +4,8 @@ import json
 import numpy as np
 from tensorflow.python.keras.models import load_model
 
-from slips_files.common.imports import *
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -17,6 +18,7 @@ from slips_files.core.evidence_structure.evidence import (
     IDEACategory,
     Proto,
     Tag,
+    Victim,
 )
 
 
@@ -68,6 +70,9 @@ class CCDetection(IModule):
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
             ),
+            victim=Victim(
+                direction=Direction.DST, victim_type=IoCType.IP, value=dstip
+            ),
             threat_level=ThreatLevel.HIGH,
             confidence=confidence,
             description=description,
@@ -86,6 +91,9 @@ class CCDetection(IModule):
             evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=dstip
+            ),
+            victim=Victim(
+                direction=Direction.SRC, victim_type=IoCType.IP, value=srcip
             ),
             threat_level=ThreatLevel.HIGH,
             confidence=confidence,
@@ -181,7 +189,8 @@ class CCDetection(IModule):
                 )
                 score = self.tcpmodel.predict(behavioral_model)
                 self.print(
-                    f" >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}",
+                    f" >> sequence: {pre_behavioral_model}. "
+                    f"final prediction score: {score[0][0]:.20f}",
                     3,
                     0,
                 )

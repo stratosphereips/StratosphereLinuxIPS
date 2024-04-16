@@ -1748,8 +1748,8 @@ class ThreatIntel(IModule, URLhaus):
         threat_level: ThreatLevel = ThreatLevel(threat_level)
         description: str = (
             f"blacklisted CNAME: {cname} when resolving "
-            f"{dns_query}"
-            f"Description: {cname_info.get('description', '')},"
+            f"{dns_query} "
+            f"Description: {cname_info.get('description', '')}, "
             f"Found in feed: {cname_info['source']}, "
             f"Confidence: {confidence}. "
         )
