@@ -8,8 +8,10 @@ import threading
 import time
 from typing import Dict, List
 
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.imports import *
+import multiprocessing
+from slips_files.common.abstracts.module import IModule
 from modules.threat_intelligence.urlhaus import URLhaus
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
@@ -22,6 +24,7 @@ from slips_files.core.evidence_structure.evidence import (
     Direction,
     IDEACategory,
     Tag,
+    Victim,
 )
 
 
@@ -123,7 +126,7 @@ class ThreatIntel(IModule, URLhaus):
     def __read_configuration(self):
         """
         Reads the module's configuration settings from a configuration file or source. This includes settings such as the path to local threat intelligence files. If the directory for local threat intelligence files does not exist, it creates it.
-        
+
         Side Effects:
             - Sets `path_to_local_ti_files` with the configured path to local threat intelligence files.
             - Creates the directory at `path_to_local_ti_files` if it does not already exist.
@@ -432,23 +435,32 @@ class ThreatIntel(IModule, URLhaus):
         twid: str = "",
     ):
         """
-        Records evidence of activity involving a malicious domain within a specific time window.
+        Records evidence of activity involving a malicious domain
+         within a specific time window.
 
         Parameters:
             domain (str): The domain name identified as malicious.
-            uid (str): Unique identifier for the network flow that triggered this evidence.
+            uid (str): Unique identifier for the network flow that
+             triggered this evidence.
             timestamp (str): Timestamp when the event occurred.
-            domain_info (dict): Contains metadata about the domain such as source, description, and threat level.
-            is_subdomain (bool): Indicates if the malicious domain is a subdomain.
-            profileid (str): Identifier for the network profile involved in the event.
-            twid (str): Time window identifier during which the event was observed.
+            domain_info (dict): Contains metadata about the domain
+            such as source, description, and threat level.
+            is_subdomain (bool): Indicates if the malicious domain
+            is a subdomain.
+            profileid (str): Identifier for the network profile involved
+             in the event.
+            twid (str): Time window identifier during which the event was
+            observed.
 
-        Depending on whether the domain was resolved in the DNS query, the function creates
-        and stores evidence related to the domain. It also marks the domain as malicious
+        Depending on whether the domain was resolved in the
+         DNS query, the function creates
+        and stores evidence related to the domain. It also
+         marks the domain as malicious
         in the database for future reference.
 
         Side Effects:
-            - Creates and stores evidence related to the malicious domain in the database.
+            - Creates and stores evidence related to the
+            malicious domain in the database.
             - Marks the domain as malicious in the database.
         """
 
@@ -483,6 +495,11 @@ class ThreatIntel(IModule, URLhaus):
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
             ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.DOMAIN,
+                value=domain,
+            ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
@@ -505,6 +522,11 @@ class ThreatIntel(IModule, URLhaus):
                     attacker_type=IoCType.DOMAIN,
                     value=domain,
                 ),
+                victim=Victim(
+                    direction=Direction.SRC,
+                    victim_type=IoCType.IP,
+                    value=srcip,
+                ),
                 threat_level=threat_level,
                 confidence=confidence,
                 description=description,
@@ -523,19 +545,32 @@ class ThreatIntel(IModule, URLhaus):
 
     def parse_local_ti_file(self, ti_file_path: str) -> bool:
         """
-        Parses a local threat intelligence (TI) file to extract and store various indicators of compromise (IoCs), including IP addresses, domains, ASN numbers, and IP ranges, in the database. The function handles IoCs by categorizing them based on their types and stores them with associated metadata like threat level, description, and tags.
+        Parses a local threat intelligence (TI) file to extract and
+         store various indicators of compromise (IoCs), including IP
+         addresses, domains, ASN numbers, and IP ranges, in the database. The function handles IoCs by categorizing them based on their types and stores them with associated metadata like threat level, description, and tags.
 
-        Each line in the TI file is expected to follow a specific format, typically CSV, with entries for the IoC, its threat level, and a description. The function validates the threat level of each IoC against a predefined set of valid threat levels and skips any entries that do not conform to expected data types or formats.
+        Each line in the TI file is expected to follow a specific
+         format, typically CSV, with entries for the IoC, its threat level,
+         and a description. The function validates the threat level
+         of each IoC against a predefined set of valid threat levels
+         and skips any entries that do not conform to
+          expected data types or formats.
 
         Parameters:
-            ti_file_path (str): The absolute path to the local TI file being parsed. This file should contain the IoCs to be extracted and stored.
+            ti_file_path (str): The absolute path to the local
+            TI file being parsed. This file should contain
+            the IoCs to be extracted and stored.
 
         Returns:
-            bool: Returns True if the file was successfully parsed and the IoCs were stored in the database. Currently, the function always returns True.
+            bool: Returns True if the file was successfully
+             parsed and the IoCs were stored in the database.
+              Currently, the function always returns True.
 
         Side Effects:
-            - Populates the database with new IoCs extracted from the provided TI file.
-            - Logs errors to the console for entries that cannot be processed due to invalid data types or formats.
+            - Populates the database with new IoCs extracted from the
+            provided TI file.
+            - Logs errors to the console for entries that cannot be
+            processed due to invalid data types or formats.
             - Skips lines that are commented out in the TI file.
         """
         data_file_name = ti_file_path.split("/")[-1]
@@ -810,7 +845,7 @@ class ThreatIntel(IModule, URLhaus):
         # Add all loaded JARM to the database
         self.db.add_jarm_to_IoC(jarm_dict)
         return True
-        
+
     def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
         """
         Determines whether a local threat intelligence (TI) file needs to be updated by comparing its current hash value against the stored hash value in the database.
@@ -836,18 +871,23 @@ class ThreatIntel(IModule, URLhaus):
         new_hash = utils.get_hash_from_file(path_to_local_ti_file)
 
         if not new_hash:
-            self.print(f"Some error occurred on calculating file hash. Not loading the file {path_to_local_ti_file}", 0, 3)
+            self.print(
+                f"Some error occurred on calculating file hash. Not loading the file {path_to_local_ti_file}",
+                0,
+                3,
+            )
             return False
 
         if old_hash == new_hash:
             self.print(f"File {path_to_local_ti_file} is up to date.", 2, 0)
             return False
         else:
-            self.print(f"Updating the local TI file {path_to_local_ti_file}", 2, 0)
+            self.print(
+                f"Updating the local TI file {path_to_local_ti_file}", 2, 0
+            )
             if old_hash:
                 self.__delete_old_source_data_from_database(filename)
             return new_hash
-
 
     def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
         """
@@ -966,7 +1006,7 @@ class ThreatIntel(IModule, URLhaus):
             bool: True if the domain ends with a TLD that is typically not relevant to threat intelligence analysis (e.g., .arpa, .local), otherwise False.
 
         This method helps in filtering out domain names that are unlikely to be involved in malicious activities based on their TLDs. It is particularly useful in preprocessing steps where irrelevant domains are excluded from further analysis.
-        """ 
+        """
         if not domain:
             return True
         ignored_TLDs = (".arpa", ".local")
@@ -1129,7 +1169,7 @@ class ThreatIntel(IModule, URLhaus):
 
     def search_online_for_hash(self, flow_info: dict):
         """
-        Attempts to find information about a file hash by querying online sources. 
+        Attempts to find information about a file hash by querying online sources.
         Currently, it queries the Circl.lu and URLhaus databases for any matches to the provided MD5 hash.
 
         Parameters:
@@ -1151,7 +1191,7 @@ class ThreatIntel(IModule, URLhaus):
             return urlhaus_info
 
     def search_offline_for_ip(self, ip):
-        """ 
+        """
         Searches for the given IP address in the local threat intelligence files to determine if it is known to be malicious.
 
         Parameters:
@@ -1171,7 +1211,7 @@ class ThreatIntel(IModule, URLhaus):
         if spamhaus_res := self.spamhaus(ip):
             return spamhaus_res
 
-    def ip_has_blacklisted_ASN(
+    def ip_has_blacklisted_asn(
         self,
         ip,
         uid,
@@ -1181,23 +1221,29 @@ class ThreatIntel(IModule, URLhaus):
         is_dns_response: bool = False,
     ):
         """
-        Checks if the given IP address is associated with a blacklisted Autonomous System Number (ASN).
+        Checks if the given IP address is associated with a
+        blacklisted Autonomous System Number (ASN).
 
         Parameters:
             - ip (str): IP address to check.
             - uid (str): Unique identifier for the network flow.
             - timestamp (str): Timestamp when the network flow occurred.
-            - profileid (str): Identifier for the profile associated with the network flow.
+            - profileid (str): Identifier for the profile associated
+             with the network flow.
             - twid (str): Time window identifier.
-            - is_dns_response (bool): Indicates if the check is for a DNS response.
+            - is_dns_response (bool): Indicates if the check is
+            for a DNS response.
 
         Side Effects:
-            - Generates and stores evidence if the IP's ASN is found to be blacklisted.
+            - Generates and stores evidence if the IP's ASN is
+             found to be blacklisted.
 
         Returns:
-            - None: The function does not return a value but stores evidence if a blacklisted ASN is associated with the IP.
+            - None: The function does not return a value but stores
+            evidence if a blacklisted ASN is associated with the IP.
 
-        This function queries the local database to determine if the IP's ASN is known to be malicious.
+        This function queries the local database to determine if
+        the IP's ASN is known to be malicious.
         """
         ip_info = self.db.get_ip_info(ip)
         if not ip_info:
@@ -1229,7 +1275,7 @@ class ThreatIntel(IModule, URLhaus):
     ):
         """
         Verifies if the provided IP address falls within any known malicious IP ranges.
-    
+
         Parameters:
             - ip (str): The IP address to check.
             - uid (str): Unique identifier for the network flow.
@@ -1238,15 +1284,15 @@ class ThreatIntel(IModule, URLhaus):
             - profileid (str): Identifier of the profile associated with the flow.
             - twid (str): Time window identifier for when the flow occurred.
             - ip_state (str): Indicates whether the IP was a source or destination in the network flow.
-    
+
         Returns:
             - True: If the IP is within a blacklisted range.
             - False: If the IP is not within a blacklisted range or cannot be processed.
-    
+
         Side Effects:
             - Records evidence using `set_evidence_malicious_ip` if the IP is found within a blacklisted range.
         """
-        
+
         ip_obj = ipaddress.ip_address(ip)
         # Malicious IP ranges are stored in slips sorted by the first octet
         # so get the ranges that match the fist octet of the given IP
@@ -1283,13 +1329,13 @@ class ThreatIntel(IModule, URLhaus):
     def search_offline_for_domain(self, domain):
         """
         Checks if the provided domain name is listed in the local threat intelligence as malicious.
-        
+
         Parameters:
             - domain (str): The domain name to be checked.
-        
+
         Returns:
             - Tuple: (domain_info, is_subdomain) where `domain_info` is the information about the domain if it's found in the local threat intelligence, and `is_subdomain` is a boolean indicating whether the domain is a subdomain of a known malicious domain. Returns (False, False) if the domain is not found or not malicious.
-        
+
         This function queries the local threat intelligence database for the provided domain name and determines if it is considered malicious.
         """
         # Search for this domain in our database of IoC
@@ -1322,7 +1368,7 @@ class ThreatIntel(IModule, URLhaus):
     ) -> bool:
         """
         Checks whether an IP address is malicious by looking it up in both offline and online threat intelligence databases.
-        
+
         Parameters:
             - ip (str): The IP address to check.
             - uid (str): Unique identifier for the network flow.
@@ -1333,10 +1379,10 @@ class ThreatIntel(IModule, URLhaus):
             - ip_state (str): Specifies whether the IP was a source or destination ('srcip' or 'dstip').
             - is_dns_response (bool, optional): Indicates if the lookup is for an IP found in a DNS response.
             - dns_query (str, optional): The DNS query associated with the DNS response containing the IP.
-        
+
         Returns:
             - bool: True if the IP address is found to be malicious, False otherwise.
-        
+
         Side Effects:
             - If the IP is found to be malicious, evidence is recorded using either `set_evidence_malicious_ip_in_dns_response` or `set_evidence_malicious_ip` methods depending on the context.
         """
@@ -1374,13 +1420,13 @@ class ThreatIntel(IModule, URLhaus):
     def is_malicious_hash(self, flow_info: dict):
         """
         Checks if a file hash is considered malicious based on online threat intelligence sources.
-        
+
         Parameters:
             - flow_info (dict): A dictionary containing information about the network flow, including the file's MD5 hash.
-        
+
         Returns:
             - None: The function does not return a value but triggers evidence creation if the hash is found to be malicious.
-        
+
         Side Effects:
             - If the hash is found to be malicious based on online sources, evidence is recorded using `set_evidence_malicious_hash`.
         """
@@ -1405,11 +1451,10 @@ class ThreatIntel(IModule, URLhaus):
             else:
                 self.set_evidence_malicious_hash(blacklist_details)
 
-
     def is_malicious_url(self, url, uid, timestamp, daddr, profileid, twid):
-     """
+        """
         Determines if a URL is considered malicious by querying online threat intelligence sources.
-        
+
         Parameters:
             - url (str): The URL to check.
             - uid (str): Unique identifier for the network flow.
@@ -1417,23 +1462,23 @@ class ThreatIntel(IModule, URLhaus):
             - daddr (str): Destination IP address in the network flow.
             - profileid (str): Identifier of the profile associated with the network flow.
             - twid (str): Time window identifier for when the network flow occurred.
-        
+
         Returns:
             - None: The function does not return a value but triggers evidence creation if the URL is found to be malicious.
-        
+
         Side Effects:
             - If the URL is found to be malicious, evidence is recorded using the `set_evidence_malicious_url` method.
         """
-     url_info = self.search_online_for_url(url)
-     
-     if not url_info:
+        url_info = self.search_online_for_url(url)
+
+        if not url_info:
             # not malicious
-        return False
-     
-     self.urlhaus.set_evidence_malicious_url(
+            return False
+
+        self.urlhaus.set_evidence_malicious_url(
             daddr, url_info, uid, timestamp, profileid, twid
         )
-     
+
     def set_evidence_malicious_cname_in_dns_response(
         self,
         cname: str,
@@ -1447,7 +1492,7 @@ class ThreatIntel(IModule, URLhaus):
     ):
         """
         Records evidence that a CNAME found in a DNS response is associated with a known malicious domain.
-        
+
         Parameters:
             - cname (str): The CNAME that was looked up and found to be malicious.
             - dns_query (str): The original DNS query that resulted in the malicious CNAME response.
@@ -1457,10 +1502,10 @@ class ThreatIntel(IModule, URLhaus):
             - is_subdomain (bool): Indicates whether the CNAME is a subdomain of a known malicious domain.
             - profileid (str, optional): Identifier of the profile associated with the network flow.
             - twid (str, optional): Time window identifier for when the network flow occurred.
-        
+
         Returns:
             - None: The function directly triggers evidence creation for the malicious CNAME and does not return a value.
-        
+
         Side Effects:
             - Records evidence of the malicious CNAME in the system.
         """
@@ -1532,7 +1577,7 @@ class ThreatIntel(IModule, URLhaus):
             - twid (str): Identifier of the time window during which the network flow occurred.
 
         Returns:
-            - False: If the CNAME is determined to be non-malicious or belongs to an ignored domain category. 
+            - False: If the CNAME is determined to be non-malicious or belongs to an ignored domain category.
             - True: If the CNAME is found to be malicious and evidence is recorded successfully.
 
         The function first checks if the CNAME belongs to a domain category that should be ignored (e.g., local domains). If not ignored, it proceeds to search for the CNAME in offline threat intelligence sources. If the CNAME is identified as malicious, it records evidence of the malicious CNAME in a DNS response, updates domain information in the database to mark it as malicious, and adds the domain to a list of known malicious domains.
@@ -1715,7 +1760,7 @@ class ThreatIntel(IModule, URLhaus):
                     self.ip_belongs_to_blacklisted_range(
                         ip, uid, daddr, timestamp, profileid, twid, ip_state
                     )
-                    self.ip_has_blacklisted_ASN(
+                    self.ip_has_blacklisted_asn(
                         ip,
                         uid,
                         timestamp,
