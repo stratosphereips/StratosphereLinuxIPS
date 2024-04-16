@@ -15,6 +15,7 @@ from slips_files.core.evidence_structure.evidence import (
     Direction,
     IoCType,
     Attacker,
+    Victim,
 )
 
 
@@ -943,7 +944,6 @@ class Whitelist(IObservable):
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
         """
-        # TODO validate IP
         if not self.is_valid_ip(ip):
             return False
 
@@ -1126,12 +1126,26 @@ class Whitelist(IObservable):
         # search in the list of organization IPs
         return self.is_ip_in_org(ip, org)
 
+    @staticmethod
+    def is_private_ip(ioc_type, ioc: Optional[Attacker, Victim]):
+        """checks if the given ioc is an ip and is private"""
+        if ioc_type != IoCType.IP.name:
+            return False
+        if utils.is_private_ip(ioc.value):
+            return True
+
     def is_part_of_a_whitelisted_org(self, ioc):
         """
         Handles the checking of whitelisted evidence/alerts only
         doesn't check if we should ignore flows
         :param ioc: can be an Attacker or a Victim object
         """
+        ioc_type: str = (
+            ioc.attacker_type if isinstance(ioc, Attacker) else ioc.victim_type
+        )
+
+        if self.is_private_ip(ioc_type, ioc):
+            return False
 
         whitelist = self.db.get_all_whitelist()
         if not whitelist:
@@ -1148,12 +1162,6 @@ class Whitelist(IObservable):
                 ioc.direction, dir_from_whitelist
             ):
                 continue
-
-            ioc_type: str = (
-                ioc.attacker_type
-                if isinstance(ioc, Attacker)
-                else ioc.victim_type
-            )
 
             cases = {
                 IoCType.DOMAIN.name: self.is_domain_in_org,
