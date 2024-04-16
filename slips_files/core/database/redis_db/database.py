@@ -497,7 +497,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.zscore("labels", label)
 
-    def get_disabled_modules(self) -> list:
+    def get_disabled_modules(self) -> dict:
         if disabled_modules := self.r.hget("analysis", "disabled_modules"):
             return json.loads(disabled_modules)
         else:
@@ -1205,7 +1205,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         :param org: supported orgs are ('google', 'microsoft', 'apple',
          'facebook', 'twitter')
         :param info_type: supported types are 'asn', 'domains'
-        " returns a json serialized dict with info
+        returns a json serialized dict with info
+        PS: All ASNs returned by this function are uppercase
         """
         return self.rcache.hget("OrgInfo", f"{org}_{info_type}") or "[]"
 

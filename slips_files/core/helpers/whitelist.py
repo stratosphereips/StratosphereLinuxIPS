@@ -1,4 +1,4 @@
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Union
 import tldextract
 import json
 import ipaddress
@@ -680,17 +680,19 @@ class Whitelist(IObservable):
         returns true if the ASN of the given IP is listed in the ASNs of
         the given org ASNs
         """
-        # Check if the IP in the content of the alert has ASN info in the db
         ip_data = self.db.get_ip_info(ip)
         if not ip_data:
             return
+
         try:
             ip_asn = ip_data["asn"]["number"]
         except KeyError:
             return
+        # because all ASN stored in slips organization_info/ are uppercase
+        ip_asn: str = ip_asn.upper()
 
-        org_asn: list = json.loads(self.db.get_org_info(org, "asn"))
-        return org.lower() in ip_asn.lower() or ip_asn in org_asn
+        org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
+        return org.upper() in ip_asn or ip_asn in org_asn
 
     def should_ignore_from(self, direction) -> bool:
         """
@@ -1127,11 +1129,13 @@ class Whitelist(IObservable):
         return self.is_ip_in_org(ip, org)
 
     @staticmethod
-    def is_private_ip(ioc_type, ioc: Optional[Attacker, Victim]):
+    def is_private_ip(ioc_type, ioc: Union[Attacker, Victim]):
         """checks if the given ioc is an ip and is private"""
         if ioc_type != IoCType.IP.name:
             return False
-        if utils.is_private_ip(ioc.value):
+
+        ip_obj = ipaddress.ip_address(ioc.value)
+        if utils.is_private_ip(ip_obj):
             return True
 
     def is_part_of_a_whitelisted_org(self, ioc):
@@ -1167,4 +1171,6 @@ class Whitelist(IObservable):
                 IoCType.DOMAIN.name: self.is_domain_in_org,
                 IoCType.IP.name: self.is_ip_part_of_a_whitelisted_org,
             }
-            return cases[ioc_type](ioc.value, org)
+            if cases[ioc_type](ioc.value, org):
+                return True
+        return False
