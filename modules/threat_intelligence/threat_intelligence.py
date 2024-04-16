@@ -234,6 +234,9 @@ class ThreatIntel(IModule, URLhaus):
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
+            victim=Victim(
+                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+            ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
@@ -250,6 +253,9 @@ class ThreatIntel(IModule, URLhaus):
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_ASN,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+            ),
+            victim=Victim(
+                direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
             ),
             threat_level=threat_level,
             confidence=confidence,
@@ -274,7 +280,8 @@ class ThreatIntel(IModule, URLhaus):
         profileid: str,
         twid: str,
     ):
-        """Sets evidence for a DNS response containing a blacklisted IP address.
+        """
+        Sets evidence for a DNS response containing a blacklisted IP.
 
         This function records evidence when a DNS query response
         includes an IP address known to be malicious based on threat
@@ -324,6 +331,9 @@ class ThreatIntel(IModule, URLhaus):
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=ip
             ),
+            victim=Victim(
+                direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
+            ),
             threat_level=threat_level,
             confidence=1.0,
             description=description,
@@ -341,6 +351,9 @@ class ThreatIntel(IModule, URLhaus):
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            ),
+            victim=Victim(
+                direction=Direction.DST, victim_type=IoCType.IP, value=ip
             ),
             threat_level=threat_level,
             confidence=1.0,
@@ -378,17 +391,23 @@ class ThreatIntel(IModule, URLhaus):
 
         Parameters:
             ip (str): The IP address under scrutiny.
-            uid (str): Unique identifier for the network flow related to this event.
+            uid (str): Unique identifier for the network flow related to this
+            event.
             daddr (str): Destination IP address of the flow.
             timestamp (str): Timestamp when the event occurred.
-            ip_info (dict): Contains metadata about the IP such as source, description, and threat level.
-            profileid (str): Identifier for the network profile involved in the event.
-            twid (str): Time window identifier during which the event was observed.
-            ip_state (str): Indicates whether the IP in question was the source or destination.
+            ip_info (dict): Contains metadata about the IP such as source,
+            description, and threat level.
+            profileid (str): Identifier for the network profile involved
+            in the event.
+            twid (str): Time window identifier during which the event was
+            observed.
+            ip_state (str): Indicates whether the IP in question was the
+            source or destination.
 
-        This function creates and stores evidence objects for both the source and destination
-        addresses involved in the traffic with the malicious IP, marking them accordingly
-        in the database as part of threat intelligence handling.
+        This function creates and stores evidence objects for both the
+        source and destination addresses involved in the traffic with the
+        malicious IP, marking them accordingly in the database as part of
+        threat intelligence handling.
 
         Side Effects:
             - Two evidence records are created and stored in the database.
@@ -427,6 +446,9 @@ class ThreatIntel(IModule, URLhaus):
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
             ),
+            victim=Victim(
+                direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
+            ),
             threat_level=threat_level,
             confidence=1.0,
             description=description,
@@ -443,6 +465,9 @@ class ThreatIntel(IModule, URLhaus):
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            ),
+            victim=Victim(
+                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
             ),
             threat_level=threat_level,
             confidence=1.0,
@@ -473,8 +498,9 @@ class ThreatIntel(IModule, URLhaus):
         profileid: str = "",
         twid: str = "",
     ):
-        """Records evidence of activity involving a malicious domain within a specific
-        time window.
+        """
+        Records evidence of activity involving a malicious domain
+         within a specific time window.
 
         Parameters:
             domain (str): The domain name identified as malicious.
@@ -582,11 +608,13 @@ class ThreatIntel(IModule, URLhaus):
         return threat_level in utils.threat_levels
 
     def parse_local_ti_file(self, ti_file_path: str) -> bool:
-        """Parses a local threat intelligence (TI) file to extract and store various
-        indicators of compromise (IoCs), including IP addresses, domains, ASN numbers,
-        and IP ranges, in the database. The function handles IoCs by categorizing them
-        based on their types and stores them with associated metadata like threat level,
-        description, and tags.
+        """Parses a local threat intelligence (TI) file to extract
+         and store various indicators of compromise (IoCs), including IP
+         addresses,
+         domains, ASN numbers, and IP ranges, in the database.
+         The function handles IoCs by categorizing them
+        based on their types and stores them with associated metadata
+        like threat level, description, and tags.
 
         Each line in the TI file is expected to follow a specific
          format, typically CSV, with entries for the IoC, its threat level,
@@ -635,7 +663,8 @@ class ThreatIntel(IModule, URLhaus):
                 # "103.15.53.231","critical", "Karel from our village. He is bad guy."
                 data = line.replace("\n", "").replace('"', "").split(",")
 
-                # the column order is hardcoded because it's owr own ti file and we know the format,
+                # the column order is hardcoded because it's owr
+                # own ti file and we know the format,
                 # we shouldn't be trying to find it
                 (
                     ioc,
@@ -652,7 +681,7 @@ class ThreatIntel(IModule, URLhaus):
                     # default value
                     threat_level = "medium"
 
-                ioc_info = {
+                ioc_info: dict = {
                     "description": description,
                     "source": data_file_name,
                     "threat_level": threat_level,
@@ -728,7 +757,7 @@ class ThreatIntel(IModule, URLhaus):
         if old_data:
             self.db.delete_ips_from_IoC_ips(old_data)
 
-    def __delete_old_source_Domains(self, file):
+    def __delete_old_source_domains(self, file):
         """Deletes all domain indicators of compromise (IoCs) associated with a specific
         source file from the database. This method is typically called when the source
         file is updated to ensure the database reflects the most current data.
@@ -769,7 +798,7 @@ class ThreatIntel(IModule, URLhaus):
         """
         # Only read the files with .txt or .csv
         self.__delete_old_source_ips(data_file)
-        self.__delete_old_source_Domains(data_file)
+        self.__delete_old_source_domains(data_file)
 
     def parse_ja3_file(self, path):
         """Parses a file containing JA3 hashes, their threat levels, and descriptions,
@@ -1205,6 +1234,9 @@ class ThreatIntel(IModule, URLhaus):
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
             ),
+            victim=Victim(
+                direction=Direction.SRC, victim_type=IoCType.IP, value=srcip
+            ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
@@ -1218,9 +1250,10 @@ class ThreatIntel(IModule, URLhaus):
         self.db.set_evidence(evidence)
 
     def circl_lu(self, flow_info: dict):
-        """Queries the Circl.lu API to determine if an MD5 hash of a file is known to be
-        malicious based on the file's hash. Utilizes internal helper functions to
-        calculate a threat level and confidence score based on the Circl.lu API
+        """Queries the Circl.lu API to determine if an MD5 hash of a
+        file is known to be malicious based on the file's hash. Utilizes
+        internal helper functions to calculate a threat level and
+        confidence score based on the Circl.lu API
         response.
 
         Parameters:
