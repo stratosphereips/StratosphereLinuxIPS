@@ -396,10 +396,6 @@ class Whitelist(IObservable):
         """
         try:
             org_domains = json.loads(self.db.get_org_info(org, "domains"))
-            if org in domain:
-                # self.print(f"The domain of this flow ({domain}) belongs to
-                # the domains of {org}")
-                return True
 
             flow_tld = self.get_tld(domain)
 
