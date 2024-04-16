@@ -497,7 +497,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.zscore("labels", label)
 
-    def get_disabled_modules(self) -> list:
+    def get_disabled_modules(self) -> dict:
         if disabled_modules := self.r.hget("analysis", "disabled_modules"):
             return json.loads(disabled_modules)
         else:
@@ -957,20 +957,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         if asn:
             asn_org = asn.get("org", "")
             asn_number = asn.get("number", "")
-            id += f"AS: {asn_org} {asn_number}"
+            id += f" AS: {asn_org} {asn_number}"
 
         sni = ip_info.get("SNI", "")
         if sni:
             sni = sni[0] if isinstance(sni, list) else sni
-            id += f'SNI: {sni["server_name"]}, '
+            id += f' SNI: {sni["server_name"]}, '
 
         rdns = ip_info.get("reverse_dns", "")
         if rdns:
-            id += f"rDNS: {rdns}, "
+            id += f" rDNS: {rdns}, "
 
         threat_intel = ip_info.get("threatintelligence", "")
         if threat_intel and get_ti_data:
-            id += f"IP seen in blacklist: {threat_intel['source']}."
+            id += f" IP seen in blacklist: {threat_intel['source']}."
 
         id = id.rstrip(", ")
         return id
@@ -1205,7 +1205,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         :param org: supported orgs are ('google', 'microsoft', 'apple',
          'facebook', 'twitter')
         :param info_type: supported types are 'asn', 'domains'
-        " returns a json serialized dict with info
+        returns a json serialized dict with info
+        PS: All ASNs returned by this function are uppercase
         """
         return self.rcache.hget("OrgInfo", f"{org}_{info_type}") or "[]"
 
