@@ -43,7 +43,6 @@ https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_n
 https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/v3_domains.txt,medium, ['spyware']
 https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/v4_domains.txt,medium, ['spyware']
 https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/v4_validation_domains.txt,medium, ['spyware']
-https://www.spamhaus.org/drop/edrop.txt,medium, ['spam','malicious']
 https://www.spamhaus.org/drop/dropv6.txt,medium, ['spam','malicious']
 https://www.spamhaus.org/drop/drop.txt,medium, ['spam','malicious']
 https://raw.githubusercontent.com/Orange-Cyberdefense/russia-ukraine_IOCs/main/OCD-Datalake-russia-ukraine_IOCs-ALL.csv,medium, ['Russia-Ukraine IoCs']
