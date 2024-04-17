@@ -42,20 +42,26 @@ def test_sanitize_with_all_special_characters():
     expected_output = "Hello`world"
     assert utils.sanitize(input_string) == expected_output     
     
-def test_detect_data_type():
+@pytest.mark.parametrize("data, expected_type", [
+    ('192.168.1.100', 'ip'),
+    ('2001:0db8:85a3:0000:0000:8a2e:0370:7334', 'ip'),
+    ('192.168.0.0/16', 'ip_range'),
+    ('e10adc3949ba59abbe56e057f20f883e', 'md5'),
+    ('example.com', 'domain'),
+    ('http://example.com/some/path', 'url'),
+    ('AS12345', 'asn')
+])
+def test_detect_data_type(data, expected_type):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.detect_data_type('192.168.1.100') == 'ip'
-    assert utils.detect_data_type('2001:0db8:85a3:0000:0000:8a2e:0370:7334') == 'ip'
-    assert utils.detect_data_type('192.168.0.0/16') == 'ip_range'
-    assert utils.detect_data_type('e10adc3949ba59abbe56e057f20f883e') == 'md5'
-    assert utils.detect_data_type('example.com') == 'domain'
-    assert utils.detect_data_type('http://example.com/some/path') == 'url'
-    assert utils.detect_data_type('AS12345') == 'asn'
+    assert utils.detect_data_type(data) == expected_type
     
-def test_detect_data_type_with_invalid_data():
+@pytest.mark.parametrize("data, expected_type", [
+    ('999.999.999.999', None),
+    ('123456789abcdefg', None)
+])
+def test_detect_data_type_with_invalid_data(data, expected_type):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.detect_data_type('999.999.999.999') == None
-    assert utils.detect_data_type('123456789abcdefg') == None    
+    assert utils.detect_data_type(data) == expected_type   
     
 def test_get_first_octet():
     utils = ModuleFactory().create_utils_obj()
