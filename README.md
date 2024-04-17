@@ -1,5 +1,5 @@
-<h1 align="center"> 
-Slips v1.0.12
+<h1 align="center">
+Slips v1.0.13
 </h1>
 
 
@@ -56,7 +56,7 @@ Slips is a powerful endpoint behavioral intrusion prevention and detection syste
 
 
 # Introduction
-Slips is the first free software behavioral machine learning-based IDS/IPS for endpoints. It was created in 2012 by Sebastian Garcia at the Stratosphere Laboratory, AIC, FEE, Czech Technical University in Prague. The goal was to offer a local IDS/IPS that leverages machine learning to detect network attacks using behavioral analysis. 
+Slips is the first free software behavioral machine learning-based IDS/IPS for endpoints. It was created in 2012 by Sebastian Garcia at the Stratosphere Laboratory, AIC, FEE, Czech Technical University in Prague. The goal was to offer a local IDS/IPS that leverages machine learning to detect network attacks using behavioral analysis.
 
 
 Slips is supported on Linux and MacOS only. The blocking features of Slips are only supported on Linux
@@ -74,7 +74,7 @@ The recommended way to use Slips is on Docker.
 docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
 ```
 
-``` 
+```
 ./slips.py -f dataset/test7-malicious.pcap -o output_dir
 ```
 
@@ -88,7 +88,7 @@ cat output_dir/alerts.log
 docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
 ```
 
-``` 
+```
 ./slips.py -f dataset/test7-malicious.pcap -o output_dir
 ```
 
@@ -103,7 +103,7 @@ cat output_dir/alerts.log
 docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
 ```
 
-``` 
+```
 ./slips.py -f dataset/test7-malicious.pcap -o output_dir
 ```
 
@@ -120,8 +120,8 @@ cat output_dir/alerts.log
 
 # Graphical User Interface
 
-To check Slips output using a GUI you can use the web interface 
-or our command-line based interface Kalipso 
+To check Slips output using a GUI you can use the web interface
+or our command-line based interface Kalipso
 
 ##### Web interface
 
@@ -160,7 +160,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
     * On MacOS M1 host
       * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
     * On MacOS Intel processor
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors) 
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors)
       * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
@@ -175,7 +175,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
 
 # Extended Usage
 
-### Linux 
+### Linux
 
 ##### [Analyse your own traffic without P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#analyse-your-own-traffic)
 
@@ -210,7 +210,7 @@ Slips has a [config/slips.conf](https://github.com/stratosphereips/StratosphereL
 
 * You can change the timewindow width by modifying the ```time_window_width``` parameter
 * You can change the analysis direction to ```all```  if you want to see the attacks from and to your computer
-* You can also specify whether to ```train``` or ```test``` the ML models 
+* You can also specify whether to ```train``` or ```test``` the ML models
 
 * You can enable [popup notifications](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications) of evidence, enable [blocking](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-permissions), [plug in your own zeek script](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#plug-in-a-zeek-script) and more.
 
@@ -238,11 +238,11 @@ We welcome contributions to improve the functionality and features of Slips.
 
 Please read carefully the [contributing guidelines](https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html) for contributing to the development of Slips
 
-You can run Slips and report bugs, make feature requests, and suggest ideas, open a pull request with a solved GitHub issue and new feature, or open a pull request with a new detection module. 
+You can run Slips and report bugs, make feature requests, and suggest ideas, open a pull request with a solved GitHub issue and new feature, or open a pull request with a new detection module.
 
 The instructions to create a new detection module along with a template [here](https://stratospherelinuxips.readthedocs.io/en/develop/create_new_module.html).
 
-If you are a student, we encourage you to apply for the Google Summer of Code program that we participate in as a hosting organization. 
+If you are a student, we encourage you to apply for the Google Summer of Code program that we participate in as a hosting organization.
 
 Check [Slips in GSoC2023](https://github.com/stratosphereips/Google-Summer-of-Code-2023) for more information.
 
@@ -258,7 +258,7 @@ We appreciate your contributions and thank you for helping to improve Slips!
 
 # Troubleshooting
 
-If you can't listen to an interface without sudo, 
+If you can't listen to an interface without sudo,
 you can run the following command to let any user use Zeek to listen to an interface not just root.
 
 ```
@@ -267,9 +267,9 @@ sudo setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
 
 You can [join our conversations in Discord](https://discord.gg/zu5HwMFy5C) for questions and discussions.
 
-Or email us at 
-* sebastian.garcia@agents.fel.cvut.cz 
-* eldraco@gmail.com, 
+Or email us at
+* sebastian.garcia@agents.fel.cvut.cz
+* eldraco@gmail.com,
 * alyaggomaa@gmail.com
 
 # License
@@ -314,7 +314,7 @@ The following videos contain demos of Slips in action in various events:
 
 
 # Funding
-We are grateful for the generous support and funding provided by the following organizations: 
+We are grateful for the generous support and funding provided by the following organizations:
 
 
 - NlNet Foundation, https://nlnet.nl/
@@ -322,11 +322,7 @@ We are grateful for the generous support and funding provided by the following o
 - Avast, https://www.avast.com/
 - CESNET, https://www.cesnet.cz/
 - Google Summer of Code (2023, 2024), https://summerofcode.withgoogle.com/
- 
-Their funding has played a crucial role in the development and success of this project. 
+
+Their funding has played a crucial role in the development and success of this project.
 We sincerely appreciate their commitment to advancing technology and their recognition of
 the value Slips brings to the community.
-
-
-
-

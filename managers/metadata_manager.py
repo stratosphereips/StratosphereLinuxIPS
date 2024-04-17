@@ -1,4 +1,3 @@
-from slips_files.common.imports import *
 import socket
 import psutil
 import sys
@@ -10,6 +9,7 @@ import json
 from datetime import datetime
 from typing import Tuple, Set
 
+from slips_files.common.slips_utils import utils
 
 
 class MetadataManager:
@@ -124,7 +124,9 @@ class MetadataManager:
         save info about name, size, analysis start date in the db
         """
         now = utils.convert_format(datetime.now(), utils.alerts_format)
-        to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
+        to_ignore: dict = self.main.conf.get_disabled_modules(
+            self.main.input_type
+        )
         info = {
             "slips_version": self.main.version,
             "name": self.main.input_information,

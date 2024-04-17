@@ -18,17 +18,21 @@ from multiprocessing import (
 from typing import (
     List,
     Tuple,
+    Dict,
 )
 
 from exclusiveprocess import (
     Lock,
     CannotAcquireLock,
 )
+import multiprocessing
 
 import modules
 from modules.progress_bar.progress_bar import PBar
 from modules.update_manager.update_manager import UpdateManager
-from slips_files.common.imports import *
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
+
 from slips_files.common.style import green
 from slips_files.core.evidencehandler import EvidenceHandler
 from slips_files.core.input import Input
@@ -39,6 +43,9 @@ from slips_files.core.profiler import Profiler
 class ProcessManager:
     def __init__(self, main):
         self.main = main
+        # this will be set by main.py if slips is not daemonized,
+        # it'll be set to the children of main.py
+        self.processes: Dict[str, Process]
         # this is the queue that will be used by the input proces
         # to pass flows to the profiler
         self.profiler_queue = Queue()
@@ -51,7 +58,7 @@ class ProcessManager:
         # terminate slips.
         self.is_input_done = Semaphore(0)
         self.is_profiler_done = Semaphore(0)
-        # is set by the profiler process to indicat ethat it's done so
+        # is set by the profiler process to indicate that it's done so
         # input can shutdown no issue
         # now without this event, input process doesn't know that profiler
         # is still waiting for the queue to stop
@@ -63,7 +70,7 @@ class ProcessManager:
         # Pipe(False) means the pipe is unidirectional.
         # aka only msgs can go from output -> pbar and not vice versa
         # recv_pipe used only for receiving,
-        # send_pipe use donly for sending
+        # send_pipe used only for sending
         self.pbar_recv_pipe, self.output_send_pipe = Pipe(False)
         self.pbar_finished: Event = Event()
 
@@ -208,7 +215,7 @@ class ProcessManager:
         # Get the child processes of the current process
         try:
             process_list = os.popen(f"pgrep -P {pid}").read().splitlines()
-        except:
+        except Exception:
             process_list = []
 
         # Recursively kill the child processes
@@ -216,7 +223,12 @@ class ProcessManager:
             self.kill_process_tree(int(child_pid))
 
     def kill_all_children(self):
+        """
+        kills all processes that are not done
+        in self.processes and prints the name of stopped ones
+        """
         for process in self.processes:
+            process: Process
             module_name: str = self.main.db.get_name_of_module_at(process.pid)
             if not module_name:
                 # if it's a thread started by one of the modules or
@@ -383,7 +395,7 @@ class ProcessManager:
             f"\t{green(module)} \tStopped. " f"" f"{green(modules_left)} left."
         )
 
-    def start_update_manager(self, local_files=False, TI_feeds=False):
+    def start_update_manager(self, local_files=False, ti_feeds=False):
         """
         starts the update manager process
         PS; this function is blocking, slips.py will not start the rest of the
@@ -411,7 +423,7 @@ class ProcessManager:
                     update_manager.update_ports_info()
                     update_manager.update_org_files()
 
-                if TI_feeds:
+                if ti_feeds:
                     update_manager.print("Updating TI feeds")
                     asyncio.run(update_manager.update_ti_files())
 
@@ -480,8 +492,6 @@ class ProcessManager:
         to_kill_first: List[Process] = []
         to_kill_last: List[Process] = []
         for process in self.processes:
-            # if it's not to kill be killed last, then we need to kill
-            # it first :'D
             if process.pid in pids_to_kill_last:
                 to_kill_last.append(process)
             else:
@@ -632,19 +642,29 @@ class ProcessManager:
         # can't acquire the semaphore, processes are still running
         return False
 
-    def shutdown_daemon(self):
+    def kill_daemon_children(self):
         """
-        Shutdown slips modules in daemon mode
-        using the daemon's -s
+        kills the processes started by the daemon
         """
         # this method doesn't deal with self.processes bc they
         # aren't the daemon's children,
         # they are the children of the slips.py that ran using -D
         # (so they started on a previous run)
         # and we only have access to the PIDs
-        for module_name, pid in self.processes.items():
+        children = self.main.db.get_pids().items()
+        for module_name, pid in children:
             self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name)
+
+    def get_print_function(self):
+        """
+        returns the print() function to use based on the curr slips mode
+        because the daemon's print isn't the same as the normal slips' print()
+        """
+        if self.main.mode == "daemonized":
+            return self.main.daemon.print
+        else:
+            return self.main.print
 
     def shutdown_gracefully(self):
         """
@@ -652,9 +672,11 @@ class ProcessManager:
         or kill them after 15 mins
         """
         try:
+            print = self.get_print_function()
+
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
-            self.main.print("Stopping Slips")
+            print("Stopping Slips")
 
             # by default, 15 mins from this time, all modules should be killed
             method_start_time = time.time()
@@ -666,26 +688,21 @@ class ProcessManager:
             # close all tws
             self.main.db.check_tw_to_close(close_all=True)
             analysis_time = self.get_analysis_time()
-            self.main.print(
+            print(
                 f"Analysis of {self.main.input_information} "
                 f"finished in {analysis_time:.2f} minutes"
             )
 
             graceful_shutdown = True
             if self.main.mode == "daemonized":
-                self.processes: dict = self.main.db.get_pids()
-                self.shutdown_daemon()
-
+                self.kill_daemon_children()
                 profiles_len: int = self.main.db.get_profiles_len()
                 self.main.daemon.print(f"Total analyzed IPs: {profiles_len}.")
-
-                # if slips finished normally without stopping the daemon with -S
-                # then we need to delete the pidfile here
                 self.main.daemon.delete_pidfile()
 
             else:
                 flows_count: int = self.main.db.get_flows_count()
-                self.main.print(
+                print(
                     f"Total flows read (without altflows): " f"{flows_count}",
                     log_to_logfiles_only=True,
                 )
@@ -696,8 +713,8 @@ class ProcessManager:
                 to_kill_last: List[Process] = hitlist[1]
                 self.termination_event.set()
 
-                # to make sure we only warn the user once about the pending
-                # modules
+                # to make sure we only warn the user once about
+                # the pending modules
                 self.warning_printed_once = False
 
                 try:
@@ -720,9 +737,8 @@ class ProcessManager:
                     # or slips was stuck looping for too long that the OS
                     # sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
-                    reason = "User pressed ctr+c or slips was killed by the OS"
+                    reason = "User pressed ctr+c or Slips was killed by the OS"
                     graceful_shutdown = False
-                    pass
 
                 if time.time() - method_start_time >= timeout_seconds:
                     # getting here means we're killing them bc of the timeout
@@ -732,12 +748,11 @@ class ProcessManager:
                         f"Killing modules that took more than {timeout}"
                         f" mins to finish."
                     )
-                    self.main.print(reason)
+                    print(reason)
                     graceful_shutdown = False
 
                 self.kill_all_children()
 
-            # save redis database if '-s' is specified
             if self.main.args.save:
                 self.main.save_the_db()
 
@@ -747,7 +762,6 @@ class ProcessManager:
 
             self.output_send_pipe.close()
             self.pbar_recv_pipe.close()
-
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
             self.main.store_zeek_dir_copy()
@@ -756,14 +770,13 @@ class ProcessManager:
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
             self.main.db.close()
-
             if graceful_shutdown:
-                self.main.print(
+                print(
                     "[Process Manager] Slips shutdown gracefully\n",
                     log_to_logfiles_only=True,
                 )
             else:
-                self.main.print(
+                print(
                     f"[Process Manager] Slips didn't "
                     f"shutdown gracefully - {reason}\n",
                     log_to_logfiles_only=True,
