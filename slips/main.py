@@ -676,7 +676,7 @@ class Main(IObservable):
                 # starting the rest of the modules
                 self.proc_man.start_update_manager(
                     local_files=True,
-                    TI_feeds=self.conf.wait_for_TI_to_finish(),
+                    ti_feeds=self.conf.wait_for_TI_to_finish(),
                 )
                 self.print("Starting modules", 1, 0)
                 self.proc_man.load_modules()

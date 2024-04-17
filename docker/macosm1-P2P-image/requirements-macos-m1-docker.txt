@@ -24,7 +24,7 @@ pytest-mock
 pytest-xdist
 slackclient
 scipy
-scikit-learn
+sklearn
 GitPython
 protobuf
 blinker
@@ -34,7 +34,7 @@ pytest-dependency
 whois
 wheel
 flask
-tld
+tldextract
 tqdm
 termcolor
 viztracer
