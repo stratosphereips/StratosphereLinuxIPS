@@ -239,10 +239,12 @@ class VerticalPortscan:
                  totalflows: total flows seen by the profileid
                  totalpkt: total packets seen by the profileid
                  totalbytes: total bytes sent by the profileid
-                 stime: timestamp of the first flow seen from this profileid -> this dstip
+                 stime: timestamp of the first flow seen from this
+                        profileid -> this dstip
                  uid: list of uids where the given profileid was
                         contacting the dst_ip on this dstport
-                 dstports: dst ports seen in all flows where the given profileid was srcip
+                 dstports: dst ports seen in all flows where the given
+                            profileid was srcip
                      {
                          <str port>: < int spkts sent to this port>
                      }
