@@ -1,6 +1,6 @@
-# Contributing 
+# Contributing
 
-All contributions are welcomed, thank you for taking the time to contribute to this project! 
+All contributions are welcomed, thank you for taking the time to contribute to this project!
 These are a set of guidelines for contributing to the development of Slips [1].
 
 ## How can you contribute?
@@ -18,7 +18,7 @@ The following git branches in the Slips repository are permanent:
 
 ## Naming Git branches for Pull Requests
 
-To keep the Git history clean and facilitate the revision of contributions we 
+To keep the Git history clean and facilitate the revision of contributions we
 ask all branches to follow concise namings. These are the branch-naming patterns
 to follow when contributing to Slips:
 
@@ -49,20 +49,30 @@ Pull Requests:
 
 Here's a very simple beginner-level steps on how to create your PR in Slips
 
-1. Clone the Slips repo 
+1. Clone the Slips repo
 2. In your clone, checkout origin/develop: ```git checkout origin develop```
 3. Install slips pre-commit hooks ```pre-commit install```
 4. Generate a baseline for detecting secrets before they're committed ```detect-secrets scan --exclude-files ".*dataset/.*|(?x)(^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$)" > .secrets.baseline```
 3. Create your own branch off develop using your name and the feature name:  ```git checkout -b <yourname>_<feature_name> develop```
 4. Change the code, add the feature or fix the bug, etc. then commit with a descriptive msg ```git commit -m "descriptive msg here" ```
 5. Test your code: this is a very important step. you shouldn't open a PR with code that is not working: ```./tests/run_all_tests.sh```
-6. If some tests didn't pass, it means you need to fix something in your branch. 
-7. Push to your own repo: ```git push -u origin <yourname>_<feature_name>``` 
+6. If some tests didn't pass, it means you need to fix something in your branch.
+7. Push to your own repo: ```git push -u origin <yourname>_<feature_name>```
 8. Open a PR in Slips, remember to set the base branch as develop.
 9. List your changes in the PR description
 
-Some IDEs like [PyCharm](https://www.jetbrains.com/help/pycharm/work-with-github-pull-requests.html) and [vscode](https://levelup.gitconnected.com/how-to-create-a-pull-request-on-github-using-vs-code-f03db28308c4) have the option 
-to open a PR from within the IDE. 
+
+## Rejected PRs
+
+We will not review PRs that have the following:
+
+* Code that's not tested. a screenshot of the passed tests is required for each PR.
+* PRs without steps to reproduce your proposed changes.
+* Asking for a step by step guide on how to solve the problem. It is ok to ask us clarifications after putting some effort into reading the code and the docs. but asking how exactly should i do X shows that you didn't look at the code
+
+
+Some IDEs like [PyCharm](https://www.jetbrains.com/help/pycharm/work-with-github-pull-requests.html) and [vscode](https://levelup.gitconnected.com/how-to-create-a-pull-request-on-github-using-vs-code-f03db28308c4) have the option
+to open a PR from within the IDE.
 
 That's it, now you have a ready-to-merge PR!
 
