@@ -31,6 +31,7 @@ Slips v1.0.13
 - [Introduction](#introduction)
 - [Usage](#usage)
 - [GUI](#graphical-user-interface)
+- [Requirements](#requirements)
 - [Installation](#installation)
 - [Extended Usage](#extended-usage)
 - [Configuration](#configuration)
@@ -71,7 +72,7 @@ The recommended way to use Slips is on Docker.
 
 #### Linux
 ```
-docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
 ```
 
 ```
@@ -85,7 +86,7 @@ cat output_dir/alerts.log
 #### Macos M1
 
 ```
-docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
+docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
 ```
 
 ```
@@ -100,7 +101,7 @@ cat output_dir/alerts.log
 #### Macos Intel
 
 ```
-docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
 ```
 
 ```
@@ -145,6 +146,10 @@ For more info about the Kalipso interface, check the docs: https://stratospherel
 
 ---
 
+
+# Requirements
+
+Slips requires Python 3.8+ and at least 4 GBs of RAM to run smoothly.
 
 
 # Installation
