@@ -45,7 +45,25 @@ Pull Requests:
 - PRs won't be merged unless the checks pass.
 - The cleaner you code/change/changeset is, the faster it will be merged.
 
-## Beginner tips on how to create a PR in Slips
+
+## Testing 
+
+This is a very important step. You shouldn't open a PR with code that is not working
+
+Testing slips is done using the following command
+
+```./tests/run_all_tests.sh```
+
+Unit tests finish quickly, but integration tests take a while
+Integration tests run Slips on all files in the dataset/ directory and checks for errors and expected evidence
+
+The failing test will tell you exactly which file failed and the reason it did.
+
+Once all tests pass, feel free to open your PR.
+
+
+
+## Beginner tips on how to open a PR in Slips
 
 Here's a very simple beginner-level steps on how to create your PR in Slips
 
@@ -55,14 +73,14 @@ Here's a very simple beginner-level steps on how to create your PR in Slips
 4. Generate a baseline for detecting secrets before they're committed ```detect-secrets scan --exclude-files ".*dataset/.*|(?x)(^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$)" > .secrets.baseline```
 3. Create your own branch off develop using your name and the feature name:  ```git checkout -b <yourname>_<feature_name> develop```
 4. Change the code, add the feature or fix the bug, etc. then commit with a descriptive msg ```git commit -m "descriptive msg here" ```
-5. Test your code: this is a very important step. you shouldn't open a PR with code that is not working: ```./tests/run_all_tests.sh```
-6. If some tests didn't pass, it means you need to fix something in your branch. 
+6. If some tests don't pass, it means you need to fix something in your branch. 
 7. Push to your own repo: ```git push -u origin <yourname>_<feature_name>``` 
-8. Open a PR in Slips, remember to set the base branch as develop.
-9. List your changes in the PR description
+8. Open a PR in Slips, remember to set the base branch as ```develop```.
+9. Fill the PR template. 
 
 Some IDEs like [PyCharm](https://www.jetbrains.com/help/pycharm/work-with-github-pull-requests.html) and [vscode](https://levelup.gitconnected.com/how-to-create-a-pull-request-on-github-using-vs-code-f03db28308c4) have the option 
 to open a PR from within the IDE. 
+
 
 That's it, now you have a ready-to-merge PR!
 
