@@ -49,17 +49,18 @@ Pull Requests:
 
 Here's a very simple beginner-level steps on how to create your PR in Slips
 
-1. Clone the Slips repo
-2. In your clone, checkout origin/develop: ```git checkout origin develop```
-3. Install slips pre-commit hooks ```pre-commit install```
-4. Generate a baseline for detecting secrets before they're committed ```detect-secrets scan --exclude-files ".*dataset/.*|(?x)(^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$)" > .secrets.baseline```
-3. Create your own branch off develop using your name and the feature name:  ```git checkout -b <yourname>_<feature_name> develop```
-4. Change the code, add the feature or fix the bug, etc. then commit with a descriptive msg ```git commit -m "descriptive msg here" ```
-5. Test your code: this is a very important step. you shouldn't open a PR with code that is not working: ```./tests/run_all_tests.sh```
-6. If some tests didn't pass, it means you need to fix something in your branch.
-7. Push to your own repo: ```git push -u origin <yourname>_<feature_name>```
-8. Open a PR in Slips, remember to set the base branch as develop.
-9. List your changes in the PR description
+1. Fork the Slips repo
+2. Clone the forked repo
+3. In your clone, checkout origin/develop: ```git checkout origin develop```
+4. Install slips pre-commit hooks ```pre-commit install```
+5. Generate a baseline for detecting secrets before they're committed ```detect-secrets scan --exclude-files ".*dataset/.*|(?x)(^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$)" > .secrets.baseline```
+6. Create your own branch off develop using your name and the feature name:  ```git checkout -b <yourname>_<feature_name> develop```
+7. Change the code, add the feature or fix the bug, etc. then commit with a descriptive msg ```git commit -m "descriptive msg here" ```
+8. Test your code: this is a very important step. you shouldn't open a PR with code that is not working: ```./tests/run_all_tests.sh```
+9. If some tests didn't pass, it means you need to fix something in your branch.
+10. Push to your own repo: ```git push -u origin <yourname>_<feature_name>```
+11. Open a PR in Slips, remember to set the base branch as develop.
+12. List your changes in the PR description
 
 
 ## Rejected PRs
