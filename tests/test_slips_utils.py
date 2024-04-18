@@ -7,7 +7,16 @@ from dataclasses import dataclass
 from enum import Enum
 import sys
 import pytest
+import socket
 
+class MockFlow:
+    def __init__(self, proto, starttime, saddr, daddr, sport, dport):
+        self.proto = proto
+        self.starttime = starttime
+        self.saddr = saddr
+        self.daddr = daddr
+        self.sport = sport
+        self.dport = dport 
 
 def test_get_hash_from_file():
     utils = ModuleFactory().create_utils_obj()
@@ -25,22 +34,17 @@ def test_get_hash_from_file_permission_error():
     utils = ModuleFactory().create_utils_obj()
     with patch('builtins.open', side_effect=PermissionError):
         with pytest.raises(PermissionError):
-            utils.get_hash_from_file('restricted_file.txt')    
+            utils.get_hash_from_file('restricted_file.txt') 
 
-def test_sanitize():
+@pytest.mark.parametrize("input_string, expected_output", [
+    ("Hello; world `& |$(this", "Hello world ` this"),
+    ("This is a clean string", "This is a clean string")
+])
+def test_sanitize(input_string, expected_output):
     utils = ModuleFactory().create_utils_obj()
-    input_string = "Hello; world `& |$(this"
-    expected_output = "Hello world ` this"
-    assert utils.sanitize(input_string) == expected_output
-    input_string = "This is a clean string"
-    assert utils.sanitize(input_string) == input_string
-    
-def test_sanitize_with_all_special_characters():
-    utils = ModuleFactory().create_utils_obj()
-    special_chars = ";`&|$("
-    input_string = f"Hello{special_chars}world"
-    expected_output = "Hello`world"
-    assert utils.sanitize(input_string) == expected_output     
+    assert utils.sanitize(input_string) == expected_output               
+
+
     
 @pytest.mark.parametrize("data, expected_type", [
     ('192.168.1.100', 'ip'),
@@ -49,19 +53,13 @@ def test_sanitize_with_all_special_characters():
     ('e10adc3949ba59abbe56e057f20f883e', 'md5'),
     ('example.com', 'domain'),
     ('http://example.com/some/path', 'url'),
-    ('AS12345', 'asn')
-])
-def test_detect_data_type(data, expected_type):
-    utils = ModuleFactory().create_utils_obj()
-    assert utils.detect_data_type(data) == expected_type
-    
-@pytest.mark.parametrize("data, expected_type", [
+    ('AS12345', 'asn'),
     ('999.999.999.999', None),
     ('123456789abcdefg', None)
 ])
-def test_detect_data_type_with_invalid_data(data, expected_type):
+def test_detect_data_type(data, expected_type):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.detect_data_type(data) == expected_type   
+    assert utils.detect_data_type(data) == expected_type 
     
 def test_get_first_octet():
     utils = ModuleFactory().create_utils_obj()
@@ -73,21 +71,25 @@ def test_get_first_octet():
     #invalid IP address
     assert utils.get_first_octet('invalid') is None
     
-def test_calculate_confidence():
+@pytest.mark.parametrize("input_value, expected_output", [
+    (0, 0.3),
+    (5, 0.5),
+    (10, 1.0),
+    (15, 1.0),
+    (-5, -0.5),
+    (1000000, 1),
+    (sys.maxsize, 1.0)
+])
+def test_calculate_confidence(input_value, expected_output):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.calculate_confidence(0) == 0.3
-    assert utils.calculate_confidence(5) == 0.5
-    assert utils.calculate_confidence(10) == 1.0
-    assert utils.calculate_confidence(15) == 1.0
-    
-def test_calculate_confidence_with_negative_and_large_packet_counts():
-    utils = ModuleFactory().create_utils_obj()
-    assert utils.calculate_confidence(-5) == -0.5, "Confidence for negative packet counts should be 0\."
-    assert utils.calculate_confidence(1000000) == 1, "Confidence for large packet counts should be capped at 1."
-    
-def test_calculate_confidence_with_extreme_values():
-    utils = ModuleFactory().create_utils_obj()
-    assert utils.calculate_confidence(sys.maxsize) == 1.0, "Confidence should be capped at 1.0 for extremely large packet counts"            
+    assert utils.calculate_confidence(input_value) == expected_output
+
+    if input_value < 0:
+        assert utils.calculate_confidence(input_value) == -0.5, "Confidence for negative packet counts should be 0."
+    elif input_value > 1000000:
+        assert utils.calculate_confidence(input_value) == 1, "Confidence for large packet counts should be capped at 1."
+    elif input_value == sys.maxsize:
+        assert utils.calculate_confidence(input_value) == 1.0, "Confidence should be capped at 1.0 for extremely large packet counts"           
     
 def test_convert_format():
     utils = ModuleFactory().create_utils_obj()
@@ -104,20 +106,17 @@ def test_assert_microseconds():
     assert utils.assert_microseconds('1680788096.123456789') == '1680788096.123456789'
         
     
-def test_threat_level_to_string():
+@pytest.mark.parametrize("input_value, expected_output", [
+    (0.1, 'low'),
+    (0.4, 'medium'),
+    (0.5, 'medium'),
+    (0.7, 'high'),
+    (1.0, 'critical'),
+    (-1, 'info'),
+    (2, None)
+])
+def test_threat_level_to_string(input_value, expected_output):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.threat_level_to_string(0.1) == 'low'
-    assert utils.threat_level_to_string(0.4) == 'medium'
-    assert utils.threat_level_to_string(0.5) == 'medium'
-    assert utils.threat_level_to_string(0.7) == 'high'
-    assert utils.threat_level_to_string(1.0) == 'critical'
-
-
-def test_threat_level_to_string_outside_range():
-    utils = ModuleFactory().create_utils_obj()
-    assert utils.threat_level_to_string(-1) == 'info'  
-    assert utils.threat_level_to_string(2) == None
-               
 
 def test_is_private_ip():
     utils = ModuleFactory().create_utils_obj()
@@ -129,79 +128,69 @@ def test_is_private_ip():
     assert not utils.is_private_ip(ipaddress.ip_address('255.255.255.255'))
        
     
-def test_remove_milliseconds_decimals():
+@pytest.mark.parametrize("timestamp, expected_result", [
+    ('1680788096.789', '1680788096'),
+    ('1680788096', '1680788096'),
+    ('1680788096.', '1680788096')
+])
+def test_remove_milliseconds_decimals(timestamp, expected_result):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.remove_milliseconds_decimals('1680788096.789') == '1680788096'
-    assert utils.remove_milliseconds_decimals('1680788096') == '1680788096'
-
-def test_remove_milliseconds_decimals_no_digits_after_decimal():
-    utils = ModuleFactory().create_utils_obj()
-    timestamp = "1680788096."
-    assert utils.remove_milliseconds_decimals(timestamp) == "1680788096", "Should remove the decimal point when no digits after it"    
+    result = utils.remove_milliseconds_decimals(timestamp)
+    assert result == expected_result, f"Expected {expected_result}, but got {result}"
     
-def test_get_time_diff():
+@pytest.mark.parametrize("start_time, end_time, return_type, expected_result", [
+    (1609459200, 1609545600, "days", 1),
+    (1609459200, 1609545600, "hours", 24),
+    (1609545600, 1609459200, "seconds", lambda result: result < 0),
+    (1609459200.0, 1609459200.1, "seconds", 0.1)
+])
+def test_get_time_diff(start_time, end_time, return_type, expected_result):
     utils = ModuleFactory().create_utils_obj()
-    start_time = 1609459200  
-    end_time = 1609545600  
-    assert utils.get_time_diff(start_time, end_time, return_type="days") == 1
-    assert utils.get_time_diff(start_time, end_time, return_type="hours") == 24
+    result = utils.get_time_diff(start_time, end_time, return_type)
+    if callable(expected_result):
+        assert expected_result(result), f"Expected the result to satisfy the condition, but got {result}"
+    else:
+        assert result == expected_result, f"Expected {expected_result}, but got {result}"                               
     
-def test_get_time_diff_negative_difference():
+@pytest.mark.parametrize("seconds, expected_timedelta", [
+    (3600, datetime.timedelta(seconds=3600)),
+    (86400, datetime.timedelta(days=1)),
+    (-3600, datetime.timedelta(seconds=-3600)),
+    (31536000, datetime.timedelta(days=365))
+])
+def test_to_delta(seconds, expected_timedelta):
     utils = ModuleFactory().create_utils_obj()
-    start_time = 1609545600  
-    end_time = 1609459200  
-    assert utils.get_time_diff(start_time, end_time, "seconds") < 0, "Should handle negative time differences"
-
-def test_get_time_diff_small_difference():
-    utils = ModuleFactory().create_utils_obj()
-    start_time = 1609459200.0
-    end_time = 1609459200.1  
-    assert utils.get_time_diff(start_time, end_time, "seconds") == 0.1, "Should handle very small time differences with precision"                                    
-    
-def test_to_delta():
-    utils = ModuleFactory().create_utils_obj()
-    assert utils.to_delta(3600) == datetime.timedelta(seconds=3600) 
-    assert utils.to_delta(86400) == datetime.timedelta(days=1)
-    
-def test_to_delta_negative_seconds():
-    utils = ModuleFactory().create_utils_obj()
-    negative_seconds = -3600
-    assert utils.to_delta(negative_seconds) == datetime.timedelta(seconds=-3600), "Should correctly handle negative seconds"
-
-def test_to_delta_large_number_of_seconds():
-    utils = ModuleFactory().create_utils_obj()
-    large_seconds = 31536000  
-    assert utils.to_delta(large_seconds) == datetime.timedelta(days=365), "Should handle large number of seconds"      
+    result = utils.to_delta(seconds)
+    assert result == expected_timedelta, f"Expected {expected_timedelta}, but got {result}"      
  
     
-def test_get_own_IPs():
+@pytest.mark.parametrize("side_effect, expected_result", [
+    (None, lambda utils: isinstance(utils.get_own_IPs(), list)),
+    (requests.exceptions.ConnectionError, lambda utils: "127.0.0.1" in utils.get_own_IPs() or not utils.get_own_IPs()),
+    (requests.exceptions.RequestException, lambda utils: "127.0.0.1" in utils.get_own_IPs() or not utils.get_own_IPs())
+])
+def test_get_own_IPs(side_effect, expected_result):
     utils = ModuleFactory().create_utils_obj()
-    assert isinstance(utils.get_own_IPs(), list)
-    
-def test_get_own_IPs_no_network_connection():
-    with patch('requests.get', side_effect=requests.exceptions.ConnectionError):
-        utils = ModuleFactory().create_utils_obj()
-        assert "127.0.0.1" in utils.get_own_IPs() or not utils.get_own_IPs(), "Should handle no network connection gracefully"
-        
-def test_get_own_IPs_with_network_failures():
-    with patch('requests.get', side_effect=requests.exceptions.RequestException):
-        utils = ModuleFactory().create_utils_obj()
-        assert "127.0.0.1" in utils.get_own_IPs() or not utils.get_own_IPs(), "Should handle network failures gracefully"                
+    if side_effect:
+        with patch('requests.get', side_effect=side_effect):
+            assert expected_result(utils), "Should handle the situation gracefully"
+    else:
+        assert expected_result(utils), "Should return a list of IPs"         
     
     
-def test_is_port_in_use():
+@pytest.mark.parametrize("port", [80, 65535, 0])
+def test_is_port_in_use(port):
     utils = ModuleFactory().create_utils_obj()
-    assert isinstance(utils.is_port_in_use(80), bool)
-    assert isinstance(utils.is_port_in_use(65535), bool)
+    assert isinstance(utils.is_port_in_use(port), bool)
 
-def test_is_port_in_use_with_known_used_port():
-    utils = ModuleFactory().create_utils_obj()
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as temp_socket:
-        temp_socket.bind(('localhost', 0))  
-        temp_socket.listen(1)  
-        port = temp_socket.getsockname()[1]
-        assert utils.is_port_in_use(port) is True, "The port should be identified as in use."     
+    if port != 0:
+        assert utils.is_port_in_use(port) is False, f"The port {port} should not be identified as in use."
+    else:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as temp_socket:
+            temp_socket.bind(('localhost', 0))
+            temp_socket.listen(1)
+            used_port = temp_socket.getsockname()[1]
+            assert utils.is_port_in_use(used_port) is True, "The port should be identified as in use." 
     
 def test_is_valid_threat_level():
     utils = ModuleFactory().create_utils_obj()
@@ -249,39 +238,14 @@ class MockEnum(Enum):
     TYPE1 = "Type 1"
     TYPE2 = "Type 2"
 
-def test_to_json_serializable_dataclass():
+@pytest.mark.parametrize("input_value, expected_output", [
+    (MockDataClass(id=1, name="Test"), {"id": 1, "name": "Test"}),
+    (MockEnum.TYPE1, "Type 1"),
+    ({"key1": MockDataClass(id=2, name="Nested"), "key2": [MockEnum.TYPE1, MockEnum.TYPE2]}, {"key1": {"id": 2, "name": "Nested"}, "key2": ["Type 1", "Type 2"]})
+])
+def test_to_json_serializable(input_value, expected_output):
     utils = ModuleFactory().create_utils_obj()
-    data_class_instance = MockDataClass(id=1, name="Test")
-    expected_output = {"id": 1, "name": "Test"}
-    assert utils.to_json_serializable(data_class_instance) == expected_output, "Dataclass conversion to JSON serializable failed."
-
-def test_to_json_serializable_enum():
-    utils = ModuleFactory().create_utils_obj()
-    enum_instance = MockEnum.TYPE1
-    expected_output = "Type 1"
-    assert utils.to_json_serializable(enum_instance) == expected_output, "Enum conversion to JSON serializable failed."
-
-def test_to_json_serializable_nested_structure():
-    utils = ModuleFactory().create_utils_obj()
-    nested_structure = {
-        "key1": MockDataClass(id=2, name="Nested"),
-        "key2": [MockEnum.TYPE1, MockEnum.TYPE2]
-    }
-    expected_output = {
-        "key1": {"id": 2, "name": "Nested"},
-        "key2": ["Type 1", "Type 2"]
-    }
-    assert utils.to_json_serializable(nested_structure) == expected_output, "Nested structure conversion to JSON serializable failed."
-    
- 
-class MockFlow:
-    def __init__(self, proto, starttime, saddr, daddr, sport, dport):
-        self.proto = proto
-        self.starttime = starttime
-        self.saddr = saddr
-        self.daddr = daddr
-        self.sport = sport
-        self.dport = dport    
+     
     
 def test_get_aid():
     utils = ModuleFactory().create_utils_obj()
@@ -303,16 +267,16 @@ def test_convert_to_datetime_around_dst():
     result = utils.convert_to_datetime(any_date)
     assert isinstance(result, datetime.datetime), "Should convert string to datetime object."
 
-def test_get_cidr_of_private_ip_with_valid_private_ip():
+@pytest.mark.parametrize("input_ip, expected_cidr", [
+    ('192.168.1.1', '192.168.0.0/16'),
+    ('10.0.0.1', '10.0.0.0/8'),
+    ('172.16.0.1', '172.16.0.0/12'),
+    ('invalid_ip', None),
+    ('256.100.50.25', None)
+])
+def test_get_cidr_of_private_ip(input_ip, expected_cidr):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.get_cidr_of_private_ip('192.168.1.1') == '192.168.0.0/16'
-    assert utils.get_cidr_of_private_ip('10.0.0.1') == '10.0.0.0/8'
-    assert utils.get_cidr_of_private_ip('172.16.0.1') == '172.16.0.0/12'
-
-def test_get_cidr_of_private_ip_with_invalid_ip_formats():
-    utils = ModuleFactory().create_utils_obj()
-    assert utils.get_cidr_of_private_ip('invalid_ip') is None
-    assert utils.get_cidr_of_private_ip('256.100.50.25') is None
+    assert utils.get_cidr_of_private_ip(input_ip) == expected_cidr
     
 @patch('os.setresgid')
 @patch('os.setresuid')
