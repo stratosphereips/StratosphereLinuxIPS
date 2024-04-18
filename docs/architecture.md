@@ -108,6 +108,17 @@ The SQLite database is stored in the output/ dir and each flow is labeled to eit
 all the labeled flows in the SQLite database can be exported to tsv or json format.
 
 
+### Time windows
+
+Slips splits the given traffic into time windows. each window is 1 hour by default. 
+
+Detections are made per timewindow in Slips. which means that 
+if an IP is detected as malicious by Slips, Slips consider the entire timewindow as malicious. This adds the flexibility of having IPs detected as malicious in 1 hour, and giving them a second chance in the next hour by detecting them as benign as long as there's not enough evidence to detect them as malicious.
+
+In some traffic, Slips encounters very old flows with timestamps older than the first time stamp seen in the given traffic (aka timewindow 1). In this case, Slips creates a negative timewindow for this flow. negative timewindows start from 0 backwards (0,-1,-2, etc..)
+
+
+
 ### Threat Levels  
 
 Slips has 4 threat levels.
