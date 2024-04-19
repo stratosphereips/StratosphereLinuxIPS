@@ -270,7 +270,7 @@ class ThreatIntel(IModule, URLhaus):
 
         self.db.set_evidence(evidence)
 
-    def set_evidence_malicious_ip_in_dns_response(
+    def set_evidence_blacklisted_ip_in_dns_response(
         self,
         ip: str,
         uid: str,
@@ -375,7 +375,7 @@ class ThreatIntel(IModule, URLhaus):
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(ip, profileid, twid)
 
-    def set_evidence_malicious_ip(
+    def set_evidence_blacklisted_ip(
         self,
         ip: str,
         uid: str,
@@ -386,8 +386,8 @@ class ThreatIntel(IModule, URLhaus):
         twid: str = "",
         ip_state: str = "",
     ):
-        """Records evidence of traffic involving a malicious IP address within a
-        specified time window.
+        """
+        Records evidence of traffic involving a malicious IP address within a specified time window.
 
         Parameters:
             ip (str): The IP address under scrutiny.
@@ -1506,7 +1506,7 @@ class ThreatIntel(IModule, URLhaus):
                 # ip was found in one of the blacklisted ranges
                 ip_info = self.db.get_malicious_ip_ranges()[range]
                 ip_info = json.loads(ip_info)
-                self.set_evidence_malicious_ip(
+                self.set_evidence_blacklisted_ip(
                     ip,
                     uid,
                     daddr,
@@ -1603,7 +1603,7 @@ class ThreatIntel(IModule, URLhaus):
 
         self.db.add_ips_to_IoC({ip: json.dumps(ip_info)})
         if is_dns_response:
-            self.set_evidence_malicious_ip_in_dns_response(
+            self.set_evidence_blacklisted_ip_in_dns_response(
                 ip,
                 uid,
                 timestamp,
@@ -1613,7 +1613,7 @@ class ThreatIntel(IModule, URLhaus):
                 twid,
             )
         else:
-            self.set_evidence_malicious_ip(
+            self.set_evidence_blacklisted_ip(
                 ip,
                 uid,
                 daddr,
