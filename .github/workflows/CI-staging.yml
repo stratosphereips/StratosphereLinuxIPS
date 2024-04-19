@@ -74,9 +74,10 @@ jobs:
 
     - name: Integration tests
       run: |
-        coverage run --source=./ -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
-        coverage report --include="dataset/*"
-        coverage html --include="dataset/*" -d coverage_reports/dataset
+        python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
+#        coverage run --source=./ -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
+#        coverage report --include="dataset/*"
+#        coverage html --include="dataset/*" -d coverage_reports/dataset
 
     - name: Flowalerts test
       run: |
