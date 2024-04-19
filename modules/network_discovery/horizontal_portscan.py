@@ -1,5 +1,7 @@
 import ipaddress
 
+import validators
+
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
@@ -207,17 +209,32 @@ class HorizontalPortscan:
 
         self.db.set_evidence(evidence)
 
-    def check(self, profileid: str, twid: str):
+    @staticmethod
+    def is_valid_saddr(profileid: str):
+        """
+        to avoid reporting port scans on the
+        broadcast or multicast addresses or invalid values
+        """
         saddr = profileid.split("_")[1]
-        try:
+        if saddr == "255.255.255.255":
+            return False
+
+        if validators.ipv4(saddr) or validators.ipv6(saddr):
             saddr_obj = ipaddress.ip_address(saddr)
-            if saddr == "255.255.255.255" or saddr_obj.is_multicast:
-                # don't report port scans on the
-                # broadcast or multicast addresses
-                return False
-        except ValueError:
-            # it's a mac
-            pass
+            return not saddr_obj.is_multicast
+
+        if validators.mac_address(saddr):
+            return True
+
+        return False
+
+    @staticmethod
+    def is_valid_twid(twid: str) -> bool:
+        return not (twid in ("", None) or "timewindow" not in twid)
+
+    def check(self, profileid: str, twid: str):
+        if not self.is_valid_saddr(profileid) or not self.is_valid_twid(twid):
+            return False
 
         # if you're portscaning a port that is open it's gonna be established
         # the amount of open ports we find is gonna be so small
