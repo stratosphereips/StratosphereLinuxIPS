@@ -19,61 +19,11 @@ from slips_files.core.evidence_structure.evidence import (
 class HorizontalPortscan:
     def __init__(self, db):
         self.db = db
-        # We need to know that after a detection, if we receive another flow
-        # that does not modify the count for the detection, we are not
-        # re-detecting again only because the threshold was overcomed last time.
+        # to keep track of the max dports reported per timewindow
         self.cached_thresholds_per_tw = {}
-        # the separator used to separate the IP and the word profile
-        self.fieldseparator = self.db.get_field_separator()
-
-        # The minimum amount of ips to scan horizontal scan
+        # The minimum amount of scanned dstips to trigger an evidence
+        # is increased exponentially every evidence, and is reset each timewindow
         self.minimum_dstips_to_set_evidence = 5
-        self.pending_horizontal_ps_evidence = {}
-        # we should alert once we find 1 horizontal ps evidence
-        # then combine the rest of evidence every x seconds
-        # format is { scanned_port: True/False , ...}
-        self.alerted_once_horizontal_ps = {}
-
-    def combine_evidence(self):
-        """
-        Combines all the evidence in pending_horizontal_ps_evidence
-        into 1 evidence and calls set_evidence
-        this function is called every 3 pending ev
-        """
-        for key, evidence_list in self.pending_horizontal_ps_evidence.items():
-            # each key here is {profileid}-{twid}-{state}-{protocol}-{dport}
-            # each value here is a list of evidence that should be combined
-            profileid, twid, state, protocol, dport = key.split("-")
-            final_evidence_uids = []
-            final_pkts_sent = 0
-            # combine all evidence that share the above key
-            for evidence in evidence_list:
-                # each evidence is a tuple of
-                # (timestamp, pkts_sent, uids, amount_of_dips)
-                # in the final evidence, we'll be using the
-                # ts of the last evidence
-                timestamp, pkts_sent, evidence_uids, amount_of_dips = evidence
-                # since we're combining evidence, we want the uids
-                # of the final evidence
-                # to be the sum of all the evidence we combined
-                final_evidence_uids += evidence_uids
-                final_pkts_sent += pkts_sent
-
-            evidence = {
-                "protocol": protocol,
-                "profileid": profileid,
-                "twid": twid,
-                "uids": final_evidence_uids,
-                "dport": dport,
-                "pkts_sent": final_pkts_sent,
-                "timestamp": timestamp,
-                "state": state,
-                "amount_of_dips": amount_of_dips,
-            }
-
-            self.set_evidence_horizontal_portscan(evidence)
-        # reset the dict since we already combined the evidence
-        self.pending_horizontal_ps_evidence = {}
 
     def get_resolved_ips(self, dstips: dict) -> list:
         """
@@ -127,9 +77,10 @@ class HorizontalPortscan:
         )
         return dports
 
-    def get_cache_key(self, profileid: str, twid: str, dport) -> str:
+    def get_twid_identifier(self, profileid: str, twid: str, dport) -> str:
         if not dport:
             return False
+
         return f"{profileid}:{twid}:dport:{dport}"
 
     def get_packets_sent(self, dstips: dict) -> int:
@@ -160,10 +111,8 @@ class HorizontalPortscan:
         return dstips >= self.minimum_dstips_to_set_evidence
 
     def are_ips_greater_or_eq_last_evidence(
-            self,
-            dstips: int,
-            ips_reported_last_evidence: int
-        ) -> bool:
+        self, dstips: int, ips_reported_last_evidence: int
+    ) -> bool:
         """
         Makes sure the amount of dports reported
          each evidence is higher than the previous one +15
@@ -184,8 +133,9 @@ class HorizontalPortscan:
     def should_set_evidence(self, dstips: int, twid_threshold: int) -> bool:
         return (
             self.are_dstips_greater_or_eq_minimum_dstipsdstips
-            and
-            self.are_ips_greater_or_eq_last_evidence(dstips, twid_threshold)
+            and self.are_ips_greater_or_eq_last_evidence(
+                dstips, twid_threshold
+            )
         )
 
     def check_if_enough_dstips_to_trigger_an_evidence(
@@ -197,9 +147,7 @@ class HorizontalPortscan:
         to make sure the amount of scanned dst ips reported each
         evidence is higher than the previous one +15
         """
-        twid_threshold = self.cached_thresholds_per_tw.get(
-            twid_identifier, 0
-            )
+        twid_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
 
         if self.should_set_evidence(amount_of_dips, twid_threshold):
             self.cached_thresholds_per_tw[twid_identifier] = amount_of_dips
@@ -217,55 +165,6 @@ class HorizontalPortscan:
                 uids.append(uid)
         return uids
 
-
-
-    def decide_if_time_to_set_evidence_or_combine(
-        self, evidence: dict, cache_key: str
-    ) -> bool:
-        """
-        sets the evidence immediately if it was the
-            first portscan evidence in this tw
-            or combines past 3
-            evidence and then sets an evidence.
-        :return: True if evidence was set/combined,
-            False if evidence was queued for combining later
-        """
-
-        if not self.alerted_once_horizontal_ps.get(cache_key, False):
-            self.alerted_once_horizontal_ps[cache_key] = True
-            self.set_evidence_horizontal_portscan(evidence)
-            #  from now on, we will be combining the next horizontal
-            #  ps evidence targeting this
-            # dport
-            return True
-
-        # we will be combining further alerts to avoid alerting
-        # many times every portscan
-        evidence_details = (
-            evidence["timestamp"],
-            evidence["pkts_sent"],
-            evidence["uids"],
-            evidence["amount_of_dips"],
-        )
-        # for all the combined alerts, the following params should be equal
-        key = (
-            f'{evidence["profileid"]}-{evidence["twid"]}-'
-            f'{evidence["state"]}-{evidence["protocol"]}-'
-            f'{evidence["dport"]}'
-        )
-
-        try:
-            self.pending_horizontal_ps_evidence[key].append(evidence_details)
-        except KeyError:
-            # first time seeing this key
-            self.pending_horizontal_ps_evidence[key] = [evidence_details]
-
-        # combine evidence every 3 new portscans to the same dport
-        if len(self.pending_horizontal_ps_evidence[key]) == 3:
-            self.combine_evidence()
-            return True
-        return False
-
     def set_evidence_horizontal_portscan(self, evidence: dict):
         threat_level = ThreatLevel.HIGH
         confidence = utils.calculate_confidence(evidence["pkts_sent"])
@@ -279,7 +178,7 @@ class HorizontalPortscan:
         description = (
             f"Horizontal port scan to port {port_info} {portproto}. "
             f'From {srcip} to {evidence["amount_of_dips"]} '
-            f'unique destination IPs. '
+            f"unique destination IPs. "
             f'Total packets sent: {evidence["pkts_sent"]}. '
             f"Confidence: {confidence}. by Slips"
         )
@@ -305,9 +204,8 @@ class HorizontalPortscan:
 
         self.db.set_evidence(evidence)
 
-
     def check(self, profileid: str, twid: str):
-        saddr = profileid.split(self.fieldseparator)[1]
+        saddr = profileid.split("_")[1]
         try:
             saddr_obj = ipaddress.ip_address(saddr)
             if saddr == "255.255.255.255" or saddr_obj.is_multicast:
@@ -339,7 +237,9 @@ class HorizontalPortscan:
                 for ip in self.get_resolved_ips(dstips):
                     dstips.pop(ip)
 
-                twid_identifier: str = self.get_cache_key(profileid, twid, dport)
+                twid_identifier: str = self.get_twid_identifier(
+                    profileid, twid, dport
+                )
                 if not twid_identifier:
                     continue
                 amount_of_dips = len(dstips)
@@ -359,6 +259,4 @@ class HorizontalPortscan:
                         "amount_of_dips": amount_of_dips,
                     }
 
-                    self.set_evidence_horizontal_portscan(
-                        evidence
-                    )
+                    self.set_evidence_horizontal_portscan(evidence)

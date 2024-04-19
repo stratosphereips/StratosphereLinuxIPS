@@ -94,14 +94,12 @@ class VerticalPortscan:
 
         self.db.set_evidence(evidence)
 
-
     def are_dports_greater_or_eq_minimum_dports(self, dports: int) -> bool:
         return dports >= self.minimum_dports_to_set_evidence
 
-
     @staticmethod
     def are_dports_greater_or_eq_last_evidence(
-         dports: int, ports_reported_last_evidence: int
+        dports: int, ports_reported_last_evidence: int
     ) -> bool:
         """
          To make sure the amount of dports reported
@@ -127,15 +125,11 @@ class VerticalPortscan:
          have so many portscan evidence
 
         """
-        return (
-                self.are_dports_greater_or_eq_minimum_dports(dports)
-                and
-                self.are_dports_greater_or_eq_last_evidence(
-                    dports,
-                    twid_threshold
-                )
+        return self.are_dports_greater_or_eq_minimum_dports(
+            dports
+        ) and self.are_dports_greater_or_eq_last_evidence(
+            dports, twid_threshold
         )
-
 
     def check_if_enough_dports_to_trigger_an_evidence(
         self, twid_identifier: str, amount_of_dports: int
@@ -147,7 +141,7 @@ class VerticalPortscan:
         """
         twid_threshold: int = self.cached_thresholds_per_tw.get(
             twid_identifier, 0
-            )
+        )
 
         if self.should_set_evidence(amount_of_dports, twid_threshold):
             # keep track of the max reported dstips
@@ -155,7 +149,6 @@ class VerticalPortscan:
             self.cached_thresholds_per_tw[twid_identifier] = amount_of_dports
             return True
         return False
-
 
     def get_not_established_dst_ips(
         self, protocol: str, state: str, profileid: str, twid: str
@@ -193,10 +186,11 @@ class VerticalPortscan:
         )
         return dstips
 
-
-    def get_cache_key(self, profileid: str, twid: str, dstip: str) -> str:
+    def get_twid_identifier(
+        self, profileid: str, twid: str, dstip: str
+    ) -> str:
         """
-        returns the key that identifies this vertical portscan in thhe
+        returns the key that identifies this vertical portscan in the
         given tw
         """
         return f"{profileid}:{twid}:dstip:{dstip}"
@@ -227,7 +221,7 @@ class VerticalPortscan:
                 pkts_sent = sum(dst_ports[dport] for dport in dst_ports)
                 amount_of_dports = len(dst_ports)
 
-                twid_identifier: str = self.get_cache_key(
+                twid_identifier: str = self.get_twid_identifier(
                     profileid, twid, dstip
                 )
                 if self.check_if_enough_dports_to_trigger_an_evidence(
