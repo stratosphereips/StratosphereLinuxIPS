@@ -94,6 +94,48 @@ class VerticalPortscan:
 
         self.db.set_evidence(evidence)
 
+
+    def is_dports_greater_or_eq_minimum_dports(self, dports: int) -> bool:
+        return dports >= self.port_scan_minimum_dports
+
+
+    @staticmethod
+    def is_dports_greater_or_eq_last_evidence(
+         dports: int, ports_reported_last_evidence: int
+    ) -> bool:
+        """
+         To make sure the amount of dports reported
+         each evidence is higher than the previous one +15
+         so the first alert will always report 5
+         dports, and then 20+,35+. etc
+        :param dports: dports scanned in the current evidence
+        :param ports_reported_last_evidence: the amount of
+            ports reported in the last evidence in the current
+            evidence's timewindow
+        """
+        return dports >= ports_reported_last_evidence + 15
+
+    def should_set_evidence(self, dports: int, twid_threshold: int):
+        """
+        Makes sure the given dports are more than the minimum dports number
+        we should alert on, and that is it more than the dports of
+        the last evidence
+
+        The goal is to never get an evidence that's
+         1 or 2 ports more than the previous one so we dont
+         have so many portscan evidence
+
+        """
+        return (
+                self.is_dports_greater_or_eq_minimum_dports(dports)
+                and
+                self.is_dports_greater_or_eq_last_evidence(
+                    dports,
+                    twid_threshold
+                )
+        )
+
+
     def check_if_enough_dports_to_trigger_an_evidence(
         self, twid_identifier: str, amount_of_dports: int
     ) -> bool:
@@ -103,18 +145,7 @@ class VerticalPortscan:
         is higher than the previous one +15
         """
         twid_threshold: int = self.cached_thresholds_per_tw.get(twid_identifier)
-        # we make sure the amount of dports reported
-        # each evidence is higher than the previous one +15
-        # so the first alert will always report 5
-        # dports, and then 20+,35+. etc
-
-        # the goal is to never get an evidence that's
-        # 1 or 2 ports more than the previous one so we dont
-        # have so many portscan evidence
-        if (
-            amount_of_dports >= self.port_scan_minimum_dports
-            and twid_threshold + 15 <= amount_of_dports
-        ):
+        if self.should_set_evidence(amount_of_dports, twid_threshold):
             # keep track of the max reported dstips in the last evidence in this twid
             self.cached_thresholds_per_tw[twid_identifier] = amount_of_dports
             return True
