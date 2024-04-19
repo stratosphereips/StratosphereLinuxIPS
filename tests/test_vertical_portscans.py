@@ -202,7 +202,7 @@ def test_check_if_enough_dports_to_trigger_an_evidence(
     vertical_ps = ModuleFactory().create_vertical_portscan_obj(mock_db)
 
     key: str = vertical_ps.get_cache_key(profileid, timewindow, dstip)
-    vertical_ps.cached_tw_thresholds[key] = prev_amount_of_dports
+    vertical_ps.cached_thresholds_per_tw[key] = prev_amount_of_dports
 
     enough: bool = vertical_ps.check_if_enough_dports_to_trigger_an_evidence(
         key, cur_amount_of_dports

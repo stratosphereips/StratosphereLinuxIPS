@@ -70,7 +70,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence(
     horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
 
     key: str = horizontal_ps.get_cache_key(profileid, timewindow, dport)
-    horizontal_ps.cached_tw_thresholds[key] = prev_amount_of_dstips
+    horizontal_ps.cached_thresholds_per_tw[key] = prev_amount_of_dstips
 
     enough: bool = horizontal_ps.check_if_enough_dstips_to_trigger_an_evidence(
         key, cur_amount_of_dstips
