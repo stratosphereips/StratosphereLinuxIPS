@@ -106,12 +106,12 @@ class HorizontalPortscan:
                 pkts_sent += int(dstips[dstip]["spkts"])
         return pkts_sent
 
-    @staticmethod
-    def are_dstips_greater_or_eq_minimum_dstipsdstips(self, dstips):
+    def are_dstips_greater_or_eq_minimum_dstips(self, dstips) -> bool:
         return dstips >= self.minimum_dstips_to_set_evidence
 
+    @staticmethod
     def are_ips_greater_or_eq_last_evidence(
-        self, dstips: int, ips_reported_last_evidence: int
+        dstips: int, ips_reported_last_evidence: int
     ) -> bool:
         """
         Makes sure the amount of dports reported
@@ -127,16 +127,19 @@ class HorizontalPortscan:
         # the goal is to never get an evidence that's 1 or 2 ports
         #  more than the previous one so we dont have so many
         #  portscan evidence
+        if ips_reported_last_evidence == 0:
+            # first portscan evidence in this threshold, no past evidence
+            # to compare with
+            return True
 
         return dstips >= ips_reported_last_evidence + 15
 
     def should_set_evidence(self, dstips: int, twid_threshold: int) -> bool:
-        return (
-            self.are_dstips_greater_or_eq_minimum_dstipsdstips
-            and self.are_ips_greater_or_eq_last_evidence(
-                dstips, twid_threshold
-            )
+        more_than_min = self.are_dstips_greater_or_eq_minimum_dstips(dstips)
+        exceeded_twid_threshold = self.are_ips_greater_or_eq_last_evidence(
+            dstips, twid_threshold
         )
+        return more_than_min and exceeded_twid_threshold
 
     def check_if_enough_dstips_to_trigger_an_evidence(
         self, twid_identifier: str, amount_of_dips: int

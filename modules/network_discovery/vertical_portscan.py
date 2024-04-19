@@ -112,6 +112,10 @@ class VerticalPortscan:
             ports reported in the last evidence in the current
             evidence's timewindow
         """
+        if ports_reported_last_evidence == 0:
+            # first portscan evidence in this threshold, no past evidence
+            # to compare with
+            return True
         return dports >= ports_reported_last_evidence + 15
 
     def should_set_evidence(self, dports: int, twid_threshold: int) -> bool:
@@ -123,13 +127,12 @@ class VerticalPortscan:
         The goal is to never get an evidence that's
          1 or 2 ports more than the previous one so we dont
          have so many portscan evidence
-
         """
-        return self.are_dports_greater_or_eq_minimum_dports(
-            dports
-        ) and self.are_dports_greater_or_eq_last_evidence(
+        more_than_min = self.are_dports_greater_or_eq_minimum_dports(dports)
+        exceeded_twid_threshold = self.are_dports_greater_or_eq_last_evidence(
             dports, twid_threshold
         )
+        return more_than_min and exceeded_twid_threshold
 
     def check_if_enough_dports_to_trigger_an_evidence(
         self, twid_identifier: str, amount_of_dports: int
