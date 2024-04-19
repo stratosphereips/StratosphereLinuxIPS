@@ -88,8 +88,8 @@ jobs:
     - name: Whitelist test
       run: |
         coverage run --source=./ -m pytest tests/test_whitelist.py -p no:warnings -vv
-        coverage report  --include="slips_files/core/helpers/whitelist/*"
-        coverage html  --include="slips_files/core/helpers/whitelist/*" -d coverage_reports/whitelist
+        coverage report  --include="slips_files/core/helpers/whitelist.py*"
+        coverage html  --include="slips_files/core/helpers/whitelist.py*" -d coverage_reports/whitelist
 
     - name: arp test
       run: |
