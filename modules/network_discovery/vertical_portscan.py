@@ -50,7 +50,7 @@ class VerticalPortscan:
         self.cached_thresholds_per_tw = {}
         # The minimum amount of scanned ports to trigger an evidence
         # is increased exponentially every evidence, and is reset each timewindow
-        self.port_scan_minimum_dports = 5
+        self.minimum_dports_to_set_evidence = 5
 
     def set_evidence_vertical_portscan(self, evidence: dict):
         """Sets the vertical portscan evidence in the db"""
@@ -95,12 +95,12 @@ class VerticalPortscan:
         self.db.set_evidence(evidence)
 
 
-    def is_dports_greater_or_eq_minimum_dports(self, dports: int) -> bool:
-        return dports >= self.port_scan_minimum_dports
+    def are_dports_greater_or_eq_minimum_dports(self, dports: int) -> bool:
+        return dports >= self.minimum_dports_to_set_evidence
 
 
     @staticmethod
-    def is_dports_greater_or_eq_last_evidence(
+    def are_dports_greater_or_eq_last_evidence(
          dports: int, ports_reported_last_evidence: int
     ) -> bool:
         """
@@ -108,14 +108,15 @@ class VerticalPortscan:
          each evidence is higher than the previous one +15
          so the first alert will always report 5
          dports, and then 20+,35+. etc
-        :param dports: dports scanned in the current evidence
+
+        :param dports: dports to report in the current evidence
         :param ports_reported_last_evidence: the amount of
             ports reported in the last evidence in the current
             evidence's timewindow
         """
         return dports >= ports_reported_last_evidence + 15
 
-    def should_set_evidence(self, dports: int, twid_threshold: int):
+    def should_set_evidence(self, dports: int, twid_threshold: int) -> bool:
         """
         Makes sure the given dports are more than the minimum dports number
         we should alert on, and that is it more than the dports of
@@ -127,9 +128,9 @@ class VerticalPortscan:
 
         """
         return (
-                self.is_dports_greater_or_eq_minimum_dports(dports)
+                self.are_dports_greater_or_eq_minimum_dports(dports)
                 and
-                self.is_dports_greater_or_eq_last_evidence(
+                self.are_dports_greater_or_eq_last_evidence(
                     dports,
                     twid_threshold
                 )
@@ -144,18 +145,24 @@ class VerticalPortscan:
         to make sure the amount of dports reported each evidence
         is higher than the previous one +15
         """
-        twid_threshold: int = self.cached_thresholds_per_tw.get(twid_identifier)
+        twid_threshold: int = self.cached_thresholds_per_tw.get(
+            twid_identifier, 0
+            )
+
         if self.should_set_evidence(amount_of_dports, twid_threshold):
-            # keep track of the max reported dstips in the last evidence in this twid
+            # keep track of the max reported dstips
+            # in the last evidence in this twid
             self.cached_thresholds_per_tw[twid_identifier] = amount_of_dports
             return True
         return False
+
 
     def get_not_established_dst_ips(
         self, protocol: str, state: str, profileid: str, twid: str
     ) -> dict:
         """
-        Get the list of dstips that we tried to connect to (not established flows)
+        Get the list of dstips that we tried to connect to
+            (not established flows)
           these unknowns are the info this function retrieves
           profileid -> unknown_dstip:unknown_dstports
 
@@ -166,10 +173,12 @@ class VerticalPortscan:
                  totalflows: total flows seen by the profileid
                  totalpkt: total packets seen by the profileid
                  totalbytes: total bytes sent by the profileid
-                 stime: timestamp of the first flow seen from this profileid -> this dstip
+                 stime: timestamp of the first flow seen from
+                        this profileid -> this dstip
                  uid: list of uids where the given profileid was
                         contacting the dst_ip on this dstport
-                 dstports: dst ports seen in all flows where the given profileid was srcip
+                 dstports: dst ports seen in all flows where the given
+                        profileid was srcip
                      {
                          <str port>: < int spkts sent to this port>
                      }
@@ -184,7 +193,8 @@ class VerticalPortscan:
         )
         return dstips
 
-    def get_cache_key(self, profileid: str, twid: str, dstip: str):
+
+    def get_cache_key(self, profileid: str, twid: str, dstip: str) -> str:
         """
         returns the key that identifies this vertical portscan in thhe
         given tw
@@ -197,9 +207,10 @@ class VerticalPortscan:
         """
         # if you're portscaning a port that is open it's gonna be established
         # the amount of open ports we find is gonna be so small
-        # theoretically this is incorrect bc we'll be ignoring established connections,
-        # but usually open ports are very few compared to the whole range
-        # so, practically this is correct to avoid FP
+        # theoretically this is incorrect bc we'll be ignoring
+        # established connections, but usually open ports are very few
+        # compared to the whole range. so, practically this is correct to
+        # avoid FP
         state = "Not Established"
 
         for protocol in ("TCP", "UDP"):
@@ -207,7 +218,8 @@ class VerticalPortscan:
                 protocol, state, profileid, twid
             )
 
-            # For each dstip, see if the amount of ports connections is over the threshold
+            # For each dstip, see if the amount of ports
+            # connections is over the threshold
             for dstip in dstips.keys():
                 dst_ports: dict = dstips[dstip]["dstports"]
                 # Get the total amount of pkts sent to all
@@ -215,7 +227,9 @@ class VerticalPortscan:
                 pkts_sent = sum(dst_ports[dport] for dport in dst_ports)
                 amount_of_dports = len(dst_ports)
 
-                twid_identifier: str = self.get_cache_key(profileid, twid, dstip)
+                twid_identifier: str = self.get_cache_key(
+                    profileid, twid, dstip
+                )
                 if self.check_if_enough_dports_to_trigger_an_evidence(
                     twid_identifier, amount_of_dports
                 ):
