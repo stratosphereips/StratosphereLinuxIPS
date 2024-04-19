@@ -20,7 +20,7 @@ def not_enough_dports_to_reach_the_threshold(mock_db):
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dports: int = random.randint(
-        0, module.port_scan_minimum_dports - 1
+        0, module.minimum_dports_to_set_evidence - 1
     )
 
     ip: str = "8.8.8.8"
@@ -45,7 +45,7 @@ def enough_dports_to_reach_the_threshold(mock_db):
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dports: int = random.randint(
-        module.port_scan_minimum_dports, 100
+        module.minimum_dports_to_set_evidence, 100
     )
 
     ip: str = "8.8.8.8"
@@ -72,7 +72,7 @@ def not_enough_dports_to_combine_1_evidence(mock_db):
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dports: int = random.randint(
-        module.port_scan_minimum_dports, 100
+        module.minimum_dports_to_set_evidence, 100
     )
 
     ip: str = "8.8.8.8"

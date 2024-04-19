@@ -31,7 +31,7 @@ def enough_dstips_to_reach_the_threshold(mock_db):
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dstips: int = random.randint(
-        module.port_scan_minimum_dips, module.port_scan_minimum_dips + 100
+        module.minimum_dstips_to_set_evidence, module.minimum_dstips_to_set_evidence + 100
     )
     dport = 5555
     res = {dport: {"dstips": {"8.8.8.8": {"dstports": random_ports}}}}
@@ -123,7 +123,7 @@ def not_enough_dstips_to_reach_the_threshold(mock_db):
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dstips: int = random.randint(
-        0, module.port_scan_minimum_dips - 1
+        0, module.minimum_dstips_to_set_evidence - 1
     )
     dport = 5555
     res = {dport: {"dstips": {"8.8.8.8": {"dstports": random_ports}}}}
@@ -142,7 +142,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_equal_min_dips(mock_db):
     timewindow = "timewindow0"
     dport = 80
     key = horizontal_ps.get_cache_key(profileid, timewindow, dport)
-    amount_of_dips = horizontal_ps.port_scan_minimum_dips
+    amount_of_dips = horizontal_ps.minimum_dstips_to_set_evidence
     enough = horizontal_ps.check_if_enough_dstips_to_trigger_an_evidence(
         key, amount_of_dips
     )
