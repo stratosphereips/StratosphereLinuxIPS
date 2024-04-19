@@ -151,7 +151,7 @@ jobs:
         coverage report  --include="slips_files/common/slips_utils.py*"
         coverage html  --include="slips_files/common/slips_utils.py*" -d coverage_reports/slips_utils
 
-    - name: slipsutils test
+    - name: slips test
       run: |
         coverage run --source=./ -m pytest tests/test_slips.py -p no:warnings -vv
         coverage report  --include="slips.py*"
@@ -183,9 +183,10 @@ jobs:
 
     - name: Config file tests
       run: |
-        coverage run --source=./ -m pytest -s tests/integration_tests/test_config_files.py -p no:warnings -vv
-        coverage report --include="dataset/*"
-        coverage html --include="dataset/*" -d coverage_reports/dataset
+        python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
+#       coverage run --source=./ -m pytest -s tests/integration_tests/test_config_files.py -p no:warnings -vv
+#       coverage report --include="dataset/*"
+#       coverage html --include="dataset/*" -d coverage_reports/dataset
 
     - name: Upload Artifact
       # run this job whether the above jobs failed or passed
