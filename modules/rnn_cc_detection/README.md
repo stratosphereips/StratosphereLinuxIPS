@@ -18,6 +18,7 @@ Betwee the letters, symbols are added to represent the absolute time passed, sin
 - `*`: Time between the last two flows was between 5 minutes and 1 hour.
 - `0`: Time between the last two flows was more than 1 hour and it is considered a timeout. Meaning there can be many `0` together. 
 
+![Stratosphere Linux IPS (Slips) - Frame 1](https://github.com/stratosphereips/StratosphereLinuxIPS/assets/2458867/eba4021a-4c54-4523-9380-fb179526d808)
 
 Figure 1
 
