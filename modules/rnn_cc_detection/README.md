@@ -57,6 +57,7 @@ val_accuracy: 0.8296
 ![Acc](docs/rnn_model_v1_2024-04-20.acc.png)
 ![Loss](docs/rnn_model_v1_2024-04-20.loss.png)
 
+![Stratosphere Linux IPS (Slips) - Frame 1](https://github.com/stratosphereips/StratosphereLinuxIPS/assets/2458867/eba4021a-4c54-4523-9380-fb179526d808)
 
 ### Test Performance
 Test Generatilization Results:
