@@ -125,6 +125,8 @@ class CCDetection(IModule):
         # Convert each of the stratosphere letters to an integer. There are 50
         vocabulary = list("abcdefghiABCDEFGHIrstuvwxyzRSTUVWXYZ1234567890,.+*")
         int_of_letters = {}
+
+        # This is a simple encoding that is not one-hot.
         for i, letter in enumerate(vocabulary):
             int_of_letters[letter] = float(i)
 
