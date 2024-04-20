@@ -32,6 +32,63 @@ Looking at the letters it can be seen that this is a rather periodic connection,
 
 For now, Slips only creates behavioral models for TCP flows, and not UDP.
 
+# Machine Learning models
+
+## v1
+The first ML model we implemened is 
+
+### Features
+- Each letter is encoded to an integer
+- All 4-tuples have a max length of 500 letters.
+- All 4-tuples are padded to have the same length. Pad is done with integer 0.
+
+### Model
+- One embedding layer that converts each 'integer token' into a vector of dimensionality 16.
+- A bidirectional GRU layer with 32 inputs/units. Using `return_sequences=False` to indicate that the layer should only return the output of the GRU at the last time step instead of the full sequence of outputs.
+- A dense FF layer of 32 units with Relu activation.
+- A dropout layer with 0.5 change of dropout
+- An output layer with 1 unit and sigmoid activation.
+- Model compiled with crossentropy and RMSprop optimizer. Learning rate 0.0001 and momentum 0.05, and metric accuracy.
+
+The summary is 
+
+        Model: "sequential"
+        _________________________________________________________________
+        Layer (type)                Output Shape              Param #   
+        =================================================================
+        embedding (Embedding)       (None, None, 16)          800       
+                                                                        
+        bidirectional (Bidirection  (None, 64)                9600      
+        al)                                                             
+                                                                        
+        dense (Dense)               (None, 32)                2080      
+                                                                        
+        dropout (Dropout)           (None, 32)                0         
+                                                                        
+        dense_1 (Dense)             (None, 1)                 33        
+                                                                        
+        =================================================================
+        Total params: 12513 (48.88 KB)
+        Trainable params: 12513 (48.88 KB)
+        Non-trainable params: 0 (0.00 Byte)
+
+### Train Performance
+
+The final train performance after 100 epochs is
+
+train_loss: 0.1652
+val_loss: 0.4539
+train_accuracy: 0.9322
+val_accuracy: 0.8296
+
+
+### Test Performance
+Test Generatilization Results:
+Test Loss: 0.17785538733005524
+Test Accuracy: 0.926008939743042
+
+
+
 # Training
 Slips comes with a pre-trained model that we trained in the datasets shown in this folder. The datasets comes from many verified malware C&C connections that we have executed. The dataset also has normal connections that could be misdetected if not in included in the training. 
 
