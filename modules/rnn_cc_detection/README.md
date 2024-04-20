@@ -195,16 +195,18 @@ In order to know which model is better, we run all models against our dataset an
 
 
 # Training
-There is a python file called `training_code/rnn_model_training.py` that can be use to retrain the model.
+Slips comes with a pre-trained model that we trained in the datasets shown in this folder. The datasets comes from many verified malware C&C connections that we have executed. The dataset also has normal connections that could be misdetected if not in included in the training. 
+
+However, you can add your own connections and letters to the training dataset and retrain your own NN model. For that there is a python file called `training_code/rnn_model_training.py` that can be used.
 
 ```bash
-python training_code/rnn_model_training.py -v 3 -D datasets/all_datasets_raw -S rnn_model_2024-02-13.h5
+python training_code/rnn_model_training.py -v 3 -D datasets/all_datasets_raw -S new_rnn_model.h5
 ```
 
-Once the model is saved in a new file, you can just replace the old one for this one.
+Once the model is saved in a new file, you can just replace the old one for this one, since Slips is searching for a file called `rnn_model.h5`.
 
 ```bash
-cp rnn_model_2024-02-13.h5 rnn_model.h5
+cp new_rnn_model.h5 rnn_model.h5
 ```
 
 
