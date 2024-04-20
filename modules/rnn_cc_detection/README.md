@@ -34,8 +34,8 @@ For now, Slips only creates behavioral models for TCP flows, and not UDP.
 
 # Machine Learning models
 
-## v1
-The first ML model we implemened is 
+## v1. Embedding + GRU
+The first ML model we implemened is v1.
 
 ### Features
 - Each letter is encoded to an integer
@@ -81,6 +81,9 @@ val_loss: 0.4539
 train_accuracy: 0.9322
 val_accuracy: 0.8296
 
+![Cat](rnn_model_v1_2024-04-20.acc.png)
+![Cat](rnn_model_v1_2024-04-20.loss.png)
+
 
 ### Test Performance
 Test Generatilization Results:
@@ -88,6 +91,26 @@ Test Loss: 0.17785538733005524
 Test Accuracy: 0.926008939743042
 
 
+
+## v1.1 Embedding + GRU
+Same as model v1 but with better separation of train and evaluation datasets. And the new test dataset.
+
+## Train performance
+loss: 0.2159 - accuracy: 0.9089 - val_loss: 0.2114 - val_accuracy: 0.8994
+
+![Cat](rnn_model_v1.1-2024-04-20.acc.png)
+![Cat](rnn_model_v1.1-2024-04-20.loss.png)
+
+## Test performance
+
+Test Generatilization Results:
+Test Loss: 0.2069242298603058
+Test Accuracy: 0.9035874605178833
+
+
+
+
+---
 
 # Training
 Slips comes with a pre-trained model that we trained in the datasets shown in this folder. The datasets comes from many verified malware C&C connections that we have executed. The dataset also has normal connections that could be misdetected if not in included in the training. 
