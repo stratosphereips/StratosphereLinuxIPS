@@ -1,8 +1,10 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 import numpy as np
-import pandas as pd
 import argparse
-import tensorflow as tf
+import pandas as pd
 import sklearn as sk
+import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
@@ -12,6 +14,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Dense, Dropout
 import matplotlib.pyplot as plt
 # Author sebastian garcia, eldraco@gmail.com
+
 
 
 def train():
@@ -121,22 +124,26 @@ def train():
     )
 
     # Model being explored. Used for file name creation.
-    model_trained = 'v1.2'
+    model_trained = args.model_version
 
     # Get current date
     model_train_date = datetime.now().strftime('%Y-%m-%d')
 
     if args.optuna:
         # Use optuna
+        print('Using optuna to find best parameters')
 
         # Define objective function
         def objective(trial):
-            # Open a log file
-            # Define hyperparameters to optimize
+
+            # Here is where you define the ranges of hyperparameters to optimize
             learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
-            dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.5)
-            embed_dim = trial.suggest_int("embedded_dim", 8, 64)
-            log = f'Trial: {trial}. Trying lr:{learning_rate}, drop:{dropout_rate}, embed:{embed_dim}'
+            dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.6)
+            embed_dim = trial.suggest_int("embedded_dim", 8, 128)
+            first_layer = trial.suggest_categorical('firstlayer', [8, 16, 20, 24, 28, 32, 36])
+            second_layer = trial.suggest_categorical('second_layer', [16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72])
+
+            log = f'Trial: {trial}. Trying lr:{learning_rate}, drop:{dropout_rate}, embed:{embed_dim}, 1st lay: {first_layer}, 2nd lay: {second_layer}'
             print(log)
             
             # Load dataset
@@ -148,10 +155,10 @@ def train():
             # GRU is the main RNN layer, inputs: A 3D tensor, with shape [batch, timesteps, feature]
             model.add(
                 layers.Bidirectional(
-                    layers.GRU(32, return_sequences=False), merge_mode="concat"
+                    layers.GRU(first_layer, return_sequences=False), merge_mode="concat"
                 )
             )
-            model.add(layers.Dense(32, activation="relu"))
+            model.add(layers.Dense(second_layer, activation="relu"))
             model.add(layers.Dropout(dropout_rate))
             model.add(layers.Dense(1, activation="sigmoid"))
             # Fully connected layer with 1 neuron output
@@ -163,6 +170,7 @@ def train():
                         metrics=['accuracy'])
             
             # Train model
+            # We only search optimizations in 30 episodes, since that seems to be enough to find good ones
             model.fit(X_traineval, y_traineval, validation_data=(X_traineval, y_traineval), epochs=30, batch_size=100, verbose=1)
             
             # Evaluate model
@@ -175,7 +183,7 @@ def train():
 
         # Set up Optuna study
         study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=50)
+        study.optimize(objective, n_trials=1)
 
         # Get best hyperparameters
         best_params = study.best_params
@@ -187,19 +195,23 @@ def train():
         print(log)
         logfile.write(log)
         logfile.close()
+
     elif not args.optuna:
-        # Hyperparameters
+        print('Training the model with good hyperparameters')
+        # Now that you now the Hyperparameters, you can train a larger model
         embed_dim = args.embed_dim
 
         # Create the model of RNN
         model = tf.keras.models.Sequential()
         model.add(layers.Embedding(vocabulary_size, embed_dim, mask_zero=True))
         # GRU is the main RNN layer, inputs: A 3D tensor, with shape [batch, timesteps, feature]
+        # Change the first layer too
         model.add(
             layers.Bidirectional(
                 layers.GRU(32, return_sequences=False), merge_mode="concat"
             )
         )
+        # Change the second layer too
         model.add(layers.Dense(32, activation="relu"))
         model.add(layers.Dropout(args.dropout))
         # Fully connected layer with 1 neuron output
@@ -207,7 +219,7 @@ def train():
         model.add(layers.Dense(1, activation="sigmoid"))
 
         # Compile model
-        model.compile(optimizer=Adam(learning_rate=args.learning_rate, beta_1=0.9, beta_2=0.999),
+        model.compile(optimizer=Adam(learning_rate=args.lr, beta_1=0.9, beta_2=0.999),
                     loss='binary_crossentropy',
                     metrics=['accuracy'])
         
@@ -216,6 +228,7 @@ def train():
 
         num_epochs = args.epochs
         batch_size = args.batch_size
+        print(f'Training the model with {num_epochs} epochs and {batch_size} batch size.')
 
         history = model.fit(
             X_traineval,
@@ -227,7 +240,10 @@ def train():
             shuffle=True,
         )
 
-        model_outputfile = f'../rnn_model_{model_trained}_2024-04-20.h5'
+        if args.model_file:
+            model_outputfile = args.model_file
+        else:
+            model_outputfile = f'rnn_model_{model_trained}_2024-04-20.h5'
         print(model.summary())
         model.save(model_outputfile, overwrite=False)
         
@@ -244,14 +260,14 @@ def train():
 
         plt.title("Training and validation accuracy")
         plt.legend()
-        plt.savefig(f"docs/rnn_model_{model_trained}-{model_train_date}.acc.png")
+        plt.savefig(f"rnn_model_{model_trained}-{model_train_date}.acc.png")
 
         plt.close()
         plt.plot(epochs, loss, "bo", label="Training loss")
         plt.plot(epochs, val_loss, "b", label="Validation loss")
         plt.title("Training and validation loss")
         plt.legend()
-        plt.savefig(f"docs/rnn_model_{model_trained}-{model_train_date}.loss.png")
+        plt.savefig(f"rnn_model_{model_trained}-{model_train_date}.loss.png")
 
         # Evaluate model on the new dataset
         loss, accuracy = model.evaluate(X_test, y_test)
@@ -276,21 +292,24 @@ if __name__ == '__main__':
         "--lr",
         help="Learning rate",
         type=float,
-        required=0.00189621996231622,
+        default=0.00189621996231622,
+        required=False
     )
     parser.add_argument(
-        "-e",
+        "-i",
         "--embed_dim",
         help="Embedding dimension",
         type=int,
-        required=64,
+        default=64,
+        required=False
     )
     parser.add_argument(
         "-d",
         "--dropout",
         help="Percentage of dropout",
         type=float,
-        required=0.34,
+        default=0.34,
+        required=False
     )
     parser.add_argument(
         "-M",
@@ -343,17 +362,24 @@ if __name__ == '__main__':
         "-o",
         "--optuna",
         help="Use optuna to find best hyperparameters",
-        type=bool,
+        action='store_true',
+        default=False,
+        required=False,
+    )
+    parser.add_argument(
+        "-V",
+        "--model_version",
+        help="String of the model version. Used for files",
+        type=str,
         required=True,
     )
     args = parser.parse_args()
 
-
-    if args.verbose:
-        # Versions
-        print(f"Numpy: {np.__version__}")
-        print(f"TensorFlow: {tf.__version__}")
-        print(f"Pandas: {pd.__version__}")
-        print(f"Sklearn: {sk.__version__}")
+    print('\nTraining the NN model for C&C detection for Slips.')
+    # Versions
+    print(f"Numpy: {np.__version__}")
+    print(f"TensorFlow: {tf.__version__}")
+    print(f"Pandas: {pd.__version__}")
+    print(f"Sklearn: {sk.__version__}")
 
     train()
