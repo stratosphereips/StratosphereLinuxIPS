@@ -36,6 +36,7 @@ def get_model_GRU_int_encode (vocabulary_size, embed_dim, first_layer, second_la
     return model
 
 
+
 def train():
     """
     Train the model
