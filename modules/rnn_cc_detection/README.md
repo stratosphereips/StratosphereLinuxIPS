@@ -81,8 +81,8 @@ val_loss: 0.4539
 train_accuracy: 0.9322
 val_accuracy: 0.8296
 
-![Cat](rnn_model_v1_2024-04-20.acc.png)
-![Cat](rnn_model_v1_2024-04-20.loss.png)
+![Acc](rnn_model_v1_2024-04-20.acc.png)
+![Loss](rnn_model_v1_2024-04-20.loss.png)
 
 
 ### Test Performance
@@ -98,8 +98,8 @@ Same as model v1 but with better separation of train and evaluation datasets. An
 ## Train performance
 loss: 0.2159 - accuracy: 0.9089 - val_loss: 0.2114 - val_accuracy: 0.8994
 
-![Cat](rnn_model_v1.1-2024-04-20.acc.png)
-![Cat](rnn_model_v1.1-2024-04-20.loss.png)
+![Acc](rnn_model_v1.1-2024-04-20.acc.png)
+![Loss](rnn_model_v1.1-2024-04-20.loss.png)
 
 ## Test performance
 
@@ -107,6 +107,46 @@ Test Generatilization Results:
 Test Loss: 0.2069242298603058
 Test Accuracy: 0.9035874605178833
 
+
+## v1.2 Embedding + GRU
+
+
+Same as v1 but with different hyperparameters found by optuna.
+
+Model: "sequential"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ embedding (Embedding)       (None, None, 64)          3200      
+                                                                 
+ bidirectional (Bidirection  (None, 64)                18816     
+ al)                                                             
+                                                                 
+ dense (Dense)               (None, 32)                2080      
+                                                                 
+ dropout (Dropout)           (None, 32)                0         
+                                                                 
+ dense_1 (Dense)             (None, 1)                 33        
+                                                                 
+=================================================================
+Total params: 24129 (94.25 KB)
+Trainable params: 24129 (94.25 KB)
+
+## Training
+
+Found hyperparameters with optuna
+
+        # Best hyperparameters: {'learning_rate': 0.001896219962316226, 'dropout_rate': 0.3405832906149749, 'momentum_rate': 0.05593281020818976, 'embedded_dim': 64}
+
+
+![Acc](docs/rnn_model_v1.2-2024-04-20.acc.png)
+![Loss](docs/rnn_model_v1.2-2024-04-20.loss.png)
+
+## Testing
+
+Test Generatilization Results:
+Test Loss: 1.2258477210998535
+Test Accuracy: 0.9304932951927185
 
 
 
