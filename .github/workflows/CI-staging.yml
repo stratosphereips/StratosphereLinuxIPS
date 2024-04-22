@@ -124,8 +124,8 @@ jobs:
     - name: vertical_portscans test
       run: |
         coverage run --source=./ -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
-        coverage report  --include="modules/network_discovery/vertical_portscans.py*"
-        coverage html  --include="modules/network_discovery/vertical_portscans.py*" -d coverage_reports/vertical_portscan
+        coverage report  --include="modules/network_discovery/vertical_portscan.py*"
+        coverage html  --include="modules/network_discovery/vertical_portscan.py*" -d coverage_reports/vertical_portscan
 
     - name: virustotal test
       run: |
