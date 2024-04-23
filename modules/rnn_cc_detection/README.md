@@ -149,26 +149,29 @@ Test Loss: 1.2258477210998535
 Test Accuracy: 0.9304932951927185
 
 
-# v1.3
-A test model that was rapidly superseeded
+# v1.3 Embedding + GRU
+A test model that was rapidly superseded
 
-# v.1.4
+
+
+# v.1.4 Embedding + GRU
 As v1, but more optimization with optuna.
 
- Layer (type)                Output Shape              Param #
-=================================================================
- embedding (Embedding)       (None, None, 60)          3000
+         Layer (type)                Output Shape              Param #
+        =================================================================
+         embedding (Embedding)       (None, None, 60)          3000
+        
+         bidirectional (Bidirection  (None, 64)                18048
+         al)
+        
+         dense (Dense)               (None, 32)                2080
+        
+         dropout (Dropout)           (None, 32)                0
+        
+         dense_1 (Dense)             (None, 1)                 33
+        
+        =================================================================
 
- bidirectional (Bidirection  (None, 64)                18048
- al)
-
- dense (Dense)               (None, 32)                2080
-
- dropout (Dropout)           (None, 32)                0
-
- dense_1 (Dense)             (None, 1)                 33
-
-=================================================================
 Total params: 23161 (90.47 KB)
 Trainable params: 23161 (90.47 KB)
 Non-trainable params: 0 (0.00 Byte)
@@ -183,6 +186,7 @@ Non-trainable params: 0 (0.00 Byte)
 Test Generatilization Results:
 Test Loss: 0.5616011023521423
 Test Accuracy: 0.939461886882782
+
 
 
 
