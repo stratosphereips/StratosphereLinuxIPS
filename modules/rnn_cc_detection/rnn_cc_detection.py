@@ -190,7 +190,7 @@ class CCDetection(IModule):
                     3,
                     0,
                 )
-                score = self.tcpmodel.predict(behavioral_model)
+                score = self.tcpmodel.predict(behavioral_model, verbose = 0)
                 self.print(
                     f" >> sequence: {pre_behavioral_model}. "
                     f"final prediction score: {score[0][0]:.20f}",
