@@ -317,5 +317,5 @@ class CCDetection(IModule):
                 if score > threshold:
                     self.set_evidence(score, tupleid, profileid, twid)
             """
-        if msg := self.get_msg("tw_closed"):
+        elif msg := self.get_msg("tw_closed"):
             self.handle_tw_closed(msg)
