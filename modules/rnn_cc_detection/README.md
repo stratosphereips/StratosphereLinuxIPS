@@ -81,8 +81,8 @@ val_loss: 0.4539
 train_accuracy: 0.9322
 val_accuracy: 0.8296
 
-![Acc](rnn_model_v1_2024-04-20.acc.png)
-![Loss](rnn_model_v1_2024-04-20.loss.png)
+![Acc](docs/rnn_model_v1_2024-04-20.acc.png)
+![Loss](docs/rnn_model_v1_2024-04-20.loss.png)
 
 
 ### Test Performance
@@ -98,8 +98,8 @@ Same as model v1 but with better separation of train and evaluation datasets. An
 ## Train performance
 loss: 0.2159 - accuracy: 0.9089 - val_loss: 0.2114 - val_accuracy: 0.8994
 
-![Acc](rnn_model_v1.1-2024-04-20.acc.png)
-![Loss](rnn_model_v1.1-2024-04-20.loss.png)
+![Acc](docs/rnn_model_v1.1-2024-04-20.acc.png)
+![Loss](docs/rnn_model_v1.1-2024-04-20.loss.png)
 
 ## Test performance
 
@@ -139,8 +139,8 @@ Found hyperparameters with optuna
         # Best hyperparameters: {'learning_rate': 0.001896219962316226, 'dropout_rate': 0.3405832906149749, 'momentum_rate': 0.05593281020818976, 'embedded_dim': 64}
 
 
-![Acc](docs/rnn_model_v1.2-2024-04-20.acc.png)
-![Loss](docs/rnn_model_v1.2-2024-04-20.loss.png)
+![Acc](docs/rnn_model_v1.2-2024-04-21.acc.png)
+![Loss](docs/rnn_model_v1.2-2024-04-21.loss.png)
 
 ## Testing
 
@@ -150,9 +150,10 @@ Test Accuracy: 0.9304932951927185
 
 
 # v1.3
-
+A test model that was rapidly superseeded
 
 # v.1.4
+As v1, but more optimization with optuna.
 
  Layer (type)                Output Shape              Param #
 =================================================================
@@ -173,8 +174,9 @@ Trainable params: 23161 (90.47 KB)
 Non-trainable params: 0 (0.00 Byte)
 
 ## Training
-![Acc](docs/rnn_model_v1.4-2024-04-20.acc.png)
-![Loss](docs/rnn_model_v1.4-2024-04-20.loss.png)
+
+![Acc](docs/rnn_model_v1.4-2024-04-23.acc.png)
+![Loss](docs/rnn_model_v1.4-2024-04-23.loss.png)
 
 
 ## Testing
