@@ -423,7 +423,8 @@ def test_check_multiple_empty_connections(mock_db, uri, request_body_len, expect
         ("Invalid user agent", None, 200, "Invalid response", False),  # Invalid user agent string
     ],
 )
-def test_get_user_agent_info(mock_db, mocker, user_agent, mock_side_effect, mock_status_code, mock_response_text,
+def test_get_user_agent_info(mock_db, mocker, user_agent, mock_side_effect, 
+                             mock_status_code, mock_response_text,
                              expected_result):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
 
