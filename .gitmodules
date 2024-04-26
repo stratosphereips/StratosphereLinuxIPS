@@ -10,3 +10,4 @@
 [submodule "feel_project"]
 	path = feel_project
 	url = https://github.com/stratosphereips/feel_project
+    branch = main
