@@ -1,7 +1,8 @@
 import json
 from typing import List
 
-from slips_files.common.imports import *
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from slips_files.core.evidence_structure.evidence import (
@@ -55,11 +56,6 @@ class NetworkDiscovery(IModule):
         # when a client is seen requesting this minimum addresses in 1 tw,
         # slips sets dhcp scan evidence
         self.minimum_requested_addrs = 4
-
-    def shutdown_gracefully(self):
-        # alert about all the pending evidence before this module stops
-        self.horizontal_ps.combine_evidence()
-        self.vertical_ps.combine_evidence()
 
     def check_icmp_sweep(
         self,
@@ -309,6 +305,7 @@ class NetworkDiscovery(IModule):
         self, timestamp, profileid, twid, uids, number_of_requested_addrs
     ):
         srcip = profileid.split("_")[-1]
+        confidence = 0.8
         description = (
             f"Performing a DHCP scan by requesting "
             f"{number_of_requested_addrs} different IP addresses. "
@@ -321,7 +318,7 @@ class NetworkDiscovery(IModule):
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
             ),
             threat_level=ThreatLevel.MEDIUM,
-            confidence=0.8,
+            confidence=confidence,
             description=description,
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=twid_number),
