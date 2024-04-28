@@ -40,26 +40,27 @@ RUN apt update && apt install -y --no-install-recommends \
 
 # Install Slips dependencies.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
+    software-properties-common \
     zeek \
     redis \
-    python3-pip \
-    python3-certifi \
-    python3-dev \
     build-essential \
     file \
     lsof \
     net-tools \
     iptables \
     iproute2 \
-    python3-tzlocal \
     nfdump \
     tshark \
     git \
     whois \
     vim \
     yara \
- && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+ && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro  \
+    && add-apt-repository ppa:deadsnakes/ppa  \
+    && apt update \
+    && apt install python3.10 python3.10-venv python3.10-dev \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10 \
+    && apt install -y python3-tzlocal
 
 # you should build the image using
 # docker build --no-cache -t slips_dependencies -f docker/dependency-image/Dockerfile .
