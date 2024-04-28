@@ -60,8 +60,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && add-apt-repository ppa:deadsnakes/ppa  \
     && apt update \
     && apt install python3.10 python3.10-venv python3.10-dev \
-    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10 \
-    && apt install -y python3-tzlocal
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
 
 RUN add-apt-repository ppa:deadsnakes/ppa -y  \
     && apt update \
