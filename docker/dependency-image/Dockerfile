@@ -70,7 +70,7 @@ COPY install/requirements.txt ${SLIPS_DIR}/install/requirements.txt
 # we're excluding black here because it has conflicts with the tensorflow version required in requirements.txt
 # this is temporary until we upgrade tensorflow to the latest version
 RUN pip3 install --no-cache-dir --upgrade pip  \
-    && grep -v 'black' ${SLIPS_DIR}/install/requirements.txt | xargs pip3 install  --no-cache-dir
+    && pip3 install --no-cache-dir install/requirements.txt
 
 
 CMD redis-server --daemonize yes && /bin/bash
