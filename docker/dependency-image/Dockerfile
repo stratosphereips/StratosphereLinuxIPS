@@ -56,7 +56,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     whois \
     vim \
     yara \
- && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+ && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro  \
+    && add-apt-repository ppa:deadsnakes/ppa  \
+    && apt update \
+    && apt install python3.10 python3.10-venv python3.10-dev \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10 \
+    && apt install -y python3-tzlocal
 
 RUN add-apt-repository ppa:deadsnakes/ppa -y  \
     && apt update \
