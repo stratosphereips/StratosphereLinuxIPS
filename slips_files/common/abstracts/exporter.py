@@ -64,7 +64,7 @@ class IExporter(IObservable, ABC):
         """
 
     @abstractmethod
-    def export(self, msg_to_send: str):
+    def export(self, *args, **kwargs):
         """exports evidence/alerts to the destination"""
 
     @abstractmethod
