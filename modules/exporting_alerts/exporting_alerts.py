@@ -1,8 +1,7 @@
+from modules.exporting_alerts.slack_exporter import SlackExporter
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
-from slack import WebClient
-from slack.errors import SlackApiError
 import os
 import json
 from stix2 import Indicator, Bundle
@@ -10,7 +9,6 @@ from cabby import create_client
 import time
 import threading
 import sys
-import datetime
 
 
 class ExportingAlerts(IModule):
@@ -26,6 +24,7 @@ class ExportingAlerts(IModule):
 
     def init(self):
         self.port = None
+        self.slack = SlackExporter(self.logger, self.db)
         self.c1 = self.db.subscribe("export_evidence")
         self.channels = {"export_evidence": self.c1}
         self.read_configuration()
@@ -42,15 +41,9 @@ class ExportingAlerts(IModule):
         )
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
         conf = ConfigParser()
         # Available options ['slack','stix']
         self.export_to = conf.export_to()
-
-        if "slack" in self.export_to:
-            self.slack_token_filepath = conf.slack_token_filepath()
-            self.slack_channel_name = conf.slack_channel_name()
-            self.sensor_name = conf.sensor_name()
 
         if self.should_export_to_stix():
             self.TAXII_server = conf.taxii_server()
@@ -69,54 +62,9 @@ class ExportingAlerts(IModule):
             # -> only push to taxii server once before
             # stopping
 
-    def get_slack_token(self):
-        if not hasattr(self, "slack_token_filepath"):
-            return False
-
-        try:
-            with open(self.slack_token_filepath, "r") as f:
-                self.BOT_TOKEN = f.read()
-                if len(self.BOT_TOKEN) < 5:
-                    del self.BOT_TOKEN
-                    raise NameError
-        except (FileNotFoundError, NameError):
-            return False
-
     def ip_exists_in_stix_file(self, ip):
         """Searches for ip in STIX_data.json to avoid exporting duplicates"""
         return ip in self.added_ips
-
-    def send_to_slack(self, msg_to_send: str) -> bool:
-        # Msgs sent in this channel will be exported to slack
-        # Token to login to your slack bot. it should be
-        # set in slack_bot_token_secret
-        if self.BOT_TOKEN == "":
-            # The file is empty
-            self.print(
-                f"Can't find SLACK_BOT_TOKEN "
-                f"in {self.slack_token_filepath}.",
-                0,
-                2,
-            )
-            return False
-
-        slack_client = WebClient(token=self.BOT_TOKEN)
-        try:
-            slack_client.chat_postMessage(
-                # Channel name is set in slips.conf
-                channel=self.slack_channel_name,
-                # Sensor name is set in slips.conf
-                text=f"{self.sensor_name}: {msg_to_send}",
-            )
-            return True
-
-        except SlackApiError as e:
-            # You will get a SlackApiError if "ok" is False
-            assert e.response[
-                "error"
-            ], "Problem while exporting to slack."  # str like
-            # 'invalid_auth', 'channel_not_found'
-            return False
 
     def push_to_taxii_server(self):
         """
@@ -308,43 +256,25 @@ class ExportingAlerts(IModule):
     def should_export_to_stix(self) -> bool:
         return "stix" in self.export_to
 
-    def should_export_to_slack(self) -> bool:
-        return "slack" in self.export_to
-
     def shutdown_gracefully(self):
+        self.slack.shutdown_gracefully()
+        # todo stick
+
         # We need to publish to taxii server before stopping
         if self.should_export_to_stix():
             self.push_to_taxii_server()
 
-        if self.should_export_to_slack() and hasattr(self, "BOT_TOKEN"):
-            date_time = datetime.datetime.now()
-            date_time = utils.convert_format(date_time, utils.alerts_format)
-            self.send_to_slack(
-                f"{date_time}: Slips finished on sensor: {self.sensor_name}."
-            )
-
     def pre_main(self):
         utils.drop_root_privs()
-        if self.should_export_to_slack():
-            if not self.get_slack_token():
-                self.print(
-                    f"Please add slack bot token to "
-                    f"{self.slack_token_filepath}. Exporting to Slack "
-                    f"aborted..",
-                    0,
-                    1,
-                )
+        if (
+            not self.slack.should_export()
+        ):  # and not self.stix.should_export():
+            return 1
 
-            if hasattr(self, "BOT_TOKEN"):
-                date_time = datetime.datetime.now()
-                date_time = utils.convert_format(
-                    date_time, utils.alerts_format
-                )
-                self.send_to_slack(
-                    f"{date_time}: Slips started on sensor:"
-                    f" {self.sensor_name}."
-                )
+        if self.slack.should_export():
+            self.slack.send_init_msg()
 
+        # todo move this to stix should export
         if self.is_running_on_interface and self.should_export_to_stix():
             # This thread is responsible for waiting n seconds before
             # each push to the stix server
@@ -356,18 +286,18 @@ class ExportingAlerts(IModule):
             evidence = json.loads(msg["data"])
             description: str = evidence["description"]
 
-            if self.should_export_to_slack() and hasattr(self, "BOT_TOKEN"):
+            if self.slack.should_export():
                 srcip = evidence["profile"]["ip"]
                 msg_to_send = f"Src IP {srcip} Detected {description}"
-                self.send_to_slack(msg_to_send)
+                self.slack.export(msg_to_send)
 
-            if self.should_export_to_stix():
-                msg_to_send = (
-                    evidence["evidence_type"],
-                    evidence["attacker"]["direction"],
-                    evidence["attacker"]["value"],
-                    description,
-                )
-                exported_to_stix = self.export_to_stix(msg_to_send)
-                if not exported_to_stix:
-                    self.print("Problem in export_to_STIX()", 0, 3)
+            # if self.should_export_to_stix():
+            #     msg_to_send = (
+            #         evidence["evidence_type"],
+            #         evidence["attacker"]["direction"],
+            #         evidence["attacker"]["value"],
+            #         description,
+            #     )
+            #     exported_to_stix = self.export_to_stix(msg_to_send)
+            #     if not exported_to_stix:
+            #         self.print("Problem in export_to_STIX()", 0, 3)
