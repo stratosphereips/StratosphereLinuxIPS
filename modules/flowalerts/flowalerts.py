@@ -1,6 +1,5 @@
 import contextlib
-from slips_files.common.imports import *
-
+import multiprocessing
 import json
 import threading
 import ipaddress
@@ -11,11 +10,13 @@ import collections
 import math
 import time
 
-from slips_files.common.imports import *
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from .timer_thread import TimerThread
 from .set_evidence import SetEvidnceHelper
 from slips_files.core.helpers.whitelist import Whitelist
-from slips_files.common.slips_utils import utils
 from typing import List, Tuple, Dict
 
 
@@ -180,7 +181,7 @@ class FlowAlerts(IModule):
             # Do not check the duration of the flow
             return
 
-        if type(dur) == str:
+        if isinstance(dur, str):
             dur = float(dur)
 
         # If duration is above threshold, we should set an evidence
@@ -571,13 +572,13 @@ class FlowAlerts(IModule):
         ip_data = self.db.get_ip_info(ip)
         try:
             SNI = ip_data["SNI"]
-            if type(SNI) == list:
+            if isinstance(SNI, list):
                 # SNI is a list of dicts, each dict contains the
                 # 'server_name' and 'port'
                 SNI = SNI[0]
                 if SNI in (None, ""):
                     SNI = False
-                elif type(SNI) == dict:
+                elif isinstance(SNI, dict):
                     SNI = SNI.get("server_name", False)
         except (KeyError, TypeError):
             # No SNI data for this ip
@@ -973,7 +974,7 @@ class FlowAlerts(IModule):
                 uid, timestamp, profileid, twid, auth_success
             )
 
-    def detect_incompatible_CN(
+    def detect_incompatible_cn(
         self, daddr, server_name, issuer, profileid, twid, uid, timestamp
     ):
         """
@@ -992,11 +993,11 @@ class FlowAlerts(IModule):
             # to use it to set evidence later
             found_org_in_cn = org
 
-            # check that the domain belongs to that same org
+            # check that the ip belongs to that same org
             if self.whitelist.is_ip_in_org(daddr, org):
                 return False
 
-            # check that the ip belongs to that same org
+            # check that the domain belongs to that same org
             if server_name and self.whitelist.is_domain_in_org(
                 server_name, org
             ):
@@ -1975,7 +1976,7 @@ class FlowAlerts(IModule):
                 saddr, daddr, ja3, ja3s, twid, uid, timestamp
             )
 
-            self.detect_incompatible_CN(
+            self.detect_incompatible_cn(
                 daddr, server_name, issuer, profileid, twid, uid, timestamp
             )
 
