@@ -41,5 +41,8 @@ pytest-sugar
 memray
 aid_hash
 tensorflow
+scikit-learn
 black
 pre-commit
+black
+ruff
