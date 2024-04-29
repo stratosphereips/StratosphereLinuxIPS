@@ -1,4 +1,4 @@
-from module_factory import ModuleFactory
+from tests.module_factory import ModuleFactory
 import pytest
 
 from unittest.mock import Mock, call
@@ -23,7 +23,7 @@ def test_is_supported_flow_not_ts(flow, mock_db):
     ],
 )
 def test_is_supported_flow_without_ts(
-        flow_type: str, expected_val: bool, flow, mock_db
+    flow_type: str, expected_val: bool, flow, mock_db
 ):
     # just change the flow_type
     flow.type_ = flow_type
@@ -40,10 +40,12 @@ def test_handle_dns():
     flow_handler.profileid = "profile_id"
     flow_handler.handle_dns()
 
-    mock_db.add_out_dns.assert_called_with(flow_handler.profileid,
-                                           flow_handler.twid, flow)
-    mock_db.add_altflow.assert_called_with(flow, flow_handler.profileid,
-                                           flow_handler.twid, "benign")
+    mock_db.add_out_dns.assert_called_with(
+        flow_handler.profileid, flow_handler.twid, flow
+    )
+    mock_db.add_altflow.assert_called_with(
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
+    )
 
 
 # testing handle_ftp
@@ -57,8 +59,9 @@ def test_handle_ftp():
     flow_handler.handle_ftp()
 
     mock_db.set_ftp_port.assert_called_with(21)
-    mock_db.add_altflow.assert_called_with(flow, flow_handler.profileid,
-                                           flow_handler.twid, 'benign')
+    mock_db.add_altflow.assert_called_with(
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
+    )
 
 
 # testing handle_http
@@ -70,10 +73,12 @@ def test_handle_http():
     flow_handler.twid = "timewindow_id"
     flow_handler.handle_http()
 
-    mock_db.add_out_http.assert_called_with(flow_handler.profileid,
-                                            flow_handler.twid, flow)
-    mock_db.add_altflow.assert_called_with(flow, flow_handler.profileid,
-                                           flow_handler.twid, 'benign')
+    mock_db.add_out_http.assert_called_with(
+        flow_handler.profileid, flow_handler.twid, flow
+    )
+    mock_db.add_altflow.assert_called_with(
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
+    )
 
 
 # testing handle_ssl
@@ -83,10 +88,12 @@ def test_handle_ssl(flow, mock_db):
     flow_handler.twid = "timewindow_id"
     flow_handler.handle_ssl()
 
-    mock_db.add_out_ssl.assert_called_with(flow_handler.profileid,
-                                           flow_handler.twid, flow)
-    mock_db.add_altflow.assert_called_with(flow, flow_handler.profileid,
-                                           flow_handler.twid, "benign")
+    mock_db.add_out_ssl.assert_called_with(
+        flow_handler.profileid, flow_handler.twid, flow
+    )
+    mock_db.add_altflow.assert_called_with(
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
+    )
 
 
 # testing handle_ssh
@@ -96,10 +103,12 @@ def test_handle_ssh(flow, mock_db):
     flow_handler.twid = "timewindow_id"
     flow_handler.handle_ssh()
 
-    mock_db.add_out_ssh.assert_called_with(flow_handler.profileid,
-                                           flow_handler.twid, flow)
-    mock_db.add_altflow.assert_called_with(flow, flow_handler.profileid,
-                                           flow_handler.twid, "benign")
+    mock_db.add_out_ssh.assert_called_with(
+        flow_handler.profileid, flow_handler.twid, flow
+    )
+    mock_db.add_altflow.assert_called_with(
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
+    )
 
 
 # testing handle_weird
@@ -114,9 +123,12 @@ def test_handle_weird(flow, mock_db):
         "twid": flow_handler.twid,
         "flow": asdict(flow),
     }
-    mock_db.publish.assert_called_with("new_weird", json.dumps(expected_payload))
-    mock_db.add_altflow.assert_called_with(flow, flow_handler.profileid,
-                                           flow_handler.twid, "benign")
+    mock_db.publish.assert_called_with(
+        "new_weird", json.dumps(expected_payload)
+    )
+    mock_db.add_altflow.assert_called_with(
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
+    )
 
 
 # testing handle_tunnel
@@ -131,9 +143,12 @@ def test_handle_tunnel(flow, mock_db):
         "twid": flow_handler.twid,
         "flow": asdict(flow),
     }
-    mock_db.publish.assert_called_with("new_tunnel", json.dumps(expected_payload))
-    mock_db.add_altflow.assert_called_with(flow, flow_handler.profileid,
-                                           flow_handler.twid, "benign")
+    mock_db.publish.assert_called_with(
+        "new_tunnel", json.dumps(expected_payload)
+    )
+    mock_db.add_altflow.assert_called_with(
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
+    )
 
 
 # testing handle_conn
@@ -157,35 +172,39 @@ def test_handle_conn(flow, mock_db, mocker):
         "192.168.1.1-80-tcp",
         ("A", "B", "C"),
         "Client",
-        flow
+        flow,
     )
     mock_db.add_ips.assert_called_with(
-        flow_handler.profileid,
-        flow_handler.twid,
-        flow,
-        "Client"
+        flow_handler.profileid, flow_handler.twid, flow, "Client"
     )
-    mock_db.add_port.assert_has_calls([
-        call(flow_handler.profileid,
-             flow_handler.twid, flow, "Client", "Dst"),
-        call(flow_handler.profileid,
-             flow_handler.twid, flow, "Client", "Src")
-    ])
+    mock_db.add_port.assert_has_calls(
+        [
+            call(
+                flow_handler.profileid,
+                flow_handler.twid,
+                flow,
+                "Client",
+                "Dst",
+            ),
+            call(
+                flow_handler.profileid,
+                flow_handler.twid,
+                flow,
+                "Client",
+                "Src",
+            ),
+        ]
+    )
     mock_db.add_flow.assert_called_with(
-        flow,
-        flow_handler.profileid,
-        flow_handler.twid,
-        "benign"
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
     mock_db.add_mac_addr_to_profile.assert_called_with(
-        flow_handler.profileid,
-        flow.smac
+        flow_handler.profileid, flow.smac
     )
     if not flow_handler.running_non_stop:
-        flow_handler.publisher.new_MAC.assert_has_calls([
-            call(flow.smac, flow.saddr),
-            call(flow.dmac, flow.daddr)
-        ])
+        flow_handler.publisher.new_MAC.assert_has_calls(
+            [call(flow.smac, flow.saddr), call(flow.dmac, flow.daddr)]
+        )
 
 
 # testing handle_files
@@ -203,14 +222,10 @@ def test_handle_files(flow, mock_db):
         "twid": flow_handler.twid,
     }
     mock_db.publish.assert_called_with(
-        "new_downloaded_file",
-        json.dumps(expected_payload)
+        "new_downloaded_file", json.dumps(expected_payload)
     )
     mock_db.add_altflow.assert_called_with(
-        flow,
-        flow_handler.profileid,
-        flow_handler.twid,
-        "benign"
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
 
 
@@ -234,21 +249,15 @@ def test_handle_arp(flow, mock_db, mocker):
         "profileid": flow_handler.profileid,
         "twid": flow_handler.twid,
     }
-    mock_db.publish.assert_called_with("new_arp",
-                                       json.dumps(expected_payload))
+    mock_db.publish.assert_called_with("new_arp", json.dumps(expected_payload))
     mock_db.add_mac_addr_to_profile.assert_called_with(
-        flow_handler.profileid,
-        flow.smac
+        flow_handler.profileid, flow.smac
     )
-    mock_publisher.new_MAC.assert_has_calls([
-        call(flow.dmac, flow.daddr),
-        call(flow.smac, flow.saddr)
-    ])
+    mock_publisher.new_MAC.assert_has_calls(
+        [call(flow.dmac, flow.daddr), call(flow.smac, flow.saddr)]
+    )
     mock_db.add_altflow.assert_called_with(
-        flow,
-        flow_handler.profileid,
-        flow_handler.twid,
-        "benign"
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
 
 
@@ -265,12 +274,11 @@ def test_handle_smtp(flow, mock_db):
         "profileid": flow_handler.profileid,
         "twid": flow_handler.twid,
     }
-    mock_db.publish.assert_called_with("new_smtp", json.dumps(expected_payload))
+    mock_db.publish.assert_called_with(
+        "new_smtp", json.dumps(expected_payload)
+    )
     mock_db.add_altflow.assert_called_with(
-        flow,
-        flow_handler.profileid,
-        flow_handler.twid,
-        "benign"
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
 
 
@@ -286,18 +294,13 @@ def test_handle_software(flow, mock_db, mocker):
     flow_handler.handle_software()
 
     mock_db.add_software_to_profile.assert_called_with(
-        flow_handler.profileid,
-        flow
+        flow_handler.profileid, flow
     )
     mock_publisher.new_software.assert_called_with(
-        flow_handler.profileid,
-        flow
+        flow_handler.profileid, flow
     )
     mock_db.add_altflow.assert_called_with(
-        flow,
-        flow_handler.profileid,
-        flow_handler.twid,
-        "benign"
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
 
 
@@ -312,16 +315,11 @@ def test_handle_notice(flow, mock_db):
     flow_handler.handle_notice()
 
     mock_db.add_out_notice.assert_called_with(
-        flow_handler.profileid,
-        flow_handler.twid,
-        flow
+        flow_handler.profileid, flow_handler.twid, flow
     )
     mock_db.set_default_gateway.assert_called_with("IP", "192.168.1.1")
     mock_db.add_altflow.assert_called_with(
-        flow,
-        flow_handler.profileid,
-        flow_handler.twid,
-        "benign"
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
 
 
@@ -336,7 +334,7 @@ def test_handle_dhcp(mock_db, mocker):
         daddr="192.168.1.2",
         client_addr="192.168.1.3",
         host_name="test-host",
-        requested_addr="192.168.1.4"
+        requested_addr="192.168.1.4",
     )
     flow_handler = FlowHandler(mock_db, None, flow)
     flow_handler.profileid = "profile_id"
@@ -349,8 +347,7 @@ def test_handle_dhcp(mock_db, mocker):
 
     mock_publisher.new_MAC.assert_called_with(flow.smac, flow.saddr)
     mock_db.add_mac_addr_to_profile.assert_called_with(
-        flow_handler.profileid,
-        flow.smac
+        flow_handler.profileid, flow.smac
     )
     mock_db.store_dhcp_server.assert_called_with("192.168.1.1")
     mock_db.mark_profile_as_dhcp.assert_called_with(flow_handler.profileid)
@@ -359,8 +356,5 @@ def test_handle_dhcp(mock_db, mocker):
     for uid in flow.uids:
         flow.uid = uid
         mock_db.add_altflow.assert_called_with(
-            flow,
-            flow_handler.profileid,
-            flow_handler.twid,
-            "benign"
+            flow, flow_handler.profileid, flow_handler.twid, "benign"
         )
