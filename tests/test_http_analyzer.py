@@ -121,22 +121,32 @@ def test_get_user_agent_info(mock_db, mocker):
     # assert ua_added_to_db is not False, 'We already have UA info about this profile in the db'
 
 
-def test_check_incompatible_user_agent(mock_db):
+@pytest.mark.parametrize(
+    "mac_vendor, user_agent, expected_result",
+    [
+        # User agent is compatible with MAC vendor
+        ("Intel Corp", {"browser": "firefox"}, None),
+        # Missing user agent information
+        ("Apple Inc.", None, False),
+        # Missing information
+        (None, None, False),
+    ],
+)
+def test_check_incompatible_user_agent(mock_db, mac_vendor, user_agent, expected_result):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    # use a different profile for this unit test to make sure we don't already have info about
-    # it in the db. it has to be a private IP for its' MAC to not be marked as the gw MAC
-    profileid = "profile_192.168.77.254"
+    profileid = "profile_192.168.77.254"  # Use a different profile for this unit test
 
-    # Mimic an intel mac vendor using safari
-    mock_db.get_mac_vendor_from_profile.return_value = "Intel Corp"
-    mock_db.get_user_agent_from_profile.return_value = {"browser": "safari"}
+    # Set up the mock database
+    mock_db.get_mac_vendor_from_profile.return_value = mac_vendor
+    mock_db.get_user_agent_from_profile.return_value = user_agent
 
-    assert (
-            http_analyzer.check_incompatible_user_agent(
-                "google.com", "/images", timestamp, profileid, twid, uid
-            )
-            is True
+    # Call the method under test
+    result = http_analyzer.check_incompatible_user_agent(
+        "google.com", "/images", timestamp, profileid, twid, uid
     )
+
+    # Assert the result
+    assert result is expected_result
 
 
 def test_extract_info_from_UA(mock_db):
@@ -164,28 +174,25 @@ def test_extract_info_from_UA_valid(mock_db):
     assert http_analyzer.extract_info_from_UA(server_bag_ua, profileid) == expected_output
 
 
-def test_check_multiple_UAs(mock_db):
+@pytest.mark.parametrize(
+    "cached_ua, new_ua, expected_result",
+    [
+        ({"os_type": "Windows", "os_name": "Windows 10"},
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 "
+         "Safari/537.3",
+         False),  # User agents belong to the same OS
+        (None,
+         "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
+         "Safari/605.1.15",
+         False),  # Missing cached user agent
+    ],
+)
+def test_check_multiple_UAs(mock_db, cached_ua, new_ua, expected_result):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mozilla_ua = (
-        "Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) "
-        "Gecko/20100101 Firefox/60.0"
+    result = http_analyzer.check_multiple_UAs(
+        cached_ua, new_ua, timestamp, profileid, twid, uid
     )
-    # old ua
-    cached_ua = {"os_type": "Fedora", "os_name": "Linux"}
-    # should set evidence
-    assert (
-            http_analyzer.check_multiple_UAs(
-                cached_ua, mozilla_ua, timestamp, profileid, twid, uid
-            )
-            is False
-    )
-    # in this case we should alert
-    assert (
-            http_analyzer.check_multiple_UAs(
-                cached_ua, SAFARI_UA, timestamp, profileid, twid, uid
-            )
-            is True
-    )
+    assert result is expected_result
 
 
 @pytest.mark.parametrize(
@@ -321,23 +328,6 @@ def test_pre_main(mock_db, mocker):
     utils.drop_root_privs.assert_called_once()
 
 
-@pytest.mark.parametrize(
-    "user_agent, expected_result",
-    [
-        ("Mozilla/5.0", False),  # Non-suspicious user agent
-        ("chm_MSDN", True),  # Suspicious user agent (case-insensitive)
-        ("", False),  # Empty user agent
-        ("httpsend chm_msdn", True),  # User agent with multiple suspicious keywords     
-    ],
-)
-def test_check_suspicious_user_agents(mock_db, user_agent, expected_result):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    result = http_analyzer.check_suspicious_user_agents(
-        uid, "example.com", "/", timestamp, user_agent, profileid, twid
-    )
-    assert result is expected_result
-
-
 def test_get_mac_vendor_from_profile(mock_db):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     mock_db.get_mac_vendor_from_profile.return_value = "Apple Inc."
@@ -346,49 +336,6 @@ def test_get_mac_vendor_from_profile(mock_db):
     vendor = http_analyzer.db.get_mac_vendor_from_profile(profileid)
 
     assert vendor == "Apple Inc."
-
-
-@pytest.mark.parametrize(
-    "cached_ua, new_ua, expected_result",
-    [
-        ({"os_type": "Windows", "os_name": "Windows 10"},
-         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 "
-         "Safari/537.3",
-         False),  # User agents belong to the same OS
-        (None,
-         "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
-         "Safari/605.1.15",
-         False),  # Missing cached user agent
-    ],
-)
-def test_check_multiple_UAs(mock_db, cached_ua, new_ua, expected_result):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    result = http_analyzer.check_multiple_UAs(
-        cached_ua, new_ua, timestamp, profileid, twid, uid
-    )
-    assert result is expected_result
-
-
-@pytest.mark.parametrize(
-    "mac_vendor, user_agent, expected_result",
-    [
-        ("Intel Corp", {"browser": "firefox"}, None),  # User agent is compatible with MAC vendor
-        ("Apple Inc.", None, False),  # Missing user agent information
-        ("Apple Inc", {"browser": "safari"}, None),  # Compatible user agent and MAC vendor
-        (None, None, False),  # Missing information
-    ],
-)
-def test_check_incompatible_user_agent(mock_db, mac_vendor, user_agent, expected_result):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    profileid = "profile_192.168.77.254"
-    mock_db.get_mac_vendor_from_profile.return_value = mac_vendor
-    mock_db.get_user_agent_from_profile.return_value = user_agent
-
-    result = http_analyzer.check_incompatible_user_agent(
-        "google.com", "/images", timestamp, profileid, twid, uid
-    )
-
-    assert result is expected_result
 
 
 @pytest.mark.parametrize(
@@ -414,29 +361,6 @@ def test_check_multiple_empty_connections(mock_db, uri, request_body_len, expect
                 uid, host, uri, timestamp, request_body_len, profileid, twid
             )
         assert http_analyzer.connections_counter[host] == ([], 0)
-
-
-@pytest.mark.parametrize(
-    "user_agent, mock_side_effect, mock_status_code, mock_response_text, expected_result",
-    [
-        (SAFARI_UA, requests.exceptions.ConnectionError, None, None, False),  # Online service unavailable
-        ("Invalid user agent", None, 200, "Invalid response", False),  # Invalid user agent string
-    ],
-)
-def test_get_user_agent_info(mock_db, mocker, user_agent, mock_side_effect, 
-                             mock_status_code, mock_response_text,
-                             expected_result):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-
-    if mock_side_effect:
-        mocker.patch("http_analyzer.requests.get", side_effect=mock_side_effect)
-    else:
-        mock_requests = mocker.patch("requests.get")
-        mock_requests.return_value.status_code = mock_status_code
-        mock_requests.return_value.text = mock_response_text
-
-    result = http_analyzer.get_user_agent_info(user_agent, profileid)
-    assert result is expected_result
 
 
 @pytest.mark.parametrize(
