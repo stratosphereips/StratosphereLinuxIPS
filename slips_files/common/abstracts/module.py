@@ -38,13 +38,28 @@ class IModule(IObservable, ABC, Process):
         self.add_observer(self.logger)
         self.init(**kwargs)
 
+    @property
+    @abstractmethod
+    def name(self):
+        pass
+
+    @property
+    @abstractmethod
+    def description(self):
+        pass
+
+    @property
+    @abstractmethod
+    def authors(self):
+        pass
+
     @abstractmethod
     def init(self, **kwargs):
         """
-        all the code that was in the __init__ of all modules, is
-        now in this method
+        handles the initialization of modules
         the goal of this is to have one common __init__() for all
-        modules, which is the one in this file
+        modules, which is the one in this file, and a different init() per
+        module
         this init will have access to all keyword args passes when
         initializing the module
         """
@@ -112,7 +127,6 @@ class IModule(IObservable, ABC, Process):
         This function is for initializations that are
         executed once before the main loop
         """
-        pass
 
     def get_msg(self, channel_name):
         message = self.db.get_message(self.channels[channel_name])
