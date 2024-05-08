@@ -91,31 +91,36 @@ class ProfileHandler(IObservable):
     def get_timewindow(self, flowtime, profileid):
         """
         This function returns the TW in the database where the flow belongs.
-        If the TW is not there, we create as many tw as necessary in the future
-         or past until we get the correct TW for this flow.
-        - We use this function to avoid retrieving all the data from the DB
-        for the complete profile.
-        We use a separate table for the TW per profile.
-        -- Returns the time window id
-        THIS IS NOT WORKING:
-        - The empty tws in the middle are not being created!!!
-        - The Dtp ips are stored in the first tw
+        Returns the time window id
+        DISCLAIMER:
+
+            if the given flowtime is == the starttime of a tw, it will
+            belong to that tw
+            if it is == the end of a tw, it will belong to the next one
+            for example,
+            a flow with ts = 2 belongs to tw1
+            a flow with ts = 4 belongs to tw3
+
+               tw1   tw2   tw3   tw4
+           0 ──────┬─────┬──────┬──────
+                   │     │      │
+                   2     4      6
+
         """
         # If the option for only-one-tw was selected, we should
         # create the TW at least 100 years before the flowtime,
         # to cover for 'flows in the past'. Which means we should
         # cover for any flow that is coming later with time before the
         # first flow
+        flowtime = float(flowtime)
         if self.width == 9999999999:
             # Seconds in 1 year = 31536000
             tw_start = float(flowtime - (31536000 * 100))
             tw_number: int = 1
         else:
             starttime_of_first_tw: str = self.r.hget("analysis", "file_start")
-
             if starttime_of_first_tw:
                 starttime_of_first_tw = float(starttime_of_first_tw)
-                flowtime = float(flowtime)
                 tw_number: int = (
                     floor((flowtime - starttime_of_first_tw) / self.width) + 1
                 )
@@ -130,7 +135,6 @@ class ProfileHandler(IObservable):
 
         tw_id: str = f"timewindow{tw_number}"
 
-        # Add this TW, of this profile, to the DB
         self.add_new_tw(profileid, tw_id, tw_start)
         return tw_id
 
