@@ -7,7 +7,6 @@ from math import floor
 from typing import (
     Tuple,
     Union,
-    Dict,
     Optional,
     List,
     Set,
@@ -1089,7 +1088,7 @@ class ProfileHandler(IObservable):
         profiles = self.r.smembers("profiles")
         return profiles if profiles != set() else {}
 
-    def getTWsfromProfile(self, profileid):
+    def get_tws_from_profile(self, profileid):
         """
         Receives a profile id and returns the list of all the TW in that profile
         Returns a list of tuples (twid, ts) or an empty list
@@ -1105,7 +1104,7 @@ class ProfileHandler(IObservable):
         Receives a profile id and returns the number of all the
         TWs in that profile
         """
-        return len(self.getTWsfromProfile(profileid)) if profileid else 0
+        return len(self.get_tws_from_profile(profileid)) if profileid else 0
 
     def get_srcips_from_profile_tw(self, profileid, twid):
         """
@@ -1212,37 +1211,6 @@ class ProfileHandler(IObservable):
             )
 
         return data
-
-    def add_new_older_tw(
-        self, profileid: str, tw_start_time: float, tw_number: int
-    ):
-        """
-        Creates or adds a new timewindow that is OLDER than the
-        first we have
-        :param tw_start_time: start time of timewindow to add
-        :param tw_number: number of timewindow to add
-        Returns the id of the timewindow just created
-        """
-        try:
-            twid: str = f"timewindow{tw_number}"
-            timewindows: Dict[str, float] = {twid: tw_start_time}
-            self.r.zadd(f"tws{profileid}", timewindows)
-
-            self.print(
-                f"Created and added to DB the new older "
-                f"TW with id {twid}. Time: {tw_start_time} ",
-                0,
-                4,
-            )
-
-            # The creation of a TW now does not imply that it was modified.
-            # You need to put data to mark is at modified
-            return twid
-        except redis.exceptions.ResponseError as e:
-            self.print("error in addNewOlderTW in database.py", 0, 1)
-            self.print(type(e), 0, 1)
-            self.print(e, 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
 
     def add_new_tw(self, profileid, timewindow: str, startoftw: float):
         """
