@@ -1,4 +1,4 @@
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Union
 import tldextract
 import json
 import ipaddress
@@ -15,6 +15,7 @@ from slips_files.core.evidence_structure.evidence import (
     Direction,
     IoCType,
     Attacker,
+    Victim,
 )
 
 
@@ -395,11 +396,6 @@ class Whitelist(IObservable):
         """
         try:
             org_domains = json.loads(self.db.get_org_info(org, "domains"))
-            if org in domain:
-                # self.print(f"The domain of this flow ({domain}) belongs to
-                # the domains of {org}")
-                return True
-
             flow_tld = self.get_tld(domain)
 
             for org_domain in org_domains:
@@ -679,17 +675,19 @@ class Whitelist(IObservable):
         returns true if the ASN of the given IP is listed in the ASNs of
         the given org ASNs
         """
-        # Check if the IP in the content of the alert has ASN info in the db
         ip_data = self.db.get_ip_info(ip)
         if not ip_data:
             return
+
         try:
             ip_asn = ip_data["asn"]["number"]
         except KeyError:
             return
+        # because all ASN stored in slips organization_info/ are uppercase
+        ip_asn: str = ip_asn.upper()
 
-        org_asn: list = json.loads(self.db.get_org_info(org, "asn"))
-        return org.lower() in ip_asn.lower() or ip_asn in org_asn
+        org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
+        return org.upper() in ip_asn or ip_asn in org_asn
 
     def should_ignore_from(self, direction) -> bool:
         """
@@ -943,7 +941,6 @@ class Whitelist(IObservable):
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
         """
-        # TODO validate IP
         if not self.is_valid_ip(ip):
             return False
 
@@ -1126,12 +1123,28 @@ class Whitelist(IObservable):
         # search in the list of organization IPs
         return self.is_ip_in_org(ip, org)
 
+    @staticmethod
+    def is_private_ip(ioc_type, ioc: Union[Attacker, Victim]):
+        """checks if the given ioc is an ip and is private"""
+        if ioc_type != IoCType.IP.name:
+            return False
+
+        ip_obj = ipaddress.ip_address(ioc.value)
+        if utils.is_private_ip(ip_obj):
+            return True
+
     def is_part_of_a_whitelisted_org(self, ioc):
         """
         Handles the checking of whitelisted evidence/alerts only
         doesn't check if we should ignore flows
         :param ioc: can be an Attacker or a Victim object
         """
+        ioc_type: str = (
+            ioc.attacker_type if isinstance(ioc, Attacker) else ioc.victim_type
+        )
+
+        if self.is_private_ip(ioc_type, ioc):
+            return False
 
         whitelist = self.db.get_all_whitelist()
         if not whitelist:
@@ -1149,14 +1162,10 @@ class Whitelist(IObservable):
             ):
                 continue
 
-            ioc_type: str = (
-                ioc.attacker_type
-                if isinstance(ioc, Attacker)
-                else ioc.victim_type
-            )
-
             cases = {
                 IoCType.DOMAIN.name: self.is_domain_in_org,
                 IoCType.IP.name: self.is_ip_part_of_a_whitelisted_org,
             }
-            return cases[ioc_type](ioc.value, org)
+            if cases[ioc_type](ioc.value, org):
+                return True
+        return False

@@ -1,4 +1,3 @@
-from slips_files.common.imports import *
 import socket
 import psutil
 import sys
@@ -10,6 +9,7 @@ import json
 from datetime import datetime
 from typing import Tuple, Set
 
+from slips_files.common.slips_utils import utils
 
 
 class MetadataManager:
@@ -66,7 +66,8 @@ class MetadataManager:
 
     def add_metadata(self):
         """
-        Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
+        Create a metadata dir output/metadata/ that has a copy of
+        slips.conf, whitelist.conf, current commit and date
         """
         if not self.enable_metadata:
             return
@@ -90,12 +91,14 @@ class MetadataManager:
         now = utils.convert_format(now, utils.alerts_format)
 
         self.info_path = os.path.join(metadata_dir, "info.txt")
+        cmd = " ".join(sys.argv)
         with open(self.info_path, "w") as f:
             f.write(
                 f"Slips version: {self.main.version}\n"
                 f"File: {self.main.input_information}\n"
                 f"Branch: {self.main.db.get_branch()}\n"
                 f"Commit: {self.main.db.get_commit()}\n"
+                f"Command: {cmd}\n"
                 f"Slips start date: {now}\n"
             )
 
@@ -124,7 +127,9 @@ class MetadataManager:
         save info about name, size, analysis start date in the db
         """
         now = utils.convert_format(datetime.now(), utils.alerts_format)
-        to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
+        to_ignore: dict = self.main.conf.get_disabled_modules(
+            self.main.input_type
+        )
         info = {
             "slips_version": self.main.version,
             "name": self.main.input_information,

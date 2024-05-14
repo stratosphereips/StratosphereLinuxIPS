@@ -21,15 +21,12 @@ RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
 class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
-    """Main redis db class."""
-
-    # this db should be a singelton per port. meaning no 2 instances should be created for the same port at the same
-    # time
+    # this db is a singelton per port. meaning no 2 instances
+    # should be created for the same port at the same time
     _obj = None
     _port = None
     # Stores instances per port
     _instances = {}
-
     supported_channels = {
         "tw_modified",
         "evidence_added",
@@ -97,7 +94,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     # try to reconnect to redis this amount of times in case of connection
     # errors before terminating
     max_retries = 150
-    # to keep track of connection retries. once it reaches max_retries, slips will terminate
+    # to keep track of connection retries. once it reaches max_retries,
+    # slips will terminate
     connection_retry = 0
 
     def __new__(
@@ -105,7 +103,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     ):
         """
         treat the db as a singelton per port
-        meaning every port will have exactly 1 single obj of this db at any given time
+        meaning every port will have exactly 1 single obj of this db
+        at any given time
         """
         cls.redis_port = redis_port
         cls.flush_db = flush_db
@@ -139,8 +138,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     @classmethod
     def _set_redis_options(cls):
         """
-        Sets the default slips options,
-         when using a different port we override it with -p
+        Updates the default slips options based on the -s param,
+        writes the new configs to cls._conf_file
         """
         cls._options = {
             "daemonize": "yes",
@@ -149,22 +148,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             "appendonly": "no",
         }
 
-        if "-s" in sys.argv:
-            #   Will save the DB if both the given number of seconds and the given
-            #   number of write operations against the DB occurred.
-            #   In the example below the behaviour will be to save:
-            #   after 30 sec if at least 500 keys changed
-            #   AOF persistence logs every write operation received by the server,
-            #   that will be played again at server startup
-            # saved the db to <Slips-dir>/dump.rdb
-            cls._options.update(
-                {
-                    "save": "30 500",
-                    "appendonly": "yes",
-                    "dir": os.getcwd(),
-                    "dbfilename": "dump.rdb",
-                }
-            )
+        if "-s" not in sys.argv:
+            return
+
+        # Will save the DB if both the given number of seconds
+        # and the given number of write operations against the DB
+        # occurred.
+        # In the example below the behaviour will be to save:
+        # after 30 sec if at least 500 keys changed
+        # AOF persistence logs every write operation received by
+        # the server, that will be played again at server startup
+        # save the db to <Slips-dir>/dump.rdb
+        cls._options.update(
+            {
+                "save": "30 500",
+                "appendonly": "yes",
+                "dir": os.getcwd(),
+                "dbfilename": "dump.rdb",
+            }
+        )
 
         with open(cls._conf_file, "w") as f:
             for option, val in cls._options.items():
@@ -497,7 +499,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.zscore("labels", label)
 
-    def get_disabled_modules(self) -> list:
+    def get_disabled_modules(self) -> dict:
         if disabled_modules := self.r.hget("analysis", "disabled_modules"):
             return json.loads(disabled_modules)
         else:
@@ -957,20 +959,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         if asn:
             asn_org = asn.get("org", "")
             asn_number = asn.get("number", "")
-            id += f"AS: {asn_org} {asn_number}"
+            id += f" AS: {asn_org} {asn_number}"
 
         sni = ip_info.get("SNI", "")
         if sni:
             sni = sni[0] if isinstance(sni, list) else sni
-            id += f'SNI: {sni["server_name"]}, '
+            id += f' SNI: {sni["server_name"]}, '
 
         rdns = ip_info.get("reverse_dns", "")
         if rdns:
-            id += f"rDNS: {rdns}, "
+            id += f" rDNS: {rdns}, "
 
         threat_intel = ip_info.get("threatintelligence", "")
         if threat_intel and get_ti_data:
-            id += f"IP seen in blacklist: {threat_intel['source']}."
+            id += f" IP seen in blacklist: {threat_intel['source']}."
 
         id = id.rstrip(", ")
         return id
@@ -1205,7 +1207,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         :param org: supported orgs are ('google', 'microsoft', 'apple',
          'facebook', 'twitter')
         :param info_type: supported types are 'asn', 'domains'
-        " returns a json serialized dict with info
+        returns a json serialized dict with info
+        PS: All ASNs returned by this function are uppercase
         """
         return self.rcache.hget("OrgInfo", f"{org}_{info_type}") or "[]"
 
