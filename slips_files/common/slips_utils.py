@@ -92,12 +92,10 @@ class Utils(object):
         """
         Sanitize strings taken from the user
         """
-        string = string.replace(";", "")
-        string = string.replace("\`", "")
-        string = string.replace("&", "")
-        string = string.replace("|", "")
-        string = string.replace("$(", "")
-        string = string.replace("\n", "")
+
+        special_chars = "[@_!#$%^&;*()<>?/\|}{~:] \n"
+        for char in special_chars:
+            string = string.replace(char, "")
         return string
 
     def detect_data_type(self, data):
@@ -365,25 +363,21 @@ class Utils(object):
             )
         )
 
-    def get_hash_from_file(self, filename):
+    def get_sha256_hash(self, filename: str):
         """
         Compute the sha256 hash of a file
         """
         # The size of each read from the file
-        BLOCK_SIZE = 65536
-        # Create the hash object, can use something other
-        # than `.sha256()` if you wish
+        block_size = 65536
+        # Create the hash object
         file_hash = hashlib.sha256()
-        # Open the file to read it's bytes
         with open(filename, "rb") as f:
-            # Read from the file. Take in the amount declared above
-            fb = f.read(BLOCK_SIZE)
-            # While there is still data being read from the file
-            while len(fb) > 0:
-                # Update the hash
-                file_hash.update(fb)
+            file_bytes = f.read(block_size)
+            while len(file_bytes) > 0:
+                file_hash.update(file_bytes)
                 # Read the next block from the file
-                fb = f.read(BLOCK_SIZE)
+                file_bytes = f.read(block_size)
+
         return file_hash.hexdigest()
 
     def is_msg_intended_for(self, message, channel):
@@ -395,7 +389,7 @@ class Utils(object):
 
         return (
             message
-            and type(message["data"]) == str
+            and isinstance(message["data"], str)
             and message["channel"] == channel
         )
 
