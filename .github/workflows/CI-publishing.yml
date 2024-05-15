@@ -41,6 +41,12 @@ jobs:
             path: ./docker/macosm1-image/Dockerfile
 
     steps:
+    - name: Maximize build space
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 512
+        swap-size-mb: 1024
+
     - name: Get slips version
       run: |
         VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
@@ -66,7 +72,7 @@ jobs:
       timeout-minutes: 15
       uses: docker/build-push-action@v2
       with:
-        swap-size-gb: 10
+        swap-size-gb: 20
         context: ./
         file: ${{ matrix.path }}
         tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
