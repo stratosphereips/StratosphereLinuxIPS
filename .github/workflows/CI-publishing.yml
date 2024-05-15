@@ -57,7 +57,7 @@ jobs:
     # By default it checks out only one commit
     - uses: actions/checkout@v3
       with:
-        ref: 'master'
+        ref: 'alya/fix-publishing-docker-image'
         # Fetch all history for all tags and branches
         fetch-depth: ''
 
