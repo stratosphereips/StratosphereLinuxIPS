@@ -66,12 +66,19 @@ jobs:
         username: stratosphereips
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+    - name: Free some space
+      run: |
+           rm -rf /usr/share/dotnet
+           rm -rf /opt/ghc
+           rm -rf "/usr/local/share/boost"
+           rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Build ${{ matrix.name }} from Dockerfile
       id: docker_build_slips
       timeout-minutes: 15
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v5
       with:
+        no-cache: true
         swap-size-gb: 20
         context: ./
         file: ${{ matrix.path }}
