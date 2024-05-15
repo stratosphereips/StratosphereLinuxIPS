@@ -67,6 +67,12 @@ jobs:
         username: stratosphereips
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+    - name: free some space
+      run: |
+           rm -rf /usr/share/dotnet
+           rm -rf /opt/ghc
+           rm -rf "/usr/local/share/boost"
+           rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Build ${{ matrix.name }} from Dockerfile
       id: docker_build_slips
