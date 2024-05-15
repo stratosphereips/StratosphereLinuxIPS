@@ -46,68 +46,11 @@ class VerticalPortscan:
 
     def __init__(self, db):
         self.db = db
-        # We need to know that after a detection, if we receive another flow
-        # that does not modify the count for the detection, we don't
-        # re-detect again
-        self.cached_tw_thresholds = {}
-        # Get from the database the separator used to
-        # separate the IP and the word profile
-        self.fieldseparator = self.db.get_field_separator()
-        # The minimum amount of ports to scan in vertical scan
-        self.port_scan_minimum_dports = 5
-        # list of tuples, each tuple is the args to setevidence
-        self.pending_vertical_ps_evidence = {}
-        # we should alert once we find 1 vertical ps evidence then
-        # combine the rest of evidence every x seconds
-        # the value of this dict will be true after
-        # the first portscan alert to th ekey ip
-        # format is {ip: True/False , ...}
-        self.alerted_once_vertical_ps = {}
-
-    def combine_evidence(self):
-        """
-        combines all evidence in self.pending_vertical_ps_evidence into 1
-        evidence and empties the dict afterwards
-        """
-        for key, evidence_list in self.pending_vertical_ps_evidence.items():
-            # each key here is  {profileid}-{twid}-{state}-{protocol}-{dport}
-            # each value here is a list of evidence that should be combined
-            profileid, twid, _, protocol, dstip = key.split("-")
-            final_evidence_uids = []
-            final_pkts_sent = 0
-
-            # combine all evidence that share the above key
-            for evidence in evidence_list:
-                # each evidence is a tuple of
-                # (timestamp, pkts_sent, uids, amount_of_dips)
-                # in the final evidence, we'll be
-                # using the ts of the last evidence
-                (
-                    timestamp,
-                    pkts_sent,
-                    evidence_uids,
-                    amount_of_dports,
-                ) = evidence
-                # since we're combining evidence,
-                # we want the uids of the final evidence
-                # to be the sum of all the evidence we combined
-                final_evidence_uids += evidence_uids
-                final_pkts_sent += pkts_sent
-
-            evidence = {
-                "timestamp": timestamp,
-                "pkts_sent": final_pkts_sent,
-                "protocol": protocol,
-                "profileid": profileid,
-                "twid": twid,
-                "uid": final_evidence_uids,
-                "amount_of_dports": amount_of_dports,
-                "dstip": dstip,
-            }
-
-            self.set_evidence_vertical_portscan(evidence)
-        # reset the dict since we already combined
-        self.pending_vertical_ps_evidence = {}
+        # to keep track of the max dports reported per timewindow
+        self.cached_thresholds_per_tw = {}
+        # The minimum amount of scanned ports to trigger an evidence
+        # is increased exponentially every evidence, and is reset each timewindow
+        self.minimum_dports_to_set_evidence = 5
 
     def set_evidence_vertical_portscan(self, evidence: dict):
         """Sets the vertical portscan evidence in the db"""
@@ -151,76 +94,62 @@ class VerticalPortscan:
 
         self.db.set_evidence(evidence)
 
-    def decide_if_time_to_set_evidence_or_combine(
-        self, evidence: dict, cache_key: str
+    def are_dports_greater_or_eq_minimum_dports(self, dports: int) -> bool:
+        return dports >= self.minimum_dports_to_set_evidence
+
+    @staticmethod
+    def are_dports_greater_or_eq_last_evidence(
+        dports: int, ports_reported_last_evidence: int
     ) -> bool:
         """
-        sets the evidence immediately if it was the
-            first portscan evidence in this tw
-            or combines past 3
-            evidence and then sets an evidence.
-        :return: True if evidence was set/combined,
-            False if evidence was queued for combining later
+         To make sure the amount of dports reported
+         each evidence is higher than the previous one +15
+         so the first alert will always report 5
+         dports, and then 20+,35+. etc
+
+        :param dports: dports to report in the current evidence
+        :param ports_reported_last_evidence: the amount of
+            ports reported in the last evidence in the current
+            evidence's timewindow
         """
-        if not self.alerted_once_vertical_ps.get(cache_key, False):
-            # now from now on, we will be combining the next vertical
-            # ps evidence targetting this dport
-            self.alerted_once_vertical_ps[cache_key] = True
-            self.set_evidence_vertical_portscan(evidence)
+        if ports_reported_last_evidence == 0:
+            # first portscan evidence in this threshold, no past evidence
+            # to compare with
             return True
+        return dports >= ports_reported_last_evidence + 15
 
-        # we will be combining further alerts to avoid alerting
-        # many times every portscan
-        evidence_to_combine = (
-            evidence["timestamp"],
-            evidence["pkts_sent"],
-            evidence["uid"],
-            evidence["amount_of_dports"],
+    def should_set_evidence(self, dports: int, twid_threshold: int) -> bool:
+        """
+        Makes sure the given dports are more than the minimum dports number
+        we should alert on, and that is it more than the dports of
+        the last evidence
+
+        The goal is to never get an evidence that's
+         1 or 2 ports more than the previous one so we dont
+         have so many portscan evidence
+        """
+        more_than_min = self.are_dports_greater_or_eq_minimum_dports(dports)
+        exceeded_twid_threshold = self.are_dports_greater_or_eq_last_evidence(
+            dports, twid_threshold
         )
-
-        # for all the combined alerts, the following params should be equal
-        key = (
-            f'{evidence["profileid"]}-'
-            f'{evidence["twid"]}-'
-            f'{evidence["state"]}-'
-            f'{evidence["protocol"]}-'
-            f'{evidence["dstip"]}'
-        )
-        try:
-            self.pending_vertical_ps_evidence[key].append(evidence_to_combine)
-        except KeyError:
-            # first time seeing this key
-            self.pending_vertical_ps_evidence[key] = [evidence_to_combine]
-
-        # combine evidence every x new portscans to the same ip
-        if len(self.pending_vertical_ps_evidence[key]) == 3:
-            self.combine_evidence()
-            return True
-
-        return False
+        return more_than_min and exceeded_twid_threshold
 
     def check_if_enough_dports_to_trigger_an_evidence(
-        self, cache_key: str, amount_of_dports: int
+        self, twid_identifier: str, amount_of_dports: int
     ) -> bool:
         """
         checks if the scanned sports are enough to trigger and evidence
-        we make sure the amount of dports reported each evidence
-        is higher than the previous one +5
+        to make sure the amount of dports reported each evidence
+        is higher than the previous one +15
         """
-        prev_amount_dports: int = self.cached_tw_thresholds.get(cache_key, 0)
-        # we make sure the amount of dports reported
-        # each evidence is higher than the previous one +5
-        # so the first alert will always report 5
-        # dport, and then 10+,15+,20+ etc
-        # the goal is to never get an evidence that's
-        # 1 or 2 ports more than the previous one so we dont
-        # have so many portscan evidence
-        if (
-            amount_of_dports >= self.port_scan_minimum_dports
-            and prev_amount_dports + 5 <= amount_of_dports
-        ):
-            # Store in our local cache how many dips were there:
-            self.cached_tw_thresholds[cache_key] = amount_of_dports
+        twid_threshold: int = self.cached_thresholds_per_tw.get(
+            twid_identifier, 0
+        )
+
+        if self.should_set_evidence(amount_of_dports, twid_threshold):
+            # keep track of the max reported dstips
+            # in the last evidence in this twid
+            self.cached_thresholds_per_tw[twid_identifier] = amount_of_dports
             return True
         return False
 
@@ -228,7 +157,8 @@ class VerticalPortscan:
         self, protocol: str, state: str, profileid: str, twid: str
     ) -> dict:
         """
-        Get the list of dstips that we tried to connect to (not established flows)
+        Get the list of dstips that we tried to connect to
+            (not established flows)
           these unknowns are the info this function retrieves
           profileid -> unknown_dstip:unknown_dstports
 
@@ -239,10 +169,12 @@ class VerticalPortscan:
                  totalflows: total flows seen by the profileid
                  totalpkt: total packets seen by the profileid
                  totalbytes: total bytes sent by the profileid
-                 stime: timestamp of the first flow seen from this profileid -> this dstip
+                 stime: timestamp of the first flow seen from
+                        this profileid -> this dstip
                  uid: list of uids where the given profileid was
                         contacting the dst_ip on this dstport
-                 dstports: dst ports seen in all flows where the given profileid was srcip
+                 dstports: dst ports seen in all flows where the given
+                        profileid was srcip
                      {
                          <str port>: < int spkts sent to this port>
                      }
@@ -257,12 +189,14 @@ class VerticalPortscan:
         )
         return dstips
 
-    def get_cache_key(self, profileid: str, twid: str, dstip: str):
+    def get_twid_identifier(
+        self, profileid: str, twid: str, dstip: str
+    ) -> str:
         """
-        returns the key that identifies this vertical portscan in thhe
+        returns the key that identifies this vertical portscan in the
         given tw
         """
-        return f"{profileid}:{twid}:dstip:{dstip}:VerticalPortscan"
+        return f"{profileid}:{twid}:dstip:{dstip}"
 
     def check(self, profileid, twid):
         """
@@ -270,9 +204,10 @@ class VerticalPortscan:
         """
         # if you're portscaning a port that is open it's gonna be established
         # the amount of open ports we find is gonna be so small
-        # theoretically this is incorrect bc we'll be ignoring established evidence,
-        # but usually open ports are very few compared to the whole range
-        # so, practically this is correct to avoid FP
+        # theoretically this is incorrect bc we'll be ignoring
+        # established connections, but usually open ports are very few
+        # compared to the whole range. so, practically this is correct to
+        # avoid FP
         state = "Not Established"
 
         for protocol in ("TCP", "UDP"):
@@ -280,17 +215,20 @@ class VerticalPortscan:
                 protocol, state, profileid, twid
             )
 
-            # For each dstip, see if the amount of ports connections is over the threshold
+            # For each dstip, see if the amount of ports
+            # connections is over the threshold
             for dstip in dstips.keys():
-                dstports: dict = dstips[dstip]["dstports"]
+                dst_ports: dict = dstips[dstip]["dstports"]
                 # Get the total amount of pkts sent to all
                 # ports on the same host
-                pkts_sent = sum(dstports[dport] for dport in dstports)
-                amount_of_dports = len(dstports)
+                pkts_sent = sum(dst_ports[dport] for dport in dst_ports)
+                amount_of_dports = len(dst_ports)
 
-                cache_key = self.get_cache_key(profileid, twid, dstip)
+                twid_identifier: str = self.get_twid_identifier(
+                    profileid, twid, dstip
+                )
                 if self.check_if_enough_dports_to_trigger_an_evidence(
-                    cache_key, amount_of_dports
+                    twid_identifier, amount_of_dports
                 ):
                     evidence_details = {
                         "timestamp": dstips[dstip]["stime"],
@@ -304,6 +242,4 @@ class VerticalPortscan:
                         "state": state,
                     }
 
-                    self.decide_if_time_to_set_evidence_or_combine(
-                        evidence_details, cache_key
-                    )
+                    self.set_evidence_vertical_portscan(evidence_details)

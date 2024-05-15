@@ -559,22 +559,21 @@ class EvidenceHandler(ICore):
             self.is_running_on_interface() and "-p" not in sys.argv
         ) or custom_flows
 
-    def handle_new_alert(self, alert_ID: str, tw_evidence: dict):
+    def handle_new_alert(self, alert_id: str, tw_evidence: dict):
         """
         saves alert details in the db and informs exporting modules about it
         """
-        profile, srcip, twid, _ = alert_ID.split("_")
+        profile, srcip, twid, _ = alert_id.split("_")
         profileid = f"{profile}_{srcip}"
         self.db.set_evidence_causing_alert(
-            profileid, twid, alert_ID, self.IDs_causing_an_alert
+            profileid, twid, alert_id, self.IDs_causing_an_alert
         )
         # when an alert is generated , we should set the threat level of the
         # attacker's profile to 1(critical) and confidence 1
         # so that it gets reported to other peers with these numbers
         self.db.update_threat_level(profileid, "critical", 1)
-
         alert_details = {
-            "alert_ID": alert_ID,
+            "alert_ID": alert_id,
             "profileid": profileid,
             "twid": twid,
         }

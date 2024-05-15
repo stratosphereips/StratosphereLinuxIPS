@@ -21,15 +21,12 @@ RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
 class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
-    """Main redis db class."""
-
-    # this db should be a singelton per port. meaning no 2 instances should be created for the same port at the same
-    # time
+    # this db is a singelton per port. meaning no 2 instances
+    # should be created for the same port at the same time
     _obj = None
     _port = None
     # Stores instances per port
     _instances = {}
-
     supported_channels = {
         "tw_modified",
         "evidence_added",
@@ -97,7 +94,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     # try to reconnect to redis this amount of times in case of connection
     # errors before terminating
     max_retries = 150
-    # to keep track of connection retries. once it reaches max_retries, slips will terminate
+    # to keep track of connection retries. once it reaches max_retries,
+    # slips will terminate
     connection_retry = 0
 
     def __new__(
@@ -105,7 +103,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     ):
         """
         treat the db as a singelton per port
-        meaning every port will have exactly 1 single obj of this db at any given time
+        meaning every port will have exactly 1 single obj of this db
+        at any given time
         """
         cls.redis_port = redis_port
         cls.flush_db = flush_db
@@ -139,8 +138,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     @classmethod
     def _set_redis_options(cls):
         """
-        Sets the default slips options,
-         when using a different port we override it with -p
+        Updates the default slips options based on the -s param,
+        writes the new configs to cls._conf_file
         """
         cls._options = {
             "daemonize": "yes",
@@ -149,22 +148,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             "appendonly": "no",
         }
 
-        if "-s" in sys.argv:
-            #   Will save the DB if both the given number of seconds and the given
-            #   number of write operations against the DB occurred.
-            #   In the example below the behaviour will be to save:
-            #   after 30 sec if at least 500 keys changed
-            #   AOF persistence logs every write operation received by the server,
-            #   that will be played again at server startup
-            # saved the db to <Slips-dir>/dump.rdb
-            cls._options.update(
-                {
-                    "save": "30 500",
-                    "appendonly": "yes",
-                    "dir": os.getcwd(),
-                    "dbfilename": "dump.rdb",
-                }
-            )
+        if "-s" not in sys.argv:
+            return
+
+        # Will save the DB if both the given number of seconds
+        # and the given number of write operations against the DB
+        # occurred.
+        # In the example below the behaviour will be to save:
+        # after 30 sec if at least 500 keys changed
+        # AOF persistence logs every write operation received by
+        # the server, that will be played again at server startup
+        # save the db to <Slips-dir>/dump.rdb
+        cls._options.update(
+            {
+                "save": "30 500",
+                "appendonly": "yes",
+                "dir": os.getcwd(),
+                "dbfilename": "dump.rdb",
+            }
+        )
 
         with open(cls._conf_file, "w") as f:
             for option, val in cls._options.items():

@@ -1,6 +1,6 @@
 # Installation
 
-There are two ways to install and run Slips: inside a Docker or in your own computer. We suggest to install and to run Slips inside a Docker since all dependencies are already installed in there. However, current version of docker with Slips does not allow to capture the traffic from the computer's interface. We will describe both ways of installation anyway. 
+There are two ways to install and run Slips: inside a Docker or in your own computer. We suggest to install and to run Slips inside a Docker since all dependencies are already installed in there. However, current version of docker with Slips does not allow to capture the traffic from the computer's interface. We will describe both ways of installation anyway.
 
 
 
@@ -14,7 +14,7 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
     * On MacOS M1 host
       * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
     * On MacOS Intel processor
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors) 
+      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors)
       * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
@@ -24,6 +24,10 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 * [on RPI (Beta)](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-on-a-raspberry-pi)
 
 
+
+## Requirements
+
+Slips requires Python 3.8+ and at least 4 GBs of RAM to run smoothly.
 
 ## Slips in Docker
 
@@ -45,29 +49,29 @@ For more advanced users, you can:
 
 1. First, choose the correct image for your architecture
 
-####  For linux 
+####  For linux
 
 ###### Analyse your own traffic
-	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
-    - Please change the name of the interface for your own. 
+	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
+    - Please change the name of the interface for your own.
     - Check the alerts slips generated
       - ```tail -f output/eno1*/alerts.log ```
 
-###### Analyze your PCAP file 
+###### Analyze your PCAP file
 	- Prepare a dataset directory
 		- `mkdir dataset`
 		- `cp myfile.pcap dataset`
 	  - Run Slips
-		- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
+		- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
 	  - Check the alerts slips generated
 		  - ```tail -f output/myfile*/alerts.log ```
 
 
 ####  For MacOS M1
 
-###### Analyse your own traffic 
-	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
-    - Please change the name of the interface for your own. 
+###### Analyse your own traffic
+	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
+    - Please change the name of the interface for your own.
     - Check the alerts slips generated
       - ```tail -f output/eno1*/alerts.log ```
 
@@ -78,36 +82,36 @@ Docker with P2P is not supported for MacOS M1.
 
 #### For MacOS Intel processors
 
-###### Analyse your own traffic 
-	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
-    - Please change the name of the interface for your own. 
+###### Analyse your own traffic
+	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
+    - Please change the name of the interface for your own.
     - Check the alerts slips generated
       - ```tail -f output/eno1*/alerts.log ```
-      
-###### Analyze your PCAP file 
+
+###### Analyze your PCAP file
 	- Prepare a dataset directory
 		- `mkdir dataset`
 		- `cp myfile.pcap dataset`
 	  - Run Slips
-		- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
+		- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
 	  - Check the alerts slips generated
 		  - ```tail -f output/myfile*/alerts.log ```
 
 
 
-####  For P2P support on Linux 
+####  For P2P support on Linux
 
 ###### To analyze your own traffic with p2p
-	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
-    - Please change the name of the interface for your own. 
+	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
+    - Please change the name of the interface for your own.
     - Check evidence
       ```tail -f output_dir/alerts.log ```
 
 #### For P2P support on MacOS Intel
 
-###### Analyze your own traffic 
-	- `docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
-    - Please change the name of the interface for your own. 
+###### Analyze your own traffic
+	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
+    - Please change the name of the interface for your own.
     - Check evidence
       ```tail -f output_dir/alerts.log ```
 
@@ -141,11 +145,11 @@ If you were running slips directly from the docker without cloning the repo, you
 	2. Get into the docker with `docker exec -it slips /bin/bash`, and then modifying the configuration file in `config/slips.conf` to add the disabled modules
 	3. Run Slips from inside the docker
 			`./slips.py -i enp7s0`
-1. You can 
-	1. Clone the Slips repo (clone the same version as the docker you are downloading), 
+1. You can
+	1. Clone the Slips repo (clone the same version as the docker you are downloading),
 	2. Modify your local `config/slips.conf`
 	3. Run the docker command above but by mounting the volume of the config.
-		`docker run --rm -it -p 55000:55000 --net=host --cap-add=NET_ADMIN -v $(pwd)/config:/StratosphereLinuxIPS/config/ -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
+		`docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/config:/StratosphereLinuxIPS/config/ -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
 
 ---
 ### Run Slips sharing files between the host and the container
@@ -155,13 +159,13 @@ The following instructions will guide you on how to run a Slips docker container
 ```bash
     # create a directory to load pcaps in your host computer
     mkdir ~/dataset
-    
+
     # copy the pcap to analyze to the newly created folder
     cp <some-place>/myfile.pcap ~/dataset
-    
+
     # create a new Slips container mapping the folder in the host to a folder in the container
     docker run -it --rm --net=host --name slips -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
-    
+
     # run Slips on the pcap file mapped to the container
     ./slips.py -f dataset/myfile.pcap
 ```
@@ -175,7 +179,7 @@ Change eno1 in the command below to your own interface
 ```bash
     # run a new Slips container with the option to interact with the network stack of the host
     docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
-    
+
     # run Slips on the host interface `eno1` with active blocking `-p`
     ./slips.py -i eno1 -p
 ```
@@ -186,7 +190,7 @@ Change eno1 in the command below to your own interface
 
 
 Change enp1s0 to your current interface in docker/docker-compose.yml and start slips using
-    
+
     docker compose -f docker/docker-compose.yml up
 
 Now everything inside your host's ```config``` and ```dataset``` directories is
@@ -215,27 +219,29 @@ First, you need to check which image is suitable for your architecture.
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/docker_images.png" width="850px">
 
 
-Before building the docker locally from the Dockerfile, first you should clone Slips repo or download the code directly: 
+Before building the docker locally from the Dockerfile, first you should clone Slips repo or download the code directly:
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
-If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
+If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
 
 **NOTE: replace ubuntu-image with the image that fits your archiecture**
+**NOTE: you have to be in the main Slips directory to build this. **
 
-	cd ~/code/StratosphereLinuxIPS/docker/ubunutu-image
-	docker build --no-cache -t slips -f Dockerfile .
-	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
+
+	cd ~/StratosphereLinuxIPS
+	docker build --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
+	docker run -it --rm --net=host slips
 	./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
 
-	docker build --network=host --no-cache -t slips -f Dockerfile .
-	
+	docker build --network=host --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
+
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 
-	cp some-pcap-file.pcap ~/code/StratosphereLinuxIPS/dataset
-	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
+	cp some-pcap-file.pcap ~/StratosphereLinuxIPS/dataset
+	docker run -it --rm --net=host -v ~/StratosphereLinuxIPS/dataset/:/StratosphereLinuxIPS/dataset slips
 	./slips.py -f dataset/some-pcap-file.pcap
 
 
@@ -249,13 +255,13 @@ To fix this you can disable all machine learning based modules when running Slip
 
 ## Installing Slips natively
 
-Slips is dependent on three major elements: 
+Slips is dependent on three major elements:
 
 Python 3.8
 Zeek
 Redis database 7.0.4
 
-To install these elements we will use APT package manager. After that, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages. 
+To install these elements we will use APT package manager. After that, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages.
 
 
 
@@ -276,12 +282,12 @@ You can install it using install.sh
 Update the repository of packages so you see the latest versions:
 
 	apt-get update
-	
+
 Install the required packages (-y to install without asking for approval):
 
     apt-get -y install tshark iproute2 python3.8 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek whois yara
     apt install -y --no-install-recommends nodejs
-	
+
 Even though we just installed pip3, the package installer for Python (3.8), we need to upgrade it to its latest version:
 
 	python3 -m pip install --upgrade pip
@@ -311,7 +317,7 @@ Finally, we will update the package manager repositories and install zeek
 
 	apt-get update
 	apt-get -y install zeek
-	
+
 To make sure that zeek can be found in the system we will add its link to a known path:
 
 	ln -s /opt/zeek/bin/zeek /usr/local/bin
@@ -319,16 +325,16 @@ To make sure that zeek can be found in the system we will add its link to a know
 #### Running Slips for the First Time
 
 
-Be aware that the first time you run Slips it will start updating 
+Be aware that the first time you run Slips it will start updating
 all the databases and threat intelligence files in the background.
-However, it will give you as many detections as possible _while_ updating. 
+However, it will give you as many detections as possible _while_ updating.
 You may have more detections if you rerun Slips after the updates.
-Slips behaves like this, so you don't have to wait for the updates to 
+Slips behaves like this, so you don't have to wait for the updates to
 finish to have some detections. however, you can change that in the config file by setting ```wait_for_TI_to_finish``` to yes.
 
 
-Depending on the remote sites, downloading and updating the DB may take up to 4 minutes. 
-Slips stores this information in a cache Redis database, 
+Depending on the remote sites, downloading and updating the DB may take up to 4 minutes.
+Slips stores this information in a cache Redis database,
 which is kept in memory when Slips stops. Next time Slips runs, it will read from this database.
 The information in the DB is updated periodically according to the configuration file (usually one day).
 
@@ -353,8 +359,8 @@ then choosing 1.
 
 ## Installing Slips on a Raspberry PI
 
-Slips on RPI is currently in beta and is actively under development. 
-While it is functional, please be aware that there may be occasional bugs or changes in functionality as we work to 
+Slips on RPI is currently in beta and is actively under development.
+While it is functional, please be aware that there may be occasional bugs or changes in functionality as we work to
 improve and refine this feature. Your feedback and contributions are highly valuable during this stage!
 
 
@@ -368,4 +374,3 @@ Packages for Raspbian 11:
 Packages for Raspbian 10:
 
 [https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.1-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.1-0_armhf.deb)
-

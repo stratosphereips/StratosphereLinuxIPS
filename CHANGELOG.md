@@ -1,3 +1,12 @@
+- 1.0.14 (May 2024)
+- Improve whitelists. better matching of ASNs, domains, and organizations.
+- Whitelist Microsoft, Apple, Twitter, Facebook and Google alerts by default to reduce false positives.
+- Better unit tests. thanks to @Sekhar-Kumar-Dash
+- Speed up portscan detections.
+- Fix the issue of overwriting redis config file every run.
+- Add more info to metadata/info.txt for each run.
+
+
 - 1.0.13 (April 2024)
 - Whitelist alerts to all organizations by default to reduce false positives.
 - Improve and compress Slips Docker images. thanks to @verovaleros
