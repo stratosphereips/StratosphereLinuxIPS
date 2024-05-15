@@ -8,21 +8,21 @@ on:
     - '!develop'
 
 jobs:
-  # auto add release tag
-#  create_tag:
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - name: Get slips version
-#        run: |
-#          VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-#          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
-#
-#      - uses: actions/checkout@v3
-#      - uses: rickstaa/action-create-tag@v1
-#        with:
-#          tag: ${{ env.SLIPS_VERSION }}
-#          message: ""
+   # auto add release tag
+  create_tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get slips version
+        run: |
+          VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+
+      - uses: actions/checkout@v3
+      - uses: rickstaa/action-create-tag@v1
+        with:
+          tag: ${{ env.SLIPS_VERSION }}
+          message: ""
 
   publish_image:
     # runs the tests in a docker(built by this job) on top of a GH VM
@@ -35,11 +35,11 @@ jobs:
             name: ubuntu-image
             image_name: slips
             path: ./docker/ubuntu-image/Dockerfile
-#
-#          - type: macosm1-image
-#            name: macosm1-image
-#            image_name: slips_macos_m1
-#            path: ./docker/macosm1-image/Dockerfile
+
+          - type: macosm1-image
+            name: macosm1-image
+            image_name: slips_macos_m1
+            path: ./docker/macosm1-image/Dockerfile
 
     steps:
     - name: Maximize build space
