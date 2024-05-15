@@ -57,22 +57,6 @@ jobs:
         coverage report --include="slips_files/core/database/*"
         coverage html --include="slips_files/core/database/*" -d coverage_reports/database
 
-    - name: Clear redis cache
-      run: ./slips.py -cc
-
-    - name: Portscan tests
-      run: |
-        coverage run --source=./ -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
-        coverage report --include="modules/network_discovery/*"
-        coverage html --include="modules/network_discovery/*" -d coverage_reports/network_discovery
-
-    - name: Integration tests
-      run: |
-        python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
-#        coverage run --source=./ -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
-#        coverage report --include="dataset/*"
-#        coverage html --include="dataset/*" -d coverage_reports/dataset
-
     - name: Flowalerts test
       run: |
         coverage run --source=./ -m pytest tests/test_flowalerts.py -p no:warnings -vv
@@ -117,7 +101,7 @@ jobs:
 
     - name: vertical_portscans test
       run: |
-        coverage run --source=./ -m pytest tests/test_vertical_portscan.py -p no:warnings -vv
+        coverage run --source=./ -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
         coverage report  --include="modules/network_discovery/vertical_portscan.py*"
         coverage html  --include="modules/network_discovery/vertical_portscan.py*" -d coverage_reports/vertical_portscan
 
@@ -174,6 +158,23 @@ jobs:
         coverage run --source=./ -m pytest tests/test_inputProc.py -p no:warnings -vv
         coverage report  --include="slips_files/core/input.py*"
         coverage html  --include="slips_files/core/input.py*" -d coverage_reports/input
+
+    - name: Clear redis cache
+      run: ./slips.py -cc
+
+    - name: Portscan tests
+      run: |
+        coverage run --source=./ -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
+        coverage report --include="modules/network_discovery/*"
+        coverage html --include="modules/network_discovery/*" -d coverage_reports/network_discovery
+
+    - name: Integration tests
+      run: |
+        python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
+#        coverage run --source=./ -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
+#        coverage report --include="dataset/*"
+#        coverage html --include="dataset/*" -d coverage_reports/dataset
+
 
     - name: Config file tests
       run: |
