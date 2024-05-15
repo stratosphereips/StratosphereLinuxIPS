@@ -83,7 +83,7 @@ jobs:
         swap-size-gb: 20
         context: ./
         file: ${{ matrix.path }}
-        tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
+        tags: stratosphereips/test_image
         push: true
 #
 #  publish_P2P_docker_image:
