@@ -66,6 +66,7 @@ jobs:
       timeout-minutes: 15
       uses: docker/build-push-action@v2
       with:
+        swap-size-gb: 10
         context: ./
         file: ${{ matrix.path }}
         tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
