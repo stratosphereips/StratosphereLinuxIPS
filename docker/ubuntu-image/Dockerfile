@@ -25,11 +25,14 @@ RUN apt update && apt install -y --no-install-recommends \
     iptables \
     iproute2 \
     python3-tzlocal \
+    nfdump \
     tshark \
     whois \
     yara \
     net-tools \
-    apt-transport-https \
+    git \
+    vim \
+    less \
  && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list \
  && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor > /etc/apt/trusted.gpg.d/security_zeek.gpg \
  && curl -fsSL https://packages.redis.io/gpg |  gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
