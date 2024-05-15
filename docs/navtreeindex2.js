@@ -1,8 +1,5 @@
 var NAVTREEINDEX2 =
 {
-"class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html#aca632501445840943a0cffe35afee3de":[1,0,0,1,11,0,0,19],
-"class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html#ade33a69e5b97204fbc23132e782e1d05":[1,0,0,1,11,0,0,39],
-"class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html#adeccb2bfd8b867d2a8b1aa8097e3773d":[1,0,0,1,11,0,0,33],
 "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html#aeac5f34df245a67585aeba76037abb25":[1,0,0,1,11,0,0,26],
 "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html#aef7b60cf1bc686534528a722088ac424":[1,0,0,1,11,0,0,46],
 "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html#af6987eb01afd7e9cee37eb08c01d226d":[1,0,0,1,11,0,0,37],
@@ -249,5 +246,8 @@ var NAVTREEINDEX2 =
 "class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a15cdb6d148acad3ce33a401427efc849":[1,0,0,1,18,0,0,3],
 "class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a165317b38dc3269ed3839e845531bb45":[1,0,0,1,18,0,0,5],
 "class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a18d4fae7ca62be663ed9fde8ced29d07":[1,0,0,1,18,0,0,29],
-"class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a350171827db97468ac52956ead5e1104":[1,0,0,1,18,0,0,17]
+"class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a350171827db97468ac52956ead5e1104":[1,0,0,1,18,0,0,17],
+"class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a3e9c1bc591097c3addd927ac394840e7":[1,0,0,1,18,0,0,0],
+"class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a45ba33f830b8b01f7867d4ec47d47aaa":[1,0,0,1,18,0,0,6],
+"class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a4df6c0e140ae9de04b66183df1f8eeb7":[1,0,0,1,18,0,0,20]
 };
