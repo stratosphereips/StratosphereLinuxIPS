@@ -2,7 +2,10 @@ import json
 import urllib
 import requests
 from typing import Union, Dict
-from slips_files.common.imports import *
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -294,7 +297,6 @@ class HTTPAnalyzer(IModule):
         Compare the user agent of this profile to the MAC vendor
         and check incompatibility
         """
-        # get the mac vendor
         vendor: Union[str, None] = self.db.get_mac_vendor_from_profile(
             profileid
         )
@@ -303,7 +305,7 @@ class HTTPAnalyzer(IModule):
         vendor = vendor.lower()
 
         user_agent: dict = self.db.get_user_agent_from_profile(profileid)
-        if not user_agent or type(user_agent) != dict:
+        if not user_agent or not isinstance(user_agent, dict):
             return False
 
         os_type = user_agent.get("os_type", "").lower()
@@ -713,7 +715,7 @@ class HTTPAnalyzer(IModule):
                 )
 
             if not cached_ua or (
-                type(cached_ua) == dict
+                isinstance(cached_ua, dict)
                 and cached_ua.get("user_agent", "") != user_agent
                 and "server-bag" not in user_agent
             ):

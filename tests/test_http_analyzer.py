@@ -115,10 +115,6 @@ def test_get_user_agent_info(mock_db, mocker):
         http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
         == expected_ret_value
     )
-    # # get ua info online, and add os_type , os_name and agent_name anout this profile
-    # # to the db
-    # assert ua_added_to_db is not None, 'Error getting UA info online'
-    # assert ua_added_to_db is not False, 'We already have UA info about this profile in the db'
 
 
 @pytest.mark.parametrize(
@@ -136,20 +132,16 @@ def test_check_incompatible_user_agent(
     mock_db, mac_vendor, user_agent, expected_result
 ):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    profileid = (
-        "profile_192.168.77.254"  # Use a different profile for this unit test
-    )
+    # Use a different profile for this unit test
+    profileid = "profile_192.168.77.254"
 
-    # Set up the mock database
     mock_db.get_mac_vendor_from_profile.return_value = mac_vendor
     mock_db.get_user_agent_from_profile.return_value = user_agent
 
-    # Call the method under test
     result = http_analyzer.check_incompatible_user_agent(
         "google.com", "/images", timestamp, profileid, twid, uid
     )
 
-    # Assert the result
     assert result is expected_result
 
 
@@ -165,21 +157,6 @@ def test_extract_info_from_UA(mock_db):
         == '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": "macOS11.5.1", '
         '"browser": ""}'
     )
-
-
-def test_extract_info_from_UA_valid(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mock_db.get_user_agent_from_profile.return_value = None
-    profileid = "profile_192.168.1.2"
-    server_bag_ua = "server-bag[macOS,11.5.1,20G80,MacBookAir10,1]"
-    expected_output = (
-        '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": '
-        '"macOS11.5.1", "browser": ""}'
-    )
-    extracted_info = http_analyzer.extract_info_from_UA(
-        server_bag_ua, profileid
-    )
-    assert extracted_info == expected_output
 
 
 @pytest.mark.parametrize(
