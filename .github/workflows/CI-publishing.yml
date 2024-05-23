@@ -26,7 +26,7 @@ jobs:
 
   publish_image:
     # runs the tests in a docker(built by this job) on top of a GH VM
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
