@@ -27,7 +27,6 @@ jobs:
   publish_image:
     # runs the tests in a docker(built by this job) on top of a GH VM
     runs-on: ubuntu-20.04
-
     strategy:
       matrix:
         include:
@@ -36,10 +35,10 @@ jobs:
             image_name: slips
             path: ./docker/ubuntu-image/Dockerfile
 
-#          - type: macosm1-image
-#            name: macosm1-image
-#            image_name: slips_macos_m1
-#            path: ./docker/macosm1-image/Dockerfile
+          - type: macosm1-image
+            name: macosm1-image
+            image_name: slips_macos_m1
+            path: ./docker/macosm1-image/Dockerfile
 
     steps:
     - name: Maximize build space
@@ -48,12 +47,23 @@ jobs:
         root-reserve-mb: 512
         swap-size-mb: 1024
 
-    - name: free some space
+    - name: Free some space
       run: |
          rm -rf /usr/share/dotnet
          rm -rf /opt/ghc
          rm -rf "/usr/local/share/boost"
          rm -rf "$AGENT_TOOLSDIRECTORY"
+
+    - name: Free disk space on Ubuntu runner
+      uses: kfir4444/free-disk-space@main
+      with:
+        # frees about 6 GB, warning: may remove required tools
+        tool-cache: false
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        swap-storage: true
 
     - name: Get Slips version
       run: |
@@ -93,6 +103,8 @@ jobs:
     runs-on: ubuntu-20.04
     # 2 hours timeout
     timeout-minutes: 7200
+    env:
+      IMAGE_NAME: stratosphereips/slips_p2p:test_image
 
     steps:
     - name: Get slips version
@@ -128,9 +140,13 @@ jobs:
         allow: network.host
         context: ./
         file: ./docker/P2P-image/Dockerfile
-        tags: |
-          stratosphereips/slips_p2p:test_image
+        tags: ${{ env.IMAGE_NAME }}
         push: true
+
+    - name: Delete image from CI container to save space
+        run: |
+          docker rmi -f $IMAGE_NAME
+
 
   update_code_docs:
     runs-on: ubuntu-latest
