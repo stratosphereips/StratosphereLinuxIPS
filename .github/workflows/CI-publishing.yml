@@ -182,7 +182,7 @@ jobs:
       with:
         context: ./
         file: ./docker/dependency-image/Dockerfile
-        tags: ${ IMAGE_NAME }
+        tags: ${{ env.IMAGE_NAME }}
         push: true
 
     - name: Delete image from CI container to save space
