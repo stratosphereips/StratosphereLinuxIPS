@@ -95,7 +95,7 @@ jobs:
         swap-size-gb: 20
         context: ./
         file: ${{ matrix.path }}
-        tags: stratosphereips/test_image
+        tags: stratosphereips/${{ matrix.image_name }}:test_image
         push: true
 
   publish_P2P_docker_image:
@@ -103,8 +103,6 @@ jobs:
     runs-on: ubuntu-20.04
     # 2 hours timeout
     timeout-minutes: 7200
-    env:
-      IMAGE_NAME: stratosphereips/slips_p2p:test_image
 
     steps:
     - name: Get slips version
@@ -140,13 +138,9 @@ jobs:
         allow: network.host
         context: ./
         file: ./docker/P2P-image/Dockerfile
-        tags: ${{ env.IMAGE_NAME }}
+        tags: |
+          stratosphereips/slips_p2p:test_image
         push: true
-
-    - name: Delete image from CI container to save space
-      run: |
-        docker rmi -f $IMAGE_NAME
-
 
   update_code_docs:
     runs-on: ubuntu-latest
@@ -177,8 +171,6 @@ jobs:
   build_and_push_dependency_image:
 
     runs-on: ubuntu-latest
-    env:
-      IMAGE_NAME: stratosphereips/slips_dependencies:test_image
 
     steps:
     # clone slips and checkout branch
@@ -198,9 +190,5 @@ jobs:
       with:
         context: ./
         file: ./docker/dependency-image/Dockerfile
-        tags: ${{ env.IMAGE_NAME }}
+        tags: stratosphereips/slips_dependencies:test_image
         push: true
-
-    - name: Delete image from CI container to save space
-      run: |
-        docker rmi -f $IMAGE_NAME
