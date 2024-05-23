@@ -36,10 +36,10 @@ jobs:
             image_name: slips
             path: ./docker/ubuntu-image/Dockerfile
 
-          - type: macosm1-image
-            name: macosm1-image
-            image_name: slips_macos_m1
-            path: ./docker/macosm1-image/Dockerfile
+#          - type: macosm1-image
+#            name: macosm1-image
+#            image_name: slips_macos_m1
+#            path: ./docker/macosm1-image/Dockerfile
 
     steps:
     - name: Maximize build space
@@ -48,7 +48,14 @@ jobs:
         root-reserve-mb: 512
         swap-size-mb: 1024
 
-    - name: Get slips version
+    - name: free some space
+      run: |
+         rm -rf /usr/share/dotnet
+         rm -rf /opt/ghc
+         rm -rf "/usr/local/share/boost"
+         rm -rf "$AGENT_TOOLSDIRECTORY"
+
+    - name: Get Slips version
       run: |
         VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
         echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
@@ -61,18 +68,13 @@ jobs:
         # Fetch all history for all tags and branches
         fetch-depth: ''
 
+
     - name: Login to DockerHub
       uses: docker/login-action@v2
       with:
         username: stratosphereips
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-    - name: free some space
-      run: |
-           rm -rf /usr/share/dotnet
-           rm -rf /opt/ghc
-           rm -rf "/usr/local/share/boost"
-           rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Build ${{ matrix.name }} from Dockerfile
       id: docker_build_slips
