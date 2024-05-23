@@ -1,5 +1,7 @@
 """Unit test for modules/http_analyzer/http_analyzer.py"""
 
+import json
+
 from tests.module_factory import ModuleFactory
 import random
 from unittest.mock import patch, MagicMock
@@ -145,17 +147,23 @@ def test_check_incompatible_user_agent(
     assert result is expected_result
 
 
-def test_extract_info_from_UA(mock_db):
+def test_extract_info_from_ua(mock_db):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     # use another profile, because the default
     # one already has a ua in the db
     mock_db.get_user_agent_from_profile.return_value = None
     profileid = "profile_192.168.1.2"
     server_bag_ua = "server-bag[macOS,11.5.1,20G80,MacBookAir10,1]"
+    expected_output = {
+        "user_agent": "macOS,11.5.1,20G80,MacBookAir10,1",
+        "os_name": "macOS",
+        "os_type": "macOS11.5.1",
+        "browser": "",
+    }
+    expected_output = json.dumps(expected_output)
     assert (
-        http_analyzer.extract_info_from_UA(server_bag_ua, profileid)
-        == '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": "macOS11.5.1", '
-        '"browser": ""}'
+        http_analyzer.extract_info_from_ua(server_bag_ua, profileid)
+        == expected_output
     )
 
 
@@ -163,22 +171,28 @@ def test_extract_info_from_UA(mock_db):
     "cached_ua, new_ua, expected_result",
     [
         (
+            # User agents belong to the same OS
             {"os_type": "Windows", "os_name": "Windows 10"},
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 "
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/58.0.3029.110 "
             "Safari/537.3",
             False,
-        ),  # User agents belong to the same OS
+        ),
         (
+            # Missing cached user agent
             None,
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
             "Safari/605.1.15",
             False,
-        ),  # Missing cached user agent
+        ),
     ],
 )
-def test_check_multiple_UAs(mock_db, cached_ua, new_ua, expected_result):
+def test_check_multiple_user_agents_in_a_row(
+    mock_db, cached_ua, new_ua, expected_result
+):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    result = http_analyzer.check_multiple_UAs(
+    result = http_analyzer.check_multiple_user_agents_in_a_row(
         cached_ua, new_ua, timestamp, profileid, twid, uid
     )
     assert result is expected_result

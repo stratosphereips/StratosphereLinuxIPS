@@ -452,7 +452,7 @@ class HTTPAnalyzer(IModule):
         self.db.add_user_agent_to_profile(profileid, json.dumps(UA_info))
         return UA_info
 
-    def extract_info_from_UA(self, user_agent, profileid):
+    def extract_info_from_ua(self, user_agent, profileid):
         """
         Zeek sometimes collects info about a specific UA,
         in this case the UA starts with 'server-bag'
@@ -467,10 +467,10 @@ class HTTPAnalyzer(IModule):
             .replace("]", "")
             .replace("[", "")
         )
-        UA_info = {"user_agent": user_agent}
+        ua_info = {"user_agent": user_agent}
         os_name = user_agent.split(",")[0]
         os_type = os_name + user_agent.split(",")[1]
-        UA_info.update(
+        ua_info.update(
             {
                 "os_name": os_name,
                 "os_type": os_type,
@@ -478,11 +478,11 @@ class HTTPAnalyzer(IModule):
                 "browser": "",
             }
         )
-        UA_info = json.dumps(UA_info)
-        self.db.add_user_agent_to_profile(profileid, UA_info)
-        return UA_info
+        ua_info = json.dumps(ua_info)
+        self.db.add_user_agent_to_profile(profileid, ua_info)
+        return ua_info
 
-    def check_multiple_UAs(
+    def check_multiple_user_agents_in_a_row(
         self,
         cached_ua: dict,
         user_agent: dict,
@@ -705,7 +705,7 @@ class HTTPAnalyzer(IModule):
             # get the last used ua of this profile
             cached_ua = self.db.get_user_agent_from_profile(profileid)
             if cached_ua:
-                self.check_multiple_UAs(
+                self.check_multiple_user_agents_in_a_row(
                     cached_ua,
                     user_agent,
                     timestamp,
@@ -724,7 +724,7 @@ class HTTPAnalyzer(IModule):
                 self.get_user_agent_info(user_agent, profileid)
 
             if "server-bag" in user_agent:
-                self.extract_info_from_UA(user_agent, profileid)
+                self.extract_info_from_ua(user_agent, profileid)
 
             if self.detect_executable_mime_types(resp_mime_types):
                 self.set_evidence_executable_mime_type(
