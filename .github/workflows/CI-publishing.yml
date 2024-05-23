@@ -144,8 +144,8 @@ jobs:
         push: true
 
     - name: Delete image from CI container to save space
-        run: |
-          docker rmi -f $IMAGE_NAME
+      run: |
+        docker rmi -f $IMAGE_NAME
 
 
   update_code_docs:
