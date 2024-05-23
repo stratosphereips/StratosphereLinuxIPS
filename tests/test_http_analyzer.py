@@ -31,16 +31,16 @@ def test_check_suspicious_user_agents(mock_db):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     # create a flow with suspicious user agent
     assert (
-            http_analyzer.check_suspicious_user_agents(
-                uid,
-                "147.32.80.7",
-                "/wpad.dat",
-                timestamp,
-                "CHM_MSDN",
-                profileid,
-                twid,
-            )
-            is True
+        http_analyzer.check_suspicious_user_agents(
+            uid,
+            "147.32.80.7",
+            "/wpad.dat",
+            timestamp,
+            "CHM_MSDN",
+            profileid,
+            twid,
+        )
+        is True
     )
 
 
@@ -109,11 +109,11 @@ def test_get_user_agent_info(mock_db, mocker):
         "os_name": "OS X",
         "os_type": "Macintosh",
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                      "Version/15.3 Safari/605.1.15",
+        "Version/15.3 Safari/605.1.15",
     }
     assert (
-            http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
-            == expected_ret_value
+        http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
+        == expected_ret_value
     )
     # # get ua info online, and add os_type , os_name and agent_name anout this profile
     # # to the db
@@ -132,9 +132,13 @@ def test_get_user_agent_info(mock_db, mocker):
         (None, None, False),
     ],
 )
-def test_check_incompatible_user_agent(mock_db, mac_vendor, user_agent, expected_result):
+def test_check_incompatible_user_agent(
+    mock_db, mac_vendor, user_agent, expected_result
+):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    profileid = "profile_192.168.77.254"  # Use a different profile for this unit test
+    profileid = (
+        "profile_192.168.77.254"  # Use a different profile for this unit test
+    )
 
     # Set up the mock database
     mock_db.get_mac_vendor_from_profile.return_value = mac_vendor
@@ -157,9 +161,9 @@ def test_extract_info_from_UA(mock_db):
     profileid = "profile_192.168.1.2"
     server_bag_ua = "server-bag[macOS,11.5.1,20G80,MacBookAir10,1]"
     assert (
-            http_analyzer.extract_info_from_UA(server_bag_ua, profileid)
-            == '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": "macOS11.5.1", '
-               '"browser": ""}'
+        http_analyzer.extract_info_from_UA(server_bag_ua, profileid)
+        == '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": "macOS11.5.1", '
+        '"browser": ""}'
     )
 
 
@@ -168,23 +172,31 @@ def test_extract_info_from_UA_valid(mock_db):
     mock_db.get_user_agent_from_profile.return_value = None
     profileid = "profile_192.168.1.2"
     server_bag_ua = "server-bag[macOS,11.5.1,20G80,MacBookAir10,1]"
-    expected_output = ('{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": '
-                       '"macOS11.5.1", "browser": ""}')
-
-    assert http_analyzer.extract_info_from_UA(server_bag_ua, profileid) == expected_output
+    expected_output = (
+        '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": '
+        '"macOS11.5.1", "browser": ""}'
+    )
+    extracted_info = http_analyzer.extract_info_from_UA(
+        server_bag_ua, profileid
+    )
+    assert extracted_info == expected_output
 
 
 @pytest.mark.parametrize(
     "cached_ua, new_ua, expected_result",
     [
-        ({"os_type": "Windows", "os_name": "Windows 10"},
-         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 "
-         "Safari/537.3",
-         False),  # User agents belong to the same OS
-        (None,
-         "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
-         "Safari/605.1.15",
-         False),  # Missing cached user agent
+        (
+            {"os_type": "Windows", "os_name": "Windows 10"},
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 "
+            "Safari/537.3",
+            False,
+        ),  # User agents belong to the same OS
+        (
+            None,
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
+            "Safari/605.1.15",
+            False,
+        ),  # Missing cached user agent
     ],
 )
 def test_check_multiple_UAs(mock_db, cached_ua, new_ua, expected_result):
@@ -202,7 +214,10 @@ def test_check_multiple_UAs(mock_db, cached_ua, new_ua, expected_result):
         (["text/html"], False),  # Non-executable MIME type
         (["application/x-msdownload"], True),  # Executable MIME type
         (["text/html", "application/x-msdownload"], True),  # Mixed MIME types
-        (["APPLICATION/X-MSDOWNLOAD"], False),  # Executable MIME types are case-insensitive
+        (
+            ["APPLICATION/X-MSDOWNLOAD"],
+            False,
+        ),  # Executable MIME types are case-insensitive
         (["text/html", "application/x-msdownload", "image/jpeg"], True),
         # Mixed executable and non-executable MIME types
     ],
@@ -214,9 +229,11 @@ def test_detect_executable_mime_types(mock_db, mime_types, expected):
 
 def test_set_evidence_http_traffic(mock_db, mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mocker.spy(http_analyzer.db, 'set_evidence')
+    mocker.spy(http_analyzer.db, "set_evidence")
 
-    http_analyzer.set_evidence_http_traffic('8.8.8.8', profileid, twid, uid, timestamp)
+    http_analyzer.set_evidence_http_traffic(
+        "8.8.8.8", profileid, twid, uid, timestamp
+    )
 
     http_analyzer.db.set_evidence.assert_called_once()
 
@@ -224,13 +241,13 @@ def test_set_evidence_http_traffic(mock_db, mocker):
 def test_set_evidence_weird_http_method(mock_db, mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     mock_db.get_ip_identification.return_value = "Some IP identification"
-    mocker.spy(http_analyzer.db, 'set_evidence')
+    mocker.spy(http_analyzer.db, "set_evidence")
 
     flow = {
         "daddr": "8.8.8.8",
         "addl": "WEIRD_METHOD",
         "uid": uid,
-        "starttime": timestamp
+        "starttime": timestamp,
     }
 
     http_analyzer.set_evidence_weird_http_method(profileid, twid, flow)
@@ -242,10 +259,10 @@ def test_set_evidence_executable_mime_type(mock_db, mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     mock_db.get_ip_identification.return_value = "Some IP identification"
 
-    mocker.spy(http_analyzer.db, 'set_evidence')
+    mocker.spy(http_analyzer.db, "set_evidence")
 
     http_analyzer.set_evidence_executable_mime_type(
-        'application/x-msdownload', profileid, twid, uid, timestamp, '8.8.8.8'
+        "application/x-msdownload", profileid, twid, uid, timestamp, "8.8.8.8"
     )
 
     assert http_analyzer.db.set_evidence.call_count == 2
@@ -255,10 +272,10 @@ def test_set_evidence_executable_mime_type_source_dest(mock_db, mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     mock_db.get_ip_identification.return_value = "Some IP identification"
 
-    mocker.spy(http_analyzer.db, 'set_evidence')
+    mocker.spy(http_analyzer.db, "set_evidence")
 
     http_analyzer.set_evidence_executable_mime_type(
-        'application/x-msdownload', profileid, twid, uid, timestamp, '8.8.8.8'
+        "application/x-msdownload", profileid, twid, uid, timestamp, "8.8.8.8"
     )
 
     assert http_analyzer.db.set_evidence.call_count == 2
@@ -268,17 +285,24 @@ def test_set_evidence_executable_mime_type_source_dest(mock_db, mocker):
     "config_value, expected_exception",
     [
         (1024, None),  # Valid configuration value
-        (Exception("Config file missing"), Exception),  # Invalid configuration (exception)
+        (
+            Exception("Config file missing"),
+            Exception,
+        ),  # Invalid configuration (exception)
     ],
 )
 def test_read_configuration(mock_db, mocker, config_value, expected_exception):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mock_conf = mocker.patch('http_analyzer.ConfigParser')
+    mock_conf = mocker.patch("http_analyzer.ConfigParser")
 
     if isinstance(config_value, Exception):
-        mock_conf.return_value.get_pastebin_download_threshold.side_effect = config_value
+        mock_conf.return_value.get_pastebin_download_threshold.side_effect = (
+            config_value
+        )
     else:
-        mock_conf.return_value.get_pastebin_download_threshold.return_value = config_value
+        mock_conf.return_value.get_pastebin_download_threshold.return_value = (
+            config_value
+        )
 
     if expected_exception:
         with pytest.raises(expected_exception):
@@ -291,13 +315,19 @@ def test_read_configuration(mock_db, mocker, config_value, expected_exception):
 @pytest.mark.parametrize(
     "flow_name, expected_call",
     [
-        ("unknown_HTTP_method", True),  # Flow name contains "unknown_HTTP_method"
-        ("some_other_event", False),  # Flow name does not contain "unknown_HTTP_method"
+        (
+            "unknown_HTTP_method",
+            True,
+        ),  # Flow name contains "unknown_HTTP_method"
+        (
+            "some_other_event",
+            False,
+        ),  # Flow name does not contain "unknown_HTTP_method"
     ],
 )
 def test_check_weird_http_method(mock_db, mocker, flow_name, expected_call):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mocker.spy(http_analyzer, 'set_evidence_weird_http_method')
+    mocker.spy(http_analyzer, "set_evidence_weird_http_method")
 
     msg = {
         "flow": {
@@ -305,10 +335,10 @@ def test_check_weird_http_method(mock_db, mocker, flow_name, expected_call):
             "daddr": "8.8.8.8",
             "addl": "WEIRD_METHOD",
             "uid": uid,
-            "starttime": timestamp
+            "starttime": timestamp,
         },
         "profileid": profileid,
-        "twid": twid
+        "twid": twid,
     }
 
     http_analyzer.check_weird_http_method(msg)
@@ -321,7 +351,7 @@ def test_check_weird_http_method(mock_db, mocker, flow_name, expected_call):
 
 def test_pre_main(mock_db, mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mocker.patch('http_analyzer.utils.drop_root_privs')
+    mocker.patch("http_analyzer.utils.drop_root_privs")
 
     http_analyzer.pre_main()
 
@@ -346,7 +376,9 @@ def test_get_mac_vendor_from_profile(mock_db):
         ("/", "invalid_length", False),  # Invalid request body length
     ],
 )
-def test_check_multiple_empty_connections(mock_db, uri, request_body_len, expected_result):
+def test_check_multiple_empty_connections(
+    mock_db, uri, request_body_len, expected_result
+):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     host = "google.com"
     result = http_analyzer.check_multiple_empty_connections(
@@ -372,7 +404,9 @@ def test_check_multiple_empty_connections(mock_db, uri, request_body_len, expect
         ("pastebin.com", "2048", "POST", None),
     ],
 )
-def test_check_pastebin_downloads(mock_db, url, response_body_len, method, expected_result):
+def test_check_pastebin_downloads(
+    mock_db, url, response_body_len, method, expected_result
+):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
 
     if url != "pastebin.com":
@@ -381,9 +415,12 @@ def test_check_pastebin_downloads(mock_db, url, response_body_len, method, expec
         mock_db.get_ip_identification.return_value = "pastebin.com"
         http_analyzer.pastebin_downloads_threshold = 1024
 
-    assert http_analyzer.check_pastebin_downloads(
-        url, response_body_len, method, profileid, twid, timestamp, uid
-    ) == expected_result
+    assert (
+        http_analyzer.check_pastebin_downloads(
+            url, response_body_len, method, profileid, twid, timestamp, uid
+        )
+        == expected_result
+    )
 
 
 @pytest.mark.parametrize(
