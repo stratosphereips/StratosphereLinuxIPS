@@ -161,6 +161,8 @@ jobs:
   build_and_push_dependency_image:
 
     runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: stratosphereips/slips_dependencies:test_image
 
     steps:
     # clone slips and checkout branch
@@ -180,5 +182,9 @@ jobs:
       with:
         context: ./
         file: ./docker/dependency-image/Dockerfile
-        tags: stratosphereips/slips_dependencies:test_image
+        tags: ${ IMAGE_NAME }
         push: true
+
+    - name: Delete image from CI container to save space
+      run: |
+        docker rmi -f $IMAGE_NAME
