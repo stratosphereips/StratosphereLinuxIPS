@@ -249,9 +249,7 @@ def test_set_evidence_weird_http_method(mock_db, mocker):
 def test_set_evidence_executable_mime_type(mock_db, mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     mock_db.get_ip_identification.return_value = "Some IP identification"
-
     mocker.spy(http_analyzer.db, "set_evidence")
-
     http_analyzer.set_evidence_executable_mime_type(
         "application/x-msdownload", profileid, twid, uid, timestamp, "8.8.8.8"
     )
@@ -304,19 +302,23 @@ def test_read_configuration(mock_db, mocker, config_value, expected_exception):
 
 
 @pytest.mark.parametrize(
-    "flow_name, expected_call",
+    "flow_name, evidence_expected",
     [
+        # Flow name contains "unknown_HTTP_method"
         (
             "unknown_HTTP_method",
             True,
-        ),  # Flow name contains "unknown_HTTP_method"
+        ),
+        # Flow name does not contain "unknown_HTTP_method"
         (
             "some_other_event",
             False,
-        ),  # Flow name does not contain "unknown_HTTP_method"
+        ),
     ],
 )
-def test_check_weird_http_method(mock_db, mocker, flow_name, expected_call):
+def test_check_weird_http_method(
+    mock_db, mocker, flow_name, evidence_expected
+):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     mocker.spy(http_analyzer, "set_evidence_weird_http_method")
 
@@ -334,7 +336,7 @@ def test_check_weird_http_method(mock_db, mocker, flow_name, expected_call):
 
     http_analyzer.check_weird_http_method(msg)
 
-    if expected_call:
+    if evidence_expected:
         http_analyzer.set_evidence_weird_http_method.assert_called_once()
     else:
         http_analyzer.set_evidence_weird_http_method.assert_not_called()
@@ -378,8 +380,7 @@ def test_check_multiple_empty_connections(
     assert result is expected_result
 
     if uri == "/" and request_body_len == 0 and expected_result is False:
-        empty_connections_threshold = http_analyzer.empty_connections_threshold
-        for _ in range(empty_connections_threshold):
+        for _ in range(http_analyzer.empty_connections_threshold):
             http_analyzer.check_multiple_empty_connections(
                 uid, host, uri, timestamp, request_body_len, profileid, twid
             )
@@ -401,7 +402,7 @@ def test_check_pastebin_downloads(
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
 
     if url != "pastebin.com":
-        mock_db.get_ip_identification.return_value = "Not a Pastebin IP"
+        mock_db.get_ip_identification.return_value = "Not a Pastebin domain"
     else:
         mock_db.get_ip_identification.return_value = "pastebin.com"
         http_analyzer.pastebin_downloads_threshold = 1024

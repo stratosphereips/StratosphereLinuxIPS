@@ -133,7 +133,7 @@ class HTTPAnalyzer(IModule):
         """
         Detects more than 4 empty connections to
             google, bing, yandex and yahoo on port 80
-        and evidence is generted only when the 4 conns have an empty uri
+        an evidence is generted only when the 4 conns have an empty uri
         """
         # to test this wget google.com:80 twice
         # wget makes multiple connections per command,
