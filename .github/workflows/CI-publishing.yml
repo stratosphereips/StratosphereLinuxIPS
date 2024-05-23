@@ -91,8 +91,9 @@ jobs:
       timeout-minutes: 15
       uses: docker/build-push-action@v5
       with:
+        debug: true
+        verbose-debug: true
         no-cache: true
-        swap-size-gb: 20
         context: ./
         file: ${{ matrix.path }}
         tags: stratosphereips/${{ matrix.image_name }}:test_image
