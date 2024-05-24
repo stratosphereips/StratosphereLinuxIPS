@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, redirect, url_for, current_app
 
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -7,6 +8,8 @@ from .analysis.analysis import analysis
 from .general.general import general
 from .documentation.documentation import documentation
 from .utils import read_db_file
+
+RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
 def create_app():
@@ -60,5 +63,8 @@ if __name__ == "__main__":
 
     app.register_blueprint(documentation, url_prefix="/documentation")
 
-    conf = ConfigParser()
-    app.run(host="0.0.0.0", port=conf.web_interface_port)
+    if RUNNING_IN_DOCKER:
+        host = "127.0.0.1"
+    else:
+        host = "0.0.0.0"
+    app.run(host=host, port=ConfigParser().web_interface_port)
