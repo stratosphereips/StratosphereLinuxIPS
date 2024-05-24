@@ -7,7 +7,8 @@ import subprocess
 import json
 import shutil
 
-from slips_files.common.imports import *
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -47,7 +48,7 @@ class LeakDetector(IModule):
 
     def is_yara_installed(self) -> bool:
         """
-        Checks if notify-send bin is installed
+        Checks if yara bin is installed
         """
         cmd = "yara -h > /dev/null 2>&1"
         returncode = os.system(cmd)
@@ -179,7 +180,7 @@ class LeakDetector(IModule):
         if not packet_info:
             return
 
-        srcip, dstip, proto, sport, dport, ts = (
+        srcip, dstip, proto, _, dport, ts = (
             packet_info[0],
             packet_info[1],
             packet_info[2],
