@@ -37,9 +37,9 @@ class Main(IObservable):
         # objects to manage various functionality
         self.checker = Checker(self)
         self.redis_man = RedisManager(self)
-        self.ui_man = UIManager(self)
         self.metadata_man = MetadataManager(self)
         self.conf = ConfigParser()
+        self.ui_man = UIManager(self)
         self.version = self.get_slips_version()
         # will be filled later
         self.commit = "None"
