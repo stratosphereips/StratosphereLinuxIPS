@@ -29,7 +29,11 @@ class UIManager:
 
         self.main.print(
             f"Slips {green('web interface')} running on "
-            f"http://localhost:{self.web_interface_port}/"
+            f"http://localhost:{self.web_interface_port}/\n"
+            f"The port will stay open after slips is done with the "
+            f"analysis unless you manually kill it.\n"
+            f"You need to kill it to be able to start the web interface "
+            f"again."
         )
         delattr(self, "webinterface_return_value")
 
