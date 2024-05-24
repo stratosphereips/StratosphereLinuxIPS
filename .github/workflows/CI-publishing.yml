@@ -4,7 +4,6 @@ on:
   push:
     branches:
     - 'master'
-    - 'alya/fix-publishing-docker-image'
     - '!develop'
 
 jobs:
@@ -26,7 +25,8 @@ jobs:
 
   publish_image:
     # runs the tests in a docker(built by this job) on top of a GH VM
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
+
     strategy:
       matrix:
         include:
@@ -74,7 +74,7 @@ jobs:
     # By default it checks out only one commit
     - uses: actions/checkout@v3
       with:
-        ref: 'alya/fix-publishing-docker-image'
+        ref: 'master'
         # Fetch all history for all tags and branches
         fetch-depth: ''
 
@@ -85,6 +85,12 @@ jobs:
         username: stratosphereips
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+    - name: Free some space
+      run: |
+           rm -rf /usr/share/dotnet
+           rm -rf /opt/ghc
+           rm -rf "/usr/local/share/boost"
+           rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Build ${{ matrix.name }} from Dockerfile
       id: docker_build_slips
@@ -96,7 +102,7 @@ jobs:
         no-cache: true
         context: ./
         file: ${{ matrix.path }}
-        tags: stratosphereips/${{ matrix.image_name }}:test_image
+        tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
         push: true
 
   publish_P2P_docker_image:
@@ -140,7 +146,8 @@ jobs:
         context: ./
         file: ./docker/P2P-image/Dockerfile
         tags: |
-          stratosphereips/slips_p2p:test_image
+          stratosphereips/slips_p2p:latest
+          stratosphereips/slips_p2p:${{ env.SLIPS_VERSION }}
         push: true
 
   update_code_docs:
@@ -191,5 +198,5 @@ jobs:
       with:
         context: ./
         file: ./docker/dependency-image/Dockerfile
-        tags: stratosphereips/slips_dependencies:test_image
+        tags: stratosphereips/slips_dependencies:latest
         push: true
