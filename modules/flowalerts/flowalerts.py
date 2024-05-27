@@ -23,6 +23,8 @@ from .set_evidence import SetEvidnceHelper
 from slips_files.core.helpers.whitelist import Whitelist
 from typing import List, Tuple, Dict
 
+from .tunnel import Tunnel
+
 
 class FlowAlerts(IModule):
     name = "Flow Alerts"
@@ -69,6 +71,7 @@ class FlowAlerts(IModule):
         self.ssl = SSL(self.db, flowalerts=self)
         self.ssh = SSH(self.db, flowalerts=self)
         self.downloaded_file = DownloadedFile(self.db, flowalerts=self)
+        self.tunnel = Tunnel(self.db, flowalerts=self)
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
@@ -849,20 +852,6 @@ class FlowAlerts(IModule):
                 daddr, profileid, timestamp, twid, uid
             )
 
-    def check_GRE_tunnel(self, tunnel_info: dict):
-        """
-        Detects GRE tunnels
-        :param tunnel_info: dict containing tunnel zeek flow
-        :return: None
-        """
-        tunnel_flow = tunnel_info["flow"]
-        tunnel_type = tunnel_flow["tunnel_type"]
-
-        if tunnel_type != "Tunnel::GRE":
-            return
-
-        self.set_evidence.GRE_tunnel(tunnel_info)
-
     def check_non_ssl_port_443_conns(
         self,
         state,
@@ -1139,7 +1128,4 @@ class FlowAlerts(IModule):
         self.ssl.analyze()
         self.ssh.analyze()
         self.downloaded_file.analyze()
-
-        # if msg := self.get_msg("new_tunnel"):
-        #     msg = json.loads(msg["data"])
-        #     self.check_GRE_tunnel(msg)
+        self.tunnel.analyze()
