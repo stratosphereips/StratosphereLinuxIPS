@@ -18,6 +18,7 @@ class SSH(IFlowalertsAnalyzer):
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
         self.read_configuration()
+        self.password_guessing_cache = {}
 
     def name(self) -> str:
         return "ssh_analyzer"
