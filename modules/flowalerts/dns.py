@@ -8,12 +8,14 @@ import validators
 
 from modules.flowalerts.set_evidence import SetEvidnceHelper
 from modules.flowalerts.timer_thread import TimerThread
-from slips_files.common.abstracts.flowalerts_helper import IFlowalertsHelper
+from slips_files.common.abstracts.flowalerts_analyzer import (
+    IFlowalertsAnalyzer,
+)
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 
 
-class DNS(IFlowalertsHelper):
+class DNS(IFlowalertsAnalyzer):
     def init(self, flowalerts=None):
         self.flowalerts = flowalerts
         # this helper contains all functions used to set evidence
@@ -35,7 +37,7 @@ class DNS(IFlowalertsHelper):
         self.arpa_scan_threshold = 10
 
     def name(self) -> str:
-        return "DNS_helper"
+        return "DNS_analyzer"
 
     def read_configuration(self):
         conf = ConfigParser()

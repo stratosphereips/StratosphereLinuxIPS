@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from slips_files.core.database.database_manager import DBManager
 
 
-class IFlowalertsHelper(ABC):
+class IFlowalertsAnalyzer(ABC):
     def __init__(self, db: DBManager, **kwargs):
         self.db = db
         self.init(**kwargs)

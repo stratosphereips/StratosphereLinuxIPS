@@ -13,6 +13,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
 from .dns import DNS
+from .notice import Notice
 from .timer_thread import TimerThread
 from .set_evidence import SetEvidnceHelper
 from slips_files.core.helpers.whitelist import Whitelist
@@ -67,6 +68,7 @@ class FlowAlerts(IModule):
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
         self.dns = DNS(self.db, flowalerts=self)
+        self.notice = Notice(self.db, flowalerts=self)
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
@@ -1483,53 +1485,8 @@ class FlowAlerts(IModule):
         #     self.check_ssh_password_guessing(
         #         daddr, uid, timestamp, profileid, twid, auth_success
         #     )
-        # # --- Detect alerts from Zeek: Self-signed certs,
-        # #       invalid certs, port-scans and address scans,
-        # #       and password guessing ---
-        # if msg := self.get_msg("new_notice"):
-        #     data = msg["data"]
-        #     # Convert from json to dict
-        #     data = json.loads(data)
-        #     profileid = data["profileid"]
-        #     twid = data["twid"]
-        #     # Get flow as a json
-        #     flow = data["flow"]
-        #     # Convert flow to a dict
-        #     flow = json.loads(flow)
-        #     timestamp = flow["stime"]
-        #     uid = data["uid"]
-        #     msg = flow["msg"]
-        #     note = flow["note"]
-        #
-        #     # --- Detect port scans from Zeek logs ---
-        #     # We're looking for port scans in notice.log in the note field
-        #     if "Port_Scan" in note:
-        #         # Vertical port scan
-        #         scanning_ip = flow.get("scanning_ip", "")
-        #         self.set_evidence.vertical_portscan(
-        #             msg,
-        #             scanning_ip,
-        #             timestamp,
-        #             twid,
-        #             uid,
-        #         )
-        #
-        #     # --- Detect horizontal portscan by zeek ---
-        #     if "Address_Scan" in note:
-        #         # Horizontal port scan
-        #         # scanned_port = flow.get('scanned_port', '')
-        #         self.set_evidence.horizontal_portscan(
-        #             msg,
-        #             timestamp,
-        #             profileid,
-        #             twid,
-        #             uid,
-        #         )
-        #     # --- Detect password guessing by zeek ---
-        #     if "Password_Guessing" in note:
-        #         self.set_evidence.pw_guessing(
-        #             msg, timestamp, twid, uid, by="Zeek"
-        #         )
+
+        self.notice.analyze()
         # # --- Detect maliciuos JA3 TLS servers ---
         # if msg := self.get_msg("new_ssl"):
         #     # Check for self signed certificates in new_ssl channel (ssl.log)
