@@ -15,6 +15,7 @@ from slips_files.common.abstracts.module import IModule
 from .dns import DNS
 from .notice import Notice
 from .smtp import SMTP
+from .ssl import SSL
 from .timer_thread import TimerThread
 from .set_evidence import SetEvidnceHelper
 from slips_files.core.helpers.whitelist import Whitelist
@@ -54,17 +55,18 @@ class FlowAlerts(IModule):
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
         self.password_guessing_cache = {}
-        # in pastebin download detection, we wait for each conn.log flow
-        # of the seen ssl flow to appear
-        # this is the dict of ssl flows we're waiting for
-        self.pending_ssl_flows = multiprocessing.Queue()
         # thread that waits for ssl flows to appear in conn.log
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
+        # in pastebin download detection, we wait for each conn.log flow
+        # of the seen ssl flow to appear
+        # this is the dict of ssl flows we're waiting for
+        self.pending_ssl_flows = multiprocessing.Queue()
         self.dns = DNS(self.db, flowalerts=self)
         self.notice = Notice(self.db, flowalerts=self)
         self.smtp = SMTP(self.db, flowalerts=self)
+        self.ssl = SSL(self.db, flowalerts=self)
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
@@ -310,7 +312,7 @@ class FlowAlerts(IModule):
         # we should wait for the conn.log to be read too
 
         while True:
-            size = self.pending_ssl_flows.qsize()
+            size = self.flowalerts.pending_ssl_flows.qsize()
             if size == 0:
                 # nothing in queue
                 time.sleep(30)
@@ -320,7 +322,9 @@ class FlowAlerts(IModule):
             # this is to ensure that re-added flows to the queue aren't checked twice
             for ssl_flow in range(size):
                 try:
-                    ssl_flow: dict = self.pending_ssl_flows.get(timeout=0.5)
+                    ssl_flow: dict = self.flowalerts.pending_ssl_flows.get(
+                        timeout=0.5
+                    )
                 except Exception:
                     continue
 
@@ -339,7 +343,7 @@ class FlowAlerts(IModule):
                         self.check_pastebin_download(*ssl_flow, flow)
                 else:
                     # flow not found in conn.log yet, re-add it to the queue to check it later
-                    self.pending_ssl_flows.put(ssl_flow)
+                    self.flowalerts.pending_ssl_flows.put(ssl_flow)
 
             # give the ssl flows remaining in self.pending_ssl_flows 2 more mins to appear
             time.sleep(wait_time)
@@ -739,45 +743,6 @@ class FlowAlerts(IModule):
                 uid, timestamp, profileid, twid, auth_success
             )
 
-    def detect_incompatible_cn(
-        self, daddr, server_name, issuer, profileid, twid, uid, timestamp
-    ):
-        """
-        Detects if a certificate claims that it's CN (common name) belongs
-        to an org that the domain doesn't belong to
-        """
-        if not issuer:
-            return False
-
-        found_org_in_cn = ""
-        for org in utils.supported_orgs:
-            if org not in issuer.lower():
-                continue
-
-            # save the org this domain/ip is claiming to belong to,
-            # to use it to set evidence later
-            found_org_in_cn = org
-
-            # check that the ip belongs to that same org
-            if self.whitelist.is_ip_in_org(daddr, org):
-                return False
-
-            # check that the domain belongs to that same org
-            if server_name and self.whitelist.is_domain_in_org(
-                server_name, org
-            ):
-                return False
-
-        if not found_org_in_cn:
-            return False
-
-        # found one of our supported orgs in the cn but
-        # it doesn't belong to any of this org's
-        # domains or ips
-        self.set_evidence.incompatible_CN(
-            found_org_in_cn, timestamp, daddr, profileid, twid, uid
-        )
-
     def check_multiple_ssh_versions(
         self, flow: dict, twid, role="SSH::CLIENT"
     ):
@@ -1000,59 +965,6 @@ class FlowAlerts(IModule):
             self.set_evidence.connection_to_multiple_ports(
                 profileid, twid, uids, timestamp, dstports, victim, attacker
             )
-
-    def detect_malicious_ja3(
-        self, saddr, daddr, ja3, ja3s, twid, uid, timestamp
-    ):
-        if not (ja3 or ja3s):
-            # we don't have info about this flow's ja3 or ja3s fingerprint
-            return
-
-        # get the dict of malicious ja3 stored in our db
-        malicious_ja3_dict = self.db.get_ja3_in_IoC()
-
-        if ja3 in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3(
-                malicious_ja3_dict,
-                twid,
-                uid,
-                timestamp,
-                saddr,
-                daddr,
-                ja3=ja3,
-            )
-
-        if ja3s in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3s(
-                malicious_ja3_dict,
-                twid,
-                uid,
-                timestamp,
-                saddr,
-                daddr,
-                ja3=ja3s,
-            )
-
-    def check_self_signed_certs(
-        self,
-        validation_status,
-        daddr,
-        server_name,
-        profileid,
-        twid,
-        timestamp,
-        uid,
-    ):
-        """
-        checks the validation status of every a zeek ssl flow for self
-        signed certs
-        """
-        if "self signed" not in validation_status:
-            return
-
-        self.set_evidence.self_signed_certificates(
-            profileid, twid, daddr, uid, timestamp, server_name
-        )
 
     def check_ssh_password_guessing(
         self, daddr, uid, timestamp, profileid, twid, auth_success
@@ -1435,50 +1347,7 @@ class FlowAlerts(IModule):
 
         self.notice.analyze()
         # # --- Detect maliciuos JA3 TLS servers ---
-        # if msg := self.get_msg("new_ssl"):
-        #     # Check for self signed certificates in new_ssl channel (ssl.log)
-        #     data = msg["data"]
-        #     # Convert from json to dict
-        #     data = json.loads(data)
-        #     # Get flow as a json
-        #     flow = data["flow"]
-        #     # Convert flow to a dict
-        #     flow = json.loads(flow)
-        #     uid = flow["uid"]
-        #     timestamp = flow["stime"]
-        #     ja3 = flow.get("ja3", False)
-        #     ja3s = flow.get("ja3s", False)
-        #     issuer = flow.get("issuer", False)
-        #     profileid = data["profileid"]
-        #     twid = data["twid"]
-        #     daddr = flow["daddr"]
-        #     saddr = profileid.split("_")[1]
-        #     server_name = flow.get("server_name")
-        #
-        #     # we'll be checking pastebin downloads of this ssl flow
-        #     # later
-        #     self.pending_ssl_flows.put(
-        #         (daddr, server_name, uid, timestamp, profileid, twid)
-        #     )
-        #
-        #     self.check_self_signed_certs(
-        #         flow["validation_status"],
-        #         daddr,
-        #         server_name,
-        #         profileid,
-        #         twid,
-        #         timestamp,
-        #         uid,
-        #     )
-        #
-        #     self.detect_malicious_ja3(
-        #         saddr, daddr, ja3, ja3s, twid, uid, timestamp
-        #     )
-        #
-        #     self.detect_incompatible_cn(
-        #         daddr, server_name, issuer, profileid, twid, uid, timestamp
-        #     )
-        #
+
         # if msg := self.get_msg("tw_closed"):
         #     profileid_tw = msg["data"].split("_")
         #     profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
@@ -1490,6 +1359,7 @@ class FlowAlerts(IModule):
 
         self.dns.analyze()
         self.smtp.analyze()
+        self.ssl.analyze()
 
         # if msg := self.get_msg("new_downloaded_file"):
         #     ssl_info = json.loads(msg["data"])
