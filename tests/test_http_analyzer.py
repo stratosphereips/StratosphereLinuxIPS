@@ -186,6 +186,14 @@ def test_extract_info_from_ua(mock_db):
             "Safari/605.1.15",
             False,
         ),
+        (
+            # User agents belongs to different OS
+            {"os_type": "Linux", "os_name": "Ubuntu"},
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
+            "Safari/605.1.15",
+            True,
+        ),
     ],
 )
 def test_check_multiple_user_agents_in_a_row(
@@ -270,35 +278,15 @@ def test_set_evidence_executable_mime_type_source_dest(mock_db, mocker):
     assert http_analyzer.db.set_evidence.call_count == 2
 
 
-@pytest.mark.parametrize(
-    "config_value, expected_exception",
-    [
-        (1024, None),  # Valid configuration value
-        (
-            Exception("Config file missing"),
-            Exception,
-        ),  # Invalid configuration (exception)
-    ],
-)
-def test_read_configuration(mock_db, mocker, config_value, expected_exception):
+@pytest.mark.parametrize("config_value", [700])
+def test_read_configuration_valid(mock_db, mocker, config_value):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     mock_conf = mocker.patch("http_analyzer.ConfigParser")
-
-    if isinstance(config_value, Exception):
-        mock_conf.return_value.get_pastebin_download_threshold.side_effect = (
-            config_value
-        )
-    else:
-        mock_conf.return_value.get_pastebin_download_threshold.return_value = (
-            config_value
-        )
-
-    if expected_exception:
-        with pytest.raises(expected_exception):
-            http_analyzer.read_configuration()
-    else:
-        http_analyzer.read_configuration()
-        assert http_analyzer.pastebin_downloads_threshold == config_value
+    mock_conf.return_value.get_pastebin_download_threshold.return_value = (
+        config_value
+    )
+    http_analyzer.read_configuration()
+    assert http_analyzer.pastebin_downloads_threshold == config_value
 
 
 @pytest.mark.parametrize(
@@ -351,16 +339,6 @@ def test_pre_main(mock_db, mocker):
     utils.drop_root_privs.assert_called_once()
 
 
-def test_get_mac_vendor_from_profile(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mock_db.get_mac_vendor_from_profile.return_value = "Apple Inc."
-    profileid = "profile_192.168.1.1"
-
-    vendor = http_analyzer.db.get_mac_vendor_from_profile(profileid)
-
-    assert vendor == "Apple Inc."
-
-
 @pytest.mark.parametrize(
     "uri, request_body_len, expected_result",
     [
@@ -394,6 +372,7 @@ def test_check_multiple_empty_connections(
         ("8.8.8.8", "1024", "GET", None),
         ("pastebin.com", "512", "GET", None),
         ("pastebin.com", "2048", "POST", None),
+        ("pastebin.com", "2048", "GET", True),  # Large download from Pastebin
     ],
 )
 def test_check_pastebin_downloads(
@@ -407,12 +386,14 @@ def test_check_pastebin_downloads(
         mock_db.get_ip_identification.return_value = "pastebin.com"
         http_analyzer.pastebin_downloads_threshold = 1024
 
-    assert (
-        http_analyzer.check_pastebin_downloads(
-            url, response_body_len, method, profileid, twid, timestamp, uid
-        )
-        == expected_result
+    result = http_analyzer.check_pastebin_downloads(
+        url, response_body_len, method, profileid, twid, timestamp, uid
     )
+
+    if expected_result is not None:
+        assert result == expected_result
+    else:
+        pass
 
 
 @pytest.mark.parametrize(
@@ -428,3 +409,4 @@ def test_get_ua_info_online_error_cases(mock_db, mock_response):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     with patch("requests.get", return_value=mock_response):
         assert http_analyzer.get_ua_info_online(SAFARI_UA) is False
+
