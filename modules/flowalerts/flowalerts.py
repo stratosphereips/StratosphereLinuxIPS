@@ -5,6 +5,7 @@ from .dns import DNS
 from .downloaded_file import DownloadedFile
 from .notice import Notice
 from .smtp import SMTP
+from .software import Software
 from .ssh import SSH
 from .ssl import SSL
 from slips_files.core.helpers.whitelist import Whitelist
@@ -25,6 +26,7 @@ class FlowAlerts(IModule):
         self.whitelist = Whitelist(self.logger, self.db)
 
         self.dns = DNS(self.db, flowalerts=self)
+        self.software = Software(self.db, flowalerts=self)
         self.notice = Notice(self.db, flowalerts=self)
         self.smtp = SMTP(self.db, flowalerts=self)
         self.ssl = SSL(self.db, flowalerts=self)
@@ -60,3 +62,4 @@ class FlowAlerts(IModule):
         self.ssh.analyze()
         self.downloaded_file.analyze()
         self.tunnel.analyze()
+        self.software.analyze()
