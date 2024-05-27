@@ -205,21 +205,23 @@ class SSL(IFlowalertsAnalyzer):
             found_org_in_cn, timestamp, daddr, profileid, twid, uid
         )
 
-    def check_non_ssl_port_443_conns(
-        self,
-        state,
-        daddr,
-        dport,
-        proto,
-        appproto,
-        profileid,
-        twid,
-        uid,
-        timestamp,
-    ):
+    def check_non_ssl_port_443_conns(self, msg):
         """
         alerts on established connections on port 443 that are not HTTPS (ssl)
         """
+        profileid = msg["profileid"]
+        twid = msg["twid"]
+        timestamp = msg["stime"]
+        flow = msg["flow"]
+
+        flow = json.loads(flow)
+        uid = next(iter(flow))
+        flow_dict = json.loads(flow[uid])
+        daddr = flow_dict["daddr"]
+        state = flow_dict["state"]
+        dport: int = flow_dict.get("dport", None)
+        proto = flow_dict.get("proto")
+        appproto = flow_dict.get("appproto", "")
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
         if (
@@ -275,26 +277,4 @@ class SSL(IFlowalertsAnalyzer):
 
         if msg := self.get_msg("new_flow"):
             new_flow = json.loads(msg["data"])
-            profileid = new_flow["profileid"]
-            twid = new_flow["twid"]
-            flow = new_flow["flow"]
-            flow = json.loads(flow)
-            uid = next(iter(flow))
-            flow_dict = json.loads(flow[uid])
-            daddr = flow_dict["daddr"]
-            state = flow_dict["state"]
-            timestamp = new_flow["stime"]
-            dport: int = flow_dict.get("dport", None)
-            proto = flow_dict.get("proto")
-            appproto = flow_dict.get("appproto", "")
-            self.check_non_ssl_port_443_conns(
-                state,
-                daddr,
-                dport,
-                proto,
-                appproto,
-                profileid,
-                twid,
-                uid,
-                timestamp,
-            )
+            self.check_non_ssl_port_443_conns(new_flow)
