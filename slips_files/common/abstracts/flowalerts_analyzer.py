@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 
 
@@ -29,6 +30,15 @@ class IFlowalertsAnalyzer(ABC):
         this init will have access to all keyword args passes when
         initializing the module
         """
+
+    def get_msg(self, channel_name):
+        message = self.db.get_message(self.channels[channel_name])
+        if utils.is_msg_intended_for(message, channel_name):
+            self.msg_received = True
+            return message
+        else:
+            self.msg_received = False
+            return False
 
     @abstractmethod
     def analyze(self) -> bool:

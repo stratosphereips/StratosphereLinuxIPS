@@ -814,33 +814,6 @@ class Conn(IFlowalertsAnalyzer):
             timestamp,
         )
 
-    def check_non_ssl_port_443_conns(
-        self,
-        state,
-        daddr,
-        dport,
-        proto,
-        appproto,
-        profileid,
-        twid,
-        uid,
-        timestamp,
-    ):
-        """
-        alerts on established connections on port 443 that are not HTTPS (ssl)
-        """
-        # if it was a valid ssl conn, the 'service' field aka
-        # appproto should be 'ssl'
-        if (
-            str(dport) == "443"
-            and proto.lower() == "tcp"
-            and appproto.lower() != "ssl"
-            and state == "Established"
-        ):
-            self.set_evidence.non_ssl_port_443_conn(
-                daddr, profileid, timestamp, twid, uid
-            )
-
     def analyze(self):
         if msg := self.flowalerts.get_msg("new_flow"):
             new_flow = json.loads(msg["data"])
@@ -937,17 +910,6 @@ class Conn(IFlowalertsAnalyzer):
             )
 
             self.check_non_http_port_80_conns(
-                state,
-                daddr,
-                dport,
-                proto,
-                appproto,
-                profileid,
-                twid,
-                uid,
-                timestamp,
-            )
-            self.check_non_ssl_port_443_conns(
                 state,
                 daddr,
                 dport,
