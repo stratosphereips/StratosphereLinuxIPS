@@ -15,6 +15,7 @@ from slips_files.common.abstracts.module import IModule
 from .dns import DNS
 from .notice import Notice
 from .smtp import SMTP
+from .ssh import SSH
 from .ssl import SSL
 from .timer_thread import TimerThread
 from .set_evidence import SetEvidnceHelper
@@ -43,8 +44,7 @@ class FlowAlerts(IModule):
         # Cache list of connections that we already checked in the timer
         # thread (we waited for the dns resolution for these connections)
         self.connections_checked_in_conn_dns_timer_thread = []
-        # Cache list of connections that we already checked in the timer thread for ssh check
-        self.connections_checked_in_ssh_timer_thread = []
+
         # Threshold how much time to wait when capturing in an interface,
         # to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
@@ -52,8 +52,7 @@ class FlowAlerts(IModule):
         self.conn_without_dns_interface_wait_time = 30
         # If 1 flow uploaded this amount of MBs or more, slips will alert data upload
         self.flow_upload_threshold = 100
-        # after this number of failed ssh logins, we alert pw guessing
-        self.pw_guessing_threshold = 20
+
         self.password_guessing_cache = {}
         # thread that waits for ssl flows to appear in conn.log
         self.ssl_waiting_thread = threading.Thread(
@@ -67,6 +66,7 @@ class FlowAlerts(IModule):
         self.notice = Notice(self.db, flowalerts=self)
         self.smtp = SMTP(self.db, flowalerts=self)
         self.ssl = SSL(self.db, flowalerts=self)
+        self.ssh = SSH(self.db, flowalerts=self)
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
@@ -97,9 +97,6 @@ class FlowAlerts(IModule):
     def read_configuration(self):
         conf = ConfigParser()
         self.long_connection_threshold = conf.long_connection_threshold()
-        self.ssh_succesful_detection_threshold = (
-            conf.ssh_succesful_detection_threshold()
-        )
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
         self.pastebin_downloads_threshold = (
             conf.get_pastebin_download_threshold()
@@ -648,101 +645,6 @@ class FlowAlerts(IModule):
             with contextlib.suppress(ValueError):
                 self.connections_checked_in_conn_dns_timer_thread.remove(uid)
 
-    def detect_successful_ssh_by_zeek(self, uid, timestamp, profileid, twid):
-        """
-        Check for auth_success: true in the given zeek flow
-        """
-        original_ssh_flow = self.db.search_tws_for_flow(profileid, twid, uid)
-        original_flow_uid = next(iter(original_ssh_flow))
-        if original_ssh_flow[original_flow_uid]:
-            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-            daddr = ssh_flow_dict["daddr"]
-            saddr = ssh_flow_dict["saddr"]
-            size = ssh_flow_dict["sbytes"] + ssh_flow_dict["dbytes"]
-            self.set_evidence.ssh_successful(
-                twid,
-                saddr,
-                daddr,
-                size,
-                uid,
-                timestamp,
-                by="Zeek",
-            )
-            with contextlib.suppress(ValueError):
-                self.connections_checked_in_ssh_timer_thread.remove(uid)
-            return True
-
-        elif uid not in self.connections_checked_in_ssh_timer_thread:
-            # It can happen that the original SSH flow is not in the DB yet
-            # comes here if we haven't started the timer thread
-            # for this connection before
-            # mark this connection as checked
-            # self.print(f'Starting the timer to check on {flow_dict},
-            # uid {uid}. time {datetime.datetime.now()}')
-            self.connections_checked_in_ssh_timer_thread.append(uid)
-            params = [uid, timestamp, profileid, twid]
-            timer = TimerThread(15, self.detect_successful_ssh_by_zeek, params)
-            timer.start()
-
-    def detect_successful_ssh_by_slips(
-        self, uid, timestamp, profileid, twid, auth_success
-    ):
-        """
-        Try Slips method to detect if SSH was successful by
-        comparing all bytes sent and received to our threshold
-        """
-        # this is the ssh flow read from conn.log not ssh.log
-        original_ssh_flow = self.db.get_flow(uid)
-        original_flow_uid = next(iter(original_ssh_flow))
-        if original_ssh_flow[original_flow_uid]:
-            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-            size = ssh_flow_dict["sbytes"] + ssh_flow_dict["dbytes"]
-            if size > self.ssh_succesful_detection_threshold:
-                daddr = ssh_flow_dict["daddr"]
-                saddr = ssh_flow_dict["saddr"]
-                # Set the evidence because there is no
-                # easier way to show how Slips detected
-                # the successful ssh and not Zeek
-                self.set_evidence.ssh_successful(
-                    twid,
-                    saddr,
-                    daddr,
-                    size,
-                    uid,
-                    timestamp,
-                    by="Slips",
-                )
-                with contextlib.suppress(ValueError):
-                    self.connections_checked_in_ssh_timer_thread.remove(uid)
-                return True
-
-        elif uid not in self.connections_checked_in_ssh_timer_thread:
-            # It can happen that the original SSH flow is not in the DB yet
-            # comes here if we haven't started the timer
-            # thread for this connection before
-            # mark this connection as checked
-            # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
-            # time {datetime.datetime.now()}')
-            self.connections_checked_in_ssh_timer_thread.append(uid)
-            params = [uid, timestamp, profileid, twid, auth_success]
-            timer = TimerThread(15, self.check_successful_ssh, params)
-            timer.start()
-
-    def check_successful_ssh(
-        self, uid, timestamp, profileid, twid, auth_success
-    ):
-        """
-        Function to check if an SSH connection logged in successfully
-        """
-        # it's true in zeek json files, T in zeke tab files
-        if auth_success in ["true", "T"]:
-            self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid)
-
-        else:
-            self.detect_successful_ssh_by_slips(
-                uid, timestamp, profileid, twid, auth_success
-            )
-
     def check_conn_to_port_0(
         self,
         sport,
@@ -917,36 +819,6 @@ class FlowAlerts(IModule):
             self.set_evidence.connection_to_multiple_ports(
                 profileid, twid, uids, timestamp, dstports, victim, attacker
             )
-
-    def check_ssh_password_guessing(
-        self, daddr, uid, timestamp, profileid, twid, auth_success
-    ):
-        """
-        This detection is only done when there's a failed ssh attempt
-        alerts ssh pw bruteforce when there's more than
-        20 failed attempts by the same ip to the same IP
-        """
-        if auth_success in ("true", "T"):
-            return False
-
-        cache_key = f"{profileid}-{twid}-{daddr}"
-        # update the number of times this ip performed a failed ssh login
-        if cache_key in self.password_guessing_cache:
-            self.password_guessing_cache[cache_key].append(uid)
-        else:
-            self.password_guessing_cache = {cache_key: [uid]}
-
-        conn_count = len(self.password_guessing_cache[cache_key])
-
-        if conn_count >= self.pw_guessing_threshold:
-            description = f"SSH password guessing to IP {daddr}"
-            uids = self.password_guessing_cache[cache_key]
-            self.set_evidence.pw_guessing(
-                description, timestamp, twid, uids, by="Slips"
-            )
-
-            # reset the counter
-            del self.password_guessing_cache[cache_key]
 
     def check_malicious_ssl(self, ssl_info):
         if ssl_info["type"] != "zeek":
@@ -1274,28 +1146,6 @@ class FlowAlerts(IModule):
         #     )
         #     self.conn_counter += 1
         #
-        # # --- Detect successful SSH connections ---
-        # if msg := self.get_msg("new_ssh"):
-        #     data = msg["data"]
-        #     data = json.loads(data)
-        #     profileid = data["profileid"]
-        #     twid = data["twid"]
-        #     # Get flow as a json
-        #     flow = data["flow"]
-        #     flow = json.loads(flow)
-        #     timestamp = flow["stime"]
-        #     uid = flow["uid"]
-        #     daddr = flow["daddr"]
-        #     # it's set to true in zeek json files, T in zeke tab files
-        #     auth_success = flow["auth_success"]
-        #
-        #     self.check_successful_ssh(
-        #         uid, timestamp, profileid, twid, auth_success
-        #     )
-        #
-        #     self.check_ssh_password_guessing(
-        #         daddr, uid, timestamp, profileid, twid, auth_success
-        #     )
 
         self.notice.analyze()
 
@@ -1308,6 +1158,7 @@ class FlowAlerts(IModule):
         self.dns.analyze()
         self.smtp.analyze()
         self.ssl.analyze()
+        self.ssh.analyze()
 
         # if msg := self.get_msg("new_downloaded_file"):
         #     ssl_info = json.loads(msg["data"])
