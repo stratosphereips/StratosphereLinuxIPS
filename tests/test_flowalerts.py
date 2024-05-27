@@ -158,7 +158,7 @@ def test_detect_DGA(mock_db):
     # arbitrary ip to be able to call detect_DGA
     daddr = "10.0.0.1"
     for i in range(10):
-        dga_detected = flowalerts.detect_DGA(
+        dga_detected = flowalerts.detect_dga(
             rcode_name,
             f"example{i}.com",
             timestamp,
