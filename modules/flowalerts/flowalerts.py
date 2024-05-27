@@ -13,6 +13,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
 from .dns import DNS
+from .downloaded_file import DownloadedFile
 from .notice import Notice
 from .smtp import SMTP
 from .ssh import SSH
@@ -67,6 +68,7 @@ class FlowAlerts(IModule):
         self.smtp = SMTP(self.db, flowalerts=self)
         self.ssl = SSL(self.db, flowalerts=self)
         self.ssh = SSH(self.db, flowalerts=self)
+        self.downloaded_file = DownloadedFile(self.db, flowalerts=self)
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
@@ -820,28 +822,6 @@ class FlowAlerts(IModule):
                 profileid, twid, uids, timestamp, dstports, victim, attacker
             )
 
-    def check_malicious_ssl(self, ssl_info):
-        if ssl_info["type"] != "zeek":
-            # this detection only supports zeek files.log flows
-            return False
-
-        flow: dict = ssl_info["flow"]
-
-        source = flow.get("source", "")
-        analyzers = flow.get("analyzers", "")
-        sha1 = flow.get("sha1", "")
-
-        if "SSL" not in source or "SHA1" not in analyzers:
-            # not an ssl cert
-            return False
-
-        # check if we have this sha1 marked as malicious from one of our feeds
-        ssl_info_from_db = self.db.get_ssl_info(sha1)
-        if not ssl_info_from_db:
-            return False
-
-        self.set_evidence.malicious_ssl(ssl_info, ssl_info_from_db)
-
     def check_non_http_port_80_conns(
         self,
         state,
@@ -1147,23 +1127,18 @@ class FlowAlerts(IModule):
         #     self.conn_counter += 1
         #
 
-        self.notice.analyze()
-
         # if msg := self.get_msg("tw_closed"):
         #     profileid_tw = msg["data"].split("_")
         #     profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
         #     twid = profileid_tw[-1]
         #     self.detect_data_upload_in_twid(profileid, twid)
 
+        self.notice.analyze()
         self.dns.analyze()
         self.smtp.analyze()
         self.ssl.analyze()
         self.ssh.analyze()
-
-        # if msg := self.get_msg("new_downloaded_file"):
-        #     ssl_info = json.loads(msg["data"])
-        #     self.check_malicious_ssl(ssl_info)
-        #
+        self.downloaded_file.analyze()
 
         # if msg := self.get_msg("new_tunnel"):
         #     msg = json.loads(msg["data"])

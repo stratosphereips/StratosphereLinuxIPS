@@ -162,13 +162,11 @@ class SSH(IFlowalertsAnalyzer):
         data = json.loads(data)
         profileid = data["profileid"]
         twid = data["twid"]
-        # Get flow as a json
         flow = data["flow"]
         flow = json.loads(flow)
         timestamp = flow["stime"]
         uid = flow["uid"]
         daddr = flow["daddr"]
-        # it's set to true in zeek json files, T in zeke tab files
         auth_success = flow["auth_success"]
 
         self.check_successful_ssh(
