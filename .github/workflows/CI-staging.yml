@@ -220,7 +220,7 @@ jobs:
 
           - name: Dataset Integration Tests
             run: |
-              python3 -m pytest -s tests/integration_tests/test_portscanst.py -p no:warnings -vv
+              python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
 
 
 
