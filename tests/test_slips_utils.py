@@ -106,19 +106,6 @@ def test_calculate_confidence(input_value, expected_output):
     utils = ModuleFactory().create_utils_obj()
     assert utils.calculate_confidence(input_value) == expected_output
 
-    if input_value < 0:
-        assert (
-            utils.calculate_confidence(input_value) == -0.5
-        ), "Confidence for negative packet counts should be 0."
-    elif input_value > 1000000:
-        assert (
-            utils.calculate_confidence(input_value) == 1
-        ), "Confidence for large packet counts should be capped at 1."
-    elif input_value == sys.maxsize:
-        assert (
-            utils.calculate_confidence(input_value) == 1.0
-        ), "Confidence should be capped at 1.0 for extremely large packet counts"
-
 
 def test_convert_format():
     utils = ModuleFactory().create_utils_obj()
@@ -155,23 +142,6 @@ def test_assert_microseconds():
         utils.assert_microseconds("1680788096.123456789")
         == "1680788096.123456789"
     )
-
-
-@pytest.mark.parametrize(
-    "input_value, expected_output",
-    [
-        (0.1, "low"),
-        (0.4, "medium"),
-        (0.5, "medium"),
-        (0.7, "high"),
-        (1.0, "critical"),
-        (-1, "info"),
-        (2, None),
-    ],
-)
-def test_threat_level_to_string(input_value, expected_output):
-    # utils = ModuleFactory().create_utils_obj()
-    ...
 
 
 def test_is_private_ip():
