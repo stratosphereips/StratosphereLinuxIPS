@@ -195,9 +195,7 @@ def test_is_private_ip():
 def test_remove_milliseconds_decimals(timestamp, expected_result):
     utils = ModuleFactory().create_utils_obj()
     result = utils.remove_milliseconds_decimals(timestamp)
-    assert (
-        result == expected_result
-    )
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(
@@ -213,13 +211,9 @@ def test_get_time_diff(start_time, end_time, return_type, expected_result):
     utils = ModuleFactory().create_utils_obj()
     result = utils.get_time_diff(start_time, end_time, return_type)
     if callable(expected_result):
-        assert expected_result(
-            result
-        )
+        assert expected_result(result)
     else:
-        assert (
-            result == expected_result
-        )
+        assert result == expected_result
 
 
 @pytest.mark.parametrize(
@@ -234,9 +228,8 @@ def test_get_time_diff(start_time, end_time, return_type, expected_result):
 def test_to_delta(seconds, expected_timedelta):
     utils = ModuleFactory().create_utils_obj()
     result = utils.to_delta(seconds)
-    assert (
-        result == expected_timedelta
-    )
+    assert result == expected_timedelta
+
 
 def _check_ip_presence(utils, expected_ip):
     """
@@ -244,19 +237,28 @@ def _check_ip_presence(utils, expected_ip):
     """
     return expected_ip in utils.get_own_IPs() or not utils.get_own_IPs()
 
+
 @pytest.mark.parametrize(
     "side_effect, expected_result",
     [
         (None, lambda utils: isinstance(utils.get_own_IPs(), list)),
-        (requests.exceptions.ConnectionError, lambda utils: _check_ip_presence(utils, "127.0.0.1")),
-        (requests.exceptions.RequestException, lambda utils: _check_ip_presence(utils, "127.0.0.1")),
+        (
+            requests.exceptions.ConnectionError,
+            lambda utils: _check_ip_presence(utils, "127.0.0.1"),
+        ),
+        (
+            requests.exceptions.RequestException,
+            lambda utils: _check_ip_presence(utils, "127.0.0.1"),
+        ),
     ],
 )
 def test_get_own_IPs(side_effect, expected_result):
     utils = ModuleFactory().create_utils_obj()
     if side_effect:
         with patch("requests.get", side_effect=side_effect):
-            assert expected_result(utils), "Should handle the situation gracefully"
+            assert expected_result(
+                utils
+            ), "Should handle the situation gracefully"
     else:
         assert expected_result(utils), "Should return a list of IPs"
 
@@ -265,16 +267,20 @@ def test_is_port_in_use():
     utils = ModuleFactory().create_utils_obj()
 
     # Testing with a port that's likely unused
-    port = 54321  
+    port = 54321
 
-    assert utils.is_port_in_use(port) is False, f"Port {port} should not be in use."
+    assert (
+        utils.is_port_in_use(port) is False
+    ), f"Port {port} should not be in use."
 
     # Testing with a port that's definitely in use
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as temp_socket:
-        temp_socket.bind(("localhost", 0))  
+        temp_socket.bind(("localhost", 0))
         temp_socket.listen(1)
         used_port = temp_socket.getsockname()[1]
-        assert utils.is_port_in_use(used_port) is True, f"Port {used_port} should be in use."
+        assert (
+            utils.is_port_in_use(used_port) is True
+        ), f"Port {used_port} should be in use."
 
 
 def test_is_valid_threat_level():
@@ -327,28 +333,6 @@ class MockDataClass:
 class MockEnum(Enum):
     TYPE1 = "Type 1"
     TYPE2 = "Type 2"
-
-
-@pytest.mark.parametrize(
-    "input_value, expected_output",
-    [
-        (MockDataClass(id=1, name="Test"), {"id": 1, "name": "Test"}),
-        (MockEnum.TYPE1, "Type 1"),
-        (
-            {
-                "key1": MockDataClass(id=2, name="Nested"),
-                "key2": [MockEnum.TYPE1, MockEnum.TYPE2],
-            },
-            {
-                "key1": {"id": 2, "name": "Nested"},
-                "key2": ["Type 1", "Type 2"],
-            },
-        ),
-    ],
-)
-def test_to_json_serializable(input_value, expected_output):
-    ...
-    # utils = ModuleFactory().create_utils_obj()
 
 
 def test_get_aid():
