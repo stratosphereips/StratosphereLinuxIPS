@@ -13,7 +13,7 @@ on:
             - '!master'
 
 jobs:
-  run_tests:
+  unit_tests:
       # specify the host OS
       runs-on: ubuntu-latest
       # 2 hours timeout
@@ -146,9 +146,39 @@ jobs:
               coverage report --include="modules/network_discovery/*"
               coverage html --include="modules/network_discovery/*" -d coverage_reports/network_discovery
 
+
+
+  dataset_integration_tests:
+      # specify the host OS
+      runs-on: ubuntu-latest
+      # 1h timeout
+      timeout-minutes: 3600
+      # start a container using slips dependencies image
+      container:
+          image: stratosphereips/slips_dependencies:latest
+      steps:
+          - uses: actions/checkout@v2
+
+          - name: Start redis server
+            run: redis-server --daemonize yes
+
           - name: Dataset Integration Tests
             run: |
               python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
+
+  config_files_integration_tests:
+      # specify the host OS
+      runs-on: ubuntu-latest
+      # 1h timeout
+      timeout-minutes: 3600
+      # start a container using slips dependencies image
+      container:
+          image: stratosphereips/slips_dependencies:latest
+      steps:
+          - uses: actions/checkout@v2
+
+          - name: Start redis server
+            run: redis-server --daemonize yes
 
           - name: Config File Integration Tests
             run: |
