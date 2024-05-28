@@ -213,7 +213,6 @@ class SSL(IFlowalertsAnalyzer):
         twid = msg["twid"]
         timestamp = msg["stime"]
         flow = msg["flow"]
-
         flow = json.loads(flow)
         uid = next(iter(flow))
         flow_dict = json.loads(flow[uid])
@@ -245,7 +244,6 @@ class SSL(IFlowalertsAnalyzer):
     ):
         if not is_doh:
             return False
-
         self.set_evidence.doh(daddr, profileid, twid, timestamp, uid)
 
     def analyze(self):

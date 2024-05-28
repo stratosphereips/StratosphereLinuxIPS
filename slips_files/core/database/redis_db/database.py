@@ -554,17 +554,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.hget("analysis", "output_dir")
 
-    def setInfoForIPs(self, ip: str, to_store: dict):
+    def set_ip_info(self, ip: str, to_store: dict):
         """
         Store information for this IP
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
-        going to store for this IP.
+        We receive a dictionary, such as {'geocountry': 'rumania'} to
+        store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
         """
         # Get the previous info already stored
         cached_ip_info = self.get_ip_info(ip)
-        if cached_ip_info is False:
+        if not cached_ip_info:
             # This IP is not in the dictionary, add it first:
             self.set_new_ip(ip)
             cached_ip_info = {}

@@ -142,8 +142,8 @@ class DBManager(IObservable):
     def update_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
 
-    def setInfoForIPs(self, *args, **kwargs):
-        return self.rdb.setInfoForIPs(*args, **kwargs)
+    def set_ip_info(self, *args, **kwargs):
+        return self.rdb.set_ip_info(*args, **kwargs)
 
     def get_p2p_reports_about_ip(self, *args, **kwargs):
         return self.rdb.get_p2p_reports_about_ip(*args, **kwargs)

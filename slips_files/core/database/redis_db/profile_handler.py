@@ -237,9 +237,7 @@ class ProfileHandler(IObservable):
             "stime": flow.starttime,
         }
 
-        # Convert to json string
         dns_flow = json.dumps(dns_flow)
-        # Publish the new dns received
         # TODO we should just send the DNS obj!
         to_send = {
             "profileid": profileid,
@@ -253,9 +251,7 @@ class ProfileHandler(IObservable):
         }
 
         to_send = json.dumps(to_send)
-        # publish a dns with its flow
         self.publish("new_dns", to_send)
-        # Check if the dns query is detected by the threat intelligence.
         self.give_threat_intelligence(
             profileid,
             twid,
@@ -922,7 +918,6 @@ class ProfileHandler(IObservable):
         # Convert to json string
         ssh_flow_dict = json.dumps(ssh_flow_dict)
 
-        # Publish the new dns received
         to_send = {
             "profileid": profileid,
             "twid": twid,
@@ -931,10 +926,8 @@ class ProfileHandler(IObservable):
             "uid": flow.uid,
         }
         to_send = json.dumps(to_send)
-        # publish a dns with its flow
         self.publish("new_ssh", to_send)
         self.print(f"Adding SSH flow to DB: {ssh_flow_dict}", 3, 0)
-        # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         self.give_threat_intelligence(
             profileid,
             twid,
