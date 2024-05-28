@@ -245,6 +245,7 @@ class SSL(IFlowalertsAnalyzer):
         if not is_doh:
             return False
         self.set_evidence.doh(daddr, profileid, twid, timestamp, uid)
+        self.db.set_ip_info(daddr, {"is_doh_server": True})
 
     def analyze(self):
         if msg := self.flowalerts.get_msg("new_ssl"):

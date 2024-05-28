@@ -58,6 +58,11 @@ class ProfileHandler(IObservable):
             }
         )
 
+    def is_doh_server(self, ip: str) -> bool:
+        """returns whether the given ip is a DoH server"""
+        info: dict = self.get_ip_info(ip)
+        return info.get("is_doh_server", False)
+
     def get_outtuples_from_profile_tw(self, profileid, twid):
         """Get the out tuples"""
         return self.r.hget(profileid + self.separator + twid, "OutTuples")
