@@ -70,7 +70,8 @@ RUN grep -v 'black' docker/macosm1-P2P-image/requirements-macos-m1-docker.txt | 
     && npm install
 
 # Change the configuration file to have use_p2p = yes
-RUN sed -i "s/use_p2p = no/use_p2p = yes/g" config/slips.conf
+# RUN sed -i "s/use_p2p = no/use_p2p = yes/g" config/slips.conf
+RUN sed -i "s/use_p2p = no/use_p2p = yes/g" config/slips.yaml
 
 # build the pigeon and add pigeon to path
 SHELL ["/bin/bash", "-c"]

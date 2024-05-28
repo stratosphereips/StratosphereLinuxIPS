@@ -66,7 +66,8 @@ class MetadataManager:
 
     def add_metadata(self):
         """
-        Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
+        Create a metadata dir output/metadata/ that has a copy of
+        slips.conf/slips.yaml, whitelist.conf, current commit and date
         """
         if not self.enable_metadata:
             return
@@ -79,7 +80,9 @@ class MetadataManager:
             pass
 
         # Add a copy of slips.conf
-        config_file = self.main.args.config or "config/slips.conf"
+        # config_file = self.main.args.config or "config/slips.conf"
+        config_file = self.main.args.config or "config/slips.yaml"
+
         shutil.copy(config_file, metadata_dir)
 
         # Add a copy of whitelist.conf
@@ -90,12 +93,14 @@ class MetadataManager:
         now = utils.convert_format(now, utils.alerts_format)
 
         self.info_path = os.path.join(metadata_dir, "info.txt")
+        cmd = " ".join(sys.argv)
         with open(self.info_path, "w") as f:
             f.write(
                 f"Slips version: {self.main.version}\n"
                 f"File: {self.main.input_information}\n"
                 f"Branch: {self.main.db.get_branch()}\n"
                 f"Commit: {self.main.db.get_commit()}\n"
+                f"Command: {cmd}\n"
                 f"Slips start date: {now}\n"
             )
 

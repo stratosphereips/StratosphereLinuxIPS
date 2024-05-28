@@ -25,7 +25,7 @@ class CESNET(IModule):
         self.stop_module = False
 
     def read_configuration(self):
-        """Read importing/exporting preferences from slips.conf"""
+        """Read importing/exporting preferences from slips.conf/slips.yaml"""
         conf = ConfigParser()
         self.send_to_warden = conf.send_to_warden()
         self.receive_from_warden = conf.receive_from_warden()
