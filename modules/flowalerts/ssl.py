@@ -18,7 +18,7 @@ class SSL(IFlowalertsAnalyzer):
         # in pastebin download detection, we wait for each conn.log flow
         # of the seen ssl flow to appear
         # this is the dict of ssl flows we're waiting for
-        self.ssl_waiting_thread = multiprocessing.Queue()
+        self.pending_ssl_flows = multiprocessing.Queue()
         # thread that waits for ssl flows to appear in conn.log
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
