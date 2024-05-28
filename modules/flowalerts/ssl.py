@@ -220,7 +220,7 @@ class SSL(IFlowalertsAnalyzer):
         state = flow_dict["state"]
         dport: int = flow_dict.get("dport", None)
         proto = flow_dict.get("proto")
-        appproto = flow_dict.get("appproto", "")
+        appproto = str(flow_dict.get("appproto", ""))
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
         if (
