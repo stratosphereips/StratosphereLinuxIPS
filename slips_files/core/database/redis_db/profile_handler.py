@@ -1015,8 +1015,7 @@ class ProfileHandler(IObservable):
             "ja3s": flow.ja3s,
             "is_DoH": flow.is_DoH,
         }
-        # TODO do something with is_doh
-        # Convert to json string
+
         ssl_flow = json.dumps(ssl_flow)
         to_send = {
             "profileid": profileid,

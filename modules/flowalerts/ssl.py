@@ -234,6 +234,20 @@ class SSL(IFlowalertsAnalyzer):
                 daddr, profileid, timestamp, twid, uid
             )
 
+    def detect_doh(
+        self,
+        is_doh,
+        daddr,
+        profileid,
+        twid,
+        timestamp,
+        uid,
+    ):
+        if not is_doh:
+            return False
+
+        self.set_evidence.doh(daddr, profileid, twid, timestamp, uid)
+
     def analyze(self):
         if msg := self.flowalerts.get_msg("new_ssl"):
             data = msg["data"]
@@ -250,6 +264,7 @@ class SSL(IFlowalertsAnalyzer):
             daddr = flow["daddr"]
             saddr = profileid.split("_")[1]
             server_name = flow.get("server_name")
+            is_doh: bool = flow.get("is_DoH", False)
 
             # we'll be checking pastebin downloads of this ssl flow
             # later
@@ -273,6 +288,14 @@ class SSL(IFlowalertsAnalyzer):
 
             self.detect_incompatible_cn(
                 daddr, server_name, issuer, profileid, twid, uid, timestamp
+            )
+            self.detect_doh(
+                is_doh,
+                daddr,
+                profileid,
+                twid,
+                timestamp,
+                uid,
             )
 
         if msg := self.get_msg("new_flow"):
