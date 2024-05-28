@@ -13,7 +13,7 @@ import json
 )
 def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     # no need to test interfaces because in that case read_zeek_files runs in a loop and never returns
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         input_information, input_type, mock_db
     )
     input.zeek_pid = "False"
@@ -31,9 +31,7 @@ def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     ],
 )
 def test_is_growing_zeek_dir(zeek_dir: str, is_tabs: bool, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
-        zeek_dir, "zeek_folder", mock_db
-    )
+    input = ModuleFactory().create_input_obj(zeek_dir, "zeek_folder", mock_db)
     mock_db.get_all_zeek_files.return_value = [
         os.path.join(zeek_dir, "conn.log")
     ]
@@ -49,9 +47,7 @@ def test_is_growing_zeek_dir(zeek_dir: str, is_tabs: bool, mock_db):
     ],
 )
 def test_is_zeek_tabs_file(path: str, expected_val: bool, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
-        path, "zeek_folder", mock_db
-    )
+    input = ModuleFactory().create_input_obj(path, "zeek_folder", mock_db)
     assert input.is_zeek_tabs_file(path) == expected_val
 
 
@@ -65,7 +61,7 @@ def test_is_zeek_tabs_file(path: str, expected_val: bool, mock_db):
     ],
 )
 def test_handle_zeek_log_file(input_information, mock_db, expected_output):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         input_information, "zeek_log_file", mock_db
     )
     assert input.handle_zeek_log_file() == expected_output
@@ -85,9 +81,7 @@ def test_cache_nxt_line_in_file(
     """
     :param line_cached: should slips cache  the first line of this file or not
     """
-    input = ModuleFactory().create_inputProcess_obj(
-        path, "zeek_log_file", mock_db
-    )
+    input = ModuleFactory().create_input_obj(path, "zeek_log_file", mock_db)
     input.cache_lines = {}
     input.file_time = {}
     input.is_zeek_tabs = is_tabs
@@ -128,9 +122,7 @@ def test_cache_nxt_line_in_file(
 def test_get_ts_from_line(
     path: str, is_tabs: str, zeek_line: str, expected_val: float, mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(
-        path, "zeek_log_file", mock_db
-    )
+    input = ModuleFactory().create_input_obj(path, "zeek_log_file", mock_db)
     input.is_zeek_tabs = is_tabs
     input.get_ts_from_line(zeek_line)
 
@@ -147,9 +139,7 @@ def test_get_ts_from_line(
 def test_reached_timeout(
     last_updated_file_time, now, bro_timeout, expected_val, mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(
-        "", "zeek_log_file", mock_db
-    )
+    input = ModuleFactory().create_input_obj("", "zeek_log_file", mock_db)
     input.last_updated_file_time = last_updated_file_time
     input.bro_timeout = bro_timeout
     # make it seem as we don't have cache lines anymore to be able to check the timeout
@@ -164,14 +154,12 @@ def test_reached_timeout(
 )
 @pytest.mark.parametrize("path", [("dataset/test1-normal.nfdump")])
 def test_handle_nfdump(path, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(path, "nfdump", mock_db)
+    input = ModuleFactory().create_input_obj(path, "nfdump", mock_db)
     assert input.handle_nfdump() is True
 
 
 def test_get_earliest_line(mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
-        "", "zeek_log_file", mock_db
-    )
+    input = ModuleFactory().create_input_obj("", "zeek_log_file", mock_db)
     input.file_time = {
         "software.log": 3,
         "ssh.log": 2,
@@ -204,7 +192,7 @@ def test_get_earliest_line(mock_db):
 def test_get_flows_number(
     path: str, is_tabs: bool, expected_val: int, mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(path, "nfdump", mock_db)
+    input = ModuleFactory().create_input_obj(path, "nfdump", mock_db)
     input.is_zeek_tabs = is_tabs
     assert input.get_flows_number(path) == expected_val
 
@@ -219,7 +207,7 @@ def test_get_flows_number(
 #                                                           ('binetflow','dataset/test3-mixed.binetflow'),
 #                                                           ('binetflow','dataset/test4-malicious.binetflow'),
 def test_handle_binetflow(input_type, input_information, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         input_information, input_type, mock_db
     )
     with patch.object(input, "get_flows_number", return_value=5):
@@ -231,10 +219,10 @@ def test_handle_binetflow(input_type, input_information, mock_db):
     [("dataset/test6-malicious.suricata.json")],
 )
 def test_handle_suricata(input_information, mock_db):
-    inputProcess = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         input_information, "suricata", mock_db
     )
-    assert inputProcess.handle_suricata() is True
+    assert input.handle_suricata() is True
 
 
 @pytest.mark.parametrize(
@@ -262,51 +250,7 @@ def test_handle_suricata(input_information, mock_db):
 def test_read_from_stdin(line_type: str, line: str, mock_db):
     # slips supports reading zeek json conn.log only using stdin,
     # tabs aren't supported
-    input = ModuleFactory().create_inputProcess_obj(
-        line_type,
-        "stdin",
-        mock_db,
-        line_type=line_type,
-    )
-    with patch.object(input, "stdin", return_value=[line, "done\n"]):
-        # this function will give the line to profiler
-        assert input.read_from_stdin()
-        line_sent: dict = input.profiler_queue.get()
-        # in case it's a zeek line, it gets sent as a dict
-        expected_received_line = (
-            json.loads(line) if line_type == "zeek" else line
-        )
-        assert line_sent["line"]["data"] == expected_received_line
-        assert line_sent["line"]["line_type"] == line_type
-        assert line_sent["input_type"] == "stdin"
-
-
-@pytest.mark.parametrize(
-    "line_type, line",
-    [
-        (
-            "zeek",
-            '{"ts":271.102532,"uid":"CsYeNL1xflv3dW9hvb","id.orig_h":"10.0.2.15","id.orig_p":59393,'
-            '"id.resp_h":"216.58.201.98","id.resp_p":443,"proto":"udp","duration":0.5936019999999758,'
-            '"orig_bytes":5219,"resp_bytes":5685,"conn_state":"SF","missed_bytes":0,"history":"Dd",'
-            '"orig_pkts":9,"orig_ip_bytes":5471,"resp_pkts":10,"resp_ip_bytes":5965}',
-        ),
-        (
-            "suricata",
-            '{"timestamp":"2021-06-06T15:57:37.272281+0200","flow_id":2054715089912378,"event_type":"flow",'
-            '"src_ip":"193.46.255.92","src_port":49569,"dest_ip":"192.168.1.129","dest_port":8014,'
-            '"proto":"TCP","flow":{"pkts_toserver":2,"pkts_toclient":2,"bytes_toserver":120,"bytes_toclient":120,"start":"2021-06-07T15:45:48.950842+0200","end":"2021-06-07T15:45:48.951095+0200","age":0,"state":"closed","reason":"shutdown","alerted":false},"tcp":{"tcp_flags":"16","tcp_flags_ts":"02","tcp_flags_tc":"14","syn":true,"rst":true,"ack":true,"state":"closed"},"host":"stratosphere.org"}',
-        ),
-        (
-            "argus",
-            "2019/04/05 16:15:09.194268,0.031142,udp,10.8.0.69,8278,  <->,8.8.8.8,53,CON,0,0,2,186,64,1,",
-        ),
-    ],
-)
-def test_read_from_stdin(line_type: str, line: str, mock_db):
-    # slips supports reading zeek json conn.log only using stdin,
-    # tabs aren't supported
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         line_type,
         "stdin",
         mock_db,
