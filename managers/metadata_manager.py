@@ -67,7 +67,7 @@ class MetadataManager:
     def add_metadata(self):
         """
         Create a metadata dir output/metadata/ that has a copy of
-        slips.conf, whitelist.conf, current commit and date
+        slips.conf/slips.yaml, whitelist.conf, current commit and date
         """
         if not self.enable_metadata:
             return
@@ -80,7 +80,9 @@ class MetadataManager:
             pass
 
         # Add a copy of slips.conf
-        config_file = self.main.args.config or "config/slips.conf"
+        # config_file = self.main.args.config or "config/slips.conf"
+        config_file = self.main.args.config or "config/slips.yaml"
+
         shutil.copy(config_file, metadata_dir)
 
         # Add a copy of whitelist.conf

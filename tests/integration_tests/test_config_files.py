@@ -1,5 +1,5 @@
 """
-This file tests 2 different config files other than slips' default config/slips.conf
+This file tests 2 different config files other than slips' default config/slips.conf or onfig/slips.yaml
 test/test.conf and tests/test2.conf
 """
 

@@ -762,11 +762,11 @@ class ProcessManager:
 
             self.output_send_pipe.close()
             self.pbar_recv_pipe.close()
-            # if store_a_copy_of_zeek_files is set to yes in slips.conf,
+            # if store_a_copy_of_zeek_files is set to yes in slips.conf/slips.yaml,
             # copy the whole zeek_files dir to the output dir
             self.main.store_zeek_dir_copy()
 
-            # if delete_zeek_files is set to yes in slips.conf,
+            # if delete_zeek_files is set to yes in slips.conf/slips.ymal,
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
             self.main.db.close()

@@ -97,6 +97,7 @@ class AlertHandler:
     def is_detection_disabled(self, evidence_type: EvidenceType):
         """
         Function to check if detection is disabled in slips.conf
+        Function to check if detection is disabled in slips.yaml
         """
         return str(evidence_type) in self.disabled_detections
 
