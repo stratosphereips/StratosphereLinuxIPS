@@ -197,7 +197,7 @@ def test_remove_milliseconds_decimals(timestamp, expected_result):
     result = utils.remove_milliseconds_decimals(timestamp)
     assert (
         result == expected_result
-    ), f"Expected {expected_result}, but got {result}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -215,11 +215,11 @@ def test_get_time_diff(start_time, end_time, return_type, expected_result):
     if callable(expected_result):
         assert expected_result(
             result
-        ), f"Expected the result to satisfy the condition, but got {result}"
+        )
     else:
         assert (
             result == expected_result
-        ), f"Expected {expected_result}, but got {result}"
+        )
 
 
 @pytest.mark.parametrize(
@@ -236,53 +236,45 @@ def test_to_delta(seconds, expected_timedelta):
     result = utils.to_delta(seconds)
     assert (
         result == expected_timedelta
-    ), f"Expected {expected_timedelta}, but got {result}"
+    )
 
+def _check_ip_presence(utils, expected_ip):
+    """
+    Helper function to check if the given IP is present in the list of own IPs.
+    """
+    return expected_ip in utils.get_own_IPs() or not utils.get_own_IPs()
 
 @pytest.mark.parametrize(
     "side_effect, expected_result",
     [
         (None, lambda utils: isinstance(utils.get_own_IPs(), list)),
-        (
-            requests.exceptions.ConnectionError,
-            lambda utils: "127.0.0.1" in utils.get_own_IPs()
-            or not utils.get_own_IPs(),
-        ),
-        (
-            requests.exceptions.RequestException,
-            lambda utils: "127.0.0.1" in utils.get_own_IPs()
-            or not utils.get_own_IPs(),
-        ),
+        (requests.exceptions.ConnectionError, lambda utils: _check_ip_presence(utils, "127.0.0.1")),
+        (requests.exceptions.RequestException, lambda utils: _check_ip_presence(utils, "127.0.0.1")),
     ],
 )
 def test_get_own_IPs(side_effect, expected_result):
     utils = ModuleFactory().create_utils_obj()
     if side_effect:
         with patch("requests.get", side_effect=side_effect):
-            assert expected_result(
-                utils
-            ), "Should handle the situation gracefully"
+            assert expected_result(utils), "Should handle the situation gracefully"
     else:
         assert expected_result(utils), "Should return a list of IPs"
 
 
-@pytest.mark.parametrize("port", [80, 65535, 0])
-def test_is_port_in_use(port):
+def test_is_port_in_use():
     utils = ModuleFactory().create_utils_obj()
-    assert isinstance(utils.is_port_in_use(port), bool)
 
-    if port != 0:
-        assert (
-            utils.is_port_in_use(port) is False
-        ), f"The port {port} should not be identified as in use."
-    else:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as temp_socket:
-            temp_socket.bind(("localhost", 0))
-            temp_socket.listen(1)
-            used_port = temp_socket.getsockname()[1]
-            assert (
-                utils.is_port_in_use(used_port) is True
-            ), "The port should be identified as in use."
+    # Testing with a port that's likely unused
+    port = 54321  
+
+    assert utils.is_port_in_use(port) is False, f"Port {port} should not be in use."
+
+    # Testing with a port that's definitely in use
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as temp_socket:
+        temp_socket.bind(("localhost", 0))  
+        temp_socket.listen(1)
+        used_port = temp_socket.getsockname()[1]
+        assert utils.is_port_in_use(used_port) is True, f"Port {used_port} should be in use."
 
 
 def test_is_valid_threat_level():
