@@ -140,12 +140,6 @@ jobs:
               coverage report  --include="slips_files/core/input.py*"
               coverage html  --include="slips_files/core/input.py*" -d coverage_reports/input
 
-          - name: Network Discovery Integration Tests
-            run: |
-              coverage run --source=./ -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
-              coverage report --include="modules/network_discovery/*"
-              coverage html --include="modules/network_discovery/*" -d coverage_reports/network_discovery
-
 
 
   dataset_integration_tests:
@@ -219,9 +213,11 @@ jobs:
             run: redis-server --daemonize yes
 
           - name: Dataset Integration Tests
+            # python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
             run: |
-              python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
-
+              coverage run --source=./ -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
+              coverage report --include="modules/network_discovery/*"
+              coverage html --include="modules/network_discovery/*" -d coverage_reports/network_discovery
 
 
   config_files_integration_tests:
