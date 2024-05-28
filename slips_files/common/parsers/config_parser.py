@@ -5,11 +5,12 @@ from typing import List
 import configparser
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
+import yaml
 
 
 class ConfigParser(object):
     name = "ConfigParser"
-    description = "Parse and sanitize slips.conf values. used by all modules"
+    description = "Parse and sanitize slips.conf/slips.yaml values. used by all modules"
     authors = ["Alya Gomaa"]
 
     def __init__(self):
@@ -27,14 +28,14 @@ class ConfigParser(object):
 
     def read_config_file(self):
         """
-        reads slips configuration file, slips.conf is the default file
+        reads slips configuration file, slips.conf/slips.yaml is the default file
         """
         config = configparser.ConfigParser(
             interpolation=None, comment_prefixes="#"
         )
         try:
             with open(self.configfile) as source:
-                config.read_file(source)
+                yaml.safe_load(source)
         except (IOError, TypeError):
             pass
         return config
@@ -82,7 +83,7 @@ class ConfigParser(object):
 
     def get_entropy_threshold(self):
         """
-        gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf
+        gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf/slips.yaml
         """
         threshold = self.read_configuration(
             "flowalerts", "entropy_threshold", 5
@@ -685,7 +686,7 @@ class ConfigParser(object):
             to_ignore.append("p2ptrust")
 
         # ignore CESNET sharing module if send and receive are
-        # disabled in slips.conf
+        # disabled in slips.conf/slips.yaml
         send_to_warden = self.send_to_warden()
         receive_from_warden = self.receive_from_warden()
 

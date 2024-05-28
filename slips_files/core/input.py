@@ -707,7 +707,7 @@ class Input(ICore):
         it deletes old zeek-date.log files and clears slips' open handles and sleeps again
         """
         while not self.should_stop():
-            # keep the rotated files for the period specified in slips.conf
+            # keep the rotated files for the period specified in slips.conf/slips.yaml
             if msg := self.get_msg("remove_old_files"):
                 # this channel receives renamed zeek log files, we can safely delete them and close their handle
                 changed_files = json.loads(msg["data"])
@@ -794,7 +794,7 @@ class Input(ICore):
         rotation = []
         if self.input_type == "interface":
             if self.enable_rotation:
-                # how often to rotate zeek files? taken from slips.conf
+                # how often to rotate zeek files? taken from slips.conf/slips.yaml
                 rotation = [
                     "-e",
                     f"redef Log::default_rotation_interval = {self.rotation_period} ;",
