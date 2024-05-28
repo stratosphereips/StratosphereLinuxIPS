@@ -166,6 +166,64 @@ jobs:
             run: |
               python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
 
+  zeek_integration_tests:
+      # specify the host OS
+      runs-on: ubuntu-latest
+      # 1h timeout
+      timeout-minutes: 3600
+      # start a container using slips dependencies image
+      container:
+          image: stratosphereips/slips_dependencies:latest
+      steps:
+          - uses: actions/checkout@v2
+
+          - name: Start redis server
+            run: redis-server --daemonize yes
+
+          - name: Dataset Integration Tests
+            run: |
+              python3 -m pytest -s tests/integration_tests/test_pcap_dataset.py -p no:warnings -vv
+
+  pcap_integration_tests:
+      # specify the host OS
+      runs-on: ubuntu-latest
+      # 1h timeout
+      timeout-minutes: 3600
+      # start a container using slips dependencies image
+      container:
+          image: stratosphereips/slips_dependencies:latest
+      steps:
+          - uses: actions/checkout@v2
+
+          - name: Start redis server
+            run: redis-server --daemonize yes
+
+          - name: Dataset Integration Tests
+            run: |
+              python3 -m pytest -s tests/integration_tests/test_zeek_dataset.py -p no:warnings -vv
+
+
+
+  port_scans_integration_tests:
+      # specify the host OS
+      runs-on: ubuntu-latest
+      # 1h timeout
+      timeout-minutes: 3600
+      # start a container using slips dependencies image
+      container:
+          image: stratosphereips/slips_dependencies:latest
+      steps:
+          - uses: actions/checkout@v2
+
+          - name: Start redis server
+            run: redis-server --daemonize yes
+
+          - name: Dataset Integration Tests
+            run: |
+              python3 -m pytest -s tests/integration_tests/test_portscanst.py -p no:warnings -vv
+
+
+
   config_files_integration_tests:
       # specify the host OS
       runs-on: ubuntu-latest
