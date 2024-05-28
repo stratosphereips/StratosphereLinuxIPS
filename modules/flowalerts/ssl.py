@@ -15,15 +15,15 @@ class SSL(IFlowalertsAnalyzer):
     def init(self, flowalerts=None):
         self.flowalerts = flowalerts
         self.set_evidence = SetEvidnceHelper(self.db)
+        # in pastebin download detection, we wait for each conn.log flow
+        # of the seen ssl flow to appear
+        # this is the dict of ssl flows we're waiting for
+        self.ssl_waiting_thread = multiprocessing.Queue()
         # thread that waits for ssl flows to appear in conn.log
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
         self.ssl_waiting_thread.start()
-        # in pastebin download detection, we wait for each conn.log flow
-        # of the seen ssl flow to appear
-        # this is the dict of ssl flows we're waiting for
-        self.pending_ssl_flows = multiprocessing.Queue()
         self.channels = {"new_flow": self.db.subscribe("new_flow")}
 
     def name(self) -> str:
