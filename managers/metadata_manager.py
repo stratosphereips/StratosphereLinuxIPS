@@ -80,7 +80,6 @@ class MetadataManager:
             pass
 
         # Add a copy of slips.conf
-        # config_file = self.main.args.config or "config/slips.conf"
         config_file = self.main.args.config or "config/slips.yaml"
 
         shutil.copy(config_file, metadata_dir)
