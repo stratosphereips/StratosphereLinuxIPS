@@ -1062,7 +1062,7 @@ class ProfileHandler(IObservable):
                     if SNI_port["server_name"] in resolution["domains"]:
                         # add SNI to our db as it has a DNS resolution
                         sni_ipdata.append(SNI_port)
-                        self.setInfoForIPs(flow.daddr, {"SNI": sni_ipdata})
+                        self.set_ip_info(flow.daddr, {"SNI": sni_ipdata})
                         break
 
     def get_profileid_from_ip(self, ip: str) -> Optional[str]:
