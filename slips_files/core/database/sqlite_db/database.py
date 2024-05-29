@@ -324,7 +324,8 @@ class SQLiteDB(IObservable):
         # 'alerts': 'alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT,
         # timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT'
         self.execute(
-            "INSERT OR REPLACE INTO alerts (alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) "
+            "INSERT OR REPLACE INTO alerts "
+            "(alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) "
             "VALUES (?, ?, ?, ?, ?, ?, ?);",
             (
                 alert["alert_ID"],

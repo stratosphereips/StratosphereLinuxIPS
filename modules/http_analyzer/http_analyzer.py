@@ -2,7 +2,10 @@ import json
 import urllib
 import requests
 from typing import Union, Dict
-from slips_files.common.imports import *
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -130,7 +133,7 @@ class HTTPAnalyzer(IModule):
         """
         Detects more than 4 empty connections to
             google, bing, yandex and yahoo on port 80
-        and evidence is generted only when the 4 conns have an empty uri
+        an evidence is generted only when the 4 conns have an empty uri
         """
         # to test this wget google.com:80 twice
         # wget makes multiple connections per command,
@@ -294,7 +297,6 @@ class HTTPAnalyzer(IModule):
         Compare the user agent of this profile to the MAC vendor
         and check incompatibility
         """
-        # get the mac vendor
         vendor: Union[str, None] = self.db.get_mac_vendor_from_profile(
             profileid
         )
@@ -303,7 +305,7 @@ class HTTPAnalyzer(IModule):
         vendor = vendor.lower()
 
         user_agent: dict = self.db.get_user_agent_from_profile(profileid)
-        if not user_agent or type(user_agent) != dict:
+        if not user_agent or not isinstance(user_agent, dict):
             return False
 
         os_type = user_agent.get("os_type", "").lower()
@@ -450,7 +452,7 @@ class HTTPAnalyzer(IModule):
         self.db.add_user_agent_to_profile(profileid, json.dumps(UA_info))
         return UA_info
 
-    def extract_info_from_UA(self, user_agent, profileid):
+    def extract_info_from_ua(self, user_agent, profileid):
         """
         Zeek sometimes collects info about a specific UA,
         in this case the UA starts with 'server-bag'
@@ -465,10 +467,10 @@ class HTTPAnalyzer(IModule):
             .replace("]", "")
             .replace("[", "")
         )
-        UA_info = {"user_agent": user_agent}
+        ua_info = {"user_agent": user_agent}
         os_name = user_agent.split(",")[0]
         os_type = os_name + user_agent.split(",")[1]
-        UA_info.update(
+        ua_info.update(
             {
                 "os_name": os_name,
                 "os_type": os_type,
@@ -476,11 +478,11 @@ class HTTPAnalyzer(IModule):
                 "browser": "",
             }
         )
-        UA_info = json.dumps(UA_info)
-        self.db.add_user_agent_to_profile(profileid, UA_info)
-        return UA_info
+        ua_info = json.dumps(ua_info)
+        self.db.add_user_agent_to_profile(profileid, ua_info)
+        return ua_info
 
-    def check_multiple_UAs(
+    def check_multiple_user_agents_in_a_row(
         self,
         cached_ua: dict,
         user_agent: dict,
@@ -703,7 +705,7 @@ class HTTPAnalyzer(IModule):
             # get the last used ua of this profile
             cached_ua = self.db.get_user_agent_from_profile(profileid)
             if cached_ua:
-                self.check_multiple_UAs(
+                self.check_multiple_user_agents_in_a_row(
                     cached_ua,
                     user_agent,
                     timestamp,
@@ -713,7 +715,7 @@ class HTTPAnalyzer(IModule):
                 )
 
             if not cached_ua or (
-                type(cached_ua) == dict
+                isinstance(cached_ua, dict)
                 and cached_ua.get("user_agent", "") != user_agent
                 and "server-bag" not in user_agent
             ):
@@ -722,7 +724,7 @@ class HTTPAnalyzer(IModule):
                 self.get_user_agent_info(user_agent, profileid)
 
             if "server-bag" in user_agent:
-                self.extract_info_from_UA(user_agent, profileid)
+                self.extract_info_from_ua(user_agent, profileid)
 
             if self.detect_executable_mime_types(resp_mime_types):
                 self.set_evidence_executable_mime_type(

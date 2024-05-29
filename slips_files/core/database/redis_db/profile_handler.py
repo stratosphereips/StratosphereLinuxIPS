@@ -7,7 +7,6 @@ from math import floor
 from typing import (
     Tuple,
     Union,
-    Dict,
     Optional,
     List,
     Set,
@@ -91,31 +90,36 @@ class ProfileHandler(IObservable):
     def get_timewindow(self, flowtime, profileid):
         """
         This function returns the TW in the database where the flow belongs.
-        If the TW is not there, we create as many tw as necessary in the future
-         or past until we get the correct TW for this flow.
-        - We use this function to avoid retrieving all the data from the DB
-        for the complete profile.
-        We use a separate table for the TW per profile.
-        -- Returns the time window id
-        THIS IS NOT WORKING:
-        - The empty tws in the middle are not being created!!!
-        - The Dtp ips are stored in the first tw
+        Returns the time window id
+        DISCLAIMER:
+
+            if the given flowtime is == the starttime of a tw, it will
+            belong to that tw
+            if it is == the end of a tw, it will belong to the next one
+            for example,
+            a flow with ts = 2 belongs to tw1
+            a flow with ts = 4 belongs to tw3
+
+               tw1   tw2   tw3   tw4
+           0 ──────┬─────┬──────┬──────
+                   │     │      │
+                   2     4      6
+
         """
         # If the option for only-one-tw was selected, we should
         # create the TW at least 100 years before the flowtime,
         # to cover for 'flows in the past'. Which means we should
         # cover for any flow that is coming later with time before the
         # first flow
+        flowtime = float(flowtime)
         if self.width == 9999999999:
             # Seconds in 1 year = 31536000
             tw_start = float(flowtime - (31536000 * 100))
             tw_number: int = 1
         else:
             starttime_of_first_tw: str = self.r.hget("analysis", "file_start")
-
             if starttime_of_first_tw:
                 starttime_of_first_tw = float(starttime_of_first_tw)
-                flowtime = float(flowtime)
                 tw_number: int = (
                     floor((flowtime - starttime_of_first_tw) / self.width) + 1
                 )
@@ -130,7 +134,6 @@ class ProfileHandler(IObservable):
 
         tw_id: str = f"timewindow{tw_number}"
 
-        # Add this TW, of this profile, to the DB
         self.add_new_tw(profileid, tw_id, tw_start)
         return tw_id
 
@@ -1085,7 +1088,7 @@ class ProfileHandler(IObservable):
         profiles = self.r.smembers("profiles")
         return profiles if profiles != set() else {}
 
-    def getTWsfromProfile(self, profileid):
+    def get_tws_from_profile(self, profileid):
         """
         Receives a profile id and returns the list of all the TW in that profile
         Returns a list of tuples (twid, ts) or an empty list
@@ -1101,7 +1104,7 @@ class ProfileHandler(IObservable):
         Receives a profile id and returns the number of all the
         TWs in that profile
         """
-        return len(self.getTWsfromProfile(profileid)) if profileid else 0
+        return len(self.get_tws_from_profile(profileid)) if profileid else 0
 
     def get_srcips_from_profile_tw(self, profileid, twid):
         """
@@ -1208,37 +1211,6 @@ class ProfileHandler(IObservable):
             )
 
         return data
-
-    def add_new_older_tw(
-        self, profileid: str, tw_start_time: float, tw_number: int
-    ):
-        """
-        Creates or adds a new timewindow that is OLDER than the
-        first we have
-        :param tw_start_time: start time of timewindow to add
-        :param tw_number: number of timewindow to add
-        Returns the id of the timewindow just created
-        """
-        try:
-            twid: str = f"timewindow{tw_number}"
-            timewindows: Dict[str, float] = {twid: tw_start_time}
-            self.r.zadd(f"tws{profileid}", timewindows)
-
-            self.print(
-                f"Created and added to DB the new older "
-                f"TW with id {twid}. Time: {tw_start_time} ",
-                0,
-                4,
-            )
-
-            # The creation of a TW now does not imply that it was modified.
-            # You need to put data to mark is at modified
-            return twid
-        except redis.exceptions.ResponseError as e:
-            self.print("error in addNewOlderTW in database.py", 0, 1)
-            self.print(type(e), 0, 1)
-            self.print(e, 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
 
     def add_new_tw(self, profileid, timewindow: str, startoftw: float):
         """

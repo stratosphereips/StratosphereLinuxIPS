@@ -629,7 +629,7 @@ class DBManager(IObservable):
         return self.rdb.getProfiles(*args, **kwargs)
 
     def getTWsfromProfile(self, *args, **kwargs):
-        return self.rdb.getTWsfromProfile(*args, **kwargs)
+        return self.rdb.get_tws_from_profile(*args, **kwargs)
 
     def get_number_of_tws_in_profile(self, *args, **kwargs):
         return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
@@ -657,9 +657,6 @@ class DBManager(IObservable):
 
     def get_tw_of_ts(self, *args, **kwargs):
         return self.rdb.get_tw_of_ts(*args, **kwargs)
-
-    def add_new_older_tw(self, *args, **kwargs):
-        return self.rdb.add_new_older_tw(*args, **kwargs)
 
     def add_new_tw(self, *args, **kwargs):
         return self.rdb.add_new_tw(*args, **kwargs)

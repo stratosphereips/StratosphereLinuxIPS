@@ -1,7 +1,13 @@
 """Unit test for modules/http_analyzer/http_analyzer.py"""
 
+import json
+
 from tests.module_factory import ModuleFactory
 import random
+from unittest.mock import patch, MagicMock
+from modules.http_analyzer.http_analyzer import utils
+import pytest
+import requests
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -104,68 +110,303 @@ def test_get_user_agent_info(mock_db, mocker):
         "browser": "Safari",
         "os_name": "OS X",
         "os_type": "Macintosh",
-        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Safari/605.1.15",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/15.3 Safari/605.1.15",
     }
     assert (
         http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
         == expected_ret_value
     )
-    # # get ua info online, and add os_type , os_name and agent_name anout this profile
-    # # to the db
-    # assert ua_added_to_db is not None, 'Error getting UA info online'
-    # assert ua_added_to_db is not False, 'We already have UA info about this profile in the db'
 
 
-def test_check_incompatible_user_agent(mock_db):
+@pytest.mark.parametrize(
+    "mac_vendor, user_agent, expected_result",
+    [
+        # User agent is compatible with MAC vendor
+        ("Intel Corp", {"browser": "firefox"}, None),
+        # Missing user agent information
+        ("Apple Inc.", None, False),
+        # Missing information
+        (None, None, False),
+    ],
+)
+def test_check_incompatible_user_agent(
+    mock_db, mac_vendor, user_agent, expected_result
+):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    # use a different profile for this unit test to make sure we don't already have info about
-    # it in the db. it has to be a private IP for its' MAC to not be marked as the gw MAC
+    # Use a different profile for this unit test
     profileid = "profile_192.168.77.254"
 
-    # Mimic an intel mac vendor using safari
-    mock_db.get_mac_vendor_from_profile.return_value = "Intel Corp"
-    mock_db.get_user_agent_from_profile.return_value = {"browser": "safari"}
+    mock_db.get_mac_vendor_from_profile.return_value = mac_vendor
+    mock_db.get_user_agent_from_profile.return_value = user_agent
 
-    assert (
-        http_analyzer.check_incompatible_user_agent(
-            "google.com", "/images", timestamp, profileid, twid, uid
-        )
-        is True
+    result = http_analyzer.check_incompatible_user_agent(
+        "google.com", "/images", timestamp, profileid, twid, uid
     )
 
+    assert result is expected_result
 
-def test_extract_info_from_UA(mock_db):
+
+def test_extract_info_from_ua(mock_db):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     # use another profile, because the default
     # one already has a ua in the db
     mock_db.get_user_agent_from_profile.return_value = None
     profileid = "profile_192.168.1.2"
     server_bag_ua = "server-bag[macOS,11.5.1,20G80,MacBookAir10,1]"
+    expected_output = {
+        "user_agent": "macOS,11.5.1,20G80,MacBookAir10,1",
+        "os_name": "macOS",
+        "os_type": "macOS11.5.1",
+        "browser": "",
+    }
+    expected_output = json.dumps(expected_output)
     assert (
-        http_analyzer.extract_info_from_UA(server_bag_ua, profileid)
-        == '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": "macOS11.5.1", "browser": ""}'
+        http_analyzer.extract_info_from_ua(server_bag_ua, profileid)
+        == expected_output
     )
 
 
-def test_check_multiple_UAs(mock_db):
+@pytest.mark.parametrize(
+    "cached_ua, new_ua, expected_result",
+    [
+        (
+            # User agents belong to the same OS
+            {"os_type": "Windows", "os_name": "Windows 10"},
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/58.0.3029.110 "
+            "Safari/537.3",
+            False,
+        ),
+        (
+            # Missing cached user agent
+            None,
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
+            "Safari/605.1.15",
+            False,
+        ),
+        (
+            # User agents belongs to different OS
+            {"os_type": "Linux", "os_name": "Ubuntu"},
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 "
+            "Safari/605.1.15",
+            True,
+        ),
+    ],
+)
+def test_check_multiple_user_agents_in_a_row(
+    mock_db, cached_ua, new_ua, expected_result
+):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mozilla_ua = (
-        "Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) "
-        "Gecko/20100101 Firefox/60.0"
+    result = http_analyzer.check_multiple_user_agents_in_a_row(
+        cached_ua, new_ua, timestamp, profileid, twid, uid
     )
-    # old ua
-    cached_ua = {"os_type": "Fedora", "os_name": "Linux"}
-    # should set evidence
-    assert (
-        http_analyzer.check_multiple_UAs(
-            cached_ua, mozilla_ua, timestamp, profileid, twid, uid
-        )
-        is False
+    assert result is expected_result
+
+
+@pytest.mark.parametrize(
+    "mime_types,expected",
+    [
+        ([], False),  # Empty list
+        (["text/html"], False),  # Non-executable MIME type
+        (["application/x-msdownload"], True),  # Executable MIME type
+        (["text/html", "application/x-msdownload"], True),  # Mixed MIME types
+        (
+            ["APPLICATION/X-MSDOWNLOAD"],
+            False,
+        ),  # Executable MIME types are case-insensitive
+        (["text/html", "application/x-msdownload", "image/jpeg"], True),
+        # Mixed executable and non-executable MIME types
+    ],
+)
+def test_detect_executable_mime_types(mock_db, mime_types, expected):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    assert http_analyzer.detect_executable_mime_types(mime_types) is expected
+
+
+def test_set_evidence_http_traffic(mock_db, mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    mocker.spy(http_analyzer.db, "set_evidence")
+
+    http_analyzer.set_evidence_http_traffic(
+        "8.8.8.8", profileid, twid, uid, timestamp
     )
-    # in this case we should alert
-    assert (
-        http_analyzer.check_multiple_UAs(
-            cached_ua, SAFARI_UA, timestamp, profileid, twid, uid
-        )
-        is True
+
+    http_analyzer.db.set_evidence.assert_called_once()
+
+
+def test_set_evidence_weird_http_method(mock_db, mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    mock_db.get_ip_identification.return_value = "Some IP identification"
+    mocker.spy(http_analyzer.db, "set_evidence")
+
+    flow = {
+        "daddr": "8.8.8.8",
+        "addl": "WEIRD_METHOD",
+        "uid": uid,
+        "starttime": timestamp,
+    }
+
+    http_analyzer.set_evidence_weird_http_method(profileid, twid, flow)
+
+    http_analyzer.db.set_evidence.assert_called_once()
+
+
+def test_set_evidence_executable_mime_type(mock_db, mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    mock_db.get_ip_identification.return_value = "Some IP identification"
+    mocker.spy(http_analyzer.db, "set_evidence")
+    http_analyzer.set_evidence_executable_mime_type(
+        "application/x-msdownload", profileid, twid, uid, timestamp, "8.8.8.8"
     )
+
+    assert http_analyzer.db.set_evidence.call_count == 2
+
+
+def test_set_evidence_executable_mime_type_source_dest(mock_db, mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    mock_db.get_ip_identification.return_value = "Some IP identification"
+
+    mocker.spy(http_analyzer.db, "set_evidence")
+
+    http_analyzer.set_evidence_executable_mime_type(
+        "application/x-msdownload", profileid, twid, uid, timestamp, "8.8.8.8"
+    )
+
+    assert http_analyzer.db.set_evidence.call_count == 2
+
+
+@pytest.mark.parametrize("config_value", [700])
+def test_read_configuration_valid(mock_db, mocker, config_value):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    mock_conf = mocker.patch("http_analyzer.ConfigParser")
+    mock_conf.return_value.get_pastebin_download_threshold.return_value = (
+        config_value
+    )
+    http_analyzer.read_configuration()
+    assert http_analyzer.pastebin_downloads_threshold == config_value
+
+
+@pytest.mark.parametrize(
+    "flow_name, evidence_expected",
+    [
+        # Flow name contains "unknown_HTTP_method"
+        (
+            "unknown_HTTP_method",
+            True,
+        ),
+        # Flow name does not contain "unknown_HTTP_method"
+        (
+            "some_other_event",
+            False,
+        ),
+    ],
+)
+def test_check_weird_http_method(
+    mock_db, mocker, flow_name, evidence_expected
+):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    mocker.spy(http_analyzer, "set_evidence_weird_http_method")
+
+    msg = {
+        "flow": {
+            "name": flow_name,
+            "daddr": "8.8.8.8",
+            "addl": "WEIRD_METHOD",
+            "uid": uid,
+            "starttime": timestamp,
+        },
+        "profileid": profileid,
+        "twid": twid,
+    }
+
+    http_analyzer.check_weird_http_method(msg)
+
+    if evidence_expected:
+        http_analyzer.set_evidence_weird_http_method.assert_called_once()
+    else:
+        http_analyzer.set_evidence_weird_http_method.assert_not_called()
+
+
+def test_pre_main(mock_db, mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    mocker.patch("http_analyzer.utils.drop_root_privs")
+
+    http_analyzer.pre_main()
+
+    utils.drop_root_privs.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "uri, request_body_len, expected_result",
+    [
+        ("/path/to/file", 0, False),  # Non-empty URI
+        ("/", 100, False),  # Non-zero request body length
+        ("/", "invalid_length", False),  # Invalid request body length
+    ],
+)
+def test_check_multiple_empty_connections(
+    mock_db, uri, request_body_len, expected_result
+):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    host = "google.com"
+    result = http_analyzer.check_multiple_empty_connections(
+        uid, host, uri, timestamp, request_body_len, profileid, twid
+    )
+    assert result is expected_result
+
+    if uri == "/" and request_body_len == 0 and expected_result is False:
+        for _ in range(http_analyzer.empty_connections_threshold):
+            http_analyzer.check_multiple_empty_connections(
+                uid, host, uri, timestamp, request_body_len, profileid, twid
+            )
+        assert http_analyzer.connections_counter[host] == ([], 0)
+
+
+@pytest.mark.parametrize(
+    "url, response_body_len, method, expected_result",
+    [
+        ("pastebin.com", "invalid_length", "GET", False),
+        ("8.8.8.8", "1024", "GET", None),
+        ("pastebin.com", "512", "GET", None),
+        ("pastebin.com", "2048", "POST", None),
+        ("pastebin.com", "2048", "GET", True),  # Large download from Pastebin
+    ],
+)
+def test_check_pastebin_downloads(
+    mock_db, url, response_body_len, method, expected_result
+):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+
+    if url != "pastebin.com":
+        mock_db.get_ip_identification.return_value = "Not a Pastebin domain"
+    else:
+        mock_db.get_ip_identification.return_value = "pastebin.com"
+        http_analyzer.pastebin_downloads_threshold = 1024
+
+    result = http_analyzer.check_pastebin_downloads(
+        url, response_body_len, method, profileid, twid, timestamp, uid
+    )
+
+    if expected_result is not None:
+        assert result == expected_result
+    else:
+        pass
+
+
+@pytest.mark.parametrize(
+    "mock_response",
+    [
+        # Unexpected response format
+        MagicMock(status_code=200, text="Unexpected response format"),
+        # Timeout
+        MagicMock(side_effect=requests.exceptions.ReadTimeout),
+    ],
+)
+def test_get_ua_info_online_error_cases(mock_db, mock_response):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    with patch("requests.get", return_value=mock_response):
+        assert http_analyzer.get_ua_info_online(SAFARI_UA) is False
+

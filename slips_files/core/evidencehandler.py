@@ -265,30 +265,18 @@ class EvidenceHandler(ICore):
 
         return domains_to_check_dst, domains_to_check_src
 
-    def format_evidence_causing_this_alert(
-        self,
-        all_evidence: Dict[str, Evidence],
-        profileid: ProfileID,
-        twid: TimeWindow,
-        flow_datetime: str,
-    ) -> str:
+    def get_alert_time_description(
+        self, profileid: ProfileID, twid: TimeWindow
+    ):
         """
-        Function to format the string with all evidence causing an alert
-        : param flow_datetime: time of the last evidence received
+        returns the start and end time of the timewindow causing the alert
         """
-        # alerts in slips consists of several evidence,
-        # each evidence has a threat_level
-        # once we reach a certain threshold of accumulated
-        # threat_levels, we produce an alert
-        # Now instead of printing the last evidence only,
-        # we print all of them
         # Get the start and end time of this TW
         twid_start_time: Optional[float] = self.db.get_tw_start_time(
             str(profileid), str(twid)
         )
         tw_stop_time: float = twid_start_time + self.width
 
-        # format them both for printing
         time_format = "%Y/%m/%d %H:%M:%S"
         twid_start_time: str = utils.convert_format(
             twid_start_time, time_format
@@ -305,12 +293,31 @@ class EvidenceHandler(ICore):
         alert_to_print += (
             f"detected as malicious in timewindow {twid.number} "
             f"(start {twid_start_time}, stop {tw_stop_time}) \n"
-            f"given the following evidence:\n"
         )
-        alert_to_print: str = red(alert_to_print)
+
+        return alert_to_print
+
+    def format_evidence_causing_this_alert(
+        self,
+        all_evidence: Dict[str, Evidence],
+        profileid: ProfileID,
+        twid: TimeWindow,
+        flow_datetime: str,
+    ) -> str:
+        """
+        Function to format the string with all evidence causing an alert
+        : param flow_datetime: time of the last evidence received
+        """
+        # once we reach a certain threshold of accumulated
+        # threat_levels, we produce an alert
+        # Now instead of printing the last evidence only,
+        # we print all of them
+        alert_to_print: str = red(
+            self.get_alert_time_description(profileid, twid)
+        )
+        alert_to_print += red("given the following evidence:\n")
 
         for evidence in all_evidence.values():
-            evidence: Evidence
             evidence: Evidence = self.add_threat_level_to_evidence_description(
                 evidence
             )
@@ -559,22 +566,21 @@ class EvidenceHandler(ICore):
             self.is_running_on_interface() and "-p" not in sys.argv
         ) or custom_flows
 
-    def handle_new_alert(self, alert_ID: str, tw_evidence: dict):
+    def handle_new_alert(self, alert_id: str, tw_evidence: dict):
         """
         saves alert details in the db and informs exporting modules about it
         """
-        profile, srcip, twid, _ = alert_ID.split("_")
+        profile, srcip, twid, _ = alert_id.split("_")
         profileid = f"{profile}_{srcip}"
         self.db.set_evidence_causing_alert(
-            profileid, twid, alert_ID, self.IDs_causing_an_alert
+            profileid, twid, alert_id, self.IDs_causing_an_alert
         )
         # when an alert is generated , we should set the threat level of the
         # attacker's profile to 1(critical) and confidence 1
         # so that it gets reported to other peers with these numbers
         self.db.update_threat_level(profileid, "critical", 1)
-
         alert_details = {
-            "alert_ID": alert_ID,
+            "alert_ID": alert_id,
             "profileid": profileid,
             "twid": twid,
         }
@@ -796,7 +802,11 @@ class EvidenceHandler(ICore):
                         self.print(f"{alert_to_print}", 1, 0)
 
                         if self.popup_alerts:
-                            self.show_popup(alert_to_print)
+                            self.show_popup(
+                                self.get_alert_time_description(
+                                    evidence.profile, evidence.timewindow
+                                )
+                            )
 
                         blocked = False
                         # send ip to the blocking module
