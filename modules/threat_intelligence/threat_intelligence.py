@@ -370,7 +370,7 @@ class ThreatIntel(IModule, URLhaus):
 
         # mark this ip as malicious in our database
         ip_info = {"threatintelligence": ip_info}
-        self.db.setInfoForIPs(ip, ip_info)
+        self.db.set_ip_info(ip, ip_info)
 
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(ip, profileid, twid)
@@ -483,7 +483,7 @@ class ThreatIntel(IModule, URLhaus):
 
         # mark this ip as malicious in our database
         ip_info = {"threatintelligence": ip_info}
-        self.db.setInfoForIPs(ip, ip_info)
+        self.db.set_ip_info(ip, ip_info)
 
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(ip, profileid, twid)

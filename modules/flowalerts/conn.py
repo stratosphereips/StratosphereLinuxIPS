@@ -399,6 +399,7 @@ class Conn(IFlowalertsAnalyzer):
             or daddr in self.client_ips
             # because there's no dns.log to know if the dns was made
             or self.db.get_input_type() == "zeek_log_file"
+            or self.db.is_doh_server(daddr)
         )
 
     def check_if_resolution_was_made_by_different_version(

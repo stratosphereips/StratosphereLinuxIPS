@@ -281,7 +281,9 @@ def test_set_evidence_executable_mime_type_source_dest(mock_db, mocker):
 @pytest.mark.parametrize("config_value", [700])
 def test_read_configuration_valid(mock_db, mocker, config_value):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mock_conf = mocker.patch("http_analyzer.ConfigParser")
+    mock_conf = mocker.patch(
+        "slips_files.common.parsers.config_parser.ConfigParser"
+    )
     mock_conf.return_value.get_pastebin_download_threshold.return_value = (
         config_value
     )
@@ -332,7 +334,7 @@ def test_check_weird_http_method(
 
 def test_pre_main(mock_db, mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mocker.patch("http_analyzer.utils.drop_root_privs")
+    mocker.patch("slips_files.common.slips_utils.Utils.drop_root_privs")
 
     http_analyzer.pre_main()
 
@@ -409,4 +411,3 @@ def test_get_ua_info_online_error_cases(mock_db, mock_response):
     http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     with patch("requests.get", return_value=mock_response):
         assert http_analyzer.get_ua_info_online(SAFARI_UA) is False
-

@@ -213,7 +213,6 @@ class SSL(IFlowalertsAnalyzer):
         twid = msg["twid"]
         timestamp = msg["stime"]
         flow = msg["flow"]
-
         flow = json.loads(flow)
         uid = next(iter(flow))
         flow_dict = json.loads(flow[uid])
@@ -221,7 +220,7 @@ class SSL(IFlowalertsAnalyzer):
         state = flow_dict["state"]
         dport: int = flow_dict.get("dport", None)
         proto = flow_dict.get("proto")
-        appproto = flow_dict.get("appproto", "")
+        appproto = str(flow_dict.get("appproto", ""))
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
         if (
@@ -233,6 +232,20 @@ class SSL(IFlowalertsAnalyzer):
             self.set_evidence.non_ssl_port_443_conn(
                 daddr, profileid, timestamp, twid, uid
             )
+
+    def detect_doh(
+        self,
+        is_doh,
+        daddr,
+        profileid,
+        twid,
+        timestamp,
+        uid,
+    ):
+        if not is_doh:
+            return False
+        self.set_evidence.doh(daddr, profileid, twid, timestamp, uid)
+        self.db.set_ip_info(daddr, {"is_doh_server": True})
 
     def analyze(self):
         if msg := self.flowalerts.get_msg("new_ssl"):
@@ -250,6 +263,7 @@ class SSL(IFlowalertsAnalyzer):
             daddr = flow["daddr"]
             saddr = profileid.split("_")[1]
             server_name = flow.get("server_name")
+            is_doh: bool = flow.get("is_DoH", False)
 
             # we'll be checking pastebin downloads of this ssl flow
             # later
@@ -273,6 +287,14 @@ class SSL(IFlowalertsAnalyzer):
 
             self.detect_incompatible_cn(
                 daddr, server_name, issuer, profileid, twid, uid, timestamp
+            )
+            self.detect_doh(
+                is_doh,
+                daddr,
+                profileid,
+                twid,
+                timestamp,
+                uid,
             )
 
         if msg := self.get_msg("new_flow"):

@@ -23,6 +23,37 @@ class SetEvidnceHelper:
     def __init__(self, db):
         self.db = db
 
+    def doh(self, daddr, profileid, twid, timestamp, uid):
+        saddr: str = profileid.split("_")[-1]
+        twid_number: int = int(twid.replace("timewindow", ""))
+        ip_identification: str = self.db.get_ip_identification(daddr)
+        description: str = (
+            f"using DNS over HTTPs. DNS server: {daddr} {ip_identification}"
+        )
+        evidence = Evidence(
+            evidence_type=EvidenceType.DIFFERENT_LOCALNET,
+            attacker=Attacker(
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=daddr,
+            ),
+            threat_level=ThreatLevel.INFO,
+            category=IDEACategory.ANOMALY_TRAFFIC,
+            description=description,
+            victim=Victim(
+                direction=Direction.SRC,
+                victim_type=IoCType.IP,
+                value=saddr,
+            ),
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[uid],
+            timestamp=timestamp,
+            conn_count=1,
+            confidence=0.9,
+        )
+        self.db.set_evidence(evidence)
+
     def young_domain(
         self,
         domain: str,
