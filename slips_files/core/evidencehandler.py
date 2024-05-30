@@ -29,7 +29,7 @@ from slips_files.common.idea_format import idea_format
 from slips_files.common.style import red, cyan
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.helpers.whitelist import Whitelist
+from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
 from slips_files.common.abstracts.core import ICore
 from slips_files.core.evidence_structure.evidence import (

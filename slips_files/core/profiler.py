@@ -19,16 +19,18 @@ from dataclasses import asdict
 import queue
 import ipaddress
 import pprint
+import multiprocessing
 from datetime import datetime
 from typing import List
 
 import validators
 
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.core import ICore
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
-from slips_files.core.helpers.whitelist import Whitelist
+from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
@@ -324,7 +326,7 @@ class Profiler(ICore):
         if input_type in ("zeek_folder", "zeek_log_file", "pcap", "interface"):
             # is it tab separated or comma separated?
             actual_line = line["data"]
-            if type(actual_line) == dict:
+            if isinstance(actual_line, dict):
                 return "zeek"
             return "zeek-tabs"
         elif input_type in ("stdin"):
@@ -473,7 +475,7 @@ class Profiler(ICore):
                 continue
 
             # TODO who is putting this True here?
-            if line == True:
+            if line is True:
                 continue
 
             # Received new input data

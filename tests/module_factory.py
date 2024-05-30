@@ -24,7 +24,7 @@ from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
 from modules.ip_info.ip_info import IPInfo
 from slips_files.common.slips_utils import utils
-from slips_files.core.helpers.whitelist import Whitelist
+from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from tests.common_test_utils import do_nothing
 from modules.virustotal.virustotal import VT
 from managers.process_manager import ProcessManager
