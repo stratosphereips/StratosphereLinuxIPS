@@ -726,7 +726,7 @@ def test_parse_whitelist(mock_db):
         "organizations": json.dumps(
             {"google": {"from": "both", "what_to_ignore": "both"}}
         ),
-        "mac": json.dumps(
+        "macs": json.dumps(
             {"b1:b1:b1:c1:c2:c3": {"from": "src", "what_to_ignore": "alerts"}}
         ),
     }

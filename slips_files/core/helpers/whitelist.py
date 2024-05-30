@@ -565,7 +565,7 @@ class Whitelist(IObservable):
         self.db.set_whitelist("IPs", whitelisted_ips)
         self.db.set_whitelist("domains", whitelisted_domains)
         self.db.set_whitelist("organizations", whitelisted_orgs)
-        self.db.set_whitelist("mac", whitelisted_mac)
+        self.db.set_whitelist("macs", whitelisted_mac)
 
         return (
             whitelisted_ips,
@@ -686,37 +686,11 @@ class Whitelist(IObservable):
         """
         return "flows" in what_to_ignore or "both" in what_to_ignore
 
-    def parse_whitelist(self, whitelist):
-        """
-        returns a tuple with whitelisted IPs, domains, orgs and MACs
-        """
-        try:
-            # Convert each list from str to dict
-            whitelisted_IPs = json.loads(whitelist["IPs"])
-        except (IndexError, KeyError):
-            whitelisted_IPs = {}
-        try:
-            whitelisted_domains = json.loads(whitelist["domains"])
-        except (IndexError, KeyError):
-            whitelisted_domains = {}
-        try:
-            whitelisted_orgs = json.loads(whitelist["organizations"])
-        except (IndexError, KeyError):
-            whitelisted_orgs = {}
-        try:
-            whitelisted_macs = json.loads(whitelist["mac"])
-        except (IndexError, KeyError):
-            whitelisted_macs = {}
-        return (
-            whitelisted_IPs,
-            whitelisted_domains,
-            whitelisted_orgs,
-            whitelisted_macs,
-        )
-
     def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
         """
         returns the whitelisted ips, domains, org from the db
+        returns a dict with the following keys
+        'mac', 'organizations', 'IPs', 'domains'
         this function tries to get the whitelist from the db 10 times
         """
         whitelist: Dict[str, dict] = self.db.get_all_whitelist()
@@ -777,11 +751,11 @@ class Whitelist(IObservable):
         if not attacker:
             return False
 
-        whitelist = self.get_all_whitelist()
-        if not whitelist:
+        whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
+            "organizations"
+        )
+        if not whitelisted_orgs:
             return False
-
-        whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
         if (
             attacker.attacker_type == IoCType.DOMAIN.name
@@ -919,13 +893,8 @@ class Whitelist(IObservable):
         if not self.is_valid_ip(ip):
             return False
 
-        whitelist = self.get_all_whitelist()
-        if not whitelist:
-            return False
-
-        whitelisted_ips, _, _, whitelisted_macs = self.parse_whitelist(
-            whitelist
-        )
+        whitelisted_ips: Dict[str, dict] = self.db.get_whitelist("IPs")
+        whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
 
         if ip in whitelisted_ips:
             # Check if we should ignore src or dst alerts from this ip
@@ -1020,12 +989,8 @@ class Whitelist(IObservable):
         if self.is_domain_in_tranco_list(parent_domain):
             return True
 
-        whitelist = self.get_all_whitelist()
-        if not whitelist:
-            return False
-
         whitelisted_domains: Dict[str, Dict[str, str]]
-        whitelisted_domains = self.parse_whitelist(whitelist)[1]
+        whitelisted_domains = self.db.get_whitelist("domains")
 
         # is domain in whitelisted domains?
         if parent_domain not in whitelisted_domains:
@@ -1121,10 +1086,11 @@ class Whitelist(IObservable):
         if self.is_private_ip(ioc_type, ioc):
             return False
 
-        whitelist = self.get_all_whitelist()
-        if not whitelist:
+        whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
+            "organizations"
+        )
+        if not whitelisted_orgs:
             return False
-        whitelisted_orgs = self.parse_whitelist(whitelist)[2]
 
         for org in whitelisted_orgs:
             dir_from_whitelist = whitelisted_orgs[org]["from"]

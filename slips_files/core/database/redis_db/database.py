@@ -15,7 +15,7 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -1228,19 +1228,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def set_whitelist(self, type_, whitelist_dict):
         """
         Store the whitelist_dict in the given key
-        :param type_: supporte types are IPs, domains and organizations
-        :param whitelist_dict: the dict of IPs, domains or orgs to store
+        :param type_: supported types are IPs, domains, macs and organizations
+        :param whitelist_dict: the dict of IPs,macs,  domains or orgs to store
         """
         self.r.hset("whitelist", type_, json.dumps(whitelist_dict))
 
-    def get_all_whitelist(self) -> Dict[str, dict]:
+    def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
         """
         Returns a dict with the following keys from the whitelist
         'mac', 'organizations', 'IPs', 'domains'
         """
-        return self.r.hgetall("whitelist")
+        whitelist: Optional[Dict[str, str]] = self.r.hgetall("whitelist")
+        if whitelist:
+            whitelist = {k: json.loads(v) for k, v in whitelist.items()}
+        return whitelist
 
-    def get_whitelist(self, key):
+    def get_whitelist(self, key: str) -> dict:
         """
         Whitelist supports different keys like : IPs domains
         and organizations
