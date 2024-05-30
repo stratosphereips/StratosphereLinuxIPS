@@ -412,7 +412,8 @@ def test_is_part_of_a_whitelisted_org(ioc_data, expected_result, mock_db):
 
 
 @pytest.mark.parametrize(
-    "whitelisted_domain, direction, domains_of_flow, ignore_type, expected_result, mock_db_values",
+    "whitelisted_domain, direction, domains_of_flow, "
+    "ignore_type, expected_result, mock_db_values",
     [
         (
             "apple.com",
@@ -421,6 +422,14 @@ def test_is_part_of_a_whitelisted_org(ioc_data, expected_result, mock_db):
             "both",
             True,
             {"apple.com": {"from": "both", "what_to_ignore": "both"}},
+        ),
+        (
+            "apple.com",
+            Direction.DST,
+            ["sub.apple.com", "apple.com"],
+            "both",
+            False,
+            {"apple.com": {"from": "src", "what_to_ignore": "both"}},
         ),
         # testing_is_whitelisted_domain_in_flow_ignore_type_mismatch
         (
@@ -477,15 +486,15 @@ def test_is_whitelisted_domain_not_found(mock_db):
     saddr = "1.2.3.4"
     daddr = "5.6.7.8"
     ignore_type = "flows"
-    assert (
-        whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
-        == False
+    assert not whitelist.is_whitelisted_domain(
+        domain, saddr, daddr, ignore_type
     )
 
 
 def test_is_whitelisted_domain_ignore_type_mismatch(mock_db):
     """
-    Test when the domain is found in the whitelisted domains, but the ignore_type does not match the what_to_ignore value.
+    Test when the domain is found in the whitelisted domains,
+    but the ignore_type does not match the what_to_ignore value.
     """
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_db.get_whitelist.return_value = {
@@ -495,15 +504,13 @@ def test_is_whitelisted_domain_ignore_type_mismatch(mock_db):
     saddr = "1.2.3.4"
     daddr = "5.6.7.8"
     ignore_type = "alerts"
-    assert (
-        whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
-        == True
-    )
+    assert whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
 
 
 def test_is_whitelisted_domain_match(mock_db):
     """
-    Test when the domain is found in the whitelisted domains, and the ignore_type matches the what_to_ignore value.
+    Test when the domain is found in the whitelisted domains,
+    and the ignore_type matches the what_to_ignore value.
     """
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_db.get_whitelist.return_value = {
@@ -513,10 +520,7 @@ def test_is_whitelisted_domain_match(mock_db):
     saddr = "1.2.3.4"
     daddr = "5.6.7.8"
     ignore_type = "both"
-    assert (
-        whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
-        == True
-    )
+    assert whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
 
 
 def test_is_whitelisted_domain_subdomain_found(mock_db):
@@ -531,10 +535,7 @@ def test_is_whitelisted_domain_subdomain_found(mock_db):
     saddr = "1.2.3.4"
     daddr = "5.6.7.8"
     ignore_type = "both"
-    assert (
-        whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
-        == True
-    )
+    assert whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
 
 
 @patch("slips_files.common.parsers.config_parser.ConfigParser")
@@ -761,16 +762,29 @@ def test_is_ip_asn_in_org_asn(
 def test_parse_whitelist(mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_whitelist = {
-        'IPs': json.dumps({'1.2.3.4': {'from': 'src', 'what_to_ignore': 'both'}}),
-        'domains': json.dumps({'example.com': {'from': 'dst', 'what_to_ignore': 'both'}}),
-        'organizations': json.dumps({'google': {'from': 'both', 'what_to_ignore': 'both'}}),
-        'mac': json.dumps({'b1:b1:b1:c1:c2:c3': {'from': 'src', 'what_to_ignore': 'alerts'}})
+        "IPs": json.dumps(
+            {"1.2.3.4": {"from": "src", "what_to_ignore": "both"}}
+        ),
+        "domains": json.dumps(
+            {"example.com": {"from": "dst", "what_to_ignore": "both"}}
+        ),
+        "organizations": json.dumps(
+            {"google": {"from": "both", "what_to_ignore": "both"}}
+        ),
+        "mac": json.dumps(
+            {"b1:b1:b1:c1:c2:c3": {"from": "src", "what_to_ignore": "alerts"}}
+        ),
     }
-    whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = whitelist.parse_whitelist(mock_whitelist)
-    assert '1.2.3.4' in whitelisted_IPs
-    assert 'example.com' in whitelisted_domains
-    assert 'google' in whitelisted_orgs
-    assert 'b1:b1:b1:c1:c2:c3' in whitelisted_macs
+    (
+        whitelisted_IPs,
+        whitelisted_domains,
+        whitelisted_orgs,
+        whitelisted_macs,
+    ) = whitelist.parse_whitelist(mock_whitelist)
+    assert "1.2.3.4" in whitelisted_IPs
+    assert "example.com" in whitelisted_domains
+    assert "google" in whitelisted_orgs
+    assert "b1:b1:b1:c1:c2:c3" in whitelisted_macs
 
 
 def test_get_all_whitelist(mock_db):
@@ -872,6 +886,3 @@ def test_is_whitelisted_flow(
     mock_db.get_all_whitelist.return_value = whitelist_data
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     assert whitelist.is_whitelisted_flow(flow_data) == expected_result
-
-
-
