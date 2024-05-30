@@ -1,11 +1,12 @@
 from flask import Flask, render_template, redirect, url_for, current_app
 
+from slips_files.common.parsers.config_parser import ConfigParser
 from .database.database import __database__
 from .database.signals import message_sent
 from .analysis.analysis import analysis
 from .general.general import general
 from .documentation.documentation import documentation
-from .utils import *
+from .utils import read_db_file
 
 
 def create_app():
@@ -59,4 +60,4 @@ if __name__ == "__main__":
 
     app.register_blueprint(documentation, url_prefix="/documentation")
 
-    app.run(host="0.0.0.0", port=55000)
+    app.run(host="0.0.0.0", port=ConfigParser().web_interface_port)

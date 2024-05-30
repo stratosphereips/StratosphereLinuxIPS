@@ -72,6 +72,14 @@ class ConfigParser(object):
             # or no section or no configuration file specified
             return default_value
 
+    @property
+    def web_interface_port(self) -> int:
+        port = self.read_configuration("web_interface", "port", 55000)
+        try:
+            return int(port)
+        except Exception:
+            return 55000
+
     def get_entropy_threshold(self):
         """
         gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf
@@ -499,11 +507,11 @@ class ConfigParser(object):
     def analysis_direction(self):
         """
         Controls which traffic flows are processed and analyzed by SLIPS.
-        
+
         Determines whether SLIPS should focus on:
         - 'out' mode: Analyzes only outbound traffic (potential data exfiltration)
         - 'all' mode: Analyzes traffic in both directions (inbound and outbound)
-    
+
         Returns:
             str or False: The value of the 'analysis_direction' parameter, or False if not found.
         """

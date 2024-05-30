@@ -2,6 +2,15 @@ import shutil
 from unittest.mock import patch, Mock
 import os
 
+from modules.flowalerts.conn import Conn
+from modules.flowalerts.dns import DNS
+from modules.flowalerts.downloaded_file import DownloadedFile
+from modules.flowalerts.notice import Notice
+from modules.flowalerts.smtp import SMTP
+from modules.flowalerts.software import Software
+from modules.flowalerts.ssh import SSH
+from modules.flowalerts.ssl import SSL
+from modules.flowalerts.tunnel import Tunnel
 from slips.main import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
@@ -27,11 +36,6 @@ from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
-
-
-def do_nothing(*arg):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
 
 
 def read_configuration():
@@ -151,13 +155,49 @@ class ModuleFactory:
         flowalerts.print = do_nothing
         return flowalerts
 
-    def create_inputProcess_obj(
+    def create_dns_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return DNS(flowalerts.db, flowalerts=flowalerts)
+
+    def create_notice_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return Notice(flowalerts.db, flowalerts=flowalerts)
+
+    def create_smtp_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return SMTP(flowalerts.db, flowalerts=flowalerts)
+
+    def create_ssl_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return SSL(flowalerts.db, flowalerts=flowalerts)
+
+    def create_ssh_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return SSH(flowalerts.db, flowalerts=flowalerts)
+
+    def create_downloaded_file_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return DownloadedFile(flowalerts.db, flowalerts=flowalerts)
+
+    def create_tunnel_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return Tunnel(flowalerts.db, flowalerts=flowalerts)
+
+    def create_conn_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return Conn(flowalerts.db, flowalerts=flowalerts)
+
+    def create_software_analyzer_obj(self, mock_db):
+        flowalerts = self.create_flowalerts_obj(mock_db)
+        return Software(flowalerts.db, flowalerts=flowalerts)
+
+    def create_input_obj(
         self, input_information, input_type, mock_db, line_type=False
     ):
         zeek_tmp_dir = os.path.join(os.getcwd(), "zeek_dir_for_testing")
         dummy_semaphore = Semaphore(0)
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
-            inputProcess = Input(
+            input = Input(
                 Output(),
                 "dummy_output_dir",
                 6379,
@@ -172,15 +212,15 @@ class ModuleFactory:
                 line_type=line_type,
                 is_profiler_done_event=self.dummy_termination_event,
             )
-        inputProcess.db.rdb = mock_db
-        inputProcess.is_done_processing = do_nothing
-        inputProcess.bro_timeout = 1
+        input.db.rdb = mock_db
+        input.is_done_processing = do_nothing
+        input.bro_timeout = 1
         # override the print function to avoid broken pipes
-        inputProcess.print = do_nothing
-        inputProcess.stop_queues = do_nothing
-        inputProcess.testing = True
+        input.print = do_nothing
+        input.stop_queues = do_nothing
+        input.testing = True
 
-        return inputProcess
+        return input
 
     def create_ip_info_obj(self, mock_db):
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
