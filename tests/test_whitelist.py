@@ -596,9 +596,11 @@ def test_is_whitelisted_victim(victim_data, expected_result, mock_db):
 def test_load_org_domains(org, expected_result, mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_db.set_org_info = MagicMock()
+
     actual_result = whitelist.load_org_domains(org)
     for domain in expected_result:
         assert domain in actual_result
+
     assert len(actual_result) >= len(expected_result)
     mock_db.set_org_info.assert_called_with(
         org, json.dumps(actual_result), "domains"

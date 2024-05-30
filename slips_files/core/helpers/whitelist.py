@@ -692,7 +692,7 @@ class Whitelist(IObservable):
     def should_ignore_from(self, direction) -> bool:
         """
         Returns true if the user wants to whitelist alerts/flows from
-         this source(ip, org, mac, etc)
+         a source e.g(ip, org, mac, etc)
         """
         return "src" in direction or "both" in direction
 
@@ -744,7 +744,11 @@ class Whitelist(IObservable):
         )
 
     def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
-        whitelist = self.db.get_all_whitelist()
+        """
+        returns the whitelisted ips, domains, org from the db
+        this function tries to get the whitelist from the db 10 times
+        """
+        whitelist: Dict[str, dict] = self.db.get_all_whitelist()
         max_tries = 10
         # if this module is loaded before profilerProcess or before we're
         # done processing the whitelist in general
@@ -802,7 +806,7 @@ class Whitelist(IObservable):
         if not attacker:
             return False
 
-        whitelist = self.db.get_all_whitelist()
+        whitelist = self.get_all_whitelist()
         if not whitelist:
             return False
 
@@ -944,7 +948,7 @@ class Whitelist(IObservable):
         if not self.is_valid_ip(ip):
             return False
 
-        whitelist = self.db.get_all_whitelist()
+        whitelist = self.get_all_whitelist()
         if not whitelist:
             return False
 
@@ -1045,7 +1049,7 @@ class Whitelist(IObservable):
         if self.is_domain_in_tranco_list(parent_domain):
             return True
 
-        whitelist = self.db.get_all_whitelist()
+        whitelist = self.get_all_whitelist()
         if not whitelist:
             return False
 
@@ -1146,7 +1150,7 @@ class Whitelist(IObservable):
         if self.is_private_ip(ioc_type, ioc):
             return False
 
-        whitelist = self.db.get_all_whitelist()
+        whitelist = self.get_all_whitelist()
         if not whitelist:
             return False
         whitelisted_orgs = self.parse_whitelist(whitelist)[2]
