@@ -149,10 +149,8 @@ class Whitelist(IObservable):
             return False
 
         # get the domains of this flow
-        (
-            dst_domains_of_flow,
-            src_domains_of_flow,
-        ) = self.get_domains_of_flow(saddr, daddr)
+        dst_domains_of_flow: List[str] = self.get_domains_of_ip(daddr)
+        src_domains_of_flow: List[str] = self.get_domains_of_ip(saddr)
 
         # self.print(f'Domains to check from flow: {domains_to_check},
         # {domains_to_check_dst} {domains_to_check_src}')
@@ -206,10 +204,8 @@ class Whitelist(IObservable):
         daddr = flow.daddr
         flow_type = flow.type_
         # get the domains of the IPs this flow
-        (
-            domains_to_check_dst,
-            domains_to_check_src,
-        ) = self.get_domains_of_flow(saddr, daddr)
+        domains_to_check_dst: List[str] = self.get_domains_of_ip(daddr)
+        domains_to_check_src: List[str] = self.get_domains_of_ip(saddr)
         # check if we have whitelisted domains
 
         # first get the domains of the flows we ewnt to check if whitelisted
@@ -578,47 +574,22 @@ class Whitelist(IObservable):
             whitelisted_mac,
         )
 
-    def get_domains_of_flow(self, saddr, daddr):
+    def get_domains_of_ip(self, ip: str) -> List[str]:
         """
-        Returns the domains of each ip (src and dst) that appeard in this flow
+        returns the domains of this IP, e.g. the DNS resolution, the SNI, etc.
         """
-        # These separate lists, hold the domains that we should only
-        # check if they are SRC or DST. Not both
-        domains_to_check_src = []
-        domains_to_check_dst = []
+        domains = []
+        if ip_data := self.db.get_ip_info(ip):
+            if sni_info := ip_data.get("SNI", [{}])[0]:
+                domains.append(sni_info.get("server_name", ""))
+
         try:
-            if ip_data := self.db.get_ip_info(saddr):
-                if sni_info := ip_data.get("SNI", [{}])[0]:
-                    domains_to_check_src.append(
-                        sni_info.get("server_name", "")
-                    )
-        except (KeyError, TypeError):
-            pass
-        try:
-            # self.print(f"DNS of src IP {column_values['saddr']}:
-            # {self.db.get_dns_resolution(column_values['saddr'])}")
-            src_dns_domains = self.db.get_dns_resolution(saddr)
-            src_dns_domains = src_dns_domains.get("domains", [])
-            domains_to_check_src.extend(iter(src_dns_domains))
-        except (KeyError, TypeError):
-            pass
-        try:
-            if ip_data := self.db.get_ip_info(daddr):
-                if sni_info := ip_data.get("SNI", [{}])[0]:
-                    domains_to_check_dst.append(sni_info.get("server_name"))
+            resolution = self.db.get_dns_resolution(ip).get("domains", [])
+            domains.extend(iter(resolution))
         except (KeyError, TypeError):
             pass
 
-        try:
-            # self.print(f"DNS of dst IP {column_values['daddr']}:
-            # {self.db.get_dns_resolution(column_values['daddr'])}")
-            dst_dns_domains = self.db.get_dns_resolution(daddr)
-            dst_dns_domains = dst_dns_domains.get("domains", [])
-            domains_to_check_dst.extend(iter(dst_dns_domains))
-        except (KeyError, TypeError):
-            pass
-
-        return domains_to_check_dst, domains_to_check_src
+        return domains
 
     def is_ip_in_org(self, ip: str, org):
         """

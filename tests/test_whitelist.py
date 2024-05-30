@@ -769,7 +769,8 @@ def test_get_all_whitelist(mock_db):
 @pytest.mark.parametrize(
     "flow_data, whitelist_data, expected_result",
     [
-        (  # testing_is_whitelisted_flow_with_whitelisted_organization_but_ip_or_domain_not_whitelisted
+        (  # testing_is_whitelisted_flow_with_whitelisted_organization_
+            # but_ip_or_domain_not_whitelisted
             MagicMock(
                 saddr="9.8.7.6", daddr="5.6.7.8", type_="http", host="org.com"
             ),
@@ -780,7 +781,8 @@ def test_get_all_whitelist(mock_db):
             },
             False,
         ),
-        (  # testing_is_whitelisted_flow_with_non_whitelisted_organization_but_ip_or_domain_whitelisted
+        (  # testing_is_whitelisted_flow_with_non_whitelisted_organizatio
+            # n_but_ip_or_domain_whitelisted
             MagicMock(
                 saddr="1.2.3.4",
                 daddr="5.6.7.8",
