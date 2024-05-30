@@ -195,75 +195,69 @@ class Whitelist(IObservable):
                 return True
         return False
 
+    def get_domains_of_flow(self, flow) -> List[str]:
+        """
+        return sthe domains of flow depending on the flow type
+        for example, HTTP flow have their domains in the host field
+        SSL flows have the host in the SNI field
+        etc.
+        """
+        domains = []
+        if flow.type_ == "ssl":
+            domains.append(flow.server_name)
+        elif flow.type_ == "http":
+            domains.append(flow.host)
+        elif flow.type_ == "ssl":
+            domains.append(flow.subject.replace("CN=", ""))
+        elif flow.type_ == "dns":
+            domains.append(flow.query)
+        return domains
+
+    def extract_dns_answers(self, flow) -> List[str]:
+        """
+        extracts all the ips we can find from the given flow
+        """
+        ips = []
+        if flow.type_ == "dns":
+            ips = ips + flow.answers
+        return ips
+
     def is_whitelisted_flow(self, flow) -> bool:
         """
-        Checks if the src IP or dst IP or domain or organization
+        Checks if the src IP, dst IP, domain, dns answer, or  organization
          of this flow is whitelisted.
         """
         saddr = flow.saddr
         daddr = flow.daddr
         flow_type = flow.type_
         # get the domains of the IPs this flow
-        domains_to_check_dst: List[str] = self.get_domains_of_ip(daddr)
-        domains_to_check_src: List[str] = self.get_domains_of_ip(saddr)
+        domains_to_check: List[str] = (
+            self.get_domains_of_ip(daddr)
+            + self.get_domains_of_ip(saddr)
+            + self.get_domains_of_flow(flow)
+        )
+
+        # domains_to_check_dst: List[str] = self.get_domains_of_ip(daddr)
+        # domains_to_check_src: List[str] = self.get_domains_of_ip(saddr)
+        #
         # check if we have whitelisted domains
-
-        # first get the domains of the flows we ewnt to check if whitelisted
-        # Domain names are stored in different zeek files using different names.
-        # Try to get the domain from each file.
-        domains_to_check = []
-        if flow_type == "ssl":
-            domains_to_check.append(flow.server_name)
-        elif flow_type == "http":
-            domains_to_check.append(flow.host)
-        elif flow_type == "ssl":
-            domains_to_check.append(flow.subject.replace("CN=", ""))
-        elif flow_type == "dns":
-            domains_to_check.append(flow.query)
-
+        # domains_to_check = self.get_domains_of_flow(flow)
         for domain in domains_to_check:
             if self.is_whitelisted_domain(domain, saddr, daddr, "flows"):
                 return True
 
-        if whitelisted_IPs := self.db.get_whitelist("IPs"):
-            # self.print('Check the IPs')
-            # Check if the IPs are whitelisted
-            ips_to_whitelist = list(whitelisted_IPs.keys())
+        if self.db.get_whitelist("IPs"):
+            if self.is_ip_whitelisted(saddr, Direction.SRC, "flows"):
+                return True
 
-            if saddr in ips_to_whitelist:
-                # The flow has the src IP to whitelist
-                from_ = whitelisted_IPs[saddr]["from"]
-                what_to_ignore = whitelisted_IPs[saddr]["what_to_ignore"]
-                if ("src" in from_ or "both" in from_) and (
-                    self.should_ignore_flows(what_to_ignore)
-                ):
-                    # self.print(f"Whitelisting the src IP {column_values['saddr']}")
-                    return True
+            if self.is_ip_whitelisted(daddr, Direction.DST, "flows"):
+                return True
 
-            if daddr in ips_to_whitelist:  # should be if and not elif
-                # The flow has the dst IP to whitelist
-                from_ = whitelisted_IPs[daddr]["from"]
-                what_to_ignore = whitelisted_IPs[daddr]["what_to_ignore"]
-                if ("dst" in from_ or "both" in from_) and (
-                    self.should_ignore_flows(what_to_ignore)
-                ):
-                    # self.print(f"Whitelisting the dst IP
-                    # {column_values['daddr']}")
-                    return True
-
-            if flow_type == "dns":
-                # check all answers
-                for answer in flow.answers:
-                    if answer in ips_to_whitelist:
-                        # #TODO the direction doesn't matter here right?
-                        # direction = whitelisted_IPs[daddr]['from']
-                        what_to_ignore = whitelisted_IPs[answer][
-                            "what_to_ignore"
-                        ]
-                        if self.should_ignore_flows(what_to_ignore):
-                            # self.print(f"Whitelisting the IP {answer}
-                            # due to its presence in a dns answer")
-                            return True
+            for answer in self.extract_dns_answers(flow):
+                # the direction doesn't matter here
+                for direction in [Direction.SRC, Direction.DST]:
+                    if self.is_ip_whitelisted(answer, direction, "flows"):
+                        return True
 
         if whitelisted_macs := self.db.get_whitelist("mac"):
             # try to get the mac address of the current flow
@@ -318,14 +312,14 @@ class Whitelist(IObservable):
                 if self.should_ignore_flows(what_to_ignore):
                     # We want to block flows from this org. get the domains
                     # of this flow based on the direction.
-                    if "both" in from_:
-                        domains_to_check = (
-                            domains_to_check_src + domains_to_check_dst
-                        )
-                    elif "src" in from_:
-                        domains_to_check = domains_to_check_src
-                    elif "dst" in from_:
-                        domains_to_check = domains_to_check_dst
+                    # if "both" in from_:
+                    #     domains_to_check = (
+                    #         domains_to_check_src + domains_to_check_dst
+                    #     )
+                    # elif "src" in from_:
+                    #     domains_to_check = domains_to_check_src
+                    # elif "dst" in from_:
+                    #     domains_to_check = domains_to_check_dst
 
                     if "src" in from_ or "both" in from_:
                         # Method 1 Check if src IP belongs to a whitelisted
@@ -731,7 +725,7 @@ class Whitelist(IObservable):
         if not victim:
             return False
 
-        if self.is_ip_whitelisted(victim.value, victim.direction):
+        if self.is_ip_whitelisted(victim.value, victim.direction, "alerts"):
             return True
 
         if (
@@ -761,14 +755,18 @@ class Whitelist(IObservable):
             attacker.attacker_type == IoCType.DOMAIN.name
             and self._is_domain_whitelisted(attacker.value, attacker.direction)
         ):
+            # ############ TODO check that the wat_to_ignore matches
             return True
 
         elif attacker.attacker_type == IoCType.IP.name:
             # Check that the IP in the content of the alert is whitelisted
-            if self.is_ip_whitelisted(attacker.value, attacker.direction):
+            if self.is_ip_whitelisted(
+                attacker.value, attacker.direction, "alerts"
+            ):
                 return True
 
-        if whitelisted_orgs and self.is_part_of_a_whitelisted_org(attacker):
+        if self.is_part_of_a_whitelisted_org(attacker):
+            ############ TODO check that the wat_to_ignore matches
             return True
 
         return False
@@ -886,38 +884,83 @@ class Whitelist(IObservable):
         except ValueError:
             return False
 
-    def is_ip_whitelisted(self, ip: str, direction: Direction):
+    def what_to_ignore_match_whitelist(
+        self, checking: str, whitelist_to_ignore: str
+    ):
+        """
+        returns True if we're checking a flow, and the whitelist has
+        'flows' or 'both' as the type to ignore
+        OR
+        if we're checking an alert and the whitelist has 'alerts' or 'both' as the
+        type to ignore
+        :param checking: can be flows or alerts
+        :param whitelist_to_ignore: can be flows or alerts
+        """
+        return checking == whitelist_to_ignore or whitelist_to_ignore == "both"
+
+    def is_ip_whitelisted(
+        self, ip: str, direction: Direction, what_to_ignore: str
+    ) -> bool:
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
+        :param ip: ip to check if whitelisted
+        :param direction: is the given ip a srcip or a dstip
+        :param what_to_ignore: can be 'flows' or 'alerts'
         """
         if not self.is_valid_ip(ip):
             return False
 
         whitelisted_ips: Dict[str, dict] = self.db.get_whitelist("IPs")
-        whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
 
-        if ip in whitelisted_ips:
-            # Check if we should ignore src or dst alerts from this ip
-            # from_ can be: src, dst, both
-            # what_to_ignore can be: alerts or flows or both
-            whitelist_direction: str = whitelisted_ips[ip]["from"]
-            what_to_ignore = whitelisted_ips[ip]["what_to_ignore"]
-            ignore_alerts = self.should_ignore_alerts(what_to_ignore)
+        if ip not in whitelisted_ips:
+            return False
 
-            if self.ignore_alert(
-                direction, ignore_alerts, whitelist_direction
-            ):
-                # self.print(f'Whitelisting src IP {srcip} for evidence'
-                #            f' about {ip}, due to a connection related to {data} '
-                #            f'in {description}')
-                return True
+        # Check if we should ignore src or dst alerts from this ip
+        # from_ can be: src, dst, both
+        # what_to_ignore can be: alerts or flows or both
+        whitelist_direction: str = whitelisted_ips[ip]["from"]
+        if not self.ioc_dir_match_whitelist_dir(
+            direction, whitelist_direction
+        ):
+            return False
 
-            # Now we know this ipv4 or ipv6 isn't whitelisted
-            # is the mac address of this ip whitelisted?
-            if whitelisted_macs and self.profile_has_whitelisted_mac(
-                ip, whitelisted_macs, direction
-            ):
-                return True
+        ignore: str = whitelisted_ips[ip]["what_to_ignore"]
+        if not self.what_to_ignore_match_whitelist(what_to_ignore, ignore):
+            return False
+        return True
+
+    def is_valid_mac(self, mac: str) -> bool:
+        return validators.mac_address(mac)
+
+    # def is_mac_whitelisted(self, mac: str):
+    #     if not self.is_valid_mac(mac):
+    #         return False
+    #
+    #     whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
+    #
+    #     if mac in whitelisted_macs:
+    #         # Check if we should ignore src or dst alerts from this ip
+    #         # from_ can be: src, dst, both
+    #         # what_to_ignore can be: alerts or flows or both
+    #         whitelist_direction: str = whitelisted_ips[ip]["from"]
+    #         what_to_ignore = whitelisted_ips[ip]["what_to_ignore"]
+    #         ignore_alerts = self.should_ignore_alerts(what_to_ignore)
+    #
+    #         if self.ignore_alert(
+    #             direction, ignore_alerts, whitelist_direction
+    #         ):
+    #             # self.print(f'Whitelisting src IP {srcip} for evidence'
+    #             #            f' about {ip}, due to a connection related to {data} '
+    #             #            f'in {description}')
+    #             return True
+    #
+    #         # Now we know this ipv4 or ipv6 isn't whitelisted
+    #         # is the mac address of this ip whitelisted?
+    #         if whitelisted_macs and self.profile_has_whitelisted_mac(
+    #             ip, whitelisted_macs, direction
+    #         ):
+    #             return True
+    #     return False
 
     def ignore_alert(
         self, direction, ignore_alerts, whitelist_direction
@@ -1094,10 +1137,6 @@ class Whitelist(IObservable):
 
         for org in whitelisted_orgs:
             dir_from_whitelist = whitelisted_orgs[org]["from"]
-            what_to_ignore = whitelisted_orgs[org]["what_to_ignore"]
-            if not self.should_ignore_alerts(what_to_ignore):
-                continue
-
             if not self.ioc_dir_match_whitelist_dir(
                 ioc.direction, dir_from_whitelist
             ):
