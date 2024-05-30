@@ -6,10 +6,10 @@ from slips_files.core.evidence_structure.evidence import (
 )
 
 
-class DomainAnalyzer(IWhitelistAnalyzer):
+class MACAnalyzer(IWhitelistAnalyzer):
     @property
     def name(self):
-        return "domain_whitelist_analyzer"
+        return "mac_whitelist_analyzer"
 
     def init(self): ...
 
