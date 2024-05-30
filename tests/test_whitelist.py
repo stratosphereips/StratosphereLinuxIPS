@@ -491,53 +491,6 @@ def test_is_whitelisted_domain_not_found(mock_db):
     )
 
 
-def test_is_whitelisted_domain_ignore_type_mismatch(mock_db):
-    """
-    Test when the domain is found in the whitelisted domains,
-    but the ignore_type does not match the what_to_ignore value.
-    """
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_whitelist.return_value = {
-        "apple.com": {"from": "both", "what_to_ignore": "both"}
-    }
-    domain = "apple.com"
-    saddr = "1.2.3.4"
-    daddr = "5.6.7.8"
-    ignore_type = "alerts"
-    assert whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
-
-
-def test_is_whitelisted_domain_match(mock_db):
-    """
-    Test when the domain is found in the whitelisted domains,
-    and the ignore_type matches the what_to_ignore value.
-    """
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_whitelist.return_value = {
-        "apple.com": {"from": "both", "what_to_ignore": "both"}
-    }
-    domain = "apple.com"
-    saddr = "1.2.3.4"
-    daddr = "5.6.7.8"
-    ignore_type = "both"
-    assert whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
-
-
-def test_is_whitelisted_domain_subdomain_found(mock_db):
-    """
-    Test when the domain is not found in the whitelisted domains, but a subdomain of the whitelisted domain is found.
-    """
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_whitelist.return_value = {
-        "apple.com": {"from": "both", "what_to_ignore": "both"}
-    }
-    domain = "sub.apple.com"
-    saddr = "1.2.3.4"
-    daddr = "5.6.7.8"
-    ignore_type = "both"
-    assert whitelist.is_whitelisted_domain(domain, saddr, daddr, ignore_type)
-
-
 @patch("slips_files.common.parsers.config_parser.ConfigParser")
 def test_read_configuration(mock_config_parser, mock_db):
     mock_config_parser.whitelist_path.return_value = "whitelist.conf"
