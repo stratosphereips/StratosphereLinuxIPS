@@ -491,12 +491,12 @@ def test_is_whitelisted_domain_not_found(mock_db):
     )
 
 
-@patch("slips_files.common.parsers.config_parser.ConfigParser")
+@patch("slips_files.common.parsers.config_parser.ConfigParser.whitelist_path")
 def test_read_configuration(mock_config_parser, mock_db):
-    mock_config_parser.whitelist_path.return_value = "whitelist.conf"
+    mock_config_parser.return_value = "expected_value"
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     whitelist.read_configuration()
-    assert whitelist.whitelist_path == "config/whitelist.conf"
+    assert whitelist.whitelist_path == mock_config_parser.return_value
 
 
 @pytest.mark.parametrize(
