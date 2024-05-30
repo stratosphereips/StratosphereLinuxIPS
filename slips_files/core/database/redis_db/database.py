@@ -1255,6 +1255,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         else:
             return {}
 
+    def has_cached_whitelist(self) -> bool:
+        return bool(self.r.exists("whitelist"))
+
     def store_dhcp_server(self, server_addr):
         """
         Store all seen DHCP servers in the database.
