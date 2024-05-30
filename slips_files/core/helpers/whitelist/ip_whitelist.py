@@ -18,6 +18,12 @@ class IPAnalyzer(IWhitelistAnalyzer):
 
     def init(self): ...
 
+    def extract_dns_answers(self, flow) -> List[str]:
+        """
+        extracts all the ips we can find from the given flow
+        """
+        return flow.answers if flow.type_ == "dns" else []
+
     @staticmethod
     def is_valid_ip(ip: str):
         try:
