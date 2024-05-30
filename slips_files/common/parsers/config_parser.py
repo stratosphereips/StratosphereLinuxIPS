@@ -177,7 +177,7 @@ class ConfigParser(object):
 
     def whitelist_path(self):
         return self.read_configuration(
-            "parameters", "whitelist_path", "whitelist.conf"
+            "parameters", "whitelist_path", "config/whitelist.conf"
         )
 
     def logsfile(self):
