@@ -1,5 +1,4 @@
 from typing import List, Dict
-
 import tldextract
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer

@@ -459,34 +459,6 @@ class Whitelist(IObservable):
             pass
         return False
 
-    def profile_has_whitelisted_mac(
-        self, profile_ip, whitelisted_macs, direction: Direction
-    ) -> bool:
-        """
-        Checks for alerts whitelist
-        """
-        mac = self.db.get_mac_addr_from_profile(f"profile_{profile_ip}")
-
-        if not mac:
-            # we have no mac for this profile
-            return False
-
-        mac = mac[0]
-        if mac in list(whitelisted_macs.keys()):
-            # src or dst and
-            from_ = whitelisted_macs[mac]["from"]
-            what_to_ignore = whitelisted_macs[mac]["what_to_ignore"]
-            # do we want to whitelist alerts?
-            if "alerts" in what_to_ignore or "both" in what_to_ignore:
-                if direction == Direction.DST and (
-                    "src" in from_ or "both" in from_
-                ):
-                    return True
-                if direction == Direction.DST and (
-                    "dst" in from_ or "both" in from_
-                ):
-                    return True
-
     def is_ip_asn_in_org_asn(self, ip: str, org):
         """
         returns true if the ASN of the given IP is listed in the ASNs of
@@ -741,39 +713,6 @@ class Whitelist(IObservable):
         :param whitelist_to_ignore: can be flows or alerts
         """
         return checking == whitelist_to_ignore or whitelist_to_ignore == "both"
-
-    def is_valid_mac(self, mac: str) -> bool:
-        return validators.mac_address(mac)
-
-    # def is_mac_whitelisted(self, mac: str):
-    #     if not self.is_valid_mac(mac):
-    #         return False
-    #
-    #     whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
-    #
-    #     if mac in whitelisted_macs:
-    #         # Check if we should ignore src or dst alerts from this ip
-    #         # from_ can be: src, dst, both
-    #         # what_to_ignore can be: alerts or flows or both
-    #         whitelist_direction: str = whitelisted_ips[ip]["from"]
-    #         what_to_ignore = whitelisted_ips[ip]["what_to_ignore"]
-    #         ignore_alerts = self.should_ignore_alerts(what_to_ignore)
-    #
-    #         if self.ignore_alert(
-    #             direction, ignore_alerts, whitelist_direction
-    #         ):
-    #             # self.print(f'Whitelisting src IP {srcip} for evidence'
-    #             #            f' about {ip}, due to a connection related to {data} '
-    #             #            f'in {description}')
-    #             return True
-    #
-    #         # Now we know this ipv4 or ipv6 isn't whitelisted
-    #         # is the mac address of this ip whitelisted?
-    #         if whitelisted_macs and self.profile_has_whitelisted_mac(
-    #             ip, whitelisted_macs, direction
-    #         ):
-    #             return True
-    #     return False
 
     def ignore_alert(
         self, direction, ignore_alerts, whitelist_direction
