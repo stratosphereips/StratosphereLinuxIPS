@@ -1,4 +1,4 @@
-from typing import Optional, Dict, List, Union
+from typing import Optional, Dict, List
 import tldextract
 import json
 import ipaddress
@@ -9,13 +9,13 @@ import os
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 from slips_files.core.output import Output
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     Direction,
     IoCType,
     Attacker,
-    Victim,
 )
 
 
@@ -29,6 +29,7 @@ class Whitelist(IObservable):
         self.org_info_path = "slips_files/organizations_info/"
         self.ignored_flow_types = "arp"
         self.db = db
+        self.ip_analyzer = IPAnalyzer(self.db, whitelist_manager=self)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -568,23 +569,6 @@ class Whitelist(IObservable):
             whitelisted_mac,
         )
 
-    def get_domains_of_ip(self, ip: str) -> List[str]:
-        """
-        returns the domains of this IP, e.g. the DNS resolution, the SNI, etc.
-        """
-        domains = []
-        if ip_data := self.db.get_ip_info(ip):
-            if sni_info := ip_data.get("SNI", [{}])[0]:
-                domains.append(sni_info.get("server_name", ""))
-
-        try:
-            resolution = self.db.get_dns_resolution(ip).get("domains", [])
-            domains.extend(iter(resolution))
-        except (KeyError, TypeError):
-            pass
-
-        return domains
-
     def is_ip_in_org(self, ip: str, org):
         """
         Check if the given ip belongs to the given org
@@ -876,14 +860,6 @@ class Whitelist(IObservable):
         self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
         return org_subnets
 
-    @staticmethod
-    def is_valid_ip(ip: str):
-        try:
-            ipaddress.ip_address(ip)
-            return True
-        except ValueError:
-            return False
-
     def what_to_ignore_match_whitelist(
         self, checking: str, whitelist_to_ignore: str
     ):
@@ -897,37 +873,6 @@ class Whitelist(IObservable):
         :param whitelist_to_ignore: can be flows or alerts
         """
         return checking == whitelist_to_ignore or whitelist_to_ignore == "both"
-
-    def is_ip_whitelisted(
-        self, ip: str, direction: Direction, what_to_ignore: str
-    ) -> bool:
-        """
-        checks the given IP in the whitelisted IPs read from whitelist.conf
-        :param ip: ip to check if whitelisted
-        :param direction: is the given ip a srcip or a dstip
-        :param what_to_ignore: can be 'flows' or 'alerts'
-        """
-        if not self.is_valid_ip(ip):
-            return False
-
-        whitelisted_ips: Dict[str, dict] = self.db.get_whitelist("IPs")
-
-        if ip not in whitelisted_ips:
-            return False
-
-        # Check if we should ignore src or dst alerts from this ip
-        # from_ can be: src, dst, both
-        # what_to_ignore can be: alerts or flows or both
-        whitelist_direction: str = whitelisted_ips[ip]["from"]
-        if not self.ioc_dir_match_whitelist_dir(
-            direction, whitelist_direction
-        ):
-            return False
-
-        ignore: str = whitelisted_ips[ip]["what_to_ignore"]
-        if not self.what_to_ignore_match_whitelist(what_to_ignore, ignore):
-            return False
-        return True
 
     def is_valid_mac(self, mac: str) -> bool:
         return validators.mac_address(mac)
@@ -986,34 +931,6 @@ class Whitelist(IObservable):
         self, ignore_alerts: bool, whitelist_direction: str
     ) -> bool:
         return ignore_alerts and "both" in whitelist_direction
-
-    def ignore_alerts_from_ip(
-        self,
-        direction: Direction,
-        ignore_alerts: bool,
-        whitelist_direction: str,
-    ) -> bool:
-        if not ignore_alerts:
-            return False
-
-        if direction == Direction.SRC and self.should_ignore_from(
-            whitelist_direction
-        ):
-            return True
-
-    def ignore_alerts_to_ip(
-        self,
-        direction: Direction,
-        ignore_alerts: bool,
-        whitelist_direction: str,
-    ) -> bool:
-        if not ignore_alerts:
-            return False
-
-        if direction == Direction.DST and self.should_ignore_to(
-            whitelist_direction
-        ):
-            return True
 
     def extract_hostname(self, url: str) -> str:
         """
@@ -1105,16 +1022,6 @@ class Whitelist(IObservable):
 
         # search in the list of organization IPs
         return self.is_ip_in_org(ip, org)
-
-    @staticmethod
-    def is_private_ip(ioc_type, ioc: Union[Attacker, Victim]):
-        """checks if the given ioc is an ip and is private"""
-        if ioc_type != IoCType.IP.name:
-            return False
-
-        ip_obj = ipaddress.ip_address(ioc.value)
-        if utils.is_private_ip(ip_obj):
-            return True
 
     def is_part_of_a_whitelisted_org(self, ioc):
         """
