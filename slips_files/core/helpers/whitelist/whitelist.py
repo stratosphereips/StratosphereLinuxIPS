@@ -1,11 +1,9 @@
 from typing import Optional, Dict, List
-import validators
 
 
-from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
+from slips_files.core.helpers.whitelist.whitelist_parser import WhitelistParser
 from slips_files.core.output import Output
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
@@ -21,10 +19,21 @@ class Whitelist(IObservable):
         self.logger = logger
         self.add_observer(self.logger)
         self.name = "whitelist"
-        self.read_configuration()
         self.ignored_flow_types = "arp"
         self.db = db
+        self.parser = WhitelistParser(self.db)
         self.ip_analyzer = IPAnalyzer(self.db, whitelist_manager=self)
+
+    def update(self):
+        """
+        parses the whitelist specified in the slips.conf and stores the
+        parsed results in the db
+        """
+        self.parser.parse()
+        self.db.set_whitelist("IPs", self.parser.whitelisted_ips)
+        self.db.set_whitelist("domains", self.parser.whitelisted_domains)
+        self.db.set_whitelist("organizations", self.parser.whitelisted_orgs)
+        self.db.set_whitelist("macs", self.parser.whitelisted_mac)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -54,25 +63,12 @@ class Whitelist(IObservable):
             }
         )
 
-    def read_configuration(self):
-        conf = ConfigParser()
-        self.whitelist_path = conf.whitelist_path()
-
     def is_ignored_flow_type(self, flow_type) -> bool:
         """
         Function reduce the number of checks we make if we don't need to check this type of flow
         """
         if flow_type in self.ignored_flow_types:
             return True
-
-    def extract_dns_answers(self, flow) -> List[str]:
-        """
-        extracts all the ips we can find from the given flow
-        """
-        ips = []
-        if flow.type_ == "dns":
-            ips = ips + flow.answers
-        return ips
 
     def is_whitelisted_flow(self, flow) -> bool:
         """
@@ -226,162 +222,6 @@ class Whitelist(IObservable):
                             return True
 
         return False
-
-    def read_whitelist(self):
-        """Reads the content of whitelist.conf and stores information about
-        each ip/org/domain in the database"""
-
-        # since this function can be run when the user modifies whitelist.conf
-        # we need to check if the dicts are already there
-        whitelisted_ips = self.db.get_whitelist("IPs")
-        whitelisted_domains = self.db.get_whitelist("domains")
-        whitelisted_orgs = self.db.get_whitelist("organizations")
-        whitelisted_mac = self.db.get_whitelist("mac")
-        # Process lines after comments
-        line_number = 0
-        try:
-            with open(self.whitelist_path) as whitelist:
-                # line = whitelist.readline()
-                while line := whitelist.readline():
-                    line_number += 1
-                    if line.startswith('"IoCType"'):
-                        continue
-
-                    # check if the user commented an org, ip or domain that
-                    # was whitelisted
-                    if line.startswith("#"):
-                        if whitelisted_ips:
-                            for ip in list(whitelisted_ips):
-                                # make sure the user commented the line we
-                                # have in cache exactly
-                                if (
-                                    ip in line
-                                    and whitelisted_ips[ip]["from"] in line
-                                    and whitelisted_ips[ip]["what_to_ignore"]
-                                    in line
-                                ):
-                                    # remove that entry from whitelisted_ips
-                                    whitelisted_ips.pop(ip)
-                                    break
-
-                        if whitelisted_domains:
-                            for domain in list(whitelisted_domains):
-                                if (
-                                    domain in line
-                                    and whitelisted_domains[domain]["from"]
-                                    in line
-                                    and whitelisted_domains[domain][
-                                        "what_to_ignore"
-                                    ]
-                                    in line
-                                ):
-                                    # remove that entry from whitelisted_domains
-                                    whitelisted_domains.pop(domain)
-                                    break
-
-                        if whitelisted_orgs:
-                            for org in list(whitelisted_orgs):
-                                if (
-                                    org in line
-                                    and whitelisted_orgs[org]["from"] in line
-                                    and whitelisted_orgs[org]["what_to_ignore"]
-                                    in line
-                                ):
-                                    # remove that entry from whitelisted_domains
-                                    whitelisted_orgs.pop(org)
-                                    break
-
-                        # todo if the user closes slips, changes the whitelist, and reopens slips ,
-                        #  slips will still have the old whitelist in the cache!
-                        continue
-                    # line should be: ["type","domain/ip/organization",
-                    # "from","what_to_ignore"]
-                    line = line.replace("\n", "").replace(" ", "").split(",")
-                    try:
-                        type_, data, from_, what_to_ignore = (
-                            (line[0]).lower(),
-                            line[1],
-                            line[2],
-                            line[3],
-                        )
-                    except IndexError:
-                        # line is missing a column, ignore it.
-                        self.print(
-                            f"Line {line_number} in whitelist.conf "
-                            f"is missing a column. Skipping."
-                        )
-                        continue
-
-                    # Validate the type before processing
-                    try:
-                        whitelist_line_info = {
-                            "from": from_,
-                            "what_to_ignore": what_to_ignore,
-                        }
-                        if "ip" in type_ and (
-                            validators.ip_address.ipv6(data)
-                            or validators.ip_address.ipv4(data)
-                        ):
-                            whitelisted_ips[data] = whitelist_line_info
-                        elif "domain" in type_ and validators.domain(data):
-                            whitelisted_domains[data] = whitelist_line_info
-                            # to be able to whitelist subdomains faster
-                            # the goal is to have an entry for each
-                            # subdomain and its parent domain
-                            hostname = self.extract_hostname(data)
-                            whitelisted_domains[hostname] = whitelist_line_info
-                        elif "mac" in type_ and validators.mac_address(data):
-                            whitelisted_mac[data] = whitelist_line_info
-                        elif "org" in type_:
-                            if data not in utils.supported_orgs:
-                                self.print(
-                                    f"Whitelisted org {data} is not"
-                                    f" supported in slips"
-                                )
-                                continue
-                            # organizations dicts look something like this:
-                            #  {'google': {'from':'dst',
-                            #               'what_to_ignore': 'alerts'
-                            #               'IPs': {'34.64.0.0/10': subnet}}
-                            try:
-                                # org already whitelisted, update info
-                                whitelisted_orgs[data]["from"] = from_
-                                whitelisted_orgs[data][
-                                    "what_to_ignore"
-                                ] = what_to_ignore
-                            except KeyError:
-                                # first time seeing this org
-                                whitelisted_orgs[data] = whitelist_line_info
-
-                        else:
-                            self.print(f"{data} is not a valid {type_}.", 1, 0)
-                    except Exception:
-                        self.print(
-                            f"Line {line_number} in whitelist.conf is invalid."
-                            f" Skipping. "
-                        )
-        except FileNotFoundError:
-            self.print(
-                f"Can't find {self.whitelist_path}, using slips default "
-                f"whitelist.conf instead"
-            )
-            if self.whitelist_path != "config/whitelist.conf":
-                self.whitelist_path = "config/whitelist.conf"
-                self.read_whitelist()
-
-        # store everything in the cache db because we'll be needing this
-        # info in the evidenceProcess
-        self.db.set_whitelist("IPs", whitelisted_ips)
-        self.db.set_whitelist("domains", whitelisted_domains)
-        self.db.set_whitelist("organizations", whitelisted_orgs)
-        self.db.set_whitelist("macs", whitelisted_mac)
-
-        return (
-            whitelisted_ips,
-            whitelisted_domains,
-            whitelisted_orgs,
-            whitelisted_mac,
-        )
 
     def should_ignore_from(self, direction) -> bool:
         """

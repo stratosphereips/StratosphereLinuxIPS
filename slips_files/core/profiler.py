@@ -520,5 +520,5 @@ class Profiler(ICore):
                 # because pycharm saves file automatically
                 # otherwise this channel will get a msg only when
                 # whitelist.conf is modified and saved to disk
-                self.whitelist.read_whitelist()
+                self.whitelist.update()
         return 1

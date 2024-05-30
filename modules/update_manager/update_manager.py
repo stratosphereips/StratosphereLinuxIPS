@@ -1430,10 +1430,17 @@ class UpdateManager(IModule):
             return True
 
     def get_whitelisted_orgs(self) -> list:
-        self.whitelist.read_whitelist()
+
         whitelisted_orgs: dict = self.db.get_whitelist("organizations")
         whitelisted_orgs: list = list(whitelisted_orgs.keys())
         return whitelisted_orgs
+
+    def update_whitelist(self):
+        """
+        parses the whitelist using the whitelist
+         parser and stores it in the db
+        """
+        self.whitelist.update()
 
     def update_org_files(self):
         # update whitelisted orgs in whitelist.conf, we may not have info about all of them
@@ -1443,7 +1450,7 @@ class UpdateManager(IModule):
             org for org in whitelisted_orgs if org not in utils.supported_orgs
         ]
         for org in not_supported_orgs:
-            self.whitelist.load_org_IPs(org)
+            self.whitelist.load_org_ips(org)
 
         # update org we have local into about
         for org in utils.supported_orgs:
@@ -1451,7 +1458,7 @@ class UpdateManager(IModule):
             org_asn = os.path.join(self.org_info_path, f"{org}_asn")
             org_domains = os.path.join(self.org_info_path, f"{org}_domains")
             if self.check_if_update_org(org_ips):
-                self.whitelist.load_org_IPs(org)
+                self.whitelist.load_org_ips(org)
 
             if self.check_if_update_org(org_domains):
                 self.whitelist.load_org_domains(org)
