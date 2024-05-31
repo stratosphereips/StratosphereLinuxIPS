@@ -86,14 +86,19 @@ class Whitelist(IObservable):
         saddr = flow.saddr
         daddr = flow.daddr
         flow_type = flow.type_
+
         # get the domains of the IPs this flow
-        domains_to_check: List[str] = (
-            self.ip_analyzer.get_domains_of_ip(daddr)
-            + self.ip_analyzer.get_domains_of_ip(saddr)
-            + self.domain_analyzer.get_domains_of_flow(flow)
+        dst_domains_to_check: List[str] = self.ip_analyzer.get_domains_of_ip(
+            daddr
+        ) + self.domain_analyzer.get_domains_of_flow(flow)
+        src_domains_to_check: List[str] = self.ip_analyzer.get_domains_of_ip(
+            saddr
+        )
+        flow_dns_answers: List[str] = self.ip_analyzer.extract_dns_answers(
+            flow
         )
 
-        for domain in domains_to_check:
+        for domain in dst_domains_to_check + src_domains_to_check:
             if self.domain_analyzer.is_whitelisted_domain(
                 domain, saddr, daddr, "flows"
             ):
@@ -148,83 +153,29 @@ class Whitelist(IObservable):
             # TODO what is this?
             return False
 
-        if whitelisted_orgs := self.db.get_whitelist("organizations"):
-            # self.print('Check if the organization is whitelisted')
-            # Check if IP belongs to a whitelisted organization range
-            # Check if the ASN of this IP is any of these organizations
+        # todo just check if the key exists in the db instead of
+        #  retrievinbg all these values and doing nothing with them
+        if self.db.get_whitelist("organizations"):
+            for domain in dst_domains_to_check:
+                self.org_analyzer.is_part_of_a_whitelisted_org(
+                    domain, IoCType.DOMAIN, Direction.DST, "flows"
+                )
 
-            for org in whitelisted_orgs:
-                from_ = whitelisted_orgs[org]["from"]  # src or dst or both
-                what_to_ignore = whitelisted_orgs[org][
-                    "what_to_ignore"
-                ]  # flows, alerts or both
-                # self.print(f'Checking {org}, from:{from_} type {what_to_ignore}')
+            for domain in src_domains_to_check:
+                self.org_analyzer.is_part_of_a_whitelisted_org(
+                    domain, IoCType.DOMAIN, Direction.SRC, "flows"
+                )
 
-                if self.should_ignore_flows(what_to_ignore):
-                    # We want to block flows from this org. get the domains
-                    # of this flow based on the direction.
-                    # if "both" in from_:
-                    #     domains_to_check = (
-                    #         domains_to_check_src + domains_to_check_dst
-                    #     )
-                    # elif "src" in from_:
-                    #     domains_to_check = domains_to_check_src
-                    # elif "dst" in from_:
-                    #     domains_to_check = domains_to_check_dst
+            # DNS answers are not src or dstips, so check them as both
+            for ip in [flow.saddr] + flow_dns_answers:
+                self.org_analyzer.is_part_of_a_whitelisted_org(
+                    ip, IoCType.IP, Direction.SRC, "flows"
+                )
 
-                    if "src" in from_ or "both" in from_:
-                        # Method 1 Check if src IP belongs to a whitelisted
-                        # organization range
-                        try:
-                            if self.org_analyzer.is_ip_in_org(saddr, org):
-                                # self.print(f"The src IP {saddr} is in the
-                                # ranges of org {org}. Whitelisted.")
-                                return True
-                        except ValueError:
-                            # Some flows don't have IPs, but mac address or
-                            # just - in some cases
-                            return False
-
-                        # Method 2 Check if the ASN of this src IP is any of
-                        # these organizations
-                        if self.org_analyzer.is_asn_in_org(saddr, org):
-                            # this ip belongs to a whitelisted org, ignore
-                            # flow
-                            # self.print(f"The src IP {saddr} belong to {org}.
-                            # Whitelisted because of ASN.")
-                            return True
-
-                    if "dst" in from_ or "both" in from_:
-                        # Method 1 Check if dst IP belongs to a whitelisted
-                        # organization range
-                        try:
-                            if self.org_analyzer.is_ip_in_org(flow.daddr, org):
-                                # self.print(f"The dst IP
-                                # {column_values['daddr']} "
-                                #            f"is in the network range of org
-                                #            {org}. Whitelisted.")
-                                return True
-                        except ValueError:
-                            # Some flows don't have IPs, but mac address or
-                            # just - in some cases
-                            return False
-
-                        # Method 2 Check if the ASN of this dst IP is any of
-                        # these organizations
-                        if self.org_analyzer.is_asn_in_org(daddr, org):
-                            # this ip belongs to a whitelisted org, ignore flow
-                            return True
-
-                    # either we're blocking src, dst, or both check the
-                    # domain of this flow
-                    # Method 3 Check if the domains of this flow belong
-                    # to this org
-                    # domains to check are usually 1 or 2 domains
-                    for flow_domain in domains_to_check:
-                        if self.org_analyzer.is_domain_in_org(
-                            flow_domain, org
-                        ):
-                            return True
+            for ip in [flow.daddr] + flow_dns_answers:
+                self.org_analyzer.is_part_of_a_whitelisted_org(
+                    ip, IoCType.IP, Direction.DST, "flows"
+                )
 
         return False
 
@@ -314,7 +265,9 @@ class Whitelist(IObservable):
         ):
             return True
 
-        if self.org_analyzer.is_part_of_a_whitelisted_org(victim, "alerts"):
+        if self.org_analyzer.is_part_of_a_whitelisted_org(
+            victim.value, victim.victim_type, victim.direction, "alerts"
+        ):
             return True
 
     def is_whitelisted_attacker(self, evidence: Evidence) -> bool:
@@ -351,7 +304,9 @@ class Whitelist(IObservable):
             ):
                 return True
 
-        if self.org_analyzer.is_part_of_a_whitelisted_org(attacker, "alerts"):
+        if self.org_analyzer.is_part_of_a_whitelisted_org(
+            attacker, attacker.attacker_type, attacker.direction, "alerts"
+        ):
             return True
 
         return False
