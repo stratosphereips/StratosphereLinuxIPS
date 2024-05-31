@@ -1,9 +1,12 @@
+from typing import Dict
+
 import validators
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
 from slips_files.core.evidence_structure.evidence import (
     Direction,
 )
+from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 
 
 class MACAnalyzer(IWhitelistAnalyzer):
@@ -11,66 +14,57 @@ class MACAnalyzer(IWhitelistAnalyzer):
     def name(self):
         return "mac_whitelist_analyzer"
 
-    def init(self): ...
+    def init(self):
+        self.ip_analyzer = IPAnalyzer(self.db)
 
     @staticmethod
     def is_valid_mac(mac: str) -> bool:
         return validators.mac_address(mac)
 
     def profile_has_whitelisted_mac(
-        self, profile_ip, whitelisted_macs, direction: Direction
+        self, profile_ip, direction: Direction, what_to_ignore: str
     ) -> bool:
         """
         Checks for alerts whitelist
+        :param profile_ip: the ip we wanna check the mac of
+        :param direction: is it a src ip or a dst ip
+        :param what_to_ignore: can be flows or alerts
         """
-        mac = self.db.get_mac_addr_from_profile(f"profile_{profile_ip}")
-
-        if not mac:
-            # we have no mac for this profile
+        if not self.ip_analyzer.is_valid_ip(profile_ip):
             return False
 
-        mac = mac[0]
-        if mac in list(whitelisted_macs.keys()):
-            # src or dst and
-            from_ = whitelisted_macs[mac]["from"]
-            what_to_ignore = whitelisted_macs[mac]["what_to_ignore"]
-            # do we want to whitelist alerts?
-            if "alerts" in what_to_ignore or "both" in what_to_ignore:
-                if direction == Direction.DST and (
-                    "src" in from_ or "both" in from_
-                ):
-                    return True
-                if direction == Direction.DST and (
-                    "dst" in from_ or "both" in from_
-                ):
-                    return True
+        mac: str = self.db.get_mac_addr_from_profile(f"profile_{profile_ip}")
+        if not mac:
+            return False
 
-    # def is_mac_whitelisted(self, mac: str):
-    #     if not self.is_valid_mac(mac):
-    #         return False
-    #     # todo it should be known whether this is a src or dst mac!
-    #     whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
-    #
-    #     if mac in whitelisted_macs:
-    #         # Check if we should ignore src or dst alerts from this ip
-    #         # from_ can be: src, dst, both
-    #         # what_to_ignore can be: alerts or flows or both
-    #         whitelist_direction: str = whitelisted_macs[mac]["from"]
-    #         what_to_ignore = whitelisted_macs[mac]["what_to_ignore"]
-    #         if self.manager.ignore_alert(
-    #             what_to_ignore
-    #         ):
-    #             # self.print(f'Whitelisting src IP {srcip} for evidence'
-    #             #            f' about {ip}, due to a connection related to {data} '
-    #             #            f'in {description}')
-    #             return True
-    #
-    #         # todo match directions
-    #         is (self.manager.ioc_dir_match_whitelist_dir( .. ,
-    #             whitelist_direction))
-    #         # todo this should be here
-    #         if self.profile_has_whitelisted_mac(
-    #             ip, whitelisted_macs, direction
-    #         ):
-    #             return True
-    #     return False
+        return self.is_mac_whitelisted(mac, direction, what_to_ignore)
+
+    def is_mac_whitelisted(
+        self, mac: str, direction: Direction, what_to_ignore: str
+    ):
+        """
+        checks if the given mac is whitelisted
+        :param mac: mac to check if whitelisted
+        :param direction: is the given mac a src or a dst mac
+        :param what_to_ignore: can be flows or alerts
+        """
+        if not self.is_valid_mac(mac):
+            return False
+
+        whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
+        if mac not in whitelisted_macs:
+            return False
+
+        whitelist_direction: str = whitelisted_macs[mac]["from"]
+        if not self.manager.ioc_dir_match_whitelist_dir(
+            direction, whitelist_direction
+        ):
+            return False
+
+        whitelist_what_to_ignore: str = whitelisted_macs[mac]["what_to_ignore"]
+        if not self.manager.what_to_ignore_match_whitelist(
+            what_to_ignore, whitelist_what_to_ignore
+        ):
+            return False
+
+        return True

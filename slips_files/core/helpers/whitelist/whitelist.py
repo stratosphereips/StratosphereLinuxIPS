@@ -132,11 +132,11 @@ class Whitelist(IObservable):
                     f"profile_{saddr}"
                 ):
                     src_mac = src_mac[0]
-            # todo repritionss!!!!
 
             # if src_mac and src_mac in list(whitelisted_macs.keys()):
             #     whitelist_what_to_ignore = whitelisted_macs[src_mac][
-            #         "what_to_ignore"]
+            #         "what_to_ignore"
+            #     ]
             #
             #     if not self.what_to_ignore_match_whitelist(
             #         "flows", whitelist_what_to_ignore
@@ -146,7 +146,6 @@ class Whitelist(IObservable):
             #     from_ = whitelisted_macs[src_mac]["from"]
             #     if not self.ioc_dir_match_whitelist_dir(Direction.SRC, from_):
             #         return False
-            #
             #
             # dst_mac = flow.dmac if hasattr(flow, "dmac") else False
             # if dst_mac and dst_mac in list(whitelisted_macs.keys()):
@@ -325,10 +324,15 @@ class Whitelist(IObservable):
         ):
             return True
 
+        if self.mac_analyzer.profile_has_whitelisted_mac(
+            victim.value, victim.direction, "alerts"
+        ):
+            return True
+
         if self.org_analyzer.is_part_of_a_whitelisted_org(victim, "alerts"):
             return True
 
-    def is_whitelisted_attacker(self, evidence: Evidence):
+    def is_whitelisted_attacker(self, evidence: Evidence) -> bool:
         if not hasattr(evidence, "attacker"):
             return False
 
@@ -357,6 +361,11 @@ class Whitelist(IObservable):
             ):
                 return True
 
+            if self.mac_analyzer.profile_has_whitelisted_mac(
+                attacker.value, attacker.direction, "alerts"
+            ):
+                return True
+
         if self.org_analyzer.is_part_of_a_whitelisted_org(attacker, "alerts"):
             return True
 
@@ -374,11 +383,7 @@ class Whitelist(IObservable):
         :param checking: can be flows or alerts
         :param whitelist_to_ignore: can be flows or alerts
         """
-        return (
-            checking == whitelist_to_ignore
-            or whitelist_to_ignore == "both"
-            or checking == "both"
-        )
+        return checking == whitelist_to_ignore or whitelist_to_ignore == "both"
 
     def ignore_alert(
         self, direction, ignore_alerts, whitelist_direction
