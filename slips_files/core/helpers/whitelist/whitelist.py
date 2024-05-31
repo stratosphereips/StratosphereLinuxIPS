@@ -90,17 +90,24 @@ class Whitelist(IObservable):
         # get the domains of the IPs this flow
         dst_domains_to_check: List[str] = self.ip_analyzer.get_domains_of_ip(
             daddr
-        ) + self.domain_analyzer.get_domains_of_flow(flow)
+        ) + self.domain_analyzer.get_dst_domains_of_flow(flow)
         src_domains_to_check: List[str] = self.ip_analyzer.get_domains_of_ip(
             saddr
         )
+
         flow_dns_answers: List[str] = self.ip_analyzer.extract_dns_answers(
             flow
         )
 
-        for domain in dst_domains_to_check + src_domains_to_check:
-            if self.domain_analyzer.is_whitelisted_domain(
-                domain, saddr, daddr, "flows"
+        for domain in dst_domains_to_check:
+            if self.domain_analyzer.is_domain_whitelisted(
+                domain, Direction.DST, "flows"
+            ):
+                return True
+
+        for domain in src_domains_to_check:
+            if self.domain_analyzer.is_domain_whitelisted(
+                domain, Direction.SRC, "flows"
             ):
                 return True
 
