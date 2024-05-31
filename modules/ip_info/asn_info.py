@@ -1,10 +1,11 @@
-from slips_files.common.imports import *
 import time
 import ipaddress
 import ipwhois
 import json
 import requests
 import maxminddb
+
+from slips_files.common.slips_utils import utils
 
 
 class ASN:
@@ -174,7 +175,7 @@ class ASN:
         asn.update({"timestamp": time.time()})
         cached_ip_info.update(asn)
         # store the ASN we found in 'IPsInfo'
-        self.db.setInfoForIPs(ip, cached_ip_info)
+        self.db.set_ip_info(ip, cached_ip_info)
 
     def get_asn(self, ip, cached_ip_info):
         """

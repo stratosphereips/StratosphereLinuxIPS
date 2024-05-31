@@ -21,15 +21,18 @@ class Notify:
             return True
         # elif returncode == 32512:
         print(
-            "notify-send is not installed. install it using:\nsudo apt-get install libnotify-bin"
+            "notify-send is not installed. install it using:\n"
+            "sudo apt-get install libnotify-bin"
         )
         return False
 
     def setup_notifications(self):
         """
-        Get the used display, the user using this display and the uid of this user in case of using Slips as root on linux
+        Get the used display, the user using this display and the uid of this
+         user in case of using Slips as root on linux
         """
-        # in linux, if the user's not root, notifications command will need extra configurations
+        # in linux, if the user's not root, notifications command will need
+        # extra configurations
         if platform.system() != "Linux" or os.geteuid() != 0:
             self.notify_cmd = "notify-send -t 5000 "
             return False
@@ -57,10 +60,12 @@ class Notify:
 
         # get the uid
         uid = pwd.getpwnam(user).pw_uid
-        # run notify-send as user using the used_display and give it the dbus addr
+        # run notify-send as user using the used_display
+        # and give it the dbus addr
         self.notify_cmd = (
             f"sudo -u {user} DISPLAY={used_display} "
-            f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 "
+            f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus "
+            f"notify-send -t 5000 "
         )
 
     def show_popup(self, alert_to_log: str):

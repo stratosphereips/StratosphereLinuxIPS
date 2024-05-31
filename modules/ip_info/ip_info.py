@@ -14,9 +14,10 @@ import subprocess
 import re
 import time
 import asyncio
+import multiprocessing
 
-from slips_files.common.imports import *
 from .asn_info import ASN
+from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
@@ -224,7 +225,7 @@ class IPInfo(IModule):
 
         else:
             data = {"geocountry": "Unknown"}
-        self.db.setInfoForIPs(ip, data)
+        self.db.set_ip_info(ip, data)
         return data
 
     # RDNS functions
@@ -253,7 +254,7 @@ class IPInfo(IModule):
             except socket.error:
                 # all good, store it
                 data["reverse_dns"] = reverse_dns
-                self.db.setInfoForIPs(ip, data)
+                self.db.set_ip_info(ip, data)
         except (socket.gaierror, socket.herror, OSError):
             # not an ip or multicast, can't get the reverse dns record of it
             return False
@@ -594,9 +595,7 @@ class IPInfo(IModule):
             # Get the ASN
             # only update the ASN for this IP if more than 1 month
             # passed since last ASN update on this IP
-            if update_asn := self.asn.update_asn(
-                cached_ip_info, self.update_period
-            ):
+            if self.asn.update_asn(cached_ip_info, self.update_period):
                 self.asn.get_asn(ip, cached_ip_info)
             self.get_rdns(ip)
 
