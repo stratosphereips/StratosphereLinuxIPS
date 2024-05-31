@@ -505,6 +505,7 @@ class Conn(IFlowalertsAnalyzer):
                 profileid, daddr
             ):
                 return False
+
             if self.is_well_known_org(daddr):
                 # if the SNI or rDNS of the IP matches a
                 # well-known org, then this is a FP
@@ -703,21 +704,22 @@ class Conn(IFlowalertsAnalyzer):
             # No SNI data for this ip
             rdns = False
 
-        flow_domain = rdns or sni
+        flow_domains = [rdns, sni]
         for org in utils.supported_orgs:
-            if self.whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org):
-                return True
+            for domain in flow_domains:
+                if self.whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org):
+                    return True
 
-            # we have the rdns or sni of this flow , now check
-            if flow_domain and self.whitelist.org_analyzer.is_domain_in_org(
-                flow_domain, org
-            ):
-                return True
+                # we have the rdns or sni of this flow , now check
+                if domain and self.whitelist.org_analyzer.is_domain_in_org(
+                    domain, org
+                ):
+                    return True
 
-            # check if the ip belongs to the range of a well known org
-            # (fb, twitter, microsoft, etc.)
-            if self.whitelist.org_analyzer.is_ip_in_org(ip, org):
-                return True
+                # check if the ip belongs to the range of a well known org
+                # (fb, twitter, microsoft, etc.)
+                if self.whitelist.org_analyzer.is_ip_in_org(ip, org):
+                    return True
 
     def check_different_localnet_usage(
         self,

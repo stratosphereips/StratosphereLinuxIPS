@@ -15,8 +15,10 @@ from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 class OrgAnalyzer(IWhitelistAnalyzer):
     """
     is_part_of_a_whitelisted_org()
-    is the only callable function from the
-    outside:D
+    is the one you should mainly use
+    from the outside.
+     unless you're not checking if a flow/alert is whitelisted,
+    (e.g. like in is_well_known_org)
     """
 
     @property
@@ -28,7 +30,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         self.domain_analyzer = DomainAnalyzer(self.db)
         self.org_info_path = "slips_files/organizations_info/"
 
-    def _is_domain_in_org(self, domain: str, org: str):
+    def is_domain_in_org(self, domain: str, org: str):
         """
         Checks if the given domains belongs to the given org using
         the hardcoded org domains in organizations_info/org_domains
@@ -61,7 +63,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             # so we don't know how to link this ip to the whitelisted org!
             return False
 
-    def _is_ip_in_org(self, ip: str, org):
+    def is_ip_in_org(self, ip: str, org):
         """
         Check if the given ip belongs to the given org
         """
@@ -83,7 +85,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             pass
         return False
 
-    def _is_ip_asn_in_org_asn(self, ip: str, org):
+    def is_ip_asn_in_org_asn(self, ip: str, org):
         """
         returns true if the ASN of the given IP is listed in
          the ASNs of the given org
@@ -106,18 +108,18 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
         return org.upper() in ip_asn or ip_asn == org_asn
 
-    def _is_ip_part_of_a_whitelisted_org(self, ip: str, org: str) -> bool:
+    def is_ip_part_of_a_whitelisted_org(self, ip: str, org: str) -> bool:
         """
         returns true if the given ip is a part of the given org
         by checking the ASN of the ip and by checking if the IP is
         part of the hardcoded IPs as part of this org in
         slips_files/organizations_info
         """
-        if self._is_ip_asn_in_org_asn(ip, org):
+        if self.is_ip_asn_in_org_asn(ip, org):
             return True
 
         # search in the list of organization IPs
-        return self._is_ip_in_org(ip, org)
+        return self.is_ip_in_org(ip, org)
 
     def is_part_of_a_whitelisted_org(
         self, ioc, ioc_type: IoCType, direction: Direction, what_to_ignore: str
@@ -157,8 +159,8 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 continue
 
             cases = {
-                IoCType.DOMAIN.name: self._is_domain_in_org,
-                IoCType.IP.name: self._is_ip_part_of_a_whitelisted_org,
+                IoCType.DOMAIN.name: self.is_domain_in_org,
+                IoCType.IP.name: self.is_ip_part_of_a_whitelisted_org,
             }
             if cases[ioc_type](ioc.value, org):
                 return True
