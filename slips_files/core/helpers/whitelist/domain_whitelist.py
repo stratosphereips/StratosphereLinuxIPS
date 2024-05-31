@@ -2,9 +2,11 @@ from typing import List, Dict
 import tldextract
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
+from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Direction,
 )
+from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 
 
 class DomainAnalyzer(IWhitelistAnalyzer):
@@ -12,7 +14,8 @@ class DomainAnalyzer(IWhitelistAnalyzer):
     def name(self):
         return "domain_whitelist_analyzer"
 
-    def init(self): ...
+    def init(self):
+        self.ip_analyzer = IPAnalyzer(self.db)
 
     def is_whitelisted_domain_in_flow(
         self,
@@ -76,8 +79,12 @@ class DomainAnalyzer(IWhitelistAnalyzer):
             return False
 
         # get the domains of this flow
-        dst_domains_of_flow: List[str] = self.get_domains_of_ip(daddr)
-        src_domains_of_flow: List[str] = self.get_domains_of_ip(saddr)
+        dst_domains_of_flow: List[str] = self.ip_analyzer.get_domains_of_ip(
+            daddr
+        )
+        src_domains_of_flow: List[str] = self.ip_analyzer.get_domains_of_ip(
+            saddr
+        )
 
         # self.print(f'Domains to check from flow: {domains_to_check},
         # {domains_to_check_dst} {domains_to_check_src}')
@@ -140,17 +147,10 @@ class DomainAnalyzer(IWhitelistAnalyzer):
             domains.append(flow.query)
         return domains
 
-    def extract_hostname(self, url: str) -> str:
-        """
-        extracts the parent domain from the given domain/url
-        """
-        parsed_url = tldextract.extract(url)
-        return f"{parsed_url.domain}.{parsed_url.suffix}"
-
-    def _is_domain_whitelisted(self, domain: str, direction: Direction):
+    def is_domain_whitelisted(self, domain: str, direction: Direction):
         # todo differentiate between this and is_whitelisted_Domain()
         # extracts the parent domain
-        parent_domain: str = self.extract_hostname(domain)
+        parent_domain: str = utils.extract_hostname(domain)
         if not parent_domain:
             return
 

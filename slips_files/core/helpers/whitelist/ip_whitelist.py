@@ -18,7 +18,8 @@ class IPAnalyzer(IWhitelistAnalyzer):
 
     def init(self): ...
 
-    def extract_dns_answers(self, flow) -> List[str]:
+    @staticmethod
+    def extract_dns_answers(flow) -> List[str]:
         """
         extracts all the ips we can find from the given flow
         """

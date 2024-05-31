@@ -8,6 +8,7 @@ from slips_files.core.evidence_structure.evidence import (
     Attacker,
     IoCType,
 )
+from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 
 
@@ -18,6 +19,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
 
     def init(self):
         self.ip_analyzer = IPAnalyzer(self.db)
+        self.domain_analyzer = DomainAnalyzer(self.db)
         self.org_info_path = "slips_files/organizations_info/"
 
     def is_domain_in_org(self, domain: str, org: str):
@@ -26,10 +28,10 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         """
         try:
             org_domains = json.loads(self.db.get_org_info(org, "domains"))
-            flow_tld = self.get_tld(domain)
+            flow_tld = self.domain_analyzer.get_tld(domain)
 
             for org_domain in org_domains:
-                org_domain_tld = self.get_tld(org_domain)
+                org_domain_tld = self.domain_analyzer.get_tld(org_domain)
 
                 if flow_tld != org_domain_tld:
                     continue

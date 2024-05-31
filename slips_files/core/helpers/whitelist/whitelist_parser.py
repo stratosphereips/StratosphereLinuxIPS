@@ -6,7 +6,6 @@ import validators
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 
 
 class WhitelistParser:
@@ -14,7 +13,6 @@ class WhitelistParser:
         self.db = db
         self.read_configuration()
         self.init_whitelists()
-        self.domain_analyzer = DomainAnalyzer()
         self.org_info_path = "slips_files/organizations_info/"
 
     def init_whitelists(self):
@@ -102,7 +100,7 @@ class WhitelistParser:
         # to be able to whitelist subdomains faster
         # the goal is to have an entry for each
         # subdomain and its parent domain
-        hostname = self.domain_analyzer.extract_hostname(domain)
+        hostname = utils.extract_hostname(domain)
         self.whitelisted_domains[hostname] = info
 
     def update_whitelisted_orgs(self, org: str, info: Dict[str, str]):

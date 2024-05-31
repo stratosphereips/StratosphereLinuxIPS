@@ -2,7 +2,12 @@ from typing import Optional, Dict, List
 
 
 from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
+from slips_files.core.helpers.whitelist.mac_whitelist import MACAnalyzer
+from slips_files.core.helpers.whitelist.organization_whitelist import (
+    OrgAnalyzer,
+)
 from slips_files.core.helpers.whitelist.whitelist_parser import WhitelistParser
 from slips_files.core.output import Output
 from slips_files.core.evidence_structure.evidence import (
@@ -23,6 +28,9 @@ class Whitelist(IObservable):
         self.db = db
         self.parser = WhitelistParser(self.db)
         self.ip_analyzer = IPAnalyzer(self.db, whitelist_manager=self)
+        self.domain_analyzer = DomainAnalyzer(self.db, whitelist_manager=self)
+        self.mac_analyzer = MACAnalyzer(self.db, whitelist_manager=self)
+        self.org_analyzer = OrgAnalyzer(self.db, whitelist_manager=self)
 
     def update(self):
         """
@@ -80,9 +88,9 @@ class Whitelist(IObservable):
         flow_type = flow.type_
         # get the domains of the IPs this flow
         domains_to_check: List[str] = (
-            self.get_domains_of_ip(daddr)
-            + self.get_domains_of_ip(saddr)
-            + self.get_domains_of_flow(flow)
+            self.ip_analyzer.get_domains_of_ip(daddr)
+            + self.ip_analyzer.get_domains_of_ip(saddr)
+            + self.domain_analyzer.get_domains_of_flow(flow)
         )
 
         # domains_to_check_dst: List[str] = self.get_domains_of_ip(daddr)
@@ -91,20 +99,28 @@ class Whitelist(IObservable):
         # check if we have whitelisted domains
         # domains_to_check = self.get_domains_of_flow(flow)
         for domain in domains_to_check:
-            if self.is_whitelisted_domain(domain, saddr, daddr, "flows"):
+            if self.domain_analyzer.is_whitelisted_domain(
+                domain, saddr, daddr, "flows"
+            ):
                 return True
 
         if self.db.get_whitelist("IPs"):
-            if self.is_ip_whitelisted(saddr, Direction.SRC, "flows"):
+            if self.ip_analyzer.is_ip_whitelisted(
+                saddr, Direction.SRC, "flows"
+            ):
                 return True
 
-            if self.is_ip_whitelisted(daddr, Direction.DST, "flows"):
+            if self.ip_analyzer.is_ip_whitelisted(
+                daddr, Direction.DST, "flows"
+            ):
                 return True
 
-            for answer in self.extract_dns_answers(flow):
+            for answer in self.ip_analyzer.extract_dns_answers(flow):
                 # the direction doesn't matter here
                 for direction in [Direction.SRC, Direction.DST]:
-                    if self.is_ip_whitelisted(answer, direction, "flows"):
+                    if self.ip_analyzer.is_ip_whitelisted(
+                        answer, direction, "flows"
+                    ):
                         return True
 
         if whitelisted_macs := self.db.get_whitelist("mac"):
@@ -173,7 +189,7 @@ class Whitelist(IObservable):
                         # Method 1 Check if src IP belongs to a whitelisted
                         # organization range
                         try:
-                            if self.is_ip_in_org(saddr, org):
+                            if self.org_analyzer.is_ip_in_org(saddr, org):
                                 # self.print(f"The src IP {saddr} is in the
                                 # ranges of org {org}. Whitelisted.")
                                 return True
@@ -184,7 +200,7 @@ class Whitelist(IObservable):
 
                         # Method 2 Check if the ASN of this src IP is any of
                         # these organizations
-                        if self.is_asn_in_org(saddr, org):
+                        if self.org_analyzer.is_asn_in_org(saddr, org):
                             # this ip belongs to a whitelisted org, ignore
                             # flow
                             # self.print(f"The src IP {saddr} belong to {org}.
@@ -195,7 +211,7 @@ class Whitelist(IObservable):
                         # Method 1 Check if dst IP belongs to a whitelisted
                         # organization range
                         try:
-                            if self.is_ip_in_org(flow.daddr, org):
+                            if self.org_analyzer.is_ip_in_org(flow.daddr, org):
                                 # self.print(f"The dst IP
                                 # {column_values['daddr']} "
                                 #            f"is in the network range of org
@@ -208,7 +224,7 @@ class Whitelist(IObservable):
 
                         # Method 2 Check if the ASN of this dst IP is any of
                         # these organizations
-                        if self.is_asn_in_org(daddr, org):
+                        if self.org_analyzer.is_asn_in_org(daddr, org):
                             # this ip belongs to a whitelisted org, ignore flow
                             return True
 
@@ -218,7 +234,9 @@ class Whitelist(IObservable):
                     # to this org
                     # domains to check are usually 1 or 2 domains
                     for flow_domain in domains_to_check:
-                        if self.is_domain_in_org(flow_domain, org):
+                        if self.org_analyzer.is_domain_in_org(
+                            flow_domain, org
+                        ):
                             return True
 
         return False
@@ -294,16 +312,20 @@ class Whitelist(IObservable):
         if not victim:
             return False
 
-        if self.is_ip_whitelisted(victim.value, victim.direction, "alerts"):
+        if self.ip_analyzer.is_ip_whitelisted(
+            victim.value, victim.direction, "alerts"
+        ):
             return True
 
         if (
             victim.victim_type == IoCType.DOMAIN.name
-            and self._is_domain_whitelisted(victim.value, victim.direction)
+            and self.domain_analyzer.is_domain_whitelisted(
+                victim.value, victim.direction
+            )
         ):
             return True
 
-        if self.is_part_of_a_whitelisted_org(victim):
+        if self.org_analyzer.is_part_of_a_whitelisted_org(victim):
             return True
 
     def is_whitelisted_attacker(self, evidence: Evidence):
@@ -322,19 +344,21 @@ class Whitelist(IObservable):
 
         if (
             attacker.attacker_type == IoCType.DOMAIN.name
-            and self._is_domain_whitelisted(attacker.value, attacker.direction)
+            and self.domain_analyzer.is_domain_whitelisted(
+                attacker.value, attacker.direction
+            )
         ):
             # ############ TODO check that the wat_to_ignore matches
             return True
 
         elif attacker.attacker_type == IoCType.IP.name:
             # Check that the IP in the content of the alert is whitelisted
-            if self.is_ip_whitelisted(
+            if self.ip_analyzer.is_ip_whitelisted(
                 attacker.value, attacker.direction, "alerts"
             ):
                 return True
 
-        if self.is_part_of_a_whitelisted_org(attacker):
+        if self.org_analyzer.is_part_of_a_whitelisted_org(attacker):
             ############ TODO check that the wat_to_ignore matches
             return True
 
@@ -362,10 +386,10 @@ class Whitelist(IObservable):
          on the ip's direction and the whitelist direction
         """
         if (
-            self.ignore_alerts_from_ip(
+            self.ip_analyzer.ignore_alerts_from_ip(
                 direction, ignore_alerts, whitelist_direction
             )
-            or self.ignore_alerts_to_ip(
+            or self.ip_analyzer.ignore_alerts_to_ip(
                 direction, ignore_alerts, whitelist_direction
             )
             or self.ignore_alerts_from_both_directions(

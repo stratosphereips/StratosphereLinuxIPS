@@ -13,7 +13,8 @@ class MACAnalyzer(IWhitelistAnalyzer):
 
     def init(self): ...
 
-    def is_valid_mac(self, mac: str) -> bool:
+    @staticmethod
+    def is_valid_mac(mac: str) -> bool:
         return validators.mac_address(mac)
 
     def profile_has_whitelisted_mac(
