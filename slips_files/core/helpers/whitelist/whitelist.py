@@ -80,7 +80,7 @@ class Whitelist(IObservable):
 
     def is_whitelisted_flow(self, flow) -> bool:
         """
-        Checks if the src IP, dst IP, domain, dns answer, or  organization
+        Checks if the src IP, dst IP, domain, dns answer, or organization
          of this flow is whitelisted.
         """
         saddr = flow.saddr
@@ -93,11 +93,6 @@ class Whitelist(IObservable):
             + self.domain_analyzer.get_domains_of_flow(flow)
         )
 
-        # domains_to_check_dst: List[str] = self.get_domains_of_ip(daddr)
-        # domains_to_check_src: List[str] = self.get_domains_of_ip(saddr)
-        #
-        # check if we have whitelisted domains
-        # domains_to_check = self.get_domains_of_flow(flow)
         for domain in domains_to_check:
             if self.domain_analyzer.is_whitelisted_domain(
                 domain, saddr, daddr, "flows"
@@ -124,43 +119,33 @@ class Whitelist(IObservable):
                         return True
 
         if self.db.get_whitelist("mac"):
+            # first check the mac storewd in the db for both the saddr and
+            # the daddr
+            if self.mac_analyzer.profile_has_whitelisted_mac(
+                flow.saddr, Direction.SRC, "flows"
+            ):
+                return True
+
+            if self.mac_analyzer.profile_has_whitelisted_mac(
+                flow.daddr, Direction.DST, "flows"
+            ):
+                return True
+
             # try to get the mac address of the current flow
-            src_mac = flow.smac if hasattr(flow, "smac") else False
+            src_mac: str = flow.smac if hasattr(flow, "smac") else False
+            if self.mac_analyzer.is_mac_whitelisted(
+                src_mac, Direction.SRC, "flows"
+            ):
+                return True
 
-            if not src_mac:
-                if src_mac := self.db.get_mac_addr_from_profile(
-                    f"profile_{saddr}"
-                ):
-                    src_mac = src_mac[0]
-
-            # if src_mac and src_mac in list(whitelisted_macs.keys()):
-            #     whitelist_what_to_ignore = whitelisted_macs[src_mac][
-            #         "what_to_ignore"
-            #     ]
-            #
-            #     if not self.what_to_ignore_match_whitelist(
-            #         "flows", whitelist_what_to_ignore
-            #     ):
-            #         return False
-            #
-            #     from_ = whitelisted_macs[src_mac]["from"]
-            #     if not self.ioc_dir_match_whitelist_dir(Direction.SRC, from_):
-            #         return False
-            #
-            # dst_mac = flow.dmac if hasattr(flow, "dmac") else False
-            # if dst_mac and dst_mac in list(whitelisted_macs.keys()):
-            #     # the dst mac of this flow is whitelisted, but which direction?
-            #     from_ = whitelisted_macs[dst_mac]["from"]
-            #     what_to_ignore = whitelisted_macs[dst_mac]["what_to_ignore"]
-            #
-            #     if (
-            #         "dst" in from_ or "both" in from_
-            #     ) and self.should_ignore_flows(what_to_ignore):
-            #         # self.print(f"The dst MAC of this flow {dst_mac}
-            #         # is whitelisted")
-            #         return True
+            dst_mac = flow.dmac if hasattr(flow, "dmac") else False
+            if self.mac_analyzer.is_mac_whitelisted(
+                dst_mac, Direction.DST, "flows"
+            ):
+                return True
 
         if self.is_ignored_flow_type(flow_type):
+            # TODO what is this?
             return False
 
         if whitelisted_orgs := self.db.get_whitelist("organizations"):
