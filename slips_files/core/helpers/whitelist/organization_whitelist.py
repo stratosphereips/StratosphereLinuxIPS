@@ -118,7 +118,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             ioc.attacker_type if isinstance(ioc, Attacker) else ioc.victim_type
         )
 
-        if self.ip_analyzer.is_private_ip(ioc_type, ioc):
+        if ioc_type == "IP" and self.ip_analyzer.is_private_ip(ioc_type, ioc):
             return False
 
         whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
@@ -140,6 +140,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             }
             if cases[ioc_type](ioc.value, org):
                 return True
+
         return False
 
     def is_asn_in_org(self, ip, org):

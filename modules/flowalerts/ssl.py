@@ -183,15 +183,12 @@ class SSL(IFlowalertsAnalyzer):
             found_org_in_cn = org
 
             # check that the ip belongs to that same org
-            if self.whitelist.ip_analyzer.is_ip_in_org(daddr, org):
+            if self.whitelist.org_analyzer.is_ip_in_org(daddr, org):
                 return False
 
             # check that the domain belongs to that same org
-            if (
-                server_name
-                and self.whitelist.domain_analyzer.is_domain_in_org(
-                    server_name, org
-                )
+            if server_name and self.whitelist.org_analyzer.is_domain_in_org(
+                server_name, org
             ):
                 return False
 

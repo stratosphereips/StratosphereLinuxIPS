@@ -545,7 +545,7 @@ class ThreatIntel(IModule, URLhaus):
         threat_level: ThreatLevel = ThreatLevel(threat_level)
         description: str = (
             f"connection to a blacklisted domain {domain}. "
-            f"Description: {domain_info.get('description', '')},"
+            f"Description: {domain_info.get('description', '')}, "
             f"Found in feed: {domain_info['source']}, "
             f"Confidence: {confidence}. "
         )

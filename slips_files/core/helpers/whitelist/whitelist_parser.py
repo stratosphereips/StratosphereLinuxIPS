@@ -157,7 +157,7 @@ class WhitelistParser:
         handlers = {
             "ip": self.update_whitelisted_ips,
             "domain": self.update_whitelisted_domains,
-            "org": self.update_whitelisted_orgs,
+            "organization": self.update_whitelisted_orgs,
             "mac": self.update_whitelisted_mac_addresses,
         }
 
@@ -168,7 +168,7 @@ class WhitelistParser:
             ...
 
         entry_details = {
-            "from": parsed_line["from_"],
+            "from": parsed_line["from"],
             "what_to_ignore": parsed_line["what_to_ignore"],
         }
         handlers[entry_type](parsed_line["data"], entry_details)

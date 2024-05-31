@@ -149,7 +149,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
 
     def is_domain_whitelisted(self, domain: str, direction: Direction):
         # todo differentiate between this and is_whitelisted_Domain()
-        # extracts the parent domain
+
         parent_domain: str = utils.extract_hostname(domain)
         if not parent_domain:
             return

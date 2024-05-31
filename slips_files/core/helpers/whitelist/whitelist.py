@@ -317,11 +317,8 @@ class Whitelist(IObservable):
         ):
             return True
 
-        if (
-            victim.victim_type == IoCType.DOMAIN.name
-            and self.domain_analyzer.is_domain_whitelisted(
-                victim.value, victim.direction
-            )
+        if self.domain_analyzer.is_domain_whitelisted(
+            victim.value, victim.direction
         ):
             return True
 

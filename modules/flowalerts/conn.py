@@ -150,7 +150,7 @@ class Conn(IFlowalertsAnalyzer):
 
             # if it's an org that slips has info about (apple, fb, google,etc.),
             # check if the daddr belongs to it
-            if bool(self.whitelist.ip_analyzer.is_ip_in_org(daddr, org_name)):
+            if bool(self.whitelist.org_analyzer.is_ip_in_org(daddr, org_name)):
                 return True
 
         return False
@@ -709,11 +709,8 @@ class Conn(IFlowalertsAnalyzer):
                 return True
 
             # we have the rdns or sni of this flow , now check
-            if (
-                flow_domain
-                and self.whitelist.domain_analyzer.is_domain_in_org(
-                    flow_domain, org
-                )
+            if flow_domain and self.whitelist.org_analyzer.is_domain_in_org(
+                flow_domain, org
             ):
                 return True
 
