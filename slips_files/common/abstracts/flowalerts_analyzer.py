@@ -1,12 +1,16 @@
 from abc import ABC, abstractmethod
 
+from modules.flowalerts.set_evidence import SetEvidnceHelper
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 
 
 class IFlowalertsAnalyzer(ABC):
-    def __init__(self, db: DBManager, **kwargs):
+    def __init__(self, db: DBManager, flowalerts=None, **kwargs):
         self.db = db
+        self.flowalerts = flowalerts
+        self.whitelist = self.flowalerts.whitelist
+        self.set_evidence = SetEvidnceHelper(self.db)
         self.init(**kwargs)
 
     @property

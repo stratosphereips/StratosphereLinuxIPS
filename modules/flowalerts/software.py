@@ -1,15 +1,12 @@
 import json
 
-from modules.flowalerts.set_evidence import SetEvidnceHelper
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 
 
 class Software(IFlowalertsAnalyzer):
-    def init(self, flowalerts=None):
-        self.flowalerts = flowalerts
-        self.set_evidence = SetEvidnceHelper(self.db)
+    def init(self): ...
 
     def name(self) -> str:
         return "software_analyzer"

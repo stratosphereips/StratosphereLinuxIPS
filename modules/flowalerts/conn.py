@@ -7,7 +7,6 @@ from typing import Tuple, List, Dict
 
 import validators
 
-from modules.flowalerts.set_evidence import SetEvidnceHelper
 from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -17,9 +16,7 @@ from slips_files.common.slips_utils import utils
 
 
 class Conn(IFlowalertsAnalyzer):
-    def init(self, flowalerts=None):
-        self.flowalerts = flowalerts
-        self.set_evidence = SetEvidnceHelper(self.db)
+    def init(self):
         # get the default gateway
         self.gateway = self.db.get_gateway_ip()
         self.p2p_daddrs = {}
@@ -30,7 +27,7 @@ class Conn(IFlowalertsAnalyzer):
         # Cache list of connections that we already checked in the timer
         # thread (we waited for the dns resolution for these connections)
         self.connections_checked_in_conn_dns_timer_thread = []
-
+        self.whitelist = self.flowalerts.whitelist
         # Threshold how much time to wait when capturing in an interface,
         # to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
@@ -153,7 +150,7 @@ class Conn(IFlowalertsAnalyzer):
 
             # if it's an org that slips has info about (apple, fb, google,etc.),
             # check if the daddr belongs to it
-            if bool(self.flowalerts.whitelist.is_ip_in_org(daddr, org_name)):
+            if bool(self.whitelist.ip_analyzer.is_ip_in_org(daddr, org_name)):
                 return True
 
         return False
@@ -708,18 +705,21 @@ class Conn(IFlowalertsAnalyzer):
 
         flow_domain = rdns or sni
         for org in utils.supported_orgs:
-            if self.flowalerts.whitelist.is_ip_asn_in_org_asn(ip, org):
+            if self.whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org):
                 return True
 
             # we have the rdns or sni of this flow , now check
-            if flow_domain and self.flowalerts.whitelist.is_domain_in_org(
-                flow_domain, org
+            if (
+                flow_domain
+                and self.whitelist.domain_analyzer.is_domain_in_org(
+                    flow_domain, org
+                )
             ):
                 return True
 
             # check if the ip belongs to the range of a well known org
             # (fb, twitter, microsoft, etc.)
-            if self.flowalerts.whitelist.is_ip_in_org(ip, org):
+            if self.whitelist.org_analyzer.is_ip_in_org(ip, org):
                 return True
 
     def check_different_localnet_usage(

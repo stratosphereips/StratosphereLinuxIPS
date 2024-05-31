@@ -6,7 +6,6 @@ from typing import List
 
 import validators
 
-from modules.flowalerts.set_evidence import SetEvidnceHelper
 from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -16,12 +15,8 @@ from slips_files.common.slips_utils import utils
 
 
 class DNS(IFlowalertsAnalyzer):
-    def init(self, flowalerts=None):
-        self.flowalerts = flowalerts
-        # this helper contains all functions used to set evidence
-        self.set_evidence = SetEvidnceHelper(self.db)
+    def init(self):
         self.read_configuration()
-
         # this dict will contain the number of nxdomains
         # found in every profile
         self.nxdomains = {}
@@ -355,7 +350,7 @@ class DNS(IFlowalertsAnalyzer):
             or not query
             or query.endswith(".arpa")
             or query.endswith(".local")
-            or self.flowalerts.whitelist.is_whitelisted_domain(
+            or self.flowalerts.whitelist.domain_analyzer.is_whitelisted_domain(
                 query, saddr, daddr, "alerts"
             )
         ):

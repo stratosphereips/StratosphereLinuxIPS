@@ -1,7 +1,6 @@
 import contextlib
 import json
 
-from modules.flowalerts.set_evidence import SetEvidnceHelper
 from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -10,10 +9,9 @@ from slips_files.common.parsers.config_parser import ConfigParser
 
 
 class SSH(IFlowalertsAnalyzer):
-    def init(self, flowalerts=None):
-        self.flowalerts = flowalerts
-        self.set_evidence = SetEvidnceHelper(self.db)
-        # Cache list of connections that we already checked in the timer thread for ssh check
+    def init(self):
+        # Cache list of connections that we already checked
+        # in the timer thread for ssh check
         self.connections_checked_in_ssh_timer_thread = []
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
