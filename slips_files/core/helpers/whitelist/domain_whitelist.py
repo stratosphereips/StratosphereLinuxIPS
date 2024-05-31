@@ -147,7 +147,16 @@ class DomainAnalyzer(IWhitelistAnalyzer):
             domains.append(flow.query)
         return domains
 
-    def is_domain_whitelisted(self, domain: str, direction: Direction):
+    def is_domain_whitelisted(
+        self, domain: str, direction: Direction, should_ignore: str
+    ) -> bool:
+        """
+        Checks the whitelisted domains and tranco whitelisted domains for
+        the given domain
+        :param domain: domain to check if whitelisted
+        :param direction: is the given domain src or dst domain?
+        :param should_ignore: can be flows or alerts
+        """
         # todo differentiate between this and is_whitelisted_Domain()
 
         parent_domain: str = utils.extract_hostname(domain)
@@ -167,8 +176,12 @@ class DomainAnalyzer(IWhitelistAnalyzer):
             return False
 
         # Ignore flows or alerts?
-        what_to_ignore = whitelisted_domains[parent_domain]["what_to_ignore"]
-        if not self.manager.should_ignore_alerts(what_to_ignore):
+        whitelist_should_ignore = whitelisted_domains[parent_domain][
+            "what_to_ignore"
+        ]
+        if not self.manager.what_to_ignore_match_whitelist(
+            should_ignore, whitelist_should_ignore
+        ):
             return False
 
         # Ignore src or dst

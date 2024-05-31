@@ -9,8 +9,10 @@ from slips_files.common.slips_utils import utils
 
 
 class WhitelistParser:
-    def __init__(self, db):
+    def __init__(self, db, manager):
         self.db = db
+        # to have access to the print function
+        self.manager = manager
         self.read_configuration()
         self.init_whitelists()
         self.org_info_path = "slips_files/organizations_info/"
@@ -54,11 +56,9 @@ class WhitelistParser:
         try:
             return open(self.whitelist_path)
         except FileNotFoundError:
-            # todo do something here!!
-            ...
-            # self.print(
-            #     f"Can't find {self.whitelist_path}, whitelisting disabled."
-            # )
+            self.manager.print(
+                f"Can't find {self.whitelist_path}, whitelisting disabled."
+            )
 
     def remove_entry_from_cache_db(
         self, entry_to_remove: Dict[str, str]
@@ -73,7 +73,6 @@ class WhitelistParser:
             "from": ..
             "what_to_ignore" : ..}
         """
-        # TODO should be probably moved to mamnager
         entry_type = entry_to_remove["type"]
         cache: Dict[str, dict] = self.get_dict_for_storing_data(entry_type)
         if entry_to_remove["data"] not in cache:
@@ -163,9 +162,10 @@ class WhitelistParser:
 
         entry_type = parsed_line["type"]
         if entry_type not in handlers:
-            # todo
-            # self.print(f"{data} is not a valid {type_}.", 1, 0)
-            ...
+            self.manager.print(
+                f"{parsed_line['data']} is not a valid" f" {entry_type}.", 1, 0
+            )
+            return
 
         entry_details = {
             "from": parsed_line["from"],
@@ -266,7 +266,7 @@ class WhitelistParser:
         self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
         return org_subnets
 
-    def parse(self):
+    def parse(self) -> bool:
         """parses the whitelist specified in the slips.conf"""
         line_number = 0
 
@@ -297,13 +297,13 @@ class WhitelistParser:
                 if not parsed_line:
                     continue
             except Exception:
-                # TODO handle this
-                # self.print(
-                #     f"Line {line_number} in whitelist.conf is invalid."
-                #     f" Skipping. "
-                # )
+                self.manager.print(
+                    f"Line {line_number} in whitelist.conf is invalid."
+                    f" Skipping. "
+                )
                 continue
 
             self.call_handler(parsed_line)
 
         whitelist.close()
+        return True

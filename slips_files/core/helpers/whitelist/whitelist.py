@@ -26,7 +26,7 @@ class Whitelist(IObservable):
         self.name = "whitelist"
         self.ignored_flow_types = "arp"
         self.db = db
-        self.parser = WhitelistParser(self.db)
+        self.parser = WhitelistParser(self.db, self)
         self.ip_analyzer = IPAnalyzer(self.db, whitelist_manager=self)
         self.domain_analyzer = DomainAnalyzer(self.db, whitelist_manager=self)
         self.mac_analyzer = MACAnalyzer(self.db, whitelist_manager=self)
@@ -123,7 +123,7 @@ class Whitelist(IObservable):
                     ):
                         return True
 
-        if whitelisted_macs := self.db.get_whitelist("mac"):
+        if self.db.get_whitelist("mac"):
             # try to get the mac address of the current flow
             src_mac = flow.smac if hasattr(flow, "smac") else False
 
@@ -132,31 +132,34 @@ class Whitelist(IObservable):
                     f"profile_{saddr}"
                 ):
                     src_mac = src_mac[0]
+            # todo repritionss!!!!
 
-            if src_mac and src_mac in list(whitelisted_macs.keys()):
-                # the src mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_macs[src_mac]["from"]
-                what_to_ignore = whitelisted_macs[src_mac]["what_to_ignore"]
-
-                if (
-                    "src" in from_ or "both" in from_
-                ) and self.should_ignore_flows(what_to_ignore):
-                    # self.print(f"The source MAC of this flow
-                    # {src_mac} is whitelisted")
-                    return True
-
-            dst_mac = flow.dmac if hasattr(flow, "smac") else False
-            if dst_mac and dst_mac in list(whitelisted_macs.keys()):
-                # the dst mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_macs[dst_mac]["from"]
-                what_to_ignore = whitelisted_macs[dst_mac]["what_to_ignore"]
-
-                if (
-                    "dst" in from_ or "both" in from_
-                ) and self.should_ignore_flows(what_to_ignore):
-                    # self.print(f"The dst MAC of this flow {dst_mac}
-                    # is whitelisted")
-                    return True
+            # if src_mac and src_mac in list(whitelisted_macs.keys()):
+            #     whitelist_what_to_ignore = whitelisted_macs[src_mac][
+            #         "what_to_ignore"]
+            #
+            #     if not self.what_to_ignore_match_whitelist(
+            #         "flows", whitelist_what_to_ignore
+            #     ):
+            #         return False
+            #
+            #     from_ = whitelisted_macs[src_mac]["from"]
+            #     if not self.ioc_dir_match_whitelist_dir(Direction.SRC, from_):
+            #         return False
+            #
+            #
+            # dst_mac = flow.dmac if hasattr(flow, "dmac") else False
+            # if dst_mac and dst_mac in list(whitelisted_macs.keys()):
+            #     # the dst mac of this flow is whitelisted, but which direction?
+            #     from_ = whitelisted_macs[dst_mac]["from"]
+            #     what_to_ignore = whitelisted_macs[dst_mac]["what_to_ignore"]
+            #
+            #     if (
+            #         "dst" in from_ or "both" in from_
+            #     ) and self.should_ignore_flows(what_to_ignore):
+            #         # self.print(f"The dst MAC of this flow {dst_mac}
+            #         # is whitelisted")
+            #         return True
 
         if self.is_ignored_flow_type(flow_type):
             return False
@@ -318,11 +321,11 @@ class Whitelist(IObservable):
             return True
 
         if self.domain_analyzer.is_domain_whitelisted(
-            victim.value, victim.direction
+            victim.value, victim.direction, "alerts"
         ):
             return True
 
-        if self.org_analyzer.is_part_of_a_whitelisted_org(victim):
+        if self.org_analyzer.is_part_of_a_whitelisted_org(victim, "alerts"):
             return True
 
     def is_whitelisted_attacker(self, evidence: Evidence):
@@ -342,10 +345,9 @@ class Whitelist(IObservable):
         if (
             attacker.attacker_type == IoCType.DOMAIN.name
             and self.domain_analyzer.is_domain_whitelisted(
-                attacker.value, attacker.direction
+                attacker.value, attacker.direction, "alerts"
             )
         ):
-            # ############ TODO check that the wat_to_ignore matches
             return True
 
         elif attacker.attacker_type == IoCType.IP.name:
@@ -355,8 +357,7 @@ class Whitelist(IObservable):
             ):
                 return True
 
-        if self.org_analyzer.is_part_of_a_whitelisted_org(attacker):
-            ############ TODO check that the wat_to_ignore matches
+        if self.org_analyzer.is_part_of_a_whitelisted_org(attacker, "alerts"):
             return True
 
         return False
@@ -373,7 +374,11 @@ class Whitelist(IObservable):
         :param checking: can be flows or alerts
         :param whitelist_to_ignore: can be flows or alerts
         """
-        return checking == whitelist_to_ignore or whitelist_to_ignore == "both"
+        return (
+            checking == whitelist_to_ignore
+            or whitelist_to_ignore == "both"
+            or checking == "both"
+        )
 
     def ignore_alert(
         self, direction, ignore_alerts, whitelist_direction

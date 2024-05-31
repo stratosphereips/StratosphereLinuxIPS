@@ -108,11 +108,14 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         # search in the list of organization IPs
         return self.is_ip_in_org(ip, org)
 
-    def is_part_of_a_whitelisted_org(self, ioc):
+    def is_part_of_a_whitelisted_org(
+        self, ioc: str, what_to_ignore: str
+    ) -> bool:
         """
         Handles the checking of whitelisted evidence/alerts only
         doesn't check if we should ignore flows
         :param ioc: can be an Attacker or a Victim object
+        :param what_to_ignore: can be flows or alerts
         """
         ioc_type: str = (
             ioc.attacker_type if isinstance(ioc, Attacker) else ioc.victim_type
@@ -131,6 +134,12 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             dir_from_whitelist = whitelisted_orgs[org]["from"]
             if not self.manager.ioc_dir_match_whitelist_dir(
                 ioc.direction, dir_from_whitelist
+            ):
+                continue
+
+            whitelist_what_to_ignore = whitelisted_orgs[org]["what_to_ignore"]
+            if not self.manager.what_to_ignore_match_whitelist(
+                what_to_ignore, whitelist_what_to_ignore
             ):
                 continue
 
