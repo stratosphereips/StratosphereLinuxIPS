@@ -1,4 +1,7 @@
-from typing import TextIO, List, Dict
+import ipaddress
+import json
+import os
+from typing import TextIO, List, Dict, Optional
 import validators
 
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -12,6 +15,7 @@ class WhitelistParser:
         self.read_configuration()
         self.init_whitelists()
         self.domain_analyzer = DomainAnalyzer()
+        self.org_info_path = "slips_files/organizations_info/"
 
     def init_whitelists(self):
         """
@@ -170,6 +174,99 @@ class WhitelistParser:
             "what_to_ignore": parsed_line["what_to_ignore"],
         }
         handlers[entry_type](parsed_line["data"], entry_details)
+
+    def load_org_asn(self, org) -> Optional[List[str]]:
+        """
+        Reads the specified org's asn from slips_files/organizations_info
+         and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list containing the org's asn
+        """
+        asn_info_file = os.path.join(self.org_info_path, f"{org}_asn")
+        try:
+            org_asn_file = open(asn_info_file)
+        except (FileNotFoundError, IOError):
+            return
+
+        org_asn = []
+        while line := org_asn_file.readline():
+            line = line.replace("\n", "").strip()
+            org_asn.append(line.upper())
+        org_asn_file.close()
+        self.db.set_org_info(org, json.dumps(org_asn), "asn")
+        return org_asn
+
+    def load_org_domains(self, org):
+        """
+        Reads the specified org's domains from
+        slips_files/organizations_info
+        and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list containing the org's domains
+        """
+        domain_info_file = os.path.join(self.org_info_path, f"{org}_domains")
+        try:
+            domain_info = open(domain_info_file)
+        except (FileNotFoundError, IOError):
+            return False
+
+        domains = []
+        while line := domain_info.readline():
+            # each line will be something like this: 34.64.0.0/10
+            line = line.replace("\n", "").strip()
+            domains.append(line.lower())
+        domain_info.close()
+
+        self.db.set_org_info(org, json.dumps(domains), "domains")
+        return domains
+
+    def is_valid_network(self, network: str) -> bool:
+        try:
+            ipaddress.ip_network(network)
+            return True
+        except ValueError:
+            return False
+
+    def load_org_ips(self, org) -> Optional[Dict[str, List[str]]]:
+        """
+        Reads the specified org's info from slips_files/organizations_info
+        and stores the info in the database
+        :param org: has to be a supported org.
+         'google', 'facebook', 'twitter', etc...
+        returns a dict of this organization's subnets
+        """
+        if org not in utils.supported_orgs:
+            return
+
+        # Each file is named after the organization's name
+        org_info_file = os.path.join(self.org_info_path, org)
+        try:
+            org_info = open(org_info_file)
+        except (FileNotFoundError, IOError):
+            # there's no slips_files/organizations_info/{org} for this org
+            return
+
+        org_subnets = {}
+        # Each line of the file contains an ip range,
+        # for example: 34.64.0.0/10
+        while line := org_info.readline():
+            line = line.replace("\n", "").strip()
+
+            if not self.is_valid_network(line):
+                continue
+
+            first_octet = utils.get_first_octet(line)
+            if not first_octet:
+                continue
+
+            try:
+                org_subnets[first_octet].append(line)
+            except KeyError:
+                org_subnets[first_octet] = [line]
+
+        org_info.close()
+        self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
+        return org_subnets
 
     def parse(self):
         """parses the whitelist specified in the slips.conf"""
