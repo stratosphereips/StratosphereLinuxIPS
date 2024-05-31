@@ -37,9 +37,9 @@ class MACAnalyzer(IWhitelistAnalyzer):
         if not mac:
             return False
 
-        return self.is_mac_whitelisted(mac, direction, what_to_ignore)
+        return self.is_whitelisted(mac, direction, what_to_ignore)
 
-    def is_mac_whitelisted(
+    def is_whitelisted(
         self, mac: str, direction: Direction, what_to_ignore: str
     ):
         """

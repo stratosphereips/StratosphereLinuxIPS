@@ -35,7 +35,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
             domains.append(flow.query)
         return domains
 
-    def is_domain_whitelisted(
+    def is_whitelisted(
         self, domain: str, direction: Direction, should_ignore: str
     ) -> bool:
         """

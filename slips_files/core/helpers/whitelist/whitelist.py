@@ -5,7 +5,7 @@ from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 from slips_files.core.helpers.whitelist.mac_whitelist import MACAnalyzer
-from slips_files.core.helpers.whitelist.matcher import Matcher
+from slips_files.core.helpers.whitelist.matcher import WhitelistMatcher
 from slips_files.core.helpers.whitelist.organization_whitelist import (
     OrgAnalyzer,
 )
@@ -26,7 +26,7 @@ class Whitelist(IObservable):
         self.add_observer(self.logger)
         self.name = "whitelist"
         self.db = db
-        self.match = Matcher()
+        self.match = WhitelistMatcher()
         self.parser = WhitelistParser(self.db, self)
         self.ip_analyzer = IPAnalyzer(self.db, whitelist_manager=self)
         self.domain_analyzer = DomainAnalyzer(self.db, whitelist_manager=self)
@@ -94,32 +94,28 @@ class Whitelist(IObservable):
         )
 
         for domain in dst_domains_to_check:
-            if self.domain_analyzer.is_domain_whitelisted(
+            if self.domain_analyzer.is_whitelisted(
                 domain, Direction.DST, "flows"
             ):
                 return True
 
         for domain in src_domains_to_check:
-            if self.domain_analyzer.is_domain_whitelisted(
+            if self.domain_analyzer.is_whitelisted(
                 domain, Direction.SRC, "flows"
             ):
                 return True
 
         if self.db.get_whitelist("IPs"):
-            if self.ip_analyzer.is_ip_whitelisted(
-                saddr, Direction.SRC, "flows"
-            ):
+            if self.ip_analyzer.is_whitelisted(saddr, Direction.SRC, "flows"):
                 return True
 
-            if self.ip_analyzer.is_ip_whitelisted(
-                daddr, Direction.DST, "flows"
-            ):
+            if self.ip_analyzer.is_whitelisted(daddr, Direction.DST, "flows"):
                 return True
 
             for answer in self.ip_analyzer.extract_dns_answers(flow):
                 # the direction doesn't matter here
                 for direction in [Direction.SRC, Direction.DST]:
-                    if self.ip_analyzer.is_ip_whitelisted(
+                    if self.ip_analyzer.is_whitelisted(
                         answer, direction, "flows"
                     ):
                         return True
@@ -139,13 +135,13 @@ class Whitelist(IObservable):
 
             # try to get the mac address of the current flow
             src_mac: str = flow.smac if hasattr(flow, "smac") else False
-            if self.mac_analyzer.is_mac_whitelisted(
+            if self.mac_analyzer.is_whitelisted(
                 src_mac, Direction.SRC, "flows"
             ):
                 return True
 
             dst_mac = flow.dmac if hasattr(flow, "dmac") else False
-            if self.mac_analyzer.is_mac_whitelisted(
+            if self.mac_analyzer.is_whitelisted(
                 dst_mac, Direction.DST, "flows"
             ):
                 return True
@@ -225,12 +221,12 @@ class Whitelist(IObservable):
         if not victim:
             return False
 
-        if self.ip_analyzer.is_ip_whitelisted(
+        if self.ip_analyzer.is_whitelisted(
             victim.value, victim.direction, "alerts"
         ):
             return True
 
-        if self.domain_analyzer.is_domain_whitelisted(
+        if self.domain_analyzer.is_whitelisted(
             victim.value, victim.direction, "alerts"
         ):
             return True
@@ -261,7 +257,7 @@ class Whitelist(IObservable):
 
         if (
             attacker.attacker_type == IoCType.DOMAIN.name
-            and self.domain_analyzer.is_domain_whitelisted(
+            and self.domain_analyzer.is_whitelisted(
                 attacker.value, attacker.direction, "alerts"
             )
         ):
@@ -269,7 +265,7 @@ class Whitelist(IObservable):
 
         elif attacker.attacker_type == IoCType.IP.name:
             # Check that the IP in the content of the alert is whitelisted
-            if self.ip_analyzer.is_ip_whitelisted(
+            if self.ip_analyzer.is_whitelisted(
                 attacker.value, attacker.direction, "alerts"
             ):
                 return True

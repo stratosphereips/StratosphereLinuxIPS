@@ -124,7 +124,6 @@ class OrgAnalyzer(IWhitelistAnalyzer):
     def is_part_of_a_whitelisted_org(
         self, ioc, ioc_type: IoCType, direction: Direction, what_to_ignore: str
     ) -> bool:
-        # TODO confirm thatwe should only call this one from the outside\!
         """
         Handles the checking of whitelisted evidence/alerts only
         doesn't check if we should ignore flows

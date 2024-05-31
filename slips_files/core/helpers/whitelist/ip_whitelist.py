@@ -50,7 +50,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
 
         return domains
 
-    def is_ip_whitelisted(
+    def is_whitelisted(
         self, ip: str, direction: Direction, what_to_ignore: str
     ) -> bool:
         """

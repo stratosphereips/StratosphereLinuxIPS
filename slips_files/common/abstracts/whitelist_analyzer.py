@@ -33,3 +33,6 @@ class IWhitelistAnalyzer(ABC):
         this init will have access to all keyword args passes when
         initializing the module
         """
+
+    @abstractmethod
+    def is_whitelisted(self, *args): ...
