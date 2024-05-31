@@ -186,32 +186,6 @@ class Whitelist(IObservable):
 
         return False
 
-    def should_ignore_from(self, direction) -> bool:
-        """
-        Returns true if the user wants to whitelist alerts/flows from
-         a source e.g(ip, org, mac, etc)
-        """
-        return "src" in direction or "both" in direction
-
-    def should_ignore_to(self, direction) -> bool:
-        """
-        Returns true if the user wants to whitelist alerts/flows to
-        this source(ip, org, mac, etc)
-        """
-        return "dst" in direction or "both" in direction
-
-    def should_ignore_alerts(self, what_to_ignore) -> bool:
-        """
-        returns true we if the user wants to ignore alerts
-        """
-        return "alerts" in what_to_ignore or "both" in what_to_ignore
-
-    def should_ignore_flows(self, what_to_ignore) -> bool:
-        """
-        returns true we if the user wants to ignore alerts
-        """
-        return "flows" in what_to_ignore or "both" in what_to_ignore
-
     def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
         """
         returns the whitelisted ips, domains, org from the db
@@ -318,9 +292,9 @@ class Whitelist(IObservable):
 
         return False
 
-    def what_to_ignore_match_whitelist(
+    def does_what_to_ignore_match_whitelist(
         self, checking: str, whitelist_to_ignore: str
-    ):
+    ) -> bool:
         """
         returns True if we're checking a flow, and the whitelist has
         'flows' or 'both' as the type to ignore
@@ -332,32 +306,7 @@ class Whitelist(IObservable):
         """
         return checking == whitelist_to_ignore or whitelist_to_ignore == "both"
 
-    def ignore_alert(
-        self, direction, ignore_alerts, whitelist_direction
-    ) -> bool:
-        """
-        determines whether or not we should ignore the given alert based
-         on the ip's direction and the whitelist direction
-        """
-        if (
-            self.ip_analyzer.ignore_alerts_from_ip(
-                direction, ignore_alerts, whitelist_direction
-            )
-            or self.ip_analyzer.ignore_alerts_to_ip(
-                direction, ignore_alerts, whitelist_direction
-            )
-            or self.ignore_alerts_from_both_directions(
-                ignore_alerts, whitelist_direction
-            )
-        ):
-            return True
-
-    def ignore_alerts_from_both_directions(
-        self, ignore_alerts: bool, whitelist_direction: str
-    ) -> bool:
-        return ignore_alerts and "both" in whitelist_direction
-
-    def ioc_dir_match_whitelist_dir(
+    def does_ioc_direction_match_whitelist(
         self,
         ioc_direction: Direction,
         dir_from_whitelist: str,

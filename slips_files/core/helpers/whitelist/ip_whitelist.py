@@ -71,45 +71,17 @@ class IPAnalyzer(IWhitelistAnalyzer):
         # from_ can be: src, dst, both
         # what_to_ignore can be: alerts or flows or both
         whitelist_direction: str = whitelisted_ips[ip]["from"]
-        if not self.manager.ioc_dir_match_whitelist_dir(
+        if not self.manager.does_ioc_direction_match_whitelist(
             direction, whitelist_direction
         ):
             return False
 
         ignore: str = whitelisted_ips[ip]["what_to_ignore"]
-        if not self.manager.what_to_ignore_match_whitelist(
+        if not self.manager.does_what_to_ignore_match_whitelist(
             what_to_ignore, ignore
         ):
             return False
         return True
-
-    def ignore_alerts_from_ip(
-        self,
-        direction: Direction,
-        ignore_alerts: bool,
-        whitelist_direction: str,
-    ) -> bool:
-        if not ignore_alerts:
-            return False
-
-        if direction == Direction.SRC and self.manager.should_ignore_from(
-            whitelist_direction
-        ):
-            return True
-
-    def ignore_alerts_to_ip(
-        self,
-        direction: Direction,
-        ignore_alerts: bool,
-        whitelist_direction: str,
-    ) -> bool:
-        if not ignore_alerts:
-            return False
-
-        if direction == Direction.DST and self.manager.should_ignore_to(
-            whitelist_direction
-        ):
-            return True
 
     @staticmethod
     def is_private_ip(ioc_type, ioc: Union[Attacker, Victim]):

@@ -147,13 +147,13 @@ class OrgAnalyzer(IWhitelistAnalyzer):
 
         for org in whitelisted_orgs:
             dir_from_whitelist = whitelisted_orgs[org]["from"]
-            if not self.manager.ioc_dir_match_whitelist_dir(
+            if not self.manager.does_ioc_direction_match_whitelist(
                 direction, dir_from_whitelist
             ):
                 continue
 
             whitelist_what_to_ignore = whitelisted_orgs[org]["what_to_ignore"]
-            if not self.manager.what_to_ignore_match_whitelist(
+            if not self.manager.does_what_to_ignore_match_whitelist(
                 what_to_ignore, whitelist_what_to_ignore
             ):
                 continue

@@ -65,14 +65,14 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         whitelist_should_ignore = whitelisted_domains[parent_domain][
             "what_to_ignore"
         ]
-        if not self.manager.what_to_ignore_match_whitelist(
+        if not self.manager.does_what_to_ignore_match_whitelist(
             should_ignore, whitelist_should_ignore
         ):
             return False
 
         # Ignore src or dst
         dir_from_whitelist: str = whitelisted_domains[parent_domain]["from"]
-        if not self.manager.ioc_dir_match_whitelist_dir(
+        if not self.manager.does_ioc_direction_match_whitelist(
             direction, dir_from_whitelist
         ):
             return False

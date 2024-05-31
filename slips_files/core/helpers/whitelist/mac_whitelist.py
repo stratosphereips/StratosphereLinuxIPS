@@ -56,13 +56,13 @@ class MACAnalyzer(IWhitelistAnalyzer):
             return False
 
         whitelist_direction: str = whitelisted_macs[mac]["from"]
-        if not self.manager.ioc_dir_match_whitelist_dir(
+        if not self.manager.does_ioc_direction_match_whitelist(
             direction, whitelist_direction
         ):
             return False
 
         whitelist_what_to_ignore: str = whitelisted_macs[mac]["what_to_ignore"]
-        if not self.manager.what_to_ignore_match_whitelist(
+        if not self.manager.does_what_to_ignore_match_whitelist(
             what_to_ignore, whitelist_what_to_ignore
         ):
             return False
