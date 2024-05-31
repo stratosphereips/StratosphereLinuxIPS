@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.helpers.whitelist.matcher import WhitelistMatcher
 
 
 class IWhitelistAnalyzer(ABC):
@@ -20,6 +21,7 @@ class IWhitelistAnalyzer(ABC):
         self.db = db
         # the file that manages all analyzers
         self.manager = whitelist_manager
+        self.match = WhitelistMatcher()
         self.init(**kwargs)
 
     @abstractmethod

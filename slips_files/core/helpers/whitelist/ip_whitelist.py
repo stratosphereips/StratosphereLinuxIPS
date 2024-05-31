@@ -71,15 +71,11 @@ class IPAnalyzer(IWhitelistAnalyzer):
         # from_ can be: src, dst, both
         # what_to_ignore can be: alerts or flows or both
         whitelist_direction: str = whitelisted_ips[ip]["from"]
-        if not self.manager.does_ioc_direction_match_whitelist(
-            direction, whitelist_direction
-        ):
+        if not self.match.direction(direction, whitelist_direction):
             return False
 
         ignore: str = whitelisted_ips[ip]["what_to_ignore"]
-        if not self.manager.does_what_to_ignore_match_whitelist(
-            what_to_ignore, ignore
-        ):
+        if not self.match.what_to_ignore(what_to_ignore, ignore):
             return False
         return True
 

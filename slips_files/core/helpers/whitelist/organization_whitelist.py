@@ -75,8 +75,8 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 return
             ip_obj = ipaddress.ip_address(ip)
             # organization IPs are sorted by first octet for faster search
-            for range in org_subnets.get(first_octet, []):
-                if ip_obj in ipaddress.ip_network(range):
+            for range_ in org_subnets.get(first_octet, []):
+                if ip_obj in ipaddress.ip_network(range_):
                     return True
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have
@@ -147,13 +147,11 @@ class OrgAnalyzer(IWhitelistAnalyzer):
 
         for org in whitelisted_orgs:
             dir_from_whitelist = whitelisted_orgs[org]["from"]
-            if not self.manager.does_ioc_direction_match_whitelist(
-                direction, dir_from_whitelist
-            ):
+            if not self.match.direction(direction, dir_from_whitelist):
                 continue
 
             whitelist_what_to_ignore = whitelisted_orgs[org]["what_to_ignore"]
-            if not self.manager.does_what_to_ignore_match_whitelist(
+            if not self.match.what_to_ignore(
                 what_to_ignore, whitelist_what_to_ignore
             ):
                 continue

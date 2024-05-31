@@ -5,6 +5,7 @@ from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 from slips_files.core.helpers.whitelist.mac_whitelist import MACAnalyzer
+from slips_files.core.helpers.whitelist.matcher import Matcher
 from slips_files.core.helpers.whitelist.organization_whitelist import (
     OrgAnalyzer,
 )
@@ -24,8 +25,8 @@ class Whitelist(IObservable):
         self.logger = logger
         self.add_observer(self.logger)
         self.name = "whitelist"
-        self.ignored_flow_types = "arp"
         self.db = db
+        self.match = Matcher()
         self.parser = WhitelistParser(self.db, self)
         self.ip_analyzer = IPAnalyzer(self.db, whitelist_manager=self)
         self.domain_analyzer = DomainAnalyzer(self.db, whitelist_manager=self)
@@ -70,13 +71,6 @@ class Whitelist(IObservable):
                 "debug": debug,
             }
         )
-
-    def is_ignored_flow_type(self, flow_type) -> bool:
-        """
-        Function reduce the number of checks we make if we don't need to check this type of flow
-        """
-        if flow_type in self.ignored_flow_types:
-            return True
 
     def is_whitelisted_flow(self, flow) -> bool:
         """
@@ -156,7 +150,7 @@ class Whitelist(IObservable):
             ):
                 return True
 
-        if self.is_ignored_flow_type(flow_type):
+        if self.match.ignored_flow_type(flow_type):
             # TODO what is this?
             return False
 
@@ -291,49 +285,3 @@ class Whitelist(IObservable):
             return True
 
         return False
-
-    def does_what_to_ignore_match_whitelist(
-        self, checking: str, whitelist_to_ignore: str
-    ) -> bool:
-        """
-        returns True if we're checking a flow, and the whitelist has
-        'flows' or 'both' as the type to ignore
-        OR
-        if we're checking an alert and the whitelist has 'alerts' or 'both' as the
-        type to ignore
-        :param checking: can be flows or alerts
-        :param whitelist_to_ignore: can be flows or alerts
-        """
-        return checking == whitelist_to_ignore or whitelist_to_ignore == "both"
-
-    def does_ioc_direction_match_whitelist(
-        self,
-        ioc_direction: Direction,
-        dir_from_whitelist: str,
-    ) -> bool:
-        """
-        Checks if the ioc direction given (ioc_direction) matches the
-        direction
-        that we
-        should whitelist taken from whitelist.conf (dir_from_whitelist)
-
-        for example
-        if dir_to_check is srs and the dir_from whitelist is both,
-        this function returns true
-
-        :param ioc_direction: Direction obj, this is the dir of the ioc
-        that we wanna check
-        :param dir_from_whitelist: the direction read from whitelist.conf.
-        can be "src", "dst" or "both":
-        """
-        if dir_from_whitelist == "both":
-            return True
-
-        whitelist_src = (
-            "src" in dir_from_whitelist and ioc_direction == Direction.SRC
-        )
-        whitelist_dst = (
-            "dst" in dir_from_whitelist and ioc_direction == Direction.DST
-        )
-
-        return whitelist_src or whitelist_dst
