@@ -108,9 +108,34 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
         return org.upper() in ip_asn or ip_asn == org_asn
 
-    def is_whitelisted(self, org: str) -> bool:
-        """checks if the given org is whitelisted"""
-        return org in self.manager.get_all_whitelist(org)
+    def is_whitelisted(self, flow) -> bool:
+        """checks if the given flow is whitelisted"""
+        flow_dns_answers: List[str] = self.ip_analyzer.extract_dns_answers(
+            flow
+        )
+
+        for domain in self.domain_analyzer.get_dst_domains_of_flow(flow):
+            if self.is_part_of_a_whitelisted_org(
+                domain, IoCType.DOMAIN, Direction.DST, "flows"
+            ):
+                return True
+
+        for domain in self.domain_analyzer.get_src_domains_of_flow(flow):
+            if self.is_part_of_a_whitelisted_org(
+                domain, IoCType.DOMAIN, Direction.SRC, "flows"
+            ):
+                return True
+
+        if self.is_part_of_a_whitelisted_org(
+            flow.saddr, IoCType.IP, Direction.SRC, "flows"
+        ):
+            return True
+
+        for ip in [flow.daddr] + flow_dns_answers:
+            if self.is_part_of_a_whitelisted_org(
+                ip, IoCType.IP, Direction.DST, "flows"
+            ):
+                return True
 
     def is_ip_part_of_a_whitelisted_org(self, ip: str, org: str) -> bool:
         """

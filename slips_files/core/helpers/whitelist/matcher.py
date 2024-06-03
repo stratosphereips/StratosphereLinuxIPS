@@ -16,9 +16,15 @@ class WhitelistMatcher:
     """
 
     def __init__(self):
-        self.ignored_flow_types = "arp"
+        # Checking if a flow belongs to a whitelisted org is costly. and arp
+        # flows are a lot, so we are not checking them.
+        self.ignored_flow_types = ["arp"]
 
-    def ignored_flow_type(self, flow_type) -> bool:
+    def is_ignored_flow_type(self, flow_type) -> bool:
+        """
+        returns true if the given type shouldn't be checked against the
+        whitelisted organizations
+        """
         return flow_type in self.ignored_flow_types
 
     def what_to_ignore(self, checking: str, whitelist_to_ignore: str) -> bool:
