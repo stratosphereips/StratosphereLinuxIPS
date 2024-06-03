@@ -72,25 +72,13 @@ class Whitelist(IObservable):
             }
         )
 
-    def is_whitelisted_flow(self, flow) -> bool:
-        """
-        Checks if the src IP, dst IP, domain, dns answer, or organization
-         of this flow is whitelisted.
-        """
-        saddr = flow.saddr
-        daddr = flow.daddr
-        flow_type = flow.type_
-
-        # get the domains of the IPs this flow
-        dst_domains_to_check: List[str] = self.ip_analyzer.get_domains_of_ip(
-            daddr
-        ) + self.domain_analyzer.get_dst_domains_of_flow(flow)
-        src_domains_to_check: List[str] = self.ip_analyzer.get_domains_of_ip(
-            saddr
+    def _check_if_whitelisted_domains_of_flow(self, flow) -> bool:
+        dst_domains_to_check: List[str] = (
+            self.domain_analyzer.get_dst_domains_of_flow(flow)
         )
 
-        flow_dns_answers: List[str] = self.ip_analyzer.extract_dns_answers(
-            flow
+        src_domains_to_check: List[str] = (
+            self.domain_analyzer.get_src_domains_of_flow(flow)
         )
 
         for domain in dst_domains_to_check:
@@ -105,76 +93,66 @@ class Whitelist(IObservable):
             ):
                 return True
 
-        if self.db.get_whitelist("IPs"):
-            if self.ip_analyzer.is_whitelisted(saddr, Direction.SRC, "flows"):
+    def _flow_contains_whitelisted_ip(self, flow):
+        """
+        Returns True if any of the flow ips are whitelisted.
+        checks the saddr, the daddr, and the dns answer
+        """
+        if self.ip_analyzer.is_whitelisted(flow.saddr, Direction.SRC, "flows"):
+            return True
+
+        if self.ip_analyzer.is_whitelisted(flow.daddr, Direction.DST, "flows"):
+            return True
+
+        for answer in self.ip_analyzer.extract_dns_answers(flow):
+            if self.ip_analyzer.is_whitelisted(answer, Direction.DST, "flows"):
                 return True
+        return False
 
-            if self.ip_analyzer.is_whitelisted(daddr, Direction.DST, "flows"):
-                return True
+    def _flow_contains_whitelisted_mac(self, flow) -> bool:
+        """
+        Returns True if any of the flow MAC addresses are whitelisted.
+        checks the MAC of the saddr, and the daddr
+        """
+        if self.mac_analyzer.profile_has_whitelisted_mac(
+            flow.saddr, Direction.SRC, "flows"
+        ):
+            return True
 
-            for answer in self.ip_analyzer.extract_dns_answers(flow):
-                # the direction doesn't matter here
-                for direction in [Direction.SRC, Direction.DST]:
-                    if self.ip_analyzer.is_whitelisted(
-                        answer, direction, "flows"
-                    ):
-                        return True
+        if self.mac_analyzer.profile_has_whitelisted_mac(
+            flow.daddr, Direction.DST, "flows"
+        ):
+            return True
 
-        if self.db.get_whitelist("mac"):
-            # first check the mac storewd in the db for both the saddr and
-            # the daddr
-            if self.mac_analyzer.profile_has_whitelisted_mac(
-                flow.saddr, Direction.SRC, "flows"
-            ):
-                return True
+        # try to get the mac address of the current flow
+        src_mac: str = flow.smac if hasattr(flow, "smac") else False
+        if self.mac_analyzer.is_whitelisted(src_mac, Direction.SRC, "flows"):
+            return True
 
-            if self.mac_analyzer.profile_has_whitelisted_mac(
-                flow.daddr, Direction.DST, "flows"
-            ):
-                return True
+        dst_mac = flow.dmac if hasattr(flow, "dmac") else False
+        if self.mac_analyzer.is_whitelisted(dst_mac, Direction.DST, "flows"):
+            return True
+        return False
 
-            # try to get the mac address of the current flow
-            src_mac: str = flow.smac if hasattr(flow, "smac") else False
-            if self.mac_analyzer.is_whitelisted(
-                src_mac, Direction.SRC, "flows"
-            ):
-                return True
+    def is_whitelisted_flow(self, flow) -> bool:
+        """
+        Checks if the src IP, dst IP, domain, dns answer, or organization
+         of this flow is whitelisted.
+        """
 
-            dst_mac = flow.dmac if hasattr(flow, "dmac") else False
-            if self.mac_analyzer.is_whitelisted(
-                dst_mac, Direction.DST, "flows"
-            ):
-                return True
+        if self._check_if_whitelisted_domains_of_flow(flow):
+            return True
 
-        if self.match.ignored_flow_type(flow_type):
-            # TODO what is this?
+        if self._flow_contains_whitelisted_ip(flow):
+            return True
+
+        if self._flow_contains_whitelisted_mac(flow):
+            return True
+
+        if self.match.is_ignored_flow_type(flow.type_):
             return False
 
-        # todo just check if the key exists in the db instead of
-        #  retrievinbg all these values and doing nothing with them
-        if self.db.get_whitelist("organizations"):
-            for domain in dst_domains_to_check:
-                self.org_analyzer.is_part_of_a_whitelisted_org(
-                    domain, IoCType.DOMAIN, Direction.DST, "flows"
-                )
-
-            for domain in src_domains_to_check:
-                self.org_analyzer.is_part_of_a_whitelisted_org(
-                    domain, IoCType.DOMAIN, Direction.SRC, "flows"
-                )
-
-            # DNS answers are not src or dstips, so check them as both
-            for ip in [flow.saddr] + flow_dns_answers:
-                self.org_analyzer.is_part_of_a_whitelisted_org(
-                    ip, IoCType.IP, Direction.SRC, "flows"
-                )
-
-            for ip in [flow.daddr] + flow_dns_answers:
-                self.org_analyzer.is_part_of_a_whitelisted_org(
-                    ip, IoCType.IP, Direction.DST, "flows"
-                )
-
-        return False
+        return self.org_analyzer.is_whitelisted(flow)
 
     def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
         """
