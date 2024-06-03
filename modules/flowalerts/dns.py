@@ -12,6 +12,7 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
 )
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.evidence_structure.evidence import Direction
 
 
 class DNS(IFlowalertsAnalyzer):
@@ -329,9 +330,7 @@ class DNS(IFlowalertsAnalyzer):
                 # avoid FP "DNS without connection" evidence
                 self.db.delete_dns_resolution(answer)
 
-    def detect_dga(
-        self, rcode_name, query, stime, daddr, profileid, twid, uid
-    ):
+    def detect_dga(self, rcode_name, query, stime, profileid, twid, uid):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         alerts when 10 15 20 etc. nxdomains are found
@@ -340,7 +339,6 @@ class DNS(IFlowalertsAnalyzer):
         if not rcode_name:
             return
 
-        saddr = profileid.split("_")[-1]
         # check whitelisted queries because we
         # don't want to count nxdomains to cymru.com or
         # spamhaus as DGA as they're made
@@ -350,8 +348,8 @@ class DNS(IFlowalertsAnalyzer):
             or not query
             or query.endswith(".arpa")
             or query.endswith(".local")
-            or self.flowalerts.whitelist.domain_analyzer.is_whitelisted_domain(
-                query, saddr, daddr, "alerts"
+            or self.flowalerts.whitelist.domain_analyzer.is_whitelisted(
+                query, Direction.SRC, "alerts"
             )
         ):
             return False
@@ -473,7 +471,7 @@ class DNS(IFlowalertsAnalyzer):
             domain, answers, profileid, twid, stime, uid
         )
 
-        self.detect_dga(rcode_name, domain, stime, daddr, profileid, twid, uid)
+        self.detect_dga(rcode_name, domain, stime, profileid, twid, uid)
 
         # TODO: not sure how to make sure IP_info is
         #  done adding domain age to the db or not
