@@ -17,14 +17,34 @@ class DomainAnalyzer(IWhitelistAnalyzer):
     def init(self):
         self.ip_analyzer = IPAnalyzer(self.db)
 
+    def get_domains_of_ip(self, ip: str) -> List[str]:
+        """
+        returns the domains of this IP, e.g. the DNS resolution, the SNI, etc.
+        """
+        domains = []
+        if ip_data := self.db.get_ip_info(ip):
+            if sni_info := ip_data.get("SNI", [{}])[0]:
+                domains.append(sni_info.get("server_name", ""))
+
+        try:
+            resolution = self.db.get_dns_resolution(ip).get("domains", [])
+            domains.extend(iter(resolution))
+        except (KeyError, TypeError):
+            pass
+
+        return domains
+
+    def get_src_domains_of_flow(self, flow) -> List[str]:
+        return self.get_domains_of_ip(flow.daddr)
+
     def get_dst_domains_of_flow(self, flow) -> List[str]:
         """
-        return sthe domains of flow depending on the flow type
+        returns the domains of flow depending on the flow type
         for example, HTTP flow have their domains in the host field
         SSL flows have the host in the SNI field
         etc.
         """
-        domains = []
+        domains: List[str] = self.get_domains_of_ip(flow.daddr)
         if flow.type_ == "ssl":
             domains.append(flow.server_name)
         elif flow.type_ == "http":
@@ -45,6 +65,10 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         :param direction: is the given domain src or dst domain?
         :param should_ignore: can be flows or alerts
         """
+
+        if not isinstance(domain, str):
+            return False
+
         parent_domain: str = utils.extract_hostname(domain)
         if not parent_domain:
             return False

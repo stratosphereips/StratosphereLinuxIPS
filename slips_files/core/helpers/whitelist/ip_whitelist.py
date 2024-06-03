@@ -23,29 +23,12 @@ class IPAnalyzer(IWhitelistAnalyzer):
         return flow.answers if flow.type_ == "dns" else []
 
     @staticmethod
-    def is_valid_ip(ip: str):
+    def is_valid_ip(ip: str) -> bool:
         try:
             ipaddress.ip_address(ip)
             return True
         except ValueError:
             return False
-
-    def get_domains_of_ip(self, ip: str) -> List[str]:
-        """
-        returns the domains of this IP, e.g. the DNS resolution, the SNI, etc.
-        """
-        domains = []
-        if ip_data := self.db.get_ip_info(ip):
-            if sni_info := ip_data.get("SNI", [{}])[0]:
-                domains.append(sni_info.get("server_name", ""))
-
-        try:
-            resolution = self.db.get_dns_resolution(ip).get("domains", [])
-            domains.extend(iter(resolution))
-        except (KeyError, TypeError):
-            pass
-
-        return domains
 
     def is_whitelisted(
         self, ip: str, direction: Direction, what_to_ignore: str
