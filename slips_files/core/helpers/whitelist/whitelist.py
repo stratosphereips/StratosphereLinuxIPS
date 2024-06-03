@@ -276,7 +276,10 @@ class Whitelist(IObservable):
                 return True
 
         if self.org_analyzer.is_part_of_a_whitelisted_org(
-            attacker, attacker.attacker_type, attacker.direction, "alerts"
+            attacker.value,
+            attacker.attacker_type,
+            attacker.direction,
+            "alerts",
         ):
             return True
 

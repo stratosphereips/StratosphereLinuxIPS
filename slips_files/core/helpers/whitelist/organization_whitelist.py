@@ -108,6 +108,10 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
         return org.upper() in ip_asn or ip_asn == org_asn
 
+    def is_whitelisted(self, org: str) -> bool:
+        """checks if the given org is whitelisted"""
+        return org in self.manager.get_all_whitelist(org)
+
     def is_ip_part_of_a_whitelisted_org(self, ip: str, org: str) -> bool:
         """
         returns true if the given ip is a part of the given org
@@ -122,7 +126,11 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         return self.is_ip_in_org(ip, org)
 
     def is_part_of_a_whitelisted_org(
-        self, ioc, ioc_type: IoCType, direction: Direction, what_to_ignore: str
+        self,
+        ioc: str,
+        ioc_type: IoCType,
+        direction: Direction,
+        what_to_ignore: str,
     ) -> bool:
         """
         Handles the checking of whitelisted evidence/alerts only
@@ -133,9 +141,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         :param what_to_ignore: can be flows or alerts
         """
 
-        if ioc_type.name == "IP" and self.ip_analyzer.is_private_ip(
-            ioc_type, ioc
-        ):
+        if ioc_type == "IP" and self.ip_analyzer.is_private_ip(ioc):
             return False
 
         whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
@@ -159,7 +165,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 IoCType.DOMAIN.name: self.is_domain_in_org,
                 IoCType.IP.name: self.is_ip_part_of_a_whitelisted_org,
             }
-            if cases[ioc_type](ioc.value, org):
+            if cases[ioc_type](ioc, org):
                 return True
 
         return False

@@ -1,13 +1,10 @@
 import ipaddress
-from typing import List, Dict, Union
+from typing import List, Dict
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Direction,
-    Attacker,
-    Victim,
-    IoCType,
 )
 
 
@@ -80,11 +77,6 @@ class IPAnalyzer(IWhitelistAnalyzer):
         return True
 
     @staticmethod
-    def is_private_ip(ioc_type, ioc: Union[Attacker, Victim]):
-        """checks if the given ioc is an ip and is private"""
-        if ioc_type != IoCType.IP.name:
-            return False
-
-        ip_obj = ipaddress.ip_address(ioc.value)
-        if utils.is_private_ip(ip_obj):
-            return True
+    def is_private_ip(ip: str) -> bool:
+        ip_obj = ipaddress.ip_address(ip)
+        return utils.is_private_ip(ip_obj)
