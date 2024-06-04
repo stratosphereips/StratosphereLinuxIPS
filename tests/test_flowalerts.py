@@ -1,5 +1,7 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
 
+from unittest.mock import Mock
+
 from tests.module_factory import ModuleFactory
 import json
 from numpy import arange
@@ -156,14 +158,14 @@ def test_check_multiple_ssh_versions(mock_db):
 def test_detect_dga(mock_db):
     flowalerts = ModuleFactory().create_dns_analyzer_obj(mock_db)
     rcode_name = "NXDOMAIN"
-    # arbitrary ip to be able to call detect_DGA
-    daddr = "10.0.0.1"
+    flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock()
+    flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = False
+
     for i in range(10):
         dga_detected = flowalerts.detect_dga(
             rcode_name,
             f"example{i}.com",
             timestamp,
-            daddr,
             profileid,
             twid,
             uid,
