@@ -935,15 +935,6 @@ class Conn(IFlowalertsAnalyzer):
                 flow_type, smac, profileid, twid, uid, timestamp
             )
 
-            if "08:00:07:f8:3d:02" in smac:
-                print("@@@@@@@@@@@@@@@@ setting evidence!")
-                self.check_device_changing_ips(
-                    flow_type, smac, profileid, twid, uid, timestamp
-                )
-                self.set_evidence.device_changing_ips(
-                    smac, "8.8.8.8", profileid, twid, uid, timestamp
-                )
-
         if msg := self.flowalerts.get_msg("tw_closed"):
             profileid_tw = msg["data"].split("_")
             profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
