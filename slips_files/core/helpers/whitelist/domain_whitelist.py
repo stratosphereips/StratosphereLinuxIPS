@@ -35,7 +35,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         return domains
 
     def get_src_domains_of_flow(self, flow) -> List[str]:
-        return self.get_domains_of_ip(flow.daddr)
+        return self.get_domains_of_ip(flow.saddr)
 
     def get_dst_domains_of_flow(self, flow) -> List[str]:
         """
@@ -47,10 +47,9 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         domains: List[str] = self.get_domains_of_ip(flow.daddr)
         if flow.type_ == "ssl":
             domains.append(flow.server_name)
+            domains.append(flow.subject.replace("CN=", ""))
         elif flow.type_ == "http":
             domains.append(flow.host)
-        elif flow.type_ == "ssl":
-            domains.append(flow.subject.replace("CN=", ""))
         elif flow.type_ == "dns":
             domains.append(flow.query)
         return domains

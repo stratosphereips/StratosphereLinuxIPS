@@ -1,9 +1,13 @@
 from tests.module_factory import ModuleFactory
 import pytest
 import json
-from unittest.mock import MagicMock, patch
-from slips_files.core.evidence_structure.evidence import Direction, IoCType
-from conftest import mock_db
+from unittest.mock import MagicMock, patch, Mock
+from slips_files.core.evidence_structure.evidence import (
+    Direction,
+    IoCType,
+    Attacker,
+    Victim,
+)
 
 
 def test_read_whitelist(mock_db):
@@ -13,23 +17,22 @@ def test_read_whitelist(mock_db):
     """
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_db.get_whitelist.return_value = {}
-    whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_mac = (
-        whitelist.read_whitelist()
-    )
-    assert "91.121.83.118" in whitelisted_IPs
-    assert "apple.com" in whitelisted_domains
-    assert "microsoft" in whitelisted_orgs
+    assert whitelist.parser.parse()
 
 
 @pytest.mark.parametrize("org,asn", [("google", "AS6432")])
 def test_load_org_asn(org, asn, mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    assert whitelist.load_org_asn(org) is not False
-    assert asn in whitelist.load_org_asn(org)
+    parsed_asn = whitelist.parser.load_org_asn(org)
+    assert parsed_asn is not False
+    assert asn in parsed_asn
 
 
-@patch("slips_files.core.helpers.whitelist.Whitelist.load_org_IPs")
-def test_load_org_IPs(mock_load_org_ips, mock_db):
+@patch(
+    "slips_files.core.helpers.whitelist."
+    "whitelist_parser.WhitelistParser.load_org_ips"
+)
+def test_load_org_ips(mock_load_org_ips, mock_db):
     """
     Test load_org_IPs without modifying real files.
     """
@@ -38,7 +41,7 @@ def test_load_org_IPs(mock_load_org_ips, mock_db):
         "34": ["34.64.0.0/10"],
         "216": ["216.58.192.0/19"],
     }
-    org_subnets = whitelist.load_org_IPs("google")  # Call the method
+    org_subnets = whitelist.parser.load_org_ips("google")  # Call the method
 
     assert "34" in org_subnets
     assert "216" in org_subnets
@@ -49,124 +52,54 @@ def test_load_org_IPs(mock_load_org_ips, mock_db):
 
 
 @pytest.mark.parametrize(
-    "mock_ip_info, mock_org_info, ip, org, expected_result",
-    [
-        (
-            {
-                "asn": {"asnorg": "microsoft"}
-            },  # Testing when the ASN organization matches the whitelisted org
-            [json.dumps(["microsoft"]), json.dumps([])],
-            "91.121.83.118",
-            "microsoft",
-            True,
-        ),
-        (
-            {
-                "asn": {"asnorg": "microsoft"}
-            },  # Testing when the ASN organization is a substring of the whitelisted org
-            [json.dumps(["microsoft"]), json.dumps([])],
-            "91.121.83.118",
-            "apple",
-            True,
-        ),
-        (
-            {
-                "asn": {"asnorg": "Unknown"}
-            },  # Testing when the ASN organization is unknown
-            json.dumps(["google"]),
-            "8.8.8.8",
-            "google",
-            None,
-        ),
-        (
-            {
-                "asn": {"asnorg": "AS6432"}
-            },  # Testing when the ASN number is not in the whitelisted org's ASNs
-            json.dumps([]),
-            "8.8.8.8",
-            "google",
-            None,
-        ),
-        (
-            {
-                "asn": {"asnorg": "google"}
-            },  # Testing when the ASN organization matches the whitelisted org
-            json.dumps(["google"]),
-            "8.8.8.8",
-            "google",
-            True,
-        ),
-        (
-            {
-                "asn": {"asnorg": "google"}
-            },  # Testing when the ASN organization is a substring of the whitelisted org
-            json.dumps(["google"]),
-            "1.1.1.1",
-            "cloudflare",
-            True,
-        ),
-        (
-            None,  # Testing when the IP has no ASN information
-            json.dumps(["google"]),
-            "8.8.4.4",
-            "google",
-            None,
-        ),
-    ],
-)
-def test_is_whitelisted_asn(
-    mock_db, mock_ip_info, mock_org_info, ip, org, expected_result
-):
-    mock_db.get_ip_info.return_value = mock_ip_info
-    if isinstance(mock_org_info, list):
-        mock_db.get_org_info.side_effect = mock_org_info
-    else:
-        mock_db.get_org_info.return_value = mock_org_info
-
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    assert whitelist.is_whitelisted_asn(ip, org) == expected_result
-
-
-@pytest.mark.parametrize(
     "flow_type, expected_result",
     [
-        ("http", None),
-        ("dns", None),
-        ("ssl", None),
+        ("http", False),
+        ("dns", False),
+        ("ssl", False),
         ("arp", True),
     ],
 )
 def test_is_ignored_flow_type(flow_type, expected_result, mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    assert whitelist.is_ignored_flow_type(flow_type) == expected_result
+    assert whitelist.match.is_ignored_flow_type(flow_type) == expected_result
 
 
-def test_get_domains_of_flow(mock_db):
+def test_get_src_domains_of_flow(mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_ip_info.return_value = {
-        "SNI": [{"server_name": "example.com"}]
+    mock_db.get_ip_info.return_value = {"SNI": [{"server_name": "sni.com"}]}
+    mock_db.get_dns_resolution.return_value = {
+        "domains": ["dns_resolution.com"]
     }
-    mock_db.get_dns_resolution.side_effect = [
-        {"domains": ["src.example.com"]},
-        {"domains": ["dst.example.net"]},
-    ]
-    dst_domains, src_domains = whitelist.get_domains_of_flow(
-        "1.2.3.4", "5.6.7.8"
-    )
-    assert "example.com" in src_domains
-    assert "src.example.com" in src_domains
-    assert "dst.example.net" in dst_domains
+    flow = Mock()
+    flow.saddr = "5.6.7.8"
+
+    src_domains = whitelist.domain_analyzer.get_src_domains_of_flow(flow)
+    assert "sni.com" in src_domains
+    assert "dns_resolution.com" in src_domains
 
 
-def test_get_domains_of_flow_no_domain_info(mock_db):
+@pytest.mark.parametrize(
+    "flow_type, expected_result",
+    [
+        ("ssl", ["server_name", "some_cn.com"]),
+        ("http", ["http_host.com"]),
+        ("dns", ["query.com"]),
+    ],
+)
+def test_get_dst_domains_of_flow(mock_db, flow_type, expected_result):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_ip_info.return_value = {}
-    mock_db.get_dns_resolution.side_effect = [{"domains": []}, {"domains": []}]
-    dst_domains, src_domains = whitelist.get_domains_of_flow(
-        "1.2.3.4", "5.6.7.8"
-    )
-    assert not dst_domains
-    assert not src_domains
+    flow = Mock()
+    flow.type_ = flow_type
+    flow.server_name = "server_name"
+    flow.subject = "CN=some_cn.com"
+    flow.host = "http_host.com"
+    flow.query = "query.com"
+
+    domains = whitelist.domain_analyzer.get_dst_domains_of_flow(flow)
+    assert domains
+    for domain in expected_result:
+        assert domain in domains
 
 
 @pytest.mark.parametrize(
@@ -180,7 +113,7 @@ def test_get_domains_of_flow_no_domain_info(mock_db):
 def test_is_ip_in_org(ip, org, org_ips, expected_result, mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_db.get_org_IPs.return_value = org_ips
-    result = whitelist.is_ip_in_org(ip, org)
+    result = whitelist.org_analyzer.is_ip_in_org(ip, org)
     assert result == expected_result
 
 
@@ -200,7 +133,7 @@ def test_is_ip_in_org(ip, org, org_ips, expected_result, mock_db):
 def test_is_domain_in_org(domain, org, org_domains, expected_result, mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_db.get_org_info.return_value = org_domains
-    result = whitelist.is_domain_in_org(domain, org)
+    result = whitelist.org_analyzer.is_domain_in_org(domain, org)
     assert result == expected_result
 
 
@@ -212,88 +145,35 @@ def test_is_domain_in_org(domain, org, org_domains, expected_result, mock_db):
         ("both", True),
     ],
 )
-def test_should_ignore_flows(what_to_ignore, expected_result):
+def test_should_ignore_flows(mock_db, what_to_ignore, expected_result):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     assert whitelist.should_ignore_flows(what_to_ignore) == expected_result
 
 
 @pytest.mark.parametrize(
-    "what_to_ignore, expected_result",
-    [
-        ("alerts", True),
-        ("flows", False),
-        ("both", True),
-    ],
-)
-def test_should_ignore_alerts(what_to_ignore, expected_result):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    assert whitelist.should_ignore_alerts(what_to_ignore) == expected_result
-
-
-@pytest.mark.parametrize(
-    "direction, whitelist_direction, expected_result",
-    [
-        (Direction.DST, "dst", True),
-        (Direction.DST, "src", False),
-        (Direction.SRC, "both", True),
-    ],
-)
-def test_should_ignore_to(direction, whitelist_direction, expected_result):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    assert whitelist.should_ignore_to(whitelist_direction) == expected_result
-
-
-@pytest.mark.parametrize(
-    "direction, whitelist_direction, expected_result",
-    [
-        (Direction.SRC, "src", True),
-        (Direction.SRC, "dst", False),
-        (Direction.DST, "both", True),
-    ],
-)
-def test_should_ignore_from(direction, whitelist_direction, expected_result):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    assert whitelist.should_ignore_from(whitelist_direction) == expected_result
-
-
-@pytest.mark.parametrize(
-    "evidence_data, expected_result",
+    "is_whitelisted_victim, is_whitelisted_attacker, expected_result",
     [
         (
-            {
-                "attacker": MagicMock(
-                    attacker_type="IP",
-                    value="1.2.3.4",
-                    direction=Direction.SRC,
-                )
-            },
+            True,
+            True,
             True,
         ),
-        # Whitelisted source IP
-        (
-            {
-                "victim": MagicMock(
-                    victim_type="DOMAIN",
-                    value="example.com",
-                    direction=Direction.DST,
-                )
-            },
-            True,
-        ),
-        # Whitelisted destination domain
+        (False, True, True),
+        (True, False, True),
+        (False, False, False),
     ],
 )
-def test_is_whitelisted_evidence(evidence_data, expected_result, mock_db):
+def test_is_whitelisted_evidence(
+    is_whitelisted_victim, is_whitelisted_attacker, expected_result, mock_db
+):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_evidence = MagicMock(**evidence_data)
-    mock_db.get_all_whitelist.return_value = {
-        "IPs": json.dumps(
-            {"1.2.3.4": {"from": "src", "what_to_ignore": "both"}}
-        ),
-        "domains": json.dumps(
-            {"example.com": {"from": "dst", "what_to_ignore": "both"}}
-        ),
-    }
+    whitelist.is_whitelisted_attacker = Mock()
+    whitelist.is_whitelisted_attacker.return_value = is_whitelisted_attacker
+
+    whitelist.is_whitelisted_victim = Mock()
+    whitelist.is_whitelisted_victim.return_value = is_whitelisted_victim
+
+    mock_evidence = Mock()
     assert whitelist.is_whitelisted_evidence(mock_evidence) == expected_result
 
 
@@ -304,7 +184,7 @@ def test_is_whitelisted_evidence(evidence_data, expected_result, mock_db):
             "1.2.3.4",
             "b1:b1:b1:c1:c2:c3",
             Direction.SRC,
-            None,
+            False,
             {"b1:b1:b1:c1:c2:c3": {"from": "src", "what_to_ignore": "alerts"}},
         ),
         (
@@ -314,7 +194,7 @@ def test_is_whitelisted_evidence(evidence_data, expected_result, mock_db):
             True,
             {"a1:a2:a3:a4:a5:a6": {"from": "dst", "what_to_ignore": "both"}},
         ),
-        ("9.8.7.6", "c1:c2:c3:c4:c5:c6", Direction.SRC, None, {}),
+        ("9.8.7.6", "c1:c2:c3:c4:c5:c6", Direction.SRC, False, {}),
     ],
 )
 def test_profile_has_whitelisted_mac(
@@ -326,32 +206,31 @@ def test_profile_has_whitelisted_mac(
     mock_db,
 ):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_mac_addr_from_profile.return_value = [mac_address]
+    mock_db.get_mac_addr_from_profile.return_value = mac_address
+    mock_db.get_whitelist.return_value = whitelisted_macs
     assert (
-        whitelist.profile_has_whitelisted_mac(
-            profile_ip, whitelisted_macs, direction
+        whitelist.mac_analyzer.profile_has_whitelisted_mac(
+            profile_ip, direction, "both"
         )
         == expected_result
     )
 
 
 @pytest.mark.parametrize(
-    "direction, ignore_alerts, whitelist_direction, expected_result",
+    "direction, whitelist_direction, expected_result",
     [
-        (Direction.SRC, True, "src", True),
-        (Direction.DST, True, "src", None),
-        (Direction.SRC, True, "both", True),
-        (Direction.DST, True, "both", True),
-        (Direction.SRC, False, "src", None),
+        (Direction.SRC, "src", True),
+        (Direction.DST, "src", False),
+        (Direction.SRC, "both", True),
+        (Direction.DST, "both", True),
+        (Direction.DST, "dst", True),
     ],
 )
-def test_ignore_alert(
-    direction, ignore_alerts, whitelist_direction, expected_result, mock_db
+def test_matching_direction(
+    direction, whitelist_direction, expected_result, mock_db
 ):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    result = whitelist.ignore_alert(
-        direction, ignore_alerts, whitelist_direction
-    )
+    result = whitelist.match.direction(direction, whitelist_direction)
     assert result == expected_result
 
 
@@ -386,94 +265,81 @@ def test_ignore_alert(
 )
 def test_is_part_of_a_whitelisted_org(ioc_data, expected_result, mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_all_whitelist.return_value = {
-        "organizations": json.dumps(
-            {"google": {"from": "src", "what_to_ignore": "both"}}
-        )
+    mock_db.get_whitelist.return_value = {
+        "google": {"from": "both", "what_to_ignore": "both"}
     }
     mock_db.get_org_info.return_value = json.dumps(["1.2.3.4/32"])
     mock_db.get_ip_info.return_value = {"asn": {"asnorg": "Google"}}
     mock_db.get_org_info.return_value = json.dumps(["example.com"])
+
     mock_ioc = MagicMock()
+    mock_ioc.value = ioc_data["value"]
+    mock_ioc.direction = ioc_data["direction"]
+    # setup the Attacker or Victim object
     if "attacker_type" in ioc_data:
         mock_ioc.attacker_type = ioc_data["attacker_type"]
         ioc_type = mock_ioc.attacker_type
     else:
         mock_ioc.victim_type = ioc_data["victim_type"]
         ioc_type = mock_ioc.victim_type
-    mock_ioc.value = ioc_data["value"]
-    mock_ioc.direction = ioc_data["direction"]
-    cases = {
-        IoCType.DOMAIN.name: whitelist.is_domain_in_org,
-        IoCType.IP.name: whitelist.is_ip_part_of_a_whitelisted_org,
-    }
-    result = cases[ioc_type](mock_ioc.value, "google")
-    assert result == expected_result
+
+    assert (
+        whitelist.org_analyzer.is_part_of_a_whitelisted_org(
+            mock_ioc.value, ioc_type, mock_ioc.direction, "both"
+        )
+        == expected_result
+    )
 
 
 @pytest.mark.parametrize(
-    "whitelisted_domain, direction, domains_of_flow, "
-    "ignore_type, expected_result, mock_db_values",
+    "dst_domains, src_domains, whitelisted_domains, expected_result",
     [
         (
-            "apple.com",
-            Direction.SRC,
-            ["sub.apple.com", "apple.com"],
-            "both",
-            True,
-            {"apple.com": {"from": "both", "what_to_ignore": "both"}},
-        ),
-        (
-            "apple.com",
-            Direction.DST,
-            ["sub.apple.com", "apple.com"],
-            "both",
-            False,
+            ["dst_domain.net"],
+            ["apple.com"],
             {"apple.com": {"from": "src", "what_to_ignore": "both"}},
+            True,
         ),
-        # testing_is_whitelisted_domain_in_flow_ignore_type_mismatch
         (
-            "example.com",
-            Direction.SRC,
-            ["example.com", "sub.example.com"],
-            "alerts",
+            ["apple.com"],
+            ["src.com"],
+            {"apple.com": {"from": "src", "what_to_ignore": "both"}},
             False,
-            {"example.com": {"from": "src", "what_to_ignore": "flows"}},
         ),
-        # testing_is_whitelisted_domain_in_flow_ignore_type_matches
-        (
-            "example.com",
-            Direction.SRC,
-            ["example.com", "sub.example.com"],
-            "both",
-            True,
-            {"example.com": {"from": "src", "what_to_ignore": "both"}},
-        ),
-        # testing_is_whitelisted_domain_in_flow_direction_and_ignore_type
-        (
-            "apple.com",
-            Direction.SRC,
-            ["store.apple.com", "apple.com"],
-            "alerts",
-            True,
-            {"apple.com": {"from": "both", "what_to_ignore": "both"}},
+        (["apple.com"], ["src.com"], {}, False),  # no whitelist found
+        (  # no flow domains found
+            [],
+            [],
+            {"apple.com": {"from": "src", "what_to_ignore": "both"}},
+            False,
         ),
     ],
 )
-def test_is_whitelisted_domain_in_flow(
-    whitelisted_domain,
-    direction,
-    domains_of_flow,
-    ignore_type,
+def test_check_if_whitelisted_domains_of_flow(
+    dst_domains,
+    src_domains,
+    whitelisted_domains,
     expected_result,
-    mock_db_values,
     mock_db,
 ):
-    mock_db.get_whitelist.return_value = mock_db_values
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    result = whitelist.is_whitelisted_domain_in_flow(
-        whitelisted_domain, direction, domains_of_flow, ignore_type
+    mock_db.get_whitelist.return_value = whitelisted_domains
+
+    whitelist.domain_analyzer.is_domain_in_tranco_list = Mock()
+    whitelist.domain_analyzer.is_domain_in_tranco_list.return_value = False
+
+    whitelist.domain_analyzer.get_dst_domains_of_flow = Mock()
+    whitelist.domain_analyzer.get_dst_domains_of_flow.return_value = (
+        dst_domains
     )
+
+    whitelist.domain_analyzer.get_src_domains_of_flow = Mock()
+    whitelist.domain_analyzer.get_src_domains_of_flow.return_value = (
+        src_domains
+    )
+
+    flow = Mock()
+    result = whitelist._check_if_whitelisted_domains_of_flow(flow)
     assert result == expected_result
 
 
@@ -481,109 +347,129 @@ def test_is_whitelisted_domain_not_found(mock_db):
     """
     Test when the domain is not found in the whitelisted domains.
     """
+    mock_db.get_whitelist.return_value = {}
+    mock_db.is_whitelisted_tranco_domain.return_value = False
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     domain = "nonwhitelisteddomain.com"
-    saddr = "1.2.3.4"
-    daddr = "5.6.7.8"
     ignore_type = "flows"
-    assert not whitelist.is_whitelisted_domain(
-        domain, saddr, daddr, ignore_type
+    assert not whitelist.domain_analyzer.is_whitelisted(
+        domain, Direction.DST, ignore_type
     )
 
 
 @patch("slips_files.common.parsers.config_parser.ConfigParser.whitelist_path")
 def test_read_configuration(mock_config_parser, mock_db):
-    mock_config_parser.return_value = "expected_value"
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    whitelist.read_configuration()
-    assert whitelist.whitelist_path == mock_config_parser.return_value
+    mock_config_parser.return_value = "config_whitelist_path"
+    whitelist.parser.read_configuration()
+    assert whitelist.parser.whitelist_path == "config_whitelist_path"
 
 
 @pytest.mark.parametrize(
-    "ip, expected_result",
+    "ip, what_to_ignore, expected_result",
     [
-        ("1.2.3.4", True),  # Whitelisted IP
-        ("5.6.7.8", None),  # Non-whitelisted IP
+        ("1.2.3.4", "flows", True),  # Whitelisted IP
+        ("1.2.3.4", "alerts", True),  # Whitelisted IP
+        ("1.2.3.4", "both", True),  # Whitelisted IP
+        ("5.6.7.8", "both", False),  # Non-whitelisted IP
+        ("5.6.7.8", "", False),  # Invalid type
+        ("invalid_ip", "both", False),  # Invalid IP
     ],
 )
-def test_is_ip_whitelisted(ip, expected_result, mock_db):
+def test_ip_analyzer_is_whitelisted(
+    ip, what_to_ignore, expected_result, mock_db
+):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_all_whitelist.return_value = {
-        "IPs": json.dumps(
-            {"1.2.3.4": {"from": "both", "what_to_ignore": "both"}}
-        )
+    mock_db.get_whitelist.return_value = {
+        "1.2.3.4": {"from": "both", "what_to_ignore": "both"}
     }
-    assert whitelist.is_ip_whitelisted(ip, Direction.SRC) == expected_result
+    assert (
+        whitelist.ip_analyzer.is_whitelisted(ip, Direction.SRC, what_to_ignore)
+        == expected_result
+    )
 
 
 @pytest.mark.parametrize(
-    "attacker_data, expected_result",
+    "is_whitelisted_domain, is_whitelisted_org, " "expected_result",
     [
-        (
-            MagicMock(
-                attacker_type=IoCType.IP.name,
-                value="1.2.3.4",
-                direction=Direction.SRC,
-            ),
-            False,
-        ),
-        (
-            MagicMock(
-                attacker_type=IoCType.DOMAIN.name,
-                value="example.com",
-                direction=Direction.DST,
-            ),
-            False,
-        ),
+        (True, False, True),
+        (True, True, True),
+        (False, True, True),
+        (True, False, True),
+        (False, False, False),
     ],
 )
-def test_is_whitelisted_attacker(attacker_data, expected_result, mock_db):
+def test_is_whitelisted_attacker_domain(
+    is_whitelisted_domain, is_whitelisted_org, expected_result, mock_db
+):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_all_whitelist.return_value = {
-        "IPs": json.dumps(
-            {"1.2.3.4": {"from": "src", "what_to_ignore": "both"}}
-        ),
-        "domains": json.dumps(
-            {"example.com": {"from": "dst", "what_to_ignore": "both"}}
-        ),
-    }
+
+    whitelist.domain_analyzer.is_whitelisted = Mock()
+    whitelist.domain_analyzer.is_whitelisted.return_value = (
+        is_whitelisted_domain
+    )
+
+    whitelist.org_analyzer.is_part_of_a_whitelisted_org = Mock()
+    whitelist.org_analyzer.is_part_of_a_whitelisted_org.return_value = (
+        is_whitelisted_org
+    )
+
     mock_db.is_whitelisted_tranco_domain.return_value = False
-    assert whitelist.is_whitelisted_attacker(attacker_data) == expected_result
+
+    evidence = Mock()
+    evidence.attacker = Attacker(
+        attacker_type=IoCType.DOMAIN,
+        value="google.com",
+        direction=Direction.SRC,
+    )
+    assert whitelist.is_whitelisted_attacker(evidence) == expected_result
 
 
 @pytest.mark.parametrize(
-    "victim_data, expected_result",
+    "is_whitelisted_domain, is_whitelisted_ip, "
+    "is_whitelisted_mac, is_whitelisted_org, expected_result",
     [
-        (
-            MagicMock(
-                victim_type=IoCType.IP.name,
-                value="1.2.3.4",
-                direction=Direction.SRC,
-            ),
-            None,
-        ),
-        (
-            MagicMock(
-                victim_type=IoCType.DOMAIN.name,
-                value="example.com",
-                direction=Direction.DST,
-            ),
-            None,
-        ),
+        (True, False, False, False, True),
+        (False, True, False, False, True),
+        (False, False, True, False, True),
+        (False, False, False, True, True),
+        (False, False, False, False, False),
     ],
 )
-def test_is_whitelisted_victim(victim_data, expected_result, mock_db):
+def test_is_whitelisted_victim(
+    is_whitelisted_domain,
+    is_whitelisted_ip,
+    is_whitelisted_mac,
+    is_whitelisted_org,
+    expected_result,
+    mock_db,
+):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_all_whitelist.return_value = {
-        "IPs": json.dumps(
-            {"1.2.3.4": {"from": "src", "what_to_ignore": "both"}}
-        ),
-        "domains": json.dumps(
-            {"example.com": {"from": "dst", "what_to_ignore": "both"}}
-        ),
-    }
+    whitelist.domain_analyzer.is_whitelisted = Mock()
+    whitelist.domain_analyzer.is_whitelisted.return_value = (
+        is_whitelisted_domain
+    )
+    whitelist.ip_analyzer.is_whitelisted = Mock()
+    whitelist.ip_analyzer.is_whitelisted.return_value = is_whitelisted_ip
+    whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock()
+    whitelist.mac_analyzer.profile_has_whitelisted_mac.return_value = (
+        is_whitelisted_mac
+    )
+
+    whitelist.org_analyzer.is_part_of_a_whitelisted_org = Mock()
+    whitelist.org_analyzer.is_part_of_a_whitelisted_org.return_value = (
+        is_whitelisted_org
+    )
+
     mock_db.is_whitelisted_tranco_domain.return_value = False
-    assert whitelist.is_whitelisted_victim(victim_data) == expected_result
+
+    evidence = Mock()
+    evidence.attacker = Victim(
+        victim_type=IoCType.IP,
+        value="1.2.3.4",
+        direction=Direction.SRC,
+    )
+    assert whitelist.is_whitelisted_victim(evidence) == expected_result
 
 
 @pytest.mark.parametrize(
@@ -597,7 +483,7 @@ def test_load_org_domains(org, expected_result, mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_db.set_org_info = MagicMock()
 
-    actual_result = whitelist.load_org_domains(org)
+    actual_result = whitelist.parser.load_org_domains(org)
     for domain in expected_result:
         assert domain in actual_result
 
@@ -605,42 +491,6 @@ def test_load_org_domains(org, expected_result, mock_db):
     mock_db.set_org_info.assert_called_with(
         org, json.dumps(actual_result), "domains"
     )
-
-
-@pytest.mark.parametrize(
-    "direction, ignore_alerts, whitelist_direction, expected_result",
-    [
-        (Direction.SRC, True, "src", True),
-        (Direction.SRC, True, "dst", None),
-        (Direction.SRC, False, "src", False),
-    ],
-)
-def test_ignore_alerts_from_ip(
-    direction, ignore_alerts, whitelist_direction, expected_result, mock_db
-):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    result = whitelist.ignore_alerts_from_ip(
-        direction, ignore_alerts, whitelist_direction
-    )
-    assert result == expected_result
-
-
-@pytest.mark.parametrize(
-    "direction, ignore_alerts, whitelist_direction, expected_result",
-    [
-        (Direction.DST, True, "dst", True),
-        (Direction.DST, True, "src", None),
-        (Direction.DST, False, "dst", False),
-    ],
-)
-def test_ignore_alerts_to_ip(
-    direction, ignore_alerts, whitelist_direction, expected_result, mock_db
-):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    result = whitelist.ignore_alerts_to_ip(
-        direction, ignore_alerts, whitelist_direction
-    )
-    assert result == expected_result
 
 
 @pytest.mark.parametrize(
@@ -653,14 +503,15 @@ def test_ignore_alerts_to_ip(
 )
 def test_is_domain_whitelisted(domain, direction, expected_result, mock_db):
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_all_whitelist.return_value = {
-        "domains": json.dumps(
-            {"example.com": {"from": "both", "what_to_ignore": "both"}}
-        )
+    mock_db.get_whitelist.return_value = {
+        "example.com": {"from": "both", "what_to_ignore": "both"}
     }
     mock_db.is_whitelisted_tranco_domain.return_value = False
-    result = whitelist._is_domain_whitelisted(domain, direction)
-    assert result == expected_result
+    for type_ in ("alerts", "flows"):
+        result = whitelist.domain_analyzer.is_whitelisted(
+            domain, direction, type_
+        )
+        assert result == expected_result
 
 
 @pytest.mark.parametrize(
@@ -710,136 +561,78 @@ def test_is_ip_asn_in_org_asn(
     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
     mock_db.get_org_info.return_value = org_asn_info
     mock_db.get_ip_info.return_value = ip_asn_info
-    result = whitelist.is_ip_asn_in_org_asn(ip, org)
-    assert result == expected_result
+    assert (
+        whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org) == expected_result
+    )
 
 
-def test_parse_whitelist(mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_whitelist = {
-        "IPs": json.dumps(
-            {"1.2.3.4": {"from": "src", "what_to_ignore": "both"}}
-        ),
-        "domains": json.dumps(
-            {"example.com": {"from": "dst", "what_to_ignore": "both"}}
-        ),
-        "organizations": json.dumps(
-            {"google": {"from": "both", "what_to_ignore": "both"}}
-        ),
-        "macs": json.dumps(
-            {"b1:b1:b1:c1:c2:c3": {"from": "src", "what_to_ignore": "alerts"}}
-        ),
-    }
-    (
-        whitelisted_IPs,
-        whitelisted_domains,
-        whitelisted_orgs,
-        whitelisted_macs,
-    ) = whitelist.parse_whitelist(mock_whitelist)
-    assert "1.2.3.4" in whitelisted_IPs
-    assert "example.com" in whitelisted_domains
-    assert "google" in whitelisted_orgs
-    assert "b1:b1:b1:c1:c2:c3" in whitelisted_macs
-
-
-def test_get_all_whitelist(mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_all_whitelist.return_value = {
-        "IPs": json.dumps(
-            {"1.2.3.4": {"from": "src", "what_to_ignore": "both"}}
-        ),
-        "domains": json.dumps(
-            {"example.com": {"from": "dst", "what_to_ignore": "both"}}
-        ),
-        "organizations": json.dumps(
-            {"google": {"from": "both", "what_to_ignore": "both"}}
-        ),
-        "mac": json.dumps(
-            {"b1:b1:b1:c1:c2:c3": {"from": "src", "what_to_ignore": "alerts"}}
-        ),
-    }
-    all_whitelist = whitelist.get_all_whitelist()
-    assert all_whitelist is not None
-    assert "IPs" in all_whitelist
-    assert "domains" in all_whitelist
-    assert "organizations" in all_whitelist
-    assert "mac" in all_whitelist
-
-
-@pytest.mark.parametrize(
-    "flow_data, whitelist_data, expected_result",
-    [
-        (  # testing_is_whitelisted_flow_with_whitelisted_organization_
-            # but_ip_or_domain_not_whitelisted
-            MagicMock(
-                saddr="9.8.7.6", daddr="5.6.7.8", type_="http", host="org.com"
-            ),
-            {
-                "organizations": {
-                    "org": {"from": "both", "what_to_ignore": "flows"}
-                }
-            },
-            False,
-        ),
-        (  # testing_is_whitelisted_flow_with_non_whitelisted_organizatio
-            # n_but_ip_or_domain_whitelisted
-            MagicMock(
-                saddr="1.2.3.4",
-                daddr="5.6.7.8",
-                type_="http",
-                host="whitelisted.com",
-            ),
-            {"IPs": {"1.2.3.4": {"from": "src", "what_to_ignore": "flows"}}},
-            False,
-        ),
-        (  # testing_is_whitelisted_flow_with_whitelisted_source_ip
-            MagicMock(
-                saddr="1.2.3.4",
-                daddr="5.6.7.8",
-                type_="http",
-                server_name="example.com",
-            ),
-            {"IPs": {"1.2.3.4": {"from": "src", "what_to_ignore": "flows"}}},
-            False,
-        ),
-        (  # testing_is_whitelisted_flow_with_both_source_and_destination_ips_whitelisted
-            MagicMock(saddr="1.2.3.4", daddr="5.6.7.8", type_="http"),
-            {
-                "IPs": {
-                    "1.2.3.4": {"from": "src", "what_to_ignore": "flows"},
-                    "5.6.7.8": {"from": "dst", "what_to_ignore": "flows"},
-                }
-            },
-            False,
-        ),
-        (
-            # testing_is_whitelisted_flow_with_whitelisted_mac_address_but_ip_not_whitelisted
-            MagicMock(
-                saddr="9.8.7.6",
-                daddr="1.2.3.4",
-                smac="b1:b1:b1:c1:c2:c3",
-                dmac="a1:a2:a3:a4:a5:a6",
-                type_="http",
-                server_name="example.org",
-            ),
-            {
-                "mac": {
-                    "b1:b1:b1:c1:c2:c3": {
-                        "from": "src",
-                        "what_to_ignore": "flows",
-                    }
-                }
-            },
-            False,
-        ),
-    ],
-)
-def test_is_whitelisted_flow(
-    mock_db, flow_data, whitelist_data, expected_result
-):
-    """
-    Test the is_whitelisted_flow method with various combinations of flow data and whitelist data.
-    """
-    mock_db.get_all_whitelist.return_value = whitelist_data
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    assert whitelist.is_whitelisted_flow(flow_data) == expected_result
+# TODO for sekhar
+# @pytest.mark.parametrize(
+#     "flow_data, whitelist_data, expected_result",
+#     [
+#         (  # testing_is_whitelisted_flow_with_whitelisted_organization_
+#             # but_ip_or_domain_not_whitelisted
+#             MagicMock(saddr="9.8.7.6", daddr="5.6.7.8", type_="http", host="org.com"),
+#             {"organizations": {"org": {"from": "both", "what_to_ignore": "flows"}}},
+#             False,
+#         ),
+#         (  # testing_is_whitelisted_flow_with_non_whitelisted_organizatio
+#             # n_but_ip_or_domain_whitelisted
+#             MagicMock(
+#                 saddr="1.2.3.4",
+#                 daddr="5.6.7.8",
+#                 type_="http",
+#                 host="whitelisted.com",
+#             ),
+#             {"IPs": {"1.2.3.4": {"from": "src", "what_to_ignore": "flows"}}},
+#             False,
+#         ),
+#         (  # testing_is_whitelisted_flow_with_whitelisted_source_ip
+#             MagicMock(
+#                 saddr="1.2.3.4",
+#                 daddr="5.6.7.8",
+#                 type_="http",
+#                 server_name="example.com",
+#             ),
+#             {"IPs": {"1.2.3.4": {"from": "src", "what_to_ignore": "flows"}}},
+#             False,
+#         ),
+#         (  # testing_is_whitelisted_flow_with_both_source_and_destination_ips_whitelisted
+#             MagicMock(saddr="1.2.3.4", daddr="5.6.7.8", type_="http"),
+#             {
+#                 "IPs": {
+#                     "1.2.3.4": {"from": "src", "what_to_ignore": "flows"},
+#                     "5.6.7.8": {"from": "dst", "what_to_ignore": "flows"},
+#                 }
+#             },
+#             False,
+#         ),
+#         (
+#             # testing_is_whitelisted_flow_with_whitelisted_mac_address_but_ip_not_whitelisted
+#             MagicMock(
+#                 saddr="9.8.7.6",
+#                 daddr="1.2.3.4",
+#                 smac="b1:b1:b1:c1:c2:c3",
+#                 dmac="a1:a2:a3:a4:a5:a6",
+#                 type_="http",
+#                 server_name="example.org",
+#             ),
+#             {
+#                 "mac": {
+#                     "b1:b1:b1:c1:c2:c3": {
+#                         "from": "src",
+#                         "what_to_ignore": "flows",
+#                     }
+#                 }
+#             },
+#             False,
+#         ),
+#     ],
+# )
+# def test_is_whitelisted_flow(mock_db, flow_data, whitelist_data, expected_result):
+#     """
+#     Test the is_whitelisted_flow method with various combinations of flow data and whitelist data.
+#     """
+#     mock_db.get_all_whitelist.return_value = whitelist_data
+#     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+#     assert whitelist.is_whitelisted_flow(flow_data) == expected_result

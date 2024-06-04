@@ -468,20 +468,20 @@ Whitelisted IoCs can be updated:
 2. On the fly while running Slips
 
 If you're updating the whitelist while Slips is running, be careful to use ; to comment out the lines you want to remove from the db
-for example, if you have the following line in whitelist.conf:
+for example, if you have the following line in `whitelist.conf`:
 
 ```
 organization,google,both,alerts
 ```
 
-To be able to remove this whitelist while Slips is running, simply change it to
+To be able to remove this whitelist entry while Slips is running, simply change it to
 
 ```
-; organization,google,both,alerts
+# organization,google,both,alerts
 ```
 
-Comments starting with `#` are not removed from the database and are treated as user comments.
-Comments starting with `;` will cause Slips to attempt to remove that entry from the database.
+Comments starting with `;` are not removed from the database and are treated as user comments.
+Comments starting with `#` will cause Slips to attempt to remove that entry from the database.
 
 ## Popup notifications
 

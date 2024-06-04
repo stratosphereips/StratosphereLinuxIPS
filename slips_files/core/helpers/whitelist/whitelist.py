@@ -14,7 +14,6 @@ from slips_files.core.output import Output
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     Direction,
-    IoCType,
     Attacker,
 )
 
@@ -92,6 +91,7 @@ class Whitelist(IObservable):
                 domain, Direction.SRC, "flows"
             ):
                 return True
+        return False
 
     def _flow_contains_whitelisted_ip(self, flow):
         """
@@ -190,6 +190,7 @@ class Whitelist(IObservable):
 
         if self.is_whitelisted_victim(evidence):
             return True
+        return False
 
     def is_whitelisted_victim(self, evidence: Evidence) -> bool:
         if not hasattr(evidence, "victim"):
@@ -219,6 +220,8 @@ class Whitelist(IObservable):
         ):
             return True
 
+        return False
+
     def is_whitelisted_attacker(self, evidence: Evidence) -> bool:
         if not hasattr(evidence, "attacker"):
             return False
@@ -227,31 +230,20 @@ class Whitelist(IObservable):
         if not attacker:
             return False
 
-        whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
-            "organizations"
-        )
-        if not whitelisted_orgs:
-            return False
-
-        if (
-            attacker.attacker_type == IoCType.DOMAIN.name
-            and self.domain_analyzer.is_whitelisted(
-                attacker.value, attacker.direction, "alerts"
-            )
+        if self.domain_analyzer.is_whitelisted(
+            attacker.value, attacker.direction, "alerts"
         ):
             return True
 
-        elif attacker.attacker_type == IoCType.IP.name:
-            # Check that the IP in the content of the alert is whitelisted
-            if self.ip_analyzer.is_whitelisted(
-                attacker.value, attacker.direction, "alerts"
-            ):
-                return True
+        if self.ip_analyzer.is_whitelisted(
+            attacker.value, attacker.direction, "alerts"
+        ):
+            return True
 
-            if self.mac_analyzer.profile_has_whitelisted_mac(
-                attacker.value, attacker.direction, "alerts"
-            ):
-                return True
+        if self.mac_analyzer.profile_has_whitelisted_mac(
+            attacker.value, attacker.direction, "alerts"
+        ):
+            return True
 
         if self.org_analyzer.is_part_of_a_whitelisted_org(
             attacker.value,

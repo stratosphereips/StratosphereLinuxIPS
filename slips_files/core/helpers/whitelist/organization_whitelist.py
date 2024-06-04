@@ -106,7 +106,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         ip_asn: str = ip_asn.upper()
 
         org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
-        return org.upper() in ip_asn or ip_asn == org_asn
+        return org.upper() in ip_asn or ip_asn in org_asn
 
     def is_whitelisted(self, flow) -> bool:
         """checks if the given flow is whitelisted"""
@@ -158,12 +158,11 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         what_to_ignore: str,
     ) -> bool:
         """
-        Handles the checking of whitelisted evidence/alerts only
-        doesn't check if we should ignore flows
+        Handles the checking of whitelisted evidence or alerts
         :param ioc: can be an ip or a domain
         :param ioc_type: type of the given ioc
         :param direction: direction of the given ioc, src or dst?
-        :param what_to_ignore: can be flows or alerts
+        :param what_to_ignore: can be flows or alerts or both
         """
 
         if ioc_type == "IP" and self.ip_analyzer.is_private_ip(ioc):
