@@ -10,7 +10,9 @@ import yaml
 
 class ConfigParser(object):
     name = "ConfigParser"
-    description = "Parse and sanitize slips.conf/slips.yaml values. used by all modules"
+    description = (
+        "Parse and sanitize slips.conf/slips.yaml values. used by all modules"
+    )
     authors = ["Alya Gomaa"]
 
     def __init__(self):
@@ -470,7 +472,7 @@ class ConfigParser(object):
         return self.read_configuration(
             "threatintelligence",
             "local_threat_intelligence_files",
-            "modules/threat_intelligence/local_data_files/",
+            "config/local_ti_files/",
         )
 
     def wait_for_TI_to_finish(self) -> bool:
