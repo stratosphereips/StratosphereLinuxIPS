@@ -965,7 +965,7 @@ to one of the above alerts, slips does not detect it assuming it's a false posit
 internally by slips.
 
 
-You can change this behaviour by updating ```whitelist.conf```.
+You can change this behaviour by updating ```config/whitelist.conf```.
 
 ## Ensembling
 

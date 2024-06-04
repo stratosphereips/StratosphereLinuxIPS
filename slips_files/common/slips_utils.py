@@ -1,6 +1,8 @@
 import hashlib
 from datetime import datetime, timedelta
 from re import findall
+
+import tldextract
 import validators
 from git import Repo
 import socket
@@ -66,6 +68,13 @@ class Utils(object):
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
+
+    def extract_hostname(self, url: str) -> str:
+        """
+        extracts the parent domain from the given domain/url
+        """
+        parsed_url = tldextract.extract(url)
+        return f"{parsed_url.domain}.{parsed_url.suffix}"
 
     def get_cidr_of_private_ip(self, ip):
         """
@@ -395,7 +404,7 @@ class Utils(object):
 
         return (
             message
-            and type(message["data"]) == str
+            and isinstance(message["data"], str)
             and message["channel"] == channel
         )
 

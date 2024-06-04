@@ -1,7 +1,6 @@
 import json
 
 
-from modules.flowalerts.set_evidence import SetEvidnceHelper
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -9,9 +8,7 @@ from slips_files.common.slips_utils import utils
 
 
 class SMTP(IFlowalertsAnalyzer):
-    def init(self, flowalerts=None):
-        self.flowalerts = flowalerts
-        self.set_evidence = SetEvidnceHelper(self.db)
+    def init(self):
         # when the ctr reaches the threshold in 10 seconds,
         # we detect an smtp bruteforce
         self.smtp_bruteforce_threshold = 3

@@ -3,7 +3,6 @@ import multiprocessing
 import threading
 import time
 
-from modules.flowalerts.set_evidence import SetEvidnceHelper
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -12,9 +11,7 @@ from slips_files.common.slips_utils import utils
 
 
 class SSL(IFlowalertsAnalyzer):
-    def init(self, flowalerts=None):
-        self.flowalerts = flowalerts
-        self.set_evidence = SetEvidnceHelper(self.db)
+    def init(self):
         # in pastebin download detection, we wait for each conn.log flow
         # of the seen ssl flow to appear
         # this is the dict of ssl flows we're waiting for
@@ -186,11 +183,11 @@ class SSL(IFlowalertsAnalyzer):
             found_org_in_cn = org
 
             # check that the ip belongs to that same org
-            if self.flowalerts.whitelist.is_ip_in_org(daddr, org):
+            if self.whitelist.org_analyzer.is_ip_in_org(daddr, org):
                 return False
 
             # check that the domain belongs to that same org
-            if server_name and self.flowalerts.whitelist.is_domain_in_org(
+            if server_name and self.whitelist.org_analyzer.is_domain_in_org(
                 server_name, org
             ):
                 return False

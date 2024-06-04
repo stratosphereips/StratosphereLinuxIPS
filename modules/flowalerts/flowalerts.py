@@ -8,7 +8,7 @@ from .smtp import SMTP
 from .software import Software
 from .ssh import SSH
 from .ssl import SSL
-from slips_files.core.helpers.whitelist import Whitelist
+from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 from .tunnel import Tunnel
 

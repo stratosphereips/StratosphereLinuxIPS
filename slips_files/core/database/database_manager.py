@@ -322,6 +322,9 @@ class DBManager(IObservable):
     def get_whitelist(self, *args, **kwargs):
         return self.rdb.get_whitelist(*args, **kwargs)
 
+    def has_cached_whitelist(self, *args, **kwargs):
+        return self.rdb.has_cached_whitelist(*args, **kwargs)
+
     def is_doh_server(self, *args, **kwargs):
         return self.rdb.is_doh_server(*args, **kwargs)
 
