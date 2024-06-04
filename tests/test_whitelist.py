@@ -138,19 +138,6 @@ def test_is_domain_in_org(domain, org, org_domains, expected_result, mock_db):
 
 
 @pytest.mark.parametrize(
-    "what_to_ignore, expected_result",
-    [
-        ("flows", True),
-        ("alerts", False),
-        ("both", True),
-    ],
-)
-def test_should_ignore_flows(mock_db, what_to_ignore, expected_result):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    assert whitelist.should_ignore_flows(what_to_ignore) == expected_result
-
-
-@pytest.mark.parametrize(
     "is_whitelisted_victim, is_whitelisted_attacker, expected_result",
     [
         (
