@@ -474,7 +474,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def is_cyst_enabled(self):
         return self.r.get("is_cyst_enabled")
 
-    def get_equivalent_tws(self, hrs: float):
+    def get_equivalent_tws(self, hrs: float) -> int:
         """
         How many tws correspond to the given hours?
         for example if the tw width is 1h, and hrs is 24, this function returns 24
@@ -664,19 +664,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             return False
 
         # these are the tws this ip was resolved in
-        tws = ip_info["timewindows"]
+        tws_where_ip_was_resolved = ip_info["timewindows"]
 
         # IP is resolved, was it resolved in the past x hrs?
-        tws_to_search = self.get_equivalent_tws(hrs)
+        tws_to_search: int = self.get_equivalent_tws(hrs)
 
-        current_twid = 0  # number of the tw we're looking for
-        while tws_to_search != current_twid:
-            matching_tws = [i for i in tws if f"timewindow{current_twid}" in i]
-
-            if not matching_tws:
-                current_twid += 1
-            else:
+        for tw_number in range(tws_to_search):
+            if f"timewindow{tw_number}" in tws_where_ip_was_resolved:
                 return True
+        return False
 
     def delete_dns_resolution(self, ip):
         self.r.hdel("DNSresolution", ip)
