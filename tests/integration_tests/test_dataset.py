@@ -86,7 +86,7 @@ def test_binetflow(
 
 
 @pytest.mark.parametrize(
-    "suricata_path,  output_dir, redis_port, expected_evidence",
+    "suricata_path, output_dir, redis_port, expected_evidence",
     [
         (
             "dataset/test6-malicious.suricata.json",
