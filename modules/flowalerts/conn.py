@@ -4,9 +4,9 @@ import json
 import sys
 from datetime import datetime
 from typing import Tuple, List, Dict
-
 import validators
 
+from modules.flowalerts.dns import DNS
 from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -33,6 +33,7 @@ class Conn(IFlowalertsAnalyzer):
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In mins
         self.conn_without_dns_interface_wait_time = 30
+        self.dns_analyzer = DNS(self.db, flowalerts=self)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -397,6 +398,7 @@ class Conn(IFlowalertsAnalyzer):
             # because there's no dns.log to know if the dns was made
             or self.db.get_input_type() == "zeek_log_file"
             or self.db.is_doh_server(daddr)
+            or self.dns_analyzer.is_dns_server(daddr)
         )
 
     def check_if_resolution_was_made_by_different_version(
@@ -463,16 +465,6 @@ class Conn(IFlowalertsAnalyzer):
         if self.db.is_ip_resolved(daddr, 24):
             return False
 
-        # self.print(f'No DNS resolution in {answers_dict}')
-        # There is no DNS resolution, but it can be that Slips is
-        # still reading it from the files.
-        # To give time to Slips to read all the files and get all the flows
-        # don't alert a Connection Without DNS until 5 seconds has passed
-        # in real time from the time of this checking.
-
-        # Create a timer thread that will wait 15 seconds
-        # for the dns to arrive and then check again
-        # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
         if uid not in self.connections_checked_in_conn_dns_timer_thread:
             # comes here if we haven't started the timer
             # thread for this connection before
@@ -487,9 +479,12 @@ class Conn(IFlowalertsAnalyzer):
                 timestamp,
                 uid,
             ]
-            # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
 
-            # time {datetime.datetime.now()}')
+            # There is no DNS resolution, but it can be that Slips is
+            # still reading it from the files.
+            # To give time to Slips to read all the files and get all the flows
+            # don't alert a Connection Without DNS until 5 seconds has passed
+            # in real time from the time of this checking.
             timer = TimerThread(
                 15, self.check_connection_without_dns_resolution, params
             )
@@ -510,7 +505,7 @@ class Conn(IFlowalertsAnalyzer):
                 # if the SNI or rDNS of the IP matches a
                 # well-known org, then this is a FP
                 return False
-            # self.print(f'Alerting after timer conn without dns on {daddr},
+
             self.set_evidence.conn_without_dns(
                 daddr, timestamp, profileid, twid, uid
             )

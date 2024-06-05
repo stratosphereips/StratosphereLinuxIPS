@@ -19,7 +19,7 @@ def get_ip_version(ip: str) -> str:
     elif validators.ipv6(ip):
         ip_version = "IP6"
     return ip_version
-    
+
 
 def extract_cc_server_ip(evidence: Evidence) -> Tuple[str, str]:
     """
@@ -29,7 +29,7 @@ def extract_cc_server_ip(evidence: Evidence) -> Tuple[str, str]:
     and the IP
     """
     # get the destination IP
-    cc_server = evidence.description.split("destination IP: ")[1].split(" ")[0]
+    cc_server = evidence.description.split("server IP: ")[1].split(" ")[0]
     return cc_server, get_ip_version(cc_server)
 
 
@@ -56,17 +56,17 @@ def extract_role_type(evidence: Evidence, role=None) -> str:
     elif role == "victim":
         ioc = evidence.victim.value
         ioc_type = evidence.victim.victim_type
-        
+
     if ioc_type == IoCType.IP.name:
         return ioc, get_ip_version(ioc)
-    
+
     # map of slips victim types to IDEA supported types
     idea_type = {
         IoCType.DOMAIN.name: "Hostname",
         IoCType.URL.name: "URL",
-        }
+    }
     return ioc, idea_type[ioc_type]
-    
+
 
 def idea_format(evidence: Evidence):
     """
@@ -123,7 +123,9 @@ def idea_format(evidence: Evidence):
             # is the dstip ipv4/ipv6 or mac?
             victims_ip: str
             victim_type: str
-            victims_ip, victim_type = extract_role_type(evidence, role="victim")
+            victims_ip, victim_type = extract_role_type(
+                evidence, role="victim"
+            )
             idea_dict["Target"] = [{victim_type: [victims_ip]}]
 
         # update the dstip description if specified in the evidence
