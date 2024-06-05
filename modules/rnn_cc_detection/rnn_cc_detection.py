@@ -50,6 +50,8 @@ class CCDetection(IModule):
     ):
         """
         Set an evidence for malicious Tuple
+        :param  tupleid: is dash separated daddr-dport-proto
+
         """
         tupleid = tupleid.split("-")
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
@@ -58,7 +60,7 @@ class CCDetection(IModule):
         port_info: str = self.db.get_port_info(portproto)
         ip_identification: str = self.db.get_ip_identification(dstip)
         description: str = (
-            f"C&C channel, destination IP: {dstip} "
+            f"C&C channel, client IP: {srcip} server IP: {dstip} "
             f'port: {port_info.upper() if port_info else ""} {portproto} '
             f'score: {format(score, ".4f")}. {ip_identification}'
         )
@@ -171,13 +173,13 @@ class CCDetection(IModule):
         return len(pre_behavioral_model) / threshold_confidence
 
     def main(self):
-        # Main loop function
         if msg := self.get_msg("new_letters"):
             msg = msg["data"]
             msg = json.loads(msg)
             pre_behavioral_model = msg["new_symbol"]
             profileid = msg["profileid"]
             twid = msg["twid"]
+            # format of the tupleid is daddr-dport-proto
             tupleid = msg["tupleid"]
             flow = msg["flow"]
 
