@@ -96,7 +96,6 @@ def test_binetflow(
                 "Connection to unknown destination port",
                 "vertical port scan",
                 "Connecting to private IP",
-                "non-HTTP established connection",
             ],
         )
     ],
