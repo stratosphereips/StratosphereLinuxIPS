@@ -147,8 +147,8 @@ class SSL(IFlowalertsAnalyzer):
                 twid,
                 uid,
                 timestamp,
-                saddr,
                 daddr,
+                saddr,
                 ja3=ja3,
             )
 
