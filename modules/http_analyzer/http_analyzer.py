@@ -550,7 +550,7 @@ class HTTPAnalyzer(IModule):
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
-            threat_level=ThreatLevel.LOW,
+            threat_level=ThreatLevel.INFO,
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=saddr),

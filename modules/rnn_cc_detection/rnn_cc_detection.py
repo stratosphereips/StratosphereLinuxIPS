@@ -50,6 +50,8 @@ class CCDetection(IModule):
     ):
         """
         Set an evidence for malicious Tuple
+        :param  tupleid: is dash separated daddr-dport-proto
+
         """
         tupleid = tupleid.split("-")
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
@@ -58,7 +60,7 @@ class CCDetection(IModule):
         port_info: str = self.db.get_port_info(portproto)
         ip_identification: str = self.db.get_ip_identification(dstip)
         description: str = (
-            f"C&C channel, destination IP: {dstip} "
+            f"C&C channel, client IP: {srcip} server IP: {dstip} "
             f'port: {port_info.upper() if port_info else ""} {portproto} '
             f'score: {format(score, ".4f")}. {ip_identification}'
         )
@@ -163,80 +165,68 @@ class CCDetection(IModule):
             self.print(e)
             return 1
 
+    def get_confidence(self, pre_behavioral_model):
+        threshold_confidence = 100
+        if len(pre_behavioral_model) >= threshold_confidence:
+            return 1
+
+        return len(pre_behavioral_model) / threshold_confidence
+
     def main(self):
-        # Main loop function
         if msg := self.get_msg("new_letters"):
             msg = msg["data"]
             msg = json.loads(msg)
             pre_behavioral_model = msg["new_symbol"]
             profileid = msg["profileid"]
             twid = msg["twid"]
+            # format of the tupleid is daddr-dport-proto
             tupleid = msg["tupleid"]
             flow = msg["flow"]
 
-            if "tcp" in tupleid.lower():
-                # to reduce false positives
-                threshold = 0.99
-                # function to convert each letter of behavioral model to ascii
-                behavioral_model = self.convert_input_for_module(
-                    pre_behavioral_model
-                )
-                # predict the score of behavioral model being c&c channel
-                self.print(
-                    f"predicting the sequence: {pre_behavioral_model}",
-                    3,
-                    0,
-                )
-                score = self.tcpmodel.predict(behavioral_model)
-                self.print(
-                    f" >> sequence: {pre_behavioral_model}. "
-                    f"final prediction score: {score[0][0]:.20f}",
-                    3,
-                    0,
-                )
-                # get a float instead of numpy array
-                score = score[0][0]
-                if score > threshold:
-                    threshold_confidence = 100
-                    if len(pre_behavioral_model) >= threshold_confidence:
-                        confidence = 1
-                    else:
-                        confidence = (
-                            len(pre_behavioral_model) / threshold_confidence
-                        )
-                    uid = msg["uid"]
-                    stime = flow["starttime"]
-                    self.set_evidence_cc_channel(
-                        score,
-                        confidence,
-                        uid,
-                        stime,
-                        tupleid,
-                        profileid,
-                        twid,
-                    )
-                    to_send = {
-                        "attacker_type": utils.detect_data_type(flow["daddr"]),
-                        "profileid": profileid,
-                        "twid": twid,
-                        "flow": flow,
-                    }
-                    # we only check malicious jarm hashes when there's a CC
-                    # detection
-                    self.db.publish("check_jarm_hash", json.dumps(to_send))
+            if "tcp" not in tupleid.lower():
+                return
 
-            """
-            elif 'udp' in tupleid.lower():
-                # Define why this threshold
-                threshold = 0.7
-                # function to convert each letter of behavioral model to ascii
-                behavioral_model = self.convert_input_for_module(pre_behavioral_model)
-                # predict the score of behavioral model being c&c channel
-                self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
-                score = udpmodel.predict(behavioral_model)
-                self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
-                # get a float instead of numpy array
-                score = score[0][0]
-                if score > threshold:
-                    self.set_evidence(score, tupleid, profileid, twid)
-            """
+            # function to convert each letter of behavioral model to ascii
+            behavioral_model = self.convert_input_for_module(
+                pre_behavioral_model
+            )
+            # predict the score of behavioral model being c&c channel
+            self.print(
+                f"predicting the sequence: {pre_behavioral_model}",
+                3,
+                0,
+            )
+            score = self.tcpmodel.predict(behavioral_model)
+            self.print(
+                f" >> sequence: {pre_behavioral_model}. "
+                f"final prediction score: {score[0][0]:.20f}",
+                3,
+                0,
+            )
+            # get a float instead of numpy array
+            score = score[0][0]
+
+            # to reduce false positives
+            if score < 0.99:
+                return
+
+            confidence: float = self.get_confidence(pre_behavioral_model)
+
+            self.set_evidence_cc_channel(
+                score,
+                confidence,
+                msg["uid"],
+                flow["starttime"],
+                tupleid,
+                profileid,
+                twid,
+            )
+            to_send = {
+                "attacker_type": utils.detect_data_type(flow["daddr"]),
+                "profileid": profileid,
+                "twid": twid,
+                "flow": flow,
+            }
+            # we only check malicious jarm hashes when there's a CC
+            # detection
+            self.db.publish("check_jarm_hash", json.dumps(to_send))

@@ -147,8 +147,8 @@ class SSL(IFlowalertsAnalyzer):
                 twid,
                 uid,
                 timestamp,
-                saddr,
                 daddr,
+                saddr,
                 ja3=ja3,
             )
 
@@ -217,6 +217,7 @@ class SSL(IFlowalertsAnalyzer):
         state = flow_dict["state"]
         dport: int = flow_dict.get("dport", None)
         proto = flow_dict.get("proto")
+        allbytes = flow_dict.get("allbytes")
         appproto = str(flow_dict.get("appproto", ""))
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
@@ -225,6 +226,7 @@ class SSL(IFlowalertsAnalyzer):
             and proto.lower() == "tcp"
             and appproto.lower() != "ssl"
             and state == "Established"
+            and allbytes != 0
         ):
             self.set_evidence.non_ssl_port_443_conn(
                 daddr, profileid, timestamp, twid, uid
