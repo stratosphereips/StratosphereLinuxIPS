@@ -659,6 +659,7 @@ class Conn(IFlowalertsAnalyzer):
         dport,
         proto,
         appproto,
+        allbytes,
         profileid,
         twid,
         uid,
@@ -674,6 +675,7 @@ class Conn(IFlowalertsAnalyzer):
             and proto.lower() == "tcp"
             and appproto.lower() != "http"
             and state == "Established"
+            and allbytes != 0
         ):
             self.set_evidence.non_http_port_80_conn(
                 daddr, profileid, timestamp, twid, uid
@@ -837,6 +839,7 @@ class Conn(IFlowalertsAnalyzer):
             sbytes = flow_dict.get("sbytes", 0)
             appproto = flow_dict.get("appproto", "")
             smac = flow_dict.get("smac", "")
+            allbytes = flow_dict.get("allbytes", 0)
             if not appproto or appproto == "-":
                 appproto = flow_dict.get("type", "")
 
@@ -915,6 +918,7 @@ class Conn(IFlowalertsAnalyzer):
                 dport,
                 proto,
                 appproto,
+                allbytes,
                 profileid,
                 twid,
                 uid,
