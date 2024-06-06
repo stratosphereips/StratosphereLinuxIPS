@@ -1,13 +1,9 @@
-# Must imports
 import warnings
 import json
-from typing import Dict, List
-import os
-import csv
+from typing import Dict
 import numpy as np
 from tensorflow.python.keras.models import load_model
 
-from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
 from slips_files.core.evidence_structure.evidence import (
@@ -24,7 +20,9 @@ from slips_files.core.evidence_structure.evidence import (
     Tag,
     Victim,
 )
-
+from modules.rnn_cc_detection.strato_letters_exporter import (
+    StratoLettersExporter,
+)
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -37,8 +35,8 @@ class CCDetection(IModule):
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 
     def init(self):
-        self.read_configuration()
         self.subscribe_to_channels()
+        self.exporter = StratoLettersExporter(self.db)
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_letters")
@@ -47,10 +45,6 @@ class CCDetection(IModule):
             "new_letters": self.c1,
             "tw_closed": self.c2,
         }
-
-    def read_configuration(self):
-        conf = ConfigParser()
-        self.export_letters: bool = conf.export_strato_letters()
 
     def set_evidence_cc_channel(
         self,
@@ -64,8 +58,7 @@ class CCDetection(IModule):
     ):
         """
         Set an evidence for malicious Tuple
-        :param  tupleid: is dash separated daddr-dport-proto
-
+        :param tupleid: is dash separated daddr-dport-proto
         """
         tupleid = tupleid.split("-")
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
@@ -175,28 +168,6 @@ class CCDetection(IModule):
 
         return len(pre_behavioral_model) / threshold_confidence
 
-    def export_starto_letters(self, profileid: str, twid: str):
-        """
-        exports starto letters to the file specified in
-        self.starto_letters_file
-        """
-        saddr = profileid.split("_")[-1]
-        with open(self.starto_letters_file, "a") as f:
-            writer = csv.writer(f, delimiter="\t")
-
-            out_tuples: str = self.db.get_outtuples_from_profile_tw(
-                profileid, twid
-            )
-            out_tuples: Dict[str, List[str, List[float]]] = json.loads(
-                out_tuples
-            )
-
-            for outtuple, info in out_tuples.items():
-                outtuple: str
-                info: List[str, List[float]]
-                letters = info[0]
-                writer.writerow([f"{saddr}-{outtuple}", letters])
-
     def handle_new_letters(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
         msg = msg["data"]
@@ -256,25 +227,10 @@ class CCDetection(IModule):
 
     def handle_tw_closed(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
-        if not self.export_letters:
-            return
-
         profileid_tw = msg["data"].split("_")
         profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
         twid = profileid_tw[-1]
-        self.export_starto_letters(profileid, twid)
-
-    def init_strato_letters_file(self):
-        """creates the strato_letters tsv file with the needed headers"""
-        output_dir = self.db.get_output_dir()
-        self.starto_letters_file: str = os.path.join(
-            output_dir, "strato_letters.tsv"
-        )
-        open(self.starto_letters_file, "w").close()
-
-        with open(self.starto_letters_file, "w") as f:
-            writer = csv.writer(f, delimiter="\t")
-            writer.writerow(["Outtuple", "Letters"])
+        self.exporter.export(profileid, twid)
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -286,8 +242,7 @@ class CCDetection(IModule):
             self.print(e)
             return 1
 
-        if self.export_letters:
-            self.init_strato_letters_file()
+        self.exporter.init()
 
     def main(self):
         if msg := self.get_msg("new_letters"):
