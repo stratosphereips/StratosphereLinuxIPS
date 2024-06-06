@@ -8,6 +8,9 @@ This model is a GRU RNN.
 # Who gets alerted
 The C&C alert from this module is used to alert on the source of the connection, and also the destination of the connection. 
 
+# Who gets alerted
+The C&C alert from this module is used to alert on the source of the connection, and also the destination of the connection. 
+
 # Machine Learning models
 
 ## v1. Embedding + GRU
