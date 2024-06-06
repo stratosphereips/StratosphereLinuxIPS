@@ -1,6 +1,6 @@
 """Unit test for modules/leak_detector/leak_detector.py"""
 
-from module_factory import ModuleFactory
+from tests.module_factory import ModuleFactory
 import os
 from unittest import mock
 import pytest
