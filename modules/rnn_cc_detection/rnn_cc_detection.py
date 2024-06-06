@@ -1,6 +1,9 @@
 # Must imports
 import warnings
 import json
+from typing import Dict
+import os
+import csv
 import numpy as np
 from tensorflow.python.keras.models import load_model
 
@@ -165,17 +168,6 @@ class CCDetection(IModule):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
-    def pre_main(self):
-        utils.drop_root_privs()
-        # TODO: set the decision threshold in the function call
-        try:
-            # Download lstm model
-            self.tcpmodel = load_model("modules/rnn_cc_detection/rnn_model.h5")
-        except AttributeError as e:
-            self.print("Error loading the model.")
-            self.print(e)
-            return 1
-
     def get_confidence(self, pre_behavioral_model):
         threshold_confidence = 100
         if len(pre_behavioral_model) >= threshold_confidence:
@@ -183,61 +175,111 @@ class CCDetection(IModule):
 
         return len(pre_behavioral_model) / threshold_confidence
 
+    def export_starto_letters(self, profileid: str, twid: str):
+        """
+        exports starto letters to the file specified in
+        self.starto_letters_file
+        """
+        # Open the file in write mode
+        # with open(self.starto_letters_file, "a") as f:
+        #   writer = csv.writer(f, delimiter="\t")
+        ...
+
+    def handle_new_letters(self, msg: Dict):
+        """handles msgs from the tw_closed channel"""
+        msg = msg["data"]
+        msg = json.loads(msg)
+        pre_behavioral_model = msg["new_symbol"]
+        profileid = msg["profileid"]
+        twid = msg["twid"]
+        # format of the tupleid is daddr-dport-proto
+        tupleid = msg["tupleid"]
+        flow = msg["flow"]
+
+        if "tcp" not in tupleid.lower():
+            return
+
+        # function to convert each letter of behavioral model to ascii
+        behavioral_model = self.convert_input_for_module(pre_behavioral_model)
+        # predict the score of behavioral model being c&c channel
+        self.print(
+            f"predicting the sequence: {pre_behavioral_model}",
+            3,
+            0,
+        )
+        score = self.tcpmodel.predict(behavioral_model)
+        self.print(
+            f" >> sequence: {pre_behavioral_model}. "
+            f"final prediction score: {score[0][0]:.20f}",
+            3,
+            0,
+        )
+        # get a float instead of numpy array
+        score = score[0][0]
+
+        # to reduce false positives
+        if score < 0.99:
+            return
+
+        confidence: float = self.get_confidence(pre_behavioral_model)
+
+        self.set_evidence_cc_channel(
+            score,
+            confidence,
+            msg["uid"],
+            flow["starttime"],
+            tupleid,
+            profileid,
+            twid,
+        )
+        to_send = {
+            "attacker_type": utils.detect_data_type(flow["daddr"]),
+            "profileid": profileid,
+            "twid": twid,
+            "flow": flow,
+        }
+        # we only check malicious jarm hashes when there's a CC
+        # detection
+        self.db.publish("check_jarm_hash", json.dumps(to_send))
+
+    def handle_tw_closed(self, msg: Dict):
+        """handles msgs from the tw_closed channel"""
+        if not self.export_letters:
+            return
+
+        profileid_tw = msg["data"].split("_")
+        profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
+        twid = profileid_tw[-1]
+        self.export_starto_letters(profileid, twid)
+
+    def init_strato_letters_file(self):
+        """creates the strato_letters tsv file with the needed headers"""
+        output_dir = self.db.get_output_dir()
+        self.starto_letters_file: str = os.path.join(
+            output_dir, "strato_letters.tsv"
+        )
+        open(self.starto_letters_file, "w").close()
+
+        with open(self.starto_letters_file, "w") as f:
+            writer = csv.writer(f, delimiter="\t")
+            writer.writerow(["Outtuple", "Letters"])
+
+    def pre_main(self):
+        utils.drop_root_privs()
+        # TODO: set the decision threshold in the function call
+        try:
+            self.tcpmodel = load_model("modules/rnn_cc_detection/rnn_model.h5")
+        except AttributeError as e:
+            self.print("Error loading the model.")
+            self.print(e)
+            return 1
+
+        if self.export_letters:
+            self.init_strato_letters_file()
+
     def main(self):
         if msg := self.get_msg("new_letters"):
-            msg = msg["data"]
-            msg = json.loads(msg)
-            pre_behavioral_model = msg["new_symbol"]
-            profileid = msg["profileid"]
-            twid = msg["twid"]
-            # format of the tupleid is daddr-dport-proto
-            tupleid = msg["tupleid"]
-            flow = msg["flow"]
+            self.handle_new_letters(msg)
 
-            if "tcp" not in tupleid.lower():
-                return
-
-            # function to convert each letter of behavioral model to ascii
-            behavioral_model = self.convert_input_for_module(
-                pre_behavioral_model
-            )
-            # predict the score of behavioral model being c&c channel
-            self.print(
-                f"predicting the sequence: {pre_behavioral_model}",
-                3,
-                0,
-            )
-            score = self.tcpmodel.predict(behavioral_model)
-            self.print(
-                f" >> sequence: {pre_behavioral_model}. "
-                f"final prediction score: {score[0][0]:.20f}",
-                3,
-                0,
-            )
-            # get a float instead of numpy array
-            score = score[0][0]
-
-            # to reduce false positives
-            if score < 0.99:
-                return
-
-            confidence: float = self.get_confidence(pre_behavioral_model)
-
-            self.set_evidence_cc_channel(
-                score,
-                confidence,
-                msg["uid"],
-                flow["starttime"],
-                tupleid,
-                profileid,
-                twid,
-            )
-            to_send = {
-                "attacker_type": utils.detect_data_type(flow["daddr"]),
-                "profileid": profileid,
-                "twid": twid,
-                "flow": flow,
-            }
-            # we only check malicious jarm hashes when there's a CC
-            # detection
-            self.db.publish("check_jarm_hash", json.dumps(to_send))
+        if msg := self.get_msg("tw_closed"):
+            self.handle_tw_closed(msg)
