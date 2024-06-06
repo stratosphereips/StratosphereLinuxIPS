@@ -109,28 +109,27 @@ Test Accuracy: 0.9035874605178833
 
 
 ## v1.2 Embedding + GRU
-
-
 Same as v1 but with different hyperparameters found by optuna.
 
-Model: "sequential"
-_________________________________________________________________
- Layer (type)                Output Shape              Param #   
-=================================================================
- embedding (Embedding)       (None, None, 64)          3200      
-                                                                 
- bidirectional (Bidirection  (None, 64)                18816     
- al)                                                             
-                                                                 
- dense (Dense)               (None, 32)                2080      
-                                                                 
- dropout (Dropout)           (None, 32)                0         
-                                                                 
- dense_1 (Dense)             (None, 1)                 33        
-                                                                 
-=================================================================
-Total params: 24129 (94.25 KB)
-Trainable params: 24129 (94.25 KB)
+
+        Model: "sequential"
+        _________________________________________________________________
+        Layer (type)                Output Shape              Param #   
+        =================================================================
+        embedding (Embedding)       (None, None, 64)          3200      
+                                                                        
+        bidirectional (Bidirection  (None, 64)                18816     
+        al)                                                             
+                                                                        
+        dense (Dense)               (None, 32)                2080      
+                                                                        
+        dropout (Dropout)           (None, 32)                0         
+                                                                        
+        dense_1 (Dense)             (None, 1)                 33        
+                                                                        
+        =================================================================
+        Total params: 24129 (94.25 KB)
+        Trainable params: 24129 (94.25 KB)
 
 ## Training
 
@@ -192,10 +191,12 @@ Test Accuracy: 0.939461886882782
 
 ---
 
-# Training
-Slips comes with a pre-trained model that we trained in the datasets shown in this folder. The datasets comes from many verified malware C&C connections that we have executed. The dataset also has normal connections that could be misdetected if not in included in the training. 
+# Training of Models to do Command and Control detection
+Slips comes with a pre-trained model that we trained in the datasets shown in the folder `modules/rnn_cc_detection/datasets`. The datasets comes from many verified malware C&C connections that we have executed. The dataset also has normal connections that could be misdetected if not in included in the training. 
 
-However, you can add your own connections and letters to the training dataset and retrain your own NN model. For that there is a python file called `training_code/rnn_model_training.py` that can be used.
+However, you can add your own connections and letters to the training dataset, or you can also use the current ones to train your own model. 
+
+If you see how we train our models, check `training_code/rnn_model_training.py`. This can be used like this:
 
 ```bash
 python training_code/rnn_model_training.py -v 3 -D datasets/all_datasets_raw -S new_rnn_model.h5
@@ -216,6 +217,8 @@ During testing this module also uses a threshold to know if the match of the rec
 
 `threshold confidence`: The detection of the C&C is augmented with a confidence level. This confidence level depend on the lenght of the received behavioral model in the current traffic, that is, the length  of the strings of letters that is being seen in the traffic and evaluated. If the length is more than 100 letters, the confidence is 1. If it is less, the confidence is decreased as a percentage. So a string with 20 letters (and a match with the model over the threshold) can never have more than a 0.2 confidence. This is because more flows mean more confidence.
 
+# Comparison of Models
+In order to know which model is better, we run all models against our dataset and see which is better. Unfortunately there are not so many C&C connections to afford a separate final test for now. Maybe we can do that later. The important part is that all models split the dataset in training/validation and testing. The model is trained in the training/validation dataset and once the best hypherparameters are selected, then the generalization power is computed in the testing dataset.
 
 
 # Dataset
