@@ -4,6 +4,7 @@ import json
 import numpy as np
 from tensorflow.python.keras.models import load_model
 
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
 from slips_files.core.evidence_structure.evidence import (
@@ -33,10 +34,20 @@ class CCDetection(IModule):
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 
     def init(self):
+        self.read_configuration()
+        self.subscribe_to_channels()
+
+    def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_letters")
+        self.c2 = self.db.subscribe("tw_closed")
         self.channels = {
             "new_letters": self.c1,
+            "tw_closed": self.c2,
         }
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.export_letters: bool = conf.export_strato_letters()
 
     def set_evidence_cc_channel(
         self,

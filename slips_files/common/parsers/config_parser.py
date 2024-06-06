@@ -348,6 +348,12 @@ class ConfigParser(object):
             .split(",")
         )
 
+    def export_strato_letters(self) -> bool:
+        export = self.read_configuration(
+            "parameters", "export_strato_letters", "no"
+        )
+        return "yes" in export
+
     def slack_token_filepath(self):
         return self.read_configuration(
             "exporting_alerts", "slack_api_path", False
