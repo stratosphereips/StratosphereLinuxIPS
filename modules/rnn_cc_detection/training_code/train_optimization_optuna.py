@@ -15,6 +15,25 @@ from tensorflow.keras.layers import Dense, Dropout
 import matplotlib.pyplot as plt
 # Author sebastian garcia, eldraco@gmail.com
 
+def get_model_GRU_int_encode (vocabulary_size, embed_dim, first_layer, second_layer, dropout_rate):
+    """
+    Define and return the model tu use
+    """
+    model = tf.keras.models.Sequential()
+    model.add(layers.Embedding(vocabulary_size, embed_dim, mask_zero=True))
+    # GRU is the main RNN layer, inputs: A 3D tensor, with shape [batch, timesteps, feature]
+    model.add(
+        layers.Bidirectional(
+            layers.GRU(first_layer, return_sequences=False), merge_mode="concat"
+        )
+    )
+    model.add(layers.Dense(second_layer, activation="relu"))
+    model.add(layers.Dropout(dropout_rate))
+    model.add(layers.Dense(1, activation="sigmoid"))
+    # Fully connected layer with 1 neuron output
+    # Final output value between 0 and 1 as probability
+
+    return model
 
 
 def train():
@@ -150,19 +169,7 @@ def train():
             X_traineval, X_test, y_traineval, y_test = train_test_split(x_data, y_data, test_size=0.2, random_state=42)    
             
             # Create the model of RNN
-            model = tf.keras.models.Sequential()
-            model.add(layers.Embedding(vocabulary_size, embed_dim, mask_zero=True))
-            # GRU is the main RNN layer, inputs: A 3D tensor, with shape [batch, timesteps, feature]
-            model.add(
-                layers.Bidirectional(
-                    layers.GRU(first_layer, return_sequences=False), merge_mode="concat"
-                )
-            )
-            model.add(layers.Dense(second_layer, activation="relu"))
-            model.add(layers.Dropout(dropout_rate))
-            model.add(layers.Dense(1, activation="sigmoid"))
-            # Fully connected layer with 1 neuron output
-            # Final output value between 0 and 1 as probability
+            model = get_model_GRU_int_encode(vocabulary_size, embed_dim, first_layer, second_layer, dropout_rate)
             
             # Compile model
             model.compile(optimizer=Adam(learning_rate=learning_rate, beta_1=0.9, beta_2=0.999),
