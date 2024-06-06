@@ -32,6 +32,9 @@ Looking at the letters it can be seen that this is a rather periodic connection,
 
 For now, Slips only creates behavioral models for TCP flows, and not UDP.
 
+# Who gets alerted
+The C&C alert from this module is used to alert on the source of the connection, and also the destination of the connection. 
+
 # Machine Learning models
 
 ## v1. Embedding + GRU
