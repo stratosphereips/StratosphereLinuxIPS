@@ -1,7 +1,7 @@
 # Must imports
 import warnings
 import json
-from typing import Dict
+from typing import Dict, List
 import os
 import csv
 import numpy as np
@@ -180,10 +180,22 @@ class CCDetection(IModule):
         exports starto letters to the file specified in
         self.starto_letters_file
         """
-        # Open the file in write mode
-        # with open(self.starto_letters_file, "a") as f:
-        #   writer = csv.writer(f, delimiter="\t")
-        ...
+        saddr = profileid.split("_")[-1]
+        with open(self.starto_letters_file, "a") as f:
+            writer = csv.writer(f, delimiter="\t")
+
+            out_tuples: str = self.db.get_outtuples_from_profile_tw(
+                profileid, twid
+            )
+            out_tuples: Dict[str, List[str, List[float]]] = json.loads(
+                out_tuples
+            )
+
+            for outtuple, info in out_tuples.items():
+                outtuple: str
+                info: List[str, List[float]]
+                letters = info[0]
+                writer.writerow([f"{saddr}-{outtuple}", letters])
 
     def handle_new_letters(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
