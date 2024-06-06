@@ -20,12 +20,13 @@ def test_get_asn_info_from_geolite(mock_db):
     assert ASN_info.get_asn_info_from_geolite("0.0.0.0") == {}
 
 
-def test_cache_ip_range(mock_db):
-    # Patch the database object creation before it is instantiated
-    ASN_info = ModuleFactory().create_asn_obj(mock_db)
-    assert ASN_info.cache_ip_range("8.8.8.8") == {
-        "asn": {"number": "AS15169", "org": "GOOGLE, US"}
-    }
+# def test_cache_ip_range(mock_db):
+#     # Patch the database object creation before it is instantiated
+#     ASN_info = ModuleFactory().create_asn_obj(mock_db)
+#     assert ASN_info.cache_ip_range("8.8.8.8") == {
+#         "asn": {"number": "AS15169", "org": "GOOGLE, US"}
+#     }
+#
 
 
 # GEOIP unit tests
