@@ -1,6 +1,6 @@
 """Unit test for modules/threat_intelligence/threat_intelligence.py"""
 
-from module_factory import ModuleFactory
+from tests.module_factory import ModuleFactory
 import os
 import pytest
 import json
