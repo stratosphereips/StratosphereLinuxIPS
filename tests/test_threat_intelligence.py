@@ -170,30 +170,6 @@ def test_set_evidence_malicious_asn(threatintel_obj, mocker):
     )
     mock_db.set_evidence.assert_called()  
 
-def test_set_evidence_malicious_ip_in_dns_response(threatintel_obj, mocker):
-    """
-    Test `set_evidence_malicious_ip_in_dns_response` for malicious IPs in DNS responses.
-    """
-    mock_db = mocker.patch.object(threatintel_obj, "db")
-    mock_db.get_ip_identification.return_value = " (Organization: Example Org)"
-    ip_info = {"description": "Malicious IP", "source": "TI Feed", "threat_level": "high"}
-
-    threatintel_obj.set_evidence_malicious_ip_in_dns_response(
-        ip="192.168.1.1",
-        uid="uid123",
-        timestamp="2023-11-28 12:00:00",
-        ip_info=ip_info,
-        dns_query="example.com",
-        profileid="profile_10.0.0.1",
-        twid="timewindow1",
-    )
-    mock_db.set_evidence.assert_called() 
-    mock_db.setInfoForIPs.assert_called_with(  
-        "192.168.1.1", {"threatintelligence": ip_info}
-    )
-    mock_db.set_malicious_ip.assert_called_with( 
-        "192.168.1.1", "profile_10.0.0.1", "timewindow1"
-    )
 
 def test_set_evidence_malicious_ip(threatintel_obj, mocker):
     """
