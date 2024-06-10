@@ -1,5 +1,7 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
 
+from unittest.mock import Mock
+
 from tests.module_factory import ModuleFactory
 import json
 from numpy import arange
@@ -15,7 +17,7 @@ dst_profileid = f"profile_{daddr}"
 
 
 def test_port_belongs_to_an_org(mock_db):
-    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+    flowalerts = ModuleFactory().create_conn_analyzer_obj(mock_db)
 
     # belongs to apple
     portproto = "65509/tcp"
@@ -42,7 +44,7 @@ def test_port_belongs_to_an_org(mock_db):
 
 
 def test_check_unknown_port(mocker, mock_db):
-    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+    flowalerts = ModuleFactory().create_conn_analyzer_obj(mock_db)
     # database.set_port_info('23/udp', 'telnet')
     mock_db.get_port_info.return_value = "telnet"
     # now we have info 23 udp
@@ -58,7 +60,7 @@ def test_check_unknown_port(mocker, mock_db):
     mock_db.is_ftp_port.return_value = False
     # mock the flowalerts call to port_belongs_to_an_org
     flowalerts_mock = mocker.patch(
-        "modules.flowalerts.flowalerts.FlowAlerts.port_belongs_to_an_org"
+        "modules.flowalerts.flowalerts.Conn.port_belongs_to_an_org"
     )
     flowalerts_mock.return_value = False
 
@@ -78,7 +80,7 @@ def test_check_unknown_port(mocker, mock_db):
 
 
 def test_check_if_resolution_was_made_by_different_version(mock_db):
-    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+    flowalerts = ModuleFactory().create_conn_analyzer_obj(mock_db)
 
     # now  this ipv6 belongs to the same profileid, is supposed to be
     # the other version of the ipv4 of the used profileid
@@ -115,7 +117,7 @@ def test_check_if_resolution_was_made_by_different_version(mock_db):
 
 
 def test_check_dns_arpa_scan(mock_db):
-    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+    flowalerts = ModuleFactory().create_dns_analyzer_obj(mock_db)
     # make 10 different arpa scans
     for ts in arange(0, 1, 1 / 10):
         is_arpa_scan = flowalerts.check_dns_arpa_scan(
@@ -126,8 +128,9 @@ def test_check_dns_arpa_scan(mock_db):
 
 
 def test_check_multiple_ssh_versions(mock_db):
-    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
-    # in the first flow, we only have 1 use ssh client so no version incompatibility
+    flowalerts = ModuleFactory().create_software_analyzer_obj(mock_db)
+    # in the first flow, we only have 1 use ssh client
+    # so no version incompatibility
     mock_db.get_software_from_profile.return_value = {
         "SSH::CLIENT": {
             "version-major": 8,
@@ -152,17 +155,17 @@ def test_check_multiple_ssh_versions(mock_db):
     assert flowalerts.check_multiple_ssh_versions(flow2, "timewindow1") is True
 
 
-def test_detect_DGA(mock_db):
-    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+def test_detect_dga(mock_db):
+    flowalerts = ModuleFactory().create_dns_analyzer_obj(mock_db)
     rcode_name = "NXDOMAIN"
-    # arbitrary ip to be able to call detect_DGA
-    daddr = "10.0.0.1"
+    flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock()
+    flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = False
+
     for i in range(10):
-        dga_detected = flowalerts.detect_DGA(
+        dga_detected = flowalerts.detect_dga(
             rcode_name,
             f"example{i}.com",
             timestamp,
-            daddr,
             profileid,
             twid,
             uid,
@@ -171,24 +174,20 @@ def test_detect_DGA(mock_db):
 
 
 def test_detect_young_domains(mock_db):
-    flowalerts = ModuleFactory().create_flowalerts_obj(mock_db)
+    flowalerts = ModuleFactory().create_dns_analyzer_obj(mock_db)
     domain = "example.com"
     answers = ["192.168.1.1", "192.168.1.2", "192.168.1.3", "CNAME_HERE.com"]
 
     # age in days
     mock_db.get_domain_data.return_value = {"Age": 50}
-    assert (
-        flowalerts.detect_young_domains(
-            domain, answers, timestamp, profileid, twid, uid
-        )
-        is True
+    assert flowalerts.detect_young_domains(
+        domain, answers, timestamp, profileid, twid, uid
     )
 
     # more than the age threshold
     mock_db.get_domain_data.return_value = {"Age": 1000}
-    assert (
+    assert not (
         flowalerts.detect_young_domains(
             domain, answers, timestamp, profileid, twid, uid
         )
-        is False
     )

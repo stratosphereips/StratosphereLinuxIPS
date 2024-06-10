@@ -122,7 +122,7 @@ class VT(IModule):
             # we dont have ASN info about this ip
             data["asn"] = {"number": f"AS{as_owner}", "timestamp": ts}
 
-        self.db.setInfoForIPs(ip, data)
+        self.db.set_ip_info(ip, data)
         self.db.set_passive_dns(ip, passive_dns)
 
     def get_url_vt_data(self, url):

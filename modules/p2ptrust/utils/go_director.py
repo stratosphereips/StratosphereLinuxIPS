@@ -14,7 +14,8 @@ from modules.p2ptrust.utils.utils import (
     send_evaluation_to_go,
 )
 from modules.p2ptrust.trust.trustdb import TrustDB
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -169,7 +170,7 @@ class GoDirector(IObservable):
         key_report_time = "report_time"
         key_message = "message"
 
-        expected_keys = {key_reporter, key_report_time, key_message}
+        # expected_keys = {key_reporter, key_report_time, key_message}
         # if the overlap of the two sets is smaller than the set of keys, some keys are missing. The & operator
         # picks the items that are present in both sets: {2, 4, 6, 8, 10, 12} & {3, 6, 9, 12, 15} = {3, 12}
 
@@ -322,7 +323,6 @@ class GoDirector(IObservable):
             # print(f"[Slips -> The Network] Slips responded with info score={score}
             # confidence={confidence} about IP: {key} to {reporter}.")
         else:
-            # send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
             self.print(
                 f"[Slips -> The Network] Slips has no info about IP: {key}. Not responding to {reporter}",
                 2,
@@ -416,7 +416,7 @@ class GoDirector(IObservable):
             )
             return
 
-        if type(evaluation) != dict:
+        if not isinstance(evaluation, dict):
             self.print("Evaluation is not a dictionary", 0, 2)
             # TODO: lower reputation
             return

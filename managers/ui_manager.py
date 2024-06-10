@@ -10,6 +10,7 @@ from multiprocessing import Queue
 class UIManager:
     def __init__(self, main):
         self.main = main
+        self.web_interface_port = self.main.conf.web_interface_port
 
     def check_if_webinterface_started(self):
         if not hasattr(self, "webinterface_return_value"):
@@ -21,14 +22,18 @@ class UIManager:
             # to make sure this function is only executed once
             delattr(self, "webinterface_return_value")
             return
-        if self.webinterface_return_value.get() != True:
+        if not self.webinterface_return_value.get():
             # to make sure this function is only executed once
             delattr(self, "webinterface_return_value")
             return
 
         self.main.print(
             f"Slips {green('web interface')} running on "
-            f"http://localhost:55000/"
+            f"http://localhost:{self.web_interface_port}/\n"
+            f"The port will stay open after slips is done with the "
+            f"analysis unless you manually kill it.\n"
+            f"You need to kill it to be able to start the web interface "
+            f"again."
         )
         delattr(self, "webinterface_return_value")
 
@@ -81,11 +86,13 @@ class UIManager:
                 for line in error.strip().decode().splitlines():
                     self.main.print(f"{line}")
 
-        if utils.is_port_in_use(55000):
-            pid = self.main.metadata_man.get_pid_using_port(55000)
+        if utils.is_port_in_use(self.web_interface_port):
+            pid = self.main.metadata_man.get_pid_using_port(
+                self.web_interface_port
+            )
             self.main.print(
-                f"Failed to start web interface. Port 55000 is "
-                f"used by PID {pid}"
+                f"Failed to start web interface. "
+                f"Port {self.web_interface_port} is used by PID {pid}"
             )
             return
 

@@ -223,23 +223,25 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
-If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
+If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
 
 **NOTE: replace ubuntu-image with the image that fits your archiecture**
+**NOTE: you have to be in the main Slips directory to build this. **
 
-	cd ~/code/StratosphereLinuxIPS/docker/ubunutu-image
-	docker build --no-cache -t slips -f Dockerfile .
-	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
+
+	cd ~/StratosphereLinuxIPS
+	docker build --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
+	docker run -it --rm --net=host slips
 	./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
 
-	docker build --network=host --no-cache -t slips -f Dockerfile .
+	docker build --network=host --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
 
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 
-	cp some-pcap-file.pcap ~/code/StratosphereLinuxIPS/dataset
-	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
+	cp some-pcap-file.pcap ~/StratosphereLinuxIPS/dataset
+	docker run -it --rm --net=host -v ~/StratosphereLinuxIPS/dataset/:/StratosphereLinuxIPS/dataset slips
 	./slips.py -f dataset/some-pcap-file.pcap
 
 

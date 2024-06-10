@@ -15,7 +15,7 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -474,7 +474,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def is_cyst_enabled(self):
         return self.r.get("is_cyst_enabled")
 
-    def get_equivalent_tws(self, hrs: float):
+    def get_equivalent_tws(self, hrs: float) -> int:
         """
         How many tws correspond to the given hours?
         for example if the tw width is 1h, and hrs is 24, this function returns 24
@@ -554,17 +554,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.hget("analysis", "output_dir")
 
-    def setInfoForIPs(self, ip: str, to_store: dict):
+    def set_ip_info(self, ip: str, to_store: dict):
         """
         Store information for this IP
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
-        going to store for this IP.
+        We receive a dictionary, such as {'geocountry': 'rumania'} to
+        store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
         """
         # Get the previous info already stored
         cached_ip_info = self.get_ip_info(ip)
-        if cached_ip_info is False:
+        if not cached_ip_info:
             # This IP is not in the dictionary, add it first:
             self.set_new_ip(ip)
             cached_ip_info = {}
@@ -664,19 +664,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             return False
 
         # these are the tws this ip was resolved in
-        tws = ip_info["timewindows"]
+        tws_where_ip_was_resolved = ip_info["timewindows"]
 
         # IP is resolved, was it resolved in the past x hrs?
-        tws_to_search = self.get_equivalent_tws(hrs)
+        tws_to_search: int = self.get_equivalent_tws(hrs)
 
-        current_twid = 0  # number of the tw we're looking for
-        while tws_to_search != current_twid:
-            matching_tws = [i for i in tws if f"timewindow{current_twid}" in i]
-
-            if not matching_tws:
-                current_twid += 1
-            else:
+        for tw_number in range(tws_to_search):
+            if f"timewindow{tw_number}" in tws_where_ip_was_resolved:
                 return True
+        return False
 
     def delete_dns_resolution(self, ip):
         self.r.hdel("DNSresolution", ip)
@@ -1228,16 +1224,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def set_whitelist(self, type_, whitelist_dict):
         """
         Store the whitelist_dict in the given key
-        :param type_: supporte types are IPs, domains and organizations
-        :param whitelist_dict: the dict of IPs, domains or orgs to store
+        :param type_: supported types are IPs, domains, macs and organizations
+        :param whitelist_dict: the dict of IPs,macs,  domains or orgs to store
         """
         self.r.hset("whitelist", type_, json.dumps(whitelist_dict))
 
-    def get_all_whitelist(self) -> Dict[str, dict]:
-        """Returns a dict of 3 keys: IPs, domains, organizations or mac"""
-        return self.r.hgetall("whitelist")
+    def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
+        """
+        Returns a dict with the following keys from the whitelist
+        'mac', 'organizations', 'IPs', 'domains'
+        """
+        whitelist: Optional[Dict[str, str]] = self.r.hgetall("whitelist")
+        if whitelist:
+            whitelist = {k: json.loads(v) for k, v in whitelist.items()}
+        return whitelist
 
-    def get_whitelist(self, key):
+    def get_whitelist(self, key: str) -> dict:
         """
         Whitelist supports different keys like : IPs domains
         and organizations
@@ -1248,6 +1250,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             return json.loads(whitelist)
         else:
             return {}
+
+    def has_cached_whitelist(self) -> bool:
+        return bool(self.r.exists("whitelist"))
 
     def store_dhcp_server(self, server_addr):
         """

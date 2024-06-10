@@ -18,7 +18,7 @@ from modules.update_manager.timer_manager import InfiniteTimer
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
-from slips_files.core.helpers.whitelist import Whitelist
+from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 
 class UpdateManager(IModule):
@@ -1425,39 +1425,38 @@ class UpdateManager(IModule):
             return False
 
     def check_if_update_org(self, file):
+        """checks if we should update organizations' info
+        based on the hash of thegiven file"""
         cached_hash = self.db.get_TI_file_info(file).get("hash", "")
         if utils.get_sha256_hash(file) != cached_hash:
             return True
 
     def get_whitelisted_orgs(self) -> list:
-        self.whitelist.read_whitelist()
+
         whitelisted_orgs: dict = self.db.get_whitelist("organizations")
         whitelisted_orgs: list = list(whitelisted_orgs.keys())
         return whitelisted_orgs
 
-    def update_org_files(self):
-        # update whitelisted orgs in whitelist.conf, we may not have info about all of them
-        whitelisted_orgs: list = self.get_whitelisted_orgs()
-        # remove the once we have info about
-        not_supported_orgs = [
-            org for org in whitelisted_orgs if org not in utils.supported_orgs
-        ]
-        for org in not_supported_orgs:
-            self.whitelist.load_org_IPs(org)
+    def update_whitelist(self):
+        """
+        parses the whitelist using the whitelist
+         parser and stores it in the db
+        """
+        self.whitelist.update()
 
-        # update org we have local into about
+    def update_org_files(self):
         for org in utils.supported_orgs:
             org_ips = os.path.join(self.org_info_path, org)
             org_asn = os.path.join(self.org_info_path, f"{org}_asn")
             org_domains = os.path.join(self.org_info_path, f"{org}_domains")
             if self.check_if_update_org(org_ips):
-                self.whitelist.load_org_IPs(org)
+                self.whitelist.parser.load_org_ips(org)
 
             if self.check_if_update_org(org_domains):
-                self.whitelist.load_org_domains(org)
+                self.whitelist.parser.load_org_domains(org)
 
             if self.check_if_update_org(org_asn):
-                self.whitelist.load_org_asn(org)
+                self.whitelist.parser.load_org_asn(org)
 
             for file in (org_ips, org_domains, org_asn):
                 info = {
