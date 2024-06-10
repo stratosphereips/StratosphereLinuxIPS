@@ -97,15 +97,17 @@ class Utils(object):
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels
 
-    def sanitize(self, string):
+    
+    def sanitize(self, input_string):
         """
         Sanitize strings taken from the user
         """
-
-        special_chars = "[@_!#$%^&;*()<>?/\|}{~:] \n"
-        for char in special_chars:
-            string = string.replace(char, "")
-        return string
+        characters_to_remove = set(";`&|$\n()")
+        input_string = input_string.strip()
+        remove_characters = str.maketrans("", "", "".join(characters_to_remove))
+        sanitized_string = input_string.translate(remove_characters)
+        
+        return sanitized_string
 
     def detect_data_type(self, data):
         """
@@ -278,7 +280,7 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
-    def get_own_IPs(self) -> list:
+    def get_own_ips(self) -> list:
         """
         Returns a list of our local and public IPs
         """
@@ -543,3 +545,4 @@ class Utils(object):
 
 
 utils = Utils()
+
