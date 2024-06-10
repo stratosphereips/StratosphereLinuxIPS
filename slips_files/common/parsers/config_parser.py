@@ -35,8 +35,8 @@ class ConfigParser(object):
         )
         try:
             with open(self.configfile) as source:
-                yaml.safe_load(source)
-        except (IOError, TypeError):
+               config =  yaml.safe_load(source)
+        except (IOError, TypeError, yaml.YAMLError):
             pass
         return config
 
@@ -62,7 +62,10 @@ class ConfigParser(object):
          Other processes also access the configuration
         """
         try:
-            return self.config.get(section, name)
+            section_data = self.config.get(section,None)
+            if section_data is None:
+                return None
+            return section_data.get(name, None)
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
@@ -213,7 +216,7 @@ class ConfigParser(object):
 
     def get_tw_width_as_float(self):
         try:
-            twid_width = self.config.get("parameters", "time_window_width")
+            twid_width = self.read_configuration("parameters", "time_window_width", 3600)
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,

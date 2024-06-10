@@ -1,6 +1,6 @@
 """
 This file tests 2 different config files other than slips' default config/slips.conf or onfig/slips.yaml
-test/test.conf and tests/test2.conf
+test/test.yaml and tests/test2.yaml
 """
 
 from slips.main import Main
@@ -53,7 +53,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t  -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c tests/integration_tests/test.conf  "
+        f"-c tests/integration_tests/test.yaml  "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
@@ -124,7 +124,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t  -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c tests/integration_tests/test2.conf "
+        f"-c tests/integration_tests/test2.yaml "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
