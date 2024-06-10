@@ -119,6 +119,12 @@ jobs:
       run: |
         python3 -m pytest tests/test_ip_info.py -p no:warnings -vv
 
+    - name: urlhaus Unit Tests
+      run: |
+        coverage run --source=./ -m pytest tests/test_urlhaus.py -p no:warnings -vv
+        coverage report  --include="modules/threat_intelligence/urlhaus.py*"
+        coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/ip_info    
+
     - name: Input Unit Tests
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
