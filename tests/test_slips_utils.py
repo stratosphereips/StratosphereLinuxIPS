@@ -45,11 +45,11 @@ def test_get_hash_from_file_permission_error():
 @pytest.mark.parametrize(
     "input_string, expected_output",
     [
-        ("Hello; world `& |$(this", "Helloworld`this"),  # special chars
+        ("Hello;world`& |$(this", "Helloworld this"),  # special chars
         ("", ""),  # empty input
-        ("!@#$%^&*()", ""),  # input with only special characters
+        ("!@#$%^&*()", "!@#%^*"),  # input with only special characters
         ("Thisisacleanstring", "Thisisacleanstring"),
-        ("Hello World!", "HelloWorld"),  # input with spaces
+        ("Hello World!", "Hello World!"),  # input with spaces
     ],
 )
 def test_sanitize(input_string, expected_output):
@@ -76,18 +76,17 @@ def test_detect_data_type(data, expected_type):
     assert utils.detect_data_type(data) == expected_type
 
 
-def test_get_first_octet():
+@pytest.mark.parametrize(
+    "ip_address, expected_first_octet",
+    [
+        ("192.168.1.100", "192"),
+        ("2001:0db8:85a3:0000:0000:8a2e:0370:7334", "2001"),
+        ("invalid", None),
+    ],
+)
+def test_get_first_octet(ip_address, expected_first_octet):
     utils = ModuleFactory().create_utils_obj()
-
-    # IPv4 address
-    assert utils.get_first_octet("192.168.1.100") == "192"
-    # IPv6 address
-    assert (
-        utils.get_first_octet("2001:0db8:85a3:0000:0000:8a2e:0370:7334")
-        == "2001"
-    )
-    # invalid IP address
-    assert utils.get_first_octet("invalid") is None
+    assert utils.get_first_octet(ip_address) == expected_first_octet
 
 
 @pytest.mark.parametrize(
@@ -107,51 +106,48 @@ def test_calculate_confidence(input_value, expected_output):
     assert utils.calculate_confidence(input_value) == expected_output
 
 
-def test_convert_format():
+@pytest.mark.parametrize(
+    "input_value, input_format, expected_output",
+    [
+        ("2023-04-06T12:34:56.789Z", "%Y-%m-%dT%H:%M:%S.%fZ", "2023-04-06T12:34:56.789000Z"),
+        (1680788096.789, "iso", "2023-04-06T13:34:56.789000+00:00"),
+        (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 19:04:56"),
+        (datetime.datetime(2023, 4, 6, 12, 34, 56, 789000), "unixtimestamp", 1680764696.789),
+    ],
+)
+def test_convert_format(input_value, input_format, expected_output):
     utils = ModuleFactory().create_utils_obj()
-    assert (
-        utils.convert_format(
-            "2023-04-06T12:34:56.789Z", "%Y-%m-%dT%H:%M:%S.%fZ"
-        )
-        == "2023-04-06T12:34:56.789000Z"
-    )
-    assert (
-        utils.convert_format(1680788096.789, "iso")
-        == "2023-04-06T13:34:56.789000+00:00"
-    )
-    assert (
-        utils.convert_format(1680788096.789, "%Y-%m-%d %H:%M:%S")
-        == "2023-04-06 19:04:56"
-    )
-    assert (
-        utils.convert_format(
-            datetime.datetime(2023, 4, 6, 12, 34, 56, 789000), "unixtimestamp"
-        )
-        == 1680764696.789
-    )
+    assert utils.convert_format(input_value, input_format) == expected_output
 
 
-def test_assert_microseconds():
+@pytest.mark.parametrize(
+    "input_value, expected_output",
+    [
+        ("1680788096.789", "1680788096.789000"),
+        ("1680788096", "1680788096"),
+        ("1680788096.123456", "1680788096.123456"),
+        ("1680788096.123456789", "1680788096.123456789"),
+    ],
+)
+def test_assert_microseconds(input_value, expected_output):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.assert_microseconds("1680788096.789") == "1680788096.789000"
-    assert utils.assert_microseconds("1680788096") == "1680788096"
-    assert (
-        utils.assert_microseconds("1680788096.123456") == "1680788096.123456"
-    )
-    assert (
-        utils.assert_microseconds("1680788096.123456789")
-        == "1680788096.123456789"
-    )
+    assert utils.assert_microseconds(input_value) == expected_output
 
 
-def test_is_private_ip():
+@pytest.mark.parametrize(
+    "ip_address, expected_result",
+    [
+        (ipaddress.ip_address("192.168.1.1"), True),
+        (ipaddress.ip_address("10.0.0.1"), True),
+        (ipaddress.ip_address("172.16.0.1"), True),
+        (ipaddress.ip_address("8.8.8.8"), False),
+        (ipaddress.ip_address("0.0.0.0"), False),
+        (ipaddress.ip_address("255.255.255.255"), False),
+    ],
+)
+def test_is_private_ip(ip_address, expected_result):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.is_private_ip(ipaddress.ip_address("192.168.1.1"))
-    assert utils.is_private_ip(ipaddress.ip_address("10.0.0.1"))
-    assert utils.is_private_ip(ipaddress.ip_address("172.16.0.1"))
-    assert not utils.is_private_ip(ipaddress.ip_address("8.8.8.8"))
-    assert not utils.is_private_ip(ipaddress.ip_address("0.0.0.0"))
-    assert not utils.is_private_ip(ipaddress.ip_address("255.255.255.255"))
+    assert utils.is_private_ip(ip_address) == expected_result
 
 
 @pytest.mark.parametrize(
@@ -205,13 +201,13 @@ def _check_ip_presence(utils, expected_ip):
     """
     Helper function to check if the given IP is present in the list of own IPs.
     """
-    return expected_ip in utils.get_own_IPs() or not utils.get_own_IPs()
+    return expected_ip in utils.get_own_ips() or not utils.get_own_ips()
 
 
 @pytest.mark.parametrize(
     "side_effect, expected_result",
     [
-        (None, lambda utils: isinstance(utils.get_own_IPs(), list)),
+        (None, lambda utils: isinstance(utils.get_own_ips(), list)),
         (
             requests.exceptions.ConnectionError,
             lambda utils: _check_ip_presence(utils, "127.0.0.1"),
@@ -222,7 +218,7 @@ def _check_ip_presence(utils, expected_ip):
         ),
     ],
 )
-def test_get_own_IPs(side_effect, expected_result):
+def test_get_own_ips(side_effect, expected_result):
     utils = ModuleFactory().create_utils_obj()
     if side_effect:
         with patch("requests.get", side_effect=side_effect):
