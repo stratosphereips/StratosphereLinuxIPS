@@ -140,6 +140,11 @@ jobs:
               coverage report  --include="slips_files/core/input.py*"
               coverage html  --include="slips_files/core/input.py*" -d coverage_reports/input
 
+          - name: urlhaus Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_urlhaus.py -p no:warnings -vv
+              coverage report  --include="modules/threat_intelligence/urlhaus.py*"
+              coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/urlhaus  
 
 
   dataset_integration_tests:
