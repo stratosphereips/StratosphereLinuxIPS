@@ -76,7 +76,7 @@ def validate_go_reports(data: str) -> list:
         print("Go send invalid json")
         return []
 
-    if type(reports) != list:
+    if not isinstance(reports, list):
         print("Expected list, got something else")
         return []
 
@@ -166,7 +166,7 @@ def save_ip_report_to_db(
 
     # store it in IPsInfo key
     wrapped_data = {"p2p4slips": report_data}
-    db.setInfoForIPs(ip, wrapped_data)
+    db.set_ip_info(ip, wrapped_data)
 
 
 #
@@ -236,23 +236,6 @@ def send_evaluation_to_go(
         "report", "ip", ip, "score_confidence", evaluation=evaluation_raw
     )
 
-    send_message_to_go(ip, recipient, channel_name, message_raw, db)
-
-
-def send_empty_evaluation_to_go(
-    ip: str, recipient: str, channel_name: str
-) -> None:
-    """
-    Creates empty message and sends it to recipient;ip
-
-    :param ip: The IP that is being reported
-    :param recipient: The peer that should receive the report.
-    Use "*" wildcard to broadcast to everyone
-    :return: None
-    """
-    message_raw = build_go_message(
-        "report", "ip", ip, "score_confidence", evaluation=None
-    )
     send_message_to_go(ip, recipient, channel_name, message_raw, db)
 
 

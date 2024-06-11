@@ -1,17 +1,20 @@
-# Must imports
-from slips_files.common.imports import *
 import traceback
 import sys
-
-# Your imports
 import time
 import json
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 
 
 class Timeline(IModule):
     # Name: short name of the module. Do not use spaces
     name = "Timeline"
-    description = "Creates kalipso timeline of what happened in the network based on flows and available data"
+    description = (
+        "Creates kalipso timeline of what happened in the"
+        " network based on flows and available data"
+    )
     authors = ["Sebastian Garcia"]
 
     def init(self):
@@ -44,13 +47,14 @@ class Timeline(IModule):
             flow_dict = json.loads(flow[uid])
             profile_ip = profileid.split("_")[1]
             dur = round(float(flow_dict["dur"]), 3)
-            stime = flow_dict["ts"]
             saddr = flow_dict["saddr"]
             sport = flow_dict["sport"]
             daddr = flow_dict["daddr"]
             dport = flow_dict["dport"]
             proto = flow_dict["proto"].upper()
             dport_name = flow_dict.get("appproto", "")
+            # suricata does this
+            dport_name = "" if dport_name == "failed" else dport_name
             if not dport_name:
                 dport_name = self.db.get_port_info(
                     f"{str(dport)}/{proto.lower()}"
@@ -60,9 +64,8 @@ class Timeline(IModule):
             else:
                 dport_name = dport_name.upper()
             state = flow_dict["state"]
-            pkts = flow_dict["pkts"]
             allbytes = flow_dict["allbytes"]
-            if type(allbytes) != int:
+            if not isinstance(allbytes, int):
                 allbytes = 0
 
             # allbytes_human are sorted wrong in the interface, thus we sticked to original byte size.
@@ -86,9 +89,8 @@ class Timeline(IModule):
             #         float(allbytes) / 1024 / 1024 / 1024, 'Gb'
             #     )
 
-            spkts = flow_dict["spkts"]
             sbytes = flow_dict["sbytes"]
-            if type(sbytes) != int:
+            if not isinstance(sbytes, int):
                 sbytes = 0
 
             # Now that we have the flow processed. Try to interpret it and create the activity line
@@ -182,7 +184,7 @@ class Timeline(IModule):
             elif "ICMP" in proto:
                 extra_info = {}
                 warning = ""
-                if type(sport) == int:
+                if isinstance(sport, int):
                     # zeek puts the number
                     if sport == 11:
                         dport_name = "ICMP Time Excedded in Transit"
@@ -199,7 +201,7 @@ class Timeline(IModule):
                             "type": f"0x{str(sport)}",
                         }
 
-                elif type(sport) == str:
+                elif isinstance(sport, str):
                     # Argus puts in hex the values of the ICMP
                     if "0x0008" in sport:
                         dport_name = "PING echo"
