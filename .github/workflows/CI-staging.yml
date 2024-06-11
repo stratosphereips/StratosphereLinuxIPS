@@ -140,6 +140,11 @@ jobs:
               coverage report  --include="slips_files/core/input.py*"
               coverage html  --include="slips_files/core/input.py*" -d coverage_reports/input
 
+          - name: set evidence test
+            run: |
+               coverage run --source=./ -m pytest tests/test_set_evidence.py -p no:warnings -vv
+               coverage report --include="modules/flowalerts/set_evidence.py*"
+               coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
 
   dataset_integration_tests:
