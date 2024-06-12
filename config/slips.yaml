@@ -41,7 +41,11 @@ parameters:
 # a year in the name that is 100 years back.
 #time_window_width : 'only_one_tw'
 
-
+# Export the strato letters used for detecting C&C by the RNN model
+# to the strato_letters.tsv in the current output directory.
+# these letters are used for re-training the model.
+# options are yes or no
+   export_strato_letters: 'no'
 
 # This option determines whether to analyze only what goes OUT of the local network or also what is coming IN the local network
 # Options: out, all

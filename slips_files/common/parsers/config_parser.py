@@ -2,7 +2,6 @@ from datetime import timedelta
 import sys
 import ipaddress
 from typing import List
-import configparser
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
 import yaml
@@ -28,16 +27,13 @@ class ConfigParser(object):
             map(ipaddress.ip_network, self.home_network_ranges)
         )
 
-    def read_config_file(self):
+    def read_config_file(self) -> dict:
         """
         reads slips configuration file, slips.conf/slips.yaml is the default file
         """
-        config = configparser.ConfigParser(
-            interpolation=None, comment_prefixes="#"
-        )
         try:
             with open(self.configfile) as source:
-               config =  yaml.safe_load(source)
+                config = yaml.safe_load(source)
         except (IOError, TypeError, yaml.YAMLError):
             pass
         return config
@@ -64,16 +60,11 @@ class ConfigParser(object):
          Other processes also access the configuration
         """
         try:
-            section_data = self.config.get(section,None)
+            section_data: dict = self.config.get(section, None)
             if section_data is None:
                 return None
-            return section_data.get(name, None)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError,
-        ):
+            return section_data.get(name, default_value)
+        except (NameError, ValueError):
             # There is a conf, but there is no option,
             # or no section or no configuration file specified
             return default_value
@@ -218,13 +209,10 @@ class ConfigParser(object):
 
     def get_tw_width_as_float(self):
         try:
-            twid_width = self.read_configuration("parameters", "time_window_width", 3600)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError,
-        ):
+            twid_width = self.read_configuration(
+                "parameters", "time_window_width", 3600
+            )
+        except (NameError, ValueError):
             # There is a conf, but there is no option,
             # or no section or no configuration file specified
             twid_width = 3600
