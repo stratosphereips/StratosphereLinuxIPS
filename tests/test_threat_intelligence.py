@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 import ipaddress
 
+
 @pytest.fixture
 def threatintel_obj(mock_db, tmp_path):
     """Fixture to create a ThreatIntel object with mocked dependencies."""
@@ -157,7 +158,8 @@ def test_get_malicious_ip_ranges(mock_db):
 
 def test_set_evidence_malicious_asn(threatintel_obj, mocker):
     """
-    Test `set_evidence_malicious_asn` for setting evidence of malicious ASN interactions.
+    Test `set_evidence_malicious_asn` for 
+    setting evidence of malicious ASN interactions.
     """
     mock_db = mocker.patch.object(threatintel_obj, "db")
     mock_db.get_ip_identification.return_value = " (Organization: Example Org)"
@@ -181,7 +183,8 @@ def test_set_evidence_malicious_asn(threatintel_obj, mocker):
 
 def test_set_evidence_malicious_ip(threatintel_obj, mocker):
     """
-    Test `set_evidence_malicious_ip` for recording evidence of traffic with malicious IPs.
+    Test `set_evidence_malicious_ip` for 
+    recording evidence of traffic with malicious IPs.
     """
     mock_db = mocker.patch.object(threatintel_obj, "db")
     mock_db.get_ip_identification.return_value = " (Organization: Example Org)"
@@ -215,31 +218,43 @@ def test_set_evidence_malicious_ip(threatintel_obj, mocker):
     mock_db.set_evidence.assert_called()
 
 
-@pytest.mark.parametrize("threat_level, expected", [
-    ("low", True),
-    ("medium", True),
-    ("high", True),
-    ("critical", True),
-    ("invalid", False),
-])
+@pytest.mark.parametrize(
+    "threat_level, expected",
+    [
+        ("low", True),
+        ("medium", True),
+        ("high", True),
+        ("critical", True),
+        ("invalid", False),
+    ],
+)
 def test_is_valid_threat_level(threatintel_obj, threat_level, expected):
     """Test `is_valid_threat_level` for recognizing valid threat levels."""
     assert threatintel_obj.is_valid_threat_level(threat_level) is expected
 
 
-@pytest.mark.parametrize("protocol, ip_address, expected", [
-    ("ICMP", "dstip", True),
-    ("TCP", "dstip", False),
-    ("ICMP", "srcip", False),
-])
-def test_is_outgoing_icmp_packet(threatintel_obj, protocol, ip_address, expected):
+@pytest.mark.parametrize(
+    "protocol, ip_address, expected",
+    [
+        ("ICMP", "dstip", True),
+        ("TCP", "dstip", False),
+        ("ICMP", "srcip", False),
+    ],
+)
+def test_is_outgoing_icmp_packet(
+    threatintel_obj, protocol, ip_address, expected
+):
     """Test `is_outgoing_icmp_packet` for identifying outbound ICMP packets."""
-    assert threatintel_obj.is_outgoing_icmp_packet(protocol, ip_address) is expected
+    assert (
+        threatintel_obj.is_outgoing_icmp_packet(protocol, ip_address)
+        is expected
+    )
 
 
 def test_delete_old_source_ips(threatintel_obj, mocker):
     """
-    Test the `__delete_old_source_ips` method for removing outdated IP IoCs.
+    Test the `__delete_old_source_ips` 
+    method for removing outdated IP IoCs.
     """
     mock_db = mocker.patch.object(threatintel_obj, "db")
     mock_db.get_IPs_in_IoC.return_value = {
@@ -252,15 +267,13 @@ def test_delete_old_source_ips(threatintel_obj, mocker):
 
 def test_delete_old_source_domains(threatintel_obj, mocker):
     """
-    Test the `__delete_old_source_domains` 
+    Test the `__delete_old_source_domains`
     method for removing outdated domain IoCs.
     """
     mock_db = mocker.patch.object(threatintel_obj, "db")
     mock_db.get_Domains_in_IoC.return_value = {
-        "example.com": 
-            '{"description": "Old domain", "source": "old_file.txt"}',
-        "current.com": 
-            '{"description": "Current domain", "source": "current_file.txt"}',
+        "example.com": '{"description": "Old domain", "source": "old_file.txt"}',
+        "current.com": '{"description": "Current domain", "source": "current_file.txt"}',
     }
     threatintel_obj._ThreatIntel__delete_old_source_domains("old_file.txt")
     mock_db.delete_domains_from_IoC_domains.assert_called_once_with(
@@ -308,10 +321,10 @@ def test_should_update_local_ti_file(
     expected_calls,
     mocker,
     mock_db,
-    
 ):
     """
-    Test the logic for updating local threat intelligence files based on hash comparison.
+    Test the logic for updating local threat 
+    intelligence files based on hash comparison.
     """
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
     own_malicious_iocs = os.path.join(
@@ -354,11 +367,14 @@ def test_spamhaus(threatintel_obj, mocker):
     assert result is None
 
 
-@pytest.mark.parametrize("domain, expected", [
-    ("example.local", True),
-    ("test.arpa", True),
-    ("malicious.com", None),
-])
+@pytest.mark.parametrize(
+    "domain, expected",
+    [
+        ("example.local", True),
+        ("test.arpa", True),
+        ("malicious.com", None),
+    ],
+)
 def test_is_ignored_domain(threatintel_obj, domain, expected):
     """Test `is_ignored_domain` for filtering out irrelevant domains."""
     assert threatintel_obj.is_ignored_domain(domain) is expected
@@ -412,7 +428,8 @@ def test_search_online_for_hash(
     expected_result,
 ):
     """
-    Test `search_online_for_hash` for querying online threat intelligence sources.
+    Test `search_online_for_hash` for querying 
+    online threat intelligence sources.
     """
     mock_circl_lu = mocker.patch.object(threatintel_obj, "circl_lu")
     mock_urlhaus_lookup = mocker.patch.object(
@@ -431,31 +448,42 @@ def test_search_online_for_hash(
     assert result == expected_result
 
 
-@pytest.mark.parametrize("ip_address, mock_return_value, expected_result", 
-                         [
-    ("192.168.1.1", '{"description": "Malicious IP"}', 
-     {"description": "Malicious IP"}),
-    ("10.0.0.1", None, False),
-])
-def test_search_offline_for_ip(threatintel_obj, mocker, 
-                               ip_address, mock_return_value, 
-                               expected_result):
+@pytest.mark.parametrize(
+    "ip_address, mock_return_value, expected_result",
+    [
+        (
+            "192.168.1.1",
+            '{"description": "Malicious IP"}',
+            {"description": "Malicious IP"},
+        ),
+        ("10.0.0.1", None, False),
+    ],
+)
+def test_search_offline_for_ip(
+    threatintel_obj, mocker, ip_address, mock_return_value, expected_result
+):
     """Test `search_offline_for_ip` for querying local threat intelligence data."""
     mock_db = mocker.patch.object(threatintel_obj, "db")
     mock_db.search_IP_in_IoC.return_value = mock_return_value
     result = threatintel_obj.search_offline_for_ip(ip_address)
     assert result == expected_result
 
-@pytest.mark.parametrize("ip_address, mock_return_value, expected_result", [
-    ("1.2.3.4", {"description": "Spam IP"}, {"description": "Spam IP"}),
-    ("10.0.0.1", None, None),
-])
+
+@pytest.mark.parametrize(
+    "ip_address, mock_return_value, expected_result",
+    [
+        ("1.2.3.4", {"description": "Spam IP"}, {"description": "Spam IP"}),
+        ("10.0.0.1", None, None),
+    ],
+)
 @patch("modules.threat_intelligence.threat_intelligence.ThreatIntel.spamhaus")
-def test_search_online_for_ip(mock_spamhaus, 
-                              threatintel_obj, 
-                              ip_address, 
-                              mock_return_value, 
-                              expected_result):
+def test_search_online_for_ip(
+    mock_spamhaus,
+    threatintel_obj,
+    ip_address,
+    mock_return_value,
+    expected_result,
+):
     """Test `search_online_for_ip` for querying online threat intelligence sources."""
     mock_spamhaus.return_value = mock_return_value
     result = threatintel_obj.search_online_for_ip(ip_address)
@@ -464,33 +492,42 @@ def test_search_online_for_ip(mock_spamhaus,
 
 @pytest.mark.parametrize(
     "ip, ip_type, in_blacklist, expected_result",
-    [   # ipv4 in blacklist
-        ("192.168.1.1", "ipv4", True, True), 
+    [  # ipv4 in blacklist
+        ("192.168.1.1", "ipv4", True, True),
         # ipv6 in blacklist
         ("2001:db8::", "ipv6", False, False),
-        # ipv6 not in blacklist 
-        ("2001:db8:1::1", "ipv6", None, None), 
+        # ipv6 not in blacklist
+        ("2001:db8:1::1", "ipv6", None, None),
         # invalid ip
-        ("10.0.0.21", "invalid", None, None), 
+        ("10.0.0.21", "invalid", None, None),
         # ipv6 range not in cache
-        ("2001:db8::", "ipv6", None, False), 
+        ("2001:db8::", "ipv6", None, False),
         # invalid ip range not in cache
-        ("10.0.0.21", "invalid", None, None), 
+        ("10.0.0.21", "invalid", None, None),
     ],
 )
 def test_ip_belongs_to_blacklisted_range(
-    threatintel_obj, mocker, ip, ip_type, in_blacklist, expected_result
+    threatintel_obj, mocker, ip, ip_type, 
+    in_blacklist, expected_result
 ):
     """Test `ip_belongs_to_blacklisted_range` for checking malicious IP ranges."""
     mock_db = mocker.patch.object(threatintel_obj, "db")
 
     if ip_type == "ipv4":
-        first_octet = str(ipaddress.ip_address(ip).exploded.split("/")[0].split(".")[0])
-        threatintel_obj.cached_ipv4_ranges = {first_octet: [f"{first_octet}.0.0.0/8"]}
+        first_octet = str(
+            ipaddress.ip_address(ip).exploded.split("/")[0].split(".")[0]
+        )
+        threatintel_obj.cached_ipv4_ranges = {
+            first_octet: [f"{first_octet}.0.0.0/8"]
+        }
         range_value = f"{first_octet}.0.0.0/8"
     elif ip_type == "ipv6":
-        first_octet = str(ipaddress.ip_address(ip).exploded.split("/")[0].split(":")[0])
-        threatintel_obj.cached_ipv6_ranges = {first_octet: [f"{first_octet}::/32"]}
+        first_octet = str(
+            ipaddress.ip_address(ip).exploded.split("/")[0].split(":")[0]
+        )
+        threatintel_obj.cached_ipv6_ranges = {
+            first_octet: [f"{first_octet}::/32"]
+        }
         range_value = f"{first_octet}::/32"
     else:
         range_value = ""
@@ -512,7 +549,8 @@ def test_ip_belongs_to_blacklisted_range(
         "srcip",
     )
     assert result is expected_result
-    
+
+
 @pytest.mark.parametrize(
     "domain, mock_return_value, expected_result",
     [
@@ -524,9 +562,10 @@ def test_ip_belongs_to_blacklisted_range(
         ("safe.com", ("{}", False), ({}, False)),
     ],
 )
-def test_search_offline_for_domain(threatintel_obj, mocker, 
-                                   domain, mock_return_value, 
-                                   expected_result):
+def test_search_offline_for_domain(
+    threatintel_obj, mocker, domain, 
+    mock_return_value, expected_result
+):
     """Test `search_offline_for_domain` for checking domain blacklisting."""
     mock_db = mocker.patch.object(threatintel_obj, "db")
     mock_db.is_domain_malicious.return_value = mock_return_value
@@ -537,22 +576,30 @@ def test_search_offline_for_domain(threatintel_obj, mocker,
 @pytest.mark.parametrize(
     "url, mock_return_value, expected_result",
     [
-        ("https://example.com", {"description": "Malicious URL"}, 
-         {"description": "Malicious URL"}),
+        (
+            "https://example.com",
+            {"description": "Malicious URL"},
+            {"description": "Malicious URL"},
+        ),
         ("https://safe.com", None, None),
     ],
 )
-def test_search_online_for_url(threatintel_obj, mocker, url, 
-                               mock_return_value, expected_result):
+def test_search_online_for_url(
+    threatintel_obj, mocker, url, 
+    mock_return_value, expected_result
+):
     """Test `search_online_for_url` for querying online threat intelligence sources."""
-    mock_urlhaus_lookup = mocker.patch.object(threatintel_obj.urlhaus, "urlhaus_lookup")
+    mock_urlhaus_lookup = mocker.patch.object(
+        threatintel_obj.urlhaus, "urlhaus_lookup"
+    )
     mock_urlhaus_lookup.return_value = mock_return_value
     result = threatintel_obj.search_online_for_url(url)
     assert result == expected_result
 
 
 def test_set_evidence_malicious_cname_in_dns_response(threatintel_obj, mocker):
-    """Test `set_evidence_malicious_cname_in_dns_response` for recording evidence of malicious CNAMEs."""
+    """Test `set_evidence_malicious_cname_in_dns_response` 
+    for recording evidence of malicious CNAMEs."""
     mock_db = mocker.patch.object(threatintel_obj, "db")
     cname_info = {
         "description": "Malicious CNAME",
@@ -583,47 +630,64 @@ def test_pre_main(threatintel_obj, mocker):
     "ip, protocol, ip_state, expected_result",
     [
         # testcase1: loopback address
-        ("127.0.0.1", "TCP", "dstip", True),  
+        ("127.0.0.1", "TCP", "dstip", True),
         # testcase2: private network
-        ("10.0.0.1", "UDP", "srcip", True),  
-         # testcase3: private network
-        ("172.16.0.1", "ICMP", "dstip", True), 
+        ("10.0.0.1", "UDP", "srcip", True),
+        # testcase3: private network
+        ("172.16.0.1", "ICMP", "dstip", True),
         # testcase4: private network
-        ("192.168.1.1", "HTTP", "srcip", True),  
+        ("192.168.1.1", "HTTP", "srcip", True),
         # testcase5: outgoing ICMP packet
         ("1.2.3.4", "ICMP", "dstip", True),
         # testcase6: incoming ICMP packet
-        ("8.8.8.8", "ICMP", "srcip", False),  
+        ("8.8.8.8", "ICMP", "srcip", False),
         # testcase7: incoming ICMP packet on private network
-        ("192.168.1.1", "ICMP", "srcip", True),  
-        
+        ("192.168.1.1", "ICMP", "srcip", True),
     ],
 )
-def test_should_lookup(threatintel_obj, ip, protocol, 
-                       ip_state, expected_result):
+def test_should_lookup(
+    threatintel_obj, ip, protocol, 
+    ip_state, expected_result
+):
     """
     Test `should_lookup` for various IP addresses, protocols, and states.
 
     Verifies that the function correctly determines whether a lookup should be performed
     based on the provided IP address, protocol, and IP state.
     """
-    assert threatintel_obj.should_lookup(ip, protocol, ip_state) == expected_result
+    assert (
+        threatintel_obj.should_lookup(ip, protocol, ip_state)
+        == expected_result
+    )
+
 
 @pytest.mark.parametrize(
     "cname, is_domain_malicious_return, expected_result",
     [
-        ("evil.com", json.dumps({"description": "Malicious domain", "source": "test_source"}), None),
+        (
+            "evil.com",
+            json.dumps(
+                {"description": "Malicious domain", "source": "test_source"}
+            ),
+            None,
+        ),
         ("safe.com", json.dumps({}), False),
         ("safe.com", "false", False),
     ],
 )
-def test_is_malicious_cname(threatintel_obj, mocker, cname, 
-                            is_domain_malicious_return, expected_result):
+def test_is_malicious_cname(
+    threatintel_obj, mocker, cname, 
+    is_domain_malicious_return, 
+    expected_result
+):
     """
     Test `is_malicious_cname` for various CNAME scenarios.
     """
     mock_db = mocker.patch.object(threatintel_obj, "db")
-    mock_db.is_domain_malicious.return_value = (is_domain_malicious_return, False)
+    mock_db.is_domain_malicious.return_value = (
+        is_domain_malicious_return,
+        False,
+    )
 
     result = threatintel_obj.is_malicious_cname(
         "example.com",
@@ -634,6 +698,7 @@ def test_is_malicious_cname(threatintel_obj, mocker, cname,
         "timewindow1",
     )
     assert result == expected_result
+
 
 @pytest.mark.parametrize(
     "cname",
@@ -646,7 +711,9 @@ def test_is_malicious_cname_ignored_cname(threatintel_obj, mocker, cname):
     """
     Test `is_malicious_cname` for ignored CNAME scenarios.
     """
-    mocker.patch.object(threatintel_obj, "is_ignored_domain", return_value=True)
+    mocker.patch.object(
+        threatintel_obj, "is_ignored_domain", return_value=True
+    )
 
     result = threatintel_obj.is_malicious_cname(
         "example.com",
@@ -676,8 +743,9 @@ def test_is_malicious_cname_ignored_cname(threatintel_obj, mocker, cname):
     ],
 )
 def test_is_malicious_ip(
-    threatintel_obj, mocker, offline_result,
-    online_result, expected_result
+    threatintel_obj, mocker, 
+    offline_result, online_result, 
+    expected_result
 ):
     """Test `is_malicious_ip` for checking IP blacklisting."""
 
@@ -707,10 +775,13 @@ def test_is_malicious_ip(
         ("safe.com", None, False),
     ],
 )
-def test_is_malicious_domain(domain, result, is_malicious,
-                             threatintel_obj, mocker):
+def test_is_malicious_domain(
+    domain, result, is_malicious, 
+    threatintel_obj, mocker
+):
     """
-    Test `is_malicious_domain` for identifying and recording evidence of malicious domains.
+    Test `is_malicious_domain` for identifying 
+    and recording evidence of malicious domains.
     """
     mock_search_offline_for_domain = mocker.patch.object(
         threatintel_obj, "search_offline_for_domain"
@@ -735,7 +806,6 @@ def test_is_malicious_domain(domain, result, is_malicious,
 
     mock_search_offline_for_domain.reset_mock()
     mock_set_evidence_malicious_domain.reset_mock()
-
 
 
 @pytest.mark.parametrize(
@@ -773,7 +843,8 @@ def test_update_local_file(
             )
         else:
             mock_db.set_TI_file_info.assert_not_called()
-            
+
+
 @pytest.mark.parametrize(
     "filename, expected_parse_function",
     [
@@ -783,22 +854,22 @@ def test_update_local_file(
     ],
 )
 def test_update_local_file_parse_function(
-    filename, expected_parse_function,
-    threatintel_obj, mocker
+    filename, expected_parse_function, threatintel_obj, mocker
 ):
     """
     Test `update_local_file` to ensure the correct parsing function
     is called based on the filename.
     """
     mock_should_update_local_ti_file = mocker.patch.object(
-        threatintel_obj, "should_update_local_ti_file", return_value="new_hash"
+        threatintel_obj, "should_update_local_ti_file", 
+        return_value="new_hash"
     )
     mock_parse_function = mocker.patch.object(
         threatintel_obj, expected_parse_function, return_value=True
     )
     threatintel_obj.update_local_file(filename)
 
-    assert mock_parse_function.called            
+    assert mock_parse_function.called
 
 
 @pytest.mark.parametrize(
@@ -819,11 +890,12 @@ def test_update_local_file_parse_function(
 )
 def test_is_malicious_hash(
     threatintel_obj, mocker, 
-    search_online_result,
+    search_online_result, 
     expected_set_evidence_call
 ):
     """
-    Test `is_malicious_hash` for identifying and recording evidence of malicious file hashes.
+    Test `is_malicious_hash` for identifying 
+    and recording evidence of malicious file hashes.
     """
     mock_db = mocker.patch.object(threatintel_obj, "db")
     mock_search_online_for_hash = mocker.patch.object(
@@ -854,12 +926,12 @@ def test_is_malicious_hash(
 @pytest.mark.parametrize(
     "url, result, is_malicious",
     [
-        ("http://malicious.com", 
-         {"description": "Malicious URL"}, True),
+        ("http://malicious.com", {"description": "Malicious URL"}, True),
         ("http://safe.com", None, False),
     ],
 )
-def test_is_malicious_url(url, result, is_malicious, threatintel_obj, mocker):
+def test_is_malicious_url(url, result, is_malicious, 
+                          threatintel_obj, mocker):
     """
     Test `is_malicious_url` for correctly handling both malicious and non-malicious URLs.
     """
@@ -870,7 +942,7 @@ def test_is_malicious_url(url, result, is_malicious, threatintel_obj, mocker):
         threatintel_obj.urlhaus, "set_evidence_malicious_url"
     )
 
-    mock_search_online_for_url.return_value = result  
+    mock_search_online_for_url.return_value = result
     threatintel_obj.is_malicious_url(
         url,
         "uid123",
@@ -881,9 +953,9 @@ def test_is_malicious_url(url, result, is_malicious, threatintel_obj, mocker):
     )
 
     if is_malicious:
-        mock_urlhaus_set_evidence.assert_called_once()  
+        mock_urlhaus_set_evidence.assert_called_once()
     else:
-        mock_urlhaus_set_evidence.assert_not_called()  
+        mock_urlhaus_set_evidence.assert_not_called()
 
     mock_search_online_for_url.reset_mock()
     mock_urlhaus_set_evidence.reset_mock()
@@ -924,9 +996,8 @@ def test_is_malicious_url(url, result, is_malicious, threatintel_obj, mocker):
         ),
     ],
 )
-def test_main_domain_lookup(threatintel_obj, 
-                            mocker, msg_data, 
-                            expected_call):
+def test_main_domain_lookup(threatintel_obj, mocker, 
+                            msg_data, expected_call):
     """
     Test the `main` function's handling of domain name lookups,
     covering scenarios with DNS responses and direct domain queries.
@@ -943,19 +1014,46 @@ def test_main_domain_lookup(threatintel_obj,
 @pytest.mark.parametrize(
     "ip_address, is_malicious, should_lookup_return, expected_calls",
     [
-        ("1.2.3.4", True, False,  # Malicious IP, should_lookup returns False
-         {"is_malicious_ip": 1, "ip_belongs_to_blacklisted_range": 1, "ip_has_blacklisted_asn": 1}),
-        ("10.0.0.1", False, False,  # Non-malicious IP, should_lookup returns False
-         {"is_malicious_ip": 1, "ip_belongs_to_blacklisted_range": 1, "ip_has_blacklisted_asn": 1}),
-        ("8.8.8.8", False, True,  # Non-malicious IP, should_lookup returns True
-         {"is_malicious_ip": 0, "ip_belongs_to_blacklisted_range": 0, "ip_has_blacklisted_asn": 0}),
+        (
+            "1.2.3.4",
+            True,
+            False,  # Malicious IP, should_lookup returns False
+            {
+                "is_malicious_ip": 1,
+                "ip_belongs_to_blacklisted_range": 1,
+                "ip_has_blacklisted_asn": 1,
+            },
+        ),
+        (
+            "10.0.0.1",
+            False,
+            False,  # Non-malicious IP, should_lookup returns False
+            {
+                "is_malicious_ip": 1,
+                "ip_belongs_to_blacklisted_range": 1,
+                "ip_has_blacklisted_asn": 1,
+            },
+        ),
+        (
+            "8.8.8.8",
+            False,
+            True,  # Non-malicious IP, should_lookup returns True
+            {
+                "is_malicious_ip": 0,
+                "ip_belongs_to_blacklisted_range": 0,
+                "ip_has_blacklisted_asn": 0,
+            },
+        ),
     ],
 )
-def test_main_ip_lookup(threatintel_obj, 
-                        mocker, ip_address, 
-                        is_malicious, 
-                        should_lookup_return, 
-                        expected_calls):
+def test_main_ip_lookup(
+    threatintel_obj,
+    mocker,
+    ip_address,
+    is_malicious,
+    should_lookup_return,
+    expected_calls,
+):
     """
     Test the `main` function's handling of IP address lookups,
     including scenarios with and without malicious IP detection,
@@ -991,12 +1089,16 @@ def test_main_ip_lookup(threatintel_obj,
         )
     }
     threatintel_obj.main()
-    assert mock_is_malicious_ip.call_count ==(
-        expected_calls["is_malicious_ip"])
-    assert mock_ip_belongs_to_blacklisted_range.call_count ==(
-        expected_calls["ip_belongs_to_blacklisted_range"])
-    assert mock_ip_has_blacklisted_asn.call_count ==(
-        expected_calls["ip_has_blacklisted_asn"])
+    assert mock_is_malicious_ip.call_count == (
+        expected_calls["is_malicious_ip"]
+    )
+    assert mock_ip_belongs_to_blacklisted_range.call_count == (
+        expected_calls["ip_belongs_to_blacklisted_range"]
+    )
+    assert mock_ip_has_blacklisted_asn.call_count == (
+        expected_calls["ip_has_blacklisted_asn"]
+    )
+
 
 def test_main_empty_message(threatintel_obj, mocker):
     """
@@ -1084,4 +1186,5 @@ def test_circl_lu(
     mock_session.get.return_value = mock_response
     result = threatintel_obj.circl_lu(flow_info)
     assert result == expected_result
+
 
