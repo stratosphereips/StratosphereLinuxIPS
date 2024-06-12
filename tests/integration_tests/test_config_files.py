@@ -88,7 +88,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     # test metadata_dir
     assert "metadata" in os.listdir(output_dir)
     metadata_path = os.path.join(output_dir, "metadata")
-    for file in ("test.conf", "whitelist.conf", "info.txt"):
+    for file in ("test.yaml", "whitelist.conf", "info.txt"):
         assert file in os.listdir(metadata_path)
 
     # test label=malicious
