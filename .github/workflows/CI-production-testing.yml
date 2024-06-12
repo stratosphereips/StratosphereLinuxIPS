@@ -10,7 +10,7 @@ jobs:
 
   unit_and_integration_tests:
     # runs the tests on a GH VM
-    runs-on: ubuntu-20.04
+    runs-on: self-hosted
     # 2 hours timeout
     timeout-minutes: 7200
 

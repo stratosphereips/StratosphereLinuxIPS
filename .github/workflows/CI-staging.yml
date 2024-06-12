@@ -14,8 +14,7 @@ on:
 
 jobs:
   unit_tests:
-      # specify the host OS
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       # 2 hours timeout
       timeout-minutes: 7200
       # start a container using slips dependencies image
@@ -144,7 +143,7 @@ jobs:
 
   dataset_integration_tests:
       # specify the host OS
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       # 1h timeout
       timeout-minutes: 3600
       # start a container using slips dependencies image
@@ -162,7 +161,7 @@ jobs:
 
   zeek_integration_tests:
       # specify the host OS
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       # 1h timeout
       timeout-minutes: 3600
       # start a container using slips dependencies image
@@ -180,7 +179,7 @@ jobs:
 
   pcap_integration_tests:
       # specify the host OS
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       # 1h timeout
       timeout-minutes: 3600
       # start a container using slips dependencies image
@@ -200,7 +199,7 @@ jobs:
 
   port_scans_integration_tests:
       # specify the host OS
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       # 1h timeout
       timeout-minutes: 3600
       # start a container using slips dependencies image
@@ -222,7 +221,7 @@ jobs:
 
   config_files_integration_tests:
       # specify the host OS
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       # 1h timeout
       timeout-minutes: 3600
       # start a container using slips dependencies image
