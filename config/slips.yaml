@@ -7,7 +7,7 @@
 # file used to log info about daemon state, erorrs, etc..
 
 modes:
-   stdout: slips.log 
+   stdout: slips.log
    stderr: errors.log
    logsfile: slips.log
 
@@ -60,7 +60,7 @@ parameters:
    analysis_direction : out
 
 
-# Delete zeek log files after stopping slips. Only yes or no 
+# Delete zeek log files after stopping slips. Only yes or no
    delete_zeek_files : 'no'
 
 # Store a copy of zeek files in the output dir after the analysis is done. Only yes or no
@@ -88,7 +88,7 @@ parameters:
    tcp_inactivity_timeout : 60
 
 # Should we delete the previously stored data in the DB when we start??
-# By default False. Meaning we don't DELETE the DB by default. 
+# By default False. Meaning we don't DELETE the DB by default.
    deletePrevdb : 'True'
 # You can remember the data in all the previous runs of the DB if you put False.
 #  Redis will remember as long as the redis server is not down. The persistance is
@@ -330,7 +330,7 @@ exporting_alerts:
 # push_delay is the time to wait before pushing STIX data to server (in seconds)
 # If running on a file not an interface
 # slips will export to server after analysis is done.
-# 3600 = 1h 
+# 3600 = 1h
    push_delay : 3600
 
 # TAXII server credentials
