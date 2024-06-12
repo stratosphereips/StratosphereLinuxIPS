@@ -15,9 +15,8 @@ class ConfigParser(object):
     authors = ["Alya Gomaa"]
 
     def __init__(self):
-        # self.args = self.get_args()
-        self.configfile = self.get_config_file()
-        self.config = self.read_config_file()
+        configfile: str = self.get_config_file()
+        self.config = self.read_config_file(configfile)
         self.home_network_ranges = (
             "192.168.0.0/16",
             "172.16.0.0/12",
@@ -27,18 +26,21 @@ class ConfigParser(object):
             map(ipaddress.ip_network, self.home_network_ranges)
         )
 
-    def read_config_file(self) -> dict:
+    def read_config_file(self, configfile: str) -> dict:
         """
         reads slips configuration file, slips.conf/slips.yaml is the default file
         """
-        try:
-            with open(self.configfile) as source:
-                config = yaml.safe_load(source)
-        except (IOError, TypeError, yaml.YAMLError):
-            pass
-        return config
+        # try:
+        with open(configfile) as source:
+            return yaml.safe_load(source)
+        # except (IOError, TypeError, yaml.YAMLError):
+        #     pass
 
     def get_config_file(self):
+        """
+        uses the arg parser to get the config file specified by -c or the
+        path of the default one
+        """
         parser = self.get_parser()
         return parser.get_configfile()
 

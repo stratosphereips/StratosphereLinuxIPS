@@ -96,7 +96,13 @@ class ArgumentParser(argparse.ArgumentParser):
     def get_configfile(self):
         # slips_conf_path = os.path.join(os.getcwd(), "config/slips.conf")
         slips_conf_path = os.path.join(os.getcwd(), "config/slips.yaml")
-
+        self.add_argument(
+            "-cc",
+            "--clearcache",
+            action="store_true",
+            required=False,
+            help="Clear the cache database.",
+        )
         self.add_argument(
             "-c",
             "--config",
