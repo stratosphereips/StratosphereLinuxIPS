@@ -945,7 +945,7 @@ class SetEvidnceHelper:
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=timestamp,

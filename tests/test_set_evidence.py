@@ -504,7 +504,7 @@ def test_self_signed_certificates(set_evidence_helper, db_mock):
     assert evidence.threat_level == ThreatLevel.LOW
     assert evidence.confidence == 0.5
     assert evidence.category == IDEACategory.ANOMALY_BEHAVIOUR
-    assert evidence.profile.ip == "192.168.0.1"
+    assert evidence.profile.ip == "10.0.0.1"
     assert evidence.timewindow.number == 1
     assert evidence.uid == ["unique_id"]
 
@@ -524,7 +524,7 @@ def test_multiple_reconnection_attempts(set_evidence_helper, db_mock):
     args, _ = db_mock.set_evidence.call_args
     evidence = args[0]
     assert (
-            evidence.evidence_type == EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS
+        evidence.evidence_type == EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS
     )
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.victim.value == "10.0.0.1"
