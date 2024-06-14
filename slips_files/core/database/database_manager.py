@@ -142,8 +142,8 @@ class DBManager(IObservable):
     def update_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
 
-    def setInfoForIPs(self, *args, **kwargs):
-        return self.rdb.setInfoForIPs(*args, **kwargs)
+    def set_ip_info(self, *args, **kwargs):
+        return self.rdb.set_ip_info(*args, **kwargs)
 
     def get_p2p_reports_about_ip(self, *args, **kwargs):
         return self.rdb.get_p2p_reports_about_ip(*args, **kwargs)
@@ -321,6 +321,12 @@ class DBManager(IObservable):
 
     def get_whitelist(self, *args, **kwargs):
         return self.rdb.get_whitelist(*args, **kwargs)
+
+    def has_cached_whitelist(self, *args, **kwargs):
+        return self.rdb.has_cached_whitelist(*args, **kwargs)
+
+    def is_doh_server(self, *args, **kwargs):
+        return self.rdb.is_doh_server(*args, **kwargs)
 
     def store_dhcp_server(self, *args, **kwargs):
         return self.rdb.store_dhcp_server(*args, **kwargs)

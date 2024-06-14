@@ -422,6 +422,7 @@ class ProcessManager:
                 if local_files:
                     update_manager.update_ports_info()
                     update_manager.update_org_files()
+                    update_manager.update_whitelist()
 
                 if ti_feeds:
                     update_manager.print("Updating TI feeds")

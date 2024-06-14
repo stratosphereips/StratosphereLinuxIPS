@@ -370,7 +370,7 @@ class ThreatIntel(IModule, URLhaus):
 
         # mark this ip as malicious in our database
         ip_info = {"threatintelligence": ip_info}
-        self.db.setInfoForIPs(ip, ip_info)
+        self.db.set_ip_info(ip, ip_info)
 
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(ip, profileid, twid)
@@ -483,7 +483,7 @@ class ThreatIntel(IModule, URLhaus):
 
         # mark this ip as malicious in our database
         ip_info = {"threatintelligence": ip_info}
-        self.db.setInfoForIPs(ip, ip_info)
+        self.db.set_ip_info(ip, ip_info)
 
         # add this ip to our MaliciousIPs hash in the database
         self.db.set_malicious_ip(ip, profileid, twid)
@@ -545,7 +545,7 @@ class ThreatIntel(IModule, URLhaus):
         threat_level: ThreatLevel = ThreatLevel(threat_level)
         description: str = (
             f"connection to a blacklisted domain {domain}. "
-            f"Description: {domain_info.get('description', '')},"
+            f"Description: {domain_info.get('description', '')}, "
             f"Found in feed: {domain_info['source']}, "
             f"Confidence: {confidence}. "
         )

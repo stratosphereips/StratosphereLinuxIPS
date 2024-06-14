@@ -58,6 +58,11 @@ class ProfileHandler(IObservable):
             }
         )
 
+    def is_doh_server(self, ip: str) -> bool:
+        """returns whether the given ip is a DoH server"""
+        info: dict = self.get_ip_info(ip)
+        return info.get("is_doh_server", False)
+
     def get_outtuples_from_profile_tw(self, profileid, twid):
         """Get the out tuples"""
         return self.r.hget(profileid + self.separator + twid, "OutTuples")
@@ -237,9 +242,7 @@ class ProfileHandler(IObservable):
             "stime": flow.starttime,
         }
 
-        # Convert to json string
         dns_flow = json.dumps(dns_flow)
-        # Publish the new dns received
         # TODO we should just send the DNS obj!
         to_send = {
             "profileid": profileid,
@@ -253,9 +256,7 @@ class ProfileHandler(IObservable):
         }
 
         to_send = json.dumps(to_send)
-        # publish a dns with its flow
         self.publish("new_dns", to_send)
-        # Check if the dns query is detected by the threat intelligence.
         self.give_threat_intelligence(
             profileid,
             twid,
@@ -922,7 +923,6 @@ class ProfileHandler(IObservable):
         # Convert to json string
         ssh_flow_dict = json.dumps(ssh_flow_dict)
 
-        # Publish the new dns received
         to_send = {
             "profileid": profileid,
             "twid": twid,
@@ -931,10 +931,8 @@ class ProfileHandler(IObservable):
             "uid": flow.uid,
         }
         to_send = json.dumps(to_send)
-        # publish a dns with its flow
         self.publish("new_ssh", to_send)
         self.print(f"Adding SSH flow to DB: {ssh_flow_dict}", 3, 0)
-        # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         self.give_threat_intelligence(
             profileid,
             twid,
@@ -1015,8 +1013,7 @@ class ProfileHandler(IObservable):
             "ja3s": flow.ja3s,
             "is_DoH": flow.is_DoH,
         }
-        # TODO do something with is_doh
-        # Convert to json string
+
         ssl_flow = json.dumps(ssl_flow)
         to_send = {
             "profileid": profileid,
@@ -1065,7 +1062,7 @@ class ProfileHandler(IObservable):
                     if SNI_port["server_name"] in resolution["domains"]:
                         # add SNI to our db as it has a DNS resolution
                         sni_ipdata.append(SNI_port)
-                        self.setInfoForIPs(flow.daddr, {"SNI": sni_ipdata})
+                        self.set_ip_info(flow.daddr, {"SNI": sni_ipdata})
                         break
 
     def get_profileid_from_ip(self, ip: str) -> Optional[str]:
