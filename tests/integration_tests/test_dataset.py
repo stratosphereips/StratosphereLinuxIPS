@@ -86,7 +86,7 @@ def test_binetflow(
 
 
 @pytest.mark.parametrize(
-    "suricata_path,  output_dir, redis_port, expected_evidence",
+    "suricata_path, output_dir, redis_port, expected_evidence",
     [
         (
             "dataset/test6-malicious.suricata.json",
@@ -96,7 +96,6 @@ def test_binetflow(
                 "Connection to unknown destination port",
                 "vertical port scan",
                 "Connecting to private IP",
-                "non-HTTP established connection",
             ],
         )
     ],

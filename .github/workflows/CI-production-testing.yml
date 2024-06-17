@@ -48,116 +48,80 @@ jobs:
       run: redis-server --daemonize yes
 
     - name: Run unit tests
-      run: coverage run --source=./ -m pytest tests/ --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+      run: python3 -m pytest tests/ --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
 
 
     - name: Run database unit tests
       run: |
-        coverage run --source=./ -m pytest tests/test_database.py -p no:warnings -vv
-        coverage report --include="slips_files/core/database/*"
-        coverage html --include="slips_files/core/database/*" -d coverage_reports/database
+        python3 -m pytest tests/test_database.py -p no:warnings -vv
 
     - name: Flowalerts Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_flowalerts.py -p no:warnings -vv
-        coverage report  --include="modules/flowalerts/*"
-        coverage html  --include="modules/flowalerts/*" -d coverage_reports/flowalerts
+        python3 -m pytest tests/test_flowalerts.py -p no:warnings -vv
 
     - name: Whitelist Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_whitelist.py -p no:warnings -vv
-        coverage report  --include="slips_files/core/helpers/whitelist.py*"
-        coverage html  --include="slips_files/core/helpers/whitelist.py*" -d coverage_reports/whitelist
+        python3 -m pytest tests/test_whitelist.py -p no:warnings -vv
 
     - name: ARP Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_arp.py -p no:warnings -vv
-        coverage report  --include="modules/arp/*"
-        coverage html  --include="modules/arp/*" -d coverage_reports/arp
+        python3 -m pytest tests/test_arp.py -p no:warnings -vv
 
     - name: Blocking Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_blocking.py -p no:warnings -vv
-        coverage report  --include="modules/blocking/*"
-        coverage html  --include="modules/blocking/*" -d coverage_reports/blocking
+        python3 -m pytest tests/test_blocking.py -p no:warnings -vv
 
     - name: Flowhandler Unit Test
       run: |
-        coverage run --source=./ -m pytest tests/test_flow_handler.py -p no:warnings -vv
-        coverage report  --include="slips_files/core/helpers/flow_handler.py*"
-        coverage html  --include="slips_files/core/helpers/flow_handler.py*" -d coverage_reports/flowhandler
+        python3 -m pytest tests/test_flow_handler.py -p no:warnings -vv
 
     - name: Horizontal Portscans Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_horizontal_portscans.py -p no:warnings -vv
-        coverage report  --include="modules/network_discovery/horizontal_portscan.py*"
-        coverage html  --include="modules/network_discovery/horizontal_portscan.py*" -d coverage_reports/horizontal_portscan
+        python3 -m pytest tests/test_horizontal_portscans.py -p no:warnings -vv
 
     - name: HTTP Analyzer Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_http_analyzer.py -p no:warnings -vv
-        coverage report  --include="modules/http_analyzer/http_analyzer.py*"
-        coverage html  --include="modules/http_analyzer/http_analyzer.py*" -d coverage_reports/http_analyzer
+        python3 -m pytest tests/test_http_analyzer.py -p no:warnings -vv
 
     - name: Vertical Portscans Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
-        coverage report  --include="modules/network_discovery/vertical_portscan.py*"
-        coverage html  --include="modules/network_discovery/vertical_portscan.py*" -d coverage_reports/vertical_portscan
+        python3 -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
 
     - name: Virustotal Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_virustotal.py -p no:warnings -vv
-        coverage report  --include="modules/virustotal/virustotal.py*"
-        coverage html  --include="modules/virustotal/virustotal.py*" -d coverage_reports/virustotal
+        python3 -m pytest tests/test_virustotal.py -p no:warnings -vv
 
     - name: Update Manager Unit tests
       run: |
-        coverage run --source=./ -m pytest tests/test_update_file_manager.py -p no:warnings -vv
-        coverage report  --include="modules/update_manager/update_manager.py*"
-        coverage html  --include="modules/update_manager/update_manager.py*" -d coverage_reports/updatemanager
+        python3 -m pytest tests/test_update_file_manager.py -p no:warnings -vv
 
     - name: Threat Intelligence Unit tests
       run: |
-        coverage run --source=./ -m pytest tests/test_threat_intelligence.py -p no:warnings -vv
-        coverage report  --include="modules/threat_intelligence/threat_intelligence.py*"
-        coverage html  --include="modules/threat_intelligence/threat_intelligence.py*" -d coverage_reports/threat_intelligence
+        python3 -m pytest tests/test_threat_intelligence.py -p no:warnings -vv
 
     - name: Slips Utils Unit tests
       run: |
-        coverage run --source=./ -m pytest tests/test_slips_utils.py -p no:warnings -vv
-        coverage report  --include="slips_files/common/slips_utils.py*"
-        coverage html  --include="slips_files/common/slips_utils.py*" -d coverage_reports/slips_utils
+        python3 -m pytest tests/test_slips_utils.py -p no:warnings -vv
 
     - name: Slips.py Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_slips.py -p no:warnings -vv
-        coverage report  --include="slips.py*"
-        coverage html  --include="slips.py*" -d coverage_reports/slips
+        python3 -m pytest tests/test_slips.py -p no:warnings -vv
 
     - name: Profiler Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_profiler.py -p no:warnings -vv
-        coverage report  --include="slips_files/core/profiler.py*"
-        coverage html  --include="slips_files/core/profiler.py*" -d coverage_reports/profiler
+        python3 -m pytest tests/test_profiler.py -p no:warnings -vv
 
     - name: Leak Detector Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_leak_detector.py -p no:warnings -vv
-        coverage report  --include="modules/leak_detector/leak_detector.py*"
-        coverage html  --include="modules/leak_detector/leak_detector.py*" -d coverage_reports/leak_detector
+        python3 -m pytest tests/test_leak_detector.py -p no:warnings -vv
 
     - name: Ipinfo Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_ip_info.py -p no:warnings -vv
-        coverage report  --include="modules/ip_info/ip_info.py*"
-        coverage html  --include="modules/ip_info/ip_info.py*" -d coverage_reports/ip_info
+        python3 -m pytest tests/test_ip_info.py -p no:warnings -vv
 
     - name: Input Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_inputProc.py -p no:warnings -vv
-        coverage report  --include="slips_files/core/input.py*"
-        coverage html  --include="slips_files/core/input.py*" -d coverage_reports/input
+        python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
     - name: Clear redis cache
       run: ./slips.py -cc
@@ -174,20 +138,18 @@ jobs:
         coverage report --include="modules/flowalerts/set_evidence.py*"
         coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/flowalerts
          
+
+        python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
+
+
     - name: Integration tests
       run: |
         python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
-#        coverage run --source=./ -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
-#        coverage report --include="dataset/*"
-#        coverage html --include="dataset/*" -d coverage_reports/dataset
 
 
     - name: Config file tests
       run: |
         python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
-#       coverage run --source=./ -m pytest -s tests/integration_tests/test_config_files.py -p no:warnings -vv
-#       coverage report --include="dataset/*"
-#       coverage html --include="dataset/*" -d coverage_reports/dataset
 
     - name: Upload Artifact
       # run this job whether the above jobs failed or passed
@@ -197,4 +159,3 @@ jobs:
         name: test_slips_locally-integration-tests-output
         path: |
           output/integration_tests
-          coverage_reports/

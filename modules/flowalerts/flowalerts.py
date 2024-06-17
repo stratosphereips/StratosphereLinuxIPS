@@ -36,18 +36,30 @@ class FlowAlerts(IModule):
         self.conn = Conn(self.db, flowalerts=self)
 
     def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_flow")
+        self.c2 = self.db.subscribe("new_ssh")
+        self.c3 = self.db.subscribe("new_notice")
+        self.c4 = self.db.subscribe("new_ssl")
+        self.c5 = self.db.subscribe("tw_closed")
+        self.c6 = self.db.subscribe("new_dns")
+        self.c7 = self.db.subscribe("new_downloaded_file")
+        self.c8 = self.db.subscribe("new_smtp")
+        self.c9 = self.db.subscribe("new_software")
+        self.c10 = self.db.subscribe("new_weird")
+        self.c11 = self.db.subscribe("new_tunnel")
+
         self.channels = {
-            "new_flow": self.db.subscribe("new_flow"),
-            "new_ssh": self.db.subscribe("new_ssh"),
-            "new_notice": self.db.subscribe("new_notice"),
-            "new_ssl": self.db.subscribe("new_ssl"),
-            "tw_closed": self.db.subscribe("tw_closed"),
-            "new_dns": self.db.subscribe("new_dns"),
-            "new_downloaded_file": self.db.subscribe("new_downloaded_file"),
-            "new_smtp": self.db.subscribe("new_smtp"),
-            "new_software": self.db.subscribe("new_software"),
-            "new_weird": self.db.subscribe("new_weird"),
-            "new_tunnel": self.db.subscribe("new_tunnel"),
+            "new_flow": self.c1,
+            "new_ssh": self.c2,
+            "new_notice": self.c3,
+            "new_ssl": self.c4,
+            "tw_closed": self.c5,
+            "new_dns": self.c6,
+            "new_downloaded_file": self.c7,
+            "new_smtp": self.c8,
+            "new_software": self.c9,
+            "new_weird": self.c10,
+            "new_tunnel": self.c11,
         }
 
     def pre_main(self):

@@ -754,6 +754,14 @@ For example, if you want to add a zeek script called ```arp.zeek``` you should a
 
 Zeek output is suppressed by default, so if your script has errors, Slips will fail silently.
 
+## Exporting strato letters
+
+Exporting the strato letters can be done by enabling the `export_strato_letters` option in
+`config/slips.conf` . once enabled, Slips will export the strato letters to `strato_letters.tsv` in the output directory.
+this file can be used for training Slips RNN module.
+
+
+
 ## Slips parameters
 
 - ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.conf
@@ -780,7 +788,7 @@ Zeek output is suppressed by default, so if your script has errors, Slips will f
 - ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
 
 
-## Containing Slips resource consumption
+## Limiting Slips resource consumption
 
 When given a very a large pcap, slips may use more memory/CPU than it should. to fix that you can reduce the niceness of
 Slips by running:
