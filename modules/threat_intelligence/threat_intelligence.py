@@ -192,23 +192,22 @@ class ThreatIntel(IModule, URLhaus):
                             the malicious ASN, including its threat level,
                             description, and source.
             is_dns_response (bool, optional): Flag indicating whether the
-             interaction was part of a DNS response.
+            interaction was part of a DNS response.
 
         Side Effects:
             Creates and stores two pieces of evidence regarding the
-             malicious ASN interaction,
+            malicious ASN interaction,
             one from the perspective of the source IP and another
-             from the destination IP.
+            from the destination IP.
         """
 
         confidence: float = 0.8
         saddr = profileid.split("_")[-1]
 
-        # when we comment ti_files and run slips, we get the
-        # error of not being able to get feed threat_level
-        threat_level: float = utils.threat_levels[
-            asn_info.get("threat_level", "medium")
-        ]
+        # Use the get method with a default value to handle invalid threat levels
+        threat_level: float = utils.threat_levels.get(
+            asn_info.get("threat_level"), utils.threat_levels["medium"]
+        )
         threat_level: ThreatLevel = ThreatLevel(threat_level)
 
         tags = asn_info.get("tags", "")
@@ -321,7 +320,7 @@ class ThreatIntel(IModule, URLhaus):
             "DNS answer with a blacklisted "
             f"IP: {ip} for query: {dns_query} "
             f"{ip_identification} Description: "
-            f"{ip_info['description']}. "
+            f"{ip_info['description']} "
             f"Source: {ip_info['source']}."
         )
 
@@ -1249,12 +1248,50 @@ class ThreatIntel(IModule, URLhaus):
 
         self.db.set_evidence(evidence)
 
+    @staticmethod
+    def calculate_threat_level(circl_trust: str) -> float:
+        """Converts a Circl.lu trust score into a standardized threat level.
+
+        Parameters:
+            - circl_trust (str): The trust level from Circl.lu, where 0
+            indicates completely malicious and 100 completely benign.
+
+        Returns:
+            - A float representing the threat level, scaled from 0 (benign)
+            to 1 (malicious).
+        """
+        # the lower the value, the more malicious the file is
+        benign_percentage = float(circl_trust)
+        malicious_percentage = 100 - benign_percentage
+        # scale the benign percentage from 0 to 1
+        threat_level = float(malicious_percentage) / 100
+        return threat_level
+
+    @staticmethod
+    def calculate_confidence(blacklists: str) -> float:
+        """Calculates the confidence score based on the count of blacklists that
+        marked the file as malicious.
+
+        Parameters:
+            - blacklists (str): A space-separated string of blacklists
+            that flagged the file.
+
+        Returns:
+            - A confidence score as a float. A higher score indicates
+            higher confidence in the file's maliciousness.
+        """
+        blacklists = len(blacklists.split(" "))
+        if blacklists == 1:
+            confidence = 0.5
+        elif blacklists == 2:
+            confidence = 0.7
+        else:
+            confidence = 1
+        return confidence
+
     def circl_lu(self, flow_info: dict):
         """Queries the Circl.lu API to determine if an MD5 hash of a
-        file is known to be malicious based on the file's hash. Utilizes
-        internal helper functions to calculate a threat level and
-        confidence score based on the Circl.lu API
-        response.
+        file is known to be malicious based on the file's hash.
 
         Parameters:
             - flow_info (dict): Information about the network flow including
@@ -1272,49 +1309,6 @@ class ThreatIntel(IModule, URLhaus):
             for later processing if the API call encounters an exception.
             - Makes a network request to the Circl.lu API.
         """
-
-        def calculate_threat_level(circl_trust: str):
-            """Converts a Circl.lu trust score into a
-            standardized threat level.
-
-            Parameters:
-                - circl_trust (str): The trust level from Circl.lu,
-                where 0 indicates completely malicious and 100
-                 completely benign.
-
-            Returns:
-                - A float representing the threat level,
-                 scaled from 0 (benign) to 1 (malicious).
-            """
-            # the lower the value, the more malicious the file is
-            benign_percentage = float(circl_trust)
-            malicious_percentage = 100 - benign_percentage
-            # scale the benign percentage from 0 to 1
-            threat_level = float(malicious_percentage) / 100
-            return threat_level
-
-        def calculate_confidence(blacklists):
-            """Calculates the confidence score based on the count of
-            blacklists that
-            marked the file as malicious.
-
-            Parameters:
-                - blacklists (str): A space-separated string of blacklists
-                 that flagged the file.
-
-            Returns:
-                - A confidence score as a float. A higher score indicates
-                higher confidence in the file's maliciousness.
-            """
-            blacklists = len(blacklists.split(" "))
-            if blacklists == 1:
-                confidence = 0.5
-            elif blacklists == 2:
-                confidence = 0.7
-            else:
-                confidence = 1
-            return confidence
-
         md5 = flow_info["flow"]["md5"]
         circl_base_url = "https://hashlookup.circl.lu/lookup/"
         try:
@@ -1336,8 +1330,10 @@ class ThreatIntel(IModule, URLhaus):
             return
 
         file_info = {
-            "confidence": calculate_confidence(response["KnownMalicious"]),
-            "threat_level": calculate_threat_level(
+            "confidence": ThreatIntel.calculate_confidence(
+                response["KnownMalicious"]
+            ),
+            "threat_level": ThreatIntel.calculate_threat_level(
                 response["hashlookup:trust"]
             ),
             "blacklist": f'{response["KnownMalicious"]}, circl.lu',
@@ -1751,7 +1747,7 @@ class ThreatIntel(IModule, URLhaus):
             f"{dns_query} "
             f"Description: {cname_info.get('description', '')}, "
             f"Found in feed: {cname_info['source']}, "
-            f"Confidence: {confidence}. "
+            f"Confidence: {confidence} "
         )
 
         tags = cname_info.get("tags", None)
