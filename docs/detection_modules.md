@@ -751,6 +751,9 @@ After detecting a vertical port scan for the first time with 5 scanned ports, sl
 The result of this combining of evidence is that the dst ports
      scanned in each evidence will be = the previous scanned ports +15
 
+<img src="images/vertical_portscans.jpg">
+
+
 This waiting for 15+ evidence is done to avoid duplicate evidence.
 The downside to this approach is that if you do more than 1 portscan in the same timewindow, all portscans starting from the second one will be ignored if the sum of ports scanned the second time are < the number of ports of the first portscan.
 
@@ -764,7 +767,13 @@ Slips considers an IP performing a horizontal port scan if it contacted more tha
 specific port with not established connections. Slips checks both TCP and UDP connections for horizontal port scans.
 
 
-After detecting a the first horizontal port scan with 5 scanned IPs, Slips only generates an evidence every 15+ scanned IPs. This means that, the first portscan is detected as soon as it happens so the analysts knows.
+After detecting the first horizontal port scan with 5 scanned IPs, Slips only generates an evidence every 15+ scanned IPs. This means that, the first portscan is detected as soon as it happens so the analysts knows.
+
+<img src="images/horizontal_portscans.jpg">
+
+This waiting for 15+ evidence is done to avoid duplicate evidence.
+The downside to this approach is that if you do more than 1 portscan in the same timewindow, all portscans starting from the second one will be ignored if the sum of ports scanned the second time are < the number of ports of the first portscan.
+
 
 
 ### PING Sweeps
