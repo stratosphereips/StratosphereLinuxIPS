@@ -64,7 +64,7 @@ class ConfigParser(object):
         try:
             section_data: dict = self.config.get(section, None)
             if section_data is None:
-                return None
+                return default_value
             return section_data.get(name, default_value)
         except (NameError, ValueError):
             # There is a conf, but there is no option,

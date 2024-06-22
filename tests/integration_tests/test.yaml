@@ -36,7 +36,7 @@ parameters:
 # 1 day
 # time_window_width = 86400
 #  One time window only. Is like if not time windows were used. Beware that the names of the files for the TW have a year in the name that is 100 years back.
-    time_window_width : 'only_one_tw'
+    time_window_width : "only_one_tw"
 
 
 # [1.4] How often should we create log files? In seconds
@@ -73,7 +73,7 @@ parameters:
 #pcapfilter = 'ip or not ip'
 # If you want more important traffic and forget the multicast and broadcast stuff, you can use
 #pcapfilter = 'not icmp and not multicast and not broadcast and not arp and not port 5353 and not port 67'
-    pcapfilter : "no"
+    pcapfilter : 'no'
 
 # tcp_inactivity_timeout (in minutes). Used with zeek
 # Default tcp_inactivity_timeout is 5 minutes.
@@ -82,7 +82,7 @@ parameters:
 
 # Should we delete the previously stored data in the DB when we start??
 # By default False. Meaning we don't DELETE the DB by default.
-    deletePrevdb : 'True'
+    deletePrevdb : 'true'
 # You can remember the data in all the previous runs of the DB if you put False.
 #  Redis will remember as long as the redis server is not down. The persistance is on the memory, not disk.
 #deletePrevdb = False
@@ -150,7 +150,7 @@ modules:
 # For each line in timeline file there is a timestamp.
 # By default the timestamp is seconds in unix time. However
 # by setting this variable to "True" value the time will be human readable.
-    timeline_human_timestamp : 'True'
+    timeline_human_timestamp : 'true'
 
 
 #####################
@@ -264,7 +264,7 @@ exporting_alerts:
 # Server to use if you enable exporting STIX
     TAXII_server : localhost
     port : 1234
-    use_https : 'False'
+    use_https : 'false'
     discovery_path : /services/discovery-a
     inbox_path : /services/inbox-a
 # Collection on the server you want to push stix data to
