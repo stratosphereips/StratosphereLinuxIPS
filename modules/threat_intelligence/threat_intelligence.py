@@ -1291,7 +1291,10 @@ class ThreatIntel(IModule, URLhaus):
 
     def circl_lu(self, flow_info: dict):
         """Queries the Circl.lu API to determine if an MD5 hash of a
-        file is known to be malicious based on the file's hash.
+        file is known to be malicious based on the file's hash.Utilizes
+        internal helper functions to calculate a threat level and
+        confidence score based on the Circl.lu API
+        response.
 
         Parameters:
             - flow_info (dict): Information about the network flow including
