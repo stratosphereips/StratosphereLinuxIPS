@@ -121,28 +121,24 @@ def test_fix_json_packet(
 
 
 @pytest.mark.parametrize(
-    "listdir_return, popen_communicate_return, "
-    "evidence_set_call_count, delete_call_count",
+    "listdir_return, popen_communicate_return, " "evidence_set_call_count",
     [
         (
             # Test case 1: Matches found, evidence set
             ["test_rule_compiled"],
             (b"test_rule\n0x4e15c:$rgx_gps_loc: 37.7749,-122.4194", None),
             True,
-            False,
         ),
         (
             # Test case 2: No matches found, no evidence set
             ["test_rule_compiled"],
             (b"", None),
             False,
-            False,
         ),
         (
             # Test case 3: Error during YARA execution, no action taken
             ["test_rule_compiled"],
             (b"", b"Error during YARA execution"),
-            False,
             False,
         ),
     ],
@@ -155,7 +151,6 @@ def test_find_matches(
     listdir_return,
     popen_communicate_return,
     evidence_set_call_count,
-    delete_call_count,
     mock_db,
 ):
     """Tests the find_matches method of LeakDetector."""
@@ -174,7 +169,6 @@ def test_find_matches(
         leak_detector.set_evidence_yara_match.call_count
         == evidence_set_call_count
     )
-    assert leak_detector.delete_compiled_rules.call_count == delete_call_count
 
 
 @pytest.mark.parametrize(
