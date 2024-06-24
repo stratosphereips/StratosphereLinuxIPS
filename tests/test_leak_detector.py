@@ -178,10 +178,29 @@ def test_find_matches(
             # Testcase1: Packet found successfully
             b"\x00" * 24 + b"\x00" * 16 + b"\x00\x00\x00\x14" + b"\x00" * 20,
             25,
-            b'[{"_source": {"layers": {"frame": {"frame.protocols": "eth:ethertype:ip:tcp", '
-            b'"frame.time_epoch": 1669852800}, "ip": {"ip.src": "10.0.0.1", "ip.dst": "10.0.0.2"}, '
-            b'"tcp": {"tcp.srcport": "80", "tcp.dstport": "443"}}}}}]',
-            False,
+            json.dumps(
+                [
+                    {
+                        "_source": {
+                            "layers": {
+                                "frame": {
+                                    "frame.protocols": "ip:ipv4:ip:tcp",
+                                    "frame.time_epoch": 1669852800,
+                                },
+                                "ip": {
+                                    "ip.src": "10.0.0.1",
+                                    "ip.dst": "10.0.0.2",
+                                },
+                                "tcp": {
+                                    "tcp.srcport": "80",
+                                    "tcp.dstport": "443",
+                                },
+                            }
+                        }
+                    }
+                ]
+            ).encode(),
+            ("10.0.0.1", "10.0.0.2", "tcp", "80", "443", 1669852800),
         ),
         (
             # Testcase2: Packet not found (offset out of range)
@@ -213,7 +232,7 @@ def test_get_packet_info(
     with patch(
         "builtins.open", mock_open(read_data=pcap_data)
     ) as mock_file, patch("subprocess.Popen") as mock_popen:
-        mock_file.return_value.tell.return_value = 24
+        mock_file.return_value.tell.side_effect = [24, 100]
 
         mock_popen.return_value.communicate.return_value = (
             tshark_output,
