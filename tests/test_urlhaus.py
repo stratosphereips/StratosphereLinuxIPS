@@ -12,353 +12,458 @@ from modules.threat_intelligence.urlhaus import (
 )
 
 
-@pytest.fixture
-def mock_db():
-    mock_db = Mock()
-    return mock_db
-
-
 @pytest.mark.parametrize(
-    "to_lookup, expected_url, status_code, side_effect",
+    "to_lookup, expected_url, status_code",
     [
         # Testcase1: URL lookup
         (
             {"url": "https://example.com"},
             f"{URLHAUS_BASE_URL}/url/",
             200,
-            None,
         ),
-        # Testcase2: Payload (hash) lookup
+        # Testcase2: hash lookup
         (
             {"md5_hash": "a1b2c3d4"},
             f"{URLHAUS_BASE_URL}/payload/",
             200,
-            None,
-        ),
-        # Testcase3: Connection error
-        (
-            {"url": "https://example.com"},
-            None,
-            None,
-            requests.exceptions.ConnectionError,
         ),
     ],
 )
 @patch("modules.threat_intelligence.urlhaus.requests.session")
 def test_make_urlhaus_request(
-    mock_session, to_lookup, expected_url, status_code, side_effect
+    mock_response, mock_db, to_lookup, expected_url, status_code
 ):
-    """Test the make_urlhaus_request function with different scenarios."""
-    mock_session_instance = Mock()
-    mock_session.return_value = mock_session_instance
-    if side_effect:
-        mock_session_instance.post.side_effect = side_effect
-    else:
-        mock_response = Mock()
-        mock_response.status_code = status_code
-        mock_session_instance.post.return_value = mock_response
-    urlhaus = URLhaus(None)
-    urlhaus.urlhaus_session = mock_session_instance
+    """Test successful requests to the make_urlhaus_request function."""
+    mock_response_instance = Mock()
+    mock_response.return_value = mock_response_instance
+    mock_response = Mock(status_code=status_code)
+    mock_response_instance.post.return_value = mock_response
+
+    urlhaus = URLhaus(mock_db)
+    urlhaus.urlhaus_session = mock_response_instance
+
     response = urlhaus.make_urlhaus_request(to_lookup)
 
-    if side_effect:
-        assert urlhaus.urlhaus_session is mock_session_instance
-    else:
-        mock_session_instance.post.assert_called_once_with(
-            expected_url, to_lookup, headers=mock_session_instance.headers
-        )
-        assert response == mock_response
-
-
-def test_create_urlhaus_session():
-    with patch.object(
-        URLhaus, "create_urlhaus_session"
-    ) as mock_create_session:
-        urlhaus = URLhaus(None)
-    urlhaus.create_urlhaus_session()
-    mock_create_session.assert_called_once_with()
-
-
-@patch.object(URLhaus, "make_urlhaus_request")
-def test_parse_urlhaus_url_response_with_payloads(mock_request):
-    mock_response = {
-        "threat": "malware_download",
-        "url_status": "online",
-        "tags": ["phishing", "fake_update"],
-        "payloads": [
-            {
-                "file_type": "PE32 executable (GUI) Intel 80386, for MS Windows",
-                "filename": "update.exe",
-                "response_md5": "a1b2c3d4",
-                "signature": "Trojan.GenericKD.33632270",
-                "virustotal": {
-                    "percent": 80,
-                },
-            }
-        ],
-    }
-    mock_request.return_value.status_code = 200
-    mock_request.return_value.text = json.dumps(mock_response)
-    urlhaus = URLhaus(None)
-    url = "https://malicious.com"
-    result = urlhaus.parse_urlhaus_url_response(mock_response, url)
-    expected_result = {
-        "source": "URLhaus",
-        "url": url,
-        "description": (
-            "Connecting to a malicious URL https://malicious.com. "
-            "Detected by: URLhaus threat: malware_download, URL status: online, "
-            "tags: phishing fake_update, the file hosted in this url is of type: "
-            "PE32 executable (GUI) Intel 80386, for MS Windows, filename: update.exe "
-            "md5: a1b2c3d4 signature: Trojan.GenericKD.33632270. and was marked by "
-            "80% of virustotal's AVs as malicious"
-        ),
-        "threat_level": 80,
-        "tags": "phishing fake_update",
-    }
-    assert result == expected_result
-
-
-@patch.object(URLhaus, "make_urlhaus_request")
-def test_parse_urlhaus_md5_response(mock_request):
-    mock_response = {
-        "file_type": "PE32 executable (console) Intel 80386, for MS Windows",
-        "filename": "malware.exe",
-        "signature": "Trojan.Win32.Generic!BT",
-        "virustotal": {
-            "percent": 95,
-        },
-    }
-    mock_request.return_value.status_code = 200
-    mock_request.return_value.text = json.dumps(mock_response)
-    urlhaus = URLhaus(None)
-    md5 = "a1b2c3d4"
-    result = urlhaus.parse_urlhaus_md5_response(mock_response, md5)
-    expected_result = {
-        "blacklist": "URLhaus",
-        "threat_level": 95,
-        "tags": "Trojan.Win32.Generic!BT",
-        "file_type": "PE32 executable (console) Intel 80386, for MS Windows",
-        "file_name": "malware.exe",
-    }
-    assert result == expected_result
-
-
-mock_url_response_data = {
-    "query_status": "ok",
-    "threat": "malware_download",
-    "url_status": "online",
-    "tags": ["phishing"],
-    "payloads": [
-        {
-            "file_type": "PE32 executable (GUI) Intel 80386, for MS Windows",
-            "filename": "malware.exe",
-            "response_md5": "a1b2c3d4",
-            "signature": "Generic.Malware",
-            "virustotal": {
-                "percent": 80,
-            },
-        }
-    ],
-}
-mock_md5_response_data = {
-    "query_status": "ok",
-    "file_type": "PE32 executable (GUI) Intel 80386, for MS Windows",
-    "filename": "malware.exe",
-    "signature": "Generic.Malware",
-    "virustotal": {
-        "percent": 80,
-    },
-}
-
-
-@patch("modules.threat_intelligence.urlhaus.URLhaus.make_urlhaus_request")
-def test_urlhaus_lookup_url_success(mock_request):
-    mock_response = Mock()
-    mock_response.status_code = 200
-    mock_response.text = json.dumps(mock_url_response_data)
-    mock_request.return_value = mock_response
-    urlhaus = URLhaus(None)
-    result = urlhaus.urlhaus_lookup("https://example.com", "url")
-    assert result["source"] == "URLhaus"
-    assert result["threat_level"]
-    assert result["tags"] == "phishing"
-
-
-@patch("modules.threat_intelligence.urlhaus.URLhaus.make_urlhaus_request")
-def test_urlhaus_lookup_md5_success(mock_request):
-    mock_response = Mock()
-    mock_response.status_code = 200
-    mock_response.text = json.dumps(mock_md5_response_data)
-    mock_request.return_value = mock_response
-    urlhaus = URLhaus(None)
-    result = urlhaus.urlhaus_lookup("a1b2c3d4", "md5_hash")
-    assert result["blacklist"] == "URLhaus"
-    assert result["threat_level"]
-    assert result["file_type"]
+    mock_response_instance.post.assert_called_once_with(
+        expected_url, to_lookup, headers=mock_response_instance.headers
+    )
+    assert response == mock_response
 
 
 @pytest.mark.parametrize(
-    "mock_response, expected_result, test_description",
+    "to_lookup",
     [
+        ({"url": "https://example.com"}),
+    ],
+)
+@patch("modules.threat_intelligence.urlhaus.requests.session")
+def test_make_urlhaus_request_connection_error(
+    mock_response, mock_db, to_lookup
+):
+    """Test the ConnectionError handling in make_urlhaus_request."""
+    mock_response_instance = Mock()
+    mock_response.return_value = mock_response_instance
+    mock_response_instance.post.side_effect = (
+        requests.exceptions.ConnectionError
+    )
+
+    urlhaus = URLhaus(mock_db)
+    urlhaus.urlhaus_session = mock_response_instance
+    with patch.object(
+        urlhaus, "create_urlhaus_session"
+    ) as mock_create_session:
+        mock_create_session.side_effect = requests.exceptions.ConnectionError
+        with pytest.raises(requests.exceptions.ConnectionError):
+            urlhaus.make_urlhaus_request(to_lookup)
+
+
+@patch("modules.threat_intelligence.urlhaus.requests.session")
+def test_create_urlhaus_session(mock_response, mock_db):
+    """Verifies session creation with successful setup."""
+    mock_response_instance = Mock()
+    mock_response.return_value = mock_response_instance
+    urlhaus = URLhaus(mock_db)
+    mock_response.assert_called_once()
+    assert urlhaus.urlhaus_session == mock_response_instance
+    assert urlhaus.urlhaus_session.verify is True
+
+
+@pytest.mark.parametrize(
+    "ioc_type, mock_response, expected_result, ioc_value",
+    [
+        # Testcase1: Testing URL parsing all fields present
         (
-            # Testcase1: No Results
-            {"query_status": "no_results"},
-            None,
-            "No results found for the given URL"
+            "url",
+            {
+                "threat": "malware_download",
+                "url_status": "online",
+                "tags": ["phishing", "fake_update"],
+                "payloads": [
+                    {
+                        "file_type": "PE32 executable (GUI) Intel 80386, for MS Windows",
+                        "filename": "update.exe",
+                        "response_md5": "a1b2c3d4",
+                        "signature": "Trojan.GenericKD.33632270",
+                        "virustotal": {
+                            "percent": 80,
+                        },
+                    }
+                ],
+            },
+            {
+                "source": "URLhaus",
+                "url": "https://malicious.com",
+                "description": (
+                    "Connecting to a malicious URL https://malicious.com. "
+                    "Detected by: URLhaus threat: malware_download, URL status: online, "
+                    "tags: phishing fake_update, the file hosted in this url is of type: "
+                    "PE32 executable (GUI) Intel 80386, for MS Windows, filename: update.exe "
+                    "md5: a1b2c3d4 signature: Trojan.GenericKD.33632270. and was marked by "
+                    "80% of virustotal's AVs as malicious"
+                ),
+                "threat_level": 80,
+                "tags": "phishing fake_update",
+            },
+            "https://malicious.com",
         ),
+        # Testcase2: Testing MD5 hash parsing all fields present
         (
-            # Testcase2: Invalid URL
-            {"query_status": "invalid_url"},
-            None,
-            "Given URL is invalid"
+            "md5_hash",
+            {
+                "file_type": "PE32 executable (console) Intel 80386, for MS Windows",
+                "filename": "malware.exe",
+                "signature": "Trojan.Win32.Generic!BT",
+                "virustotal": {
+                    "percent": 95,
+                },
+            },
+            {
+                "blacklist": "URLhaus",
+                "threat_level": 95,
+                "tags": "Trojan.Win32.Generic!BT",
+                "file_type": "PE32 executable (console) Intel 80386, for MS Windows",
+                "file_name": "malware.exe",
+            },
+            "a1b2c3d4",
         ),
+        # Testcase 3: MD5 hash parsing  missing 'virustotal'
         (
-            # Testcase3: Request Error
-            None,
-            None,
-            "Request to URLhaus failed"
-        ),
-        (
-            # Testcase4: JSON Error
-            "not json",
-            None,
-            "URLhaus response is not valid JSON"
+            "md5_hash",
+            {
+                "file_type": "PE32 executable (console) Intel 80386, for MS Windows",
+                "filename": "malware.exe",
+                "signature": "Trojan.Win32.Generic!BT",
+            },
+            {
+                "blacklist": "URLhaus",
+                "threat_level": False,
+                "tags": "Trojan.Win32.Generic!BT",
+                "file_type": "PE32 executable (console) Intel 80386, for MS Windows",
+                "file_name": "malware.exe",
+            },
+            "a1b2c3d4",
         ),
     ],
 )
-def test_urlhaus_lookup(mock_response, expected_result, test_description):
-    """Tests urlhaus_lookup with different scenarios."""
-    with patch("modules.threat_intelligence.urlhaus.URLhaus.make_urlhaus_request") as mock_request:
-        if mock_response is None:
-            mock_request.return_value = None
-        else:
-            mock_response_obj = Mock()
-            mock_response_obj.status_code = 200
-            if isinstance(mock_response, dict):
-                mock_response_obj.text = json.dumps(mock_response)
-            else:
-                mock_response_obj.text = mock_response
-            mock_request.return_value = mock_response_obj
+@patch.object(URLhaus, "make_urlhaus_request")
+def test_parse_urlhaus_responses(
+    mock_request, mock_db, ioc_type, mock_response, expected_result, ioc_value
+):
+    """Test parsing responses from URLhaus for different IOC types."""
+    mock_request.return_value.status_code = 200
+    mock_request.return_value.text = json.dumps(mock_response)
+    urlhaus = URLhaus(mock_db)
+    parsing_functions = {
+        "url": urlhaus.parse_urlhaus_url_response,
+        "md5_hash": urlhaus.parse_urlhaus_md5_response,
+    }
+    parse_function = parsing_functions[ioc_type]
+    result = parse_function(mock_response, ioc_value)
 
-        urlhaus = URLhaus(None)
-        result = urlhaus.urlhaus_lookup("https://example.com", "url")
-        assert result == expected_result
+    assert result == expected_result
 
-file_info = {
-    "flow": {
-        "daddr": "8.8.8.8",
-        "size": 1234,
-        "file_name": "malware.exe",
-        "file_type": "PE32 executable",
-        "md5": "a1b2c3d4",
-        "tags": "trojan,ransomware",
-        "starttime": "2023-11-15 12:00:00",
-        "uid": "flow-123",
-    },
-    "threat_level": 80,
-    "profileid": "profile_10.0.0.1",
-    "twid": "timewindow1",
-}
 
-url_info_with_threat_level = {
-    "threat_level": 50,
-    "description": "Malicious URL",
-}
+@pytest.mark.parametrize(
+    "ioc, type_of_ioc, expected_result, mock_response_data, mock_status_code",
+    [
+        # Testcase 1: Successful URL lookup
+        (
+            "https://example.com",
+            "url",
+            {
+                "source": "URLhaus",
+                "threat_level": 80,
+                "tags": "phishing",
+                "description": "Connecting to a malicious URL https://example.com. "
+                "Detected by: URLhaus threat: malware_download, "
+                "URL status: online, tags: phishing, "
+                "the file hosted in this url is of type: "
+                "PE32 executable (GUI) Intel 80386, "
+                "for MS Windows, filename: malware.exe md5: "
+                "a1b2c3d4 signature: Generic.Malware. "
+                "and was marked by 80% of virustotal's AVs as malicious",
+                "url": "https://example.com",
+            },
+            {
+                "query_status": "ok",
+                "threat": "malware_download",
+                "url_status": "online",
+                "tags": ["phishing"],
+                "payloads": [
+                    {
+                        "file_type": "PE32 executable (GUI) Intel 80386, for MS Windows",
+                        "filename": "malware.exe",
+                        "response_md5": "a1b2c3d4",
+                        "signature": "Generic.Malware",
+                        "virustotal": {"percent": 80},
+                    }
+                ],
+            },
+            200,
+        ),
+        # Testcase 2: Successful MD5 hash lookup
+        (
+            "a1b2c3d4",
+            "md5_hash",
+            {
+                "blacklist": "URLhaus",
+                "file_name": "malware.exe",
+                "threat_level": 80,
+                "tags": "Generic.Malware",
+                "file_type": "PE32 executable (GUI) Intel 80386, for MS Windows",
+            },
+            {
+                "query_status": "ok",
+                "file_type": "PE32 executable (GUI) Intel 80386, for MS Windows",
+                "filename": "malware.exe",
+                "signature": "Generic.Malware",
+                "virustotal": {"percent": 80},
+            },
+            200,
+        ),
+        # Testcase 3: URL not found
+        (
+            "https://notfound.com",
+            "url",
+            None,
+            {"query_status": "no_results"},
+            200,
+        ),
+        # Testcase 4: Invalid URL format
+        (
+            "invalid-url-format",
+            "url",
+            None,
+            {"query_status": "invalid_url"},
+            200,
+        ),
+        # Testcase 5: MD5 hash not found
+        (
+            "invalidmd5hash",
+            "md5_hash",
+            None,
+            {"query_status": "no_results"},
+            200,
+        ),
+        # Testcase 6: HTTP error during lookup
+        (
+            "https://error.com",
+            "url",
+            None,
+            {},
+            404,
+        ),
+    ],
+)
+@patch("modules.threat_intelligence.urlhaus.URLhaus.make_urlhaus_request")
+def test_urlhaus_lookup(
+    mock_request,
+    mock_db,
+    ioc,
+    type_of_ioc,
+    expected_result,
+    mock_response_data,
+    mock_status_code,
+):
+    """Tests urlhaus_lookup for various scenarios, including successful lookups,
+    not found responses, invalid input, and HTTP errors.
+    """
+    mock_response = Mock()
+    mock_response.status_code = mock_status_code
+    mock_response.text = json.dumps(mock_response_data)
+    mock_request.return_value = mock_response
+    urlhaus = URLhaus(mock_db)
+    result = urlhaus.urlhaus_lookup(ioc, type_of_ioc)
+    assert result == expected_result
 
-url_info_without_threat_level = {
-    "description": "Malicious URL",
-}
+
+@patch("modules.threat_intelligence.urlhaus.URLhaus.make_urlhaus_request")
+def test_urlhaus_lookup_json_decode_error(mock_request, mock_db):
+    """
+    Test the case when the response from the API is not valid JSON.
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "Invalid JSON"
+    mock_request.return_value = mock_response
+
+    urlhaus = URLhaus(mock_db)
+    result = urlhaus.urlhaus_lookup("https://example.com", "url")
+    assert result is None
 
 
 @pytest.mark.parametrize(
     "url_info, expected_threat_level",
     [
+        # Test case 1: Valid threat level
         (
             {"threat_level": 50, "description": "Malicious URL"},
             ThreatLevel.MEDIUM,
         ),
+        # Test case 2: No threat level provided
         ({"description": "Malicious URL"}, ThreatLevel.MEDIUM),
+        # Test case 3: Invalid threat level format
         (
             {"threat_level": "invalid", "description": "Malicious URL"},
             ThreatLevel.MEDIUM,
         ),
     ],
 )
-def test_get_threat_level(url_info, expected_threat_level):
-    urlhaus = URLhaus(None)
+def test_get_threat_level(mock_db, url_info, expected_threat_level):
+    urlhaus = URLhaus(mock_db)
     assert urlhaus.get_threat_level(url_info) == expected_threat_level
 
 
-def test_set_evidence_malicious_hash_with_threat_level(mock_db):
+@pytest.mark.parametrize(
+    "file_info, expected_threat_level, expected_description_snippets",
+    [
+        (
+            # Testcase 1: All fields present, threat level from VT available
+            {
+                "flow": {
+                    "daddr": "8.8.8.8",
+                    "size": 1234,
+                    "file_name": "malware.exe",
+                    "file_type": "PE32 executable",
+                    "md5": "a1b2c3d4",
+                    "tags": "trojan,ransomware",
+                    "starttime": "2023-11-15 12:00:00",
+                    "uid": "flow-123",
+                },
+                "threat_level": 80,
+                "profileid": "profile_10.0.0.1",
+                "twid": "timewindow1",
+            },
+            ThreatLevel.HIGH,
+            [
+                "Virustotal score: 80% malicious",
+                "size: 1234",
+                "file name: malware.exe",
+                "file type: PE32 executable",
+                "tags: trojan,ransomware",
+            ],
+        ),
+        (
+            # Testcase 2: Some fields missing in flow, threat level from VT NOT available
+            {
+                "flow": {
+                    "daddr": "8.8.8.8",
+                    "md5": "a1b2c3d4",
+                    "starttime": "2023-11-15 12:00:00",
+                    "uid": "flow-123",
+                },
+                "threat_level": None,
+                "profileid": "profile_10.0.0.1",
+                "twid": "timewindow1",
+            },
+            ThreatLevel.HIGH,
+            [
+                "Malicious downloaded file: a1b2c3d4.",
+                "from IP: 8.8.8.8",
+                "by URLhaus.",
+            ],
+        ),
+    ],
+)
+def test_set_evidence_malicious_hash(
+    mock_db, file_info, expected_threat_level, expected_description_snippets
+):
+    """
+    Test the `set_evidence_malicious_hash`.
+    """
     urlhaus = URLhaus(mock_db)
     urlhaus.set_evidence_malicious_hash(file_info)
+
     assert mock_db.set_evidence.call_count == 2
-    call_args = mock_db.set_evidence.call_args_list[0][0][0]
-    assert call_args.attacker.direction.name == "SRC"
-    assert call_args.attacker.attacker_type.name == "IP"
-    assert call_args.attacker.value == "10.0.0.1"
-    assert call_args.threat_level == ThreatLevel.HIGH
-    assert "Virustotal score: 80% malicious" in call_args.description
-    call_args = mock_db.set_evidence.call_args_list[1][0][0]
-    assert call_args.attacker.direction.name == "DST"
-    assert call_args.attacker.attacker_type.name == "IP"
-    assert call_args.attacker.value == "8.8.8.8"
-    assert call_args.threat_level == ThreatLevel.HIGH
-    assert "Virustotal score: 80% malicious" in call_args.description
 
-
-def test_set_evidence_malicious_hash_without_threat_level(mock_db):
-    file_info_no_threat_level = file_info.copy()
-    del file_info_no_threat_level["threat_level"]
-
-    urlhaus = URLhaus(mock_db)
-    urlhaus.set_evidence_malicious_hash(file_info_no_threat_level)
-    assert mock_db.set_evidence.call_count == 2
     for call_args in mock_db.set_evidence.call_args_list:
-        assert call_args[0][0].threat_level == ThreatLevel.HIGH
+        evidence = call_args[0][0]
+        assert evidence.threat_level == expected_threat_level
+        for snippet in expected_description_snippets:
+            assert snippet in evidence.description
 
 
-SAMPLE_DADDR = "1.2.3.4"
-SAMPLE_URL_INFO = {
-    "threat_level": "50",
-    "description": "Malicious URL detected",
-}
-SAMPLE_UID = "1234"
-SAMPLE_TIMESTAMP = "2023-11-01 12:00:00"
-SAMPLE_PROFILEID = "profile_1.2.3.4"
-SAMPLE_TWID = "timewindow1"
+@pytest.mark.parametrize(
+    "url_info, expected_threat_level, expected_description",
+    [
+        # Testcase1: Valid threat level and description
+        (
+            {"threat_level": "50", "description": "Malicious URL detected"},
+            ThreatLevel.MEDIUM,
+            "Malicious URL detected",
+        ),
+        # Testcase2: No threat level provided
+        (
+            {"description": "Another malicious URL"},
+            ThreatLevel.MEDIUM,
+            "Another malicious URL",
+        ),
+        # Testcase3: Invalid threat level format
+        (
+            {
+                "threat_level": "invalid",
+                "description": "Yet another malicious URL",
+            },
+            ThreatLevel.MEDIUM,
+            "Yet another malicious URL",
+        ),
+    ],
+)
+def test_set_evidence_malicious_url(
+    mock_db, url_info, expected_threat_level, expected_description
+):
+    """
+    Tests the set_evidence_malicious_url method
+    with different URL info inputs.
+    """
+    urlhaus = URLhaus(mock_db)
+    daddr = "1.2.3.4"
+    uid = "1234"
+    timestamp = "2023-11-01 12:00:00"
+    profileid = "profile_1.2.3.4"
+    twid = "timewindow1"
 
-
-@patch.object(URLhaus, "get_threat_level")
-def test_set_evidence_malicious_url(mock_get_threat_level):
-    mock_db = Mock()
-    urlhaus_instance = URLhaus(mock_db)
-    mock_get_threat_level.return_value = ThreatLevel.MEDIUM
-    urlhaus_instance.set_evidence_malicious_url(
-        SAMPLE_DADDR,
-        SAMPLE_URL_INFO,
-        SAMPLE_UID,
-        SAMPLE_TIMESTAMP,
-        SAMPLE_PROFILEID,
-        SAMPLE_TWID,
+    urlhaus.set_evidence_malicious_url(
+        daddr, url_info, uid, timestamp, profileid, twid
     )
+
     assert mock_db.set_evidence.call_count == 2
     call_args_list = mock_db.set_evidence.call_args_list
     evidence_objects = [args[0][0] for args in call_args_list]
+
     for evidence in evidence_objects:
         assert (
             evidence.evidence_type
             == EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL
         )
-        assert evidence.threat_level == ThreatLevel.MEDIUM
+        assert evidence.threat_level == expected_threat_level
         assert evidence.confidence == 0.7
-        assert evidence.description == SAMPLE_URL_INFO["description"]
-        assert evidence.timestamp == SAMPLE_TIMESTAMP
+        assert evidence.description == expected_description
+        assert evidence.timestamp == timestamp
         assert evidence.category == IDEACategory.MALWARE
         assert evidence.timewindow.number == 1
-        assert evidence.uid == [SAMPLE_UID]
+        assert evidence.uid == [uid]
     assert evidence_objects[0].attacker.direction == Direction.SRC
     assert evidence_objects[0].attacker.value == "1.2.3.4"
     assert evidence_objects[1].attacker.direction == Direction.DST
-    assert evidence_objects[1].attacker.value == SAMPLE_DADDR
+    assert evidence_objects[1].attacker.value == daddr
