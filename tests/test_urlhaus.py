@@ -8,30 +8,29 @@ from modules.threat_intelligence.urlhaus import (
     EvidenceType,
     IDEACategory,
     Direction,
-    URLHAUS_BASE_URL,
 )
 
 
 @pytest.mark.parametrize(
-    "to_lookup, expected_url, status_code",
+    "to_lookup, uri, status_code",
     [
         # Testcase1: URL lookup
         (
             {"url": "https://example.com"},
-            f"{URLHAUS_BASE_URL}/url/",
+            "url",
             200,
         ),
         # Testcase2: hash lookup
         (
             {"md5_hash": "a1b2c3d4"},
-            f"{URLHAUS_BASE_URL}/payload/",
+            "payload",
             200,
         ),
     ],
 )
 @patch("modules.threat_intelligence.urlhaus.requests.session")
 def test_make_urlhaus_request(
-    mock_response, mock_db, to_lookup, expected_url, status_code
+    mock_response, mock_db, to_lookup, uri, status_code
 ):
     """Test successful requests to the make_urlhaus_request function."""
     mock_response_instance = Mock()
@@ -45,7 +44,9 @@ def test_make_urlhaus_request(
     response = urlhaus.make_urlhaus_request(to_lookup)
 
     mock_response_instance.post.assert_called_once_with(
-        expected_url, to_lookup, headers=mock_response_instance.headers
+        f"{urlhaus.base_url}/{uri}/",
+        to_lookup,
+        headers=mock_response_instance.headers,
     )
     assert response == mock_response
 
