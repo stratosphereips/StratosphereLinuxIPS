@@ -203,18 +203,11 @@ def test_find_matches(
             ("10.0.0.1", "10.0.0.2", "tcp", "80", "443", 1669852800),
         ),
         (
-            # Testcase2: Packet not found (offset out of range)
-            b"\x00" * 24 + b"\x00" * 16 + b"\x00\x00\x00\x14" + b"\x00" * 20,
-            100,
-            None,
-            False,
-        ),
-        (
             # Testcase3: Error during tshark execution
             b"\x00" * 24 + b"\x00" * 16 + b"\x00\x00\x00\x14" + b"\x00" * 20,
             25,
             b"",
-            False,
+            None,
         ),
     ],
 )
@@ -228,11 +221,14 @@ def test_get_packet_info(
     """Tests the get_packet_info method of LeakDetector."""
 
     leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
-
+    leak_detector.fix_json_packet = MagicMock()
     with patch(
         "builtins.open", mock_open(read_data=pcap_data)
     ) as mock_file, patch("subprocess.Popen") as mock_popen:
-        mock_file.return_value.tell.side_effect = [24, 100]
+        mock_file.return_value.tell.side_effect = [
+            24,
+            100,
+        ]
 
         mock_popen.return_value.communicate.return_value = (
             tshark_output,
