@@ -2,7 +2,6 @@ import warnings
 import json
 from typing import Dict
 import numpy as np
-from tensorflow.python.keras.models import load_model
 from tensorflow.keras.models import load_model
 
 from slips_files.common.slips_utils import utils
