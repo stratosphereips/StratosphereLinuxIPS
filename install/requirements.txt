@@ -44,3 +44,4 @@ aid_hash
 black
 ruff
 pre-commit
+coverage

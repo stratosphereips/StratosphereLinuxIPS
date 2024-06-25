@@ -42,28 +42,102 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         grep -v 'black' install/requirements.txt | xargs pip3 install  --no-cache-dir
+        pip install coverage
 
     - name: Start redis server
       run: redis-server --daemonize yes
 
     - name: Run unit tests
-      run: python3  -m pytest tests/ --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+      run: python3 -m pytest tests/ --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+
 
     - name: Run database unit tests
-      run: python3  -m pytest tests/test_database.py -p no:warnings -vv
+      run: |
+        python3 -m pytest tests/test_database.py -p no:warnings -vv
+
+    - name: Flowalerts Unit Tests
+      run: |
+        python3 -m pytest tests/test_flowalerts.py -p no:warnings -vv
+
+    - name: Whitelist Unit Tests
+      run: |
+        python3 -m pytest tests/test_whitelist.py -p no:warnings -vv
+
+    - name: ARP Unit Tests
+      run: |
+        python3 -m pytest tests/test_arp.py -p no:warnings -vv
+
+    - name: Blocking Unit Tests
+      run: |
+        python3 -m pytest tests/test_blocking.py -p no:warnings -vv
+
+    - name: Flowhandler Unit Test
+      run: |
+        python3 -m pytest tests/test_flow_handler.py -p no:warnings -vv
+
+    - name: Horizontal Portscans Unit Tests
+      run: |
+        python3 -m pytest tests/test_horizontal_portscans.py -p no:warnings -vv
+
+    - name: HTTP Analyzer Unit Tests
+      run: |
+        python3 -m pytest tests/test_http_analyzer.py -p no:warnings -vv
+
+    - name: Vertical Portscans Unit Tests
+      run: |
+        python3 -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
+
+    - name: Virustotal Unit Tests
+      run: |
+        python3 -m pytest tests/test_virustotal.py -p no:warnings -vv
+
+    - name: Update Manager Unit tests
+      run: |
+        python3 -m pytest tests/test_update_file_manager.py -p no:warnings -vv
+
+    - name: Threat Intelligence Unit tests
+      run: |
+        python3 -m pytest tests/test_threat_intelligence.py -p no:warnings -vv
+
+    - name: Slips Utils Unit tests
+      run: |
+        python3 -m pytest tests/test_slips_utils.py -p no:warnings -vv
+
+    - name: Slips.py Unit Tests
+      run: |
+        python3 -m pytest tests/test_slips.py -p no:warnings -vv
+
+    - name: Profiler Unit Tests
+      run: |
+        python3 -m pytest tests/test_profiler.py -p no:warnings -vv
+
+    - name: Leak Detector Unit Tests
+      run: |
+        python3 -m pytest tests/test_leak_detector.py -p no:warnings -vv
+
+    - name: Ipinfo Unit Tests
+      run: |
+        python3 -m pytest tests/test_ip_info.py -p no:warnings -vv
+
+    - name: Input Unit Tests
+      run: |
+        python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
     - name: Clear redis cache
       run: ./slips.py -cc
 
     - name: Portscan tests
-      run: python3 -m pytest -s tests/integration_tests/test_portscans.py  -p no:warnings -vv
+      run: |
+        python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
 
     - name: Integration tests
-      run: python3 -m pytest -s tests/integration_tests/test_dataset.py  -p no:warnings -vv
+      run: |
+        python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
+
 
     - name: Config file tests
-      run: python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
-
+      run: |
+        python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
 
     - name: Upload Artifact
       # run this job whether the above jobs failed or passed

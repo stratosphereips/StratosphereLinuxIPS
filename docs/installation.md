@@ -52,28 +52,40 @@ For more advanced users, you can:
 ####  For linux
 
 ###### Analyse your own traffic
-	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
-    - Please change the name of the interface for your own.
-    - Check the alerts slips generated
-      - ```tail -f output/eno1*/alerts.log ```
+    docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
+
+Please change the name of the interface for your own.
+Check the alerts slips generated
+
+      tail -f output/eno1*/alerts.log
 
 ###### Analyze your PCAP file
-	- Prepare a dataset directory
-		- `mkdir dataset`
-		- `cp myfile.pcap dataset`
-	  - Run Slips
-		- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
-	  - Check the alerts slips generated
-		  - ```tail -f output/myfile*/alerts.log ```
+
+Prepare a dataset directory
+
+    mkdir dataset
+    cp myfile.pcap dataset
+
+Run Slips
+
+		docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap
+
+Check the alerts slips generated
+
+		  tail -f output/myfile*/alerts.log
 
 
 ####  For MacOS M1
 
-###### Analyse your own traffic
-	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
-    - Please change the name of the interface for your own.
-    - Check the alerts slips generated
-      - ```tail -f output/eno1*/alerts.log ```
+###### Analyze your own traffic
+
+	docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
+
+Please change the name of the interface for your own.
+
+Check the alerts slips generated
+
+    tail -f output/eno1*/alerts.log
 
     docker run -it --rm --net=host stratosphereips/slips_macos_m1:latest
 
@@ -82,40 +94,49 @@ Docker with P2P is not supported for MacOS M1.
 
 #### For MacOS Intel processors
 
-###### Analyse your own traffic
-	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
-    - Please change the name of the interface for your own.
-    - Check the alerts slips generated
-      - ```tail -f output/eno1*/alerts.log ```
+###### Analyze your own traffic
+	docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
+
+Please change the name of the interface for your own.
+Check the alerts slips generated
+
+    tail -f output/eno1*/alerts.log
 
 ###### Analyze your PCAP file
-	- Prepare a dataset directory
-		- `mkdir dataset`
-		- `cp myfile.pcap dataset`
-	  - Run Slips
-		- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
-	  - Check the alerts slips generated
-		  - ```tail -f output/myfile*/alerts.log ```
+Prepare a dataset directory
 
+		mkdir dataset
+		cp myfile.pcap dataset
+
+Run Slips
+
+    docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
+
+Check the alerts slips generated
+
+    tail -f output/myfile*/alerts.log
 
 
 ####  For P2P support on Linux
 
 ###### To analyze your own traffic with p2p
-	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
-    - Please change the name of the interface for your own.
-    - Check evidence
-      ```tail -f output_dir/alerts.log ```
+    docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
+
+Please change the name of the interface for your own.
+
+Check evidence
+
+      tail -f output_dir/alerts.log
 
 #### For P2P support on MacOS Intel
 
 ###### Analyze your own traffic
-	- `docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
-    - Please change the name of the interface for your own.
-    - Check evidence
-      ```tail -f output_dir/alerts.log ```
+    docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
 
+Please change the name of the interface for your own.
+Check evidence
 
+      tail -f output_dir/alerts.log
 
 ---
 
@@ -223,23 +244,25 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
-If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
+If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
 
 **NOTE: replace ubuntu-image with the image that fits your archiecture**
+**NOTE: you have to be in the main Slips directory to build this. **
 
-	cd ~/code/StratosphereLinuxIPS/docker/ubunutu-image
-	docker build --no-cache -t slips -f Dockerfile .
-	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
+
+	cd ~/StratosphereLinuxIPS
+	docker build --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
+	docker run -it --rm --net=host slips
 	./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
 
-	docker build --network=host --no-cache -t slips -f Dockerfile .
+	docker build --network=host --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
 
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 
-	cp some-pcap-file.pcap ~/code/StratosphereLinuxIPS/dataset
-	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
+	cp some-pcap-file.pcap ~/StratosphereLinuxIPS/dataset
+	docker run -it --rm --net=host -v ~/StratosphereLinuxIPS/dataset/:/StratosphereLinuxIPS/dataset slips
 	./slips.py -f dataset/some-pcap-file.pcap
 
 

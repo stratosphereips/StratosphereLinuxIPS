@@ -15,21 +15,18 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
 class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
-    """Main redis db class."""
-
-    # this db should be a singelton per port. meaning no 2 instances should be created for the same port at the same
-    # time
+    # this db is a singelton per port. meaning no 2 instances
+    # should be created for the same port at the same time
     _obj = None
     _port = None
     # Stores instances per port
     _instances = {}
-
     supported_channels = {
         "tw_modified",
         "evidence_added",
@@ -97,7 +94,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     # try to reconnect to redis this amount of times in case of connection
     # errors before terminating
     max_retries = 150
-    # to keep track of connection retries. once it reaches max_retries, slips will terminate
+    # to keep track of connection retries. once it reaches max_retries,
+    # slips will terminate
     connection_retry = 0
 
     def __new__(
@@ -105,7 +103,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     ):
         """
         treat the db as a singelton per port
-        meaning every port will have exactly 1 single obj of this db at any given time
+        meaning every port will have exactly 1 single obj of this db
+        at any given time
         """
         cls.redis_port = redis_port
         cls.flush_db = flush_db
@@ -139,8 +138,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     @classmethod
     def _set_redis_options(cls):
         """
-        Sets the default slips options,
-         when using a different port we override it with -p
+        Updates the default slips options based on the -s param,
+        writes the new configs to cls._conf_file
         """
         cls._options = {
             "daemonize": "yes",
@@ -149,22 +148,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             "appendonly": "no",
         }
 
-        if "-s" in sys.argv:
-            #   Will save the DB if both the given number of seconds and the given
-            #   number of write operations against the DB occurred.
-            #   In the example below the behaviour will be to save:
-            #   after 30 sec if at least 500 keys changed
-            #   AOF persistence logs every write operation received by the server,
-            #   that will be played again at server startup
-            # saved the db to <Slips-dir>/dump.rdb
-            cls._options.update(
-                {
-                    "save": "30 500",
-                    "appendonly": "yes",
-                    "dir": os.getcwd(),
-                    "dbfilename": "dump.rdb",
-                }
-            )
+        if "-s" not in sys.argv:
+            return
+
+        # Will save the DB if both the given number of seconds
+        # and the given number of write operations against the DB
+        # occurred.
+        # In the example below the behaviour will be to save:
+        # after 30 sec if at least 500 keys changed
+        # AOF persistence logs every write operation received by
+        # the server, that will be played again at server startup
+        # save the db to <Slips-dir>/dump.rdb
+        cls._options.update(
+            {
+                "save": "30 500",
+                "appendonly": "yes",
+                "dir": os.getcwd(),
+                "dbfilename": "dump.rdb",
+            }
+        )
 
         with open(cls._conf_file, "w") as f:
             for option, val in cls._options.items():
@@ -472,7 +474,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def is_cyst_enabled(self):
         return self.r.get("is_cyst_enabled")
 
-    def get_equivalent_tws(self, hrs: float):
+    def get_equivalent_tws(self, hrs: float) -> int:
         """
         How many tws correspond to the given hours?
         for example if the tw width is 1h, and hrs is 24, this function returns 24
@@ -552,17 +554,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.hget("analysis", "output_dir")
 
-    def setInfoForIPs(self, ip: str, to_store: dict):
+    def set_ip_info(self, ip: str, to_store: dict):
         """
         Store information for this IP
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
-        going to store for this IP.
+        We receive a dictionary, such as {'geocountry': 'rumania'} to
+        store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
         """
         # Get the previous info already stored
         cached_ip_info = self.get_ip_info(ip)
-        if cached_ip_info is False:
+        if not cached_ip_info:
             # This IP is not in the dictionary, add it first:
             self.set_new_ip(ip)
             cached_ip_info = {}
@@ -662,19 +664,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             return False
 
         # these are the tws this ip was resolved in
-        tws = ip_info["timewindows"]
+        tws_where_ip_was_resolved = ip_info["timewindows"]
 
         # IP is resolved, was it resolved in the past x hrs?
-        tws_to_search = self.get_equivalent_tws(hrs)
+        tws_to_search: int = self.get_equivalent_tws(hrs)
 
-        current_twid = 0  # number of the tw we're looking for
-        while tws_to_search != current_twid:
-            matching_tws = [i for i in tws if f"timewindow{current_twid}" in i]
-
-            if not matching_tws:
-                current_twid += 1
-            else:
+        for tw_number in range(tws_to_search):
+            if f"timewindow{tw_number}" in tws_where_ip_was_resolved:
                 return True
+        return False
 
     def delete_dns_resolution(self, ip):
         self.r.hdel("DNSresolution", ip)
@@ -1226,16 +1224,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def set_whitelist(self, type_, whitelist_dict):
         """
         Store the whitelist_dict in the given key
-        :param type_: supporte types are IPs, domains and organizations
-        :param whitelist_dict: the dict of IPs, domains or orgs to store
+        :param type_: supported types are IPs, domains, macs and organizations
+        :param whitelist_dict: the dict of IPs,macs,  domains or orgs to store
         """
         self.r.hset("whitelist", type_, json.dumps(whitelist_dict))
 
-    def get_all_whitelist(self) -> Dict[str, dict]:
-        """Returns a dict of 3 keys: IPs, domains, organizations or mac"""
-        return self.r.hgetall("whitelist")
+    def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
+        """
+        Returns a dict with the following keys from the whitelist
+        'mac', 'organizations', 'IPs', 'domains'
+        """
+        whitelist: Optional[Dict[str, str]] = self.r.hgetall("whitelist")
+        if whitelist:
+            whitelist = {k: json.loads(v) for k, v in whitelist.items()}
+        return whitelist
 
-    def get_whitelist(self, key):
+    def get_whitelist(self, key: str) -> dict:
         """
         Whitelist supports different keys like : IPs domains
         and organizations
@@ -1246,6 +1250,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             return json.loads(whitelist)
         else:
             return {}
+
+    def has_cached_whitelist(self) -> bool:
+        return bool(self.r.exists("whitelist"))
 
     def store_dhcp_server(self, server_addr):
         """

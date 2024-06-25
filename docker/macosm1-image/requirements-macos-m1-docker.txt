@@ -22,7 +22,6 @@ pytest-mock
 pytest-xdist
 slackclient
 scipy
-sklearn
 GitPython
 protobuf
 blinker
@@ -41,5 +40,7 @@ pytest-sugar
 memray
 aid_hash
 tensorflow
-black
+scikit-learn
 pre-commit
+black
+ruff

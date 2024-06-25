@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.0.13
+Slips v1.0.15
 </h1>
 
 
@@ -84,9 +84,10 @@ cat output_dir/alerts.log
 ```
 
 #### Macos M1
+In macos do not use --net=host if you want to access the internal container's ports from the host.
 
 ```
-docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
+docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
 ```
 
 ```
@@ -323,6 +324,13 @@ We are grateful for the generous support and funding provided by the following o
 
 
 - NlNet Foundation, https://nlnet.nl/
+
+This project is funded through [NGI0 Entrust](https://nlnet.nl/entrust), a fund established by [NLnet](https://nlnet.nl) with financial support from the European Commission's [Next Generation Internet](https://ngi.eu) program. Learn more at the [NLnet project page](https://nlnet.nl/project/Iris-P2P).
+
+[<img src="https://nlnet.nl/logo/banner.png" alt="NLnet foundation logo" width="20%" />](https://nlnet.nl)
+[<img src="https://nlnet.nl/image/logos/NGI0_tag.svg" alt="NGI Zero Logo" width="20%" />](https://nlnet.nl/entrust)
+
+
 - Artificial Intelligence Centre at the Czech Technical University in Prague, https://www.aic.fel.cvut.cz/
 - Avast, https://www.avast.com/
 - CESNET, https://www.cesnet.cz/

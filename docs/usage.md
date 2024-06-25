@@ -2,22 +2,22 @@
 
 Slips can read the packets directly from the **network interface** of the host machine, and packets and flows from different types of files, including
 
-- Pcap files (internally using Zeek) 
+- Pcap files (internally using Zeek)
 - Packets directly from an interface (internally using Zeek)
 - Suricata flows (from JSON files created by Suricata, such as eve.json)
-- Argus flows (CSV file separated by commas or TABs) 
+- Argus flows (CSV file separated by commas or TABs)
 - Zeek/Bro flows from a Zeek folder with log files
 - Nfdump flows from a binary nfdump file
 - Text flows from stdin in zeek, argus or suricata form
 
 It's recommended to use PCAPs.
 
-All the input flows are converted to an internal format. So once read, Slips works the same with all of them. 
+All the input flows are converted to an internal format. So once read, Slips works the same with all of them.
 
 After Slips was run on the traffic, the Slips output can be analyzed with Kalipso GUI interface. In this section, we will explain how to execute each type of file in Slips, and the output can be analyzed with Kalipso.
 
 Either you are [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-and-running-slips-inside-a-docker) or [locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-in-your-own-computer), you can run Slips using the same below commands and configurations.
-	
+
 
 ## Reading the input
 
@@ -83,7 +83,7 @@ tr:nth-child(even) {
 		<td>stdin</td>
 		<td>-f</td>
 		<td>./slips.py -f zeek </td>
-	</tr>    
+	</tr>
 
 </table>
 
@@ -99,7 +99,7 @@ Slips has 2 modes, interactive and daemonized.
 **Daemonized** : means , output, logs and alerts are written in files.
 
 In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and
-```logsfile``` files specified in ```config/slips.conf``` 
+```logsfile``` files specified in ```config/slips.conf```
 
 by default, these are the paths used
 
@@ -107,13 +107,13 @@ stdout = /var/log/slips/slips.log
 stderr = /var/log/slips/error.log
 logsfile = /var/log/slips/slips.log
 
-NOTE: Since ```/val/log/``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```, 
+NOTE: Since ```/val/log/``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```,
 creat /var/log/slips as root and slips will use it by default.
 
 If slips can't write there, slips will store the logs in the ```Slips/output/``` dir by default.
 
 NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
- instead of the otput_dir specified in config/slips.conf 
+ instead of the otput_dir specified in config/slips.conf
 
 
 
@@ -128,18 +128,18 @@ To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
 Only one instance of the daemon can be running at a time.
 
 **Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
- 
+
 This is the default mode, It doesn't require any flags.
 
 Output files are stored in ```output/``` dir.
 
-By default you don't need root to run slips, but if you changed the default output directory to a dir that is 
+By default you don't need root to run slips, but if you changed the default output directory to a dir that is
 owned by root, you will need to run Slips using sudo or give the current user enough permission so that
-slips can write to those files. 
+slips can write to those files.
 
 
 
-For detailed information on how slips uses redis check the 
+For detailed information on how slips uses redis check the
 [Running several slips instances section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#running-several-slips-instances)
 
 
@@ -148,7 +148,7 @@ For detailed information on how slips uses redis check the
 By default, Slips will assume you are running only 1 instance and will use the redis port 6379 on each run.
 
 You can run several instances of slips at the same time using the -m flag, and the output of each instance will be stored in
-```output/filename_timestamp/```  directory. 
+```output/filename_timestamp/```  directory.
 
 If you want Slips to run on a certain port, you can use the ```-P <portnumber>``` parameter to specify the
 port you want Slips to use. but it will always use port 6379 db 1 for the cache db.
@@ -164,7 +164,7 @@ Both redis servers, the main sever (DB 0) and the cache server (DB 1) are opened
 When running ./kalipso.sh, you will be prompted with the following
 
     To close all unused redis servers, run slips with --killall
-    You have 3 open redis servers, Choose which one to use [1,2,3 etc..] 
+    You have 3 open redis servers, Choose which one to use [1,2,3 etc..]
     [1] wlp3s0 - port 55879
     [2] dataset/test7-malicious.pcap - port 59324
 
@@ -174,7 +174,7 @@ Once you're done, you can run slips with ```--killall``` to close all the redis 
 
 ```./slips.py --killall```
 
-NOTICE: if you run more than one instance of Slips on the same file or the same interface, 
+NOTICE: if you run more than one instance of Slips on the same file or the same interface,
 Slips will generate a new directory with the name of the file and the new timestamp inside the ```output/``` dir
 
 
@@ -183,17 +183,17 @@ Slips will generate a new directory with the name of the file and the new timest
 Slips uses a random unused port in the range in the range (32768 to 32850).
 
 When running slips, it will warn you if you have more than 1 redis serve open using the following msg
-    
+
     [Main] Warning: You have 2 redis servers running. Run Slips with --killall to stop them.
 
 you can use the -k flag to kill 1 open redis server, or all of them using the following command
-    
+
     ./slips.py -k
 
 You will be prompted with the following options
 
     Choose which one to kill [0,1,2 etc..]
-    
+
     [0] Close all servers
     [1] dataset/sample_zeek_files - port 32768
     [2] dataset/sample_zeek_files - port 32769
@@ -201,11 +201,11 @@ You will be prompted with the following options
 
 you can select the number you want to kill or 0 to close all the servers.
 
-Note that if all ports from (32768 to 32850) are unavailable, slips won't be able to start, and you will 
+Note that if all ports from (32768 to 32850) are unavailable, slips won't be able to start, and you will
 be asked to close all all of them using the following warning
 
     All ports from 32768 to 32769 are used. Unable to start slips.
-    
+
     Press Enter to close all ports.
 
 You can press enter to close all ports, then start slips again.
@@ -228,7 +228,7 @@ Then start slips on your zeek dir using -f normally, and mark the given dir as g
 
 By using the -g parameter, slips will treat your given zeek directory as growing (the same way we treat zeek
 directories generated by using slips with -i) and will not stop when there
-are no flows for a while. 
+are no flows for a while.
 
 
 
@@ -239,7 +239,7 @@ analysis and detected malicious behaviour can be analyzed as following:
 - **Kalipso** - Node.JS based graphical user interface in the terminal. Kalipso displays Slips detection and analysis in colorful table and graphs, highlighting important detections. See section Kalipso for more explanation.
 - **alerts.json and alerts.txt in the output folder** - collects all evidences and detections generated by Slips in a .txt and .json formats.
 - **log files in a folder _current-date-time_** - separates the traffic into files according to a profile and timewindow and summarize the traffic according to each profile and timewindow.
-- **Web interface** - Node.JS browser based GUI for vewing slips detections, Incoming and ongoing traffic and an organized timeline of flows.  
+- **Web interface** - Node.JS browser based GUI for vewing slips detections, Incoming and ongoing traffic and an organized timeline of flows.
 
 
 There are two options how to run Kalipso Locally:
@@ -259,11 +259,11 @@ Now in a new local terminal get the Slips container ID:
 
 ```docker ps```
 
-Create another terminal of the Slips container using 
+Create another terminal of the Slips container using
 
 ```docker exec -it <container_id> bash```
 
-Now you can run 
+Now you can run
 
 ```./kalipso.sh```
 
@@ -310,9 +310,9 @@ You can view the traffic of each time window by clicking on it
 * The outgoing button shows flow sent from this IP/profile to other IPs only. it doesn't show traffic sent to the profile.
 * The incoming button shows flow sent to this IP/profile to other IPs only. It doesn't show traffic sent from the profile.
 * The Alerts button shows the alerts Slips saw for this IP, each alert is a bunch of evidence that the given profile is malicious. Slips decides to block the IP if an alert is generated for it (if running with -p). Clicking on each alert expands the evidence that resulted in the alert.
-* The Evidence button shows all the evidence of the timewindow whether they were part of an alert or not. 
+* The Evidence button shows all the evidence of the timewindow whether they were part of an alert or not.
 
---- 
+---
 
 If you're running slips in docker you will need to add one of the following
 parameters to docker to be able to use the web interface:
@@ -351,27 +351,27 @@ This feature isn't supported in docker due to problems with redis in docker.
 
 
 _DISCLAIMER_: When saving the database you will see the following
-warning 
+warning
 
     stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file
 
 This configuration is set by slips so that redis will continue working even if redis
-can't write to dump.rdb. 
+can't write to dump.rdb.
 
-Your information will be lost only if you're out of space and redis can't write to dump.rdb or if you 
-don't have permissions to write to /var/lib/redis/dump.rdb, otherwise you're fine and 
+Your information will be lost only if you're out of space and redis can't write to dump.rdb or if you
+don't have permissions to write to /var/lib/redis/dump.rdb, otherwise you're fine and
 the saved database will contain all analyzed flows.
 
 
 ## Whitelisting
 
-Slips allows you to whitelist some pieces of data in order to avoid its processing. 
-In particular, you can whitelist an IP address, a domain, a MAC address or a complete organization. 
-You can choose to whitelist what is going __to__ them and what is coming __from__ them. 
-You can also choose to whitelist the flows, so they are not processed, or the alerts, so
+Slips allows you to whitelist some pieces of data in order to avoid its processing.
+In particular, you can whitelist an IP address, a domain, a MAC address or a complete organization.
+You can choose to whitelist what is going __to__ them, what is coming __from__ them, or both directions.
+You can also choose to whitelist the flows, so they are not processed, or alerts, so
 you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid
-processing any communication to or from these pieces of data, not to avoid any packet that
-contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS 
+processing any communication to or from these iocs, not to avoid any packet that
+contains that ioc. For example, if you whitelist the flow of the domain slack.com, then a DNS
 request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 
@@ -401,25 +401,25 @@ If you whitelist some piece of data not to generate alerts, the process is the f
 - If you whitelisted an IP
     - We check if the source or destination IP of the flow that generated that alert is whitelisted.
     - We check if the content of the alert is related to the IP that is whitelisted.
-  
+
 - If you whitelisted a domain
-    - We check if any domain in alerts related to DNS/HTTP Host/SNI is whitelisted. 
+    - We check if any domain in alerts related to DNS/HTTP Host/SNI is whitelisted.
     - We check also if any domain in the traffic is a subdomain of your whitelisted domain. So if you whitelist 'test.com', we also match 'one.test.com'
-  
+
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
-  
+
 - If you whitelist a MAC address, then:
   - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
-  
+
 ### Tranco whitelist
 
 In order to reduce the number of false positive alerts,
-Slips uses Tranco whitelist which contains a research-oriented top sites 
+Slips uses Tranco whitelist which contains a research-oriented top sites
 ranking hardened against manipulation here https://tranco-list.eu/
 
-Slips download the top 10k domains from this list and by default and 
+Slips download the top 10k domains from this list and by default and
 whitelists all evidence and alerts from and to these domains. Slips still shows the flows to and from these IoC.
 
 
@@ -428,10 +428,8 @@ The tranco list is updated daily by default in Slips, but you can change how oft
 
 
 
-
-
 ### Whitelisting Example
-You can modify the file ```whitelist.csv``` file with this content:
+You can modify the file ```config/whitelist.conf``` file with this content:
 
 
     "IoCType","IoCValue","Direction","IgnoreType"
@@ -463,13 +461,33 @@ The values for each column are the following:
             - Ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
             - Ignore flows: the flow will be completely discarded.
 
+### Removing values from the Whitelist
 
+Whitelisted IoCs can be updated:
+1. When you re-start Slips
+2. On the fly while running Slips
+
+If you're updating the whitelist while Slips is running, be careful to use ; to comment out the lines you want to remove from the db
+for example, if you have the following line in `whitelist.conf`:
+
+```
+organization,google,both,alerts
+```
+
+To be able to remove this whitelist entry while Slips is running, simply change it to
+
+```
+# organization,google,both,alerts
+```
+
+Comments starting with `;` are not removed from the database and are treated as user comments.
+Comments starting with `#` will cause Slips to attempt to remove that entry from the database.
 
 ## Popup notifications
 
-Slips Support displaying popup notifications whenever there's an alert. 
+Slips Support displaying popup notifications whenever there's an alert.
 
-This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.conf``` 
+This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.conf```
 
 This feature is supported in Linux and it requires root privileges.
 
@@ -535,19 +553,19 @@ The module name to disable should be the same as the name of it's directory name
 
 The ```mode=train``` should be used to tell the MLdetection1 module that the flows received are all for training.
 
-The ```mode=test``` should be used after training the models, to test unknown data. 
+The ```mode=test``` should be used after training the models, to test unknown data.
 
 You should have trained at least once with 'Normal' data and once with 'Malicious' data in order for the test to work.
 
 ### Blocking
 
-This module is enabled only using the ```-p``` parameter and needs an interface to run. 
+This module is enabled only using the ```-p``` parameter and needs an interface to run.
 
 Usage example:
 
 ```sudo ./slips.py -i wlp3s0 -p```
 
-Slips needs to be run as root so it can execute iptables commands. 
+Slips needs to be run as root so it can execute iptables commands.
 
 In Docker, since there's no root, the environment variable ```IS_IN_A_DOCKER_CONTAINER``` should be set to ```True``` to use 'sudo' properly.
 
@@ -583,20 +601,20 @@ To enable the creation of log files, there are two options:
 1. Running Slips with ```verbose``` and ```debug``` flags
 2. Using errors.log and running.log
 
-#### Zeek log files 
+#### Zeek log files
 
 You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
 
-DISCLAIMER: zeek generates log files that grow every second until they reach GBs, to save disk space, 
+DISCLAIMER: zeek generates log files that grow every second until they reach GBs, to save disk space,
 Slips deletes all zeek log files after 1 day when running on an
 interface. this is called zeek rotation and is enabled by default.
 
 You can disable rotation by setting ```rotation``` to ```no``` in ```config/slips.conf```
 
-Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#rotation) for more info 
+Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#rotation) for more info
 
-But you can also enable storing a copy of zeek log files in the output 
-directory after the analysis is done by setting ```store_a_copy_of_zeek_files``` to yes, 
+But you can also enable storing a copy of zeek log files in the output
+directory after the analysis is done by setting ```store_a_copy_of_zeek_files``` to yes,
 or while zeek is stil generating log files by setting ```store_zeek_files_in_the_output_dir``` to yes.
 this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops.
 so this doesn't include deleted zeek logs.
@@ -621,7 +639,7 @@ by changing the value of ```rotation_period```
 the time unit is one of usec, msec, sec, min, hr, or day which respectively
 represent microseconds, milliseconds, seconds, minutes, hours, and days.
 Whitespace between the numeric constant and time unit is optional. Appending the letter s to the
-time unit in order to pluralize it is also optional. 
+time unit in order to pluralize it is also optional.
 Check [Zeek rotation interval](https://docs.zeek.org/en/master/script-reference/types.html#type-interval) for more details
 
 Slips has an option to not delete the rotated zeek files immediately by setting the
@@ -646,7 +664,7 @@ For example:
 
 ```./slips.py -c config/slips.conf -v 2 -e 1 -f zeek_dir ```
 
-Verbosity is about less or more information on the normal work of slips. 
+Verbosity is about less or more information on the normal work of slips.
 
 For example: "Done writing logs to file x."
 
@@ -736,6 +754,14 @@ For example, if you want to add a zeek script called ```arp.zeek``` you should a
 
 Zeek output is suppressed by default, so if your script has errors, Slips will fail silently.
 
+## Exporting strato letters
+
+Exporting the strato letters can be done by enabling the `export_strato_letters` option in
+`config/slips.conf` . once enabled, Slips will export the strato letters to `strato_letters.tsv` in the output directory.
+this file can be used for training Slips RNN module.
+
+
+
 ## Slips parameters
 
 - ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.conf
@@ -747,11 +773,11 @@ Zeek output is suppressed by default, so if your script has errors, Slips will f
 - ```-F``` or  ```--pcapfilter``` Packet filter for Zeek. BPF style.
 - ```-cc``` or  ```--clearcache``` Clear the cache database.
 - ```-p``` or  ```--blocking``` Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.
-- ```-cb``` or  ```--clearblocking``` Flush and delete slipsBlocking iptables chain 
+- ```-cb``` or  ```--clearblocking``` Flush and delete slipsBlocking iptables chain
 - ```-o``` or  ```--output``` Store alerts.json and alerts.txt in the given folder.
 - ```-s``` or  ```--save``` Save the analysed file db to disk.
 - ```-d``` or  ```--db``` Read an analysed file (rdb) from disk.
-- ```-D``` or  ```--daemon``` Run slips in daemon mode 
+- ```-D``` or  ```--daemon``` Run slips in daemon mode
 - ```-S``` or  ```--stopdaemon``` Stop slips daemon
 - ```-k``` or  ```--killall``` Kill all unused redis servers
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
@@ -762,9 +788,9 @@ Zeek output is suppressed by default, so if your script has errors, Slips will f
 - ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
 
 
-## Containing Slips resource consumption
+## Limiting Slips resource consumption
 
-When given a very a large pcap, slips may use more memory/CPU than it should. to fix that you can reduce the niceness of 
+When given a very a large pcap, slips may use more memory/CPU than it should. to fix that you can reduce the niceness of
 Slips by running:
 
     renice -n 6 -p <Slips-PID>
@@ -779,5 +805,3 @@ command = './slips.py -f dataset/test3-mixed.binetflow -o /data/test'
 args = command.split()
 process = subprocess.run(args, stdout=subprocess.PIPE)
 ```
-
-
