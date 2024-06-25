@@ -345,7 +345,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def incompatible_CN(
+    def incompatible_cn(
         self,
         org: str,
         timestamp: str,
@@ -385,7 +385,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def DGA(
+    def dga(
         self,
         nxdomains: int,
         stime: str,
@@ -400,7 +400,7 @@ class SetEvidnceHelper:
         confidence = round(confidence, 2)  # for readability
         saddr = profileid.split("_")[-1]
         description = (
-            f"Possible DGA or domain scanning. {saddr} "
+            f"Possible dga or domain scanning. {saddr} "
             f"failed to resolve {nxdomains} domains"
         )
 
@@ -945,7 +945,7 @@ class SetEvidnceHelper:
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=daddr),
+            profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=timestamp,
