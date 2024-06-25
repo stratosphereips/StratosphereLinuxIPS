@@ -8,30 +8,30 @@ from modules.threat_intelligence.urlhaus import (
     EvidenceType,
     IDEACategory,
     Direction,
+    URLHAUS_BASE_URL,
 )
-from tests.module_factory import ModuleFactory
 
 
 @pytest.mark.parametrize(
-    "to_lookup, uri, status_code",
+    "to_lookup, expected_url, status_code",
     [
         # Testcase1: URL lookup
         (
             {"url": "https://example.com"},
-            "url",
+            f"{URLHAUS_BASE_URL}/url/",
             200,
         ),
         # Testcase2: hash lookup
         (
             {"md5_hash": "a1b2c3d4"},
-            "payload",
+            f"{URLHAUS_BASE_URL}/payload/",
             200,
         ),
     ],
 )
 @patch("modules.threat_intelligence.urlhaus.requests.session")
 def test_make_urlhaus_request(
-    mock_response, mock_db, to_lookup, uri, status_code
+    mock_response, mock_db, to_lookup, expected_url, status_code
 ):
     """Test successful requests to the make_urlhaus_request function."""
     mock_response_instance = Mock()
@@ -39,15 +39,13 @@ def test_make_urlhaus_request(
     mock_response = Mock(status_code=status_code)
     mock_response_instance.post.return_value = mock_response
 
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     urlhaus.urlhaus_session = mock_response_instance
 
     response = urlhaus.make_urlhaus_request(to_lookup)
 
     mock_response_instance.post.assert_called_once_with(
-        f"{urlhaus.base_url}/{uri}/",
-        to_lookup,
-        headers=mock_response_instance.headers,
+        expected_url, to_lookup, headers=mock_response_instance.headers
     )
     assert response == mock_response
 
@@ -66,14 +64,17 @@ def test_make_urlhaus_request_connection_error(
     mock_response_instance = Mock()
     mock_response.return_value = mock_response_instance
     mock_response_instance.post.side_effect = (
-        requests.exceptions.ConnectionError()
+        requests.exceptions.ConnectionError
     )
 
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     urlhaus.urlhaus_session = mock_response_instance
-
-    response = urlhaus.make_urlhaus_request(to_lookup)
-    assert response is None
+    with patch.object(
+        urlhaus, "create_urlhaus_session"
+    ) as mock_create_session:
+        mock_create_session.side_effect = requests.exceptions.ConnectionError
+        with pytest.raises(requests.exceptions.ConnectionError):
+            urlhaus.make_urlhaus_request(to_lookup)
 
 
 @patch("modules.threat_intelligence.urlhaus.requests.session")
@@ -81,7 +82,7 @@ def test_create_urlhaus_session(mock_response, mock_db):
     """Verifies session creation with successful setup."""
     mock_response_instance = Mock()
     mock_response.return_value = mock_response_instance
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     mock_response.assert_called_once()
     assert urlhaus.urlhaus_session == mock_response_instance
     assert urlhaus.urlhaus_session.verify is True
@@ -171,7 +172,7 @@ def test_parse_urlhaus_responses(
     """Test parsing responses from URLhaus for different IOC types."""
     mock_request.return_value.status_code = 200
     mock_request.return_value.text = json.dumps(mock_response)
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     parsing_functions = {
         "url": urlhaus.parse_urlhaus_url_response,
         "md5_hash": urlhaus.parse_urlhaus_md5_response,
@@ -291,7 +292,7 @@ def test_urlhaus_lookup(
     mock_response.status_code = mock_status_code
     mock_response.text = json.dumps(mock_response_data)
     mock_request.return_value = mock_response
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     result = urlhaus.urlhaus_lookup(ioc, type_of_ioc)
     assert result == expected_result
 
@@ -306,7 +307,7 @@ def test_urlhaus_lookup_json_decode_error(mock_request, mock_db):
     mock_response.text = "Invalid JSON"
     mock_request.return_value = mock_response
 
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     result = urlhaus.urlhaus_lookup("https://example.com", "url")
     assert result is None
 
@@ -329,7 +330,7 @@ def test_urlhaus_lookup_json_decode_error(mock_request, mock_db):
     ],
 )
 def test_get_threat_level(mock_db, url_info, expected_threat_level):
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     assert urlhaus.get_threat_level(url_info) == expected_threat_level
 
 
@@ -390,7 +391,7 @@ def test_set_evidence_malicious_hash(
     """
     Test the `set_evidence_malicious_hash`.
     """
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     urlhaus.set_evidence_malicious_hash(file_info)
 
     assert mock_db.set_evidence.call_count == 2
@@ -435,7 +436,7 @@ def test_set_evidence_malicious_url(
     Tests the set_evidence_malicious_url method
     with different URL info inputs.
     """
-    urlhaus = ModuleFactory().create_urlhaus_obj(mock_db)
+    urlhaus = URLhaus(mock_db)
     daddr = "1.2.3.4"
     uid = "1234"
     timestamp = "2023-11-01 12:00:00"
