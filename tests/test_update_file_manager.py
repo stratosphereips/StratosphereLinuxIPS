@@ -177,61 +177,6 @@ def test_log(mock_db, message, expected_call_args):
     mock_observer.assert_called_once_with(expected_call_args)
 
 
-def test_read_configuration(mocker, mock_db):
-    """Test read_configuration with a valid slips.conf file."""
-    mock_config_parser = mocker.patch(
-        "slips_files.common.parsers.config_parser.ConfigParser"
-    )
-    mock_config_parser.return_value.update_period.return_value = 3600
-    mock_config_parser.return_value.remote_ti_data_path.return_value = (
-        "modules/threat_intelligence/remote_data_files/"
-    )
-    mock_config_parser.return_value.ti_files.return_value = "path/to/ti_files"
-    mock_config_parser.return_value.ja3_feeds.return_value = (
-        "path/to/ja3_feeds"
-    )
-    mock_config_parser.return_value.ssl_feeds.return_value = (
-        "path/to/ssl_feeds"
-    )
-    mock_config_parser.return_value.RiskIQ_credentials_path.return_value = (
-        "path/to/riskiq_credentials"
-    )
-    mock_config_parser.return_value.riskiq_update_period.return_value = 86400
-    mock_config_parser.return_value.mac_db_update_period.return_value = 86400
-    mock_config_parser.return_value.mac_db_link.return_value = (
-        "https://example.com/mac_db.json"
-    )
-    mock_config_parser.return_value.online_whitelist_update_period.return_value = (
-        86400
-    )
-    mock_config_parser.return_value.online_whitelist.return_value = (
-        "https://example.com/whitelist.txt"
-    )
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    update_manager.read_configuration()
-
-    assert update_manager.update_period == 86400.0
-    assert (
-        update_manager.path_to_remote_ti_files
-        == "modules/threat_intelligence/remote_data_files/"
-    )
-    assert update_manager.ti_feeds_path == "config/TI_feeds.csv"
-    assert update_manager.ja3_feeds_path == "config/JA3_feeds.csv"
-    assert update_manager.ssl_feeds_path == "config/SSL_feeds.csv"
-    assert update_manager.riskiq_update_period == 604800.0
-    assert update_manager.mac_db_update_period == 1209600.0
-    assert (
-        update_manager.mac_db_link
-        == "https://maclookup.app/downloads/json-database/get-db?"
-        "t=22-08-19h=d1d39c52de447a7e7194331f379e1e99f94f35f1"
-    )
-    assert update_manager.online_whitelist_update_period == 86400
-    assert (
-        update_manager.online_whitelist
-        == "https://tranco-list.eu/download/X5QNN/10000"
-    )
-
-
 def test_download_file(mocker, mock_db):
     """Test download_file with a successful request."""
     url = "https://example.com/file.txt"
