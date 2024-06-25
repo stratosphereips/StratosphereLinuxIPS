@@ -341,3 +341,8 @@ class ModuleFactory:
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
             vertical_ps = VerticalPortscan(mock_db)
             return vertical_ps
+            
+    def create_urlhaus_obj(self, mock_db):
+        """Create an instance of URLhaus."""
+        urlhaus=URLhaus(mock_db)
+        return  urlhaus  
