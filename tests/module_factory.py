@@ -18,6 +18,7 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.core.profiler import Profiler
 from slips_files.core.output import Output
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
+from modules.threat_intelligence.urlhaus import URLhaus
 from modules.flowalerts.flowalerts import FlowAlerts
 from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
