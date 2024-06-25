@@ -19,6 +19,7 @@ from slips_files.core.profiler import Profiler
 from slips_files.core.output import Output
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 from modules.flowalerts.flowalerts import FlowAlerts
+from modules.flowalerts.set_evidence import SetEvidnceHelper
 from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
@@ -341,3 +342,8 @@ class ModuleFactory:
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
             vertical_ps = VerticalPortscan(mock_db)
             return vertical_ps
+            
+    def create_set_evidence_helper(self, mock_db):
+        """Create an instance of SetEvidenceHelper."""
+        set_evidence_helper=SetEvidnceHelper(mock_db)
+        return set_evidence_helper        
