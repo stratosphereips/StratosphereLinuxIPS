@@ -317,4 +317,3 @@ class CCDetection(IModule):
                 if score > threshold:
                     self.set_evidence(score, tupleid, profileid, twid)
             """
->>>>>>> 5a5798385 (Add verbosity 0)
