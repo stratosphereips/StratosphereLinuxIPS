@@ -319,7 +319,7 @@ class ThreatIntel(IModule, URLhaus):
         ).strip()
         description: str = (
             "DNS answer with a blacklisted "
-            f"IP: {ip} for query: {dns_query}"
+            f"IP: {ip} for query: {dns_query} "
             f"{ip_identification} Description: "
             f"{ip_info['description']}. "
             f"Source: {ip_info['source']}."
