@@ -59,10 +59,7 @@ def test_getProfileIdFromIP():
     """unit test for add_profile and getProfileIdFromIP"""
 
     # clear the database before running this test
-    # os.system("./slips.py -c slips.conf -cc")
     os.system("./slips.py -c slips.yaml -cc")
-    
-    
 
     # add a profile
     db.add_profile("profile_192.168.1.1", "00:00", "1")

@@ -1,5 +1,5 @@
 """
-This file tests 2 different config files other than slips' default config/slips.conf or onfig/slips.yaml
+This file tests 2 different config files other than slips' default config/slips.yaml
 test/test.yaml and tests/test2.yaml
 """
 
@@ -12,7 +12,6 @@ from tests.common_test_utils import (
 )
 from tests.module_factory import ModuleFactory
 import pytest
-from ...slips import *
 import shutil
 import os
 

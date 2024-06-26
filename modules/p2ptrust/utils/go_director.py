@@ -468,7 +468,7 @@ class GoDirector(IObservable):
         self.db.store_p2p_report(key, report_info)
 
         # create a new profile for the reported ip
-        # with the width from slips.conf/slips.yaml and the starttime as the report time
+        # with the width from slips.yaml and the starttime as the report time
         if key_type == "ip":
             profileid_of_attacker = f"profile_{key}"
             self.db.add_profile(profileid_of_attacker, report_time, self.width)

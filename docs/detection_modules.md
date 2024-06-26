@@ -148,7 +148,6 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 
 The hash should be your 64 character API Key.
 
-<!-- The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.conf``` -->
 The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.yaml```
 
 ## RNN C&C Detection Module
@@ -285,7 +284,6 @@ Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readt
 
 ## Disabled alerts
 
-<!-- All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.conf```  -->
 All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.yaml```
 
 Slips support disabling unwanted alerts, simply add the detection you want to disable in
@@ -368,7 +366,6 @@ The domains are currently taken from:
 - TLS SNI
 
 Once a domain is found, it is verified against the downloaded list of domains
-<!-- from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.conf```.  -->
 from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.yaml```.
 which is ```config/TI_feeds.csv``` by default.
 If an exact match is found, then an evidence is generated.
@@ -387,7 +384,6 @@ Every time Slips encounters an TLS flow,
 it compares each JA3 and JA3s with the feeds of malicious JA3 and alerts when
 there’s a match.
 Slips is shipped with the Abuse.ch JA3 feed by default
-<!-- You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```config/slips.conf``` -->
 You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```config/slips.yaml```
 
 ### Matching of SSL SHA1 Hashes
@@ -397,7 +393,6 @@ then it compares the hash with our list of blacklisted SSL certificates
 
 Slips is shipped with the Abuse.ch SSL feed by default,
 
-<!-- You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.conf``` -->
 You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.yaml```
 
 
@@ -413,7 +408,6 @@ so you can update them or add your own.
 
 Slips has a local file for adding IoCs of your own,
 it's located in ```config/local_data_files/own_malicious_iocs.csv``` by default,
-<!-- this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```. -->
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.yaml```
 
 
@@ -450,7 +444,6 @@ Example:
 
 
 We update the remote ones regularly. The list of remote threat intelligence
-<!-- files is set in the path of ```ti_files``` variable in ```config/slips.conf```. -->
 files is set in the path of ```ti_files``` variable in ```config/slips.yaml```.
 The path of all the TI feeds is in ```config/TI_feeds.csv``` by default.
 
@@ -468,7 +461,6 @@ Refer to the [architecture section of the docs](https://stratospherelinuxips.rea
 
 TI files commented using # may be processed as they're still in our database.
 
-<!-- Use ```;``` for commenting TI files in ```config/slips.conf``` instead of ```#```. -->
 Use ```;``` for commenting TI files in ```config/slips.yaml``` instead of ```#```.
 
 Commented TI files (lines starting with ;) will be completely removed from our database.
@@ -497,7 +489,6 @@ To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by
 Slips every 24 hours, which requires no user interaction.
 
-<!-- The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.conf``` -->
 The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.yaml```
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
@@ -511,7 +502,6 @@ the update manager if they were changed on disk.
 Only one slips instance is allowed to be using the update manager at a time to avoid race conditions.
 
 By default, slips starts without the TI files, and runs the Update Manager in the background
- <!-- if the ```wait_for_TI_to_finish``` option in slips.conf is set to yes, slips will not start until the update manager is done -->
 if the ```wait_for_TI_to_finish``` option in slips.yaml is set to yes, slips will not start until the update manager is done
 
  and all TI files are loaded successfully,
@@ -556,7 +546,6 @@ Slips updates this database by default every 2 weeks using the following online 
 https://maclookup.app/downloads/json-database/get-db?t=22-08-19&h=d1d39c52de447a7e7194331f379e1e99f94f35f1
 
 You can change how often this db is updated by changing the value of
-<!-- ```mac_db_update``` in ```config/slips.conf```. -->
 ```mac_db_update``` in ```config/slips.yaml```.
 
 Slips gets the MAC address of each IP from dhcp.log and arp.log and then searches the offline
@@ -616,14 +605,12 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 for detailed instructions on CESNET exporting and the format of the configuration files.
 
 To enable the importing alerts from warden servers,
-<!-- set ```receive_alerts```  to ```yes``` in config/slips.conf   -->
 set ```receive_alerts```  to ```yes``` in config/slips.yaml
 
 Slips imports 100 alerts from warden servers each day, and automatically stores the IoCs in our database
 
 
 Time to wait before receiving alerts from warden server is 1 day by default, you can change this
-<!-- by chaning the ```receive_delay``` in ```config/slips.conf``` -->
 by chaning the ```receive_delay``` in ```config/slips.yaml```
 
 
@@ -697,7 +684,6 @@ Some malware use pastebin as the host of their malicious payloads.
 
 Slips detects downloads of files from pastebin through HTTP with size >= 700 bytes.
 
-<!-- This value can be customized in slips.conf by changing ```pastebin_download_threshold``` -->
 This value can be customized in slips.yaml by changing ```pastebin_download_threshold```
 
 When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
