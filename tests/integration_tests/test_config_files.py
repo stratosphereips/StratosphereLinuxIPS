@@ -53,7 +53,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t  -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c /StratosphereLinuxIPS/tests/integration_tests/test.yaml "
+        f"-c tests/integration_tests/test.yaml "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
@@ -88,7 +88,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     # test metadata_dir
     assert "metadata" in os.listdir(output_dir)
     metadata_path = os.path.join(output_dir, "metadata")
-    for file in ("/StratosphereLinuxIPS/config/test.yaml", "/StratosphereLinuxIPS/config/whitelist.conf", "running_slips_info.txt"):
+    for file in ("test.yaml", "whitelist.conf", "info.txt"):
         assert file in os.listdir(metadata_path)
 
     # test label=malicious
@@ -124,7 +124,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t  -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c /StratosphereLinuxIPS/tests/integration_tests/test2.yaml "
+        f"-c tests/integration_tests/test2.yaml "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
