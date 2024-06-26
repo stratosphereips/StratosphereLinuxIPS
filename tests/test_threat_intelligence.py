@@ -1742,7 +1742,8 @@ def test_set_evidence_malicious_domain(
             "profile_10.0.0.1",
             "timewindow1",
             (
-                "DNS answer with a blacklisted IP: 192.168.1.1 for query: example.com"
+                "DNS answer with a blacklisted IP: 192.168.1.1 for query: "
+                "example.com "
                 "(Organization: Example Org) Description: Malicious IP Source: TI Feed."
             ),
             ThreatLevel.MEDIUM,
@@ -1761,8 +1762,9 @@ def test_set_evidence_malicious_domain(
             "profile_10.0.0.2",
             "timewindow2",
             (
-                "DNS answer with a blacklisted IP: 192.168.1.2 for query: test.com"
-                "(Organization: Example Org) Description: Another Malicious IP Source: Different Feed."
+                "DNS answer with a blacklisted IP: 192.168.1.2 for query: "
+                "test.com (Organization: Example Org) Description: Another"
+                " Malicious IP Source: Different Feed."
             ),
             ThreatLevel.HIGH,
         ),
@@ -1780,8 +1782,10 @@ def test_set_evidence_malicious_domain(
             "profile_10.0.0.3",
             "timewindow3",
             (
-                "DNS answer with a blacklisted IP: 192.168.1.3 for query: domain.com"
-                "(Organization: Example Org) Description: Yet Another Malicious IP Source: Another Feed."
+                "DNS answer with a blacklisted IP: 192.168.1.3 for query: "
+                "domain.com "
+                "(Organization: Example Org) Description: Yet Another "
+                "Malicious IP Source: Another Feed."
             ),
             ThreatLevel.LOW,
         ),
