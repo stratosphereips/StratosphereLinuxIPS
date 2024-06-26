@@ -6,6 +6,10 @@ import os
 import subprocess
 import json
 import shutil
+from typing import (
+    Dict,
+    List,
+)
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
@@ -88,13 +92,16 @@ class LeakDetector(IModule):
             packet_data_length = True
             while packet_data_length:
                 # the number of the packet we're currently working with,
-                # since packets start from 1 in tshark , the first packet should be 1
+                # since packets start from 1 in tshark,
+                # the first packet should be 1
                 packet_number += 1
                 # this offset is exactly when the packet starts
                 start_offset = f.tell() + 1
                 # get the Packet header, every packet header is exactly 16 bytes long
                 packet_header = f.read(16)
-                # get the length of the Packet Data field (the second last 4 bytes of the header), [::-1] for little endian
+                # get the length of the Packet Data field
+                # (the second last 4 bytes of the header),
+                # [::-1] for little endian
                 packet_data_length = packet_header[8:12][::-1]
                 # convert the hex into decimal
                 packet_length_in_decimal = int.from_bytes(
@@ -124,10 +131,12 @@ class LeakDetector(IModule):
                         )
                         return
 
-                    json_packet = result.decode()
+                    json_packet: str = result.decode()
 
                     try:
-                        json_packet = json.loads(json_packet)
+                        json_packet: List[Dict[str, str]] = json.loads(
+                            json_packet
+                        )
                     except json.decoder.JSONDecodeError:
                         json_packet = self.fix_json_packet(json_packet)
 

@@ -84,9 +84,10 @@ cat output_dir/alerts.log
 ```
 
 #### Macos M1
+In macos do not use --net=host if you want to access the internal container's ports from the host.
 
 ```
-docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
+docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
 ```
 
 ```

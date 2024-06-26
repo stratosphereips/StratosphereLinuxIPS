@@ -223,9 +223,6 @@ class HorizontalPortscan:
             saddr_obj = ipaddress.ip_address(saddr)
             return not saddr_obj.is_multicast
 
-        if validators.mac_address(saddr):
-            return True
-
         return False
 
     @staticmethod
