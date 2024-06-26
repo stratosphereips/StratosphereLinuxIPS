@@ -79,7 +79,6 @@ class MetadataManager:
             # if the file exists it will be overwritten
             pass
 
-        # Add a copy of slips.conf
         config_file = self.main.args.config or "config/slips.yaml"
         shutil.copy(config_file, metadata_dir)
 

@@ -170,7 +170,7 @@ class UpdateManager(IModule):
             if not utils.is_valid_threat_level(threat_level):
                 # not a valid threat_level
                 self.print(
-                    f"Invalid threat level found in slips.conf/slips.yaml: {threat_level} "
+                    f"Invalid threat level found in slips.yaml: {threat_level} "
                     f"for TI feed: {url}. Using 'low' instead.",
                     0,
                     1,
@@ -301,7 +301,7 @@ class UpdateManager(IModule):
     def check_if_update_online_whitelist(self) -> bool:
         """
         Decides whether to update or not based on the update period
-        Used for online whitelist specified in slips.conf/slips.yaml
+        Used for online whitelist specified in slips.yaml
         """
         # Get the last time this file was updated
         ti_file_info = self.db.get_TI_file_info("tranco_whitelist")
@@ -1336,7 +1336,7 @@ class UpdateManager(IModule):
                                 }
                             )
                             # set the score and confidence of this ip in ipsinfo
-                            # and the profile of this ip to the same as the ones given in slips.conf/slips.yaml
+                            # and the profile of this ip to the same as the ones given in slips.yaml
                             # todo for now the confidence is 1
                             self.db.update_threat_level(
                                 f"profile_{data}", threat_level, 1
@@ -1530,7 +1530,7 @@ class UpdateManager(IModule):
 
     def update_online_whitelist(self):
         """
-        Updates online tranco whitelist defined in slips.conf/slips.yaml online_whitelist key
+        Updates online tranco whitelist defined in slips.yaml online_whitelist key
         """
         response = self.responses["tranco_whitelist"]
         # write to the file so we don't store the 10k domains in memory

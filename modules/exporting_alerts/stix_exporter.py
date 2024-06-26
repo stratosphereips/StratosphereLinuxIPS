@@ -58,7 +58,7 @@ class StixExporter(IExporter):
                 jwt_auth_url=self.jwt_auth_path,
             )
         else:
-            # User didn't provide jwt_auth_path in slips.conf
+            # User didn't provide jwt_auth_path in slips.yaml
             client.set_auth(
                 username=self.taxii_username,
                 password=self.taxii_password,
@@ -241,7 +241,7 @@ class StixExporter(IExporter):
         self.push_delay seconds when running on an interface only
         """
         while True:
-            # on an interface, we use the push delay from slips.conf
+            # on an interface, we use the push delay from slips.yaml
             # on files, we push once when slips is stopping
             time.sleep(self.push_delay)
             # Sometimes the time's up and we need to send to

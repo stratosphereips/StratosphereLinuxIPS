@@ -65,7 +65,7 @@ parameters:
     store_zeek_files_in_the_output_dir : 'no'
 
 
-# Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist file, current commit and date
+# Create a metadata dir output/metadata/ that has a copy of slips.yaml, whitelist file, current commit and date
 # available options are yes or no
     metadata_dir : 'yes'
 
@@ -322,7 +322,7 @@ DisabledAlerts:
 
 # disabled_detections = [ConnectionToMultiplePorts, PortScanType1]
     disabled_detections : "[ConnectionWithoutDNS]"
- 
+
 # [10] Docker created files settings
 Docker:
 # ID and group id of the user who started to docker container
