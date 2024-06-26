@@ -18,6 +18,7 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.core.profiler import Profiler
 from slips_files.core.output import Output
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
+from modules.threat_intelligence.urlhaus import URLhaus
 from modules.flowalerts.flowalerts import FlowAlerts
 from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
@@ -341,3 +342,8 @@ class ModuleFactory:
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
             vertical_ps = VerticalPortscan(mock_db)
             return vertical_ps
+            
+    def create_urlhaus_obj(self, mock_db):
+        """Create an instance of URLhaus."""
+        urlhaus=URLhaus(mock_db)
+        return  urlhaus  

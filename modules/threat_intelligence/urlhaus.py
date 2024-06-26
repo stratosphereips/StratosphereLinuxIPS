@@ -2,7 +2,7 @@ from typing import Dict, Any
 import json
 import requests
 
-from slips_files.common.imports import *
+from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -15,8 +15,6 @@ from slips_files.core.evidence_structure.evidence import (
     IDEACategory,
 )
 
-URLHAUS_BASE_URL = "https://urlhaus-api.abuse.ch/v1"
-
 
 class URLhaus:
     name = "URLhaus"
@@ -26,6 +24,7 @@ class URLhaus:
     def __init__(self, db):
         self.db = db
         self.create_urlhaus_session()
+        self.base_url = "https://urlhaus-api.abuse.ch/v1"
 
     def create_urlhaus_session(self):
         self.urlhaus_session = requests.session()
@@ -40,7 +39,7 @@ class URLhaus:
         uri = "url" if ioc_type == "url" else "payload"
         try:
             return self.urlhaus_session.post(
-                f"{URLHAUS_BASE_URL}/{uri}/",
+                f"{self.base_url}/{uri}/",
                 to_lookup,
                 headers=self.urlhaus_session.headers,
             )
