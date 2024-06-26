@@ -44,3 +44,4 @@ scikit-learn
 pre-commit
 black
 ruff
+yaml
