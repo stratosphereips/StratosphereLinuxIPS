@@ -110,7 +110,7 @@ class EvidenceHandler(ICore):
         self.UID = conf.get_UID()
 
         self.popup_alerts = conf.popup_alerts()
-        # In docker, disable alerts no matter what slips.conf says
+        # In docker, disable alerts no matter what slips.conf/slips.yaml says
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
 

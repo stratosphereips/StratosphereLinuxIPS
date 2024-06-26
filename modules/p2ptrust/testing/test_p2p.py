@@ -199,7 +199,7 @@ def test_inputs():
 
 def get_default_config():
     cfg = configparser.ConfigParser()
-    cfg.read_file(open("slips.conf"))
+    cfg.read_file(open("slips.yaml"))
     return cfg
 
 

@@ -1,6 +1,6 @@
 """
-This file tests 2 different config files other than slips' default config/slips.conf
-test/test.conf and tests/test2.conf
+This file tests 2 different config files other than slips' default config/slips.conf or onfig/slips.yaml
+test/test.yaml and tests/test2.yaml
 """
 
 from slips.main import Main
@@ -53,7 +53,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t  -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c tests/integration_tests/test.conf  "
+        f"-c tests/integration_tests/test.yaml "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
@@ -88,7 +88,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     # test metadata_dir
     assert "metadata" in os.listdir(output_dir)
     metadata_path = os.path.join(output_dir, "metadata")
-    for file in ("test.conf", "whitelist.conf", "info.txt"):
+    for file in ("test.yaml", "whitelist.conf", "info.txt"):
         assert file in os.listdir(metadata_path)
 
     # test label=malicious
@@ -105,7 +105,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     "pcap_path, expected_profiles, output_dir, redis_port",
     [
         (
-            "dataset/test8-malicious.pcap",
+            "dataset/test8-malicious.pcap ",
             1,
             "pcap_test_conf2/",
             6668,
@@ -124,7 +124,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t  -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c tests/integration_tests/test2.conf "
+        f"-c tests/integration_tests/test2.yaml "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )

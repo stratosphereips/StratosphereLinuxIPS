@@ -148,7 +148,8 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 
 The hash should be your 64 character API Key.
 
-The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.conf```
+<!-- The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.conf``` -->
+The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.yaml```
 
 ## RNN C&C Detection Module
 
@@ -284,7 +285,8 @@ Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readt
 
 ## Disabled alerts
 
-All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.conf```
+<!-- All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.conf```  -->
+All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.yaml```
 
 Slips support disabling unwanted alerts, simply add the detection you want to disable in
 the ```disabled_detections``` list and slips will not generate any alerts of this type.
@@ -366,7 +368,8 @@ The domains are currently taken from:
 - TLS SNI
 
 Once a domain is found, it is verified against the downloaded list of domains
-from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.conf```.
+<!-- from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.conf```.  -->
+from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.yaml```.
 which is ```config/TI_feeds.csv``` by default.
 If an exact match is found, then an evidence is generated.
 
@@ -384,7 +387,8 @@ Every time Slips encounters an TLS flow,
 it compares each JA3 and JA3s with the feeds of malicious JA3 and alerts when
 there’s a match.
 Slips is shipped with the Abuse.ch JA3 feed by default
-You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```config/slips.conf```
+<!-- You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```config/slips.conf``` -->
+You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```config/slips.yaml```
 
 ### Matching of SSL SHA1 Hashes
 
@@ -393,7 +397,9 @@ then it compares the hash with our list of blacklisted SSL certificates
 
 Slips is shipped with the Abuse.ch SSL feed by default,
 
-You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.conf```
+<!-- You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.conf``` -->
+You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.yaml```
+
 
 ### Matching of ASNs
 
@@ -407,7 +413,9 @@ so you can update them or add your own.
 
 Slips has a local file for adding IoCs of your own,
 it's located in ```config/local_data_files/own_malicious_iocs.csv``` by default,
-this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```.
+<!-- this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```. -->
+this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.yaml```
+
 
 The format of the file is "IP address/IP Range/domain/ASN","Threat level", "Description"
 
@@ -442,7 +450,8 @@ Example:
 
 
 We update the remote ones regularly. The list of remote threat intelligence
-files is set in the path of ```ti_files``` variable in ```config/slips.conf```.
+<!-- files is set in the path of ```ti_files``` variable in ```config/slips.conf```. -->
+files is set in the path of ```ti_files``` variable in ```config/slips.yaml```.
 The path of all the TI feeds is in ```config/TI_feeds.csv``` by default.
 
 You can add your own remote threat intelligence feeds in this variable.
@@ -459,7 +468,8 @@ Refer to the [architecture section of the docs](https://stratospherelinuxips.rea
 
 TI files commented using # may be processed as they're still in our database.
 
-Use ```;``` for commenting TI files in ```config/slips.conf``` instead of ```#```.
+<!-- Use ```;``` for commenting TI files in ```config/slips.conf``` instead of ```#```. -->
+Use ```;``` for commenting TI files in ```config/slips.yaml``` instead of ```#```.
 
 Commented TI files (lines starting with ;) will be completely removed from our database.
 
@@ -487,7 +497,8 @@ To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by
 Slips every 24 hours, which requires no user interaction.
 
-The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.conf```
+<!-- The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.conf``` -->
+The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.yaml```
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
 
@@ -500,7 +511,9 @@ the update manager if they were changed on disk.
 Only one slips instance is allowed to be using the update manager at a time to avoid race conditions.
 
 By default, slips starts without the TI files, and runs the Update Manager in the background
- if the ```wait_for_TI_to_finish``` option in slips.conf is set to yes, slips will not start until the update manager is done
+ <!-- if the ```wait_for_TI_to_finish``` option in slips.conf is set to yes, slips will not start until the update manager is done -->
+if the ```wait_for_TI_to_finish``` option in slips.yaml is set to yes, slips will not start until the update manager is done
+
  and all TI files are loaded successfully,
 this is useful if you want to ensure that slips doesn't miss
 the detection of any blacklisted IPs, but it adds some time to the startup of slips
@@ -543,7 +556,8 @@ Slips updates this database by default every 2 weeks using the following online 
 https://maclookup.app/downloads/json-database/get-db?t=22-08-19&h=d1d39c52de447a7e7194331f379e1e99f94f35f1
 
 You can change how often this db is updated by changing the value of
-```mac_db_update``` in ```config/slips.conf```.
+<!-- ```mac_db_update``` in ```config/slips.conf```. -->
+```mac_db_update``` in ```config/slips.yaml```.
 
 Slips gets the MAC address of each IP from dhcp.log and arp.log and then searches the offline
 database using the OUI.
@@ -602,13 +616,15 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 for detailed instructions on CESNET exporting and the format of the configuration files.
 
 To enable the importing alerts from warden servers,
-set ```receive_alerts```  to ```yes``` in config/slips.conf
+<!-- set ```receive_alerts```  to ```yes``` in config/slips.conf   -->
+set ```receive_alerts```  to ```yes``` in config/slips.yaml
 
 Slips imports 100 alerts from warden servers each day, and automatically stores the IoCs in our database
 
 
 Time to wait before receiving alerts from warden server is 1 day by default, you can change this
-by chaning the ```receive_delay``` in ```config/slips.conf```
+<!-- by chaning the ```receive_delay``` in ```config/slips.conf``` -->
+by chaning the ```receive_delay``` in ```config/slips.yaml```
 
 
 These are the categories Slips imports:
@@ -681,7 +697,8 @@ Some malware use pastebin as the host of their malicious payloads.
 
 Slips detects downloads of files from pastebin through HTTP with size >= 700 bytes.
 
-This value can be customized in slips.conf by changing ```pastebin_download_threshold```
+<!-- This value can be customized in slips.conf by changing ```pastebin_download_threshold``` -->
+This value can be customized in slips.yaml by changing ```pastebin_download_threshold```
 
 When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
 
@@ -744,36 +761,27 @@ This module is responsible for detecting scans such as:
 
 ### Vertical port scans
 
-Slips considers an IP performing a vertical port scan if it contacts 5 or more different destination ports to the same destination IP in at least one time window (usually 1hr). The flows can be both, Non-Established TCP or UDP flows. On each arriving flow this check is performed.
+Slips considers an IP performing a vertical port scan if it contacts 5 or more different destination ports to the same destination IP in at least one time window (usually 1hs). The flows can be both, Non-Established TCP or UDP flows. On each arriving flow this check is performed.
 
-After detecting a vertical port scan for the first time with 5 scanned ports, slips only generates an evidence every 15+ scanned ports. This means that the first portscan is detected as soon as it happens so the analysts knows.
+After detecting a vertical port scan for the first time, if Slips detects new flows to 5 destination ports, then it triggers a waiting process to find out how many packets to new ports will arrive. For this it waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one alert 'port scan' per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
-The result of this combining of evidence is that the dst ports
-     scanned in each evidence will be = the previous scanned ports +15
-
-<img src="images/vertical_portscans.jpg">
-
-
-This waiting for 15+ evidence is done to avoid duplicate evidence.
-The downside to this approach is that if you do more than 1 portscan in the same timewindow, all portscans starting from the second one will be ignored if the sum of ports scanned the second time are < the number of ports of the first portscan.
-
+If one alert was generated (Slips waited 10 seconds and no more flows arrived to new ports in that dst IP) then the counter resets and the same attacker needs to do _again_ more than threshold destinations ports in one IP to be detected. This avoids the problem that after 5 flows that generated an alert, the 6 flow also generates an alert.
 
 The total number of _packets_ in all flows in the scan give us the confidence of the scan.
 
 
 ### Horizontal port scans
 
-Slips considers an IP performing a horizontal port scan if it contacted more than 5 destination IPs on the same
+Slips considers an IP performing a horizontal port scan if it contacted more than 6 destination IPs on the same
 specific port with not established connections. Slips checks both TCP and UDP connections for horizontal port scans.
+The initial threshold is now 6 destination IPs using the same destination ports.
 
+After detecting a horizontal port scan, Slips waits 10 seconds to see if more flows arrive,
+since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
-After detecting the first horizontal port scan with 5 scanned IPs, Slips only generates an evidence every 15+ scanned IPs. This means that, the first portscan is detected as soon as it happens so the analysts knows.
+If one alert was generated (Slips waited 10 seconds and no more flows arrived to new IPs) then the counter resets and the same attacker needs to do _again_ more than threshold destinations IPs in the same port to be detected. This avoids the problem that after 6 flows that generated an alert, the 7 flow also generates an alert.
 
-<img src="images/horizontal_portscans.jpg">
-
-This waiting for 15+ evidence is done to avoid duplicate evidence.
-The downside to this approach is that if you do more than 1 portscan in the same timewindow, all portscans starting from the second one will be ignored if the sum of ports scanned the second time are < the number of ports of the first portscan.
-
+Slips ignores the broadcast IP 255.255.255.255 has destination of port scans.
 
 
 ### PING Sweeps

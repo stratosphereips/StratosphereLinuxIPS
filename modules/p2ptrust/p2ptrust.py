@@ -652,7 +652,7 @@ class Trust(IModule):
             )
             return 1
 
-        # create_p2p_logfile is taken from slips.conf
+        # create_p2p_logfile is taken from slips.conf/slips.yaml
         if self.create_p2p_logfile:
             # rotates p2p.log file every 1 day
             self.rotator_thread.start()
