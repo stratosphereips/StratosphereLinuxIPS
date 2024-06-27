@@ -119,6 +119,18 @@ jobs:
       run: |
         python3 -m pytest tests/test_ip_info.py -p no:warnings -vv
 
+    - name: urlhaus Unit Tests
+      run: |
+        coverage run --source=./ -m pytest tests/test_urlhaus.py -p no:warnings -vv
+        coverage report  --include="modules/threat_intelligence/urlhaus.py*"
+        coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/ip_info
+
+    - name: urlhaus Unit Tests
+      run: |
+        coverage run --source=./ -m pytest tests/test_urlhaus.py -p no:warnings -vv
+        coverage report  --include="modules/threat_intelligence/urlhaus.py*"
+        coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/ip_info
+
     - name: Input Unit Tests
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
@@ -128,7 +140,19 @@ jobs:
 
     - name: Portscan tests
       run: |
+        coverage run --source=./ -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
+        coverage report --include="modules/network_discovery/*"
+        coverage html --include="modules/network_discovery/*" -d coverage_reports/network_discovery
+
+    - name: set evidence test
+      run: |
+        coverage run --source=./ -m pytest tests/test_set_evidence.py -p no:warnings -vv
+        coverage report --include="modules/flowalerts/set_evidence.py*"
+        coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/flowalerts
+
+
         python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
+
 
     - name: Integration tests
       run: |

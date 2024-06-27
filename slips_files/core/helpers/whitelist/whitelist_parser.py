@@ -267,7 +267,7 @@ class WhitelistParser:
         return org_subnets
 
     def parse(self) -> bool:
-        """parses the whitelist specified in the slips.conf"""
+        """parses the whitelist specified in the slips.yaml"""
         line_number = 0
 
         whitelist = self.open_whitelist_for_reading()

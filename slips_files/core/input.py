@@ -30,7 +30,11 @@ from re import split
 from watchdog.observers import Observer
 
 from slips_files.common.abstracts.core import ICore
-from slips_files.common.imports import *
+
+# common imports for all modules
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+import multiprocessing
 from slips_files.core.helpers.filemonitor import FileEventHandler
 
 SUPPORTED_LOGFILES = (
@@ -161,8 +165,6 @@ class Input(ICore):
             for nfdump_line in self.nfdump_output.splitlines():
                 # this line is taken from stdout we need to remove whitespaces
                 nfdump_line.replace(" ", "")
-                ts = nfdump_line.split(",")[0]
-
                 line = {"type": "nfdump", "data": nfdump_line}
                 self.give_profiler(line)
                 if self.testing:
@@ -707,9 +709,10 @@ class Input(ICore):
         it deletes old zeek-date.log files and clears slips' open handles and sleeps again
         """
         while not self.should_stop():
-            # keep the rotated files for the period specified in slips.conf
+            # keep the rotated files for the period specified in slips.yaml
             if msg := self.get_msg("remove_old_files"):
-                # this channel receives renamed zeek log files, we can safely delete them and close their handle
+                # this channel receives renamed zeek log files,
+                # we can safely delete them and close their handle
                 changed_files = json.loads(msg["data"])
 
                 # for example the old log file should be  ./zeek_files/dns.2022-05-11-14-43-20.log
@@ -755,11 +758,11 @@ class Input(ICore):
         self.stop_queues()
         try:
             self.remover_thread.join(3)
-        except:
+        except Exception:
             pass
         try:
             self.zeek_thread.join(3)
-        except:
+        except Exception:
             pass
 
         if hasattr(self, "open_file_handlers"):
@@ -794,7 +797,7 @@ class Input(ICore):
         rotation = []
         if self.input_type == "interface":
             if self.enable_rotation:
-                # how often to rotate zeek files? taken from slips.conf
+                # how often to rotate zeek files? taken from slips.yaml
                 rotation = [
                     "-e",
                     f"redef Log::default_rotation_interval = {self.rotation_period} ;",

@@ -63,7 +63,7 @@ RUN grep -v 'black' install/requirements.txt | xargs pip3 install  --no-cache-di
     && npm install
 
 # set use_p2p to yes in the config file
-RUN sed -i 's/use_p2p = no/use_p2p = yes/g' config/slips.conf
+RUN sed -i "s/use_p2p : \'no\'/use_p2p : \'yes\'/g" config/slips.yaml
 
 # build the pigeon and add pigeon to path
 SHELL ["/bin/bash", "-c"]

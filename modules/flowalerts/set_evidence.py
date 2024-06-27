@@ -345,7 +345,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def incompatible_CN(
+    def incompatible_cn(
         self,
         org: str,
         timestamp: str,
@@ -385,7 +385,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def DGA(
+    def dga(
         self,
         nxdomains: int,
         stime: str,

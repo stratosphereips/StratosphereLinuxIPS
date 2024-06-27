@@ -198,7 +198,7 @@ class SSL(IFlowalertsAnalyzer):
         # found one of our supported orgs in the cn but
         # it doesn't belong to any of this org's
         # domains or ips
-        self.set_evidence.incompatible_CN(
+        self.set_evidence.incompatible_cn(
             found_org_in_cn, timestamp, daddr, profileid, twid, uid
         )
 
