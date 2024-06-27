@@ -67,7 +67,10 @@ def test_binetflow(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py  -e 1 -t -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1"
+    command = (
+        f"./slips.py  -e 1 -t -o {output_dir}  -P {redis_port}"
+        f" -f {binetflow_path}  >  {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
 
