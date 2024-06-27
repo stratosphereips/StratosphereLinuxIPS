@@ -44,6 +44,12 @@ jobs:
               coverage report  --include="modules/flowalerts/*"
               coverage html  --include="modules/flowalerts/*" -d coverage_reports/flowalerts
 
+          - name: Software  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_software.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/software.py*"
+              coverage html  --include="modules/flowalerts/software.py*" -d coverage_reports/flowalerts     
+
           - name: Whitelist  Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_whitelist.py -p no:warnings -vv
