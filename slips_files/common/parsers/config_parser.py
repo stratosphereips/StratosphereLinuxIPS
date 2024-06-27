@@ -2,20 +2,19 @@ from datetime import timedelta
 import sys
 import ipaddress
 from typing import List
-import configparser
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
+import yaml
 
 
 class ConfigParser(object):
     name = "ConfigParser"
-    description = "Parse and sanitize slips.conf values. used by all modules"
+    description = "Parse and sanitize slips.yaml values. used by all modules"
     authors = ["Alya Gomaa"]
 
     def __init__(self):
-        # self.args = self.get_args()
-        self.configfile = self.get_config_file()
-        self.config = self.read_config_file()
+        configfile: str = self.get_config_file()
+        self.config = self.read_config_file(configfile)
         self.home_network_ranges = (
             "192.168.0.0/16",
             "172.16.0.0/12",
@@ -25,21 +24,21 @@ class ConfigParser(object):
             map(ipaddress.ip_network, self.home_network_ranges)
         )
 
-    def read_config_file(self):
+    def read_config_file(self, configfile: str) -> dict:
         """
-        reads slips configuration file, slips.conf is the default file
+        reads slips configuration file, slips.conf/slips.yaml is the default file
         """
-        config = configparser.ConfigParser(
-            interpolation=None, comment_prefixes="#"
-        )
-        try:
-            with open(self.configfile) as source:
-                config.read_file(source)
-        except (IOError, TypeError):
-            pass
-        return config
+        # try:
+        with open(configfile) as source:
+            return yaml.safe_load(source)
+        # except (IOError, TypeError, yaml.YAMLError):
+        #     pass
 
     def get_config_file(self):
+        """
+        uses the arg parser to get the config file specified by -c or the
+        path of the default one
+        """
         parser = self.get_parser()
         return parser.get_configfile()
 
@@ -61,13 +60,11 @@ class ConfigParser(object):
          Other processes also access the configuration
         """
         try:
-            return self.config.get(section, name)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError,
-        ):
+            section_data: dict = self.config.get(section, None)
+            if section_data is None:
+                return default_value
+            return section_data.get(name, default_value)
+        except (NameError, ValueError):
             # There is a conf, but there is no option,
             # or no section or no configuration file specified
             return default_value
@@ -82,7 +79,7 @@ class ConfigParser(object):
 
     def get_entropy_threshold(self):
         """
-        gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf
+        gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf/slips.yaml
         """
         threshold = self.read_configuration(
             "flowalerts", "entropy_threshold", 5
@@ -212,13 +209,10 @@ class ConfigParser(object):
 
     def get_tw_width_as_float(self):
         try:
-            twid_width = self.config.get("parameters", "time_window_width")
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError,
-        ):
+            twid_width = self.read_configuration(
+                "parameters", "time_window_width", 3600
+            )
+        except (NameError, ValueError):
             # There is a conf, but there is no option,
             # or no section or no configuration file specified
             twid_width = 3600
@@ -475,7 +469,7 @@ class ConfigParser(object):
         return self.read_configuration(
             "threatintelligence",
             "local_threat_intelligence_files",
-            "modules/threat_intelligence/local_data_files/",
+            "config/local_ti_files/",
         )
 
     def wait_for_TI_to_finish(self) -> bool:
@@ -685,7 +679,7 @@ class ConfigParser(object):
             to_ignore.append("p2ptrust")
 
         # ignore CESNET sharing module if send and receive are
-        # disabled in slips.conf
+        # disabled in slips.yaml
         send_to_warden = self.send_to_warden()
         receive_from_warden = self.receive_from_warden()
 

@@ -97,7 +97,6 @@ class Checker:
         ):
             print("Redis database is not running. Stopping Slips")
             self.main.terminate_slips()
-
         if self.main.args.config and not os.path.exists(self.main.args.config):
             print(f"{self.main.args.config} doesn't exist. Stopping Slips")
             self.main.terminate_slips()

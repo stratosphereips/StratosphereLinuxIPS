@@ -46,3 +46,4 @@ black
 ruff
 pre-commit
 coverage
+yaml
