@@ -389,7 +389,7 @@ class DNS(IFlowalertsAnalyzer):
             number_of_nxdomains % 5 == 0
             and number_of_nxdomains >= self.nxdomains_threshold
         ):
-            self.set_evidence.DGA(
+            self.set_evidence.dga(
                 number_of_nxdomains, stime, profileid, twid, uids
             )
             # clear the list of alerted queries and uids
