@@ -59,6 +59,10 @@ jobs:
       run: |
         python3 -m pytest tests/test_flowalerts.py -p no:warnings -vv
 
+    - name: Tunnel Unit Tests
+      run: |
+        python3 -m pytest tests/test_tunnel.py -p no:warnings -vv    
+
     - name: Whitelist Unit Tests
       run: |
         python3 -m pytest tests/test_whitelist.py -p no:warnings -vv
