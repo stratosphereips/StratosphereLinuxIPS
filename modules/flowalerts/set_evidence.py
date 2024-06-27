@@ -400,7 +400,7 @@ class SetEvidnceHelper:
         confidence = round(confidence, 2)  # for readability
         saddr = profileid.split("_")[-1]
         description = (
-            f"Possible dga or domain scanning. {saddr} "
+            f"Possible DGA or domain scanning. {saddr} "
             f"failed to resolve {nxdomains} domains"
         )
 
