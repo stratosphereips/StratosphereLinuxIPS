@@ -20,8 +20,7 @@ alerts_file = "alerts.log"
             4,
             [
                 "Malicious JA3: 6734f37431670b3ab4292b8f60f29984",
-                # "sending ARP packet to a destination address outside of
-                # local network",
+                "sending ARP packet to a destination address outside of local network",
                 "broadcasting unsolicited ARP",
             ],
             "test9-mixed-zeek-dir/",
@@ -31,8 +30,7 @@ alerts_file = "alerts.log"
             "dataset/test16-malicious-zeek-dir",
             0,
             [
-                # "sending ARP packet to a destination address outside of
-                # local network",
+                "sending ARP packet to a destination address outside of local network",
                 "broadcasting unsolicited ARP",
             ],
             "test16-malicious-zeek-dir/",
