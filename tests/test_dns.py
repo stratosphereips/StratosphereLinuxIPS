@@ -542,7 +542,7 @@ def test_analyze(mocker, mock_db, test_case, expected_calls):
                     [uid] * 9,
                 )
             },
-            False,
+            None,
         ),
     ],
 )
