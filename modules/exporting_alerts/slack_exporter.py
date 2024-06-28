@@ -77,9 +77,9 @@ class SlackExporter(IExporter):
         slack_client = WebClient(token=self.token)
         try:
             slack_client.chat_postMessage(
-                # Channel name is set in slips.conf
+                # Channel name is set in slips.yaml
                 channel=self.slack_channel_name,
-                # Sensor name is set in slips.conf
+                # Sensor name is set in slips.yaml
                 text=f"{self.sensor_name}: {msg_to_send}",
             )
             return True

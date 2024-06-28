@@ -1,3 +1,19 @@
+- 1.0.15 (June 2024)
+- Add a Parameter to export strato letters to re-train the RNN model.
+- Better organization of flowalerts module by splitting it into many specialized files.
+- Better unit tests. thanks to @Sekhar-Kumar-Dash
+- Disable "Connection without DNS resolution" evidence to DNS servers.
+- Fix displaying "Failed" as the protocol name in the web interface when reading Suricata flows.
+- Fix problem reversing source and destination addresses in JA3 evidence description.
+- Improve CI by using more parallelization.
+- Improve non-SSL and non-HTTP detections by making sure that the sum of bytes sent and received is zero.
+- Improve RNN evidence description, now it's more clear which IP is the botnet, and which is the C&C server.
+- Improve some threat levels of evidence to reduce false positives.
+- Improve whitelists. Better matching, more domains added, reduced false positives.
+- More minimal Slips notifications, now Slips displays the alert description instead of all evidence in the alert.
+- The port of the web interface is now configurable in slips.conf
+
+
 - 1.0.14 (May 2024)
 - Improve whitelists. better matching of ASNs, domains, and organizations.
 - Whitelist Microsoft, Apple, Twitter, Facebook and Google alerts by default to reduce false positives.
@@ -642,5 +658,3 @@
 	- This is a mayor version change. Implementing new algorithms for analyzing the results, management of IPs, connections, whois database and more features.
 	- A new parameter to specify the file (-r). This is as fast as reading the file from stdin.
 	- Now we have a configuration file slips.conf. In there you can specify from fixed parameters, the time formats, to the columns in the flow file.
-- 0.3.3alpha
-	- First stable version with a minimal algorithm for detecting behavioral threats.

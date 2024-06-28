@@ -24,23 +24,23 @@ class VerticalPortscan:
     destination ports we connected to
     3. The first evidence will be triggered if the amount of
     destination ports for 1 IP is 5+
-    4. then we combine evidence 3 by 3. for example
-        evidence f 10,15,20 ports scanned will be combined into 1 evidence
-        evidence of 15,30,35 ports scanned will be combined into 1 evidence
-        etc.
+    4. then we set evidence on 20+,35+. etc
+
     The result of this combining of evidence is that the dst ports
-     scanned in each evidence will be = the
-    previous scanned ports +15
+     scanned in each evidence will be = the previous scanned ports +15
+
     this combining is done to avoid duplicate evidence
     the downside to this is that if you do more than 1 portscan
     in the same timewindow, all portscans starting
     from the second portscan will be ignored if they don't exceed
     the number of dports of the first portscan
+
     so as a rule, each evidence should have X ports scanned. this
     X should ALWAYS be the last portscan+15,
     if this X is the last portscan +14, we don't
-    set the evidence. we keep combining.
-    3. Once the timewindow stops, Slips resets
+    set the evidence.
+
+    5. Once the timewindow ends, Slips resets
      all counters, we go back to step 1
     """
 

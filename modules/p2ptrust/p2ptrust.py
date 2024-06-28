@@ -10,8 +10,9 @@ import json
 import sys
 import socket
 
-
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.trust.trustdb as trustdb
 import modules.p2ptrust.utils.utils as p2p_utils
@@ -402,7 +403,7 @@ class Trust(IModule):
     def data_request_callback(self, msg: Dict):
         try:
             # ignore subscribe msgs (first 2 msgs sent in redis channel)
-            if msg and type(msg["data"]) != int:
+            if msg and not isinstance(msg["data"], int):
                 self.handle_data_request(msg["data"])
         except Exception as e:
             self.print(f"Exception {e} in data_request_callback", 0, 1)
@@ -652,7 +653,7 @@ class Trust(IModule):
             )
             return 1
 
-        # create_p2p_logfile is taken from slips.conf
+        # create_p2p_logfile is taken from slips.yaml
         if self.create_p2p_logfile:
             # rotates p2p.log file every 1 day
             self.rotator_thread.start()
