@@ -45,13 +45,12 @@ class SSL(IFlowalertsAnalyzer):
         # this thread shouldn't run on interface only because in zeek dirs we
         # we should wait for the conn.log to be read too
 
-        while True:
+        while not self.flowalerts.should_stop():
             size = self.pending_ssl_flows.qsize()
             if size == 0:
                 # nothing in queue
                 time.sleep(30)
                 continue
-
             # try to get the conn of each pending flow only once
             # this is to ensure that re-added flows to the queue aren't checked twice
             for ssl_flow in range(size):
@@ -70,7 +69,7 @@ class SSL(IFlowalertsAnalyzer):
                 flow: dict = self.db.get_flow(uid)
                 if flow := flow.get(uid):
                     flow = json.loads(flow)
-                    if "ts" in flow:
+                    if "starttime" in flow:
                         # this means the flow is found in conn.log
                         self.check_pastebin_download(*ssl_flow, flow)
                 else:
