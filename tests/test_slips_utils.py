@@ -20,7 +20,7 @@ class MockFlow:
         self.dport = dport
 
 
-def test_get_hash_from_file():
+def test_get_sha256_hash():
     utils = ModuleFactory().create_utils_obj()
     # a file that we know doesn't change
     assert (
@@ -29,13 +29,13 @@ def test_get_hash_from_file():
     )
 
 
-def test_get_hash_from_nonexistent_file():
+def test_get_sha256_hash_from_nonexistent_file():
     utils = ModuleFactory().create_utils_obj()
     with pytest.raises(FileNotFoundError):
         utils.get_sha256_hash("nonexistent_file.txt")
 
 
-def test_get_hash_from_file_permission_error():
+def test_get_sha256_hash_permission_error():
     utils = ModuleFactory().create_utils_obj()
     with patch("builtins.open", side_effect=PermissionError):
         with pytest.raises(PermissionError):
@@ -109,10 +109,18 @@ def test_calculate_confidence(input_value, expected_output):
 @pytest.mark.parametrize(
     "input_value, input_format, expected_output",
     [
-        ("2023-04-06T12:34:56.789Z", "%Y-%m-%dT%H:%M:%S.%fZ", "2023-04-06T12:34:56.789000Z"),
+        (
+            "2023-04-06T12:34:56.789Z",
+            "%Y-%m-%dT%H:%M:%S.%fZ",
+            "2023-04-06T12:34:56.789000Z",
+        ),
         (1680788096.789, "iso", "2023-04-06T13:34:56.789000+00:00"),
         (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 19:04:56"),
-        (datetime.datetime(2023, 4, 6, 12, 34, 56, 789000), "unixtimestamp", 1680764696.789),
+        (
+            datetime.datetime(2023, 4, 6, 12, 34, 56, 789000),
+            "unixtimestamp",
+            1680764696.789,
+        ),
     ],
 )
 def test_convert_format(input_value, input_format, expected_output):
