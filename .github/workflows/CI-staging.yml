@@ -43,6 +43,13 @@ jobs:
               coverage run --source=./ -m pytest tests/test_flowalerts.py -p no:warnings -vv
               coverage report  --include="modules/flowalerts/*"
               coverage html  --include="modules/flowalerts/*" -d coverage_reports/flowalerts
+              
+          - name: SSH  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_ssh.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/ssh.py*"
+              coverage html  --include="modules/flowalerts/ssh.py*" -d coverage_reports/flowalerts
+    
 
           - name: dns  Unit Tests
             run: |
