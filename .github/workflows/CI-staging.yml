@@ -43,6 +43,12 @@ jobs:
               coverage run --source=./ -m pytest tests/test_flowalerts.py -p no:warnings -vv
               coverage report  --include="modules/flowalerts/*"
               coverage html  --include="modules/flowalerts/*" -d coverage_reports/flowalerts
+              
+          - name: ssl  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_ssl.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/ssl.py*"
+              coverage html  --include="modules/flowalerts/ssl.py*" -d coverage_reports/flowalerts
 
           - name: Whitelist  Unit Tests
             run: |
