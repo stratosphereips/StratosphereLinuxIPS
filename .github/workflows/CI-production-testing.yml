@@ -61,7 +61,15 @@ jobs:
 
     - name: dns Unit Tests
       run: |
-        python3 -m pytest tests/test_dns.py -p no:warnings -vv    
+        python3 -m pytest tests/test_dns.py -p no:warnings -vv
+
+    - name: Notice Unit Tests
+      run: |
+        python3 -m pytest tests/test_notice.py -p no:warnings -vv
+
+    - name: dns Unit Tests
+      run: |
+        python3 -m pytest tests/test_dns.py -p no:warnings -vv
 
     - name: Whitelist Unit Tests
       run: |
@@ -125,9 +133,7 @@ jobs:
 
     - name: urlhaus Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_urlhaus.py -p no:warnings -vv
-        coverage report  --include="modules/threat_intelligence/urlhaus.py*"
-        coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/urlhaus       
+        python3 -m pytest tests/test_urlhaus.py -p no:warnings -vv
 
     - name: Input Unit Tests
       run: |
