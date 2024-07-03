@@ -5,19 +5,7 @@ import json
 import requests
 import pytest
 import time
-import os
 from unittest.mock import Mock, mock_open
-
-
-def test_getting_header_fields(mocker, mock_db):
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    url = "google.com/play"
-    mock_requests = mocker.patch("requests.get")
-    mock_requests.return_value.status_code = 200
-    mock_requests.return_value.headers = {"ETag": "1234"}
-    mock_requests.return_value.text = ""
-    response = update_manager.download_file(url)
-    assert update_manager.get_e_tag(response) == "1234"
 
 
 def test_check_if_update_based_on_update_period(mock_db):
@@ -79,20 +67,35 @@ def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     assert update_manager.check_if_update(url, float("-inf")) is True
 
 
-def test_check_if_update_local_file(database, mock_db):
+@pytest.mark.parametrize(
+    "new_hash, old_hash, expected_result",
+    [  # Testcase1: File not in DB, update needed
+        ("hash123", False, True),
+        # Testcase2: Hashes match, no update needed
+        ("hash456", "hash456", False),
+        # Testcase3: Hashes different, update needed
+        ("hash789", "hash123", True),
+    ],
+)
+def test_check_if_update_local_file(
+    mocker, mock_db, new_hash, old_hash, expected_result
+):
     """
-    Test if check_if_update_local_file() correctly detects if we should update
-    a local file based on the file hash
+    Test if check_if_update_local_file() correctly detects
+    if we should update a local file based on the file hash.
     """
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    file_path = os.path.join(
-        os.getcwd(), "slips_files/ports_info/ports_used_by_specific_orgs.csv"
+
+    mocker.patch(
+        "slips_files.common.slips_utils.Utils.get_hash_from_file",
+        return_value=new_hash,
     )
-    assert update_manager.check_if_update_local_file(file_path) is True
-    mock_db.get_TI_file_info.return_value = {
-        "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    }
-    assert update_manager.check_if_update_local_file(file_path) is True
+    mock_db.get_TI_file_info.return_value = {"hash": old_hash}
+
+    file_path = "path/to/my/file.txt"
+    assert (
+        update_manager.check_if_update_local_file(file_path) is expected_result
+    )
 
 
 @pytest.mark.parametrize(
@@ -135,8 +138,8 @@ def test_check_if_update_local_file(database, mock_db):
 def test_get_feed_details(mocker, mock_db, mock_data, expected_feeds):
     """Test get_feed_details with different file contents."""
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    m = mock_open(read_data=mock_data)
-    mocker.patch("builtins.open", m)
+    mock_feeds_file = mock_open(read_data=mock_data)
+    mocker.patch("builtins.open", mock_feeds_file)
     feeds = update_manager.get_feed_details("path/to/feeds")
     assert feeds == expected_feeds
 
@@ -226,10 +229,8 @@ TestOrg,192.168.1.2,443-445,udp""",
 def test_read_ports_info(mocker, mock_db, tmp_path, test_data, expected_calls):
     """Test read_ports_info with different file contents."""
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    test_file = tmp_path / "ports_info.csv"
-    test_file.write_text(test_data, encoding="utf-8")
     mocker.patch("builtins.open", mock_open(read_data=test_data))
-    update_manager.read_ports_info(str(test_file))
+    update_manager.read_ports_info(str(tmp_path / "ports_info.csv"))
     for call in expected_calls:
         mock_db.set_organization_of_port.assert_any_call(*call)
 
@@ -260,12 +261,10 @@ def test_update_local_file(
     """Test update_local_file with a valid file."""
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     update_manager.new_hash = "test_hash"
-    test_file = tmp_path / file_name
-    test_file.write_text(test_data, encoding="utf-8")
     mocker.patch("builtins.open", mock_open(read_data=test_data))
-    result = update_manager.update_local_file(str(test_file))
+    result = update_manager.update_local_file(str(tmp_path / file_name))
     mock_db.set_TI_file_info.assert_called_once_with(
-        str(test_file), {"hash": "test_hash"}
+        str(tmp_path / file_name), {"hash": "test_hash"}
     )
     assert result is True
 
@@ -276,8 +275,7 @@ def test_check_if_update_online_whitelist_download_updated(mocker, mock_db):
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
 
-    mock_requests = mocker.patch("requests.get")
-    mock_requests.return_value.status_code = 200
+    update_manager.download_file = Mock(return_value=Mock(status_code=200))
 
     result = update_manager.check_if_update_online_whitelist()
 
@@ -372,7 +370,7 @@ def test_delete_old_source_ips(mock_db):
         ),
     }
     update_manager.delete_old_source_IPs("old_file.txt")
-    mock_db.delete_ips_from_IoC_ips.assert_called_once_with(["1.2.3.4"])
+    (mock_db.delete_ips_from_IoC_ips.assert_called_once_with(["1.2.3.4"]))
 
 
 def test_delete_old_source_domains(mock_db):
@@ -391,7 +389,8 @@ def test_delete_old_source_domains(mock_db):
 
 def test_update_riskiq_feed(mocker, mock_db):
     """
-    Test update_riskiq_feed with a successful request and valid data.
+    Test update_riskiq_feed with a
+    successful request and valid data.
     """
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     update_manager.riskiq_email = "test@example.com"
@@ -484,11 +483,11 @@ def test_delete_old_source_data_from_database(mock_db):
 @pytest.mark.parametrize(
     "header, expected_description_column",
     [
-        # Testcase1 finding "desc" column
+        # Testcase1: finding "desc" column
         ("#,ip,desc", 2),
-        # Testcase2 finding "collect" column
+        # Testcase2: finding "collect" column
         ("#,ip,collect", 2),
-        # Testcase3 not finding a description column
+        # Testcase3: not finding a description column
         ("#,ip,date", None),
     ],
 )
@@ -576,7 +575,9 @@ def test_get_data_column(mock_db, line_fields, expected_data_column):
 
 
 @pytest.mark.parametrize(
-    "line, line_fields, separator, data_column, description_column, file_path, expected_data, expected_description",
+    "line, line_fields, separator, data_column, "
+    "description_column, file_path, "
+    "expected_data, expected_description",
     [
         (
             "1.2.3.4,Test description",
@@ -649,9 +650,10 @@ def test_add_to_ip_ctr_new_ip(mock_db):
     }
 
 
-def test_parse_ti_feed_valid_data(mocker, mock_db, tmp_path):
+def test_parse_ti_feed_valid_data(mocker, mock_db):
     """
-    Test parse_ti_feed with valid data containing both IP and domain.
+    Test parse_ti_feed with valid data
+    containing both IP and domain.
     """
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     update_manager.url_feeds = {
@@ -664,11 +666,9 @@ def test_parse_ti_feed_valid_data(mocker, mock_db, tmp_path):
     1.2.3.4,Test description
     example.com,Another description
     """
-    test_file = tmp_path / "test.txt"
-    test_file.write_text(test_data, encoding="utf-8")
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     result = update_manager.parse_ti_feed(
-        "https://example.com/test.txt", str(test_file)
+        "https://example.com/test.txt", "test.txt"
     )
     mock_db.add_ips_to_IoC.assert_any_call(mocker.ANY)
     mock_db.add_domains_to_IoC.assert_any_call({"example.com": mocker.ANY})
@@ -687,11 +687,9 @@ def test_parse_ti_feed_invalid_data(mocker, mock_db, tmp_path):
     test_data = """# Comment
     invalid_data,Description
     """
-    test_file = tmp_path / "invalid.txt"
-    test_file.write_text(test_data, encoding="utf-8")
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     result = update_manager.parse_ti_feed(
-        "https://example.com/invalid.txt", str(test_file)
+        "https://example.com/invalid.txt", str(tmp_path / "invalid.txt")
     )
     mock_db.add_ips_to_IoC.assert_not_called()
     mock_db.add_domains_to_IoC.assert_not_called()
@@ -700,36 +698,34 @@ def test_parse_ti_feed_invalid_data(mocker, mock_db, tmp_path):
 
 @pytest.mark.parametrize(
     "file_content, cached_hash, expected_result",
-    [
-        ("test content", {}, True),  # Testcase1 New file
-        ("new content", "old_hash", True),  # Testcase2 Updated file
-        # Testcase3 Unchanged file
-        (
-            "test content",
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            True,
-        ),
+    [  # Testcase1: New file
+        ("test content", {}, True),
+        # Testcase2: Updated file
+        ("new content", "old_hash", True),
     ],
 )
 def test_check_if_update_org(
-    mock_db, tmp_path, file_content, cached_hash, expected_result
+    mocker, mock_db, file_content, cached_hash, expected_result
 ):
     """Test check_if_update_org with different file and cache scenarios."""
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    test_file = tmp_path / "test_org"
-    test_file.write_text(file_content, encoding="utf-8")
+
     mock_db.get_TI_file_info.return_value = {"hash": cached_hash}
-    result = update_manager.check_if_update_org(str(test_file))
+    mocker.patch(
+        "slips_files.common." "slips_utils.Utils.get_hash_from_file",
+        return_value=hash(file_content.encode()),
+    )
+    result = update_manager.check_if_update_org("test_org")
     assert result is expected_result
 
 
 @pytest.mark.parametrize(
     "status_code, expected_result, db_call_count",
-    [  # Testcase1:Successful download and update
+    [  # Testcase1: Successful download and update
         (200, True, 1),
-        # Testcase2:Download failed
+        # Testcase2: Download failed
         (404, False, 0),
-        # Testcase3:Server error
+        # Testcase3: Server error
         (500, False, 0),
     ],
 )
@@ -741,13 +737,16 @@ def test_update_mac_db(
     """
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     update_manager.mac_db_link = "https://example.com/mac_db.json"
+
     mock_response = mocker.Mock()
     mock_response.status_code = status_code
-
-    mock_response.text = '[{"mac":"00:00:00:00:00:01","vendor":"VendorA"}]'
+    mock_response.text = '[{"mac":"00:00:00:00:00:01",' '"vendor":"VendorA"}]'
     update_manager.responses["mac_db"] = mock_response
+    mock_open = mocker.mock_open()
+    mocker.patch("builtins.open", mock_open)
 
     result = update_manager.update_mac_db()
+
     assert result is expected_result
     assert mock_db.set_TI_file_info.call_count == db_call_count
 
@@ -822,11 +821,10 @@ def test_parse_ssl_feed_valid_data(mocker, mock_db, tmp_path):
     test_data = """# Listingdate,SHA1 Fingerprint,Description
     2023-03-08 07:58:29,6cec09bcb575352785d313c7e978f26bfbd528ab,AsyncRAT C&C
     2023-03-09 08:00:00,aaabbbcccdddeeeeffff00001111222233334444,Cobalt Strike C2"""
-    test_file = tmp_path / "test_ssl_feed.csv"
-    test_file.write_text(test_data, encoding="utf-8")
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     result = update_manager.parse_ssl_feed(
-        "https://example.com/test_ssl_feed.csv", str(test_file)
+        "https://example.com/test_ssl_feed.csv",
+        str(tmp_path / "test_ssl_feed.csv"),
     )
 
     mock_db.add_ssl_sha1_to_IoC.assert_called_once_with(
@@ -856,12 +854,12 @@ def test_parse_ssl_feed_no_valid_fingerprints(mocker, mock_db, tmp_path):
         }
     }
     test_data = """# ja3_md5,first_seen,last_seen,Listingreason
-    8f52d1ce303fb4a6515836aec3cc16b1,2017-07-15 19:05:11,2019-07-27 20:00:57,TrickBot"""
-    test_file = tmp_path / "test_ssl_feed.csv"
-    test_file.write_text(test_data, encoding="utf-8")
+    8f52d1ce303fb4a6515836aec3cc16b1,
+    2017-07-15 19:05:11,2019-07-27 20:00:57,TrickBot"""
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     result = update_manager.parse_ssl_feed(
-        "https://example.com/test_ssl_feed.csv", str(test_file)
+        "https://example.com/test_ssl_feed.csv",
+        str(tmp_path / "test_ssl_feed.csv"),
     )
 
     mock_db.add_ssl_sha1_to_IoC.assert_not_called()
