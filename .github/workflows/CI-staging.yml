@@ -50,6 +50,19 @@ jobs:
               coverage report  --include="modules/flowalerts/tunnel.py*"
               coverage html  --include="modules/flowalerts/tunnel.py*" -d coverage_reports/flowalerts    
 
+          - name: dns  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_dns.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/dns.py*"
+              coverage html  --include="modules/flowalerts/dns.py*" -d coverage_reports/flowalerts
+
+          - name: notice  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/notice.py*"
+              coverage html  --include="modules/flowalerts/notice.py*" -d coverage_reports/flowalerts
+
+
           - name: Whitelist  Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_whitelist.py -p no:warnings -vv

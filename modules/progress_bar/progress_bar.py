@@ -119,10 +119,16 @@ class PBar(IModule):
         """
         keeps receiving events until pbar reaches 100%
         """
+        # the only module that sends in this pipe is output.py
         has_new_msg = self.pipe.poll(timeout=0.1)
-
         if has_new_msg:
-            msg: dict = self.pipe.recv()
+            try:
+                msg: dict = self.pipe.recv()
+            except UnicodeDecodeError as e:
+                self.print(
+                    f"Unable to recv from pipe, msg discarded. {e}", 0, 1
+                )
+                return False
 
             event: str = msg["event"]
             if event == "init":
