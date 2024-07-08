@@ -59,14 +59,14 @@ class Notice(IFlowalertsAnalyzer):
         if not msg:
             return False
 
-        data = msg["data"]
-        data = json.loads(data)
+        data = json.loads(msg["data"])
         profileid = data["profileid"]
         twid = data["twid"]
-        flow = data["flow"]
-        flow = json.loads(flow)
+        flow = json.loads(data["flow"])
         uid = data["uid"]
 
         self.check_vertical_portscan(flow, uid, twid)
         self.check_horizontal_portscan(flow, uid, profileid, twid)
         self.check_password_guessing(flow, uid, twid)
+
+        return True

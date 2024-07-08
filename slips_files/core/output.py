@@ -4,7 +4,6 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -64,7 +63,8 @@ class Output(IObserver):
         self.input_type = input_type
         self.has_pbar = has_pbar
         self.pbar_finished: Event = pbar_finished
-        self.sender_pipe = sender_pipe
+        # pipe for sending progress bar msgs
+        self.pbar_sender_pipe = sender_pipe
         self.stop_daemon = stop_daemon
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
@@ -177,6 +177,7 @@ class Output(IObserver):
         if sender:
             to_print = f"[{sender}] {txt}"
         else:
+            txt: str = utils.remove_non_printable_chars(txt)
             to_print = txt
 
         if self.has_pbar and not self.is_pbar_finished():
@@ -263,7 +264,7 @@ class Output(IObserver):
         writes to the pbar pipe. anything sent by this method
         will be received by the pbar class
         """
-        self.sender_pipe.send(msg)
+        self.pbar_sender_pipe.send(msg)
 
     def is_pbar_finished(self) -> bool:
         return self.pbar_finished.is_set()
