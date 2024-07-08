@@ -280,7 +280,7 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
-    def get_own_IPs(self) -> list:
+    def get_own_ips(self) -> list:
         """
         Returns a list of our local and public IPs
         """
