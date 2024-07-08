@@ -63,6 +63,10 @@ jobs:
       run: |
         python3 -m pytest tests/test_downloaded_file.py -p no:warnings -vv    
 
+    - name: Tunnel Unit Tests
+      run: |
+        python3 -m pytest tests/test_tunnel.py -p no:warnings -vv    
+
     - name: dns Unit Tests
       run: |
         python3 -m pytest tests/test_dns.py -p no:warnings -vv
@@ -71,9 +75,9 @@ jobs:
       run: |
         python3 -m pytest tests/test_notice.py -p no:warnings -vv
 
-    - name: dns Unit Tests
+    - name: software Unit Tests
       run: |
-        python3 -m pytest tests/test_dns.py -p no:warnings -vv
+        python3 -m pytest tests/test_software.py -p no:warnings -vv
 
     - name: Whitelist Unit Tests
       run: |
