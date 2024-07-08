@@ -67,9 +67,9 @@ jobs:
       run: |
         python3 -m pytest tests/test_notice.py -p no:warnings -vv
 
-    - name: dns Unit Tests
+    - name: software Unit Tests
       run: |
-        python3 -m pytest tests/test_dns.py -p no:warnings -vv
+        python3 -m pytest tests/test_software.py -p no:warnings -vv
 
     - name: Whitelist Unit Tests
       run: |
