@@ -5,7 +5,7 @@ import json
 import requests
 import pytest
 import time
-from unittest.mock import Mock, mock_open
+from unittest.mock import Mock, mock_open, patch
 
 
 def test_check_if_update_based_on_update_period(mock_db):
@@ -491,12 +491,14 @@ def test_delete_old_source_data_from_database(mock_db):
         ("#,ip,date", None),
     ],
 )
-def test_get_description_column(mock_db, header, expected_description_column):
+def test_get_description_column_index(
+    mock_db, header, expected_description_column
+):
     """
     Test get_description_column() with different header formats.
     """
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    description_column = update_manager.get_description_column(header)
+    description_column = update_manager.get_description_column_index(header)
     assert description_column == expected_description_column
 
 
@@ -545,7 +547,9 @@ def test_parse_line(
     Test parse_line() with different line formats.
     """
     update_manager = ModuleFactory().create_update_manager_obj(Mock())
-    amount_of_columns, line_fields, sep = update_manager.parse_line(line, "")
+    amount_of_columns, line_fields, sep = (
+        update_manager.get_feed_fields_and_sep(line, "")
+    )
     assert amount_of_columns == expected_amount_of_columns
     assert line_fields == expected_line_fields
     assert sep == expected_sep
@@ -650,6 +654,7 @@ def test_add_to_ip_ctr_new_ip(mock_db):
     }
 
 
+@patch("os.path.getsize", return_value=10)
 def test_parse_ti_feed_valid_data(mocker, mock_db):
     """
     Test parse_ti_feed with valid data
@@ -664,14 +669,27 @@ def test_parse_ti_feed_valid_data(mocker, mock_db):
     }
     test_data = """# Comment
     1.2.3.4,Test description
-    example.com,Another description
-    """
-    mocker.patch("builtins.open", mock_open(read_data=test_data))
-    result = update_manager.parse_ti_feed(
-        "https://example.com/test.txt", "test.txt"
+    example.com,Another description"""
+    with patch("builtins.open", mock_open(read_data=test_data)):
+        result = update_manager.parse_ti_feed(
+            "https://example.com/test.txt", "test.txt"
+        )
+    mock_db.add_ips_to_IoC.assert_any_call(
+        {
+            "1.2.3.4": '{"description": "Test description", '
+            '"source": "test.txt", '
+            '"threat_level": "low", '
+            '"tags": ["tag3"]}'
+        }
     )
-    mock_db.add_ips_to_IoC.assert_any_call(mocker.ANY)
-    mock_db.add_domains_to_IoC.assert_any_call({"example.com": mocker.ANY})
+    mock_db.add_domains_to_IoC.assert_any_call(
+        {
+            "example.com": '{"description": "Another description",'
+            ' "source": "test.txt",'
+            ' "threat_level": "low", '
+            '"tags": ["tag3"]}'
+        }
+    )
     assert result is True
 
 
