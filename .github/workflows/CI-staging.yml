@@ -111,6 +111,12 @@ jobs:
               coverage report  --include="modules/network_discovery/vertical_portscan.py*"
               coverage html  --include="modules/network_discovery/vertical_portscan.py*" -d coverage_reports/vertical_portscan
 
+          - name: evidence Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_evidence.py -p no:warnings -vv
+              coverage report  --include="slips_files/core/evidence_structure/evidence.py*"
+              coverage html  --include="slips_files/core/evidence_structure/evidence.py*" -d coverage_reports/evidence_structure   
+
           - name: Virustotal Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_virustotal.py -p no:warnings -vv
