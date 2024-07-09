@@ -319,11 +319,19 @@ def dict_to_evidence(evidence: dict):
     evidence_attributes = {
         "evidence_type": EvidenceType[evidence["evidence_type"]],
         "description": evidence["description"],
-        "attacker": Attacker(**evidence["attacker"]),
+        "attacker": Attacker(
+            direction=Direction[evidence["attacker"]["direction"]],
+            attacker_type=IoCType[evidence["attacker"]["attacker_type"]],
+            value=evidence["attacker"]["value"],
+        ),
         "threat_level": ThreatLevel[evidence["threat_level"].upper()],
         "category": IDEACategory[evidence["category"]],
         "victim": (
-            Victim(**evidence["victim"])
+            Victim(
+                direction=Direction[evidence["victim"]["direction"]],
+                victim_type=IoCType[evidence["victim"]["victim_type"]],
+                value=evidence["victim"]["value"],
+            )
             if "victim" in evidence and evidence["victim"]
             else None
         ),
