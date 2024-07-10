@@ -216,12 +216,29 @@ class HorizontalPortscan:
         broadcast or multicast addresses or invalid values
         """
         saddr = profileid.split("_")[1]
-        if saddr == "255.255.255.255":
-            return False
-
         if validators.ipv4(saddr) or validators.ipv6(saddr):
             saddr_obj = ipaddress.ip_address(saddr)
-            return not saddr_obj.is_multicast
+            network = ipaddress.ip_network(saddr, strict=False)
+            return (
+                not saddr_obj.is_multicast
+                and not saddr == network.broadcast_address
+            )
+
+        return False
+
+    @staticmethod
+    def is_valid_daddr(daddr: str):
+        """
+        to avoid reporting port scans on the
+        broadcast or multicast addresses or invalid values
+        """
+        if validators.ipv4(daddr) or validators.ipv6(daddr):
+            daddr_obj = ipaddress.ip_address(daddr)
+            network = ipaddress.ip_network(daddr, strict=False)
+            return (
+                not daddr_obj.is_multicast
+                and not daddr == network.broadcast_address
+            )
 
         return False
 
@@ -251,8 +268,12 @@ class HorizontalPortscan:
                 dstips: dict = dports[dport]["dstips"]
 
                 # remove the resolved dstips from dstips dict
-                for ip in self.get_resolved_ips(dstips):
-                    dstips.pop(ip)
+                resolved_ips = self.get_resolved_ips(dstips)
+                for ip in dstips:
+                    if not self.is_valid_daddr(ip):
+                        dstips.pop(ip)
+                    if ip in resolved_ips:
+                        dstips.pop(ip)
 
                 twid_identifier: str = self.get_twid_identifier(
                     profileid, twid, dport
