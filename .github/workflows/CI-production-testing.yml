@@ -63,6 +63,11 @@ jobs:
       run: |
         python3 -m pytest tests/test_downloaded_file.py -p no:warnings -vv
 
+
+    - name: SSL Unit Tests
+      run: |
+        python3 -m pytest tests/test_ssl.py -p no:warnings -vv
+
     - name: Tunnel Unit Tests
       run: |
         python3 -m pytest tests/test_tunnel.py -p no:warnings -vv
