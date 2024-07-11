@@ -1,4 +1,5 @@
 import ipaddress
+from typing import List
 
 import validators
 
@@ -16,6 +17,8 @@ from slips_files.core.evidence_structure.evidence import (
     IDEACategory,
     Tag,
 )
+
+BROADCAST_ADDR = "255.255.255.255"
 
 
 class HorizontalPortscan:
@@ -218,11 +221,7 @@ class HorizontalPortscan:
         saddr = profileid.split("_")[1]
         if validators.ipv4(saddr) or validators.ipv6(saddr):
             saddr_obj = ipaddress.ip_address(saddr)
-            network = ipaddress.ip_network(saddr, strict=False)
-            return (
-                not saddr_obj.is_multicast
-                and not saddr == network.broadcast_address
-            )
+            return not saddr_obj.is_multicast and saddr != BROADCAST_ADDR
 
         return False
 
@@ -234,17 +233,31 @@ class HorizontalPortscan:
         """
         if validators.ipv4(daddr) or validators.ipv6(daddr):
             daddr_obj = ipaddress.ip_address(daddr)
-            network = ipaddress.ip_network(daddr, strict=False)
-            return (
-                not daddr_obj.is_multicast
-                and not daddr == network.broadcast_address
-            )
+            return not daddr_obj.is_multicast and daddr != "255.255.255.255"
 
         return False
 
     @staticmethod
     def is_valid_twid(twid: str) -> bool:
         return not (twid in ("", None) or "timewindow" not in twid)
+
+    def filter_dstips(self, dstips: dict) -> dict:
+        """
+        returns the given dict of dstips without resolved IPs, broadcast,
+        and multicast addrs
+        """
+        resolved_ips: List[str] = self.get_resolved_ips(dstips)
+        dstips_to_discard = []
+        for ip in dstips:
+            if not self.is_valid_daddr(ip):
+                dstips_to_discard.append(ip)
+            if ip in resolved_ips:
+                dstips_to_discard.append(ip)
+
+        for ip in dstips_to_discard:
+            dstips.pop(ip)
+
+        return dstips
 
     def check(self, profileid: str, twid: str):
         if not self.is_valid_saddr(profileid) or not self.is_valid_twid(twid):
@@ -267,19 +280,14 @@ class HorizontalPortscan:
                 # PortScan Type 2. Direction OUT
                 dstips: dict = dports[dport]["dstips"]
 
-                # remove the resolved dstips from dstips dict
-                resolved_ips = self.get_resolved_ips(dstips)
-                for ip in dstips:
-                    if not self.is_valid_daddr(ip):
-                        dstips.pop(ip)
-                    if ip in resolved_ips:
-                        dstips.pop(ip)
+                dstips: dict = self.filter_dstips(dstips)
 
                 twid_identifier: str = self.get_twid_identifier(
                     profileid, twid, dport
                 )
                 if not twid_identifier:
                     continue
+
                 amount_of_dips = len(dstips)
 
                 if self.check_if_enough_dstips_to_trigger_an_evidence(
