@@ -14,7 +14,7 @@ import signal
 )
 def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     # no need to test interfaces because in that case read_zeek_files runs in a loop and never returns
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         input_information, input_type, mock_db
     )
     input.zeek_pid = "False"
@@ -34,7 +34,7 @@ def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     ],
 )
 def test_is_growing_zeek_dir(zeek_dir: str, is_tabs: bool, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         zeek_dir, "zeek_folder", mock_db
     )
     mock_db.get_all_zeek_files.return_value = [
@@ -52,7 +52,7 @@ def test_is_growing_zeek_dir(zeek_dir: str, is_tabs: bool, mock_db):
     ],
 )
 def test_is_zeek_tabs_file(path: str, expected_val: bool, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         path, "zeek_folder", mock_db
     )
     assert input.is_zeek_tabs_file(path) == expected_val
@@ -68,7 +68,7 @@ def test_is_zeek_tabs_file(path: str, expected_val: bool, mock_db):
     ],
 )
 def test_handle_zeek_log_file(input_information, mock_db, expected_output):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         input_information, "zeek_log_file", mock_db
     )
     assert input.handle_zeek_log_file() == expected_output
@@ -88,7 +88,7 @@ def test_cache_nxt_line_in_file(
     :param line_cached: should slips cache
     the first line of this file or not
     """
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         path, "zeek_log_file", mock_db
     )
     input.cache_lines = {}
@@ -143,7 +143,7 @@ def test_cache_nxt_line_in_file(
 def test_get_ts_from_line(
     path: str, is_tabs: str, zeek_line: str, expected_val: float, mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         path, "zeek_log_file", mock_db
     )
     input.is_zeek_tabs = is_tabs
@@ -162,7 +162,7 @@ def test_get_ts_from_line(
 def test_reached_timeout(
     last_updated_file_time, now, bro_timeout, expected_val, mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     input.last_updated_file_time = last_updated_file_time
@@ -178,12 +178,12 @@ def test_reached_timeout(
 )
 @pytest.mark.parametrize("path", [("dataset/test1-normal.nfdump")])
 def test_handle_nfdump(path, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(path, "nfdump", mock_db)
+    input = ModuleFactory().create_input_obj(path, "nfdump", mock_db)
     assert input.handle_nfdump() is True
 
 
 def test_get_earliest_line(mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     input.file_time = {
@@ -218,7 +218,7 @@ def test_get_earliest_line(mock_db):
 def test_get_flows_number(
     path: str, is_tabs: bool, expected_val: int, mock_db
 ):
-    input = ModuleFactory().create_inputProcess_obj(path, "nfdump", mock_db)
+    input = ModuleFactory().create_input_obj(path, "nfdump", mock_db)
     input.is_zeek_tabs = is_tabs
     assert input.get_flows_number(path) == expected_val
 
@@ -231,7 +231,7 @@ def test_get_flows_number(
     ],
 )
 def test_handle_binetflow(input_type, input_information, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         input_information, input_type, mock_db
     )
     with patch.object(input, "get_flows_number", return_value=5):
@@ -243,7 +243,7 @@ def test_handle_binetflow(input_type, input_information, mock_db):
     [("dataset/test6-malicious.suricata.json")],
 )
 def test_handle_suricata(input_information, mock_db):
-    inputProcess = ModuleFactory().create_inputProcess_obj(
+    inputProcess = ModuleFactory().create_input_obj(
         input_information, "suricata", mock_db
     )
     assert inputProcess.handle_suricata() is True
@@ -286,7 +286,7 @@ def test_handle_suricata(input_information, mock_db):
     ],
 )
 def test_read_from_stdin(line_type: str, line: str, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         line_type,
         "stdin",
         mock_db,
@@ -338,7 +338,7 @@ def test_give_profiler(
     mock_db, line, input_type, expected_line, expected_input_type
 ):
     """Test that the give_profiler function correctly sends the given line to the profiler queue."""
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", input_type, mock_db
     )
     input_process.total_flows = (
@@ -389,7 +389,7 @@ def test_is_ignored_file(filepath, expected_result, mock_db):
     Test that the is_ignored_file method correctly
     identifies ignored Zeek log files.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     assert input_process.is_ignored_file(filepath) == expected_result
@@ -400,7 +400,7 @@ def test_get_file_handle_existing_file(mock_db):
     Test that the get_file_handle method correctly
     returns the file handle for an existing file.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     filename = "test_file.log"
@@ -423,7 +423,7 @@ def test_get_file_handle_existing_file(mock_db):
     ],
 )
 def test_stop_observer(zeek_dir: str, mock_db):
-    input = ModuleFactory().create_inputProcess_obj(
+    input = ModuleFactory().create_input_obj(
         zeek_dir, "zeek_folder", mock_db
     )
     mock_db.get_all_zeek_files.return_value = [
@@ -441,7 +441,7 @@ def test_shutdown_gracefully_all_components_active(mock_db):
     """
     Test shutdown_gracefully when all components (open files, zeek, remover thread) are active.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     input_process.stop_observer = MagicMock(return_value=True)
@@ -465,7 +465,7 @@ def test_shutdown_gracefully_no_open_files(mock_db):
     """
     Test shutdown_gracefully when there are no open files.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     input_process.stop_observer = MagicMock(return_value=True)
@@ -488,7 +488,7 @@ def test_shutdown_gracefully_zeek_not_running(mock_db):
     """
     Test shutdown_gracefully when Zeek is not running.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     input_process.stop_observer = MagicMock(return_value=True)
@@ -510,7 +510,7 @@ def test_shutdown_gracefully_remover_thread_not_running(mock_db):
     """
     Test shutdown_gracefully when the remover thread is not running.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     input_process.stop_observer = MagicMock(return_value=True)
@@ -530,7 +530,7 @@ def test_shutdown_gracefully_remover_thread_not_running(mock_db):
 
 def test_stop_queues(mock_db):
     """Test that the stop_queues method correctly cancels the join thread for the profiler queue."""
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     input_process.profiler_queue = MagicMock()
@@ -540,7 +540,7 @@ def test_stop_queues(mock_db):
 
 def test_close_all_handles(mock_db):
     """Test that the close_all_handles method closes all open file handles."""
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     mock_handle1 = MagicMock()
@@ -560,7 +560,7 @@ def test_shutdown_gracefully_no_zeek_pid(mock_db):
     """
     Test shutdown_gracefully when the Zeek PID is not set.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     input_process.stop_observer = MagicMock(return_value=True)
@@ -581,7 +581,7 @@ def test_get_file_handle_non_existing_file(mock_db):
     """
     Test that the get_file_handle method returns False for a non-existing file.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     filename = "non_existing_file.log"
@@ -610,7 +610,7 @@ def test__make_gen(data, expected_chunks, mock_db):
     """
     Test that the _make_gen function yields chunks of data from a file.
     """
-    input_process = ModuleFactory().create_inputProcess_obj(
+    input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
     reader = MagicMock(side_effect=[*expected_chunks, b""])
