@@ -374,6 +374,12 @@ class Utils(object):
             )
         )
 
+    def remove_non_printable_chars(self, txt) -> str:
+        """
+        removes all non-printable chars from the given txt
+        """
+        return "".join(filter(lambda x: x.isprintable(), txt))
+
     def get_sha256_hash(self, filename: str):
         """
         Compute the sha256 hash of a file

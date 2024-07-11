@@ -59,6 +59,35 @@ jobs:
       run: |
         python3 -m pytest tests/test_flowalerts.py -p no:warnings -vv
 
+    - name: downloaded_file Unit Tests
+      run: |
+        python3 -m pytest tests/test_downloaded_file.py -p no:warnings -vv
+
+
+    - name: SSL Unit Tests
+      run: |
+        python3 -m pytest tests/test_ssl.py -p no:warnings -vv
+
+    - name: Tunnel Unit Tests
+      run: |
+        python3 -m pytest tests/test_tunnel.py -p no:warnings -vv
+
+    - name: dns Unit Tests
+      run: |
+        python3 -m pytest tests/test_dns.py -p no:warnings -vv
+
+    - name: Notice Unit Tests
+      run: |
+        python3 -m pytest tests/test_notice.py -p no:warnings -vv
+
+    - name: software Unit Tests
+      run: |
+        python3 -m pytest tests/test_software.py -p no:warnings -vv
+
+    - name: smtp Unit Tests
+      run: |
+        python3 -m pytest tests/test_smtp.py -p no:warnings -vv
+
     - name: Whitelist Unit Tests
       run: |
         python3 -m pytest tests/test_whitelist.py -p no:warnings -vv
@@ -121,15 +150,7 @@ jobs:
 
     - name: urlhaus Unit Tests
       run: |
-        coverage run --source=./ -m pytest tests/test_urlhaus.py -p no:warnings -vv
-        coverage report  --include="modules/threat_intelligence/urlhaus.py*"
-        coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/ip_info
-
-    - name: urlhaus Unit Tests
-      run: |
-        coverage run --source=./ -m pytest tests/test_urlhaus.py -p no:warnings -vv
-        coverage report  --include="modules/threat_intelligence/urlhaus.py*"
-        coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/ip_info
+        python3 -m pytest tests/test_urlhaus.py -p no:warnings -vv
 
     - name: Input Unit Tests
       run: |
