@@ -353,3 +353,6 @@ class ModuleFactory:
         """Create an instance of SetEvidenceHelper."""
         set_evidence_helper = SetEvidnceHelper(mock_db)
         return set_evidence_helper
+
+    def create_output_obj(stop_daemon=True):
+        return Output(stop_daemon=True)   
