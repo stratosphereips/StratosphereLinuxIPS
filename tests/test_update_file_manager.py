@@ -87,7 +87,7 @@ def test_check_if_update_local_file(
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
 
     mocker.patch(
-        "slips_files.common.slips_utils.Utils.get_hash_from_file",
+        "slips_files.common.slips_utils.Utils.get_sha256_hash",
         return_value=new_hash,
     )
     mock_db.get_TI_file_info.return_value = {"hash": old_hash}
@@ -730,7 +730,7 @@ def test_check_if_update_org(
 
     mock_db.get_TI_file_info.return_value = {"hash": cached_hash}
     mocker.patch(
-        "slips_files.common." "slips_utils.Utils.get_hash_from_file",
+        "slips_files.common." "slips_utils.Utils.get_sha256_hash",
         return_value=hash(file_content.encode()),
     )
     result = update_manager.check_if_update_org("test_org")
