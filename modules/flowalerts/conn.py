@@ -388,7 +388,7 @@ class Conn(IFlowalertsAnalyzer):
         # private ip or in the list of client_ips
         return (
             flow_type != "conn"
-            or appproto == "dns"
+            or appproto in ("dns", "icmp")
             or utils.is_ignored_ip(daddr)
             # if the daddr is a client ip, it means that this is a conn
             # from the internet to our ip, the dns res was probably
