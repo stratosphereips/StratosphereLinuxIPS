@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from datetime import datetime
 import optuna
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.layers import Dense, Dropout, Input, Reshape
 import matplotlib.pyplot as plt
 # Author sebastian garcia, eldraco@gmail.com
 
@@ -21,6 +21,7 @@ def get_model_GRU_int_encode (vocabulary_size, embed_dim, first_layer, second_la
     """
     model = tf.keras.models.Sequential()
     model.add(layers.Embedding(vocabulary_size, embed_dim, mask_zero=True))
+    model.add(layers.Reshape((500, embed_dim)))
     # GRU is the main RNN layer, inputs: A 3D tensor, with shape [batch, timesteps, feature]
     model.add(
         layers.Bidirectional(
@@ -119,7 +120,7 @@ def train():
         x_data, maxlen=max_length_of_outtupple, padding="post"
     )
     print(
-            f"padded_x_data is of type {type(padded_x_data)}, of shape {padded_x_data.shape}. padded_x_data[0] type is {type(padded_x_data[0])}. Shape of second list is {padded_x_data[0].shape}"
+            f"Padded_x_data is of type {type(padded_x_data)}, of shape {padded_x_data.shape}. padded_x_data[0] type is {type(padded_x_data[0])}. Shape of second list is {padded_x_data[0].shape}"
         )
 
     # Split the data in training/evaluation and testing
@@ -140,8 +141,11 @@ def train():
     # The amount of time steps is the amount of letters, since one letter is one time step, which is the amount of letters max, which 500
     input_shape = (num_outtuples, features_per_sample)
     print(
-        f"We have as shape: Num of samples: {num_outtuples}, Num of letters per sample (timesteps): {max_length_of_outtupple}, each letter has {features_per_sample} values. The input shape is {input_shape}"
+        f"We have as shape: Num of samples in train/eval: {num_outtuples}, Num of letters per sample (timesteps): {max_length_of_outtupple}, each letter has {features_per_sample} values. The input shape is {input_shape}"
     )
+
+    input_data = Input(shape=(500, 1, 64))
+    reshaped_input = Reshape((500, 64))(input_data)
 
     # Model being explored. Used for file name creation.
     model_trained = args.model_version
@@ -168,6 +172,7 @@ def train():
             
             # Load dataset
             X_traineval, X_test, y_traineval, y_test = train_test_split(x_data, y_data, test_size=0.2, random_state=42)    
+            print(f'X_traineval shape: {X_traineval.shape}, X_test shape: {X_test.shape}, y_traineval shape: {y_traineval.shape}, y_test shape: {y_test.shape}')
             
             # Create the model of RNN
             model = get_model_GRU_int_encode(vocabulary_size, embed_dim, first_layer, second_layer, dropout_rate)
@@ -208,12 +213,14 @@ def train():
         print('Training the model with good hyperparameters')
         # Now that you now the Hyperparameters, you can train a larger model
         embed_dim = args.embed_dim
+        print(f'X_traineval shape: {X_traineval.shape}, X_test shape: {X_test.shape}, y_traineval shape: {y_traineval.shape}, y_test shape: {y_test.shape}. Embed_dim: {embed_dim}')
 
         # Create the model of RNN
         model = tf.keras.models.Sequential()
         model.add(layers.Embedding(vocabulary_size, embed_dim, mask_zero=True))
         # GRU is the main RNN layer, inputs: A 3D tensor, with shape [batch, timesteps, feature]
         # Change the first layer too
+        model.add(layers.Reshape((500, embed_dim)))
         model.add(
             layers.Bidirectional(
                 layers.GRU(32, return_sequences=False), merge_mode="concat"
@@ -253,7 +260,8 @@ def train():
         else:
             model_outputfile = f'rnn_model_{model_trained}_2024-04-20.h5'
         print(model.summary())
-        model.save(model_outputfile, overwrite=False)
+        #model.save(model_outputfile, overwrite=False)
+        keras.saving.save_model(model, model_outputfile)
         
         # Plots
         # To plot the results of training
