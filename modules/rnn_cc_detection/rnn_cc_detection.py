@@ -173,6 +173,7 @@ class CCDetection(IModule):
 
     def handle_new_letters(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
+
         msg = msg["data"]
         msg = json.loads(msg)
         pre_behavioral_model = msg["new_symbol"]
@@ -185,15 +186,19 @@ class CCDetection(IModule):
         if "tcp" not in tupleid.lower():
             return
 
+        # to reduce false positives
+        threshold = 0.99
         # function to convert each letter of behavioral model to ascii
-        behavioral_model = self.convert_input_for_module(pre_behavioral_model)
+        behavioral_model = self.convert_input_for_module(
+            pre_behavioral_model
+        )
         # predict the score of behavioral model being c&c channel
         self.print(
             f"predicting the sequence: {pre_behavioral_model}",
             3,
             0,
         )
-        score = self.tcpmodel.predict(behavioral_model)
+        score = self.tcpmodel.predict(behavioral_model, verbose = 0)
         self.print(
             f" >> sequence: {pre_behavioral_model}. "
             f"final prediction score: {score[0][0]:.20f}",
@@ -202,31 +207,35 @@ class CCDetection(IModule):
         )
         # get a float instead of numpy array
         score = score[0][0]
+        if score > threshold:
+            threshold_confidence = 100
+            if len(pre_behavioral_model) >= threshold_confidence:
+                confidence = 1
+            else:
+                confidence = (
+                    len(pre_behavioral_model) / threshold_confidence
+                )
+            uid = msg["uid"]
+            stime = flow["starttime"]
+            self.set_evidence_cc_channel(
+                score,
+                confidence,
+                uid,
+                stime,
+                tupleid,
+                profileid,
+                twid,
+            )
+            to_send = {
+                "attacker_type": utils.detect_data_type(flow["daddr"]),
+                "profileid": profileid,
+                "twid": twid,
+                "flow": flow,
+            }
+            # we only check malicious jarm hashes when there's a CC
+            # detection
+            self.db.publish("check_jarm_hash", json.dumps(to_send))
 
-        # to reduce false positives
-        if score < 0.99:
-            return
-
-        confidence: float = self.get_confidence(pre_behavioral_model)
-
-        self.set_evidence_cc_channel(
-            score,
-            confidence,
-            msg["uid"],
-            flow["starttime"],
-            tupleid,
-            profileid,
-            twid,
-        )
-        to_send = {
-            "attacker_type": utils.detect_data_type(flow["daddr"]),
-            "profileid": profileid,
-            "twid": twid,
-            "flow": flow,
-        }
-        # we only check malicious jarm hashes when there's a CC
-        # detection
-        self.db.publish("check_jarm_hash", json.dumps(to_send))
 
     def handle_tw_closed(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
@@ -250,72 +259,5 @@ class CCDetection(IModule):
     def main(self):
         if msg := self.get_msg("new_letters"):
             self.handle_new_letters(msg)
-
-            if "tcp" in tupleid.lower():
-                # to reduce false positives
-                threshold = 0.99
-                # function to convert each letter of behavioral model to ascii
-                behavioral_model = self.convert_input_for_module(
-                    pre_behavioral_model
-                )
-                # predict the score of behavioral model being c&c channel
-                self.print(
-                    f"predicting the sequence: {pre_behavioral_model}",
-                    3,
-                    0,
-                )
-                score = self.tcpmodel.predict(behavioral_model, verbose = 0)
-                self.print(
-                    f" >> sequence: {pre_behavioral_model}. "
-                    f"final prediction score: {score[0][0]:.20f}",
-                    3,
-                    0,
-                )
-                # get a float instead of numpy array
-                score = score[0][0]
-                if score > threshold:
-                    threshold_confidence = 100
-                    if len(pre_behavioral_model) >= threshold_confidence:
-                        confidence = 1
-                    else:
-                        confidence = (
-                            len(pre_behavioral_model) / threshold_confidence
-                        )
-                    uid = msg["uid"]
-                    stime = flow["starttime"]
-                    self.set_evidence_cc_channel(
-                        score,
-                        confidence,
-                        uid,
-                        stime,
-                        tupleid,
-                        profileid,
-                        twid,
-                    )
-                    to_send = {
-                        "attacker_type": utils.detect_data_type(flow["daddr"]),
-                        "profileid": profileid,
-                        "twid": twid,
-                        "flow": flow,
-                    }
-                    # we only check malicious jarm hashes when there's a CC
-                    # detection
-                    self.db.publish("check_jarm_hash", json.dumps(to_send))
-
-            """
-            elif 'udp' in tupleid.lower():
-                # Define why this threshold
-                threshold = 0.7
-                # function to convert each letter of behavioral model to ascii
-                behavioral_model = self.convert_input_for_module(pre_behavioral_model)
-                # predict the score of behavioral model being c&c channel
-                self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
-                score = udpmodel.predict(behavioral_model)
-                self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
-                # get a float instead of numpy array
-                score = score[0][0]
-                if score > threshold:
-                    self.set_evidence(score, tupleid, profileid, twid)
-            """
         elif msg := self.get_msg("tw_closed"):
             self.handle_tw_closed(msg)
