@@ -1,29 +1,18 @@
 # RNN Command and Control detection for Slips
-
 This is the code of the module plus training programs of the RNN neural network that detects command and control channels in Slips.
 
-This model is a GRU RNN.
-
-
-# Who gets alerted
-The C&C alert from this module is used to alert on the source of the connection, and also the destination of the connection. 
+There are several models that we have been trying. Each model is documented here with a version number and training performance. 
 
 # Who gets alerted
-The C&C alert from this module is used to alert on the source of the connection, and also the destination of the connection. 
-
-# Who gets alerted
-The C&C alert from this module is used to alert on the source of the connection, and also the destination of the connection. 
-
-# Who gets alerted
-The C&C alert from this module is used to alert on the source of the connection, and also the destination of the connection. 
+The C&C alert from this module is used to alert on the __source__ of the connection, and also the __destination__ of the connection. 
 
 # Machine Learning models
 
 ## v1. Embedding + GRU
-The first ML model we implemened is v1.
+The first ML model we implemened is v1. It is a bidirectional GRU network.
 
 ### Features
-- Each letter is encoded to an integer
+- Each letter is encoded to an integer.
 - All 4-tuples have a max length of 500 letters.
 - All 4-tuples are padded to have the same length. Pad is done with integer 0.
 
@@ -59,7 +48,7 @@ The summary is
 
 ### Train Performance
 
-The final train performance after 100 epochs is
+The final train performance after 100 epochs is:
 
 train_loss: 0.1652
 val_loss: 0.4539
@@ -72,14 +61,14 @@ val_accuracy: 0.8296
 ![Stratosphere Linux IPS (Slips) - Frame 1](https://github.com/stratosphereips/StratosphereLinuxIPS/assets/2458867/eba4021a-4c54-4523-9380-fb179526d808)
 
 ### Test Performance
-Test Generatilization Results:
-Test Loss: 0.17785538733005524
-Test Accuracy: 0.926008939743042
+        Test Loss: 0.17785538733005524
+        Test Accuracy: 0.926008939743042
 
 
 
+---
 ## v1.1 Embedding + GRU
-Same as model v1 but with better separation of train and evaluation datasets. And the new test dataset.
+Same as model v1 but with better separation of train and evaluation datasets, the new test dataset and the use of an embedding layer.
 
 ## Train performance
 loss: 0.2159 - accuracy: 0.9089 - val_loss: 0.2114 - val_accuracy: 0.8994
@@ -88,12 +77,11 @@ loss: 0.2159 - accuracy: 0.9089 - val_loss: 0.2114 - val_accuracy: 0.8994
 ![Loss](docs/rnn_model_v1.1-2024-04-20.loss.png)
 
 ## Test performance
-
-Test Generatilization Results:
-Test Loss: 0.2069242298603058
-Test Accuracy: 0.9035874605178833
+        Test Loss: 0.2069242298603058
+        Test Accuracy: 0.9035874605178833
 
 
+---
 ## v1.2 Embedding + GRU
 Same as v1 but with different hyperparameters found by optuna.
 
@@ -128,17 +116,17 @@ Found hyperparameters with optuna
 ![Loss](docs/rnn_model_v1.2-2024-04-21.loss.png)
 
 ## Testing
-
-Test Generatilization Results:
-Test Loss: 1.2258477210998535
-Test Accuracy: 0.9304932951927185
+        Test Loss: 1.2258477210998535
+        Test Accuracy: 0.9304932951927185
 
 
+---
 # v1.3 Embedding + GRU
 A test model that was rapidly superseded
 
 
 
+---
 # v.1.4 Embedding + GRU
 As v1, but more optimization with optuna.
 
@@ -168,9 +156,45 @@ Non-trainable params: 0 (0.00 Byte)
 
 
 ## Testing
-Test Generatilization Results:
-Test Loss: 0.5616011023521423
-Test Accuracy: 0.939461886882782
+        Test Loss: 0.5616011023521423
+        Test Accuracy: 0.939461886882782
+
+
+---
+# v.1.5 Embedding + GRU
+As v1, with more optimization with optuna (500 searches) and trained on Docker on Linux for python 3.10.12. This model works in Docker for Linux and Docker for macos M1.
+
+## Training
+Model: "sequential"
+
+        ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+        ┃ Layer (type)                         ┃ Output Shape                ┃         Param # ┃
+        ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+        │ embedding (Embedding)                │ (None, 500, 1, 94)          │           4,700 │
+        ├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+        │ reshape_1 (Reshape)                  │ (None, 500, 94)             │               0 │
+        ├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+        │ bidirectional (Bidirectional)        │ (None, 32)                  │          10,752 │
+        ├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+        │ dense (Dense)                        │ (None, 24)                  │             792 │
+        ├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+        │ dropout (Dropout)                    │ (None, 24)                  │               0 │
+        ├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+        │ dense_1 (Dense)                      │ (None, 1)                   │              25 │
+        └──────────────────────────────────────┴─────────────────────────────┴─────────────────┘
+ Total params: 48,809 (190.66 KB)
+ Trainable params: 16,269 (63.55 KB)
+ Non-trainable params: 0 (0.00 B)
+ Optimizer params: 32,540 (127.11 KB)
+
+## Testing 
+        Test Loss: 0.47594040632247925
+        Test Accuracy: 0.9304932951927185
+
+![Acc](docs/rnn_model_v1.5-2024-07-13.acc.png)
+![Loss](docs/rnn_model_v1.5-2024-07-13.loss.png)
+
+
 
 
 
