@@ -44,6 +44,32 @@ jobs:
               coverage report  --include="modules/flowalerts/*"
               coverage html  --include="modules/flowalerts/*" -d coverage_reports/flowalerts
 
+          - name: Tunnel  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_tunnel.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/tunnel.py*"
+              coverage html  --include="modules/flowalerts/tunnel.py*" -d coverage_reports/flowalerts
+
+
+          - name: Downloaded_file  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_downloaded_file.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/downloaded_file.py*"
+              coverage html  --include="modules/flowalerts/downloaded_file.py*" -d coverage_reports/flowalerts
+
+          - name: ssl  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_ssl.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/ssl.py*"
+              coverage html  --include="modules/flowalerts/ssl.py*" -d coverage_reports/flowalerts
+
+          - name: SSH  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_ssh.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/ssh.py*"
+              coverage html  --include="modules/flowalerts/ssh.py*" -d coverage_reports/flowalerts
+
+
           - name: dns  Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_dns.py -p no:warnings -vv
@@ -56,6 +82,18 @@ jobs:
               coverage report  --include="modules/flowalerts/notice.py*"
               coverage html  --include="modules/flowalerts/notice.py*" -d coverage_reports/flowalerts
 
+          - name: Software  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_software.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/software.py*"
+              coverage html  --include="modules/flowalerts/software.py*" -d coverage_reports/flowalerts
+
+
+          - name: Smtp  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_smtp.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/smtp.py*"
+              coverage html  --include="modules/flowalerts/smtp.py*" -d coverage_reports/flowalerts
 
           - name: Whitelist  Unit Tests
             run: |

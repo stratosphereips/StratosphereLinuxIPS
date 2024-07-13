@@ -767,7 +767,7 @@ since in most port scans the attcker will scan more ports. This avoids generatin
 
 If one alert was generated (Slips waited 10 seconds and no more flows arrived to new IPs) then the counter resets and the same attacker needs to do _again_ more than threshold destinations IPs in the same port to be detected. This avoids the problem that after 6 flows that generated an alert, the 7 flow also generates an alert.
 
-Slips ignores the broadcast IP 255.255.255.255 has destination of port scans.
+Slips ignores the broadcast IP 255.255.255.255 if it's the source or the destination of horizontal port scans.
 
 
 ### PING Sweeps

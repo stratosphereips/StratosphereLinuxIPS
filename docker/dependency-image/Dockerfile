@@ -38,21 +38,18 @@ RUN apt update && apt install -y --no-install-recommends \
  && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list
 
 
+
 # Install Slips dependencies.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
+    software-properties-common \
     zeek \
     redis \
-    python3-pip \
-    python3-certifi \
-    python3-dev \
     build-essential \
     file \
     lsof \
     net-tools \
     iptables \
     iproute2 \
-    python3-tzlocal \
     nfdump \
     tshark \
     git \
@@ -61,15 +58,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
+
+RUN add-apt-repository ppa:deadsnakes/ppa -y  \
+    && apt update \
+    && apt install -y python3.10 python3.10-venv python3.10-dev \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10  \
+    &&  apt install -y python3-tzlocal python3-certifi
+
 # you should build the image using
 # docker build --no-cache -t slips_dependencies -f docker/dependency-image/Dockerfile .
 # or this step won't be able to find requirements.txt
 COPY install/requirements.txt ${SLIPS_DIR}/install/requirements.txt
 
-# we're excluding black here because it has conflicts with the tensorflow version required in requirements.txt
-# this is temporary until we upgrade tensorflow to the latest version
-RUN pip3 install --no-cache-dir --upgrade pip  \
-    && grep -v 'black' ${SLIPS_DIR}/install/requirements.txt | xargs pip3 install  --no-cache-dir
+WORKDIR ${SLIPS_DIR}
+
+RUN pip3 install -r install/requirements.txt
 
 
 CMD redis-server --daemonize yes && /bin/bash

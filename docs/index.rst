@@ -33,6 +33,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Code documentation**. Auto generated slips code documentation See :doc:`Code docs <code_documentation>`.
 
+- **Datasets**. The folder `dataset` contains some testing datasets for you to try. See :doc:`Datasets <datasets>`.
 
 
 
@@ -57,5 +58,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    create_new_module
    FAQ
    code_documentation
+   datasets
+
 
 
