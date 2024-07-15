@@ -97,16 +97,17 @@ class Utils(object):
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels
 
-    
     def sanitize(self, input_string):
         """
         Sanitize strings taken from the user
         """
         characters_to_remove = set(";`&|$\n()")
         input_string = input_string.strip()
-        remove_characters = str.maketrans("", "", "".join(characters_to_remove))
+        remove_characters = str.maketrans(
+            "", "", "".join(characters_to_remove)
+        )
         sanitized_string = input_string.translate(remove_characters)
-        
+
         return sanitized_string
 
     def detect_data_type(self, data):
@@ -374,12 +375,6 @@ class Utils(object):
             )
         )
 
-    def remove_non_printable_chars(self, txt) -> str:
-        """
-        removes all non-printable chars from the given txt
-        """
-        return "".join(filter(lambda x: x.isprintable(), txt))
-
     def get_sha256_hash(self, filename: str):
         """
         Compute the sha256 hash of a file
@@ -551,4 +546,3 @@ class Utils(object):
 
 
 utils = Utils()
-
