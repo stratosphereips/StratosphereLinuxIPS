@@ -255,6 +255,7 @@ If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker i
 	docker run -it --rm --net=host slips
 	./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
 
+
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
 
 	docker build --network=host --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
