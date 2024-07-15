@@ -36,6 +36,7 @@ from multiprocessing import Queue, Event, Semaphore
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
+from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
 
@@ -353,3 +354,9 @@ class ModuleFactory:
         """Create an instance of SetEvidenceHelper."""
         set_evidence_helper = SetEvidnceHelper(mock_db)
         return set_evidence_helper
+
+    def create_network_discovery_obj(self, mock_db):
+        with patch('modules.network_discovery.network_discovery.NetworkDiscovery.__init__', return_value=None):
+            network_discovery = NetworkDiscovery(mock_db)
+            network_discovery.db = mock_db 
+        return network_discovery
