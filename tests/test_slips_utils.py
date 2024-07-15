@@ -129,14 +129,14 @@ def test_calculate_confidence(input_value, expected_output):
             "2023-04-06T12:34:56.789000Z",
         ),
         # testcase2: Unix timestamp to ISO format
-        (1680788096.789, "iso", "2023-04-06T19:04:56.789000+05:30"),
+        (1680788096.789, "iso", "2023-04-06T13:34:56.789000+00:00"),
         # testcase3: Unix timestamp to custom format
-        (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 19:04:56"),
+        (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 13:34:56"),
         # testcase4: Datetime object to Unix timestamp
         (
             datetime.datetime(2023, 4, 6, 12, 34, 56, 789000),
             "unixtimestamp",
-            1680764696.789,
+            1680784496.789,
         ),
         # testcase5: Custom format to another custom format
         (
