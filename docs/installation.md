@@ -251,7 +251,7 @@ If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker i
 
 
 	cd ~/StratosphereLinuxIPS
-	docker build --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
+	docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
 	docker run -it --rm --net=host slips
 	./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
 
