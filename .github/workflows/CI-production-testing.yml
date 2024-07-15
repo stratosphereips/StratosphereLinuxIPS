@@ -63,9 +63,21 @@ jobs:
       run: |
         python3 -m pytest tests/test_conn.py -p no:warnings -vv    
 
+    - name: downloaded_file Unit Tests
+      run: |
+        python3 -m pytest tests/test_downloaded_file.py -p no:warnings -vv
+
+    - name: SSL Unit Tests
+      run: |
+        python3 -m pytest tests/test_ssl.py -p no:warnings -vv
+
     - name: Tunnel Unit Tests
       run: |
-        python3 -m pytest tests/test_tunnel.py -p no:warnings -vv    
+        python3 -m pytest tests/test_tunnel.py -p no:warnings -vv
+
+    - name: SSH Unit Tests
+      run: |
+        python3 -m pytest tests/test_ssh.py -p no:warnings -vv
 
 
     - name: dns Unit Tests
@@ -79,6 +91,10 @@ jobs:
     - name: software Unit Tests
       run: |
         python3 -m pytest tests/test_software.py -p no:warnings -vv
+
+    - name: smtp Unit Tests
+      run: |
+        python3 -m pytest tests/test_smtp.py -p no:warnings -vv
 
     - name: Whitelist Unit Tests
       run: |

@@ -251,13 +251,13 @@ If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker i
 
 
 	cd ~/StratosphereLinuxIPS
-	docker build --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
+	docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
 	docker run -it --rm --net=host slips
 	./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
 
-	docker build --network=host --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
+	docker build --network=host --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
 
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 
