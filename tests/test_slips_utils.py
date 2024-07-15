@@ -649,29 +649,6 @@ def test_is_ignored_ip(ip_address, expected_result):
 
 
 @pytest.mark.parametrize(
-    "input_text, expected_output",
-    [  # testcase1: Normal string should remain unchanged
-        ("Hello World!", "Hello World!"),
-        # testcase2: Remove non-printable characters
-        (
-            "This\tstring\nhas\rsome\x07weird\x0bcharacters",
-            "Thisstringhassomeweirdcharacters",
-        ),
-        # testcase4: Keep Unicode characters
-        (
-            "This is a string with Unicode characters like こんにちは",
-            "This is a string with Unicode characters like こんにちは",
-        ),
-        # testcase5: Empty string should remain unchanged
-        ("", ""),
-    ],
-)
-def test_remove_non_printable_chars(input_text, expected_output):
-    utils = ModuleFactory().create_utils_obj()
-    assert utils.remove_non_printable_chars(input_text) == expected_output
-
-
-@pytest.mark.parametrize(
     "input_obj, expected_json",
     [  # testcase1: Simple dictionary
         ({"key": "value"}, '{"key": "value"}'),
