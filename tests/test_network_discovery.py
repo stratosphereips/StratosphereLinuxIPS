@@ -129,7 +129,10 @@ def test_check_icmp_sweep_unsupported_scan(mocker, mock_db):
                 "profileid": "profile_192.168.1.2",
                 "twid": "timewindow5",
             },
-            {"192.168.1.100": ["uid1234"]},
+            {
+                "192.168.1.100": ["uid1234", "uid2345"],
+                "192.168.1.102": ["uid3456", "uid4567"],
+            },
             1,
             2,
         ),
