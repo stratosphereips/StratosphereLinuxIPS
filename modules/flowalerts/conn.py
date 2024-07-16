@@ -40,7 +40,7 @@ class Conn(IFlowalertsAnalyzer):
         self.long_connection_threshold = conf.long_connection_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
-        self.our_ips = utils.get_own_IPs()
+        self.our_ips = utils.get_own_ips()
         self.client_ips: List[str] = conf.client_ips()
 
     def name(self) -> str:

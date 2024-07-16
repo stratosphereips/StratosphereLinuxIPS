@@ -257,7 +257,7 @@ If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker i
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
 
-	docker build --network=host --no-cache -t slips -f docker/ubunutu-image/Dockerfile .
+	docker build --network=host --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
 
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 
