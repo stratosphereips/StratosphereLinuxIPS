@@ -182,8 +182,12 @@ class CCDetection(IModule):
         # format of the tupleid is daddr-dport-proto
         tupleid = msg["tupleid"]
         flow = msg["flow"]
+        state = flow["state"]
 
         if "tcp" not in tupleid.lower():
+            return
+        
+        if "established" not in state.lower():
             return
 
         # to reduce false positives
