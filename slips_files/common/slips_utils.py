@@ -252,7 +252,7 @@ class Utils(object):
 
         given_format = self.define_time_format(ts)
         return (
-            datetime.fromtimestamp(float(ts))
+            datetime.fromtimestamp(float(ts), tz=self.local_tz)
             if given_format == "unixtimestamp"
             else datetime.strptime(ts, given_format)
         )
