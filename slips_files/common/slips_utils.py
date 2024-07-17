@@ -202,6 +202,7 @@ class Utils(object):
     def convert_format(self, ts, required_format: str):
         """
         Detects and converts the given ts to the given format
+        puts the given ts in the local timezone before converting
         :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
         """
         given_format = self.define_time_format(ts)
@@ -215,11 +216,13 @@ class Utils(object):
 
         # convert to the req format
         if required_format == "iso":
-            return datetime_obj.astimezone().isoformat()
+            return datetime_obj.astimezone(self.local_tz).isoformat()
         elif required_format == "unixtimestamp":
-            return datetime_obj.timestamp()
+            tz_aware = datetime_obj.replace(tzinfo=self.local_tz)
+            return tz_aware.timestamp()
         else:
-            return datetime_obj.strftime(required_format)
+            tz_aware = datetime_obj.replace(tzinfo=self.local_tz)
+            return tz_aware.strftime(required_format)
 
     def get_local_timezone(self):
         """

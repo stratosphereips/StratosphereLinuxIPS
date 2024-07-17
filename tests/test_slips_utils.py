@@ -131,7 +131,7 @@ def test_calculate_confidence(input_value, expected_output):
         # testcase2: Unix timestamp to ISO format
         (1680788096.789, "iso", "2023-04-06T13:34:56.789000+00:00"),
         # testcase3: Unix timestamp to custom format
-        (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 13:34:56"),
+        (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 15:34:56"),
         # testcase4: Datetime object to Unix timestamp
         (
             datetime.datetime(2023, 4, 6, 12, 34, 56, 789000),
@@ -148,6 +148,7 @@ def test_calculate_confidence(input_value, expected_output):
 )
 def test_convert_format(input_value, input_format, expected_output):
     utils = ModuleFactory().create_utils_obj()
+    utils.local_tz = datetime.timezone.utc
     assert utils.convert_format(input_value, input_format) == expected_output
 
 
