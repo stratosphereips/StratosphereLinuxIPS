@@ -202,7 +202,6 @@ class Utils(object):
     def convert_format(self, ts, required_format: str):
         """
         Detects and converts the given ts to the given format
-        puts the given ts in the local timezone before converting
         :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
         """
         given_format = self.define_time_format(ts)
@@ -218,11 +217,9 @@ class Utils(object):
         if required_format == "iso":
             return datetime_obj.astimezone(self.local_tz).isoformat()
         elif required_format == "unixtimestamp":
-            tz_aware = datetime_obj.replace(tzinfo=self.local_tz)
-            return tz_aware.timestamp()
+            return datetime_obj.timestamp()
         else:
-            tz_aware = datetime_obj.replace(tzinfo=self.local_tz)
-            return tz_aware.strftime(required_format)
+            return datetime_obj.strftime(required_format)
 
     def get_local_timezone(self):
         """
@@ -240,14 +237,13 @@ class Utils(object):
         datetime_obj = self.convert_to_datetime(ts)
         return datetime_obj.astimezone(self.local_tz)
 
-    def is_datetime_obj(self, ts):
+    def is_datetime_obj(self, ts) -> bool:
         """
         checks if the given ts is a datetime obj
         """
         try:
-            ts.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
-            return True
-        except AttributeError:
+            return isinstance(ts, datetime)
+        except Exception:
             return False
 
     def convert_to_datetime(self, ts):

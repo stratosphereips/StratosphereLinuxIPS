@@ -134,7 +134,9 @@ def test_calculate_confidence(input_value, expected_output):
         (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 15:34:56"),
         # testcase4: Datetime object to Unix timestamp
         (
-            datetime.datetime(2023, 4, 6, 12, 34, 56, 789000),
+            datetime.datetime(
+                2023, 4, 6, 12, 34, 56, 789000, tzinfo=datetime.timezone.utc
+            ),
             "unixtimestamp",
             1680784496.789,
         ),
