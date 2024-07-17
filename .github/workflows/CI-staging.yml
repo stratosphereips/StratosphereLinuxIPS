@@ -95,9 +95,9 @@ jobs:
               coverage html  --include="modules/flowalerts/smtp.py*" -d coverage_reports/flowalerts
           - name: main  Unit Tests
             run: |
-              coverage run --source=./ -m pytest tests/test_tunnel.py -p no:warnings -vv
-              coverage report  --include="modules/flowalerts/tunnel.py*"
-              coverage html  --include="modules/flowalerts/tunnel.py*" -d coverage_reports/flowalerts    
+              coverage run --source=./ -m pytest tests/test_main.py -p no:warnings -vv
+              coverage report  --include="slips/main.py*"
+              coverage html  --include="slips/main.py*" -d coverage_reports/main    
 
           - name: Whitelist  Unit Tests
             run: |
