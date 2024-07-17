@@ -539,26 +539,31 @@ def test_threat_level_to_string(threat_level, expected_string):
 @pytest.mark.parametrize(
     "ts, expected_local_ts",
     [
-        (  # testcase1: Convert UTC timestamp string to local timezone
+        (  # testcase1: Convert UTC timestamp string to utc timezone
             "2023-04-06T12:34:56.789Z",
             datetime.datetime(
                 2023, 4, 6, 12, 34, 56, 789000, tzinfo=pytz.utc
-            ).astimezone(),
+            ).astimezone(datetime.timezone.utc),
         ),
-        (  # testcase2: Convert Unix timestamp to local timezone
+        (  # testcase2: Convert Unix timestamp to utc timezone
             1680788096.789,
-            datetime.datetime.fromtimestamp(1680788096.789).astimezone(),
+            datetime.datetime.fromtimestamp(1680788096.789).astimezone(
+                datetime.timezone.utc
+            ),
         ),
         (  # testcase3: Handle already timezone-aware datetime object
             datetime.datetime(2023, 4, 6, 12, 34, 56, 789000, tzinfo=pytz.utc),
             datetime.datetime(
                 2023, 4, 6, 12, 34, 56, 789000, tzinfo=pytz.utc
-            ).astimezone(),
+            ).astimezone(datetime.timezone.utc),
         ),
     ],
 )
 def test_convert_to_local_timezone(ts, expected_local_ts):
     utils = ModuleFactory().create_utils_obj()
+    # to ensure this test results in the same behaviour everywhere
+    # so when converting to "local timezone" we always convert to UTC
+    utils.local_tz = datetime.timezone.utc
     expected_local_ts = expected_local_ts.replace(tzinfo=None)
     local_ts = utils.convert_to_local_timezone(ts).replace(tzinfo=None)
     assert local_ts == expected_local_ts
