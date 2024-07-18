@@ -25,7 +25,6 @@ RUN apt update && apt install -y --no-install-recommends \
     whois \
     yara \
     net-tools \
-    git \
     vim \
     less \
  && apt install  -y --no-install-recommends \
