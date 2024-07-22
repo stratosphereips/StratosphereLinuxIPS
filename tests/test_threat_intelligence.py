@@ -99,7 +99,7 @@ def test_check_local_ti_files_for_update(
     )
 
     mock_hash = mocker.patch(
-        "slips_files.common.slips_utils.Utils.get_hash_from_file"
+        "slips_files.common.slips_utils.Utils.get_sha256_hash"
     )
 
     mock_hash.return_value = current_hash
@@ -603,7 +603,7 @@ def test_should_update_local_ti_file(
         threatintel.path_to_local_ti_files, "own_malicious_iocs.csv"
     )
     mock_hash = mocker.patch(
-        "slips_files.common.slips_utils.Utils.get_hash_from_file"
+        "slips_files.common.slips_utils.Utils.get_sha256_hash"
     )
     mock_hash.return_value = current_hash
     mock_db.get_TI_file_info.return_value = {"hash": old_hash}

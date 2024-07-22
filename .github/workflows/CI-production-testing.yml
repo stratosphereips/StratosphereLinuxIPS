@@ -123,6 +123,10 @@ jobs:
     - name: Vertical Portscans Unit Tests
       run: |
         python3 -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
+    
+    - name: Network discovery Unit Tests
+      run: |
+        python3 -m pytest tests/test_network_discovery.py -p no:warnings -vv    
 
     - name: Virustotal Unit Tests
       run: |

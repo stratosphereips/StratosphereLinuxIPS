@@ -171,19 +171,21 @@ class Output(IObserver):
         prints the given txt whether using tqdm or using print()
         """
         self.cli_lock.acquire()
-        # when the pbar reaches 100% aka we're done_reading_flows
-        # we print alerts at the very botttom of the screen using print
-        # instead of printing alerts at the top of the pbar using tqdm
-        if sender:
-            to_print = f"[{sender}] {txt}"
-        else:
-            txt: str = utils.remove_non_printable_chars(txt)
-            to_print = txt
+        try:
+            # when the pbar reaches 100% aka we're done_reading_flows
+            # we print alerts at the very botttom of the screen using print
+            # instead of printing alerts at the top of the pbar using tqdm
+            if sender:
+                to_print = f"[{sender}] {txt}"
+            else:
+                to_print = txt
 
-        if self.has_pbar and not self.is_pbar_finished():
-            self.tell_pbar({"event": "print", "txt": to_print})
-        else:
-            print(to_print, end=end)
+            if self.has_pbar and not self.is_pbar_finished():
+                self.tell_pbar({"event": "print", "txt": to_print})
+            else:
+                print(to_print, end=end)
+        except Exception as e:
+            print(f"Problem printing {txt}. {e}")
 
         self.cli_lock.release()
 

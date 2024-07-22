@@ -92,7 +92,7 @@ class EvidenceHandler(ICore):
 
         self.print(f"Storing Slips logs in {self.output_dir}")
         # this list will have our local and public ips when using -i
-        self.our_ips = utils.get_own_IPs()
+        self.our_ips = utils.get_own_ips()
         self.discarded_bc_never_processed = {}
 
     def read_configuration(self):
