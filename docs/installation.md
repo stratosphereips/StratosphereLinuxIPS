@@ -246,8 +246,9 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
 
-**NOTE: replace ubuntu-image with the image that fits your archiecture**
-**NOTE: you have to be in the main Slips directory to build this. **
+**NOTE**: replace ubuntu-image with the image that fits your architecture
+
+**NOTE**: you have to be in the main Slips directory to build this.
 
 
 	cd ~/StratosphereLinuxIPS

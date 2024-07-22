@@ -9,7 +9,7 @@ ENV SLIPS_DIR=/StratosphereLinuxIPS
 ENV NODE_VERSION=22.5.0
 ENV NVM_DIR=/root/.nvm
 
-# use bash instead of sh for fnm
+# use bash instead of sh
 SHELL ["/bin/bash", "-c"]
 
 # Install wget and add Zeek and redis repositories to our sources.
@@ -65,8 +65,6 @@ WORKDIR ${SLIPS_DIR}
 
 COPY . $SLIPS_DIR
 
-# we're excluding black here because it has conflicts with the tensorflow version required in requirements.txt
-# this is temporary until we upgrade tensorflow to the latest version
 RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
     && git init \
