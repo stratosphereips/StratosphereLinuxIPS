@@ -4,7 +4,6 @@
 # this image doesn't have node.js requirements and doesn't support kalipso
 # because it's only used for unit testing,
 # and we don't have unit tests for kalipso yet
-
 FROM ubuntu:22.04
 
 # To avoid user interaction when installing libraries
@@ -44,23 +43,22 @@ RUN apt update && apt install -y --no-install-recommends \
     net-tools \
     vim \
     less \
- && apt install  -y --no-install-recommends \
+    unzip \
     python3-certifi \
     python3-dev \
     python3-tzlocal \
     python3-pip \
- && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' |  tee /etc/apt/sources.list.d/security:zeek.list \
- && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
- && curl -fsSL https://packages.redis.io/gpg |  gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
- && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list \
- && apt update \
- && apt install -y --no-install-recommends --fix-missing \
+    && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' |  tee /etc/apt/sources.list.d/security:zeek.list \
+    && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
+    && curl -fsSL https://packages.redis.io/gpg |  gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list \
+    && apt update \
+    && apt install -y --no-install-recommends --fix-missing \
     zeek \
     redis \
- && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
- && apt clean \
- && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
+    && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
+    && apt clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 
 # you should build the image using
