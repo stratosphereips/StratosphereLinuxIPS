@@ -72,6 +72,10 @@ jobs:
       run: |
         python3 -m pytest tests/test_tunnel.py -p no:warnings -vv
 
+    - name: SSH Unit Tests
+      run: |
+        python3 -m pytest tests/test_ssh.py -p no:warnings -vv
+
     - name: dns Unit Tests
       run: |
         python3 -m pytest tests/test_dns.py -p no:warnings -vv
@@ -115,6 +119,10 @@ jobs:
     - name: Vertical Portscans Unit Tests
       run: |
         python3 -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
+    
+    - name: Network discovery Unit Tests
+      run: |
+        python3 -m pytest tests/test_network_discovery.py -p no:warnings -vv    
 
     - name: Virustotal Unit Tests
       run: |

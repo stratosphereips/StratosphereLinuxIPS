@@ -6,11 +6,11 @@ import dns
 import requests
 import threading
 import time
+import multiprocessing
 from typing import Dict, List
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-import multiprocessing
 from slips_files.common.abstracts.module import IModule
 from modules.threat_intelligence.urlhaus import URLhaus
 from slips_files.core.evidence_structure.evidence import (
@@ -980,7 +980,7 @@ class ThreatIntel(IModule, URLhaus):
         data = self.db.get_TI_file_info(filename)
         old_hash = data.get("hash", False)
 
-        new_hash = utils.get_hash_from_file(path_to_local_ti_file)
+        new_hash = utils.get_sha256_hash(path_to_local_ti_file)
 
         if not new_hash:
             self.print(
@@ -1344,7 +1344,8 @@ class ThreatIntel(IModule, URLhaus):
         return file_info
 
     def search_online_for_hash(self, flow_info: dict):
-        """Attempts to find information about a file hash by
+        """
+        Attempts to find information about a file hash by
         querying online sources.
         Currently, it queries the Circl.lu and URLhaus databases
         for any matches to the
@@ -1374,7 +1375,8 @@ class ThreatIntel(IModule, URLhaus):
             return urlhaus_info
 
     def search_offline_for_ip(self, ip):
-        """Searches for the given IP address in the local
+        """
+        Searches for the given IP address in the local
         threat intelligence files to
         determine if it is known to be malicious.
 
@@ -1460,7 +1462,8 @@ class ThreatIntel(IModule, URLhaus):
     def ip_belongs_to_blacklisted_range(
         self, ip, uid, daddr, timestamp, profileid, twid, ip_state
     ):
-        """Verifies if the provided IP address falls within any known malicious IP
+        """
+        Verifies if the provided IP address falls within any known malicious IP
         ranges.
 
         Parameters:

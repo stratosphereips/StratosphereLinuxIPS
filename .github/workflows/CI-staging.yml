@@ -63,6 +63,13 @@ jobs:
               coverage report  --include="modules/flowalerts/ssl.py*"
               coverage html  --include="modules/flowalerts/ssl.py*" -d coverage_reports/flowalerts
 
+          - name: SSH  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_ssh.py -p no:warnings -vv
+              coverage report  --include="modules/flowalerts/ssh.py*"
+              coverage html  --include="modules/flowalerts/ssh.py*" -d coverage_reports/flowalerts
+
+
           - name: dns  Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_dns.py -p no:warnings -vv
@@ -129,6 +136,12 @@ jobs:
               coverage run --source=./ -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
               coverage report  --include="modules/network_discovery/vertical_portscan.py*"
               coverage html  --include="modules/network_discovery/vertical_portscan.py*" -d coverage_reports/vertical_portscan
+          
+          - name: Network discovery Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_network_discovery.py -p no:warnings -vv
+              coverage report  --include="modules/network_discovery/network_discovery.py*"
+              coverage html  --include="modules/network_discovery/network_discovery.py*" -d coverage_reports/network_discovery    
 
           - name: Virustotal Unit Tests
             run: |

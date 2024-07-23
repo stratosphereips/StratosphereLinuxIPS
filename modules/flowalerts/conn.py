@@ -40,7 +40,7 @@ class Conn(IFlowalertsAnalyzer):
         self.long_connection_threshold = conf.long_connection_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
-        self.our_ips = utils.get_own_IPs()
+        self.our_ips = utils.get_own_ips()
         self.client_ips: List[str] = conf.client_ips()
 
     def name(self) -> str:
@@ -388,7 +388,7 @@ class Conn(IFlowalertsAnalyzer):
         # private ip or in the list of client_ips
         return (
             flow_type != "conn"
-            or appproto == "dns"
+            or appproto in ("dns", "icmp")
             or utils.is_ignored_ip(daddr)
             # if the daddr is a client ip, it means that this is a conn
             # from the internet to our ip, the dns res was probably

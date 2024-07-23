@@ -287,7 +287,7 @@ class UpdateManager(IModule):
         """
 
         # compute file sha256 hash
-        new_hash = utils.get_hash_from_file(file_path)
+        new_hash = utils.get_sha256_hash(file_path)
 
         # Get last hash of the file stored in the database
         file_info = self.db.get_TI_file_info(file_path)
@@ -1444,7 +1444,7 @@ class UpdateManager(IModule):
         """checks if we should update organizations' info
         based on the hash of thegiven file"""
         cached_hash = self.db.get_TI_file_info(file).get("hash", "")
-        if utils.get_hash_from_file(file) != cached_hash:
+        if utils.get_sha256_hash(file) != cached_hash:
             return True
 
     def get_whitelisted_orgs(self) -> list:
@@ -1476,7 +1476,7 @@ class UpdateManager(IModule):
 
             for file in (org_ips, org_domains, org_asn):
                 info = {
-                    "hash": utils.get_hash_from_file(file),
+                    "hash": utils.get_sha256_hash(file),
                 }
                 self.db.set_TI_file_info(file, info)
 
