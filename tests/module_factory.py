@@ -361,8 +361,8 @@ class ModuleFactory:
         return set_evidence_helper
 
 
-    def create_output_obj(stop_daemon=True):
-        return Output(stop_daemon=True)   
+    def create_output_obj(self):
+        return Output()       
 
     def create_network_discovery_obj(self, mock_db):
         with patch('modules.network_discovery.network_discovery.NetworkDiscovery.__init__', return_value=None):
