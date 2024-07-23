@@ -1,5 +1,5 @@
 from uuid import uuid4
-from module_factory import ModuleFactory
+from tests.module_factory import ModuleFactory
 import pytest
 from slips_files.core.evidence_structure.evidence import validate_timestamp
 from slips_files.core.evidence_structure.evidence import (
