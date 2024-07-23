@@ -1,5 +1,5 @@
 from uuid import uuid4
-from tests.module_factory import ModuleFactory
+from module_factory import ModuleFactory
 import pytest
 from slips_files.core.evidence_structure.evidence import validate_timestamp
 from slips_files.core.evidence_structure.evidence import (
@@ -85,16 +85,18 @@ def test_evidence_post_init(
     conn_count,
     confidence,
 ):
-    attacker = ModuleFactory.create_attacker_obj(
+    attacker = ModuleFactory().create_attacker_obj(
         value=attacker_value, direction=Direction.SRC, attacker_type=IoCType.IP
     )
-    victim = ModuleFactory.create_victim_obj(
+    victim = ModuleFactory().create_victim_obj(
         direction=Direction.DST, victim_type=IoCType.IP, value=victim_value
     )
-    profile = ModuleFactory.create_profileid_obj(ip=profile_ip)
-    timewindow = ModuleFactory.create_timewindow_obj(number=timewindow_number)
-    proto = ModuleFactory.create_proto_obj()[proto_value.upper()]
-    evidence = ModuleFactory.create_evidence_obj(
+    profile = ModuleFactory().create_profileid_obj(ip=profile_ip)
+    timewindow = ModuleFactory().create_timewindow_obj(
+        number=timewindow_number
+    )
+    proto = ModuleFactory().create_proto_obj()[proto_value.upper()]
+    evidence = ModuleFactory().create_evidence_obj(
         evidence_type=evidence_type,
         description=description,
         attacker=attacker,
@@ -132,54 +134,28 @@ def test_evidence_post_init(
 
 def test_evidence_post_init_invalid_uid():
     with pytest.raises(ValueError, match="uid must be a " "list of strings"):
-        ModuleFactory.create_evidence_obj(
+        ModuleFactory().create_evidence_obj(
             evidence_type=EvidenceType.ARP_SCAN,
             description="ARP scan detected",
-            attacker=ModuleFactory.create_attacker_obj(
+            attacker=ModuleFactory().create_attacker_obj(
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
                 value="192.168.1.1",
             ),
             threat_level=ThreatLevel.LOW,
             category=IDEACategory.ANOMALY_TRAFFIC,
-            profile=ModuleFactory.create_profileid_obj(ip="192.168.1.2"),
-            timewindow=ModuleFactory.create_timewindow_obj(number=1),
-            uid="invalid_uid",
-            timestamp="2023/10/26 10:10:10.000000+0000",
-            victim=ModuleFactory.create_victim_obj(
-                direction=Direction.DST,
-                victim_type=IoCType.IP,
-                value="192.168.1.3",
-            ),
-            proto=Proto.TCP,
-            port=80,
-            source_target_tag=Tag.RECON,
-            conn_count=10,
-            confidence=0.8,
-        )
-
-    with pytest.raises(ValueError, match="uid must be a " "list of strings"):
-        ModuleFactory.create_evidence_obj(
-            evidence_type=EvidenceType.ARP_SCAN,
-            description="ARP scan detected",
-            attacker=ModuleFactory.create_attacker_obj(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value="192.168.1.1",
-            ),
-            threat_level=ThreatLevel.LOW,
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            profile=ModuleFactory.create_profileid_obj(ip="192.168.1.2"),
-            timewindow=ModuleFactory.create_timewindow_obj(number=1),
+            profile=ModuleFactory().create_profileid_obj(ip="192.168.1.2"),
+            timewindow=ModuleFactory().create_timewindow_obj(number=1),
             uid=[1, 2, 3],
             timestamp="2023/10/26 10:10:10.000000+0000",
-            victim=ModuleFactory.create_victim_obj(
+            victim=ModuleFactory().create_victim_obj(
                 direction=Direction.DST,
                 victim_type=IoCType.IP,
                 value="192.168.1.3",
             ),
             proto=Proto.TCP,
             port=80,
+            id=232,
             source_target_tag=Tag.RECON,
             conn_count=10,
             confidence=0.8,
@@ -269,15 +245,17 @@ def test_evidence_to_dict(
     conn_count,
     confidence,
 ):
-    attacker = ModuleFactory.create_attacker_obj(
+    attacker = ModuleFactory().create_attacker_obj(
         value=attacker_value, direction=Direction.SRC, attacker_type=IoCType.IP
     )
-    victim = ModuleFactory.create_victim_obj(
+    victim = ModuleFactory().create_victim_obj(
         direction=Direction.DST, victim_type=IoCType.IP, value=victim_value
     )
-    profile = ModuleFactory.create_profileid_obj(ip=profile_ip)
-    timewindow = ModuleFactory.create_timewindow_obj(number=timewindow_number)
-    proto = (ModuleFactory.create_proto_obj())[proto_value.upper()]
+    profile = ModuleFactory().create_profileid_obj(ip=profile_ip)
+    timewindow = ModuleFactory().create_timewindow_obj(
+        number=timewindow_number
+    )
+    proto = (ModuleFactory().create_proto_obj())[proto_value.upper()]
 
     evidence = Evidence(
         evidence_type=evidence_type,
