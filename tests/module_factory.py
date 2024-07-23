@@ -369,48 +369,24 @@ class ModuleFactory:
         set_evidence_helper = SetEvidnceHelper(mock_db)
         return set_evidence_helper
 
-    def create_attacker_obj(value="192.168.1.1", direction=Direction.SRC, attacker_type=IoCType.IP):
+        def create_attacker_obj(self, value="192.168.1.1", direction=Direction.SRC, attacker_type=IoCType.IP):
         return Attacker(direction=direction, attacker_type=attacker_type, value=value)
     
-    def create_victim_obj(value="192.168.1.2", direction=Direction.DST, victim_type=IoCType.IP):
+    def create_victim_obj(self, value="192.168.1.2", direction=Direction.DST, victim_type=IoCType.IP):
         return Victim(direction=direction, victim_type=victim_type, value=value)
     
-    def create_profileid_obj(ip="192.168.1.3"):
+    def create_profileid_obj(self, ip="192.168.1.3"):
         return ProfileID(ip=ip)
     
-    def create_timewindow_obj(number=1):
+    def create_timewindow_obj(self,number=1):
         return TimeWindow(number=number)
     
-    def create_proto_obj():
+    def create_proto_obj(self):
         return Proto
     
-    def create_evidence_obj(
-        evidence_type=EvidenceType.ARP_SCAN,
-        description="Test Evidence",
-        attacker=None,
-        threat_level=ThreatLevel.LOW,
-        category=IDEACategory.ANOMALY_TRAFFIC,
-        victim=None,
-        profile=None,
-        timewindow=None,
-        uid=["flow1"],
-        timestamp="2023/10/26 10:10:10.000000+0000",
-        proto=Proto.TCP,
-        port=80,
-        source_target_tag=Tag.RECON,
-        id=None,
-        conn_count=1,
-        confidence=0.5
-    ):
-        if attacker is None:
-            attacker = ModuleFactory.create_attacker_obj()
-        if victim is None:
-            victim = ModuleFactory.create_victim_obj()
-        if profile is None:
-            profile = ModuleFactory.create_profileid_obj()
-        if timewindow is None:
-            timewindow = ModuleFactory.create_timewindow_obj()
-
+    def create_evidence_obj(self, evidence_type, description, attacker, threat_level,
+                            category, victim, profile, timewindow, uid, timestamp,
+                            proto, port, source_target_tag, id, conn_count, confidence):
         return Evidence(
             evidence_type=evidence_type,
             description=description,
