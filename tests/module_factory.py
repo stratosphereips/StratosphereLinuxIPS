@@ -36,6 +36,7 @@ from multiprocessing import Queue, Event, Semaphore
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
+from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
 from slips_files.core.evidence_structure.evidence import (
@@ -85,7 +86,12 @@ class ModuleFactory:
     def create_db_manager_obj(
         self, port, output_dir="output/", flush_db=False
     ):
-        db = DBManager(self.logger, output_dir, port, flush_db=flush_db)
+        # to prevent config/redis.conf from being overwritten
+        with patch(
+            "slips_files.core.database.redis_db.database.RedisDB._set_redis_options",
+            return_value=Mock(),
+        ):
+            db = DBManager(self.logger, output_dir, port, flush_db=flush_db)
         db.r = db.rdb.r
         db.print = do_nothing
         assert db.get_used_redis_port() == port
@@ -369,7 +375,7 @@ class ModuleFactory:
         set_evidence_helper = SetEvidnceHelper(mock_db)
         return set_evidence_helper
 
-        def create_attacker_obj(self, value="192.168.1.1", direction=Direction.SRC, attacker_type=IoCType.IP):
+    def create_attacker_obj(self, value="192.168.1.1", direction=Direction.SRC, attacker_type=IoCType.IP):
         return Attacker(direction=direction, attacker_type=attacker_type, value=value)
     
     def create_victim_obj(self, value="192.168.1.2", direction=Direction.DST, victim_type=IoCType.IP):
@@ -405,3 +411,10 @@ class ModuleFactory:
             conn_count=conn_count,
             confidence=confidence
         )
+
+    def create_network_discovery_obj(self, mock_db):
+        with patch('modules.network_discovery.network_discovery.NetworkDiscovery.__init__', return_value=None):
+            network_discovery = NetworkDiscovery(mock_db)
+            network_discovery.db = mock_db 
+        return network_discovery
+
