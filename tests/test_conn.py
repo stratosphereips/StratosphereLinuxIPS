@@ -2,7 +2,7 @@
 
 from tests.module_factory import ModuleFactory
 import json
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 import pytest
 from ipaddress import ip_address
 
@@ -17,34 +17,69 @@ dst_profileid = f"profile_{daddr}"
 
 
 @pytest.mark.parametrize(
-    "dport, proto, daddr, expected_result",
-    [  # Testcase 1: Protocol is not UDP
-        (1234, "tcp", "192.168.1.0", False),
+    "dport, proto, daddr, initial_p2p_daddrs, "
+    "expected_result, expected_final_p2p_daddrs",
+    [
+        # Testcase 1: Protocol is not UDP
+        (1234, "tcp", "192.168.1.0", {}, False, {}),
         # Testcase 2: Port number is less than 30000
-        (8080, "udp", "192.168.1.0", False),
-        # Testcase 3: It is a P2P connection
-        (30001, "udp", "192.168.1.6", True),
-        # Testcase 4: New IP, becomes P2P after 5 connections
-        (30001, "udp", "192.168.1.7", True),
-        # Testcase 5: 6th connection to the same IP,
-        # different port > 30000
-        (30002, "udp", "192.168.1.6", True),
-        # Testcase 6: Existing IP, but already marked as P2P
-        (30003, "udp", "192.168.1.1", True),
+        (8080, "udp", "192.168.1.0", {}, False, {}),
+        # Testcase 3: First connection to an IP on port > 30000
+        (30001, "udp", "192.168.1.1", {}, False, {"192.168.1.1": 1}),
+        # Testcase 4: 5th connection to different IPs, becomes P2P
+        (
+            30001,
+            "udp",
+            "192.168.1.5",
+            {
+                "192.168.1.1": 1,
+                "192.168.1.2": 1,
+                "192.168.1.3": 1,
+                "192.168.1.4": 1,
+            },
+            True,
+            {
+                "192.168.1.1": 1,
+                "192.168.1.2": 1,
+                "192.168.1.3": 1,
+                "192.168.1.4": 1,
+                "192.168.1.5": 1,
+            },
+        ),
+        # Testcase 5: 6th connection to the same IP, different port > 30000
+        (
+            30002,
+            "udp",
+            "192.168.1.1",
+            {"192.168.1.1": 5},
+            False,
+            {"192.168.1.1": 6},
+        ),
+        # Testcase 6: Connection to IP with 6+ previous connections
+        (
+            30003,
+            "udp",
+            "192.168.1.1",
+            {"192.168.1.1": 6},
+            True,
+            {"192.168.1.1": 6},
+        ),
     ],
 )
-def test_is_p2p(mock_db, dport, proto, daddr, expected_result):
-    mock_conn = MagicMock()
-    mock_conn.p2p_daddrs = {
-        "192.168.1.1": 1,
-        "192.168.1.2": 1,
-        "192.168.1.3": 1,
-        "192.168.1.4": 1,
-        "192.168.1.5": 1,
-    }
+def test_is_p2p(
+    mock_db,
+    dport,
+    proto,
+    daddr,
+    initial_p2p_daddrs,
+    expected_result,
+    expected_final_p2p_daddrs,
+):
     conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
-    conn.p2p_daddrs = mock_conn.p2p_daddrs
-    assert conn.is_p2p(dport, proto, daddr) == expected_result
+    conn.p2p_daddrs = initial_p2p_daddrs.copy()
+    result = conn.is_p2p(dport, proto, daddr)
+    assert result == expected_result
+    assert conn.p2p_daddrs == expected_final_p2p_daddrs
 
 
 @pytest.mark.parametrize(
@@ -79,6 +114,26 @@ def test_check_unknown_port(
             dport, proto, daddr, profileid, twid, uid, timestamp, "Established"
         )
         is expected_result
+    )
+
+
+def test_check_unknown_port_true_case(mocker, mock_db):
+    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    dport = "12345"
+    proto = "tcp"
+    mock_db.get_port_info.return_value = None
+    mock_db.is_ftp_port.return_value = False
+    mocker.patch.object(conn, "port_belongs_to_an_org", return_value=False)
+    mocker.patch.object(conn, "is_p2p", return_value=False)
+    mock_set_evidence = mocker.patch.object(conn.set_evidence, "unknown_port")
+
+    result = conn.check_unknown_port(
+        dport, proto, daddr, profileid, twid, uid, timestamp, "Established"
+    )
+
+    assert result is True
+    mock_set_evidence.assert_called_once_with(
+        daddr, dport, proto, timestamp, profileid, twid, uid
     )
 
 
@@ -488,7 +543,7 @@ def test_check_non_http_port_80_conns(
 
 
 @pytest.mark.parametrize(
-    "dur, daddr, saddr, expected_result, " "expected_evidence_call",
+    "dur, daddr, saddr, expected_result, expected_evidence_call",
     [
         (  # Test case 1: Duration above threshold
             2000,
@@ -504,12 +559,33 @@ def test_check_non_http_port_80_conns(
             False,
             0,
         ),
-        (  # Test case 4: Duration as string
+        (  # Test case 3: Duration as string
             "2000",
             "192.168.1.2",
             "192.168.1.1",
             True,
             1,
+        ),
+        (  # Test case 4: Multicast daddr
+            2000,
+            "224.0.0.1",
+            "192.168.1.1",
+            None,
+            0,
+        ),
+        (  # Test case 5: Multicast saddr
+            2000,
+            "192.168.1.2",
+            "224.0.0.1",
+            None,
+            0,
+        ),
+        (  # Test case 6: Both multicast
+            2000,
+            "224.0.0.2",
+            "224.0.0.1",
+            None,
+            0,
         ),
     ],
 )
@@ -872,3 +948,4 @@ def test_check_connection_to_local_ip(
         daddr, dport, proto, saddr, twid, uid, timestamp
     )
     assert mock_set_evidence.call_count == expected_calls
+
