@@ -6,28 +6,6 @@ import sys
 from io import StringIO
 
 
-@patch("slips_files.core.output.ConfigParser")
-def test_read_configuration(mock_config_parser):
-    """Test that the read_configuration method reads
-    values from the ConfigParser."""
-    mock_parser = MagicMock()
-    mock_parser.get_tw_width.return_value = 100
-    mock_parser.get_GID.return_value = 1000
-    mock_parser.get_UID.return_value = 1001
-    mock_config_parser.return_value = mock_parser
-
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
-
-    output._read_configuration()
-
-    mock_parser.get_tw_width.assert_called_once()
-    mock_parser.get_GID.assert_called_once()
-    mock_parser.get_UID.assert_called_once()
-    assert output.printable_twid_width == 100
-    assert output.GID == 1000
-    assert output.UID == 1001
-
-
 @pytest.mark.parametrize(
     "msg, expected_log_content",
     [
@@ -54,7 +32,7 @@ def test_log_line(mock_convert_format, msg, expected_log_content):
     to the slips.log file."""
     mock_convert_format.return_value = "formatted_datetime"
 
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.slips_logfile = "path/to/slips.log"
 
     with patch("builtins.open", mock_open()) as mock_file:
@@ -70,7 +48,7 @@ def test_log_line(mock_convert_format, msg, expected_log_content):
 def test_change_stdout(mock_text_io_wrapper, mock_open):
     """Test that the change_stdout method correctly changes
     the sys.stdout to the specified file."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.stdout = "path/to/stdout.log"
     mock_file = MagicMock()
     mock_open.return_value = mock_file
@@ -86,7 +64,7 @@ def test_change_stdout(mock_text_io_wrapper, mock_open):
 
 def test_print_no_pbar():
     """Test printing when has_pbar is False."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.has_pbar = False
     output.tell_pbar = MagicMock()
     sender = "SenderName"
@@ -101,7 +79,7 @@ def test_print_no_pbar():
 
 def test_print_pbar_finished():
     """Test printing when pbar is finished."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.has_pbar = True
     output.pbar_finished = MagicMock()
     output.pbar_finished.is_set.return_value = True
@@ -118,7 +96,7 @@ def test_print_pbar_finished():
 
 def test_print_pbar_active_with_sender():
     """Test printing with active pbar and a sender."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.has_pbar = True
     output.pbar_finished = MagicMock()
     output.pbar_finished.is_set.return_value = False
@@ -139,7 +117,7 @@ def test_print_pbar_active_with_sender():
 
 def test_print_pbar_active_no_sender():
     """Test printing with active pbar and no sender."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.has_pbar = True
     output.pbar_finished = MagicMock()
     output.pbar_finished.is_set.return_value = False
@@ -156,7 +134,7 @@ def test_print_pbar_active_no_sender():
 
 def test_handle_printing_stats_pbar_not_finished():
     """Test when pbar is not finished, stats should be sent to pbar."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.has_pbar = True
     output.pbar_finished = MagicMock()
     output.pbar_finished.is_set.return_value = False
@@ -174,7 +152,7 @@ def test_handle_printing_stats_pbar_not_finished():
 
 def test_handle_printing_stats_pbar_finished():
     """Test when pbar is finished, stats should be printed directly."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.has_pbar = True
     output.pbar_finished = MagicMock()
     output.pbar_finished.is_set.return_value = True
@@ -208,7 +186,7 @@ def test_handle_printing_stats_pbar_finished():
 )
 def test_enough_verbose(output_verbose, input_verbose, expected_result):
     """Test that the enough_verbose method returns the correct result."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.verbose = output_verbose
 
     assert output.enough_verbose(input_verbose) == expected_result
@@ -232,7 +210,7 @@ def test_enough_verbose(output_verbose, input_verbose, expected_result):
 )
 def test_enough_debug(output_debug, input_debug, expected_result):
     """Test that the enough_debug method returns the correct result."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.debug = output_debug
 
     assert output.enough_debug(input_debug) == expected_result
@@ -242,7 +220,7 @@ def test_enough_debug(output_debug, input_debug, expected_result):
 @patch("slips_files.core.output.Output.log_line")
 @patch("slips_files.core.output.Output.log_error")
 def test_output_line_all_outputs(mock_log_error, mock_log_line, mock_print):
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.verbose = 2
     output.debug = 2
 
@@ -264,7 +242,7 @@ def test_output_line_all_outputs(mock_log_error, mock_log_line, mock_print):
 @patch("slips_files.core.output.Output.log_line")
 @patch("slips_files.core.output.Output.log_error")
 def test_output_line_no_outputs(mock_log_error, mock_log_line, mock_print):
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.verbose = 2
     output.debug = 2
 
@@ -286,7 +264,7 @@ def test_output_line_no_outputs(mock_log_error, mock_log_line, mock_print):
 @patch("slips_files.core.output.Output.log_line")
 @patch("slips_files.core.output.Output.log_error")
 def test_output_line_no_error_log(mock_log_error, mock_log_line, mock_print):
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.verbose = 2
     output.debug = 2
 
@@ -314,7 +292,7 @@ def test_output_line_no_error_log(mock_log_error, mock_log_line, mock_print):
 )
 def test_is_pbar_finished(is_set_return_value, expected_result):
     """Test that the is_pbar_finished method returns the correct result."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.pbar_finished = MagicMock()
     output.pbar_finished.is_set.return_value = is_set_return_value
 
@@ -351,7 +329,7 @@ def test_update(
 ):
     """Test that the update method handles
     different cases correctly."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
 
     output.forward_progress_bar_msgs = MagicMock()
     output.output_line = MagicMock()
@@ -372,7 +350,7 @@ def test_update(
 def test_update_log_to_logfiles_only():
     """Test that the update method handles
     log_to_logfiles_only correctly."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.log_line = MagicMock()
 
     msg = {
@@ -400,7 +378,7 @@ def test_update_log_to_logfiles_only():
 )
 def test_forward_progress_bar_msgs_valid(msg, expected_call):
     """Test valid progress bar messages."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.tell_pbar = MagicMock()
     output.is_pbar_finished = MagicMock(return_value=False)
 
@@ -411,7 +389,7 @@ def test_forward_progress_bar_msgs_valid(msg, expected_call):
 
 def test_forward_progress_bar_msgs_update_finished():
     """Test update message when progress bar is finished."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.tell_pbar = MagicMock()
     output.is_pbar_finished = MagicMock(return_value=True)
 
@@ -422,7 +400,7 @@ def test_forward_progress_bar_msgs_update_finished():
 
 def test_forward_progress_bar_msgs_unknown_bar():
     """Test message with unknown 'bar' value."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.tell_pbar = MagicMock()
 
     output.forward_progress_bar_msgs({"bar": "unknown"})
@@ -432,7 +410,7 @@ def test_forward_progress_bar_msgs_unknown_bar():
 
 def test_tell_pbar():
     """Test that tell_pbar sends the message through the pipe."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.pbar_sender_pipe = MagicMock()
 
     msg = {"event": "update", "progress": 50}
@@ -443,7 +421,7 @@ def test_tell_pbar():
 
 def test_tell_pbar_empty_message():
     """Test that tell_pbar handles empty messages correctly."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.pbar_sender_pipe = MagicMock()
 
     msg = {}
@@ -454,7 +432,7 @@ def test_tell_pbar_empty_message():
 
 def test_tell_pbar_none_message():
     """Test that tell_pbar handles None messages correctly."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.pbar_sender_pipe = MagicMock()
 
     msg = None
@@ -465,7 +443,7 @@ def test_tell_pbar_none_message():
 
 def test_tell_pbar_large_message():
     """Test that tell_pbar can handle large messages."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.pbar_sender_pipe = MagicMock()
 
     msg = {"event": "update", "data": "x" * 1000000}
@@ -477,7 +455,7 @@ def test_tell_pbar_large_message():
 def test_tell_pbar_multiple_calls():
     """Test that tell_pbar works correctly
     for multiple consecutive calls."""
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     output.pbar_sender_pipe = MagicMock()
 
     msgs = [
@@ -497,7 +475,7 @@ def test_tell_pbar_multiple_calls():
 
 
 def test_create_logfile_existing():
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     path = "/existing/path/file.log"
 
     with patch("builtins.open", mock_open()) as mocked_open:
@@ -510,7 +488,7 @@ def test_create_logfile_existing():
 
 
 def test_create_logfile_new():
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     path = "/new/path/newfile.log"
     mock_file_error = mock_open()
     mock_file_error.side_effect = FileNotFoundError
@@ -535,7 +513,7 @@ def test_create_logfile_new():
 
 
 def test_create_logfile_permission_error():
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     path = "/root/restricted.log"
 
     with patch("builtins.open", side_effect=PermissionError):
@@ -544,7 +522,7 @@ def test_create_logfile_permission_error():
 
 
 def test_create_logfile_disk_full():
-    output = ModuleFactory.create_output_obj(stop_daemon=False)
+    output = ModuleFactory().create_output_obj()
     path = "/mnt/full_disk/file.log"
 
     with patch("builtins.open", side_effect=IOError):
