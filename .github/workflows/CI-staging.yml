@@ -218,7 +218,8 @@ jobs:
       timeout-minutes: 3600
       # start a container using slips dependencies image
       container:
-          image: stratosphereips/slips_dependencies:latest
+          #image: stratosphereips/slips_dependencies:latest
+          image: stratosphereips/slips_dependencies_test_image:latest
       steps:
           - uses: actions/checkout@v2
 
@@ -236,7 +237,8 @@ jobs:
       timeout-minutes: 3600
       # start a container using slips dependencies image
       container:
-          image: stratosphereips/slips_dependencies:latest
+          #image: stratosphereips/slips_dependencies:latest
+          image: stratosphereips/slips_dependencies_test_image:latest
       steps:
           - uses: actions/checkout@v2
 
@@ -254,7 +256,8 @@ jobs:
       timeout-minutes: 3600
       # start a container using slips dependencies image
       container:
-          image: stratosphereips/slips_dependencies:latest
+          #image: stratosphereips/slips_dependencies:latest
+          image: stratosphereips/slips_dependencies_test_image:latest
       steps:
           - uses: actions/checkout@v2
 
@@ -274,7 +277,8 @@ jobs:
       timeout-minutes: 3600
       # start a container using slips dependencies image
       container:
-          image: stratosphereips/slips_dependencies:latest
+          #image: stratosphereips/slips_dependencies:latest
+          image: stratosphereips/slips_dependencies_test_image:latest
       steps:
           - uses: actions/checkout@v2
 
@@ -296,7 +300,8 @@ jobs:
       timeout-minutes: 3600
       # start a container using slips dependencies image
       container:
-          image: stratosphereips/slips_dependencies:latest
+          #image: stratosphereips/slips_dependencies:latest
+          image: stratosphereips/slips_dependencies_test_image:latest
       steps:
           - uses: actions/checkout@v2
 
