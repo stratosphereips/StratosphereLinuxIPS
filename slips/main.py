@@ -68,10 +68,10 @@ class Main(IObservable):
                 self.twid_width = self.conf.get_tw_width()
 
     def cpu_profiler_init(self):
-        self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable() == "yes"
+        self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable() == True
         self.cpuProfilerMode = self.conf.get_cpu_profiler_mode()
         self.cpuProfilerMultiprocess = (
-            self.conf.get_cpu_profiler_multiprocess() == "yes"
+            self.conf.get_cpu_profiler_multiprocess() == True
         )
         if self.cpuProfilerEnabled:
             try:
@@ -126,11 +126,11 @@ class Main(IObservable):
 
     def memory_profiler_init(self):
         self.memoryProfilerEnabled = (
-            self.conf.get_memory_profiler_enable() == "yes"
+            self.conf.get_memory_profiler_enable() == True
         )
         memoryProfilerMode = self.conf.get_memory_profiler_mode()
         memoryProfilerMultiprocess = (
-            self.conf.get_memory_profiler_multiprocess() == "yes"
+            self.conf.get_memory_profiler_multiprocess() == True
         )
         if self.memoryProfilerEnabled:
             output_dir = os.path.join(self.args.output, "memoryprofile/")
@@ -227,7 +227,7 @@ class Main(IObservable):
         """
         if self.mode == "daemonized":
             self.daemon.stop()
-        if self.conf.get_cpu_profiler_enable() != "yes":
+        if self.conf.get_cpu_profiler_enable() != True:
             sys.exit(0)
 
     def save_the_db(self):
