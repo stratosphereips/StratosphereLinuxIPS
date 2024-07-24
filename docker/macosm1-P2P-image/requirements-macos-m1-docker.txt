@@ -1,14 +1,14 @@
 maxminddb
 numpy
 watchdog
-redis>=3.5.2,<=3.5.3
+redis==3.5.3
 urllib3
 pandas
 tzlocal
 cabby
 stix2
 certifi
-tensorflow
+tensorflow==2.16.1
 colorama
 Keras
 validators
@@ -45,4 +45,4 @@ aid_hash
 black
 ruff
 pre-commit
-yaml
+pyyaml

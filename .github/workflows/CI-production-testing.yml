@@ -59,10 +59,13 @@ jobs:
       run: |
         python3 -m pytest tests/test_flowalerts.py -p no:warnings -vv
 
+    - name: conn Unit Tests
+      run: |
+        python3 -m pytest tests/test_conn.py -p no:warnings -vv    
+
     - name: downloaded_file Unit Tests
       run: |
         python3 -m pytest tests/test_downloaded_file.py -p no:warnings -vv
-
 
     - name: SSL Unit Tests
       run: |
@@ -75,6 +78,7 @@ jobs:
     - name: SSH Unit Tests
       run: |
         python3 -m pytest tests/test_ssh.py -p no:warnings -vv
+
 
     - name: dns Unit Tests
       run: |

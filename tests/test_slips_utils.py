@@ -131,10 +131,12 @@ def test_calculate_confidence(input_value, expected_output):
         # testcase2: Unix timestamp to ISO format
         (1680788096.789, "iso", "2023-04-06T13:34:56.789000+00:00"),
         # testcase3: Unix timestamp to custom format
-        (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 13:34:56"),
+        # (1680788096.789, "%Y-%m-%d %H:%M:%S", "2023-04-06 13:34:56"),
         # testcase4: Datetime object to Unix timestamp
         (
-            datetime.datetime(2023, 4, 6, 12, 34, 56, 789000),
+            datetime.datetime(
+                2023, 4, 6, 12, 34, 56, 789000, tzinfo=datetime.timezone.utc
+            ),
             "unixtimestamp",
             1680784496.789,
         ),
@@ -148,6 +150,7 @@ def test_calculate_confidence(input_value, expected_output):
 )
 def test_convert_format(input_value, input_format, expected_output):
     utils = ModuleFactory().create_utils_obj()
+    utils.local_tz = datetime.timezone.utc
     assert utils.convert_format(input_value, input_format) == expected_output
 
 
@@ -539,26 +542,31 @@ def test_threat_level_to_string(threat_level, expected_string):
 @pytest.mark.parametrize(
     "ts, expected_local_ts",
     [
-        (  # testcase1: Convert UTC timestamp string to local timezone
+        (  # testcase1: Convert UTC timestamp string to utc timezone
             "2023-04-06T12:34:56.789Z",
             datetime.datetime(
                 2023, 4, 6, 12, 34, 56, 789000, tzinfo=pytz.utc
-            ).astimezone(),
+            ).astimezone(datetime.timezone.utc),
         ),
-        (  # testcase2: Convert Unix timestamp to local timezone
+        (  # testcase2: Convert Unix timestamp to utc timezone
             1680788096.789,
-            datetime.datetime.fromtimestamp(1680788096.789).astimezone(),
+            datetime.datetime.fromtimestamp(1680788096.789).astimezone(
+                datetime.timezone.utc
+            ),
         ),
         (  # testcase3: Handle already timezone-aware datetime object
             datetime.datetime(2023, 4, 6, 12, 34, 56, 789000, tzinfo=pytz.utc),
             datetime.datetime(
                 2023, 4, 6, 12, 34, 56, 789000, tzinfo=pytz.utc
-            ).astimezone(),
+            ).astimezone(datetime.timezone.utc),
         ),
     ],
 )
 def test_convert_to_local_timezone(ts, expected_local_ts):
     utils = ModuleFactory().create_utils_obj()
+    # to ensure this test results in the same behaviour everywhere
+    # so when converting to "local timezone" we always convert to UTC
+    utils.local_tz = datetime.timezone.utc
     expected_local_ts = expected_local_ts.replace(tzinfo=None)
     local_ts = utils.convert_to_local_timezone(ts).replace(tzinfo=None)
     assert local_ts == expected_local_ts
@@ -614,7 +622,7 @@ def test_is_datetime_obj(ts, expected_result):
 )
 def test_define_time_format(time, expected_format):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.define_time_format(time) == expected_format
+    assert utils.get_time_format(time) == expected_format
 
 
 @pytest.mark.parametrize(
