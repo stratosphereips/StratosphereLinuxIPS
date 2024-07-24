@@ -89,7 +89,7 @@ class Conn(IFlowalertsAnalyzer):
                 # first time seeing this daddr
                 self.p2p_daddrs[daddr] = 1
 
-            if len(self.p2p_daddrs) == 5:
+            if len(self.p2p_daddrs) >= 5:
                 # this is another connection on port 3000+/udp and we already have 5 of them
                 # probably p2p
                 return True
@@ -246,6 +246,8 @@ class Conn(IFlowalertsAnalyzer):
             or ip_obj.is_reserved
         ):
             return True
+        
+        return False
 
     def get_sent_bytes(
         self, all_flows: Dict[str, dict]
@@ -377,6 +379,7 @@ class Conn(IFlowalertsAnalyzer):
                 timestamp,
             )
             return True
+        return False
 
     def should_ignore_conn_without_dns(
         self, flow_type, appproto, daddr
@@ -717,6 +720,7 @@ class Conn(IFlowalertsAnalyzer):
                 # (fb, twitter, microsoft, etc.)
                 if self.whitelist.org_analyzer.is_ip_in_org(ip, org):
                     return True
+            return False   
 
     def check_different_localnet_usage(
         self,
