@@ -1,3 +1,4 @@
+from datetime import datetime
 from re import split
 
 from slips_files.common.abstracts.input_type import IInputType
@@ -45,7 +46,7 @@ class ZeekJSON(IInputType):
             file_type = file_type.split("/")[-1]
 
         if ts := line.get("ts", False):
-            starttime = utils.convert_to_datetime(ts)
+            starttime: datetime = utils.convert_to_datetime(ts)
         else:
             starttime = ""
 

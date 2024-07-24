@@ -150,7 +150,7 @@ For more info about the Kalipso interface, check the docs: https://stratospherel
 
 # Requirements
 
-Slips requires Python 3.8+ and at least 4 GBs of RAM to run smoothly.
+Slips requires Python 3.10.12 and at least 4 GBs of RAM to run smoothly.
 
 
 # Installation

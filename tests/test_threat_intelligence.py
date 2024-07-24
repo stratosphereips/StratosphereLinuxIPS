@@ -857,13 +857,13 @@ def test_search_online_for_ip(
         # Testcase 2: ipv6 in blacklist
         ("2001:db8::", "ipv6", False, False),
         # Testcase 3: ipv6 not in blacklist
-        ("2001:db8:1::1", "ipv6", None, None),
+        ("2001:db8:1::1", "ipv6", False, False),
         # Testcase 4: invalid ip
-        ("10.0.0.21", "invalid", None, None),
+        ("10.0.0.21", "invalid", False, False),
         # Testcase 5: ipv6 range not in cache
-        ("2001:db8::", "ipv6", None, False),
+        ("2001:db8::", "ipv6", False, False),
         # Testcase 6: invalid ip range not in cache
-        ("10.0.0.21", "invalid", None, None),
+        ("10.0.0.21", "invalid", False, False),
     ],
 )
 def test_ip_belongs_to_blacklisted_range(
@@ -878,6 +878,7 @@ def test_ip_belongs_to_blacklisted_range(
         if ip_type == "ipv4"
         else ipaddress.ip_address(ip).exploded.split("/")[0].split(":")[0]
     )
+
     range_value = (
         f"{first_octet}.0.0.0/8"
         if ip_type == "ipv4"

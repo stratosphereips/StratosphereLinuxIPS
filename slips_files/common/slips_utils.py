@@ -204,7 +204,7 @@ class Utils(object):
         Detects and converts the given ts to the given format
         :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
         """
-        given_format = self.define_time_format(ts)
+        given_format = self.get_time_format(ts)
         if given_format == required_format:
             return ts
 
@@ -215,7 +215,7 @@ class Utils(object):
 
         # convert to the req format
         if required_format == "iso":
-            return datetime_obj.astimezone().isoformat()
+            return datetime_obj.astimezone(self.local_tz).isoformat()
         elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
         else:
@@ -237,28 +237,27 @@ class Utils(object):
         datetime_obj = self.convert_to_datetime(ts)
         return datetime_obj.astimezone(self.local_tz)
 
-    def is_datetime_obj(self, ts):
+    def is_datetime_obj(self, ts) -> bool:
         """
         checks if the given ts is a datetime obj
         """
         try:
-            ts.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
-            return True
-        except AttributeError:
+            return isinstance(ts, datetime)
+        except Exception:
             return False
 
     def convert_to_datetime(self, ts):
         if self.is_datetime_obj(ts):
             return ts
 
-        given_format = self.define_time_format(ts)
+        given_format = self.get_time_format(ts)
         return (
-            datetime.fromtimestamp(float(ts))
+            datetime.fromtimestamp(float(ts), tz=self.local_tz)
             if given_format == "unixtimestamp"
             else datetime.strptime(ts, given_format)
         )
 
-    def define_time_format(self, time: str) -> Optional[str]:
+    def get_time_format(self, time) -> Optional[str]:
         if self.is_datetime_obj(time):
             return "datetimeobj"
 
@@ -431,6 +430,17 @@ class Utils(object):
             # when in docker, we copy the repo instead of clone it so there's no .git files
             # we can't add repo metadata
             return False
+
+    def convert_ts_to_tz_aware(self, naive_datetime: datetime) -> datetime:
+        """adds the current local tz (self.local_tz) to the given dt obj"""
+        naive_datetime = utils.convert_to_datetime(naive_datetime)
+        return naive_datetime.replace(tzinfo=self.local_tz)
+
+    def is_aware(self, dt: datetime) -> bool:
+        """
+        checks if the given datetime object is timemzone aware or not
+        """
+        return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
 
     def get_time_diff(
         self, start_time: float, end_time: float, return_type="seconds"

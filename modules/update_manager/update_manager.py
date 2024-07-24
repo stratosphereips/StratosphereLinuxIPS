@@ -952,6 +952,7 @@ class UpdateManager(IModule):
 
                 for ioc in file:
                     date = ioc["InsertDate"]
+                    date = utils.convert_ts_to_tz_aware(date)
                     diff = utils.get_time_diff(
                         date, time.time(), return_type="days"
                     )
