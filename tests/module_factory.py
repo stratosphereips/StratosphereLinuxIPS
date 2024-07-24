@@ -11,6 +11,7 @@ from modules.flowalerts.software import Software
 from modules.flowalerts.ssh import SSH
 from modules.flowalerts.ssl import SSL
 from modules.flowalerts.tunnel import Tunnel
+from modules.p2ptrust.trust.trustdb import TrustDB
 from modules.p2ptrust.utils.go_director import GoDirector
 from slips.main import Main
 from modules.update_manager.update_manager import UpdateManager
