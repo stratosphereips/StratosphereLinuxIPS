@@ -209,6 +209,12 @@ jobs:
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
+          - name: go_director test
+            run: |
+               coverage run --source=./ -m pytest tests/test_go_director.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/utils/go_director.py*"
+               coverage html --include="modules/p2ptrust/utils/go_director.py*" -d coverage_reports/go_director     
+
 
   dataset_integration_tests:
       # specify the host OS
