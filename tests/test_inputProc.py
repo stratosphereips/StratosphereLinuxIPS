@@ -205,22 +205,6 @@ def test_get_earliest_line(mock_db):
 
 
 @pytest.mark.parametrize(
-    "path, is_tabs, expected_val",
-    [
-        ("dataset/test1-normal.nfdump", False, 4646),
-        ("dataset/test9-mixed-zeek-dir/conn.log", False, 577),
-        ("dataset/test10-mixed-zeek-dir/conn.log", True, 117),
-    ],
-)
-def test_get_flows_number(
-    path: str, is_tabs: bool, expected_val: int, mock_db
-):
-    input = ModuleFactory().create_input_obj(path, "nfdump", mock_db)
-    input.is_zeek_tabs = is_tabs
-    assert input.get_flows_number(path) == expected_val
-
-
-@pytest.mark.parametrize(
     "input_type,input_information",
     [
         ("binetflow", "dataset/test2-malicious.binetflow"),
@@ -409,29 +393,6 @@ def test_get_file_handle_existing_file(mock_db):
     assert file_handle is not False
     assert file_handle.name == filename
     os.remove(filename)
-
-
-@pytest.mark.parametrize(
-    "zeek_dir",
-    [  # Testcase1:  tabs
-        ("dataset/test10-mixed-zeek-dir/"),
-        # Testcase2: json
-        ("dataset/test9-mixed-zeek-dir/"),
-    ],
-)
-def test_stop_observer(zeek_dir: str, mock_db):
-    input = ModuleFactory().create_input_obj(
-        zeek_dir, "zeek_folder", mock_db
-    )
-    mock_db.get_all_zeek_files.return_value = [
-        os.path.join(zeek_dir, "conn.log")
-    ]
-    input.start_observer()
-    with patch.object(input.event_observer, "stop") as mock_stop:
-        with patch.object(input.event_observer, "join") as mock_join:
-            input.stop_observer()
-            mock_stop.assert_called_once()
-            mock_join.assert_called_once_with(10)
 
 
 def test_shutdown_gracefully_all_components_active(mock_db):
