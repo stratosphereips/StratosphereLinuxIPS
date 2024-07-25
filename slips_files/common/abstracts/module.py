@@ -161,17 +161,8 @@ class IModule(IObservable, ABC, Process):
         message = self.db.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
             self.channel_tracker[channel_name] = True
-            # if "Flow Alerts" in self.name:
-            #     print(
-            #         f"@@@@@@@@@@@@@@@@ setting the get msg of flowalerts to "
-            #         f"true"
-            #         )
             return message
         else:
-            # if "Flow Alerts" in self.name:
-            #     print(
-            #         f"@@@@@@@@@@@@@@@@ no flowalerts msgs received!"
-            #         )
             self.channel_tracker[channel_name] = False
             return False
 

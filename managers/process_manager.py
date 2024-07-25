@@ -50,6 +50,9 @@ class ProcessManager:
         # to pass flows to the profiler
         self.profiler_queue = Queue()
         self.termination_event: Event = Event()
+        # this one has its own termination event because we want it to
+        # shutdown at the very end of all other slips modules.
+        self.evidence_handler_termination_event: Event = Event()
         self.stopped_modules = []
         # used to stop slips when these 2 are done
         # since the semaphore count is zero, slips.py will wait until another
@@ -167,7 +170,7 @@ class ProcessManager:
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
-            self.termination_event,
+            self.evidence_handler_termination_event,
         )
         evidence_process.start()
         self.main.print(
@@ -612,6 +615,8 @@ class ProcessManager:
         else:
             # all of them are killed
             to_kill_first = []
+            # tell evidence to stop since all the modules are done
+            self.evidence_handler_termination_event.set()
 
         alive_processes = self.wait_for_processes_to_finish(to_kill_last)
         if alive_processes:
