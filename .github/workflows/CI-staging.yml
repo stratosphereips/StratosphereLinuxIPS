@@ -150,6 +150,12 @@ jobs:
               coverage report  --include="modules/network_discovery/network_discovery.py*"
               coverage html  --include="modules/network_discovery/network_discovery.py*" -d coverage_reports/network_discovery
 
+          - name: evidence Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_evidence.py -p no:warnings -vv
+              coverage report  --include="slips_files/core/evidence_structure/evidence.py*"
+              coverage html  --include="slips_files/core/evidence_structure/evidence.py*" -d coverage_reports/evidence_structure   
+
           - name: Virustotal Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_virustotal.py -p no:warnings -vv
