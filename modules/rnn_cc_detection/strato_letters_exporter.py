@@ -42,6 +42,10 @@ class StratoLettersExporter:
         out_tuples: str = self.db.get_outtuples_from_profile_tw(
             profileid, twid
         )
+
+        if out_tuples is None:
+            return
+
         out_tuples: Dict[str, List[str, List[float]]] = json.loads(out_tuples)
 
         with open(self.starto_letters_file, "a") as f:

@@ -1519,6 +1519,7 @@ class ThreatIntel(IModule, URLhaus):
                     ip_state,
                 )
                 return True
+        return False
 
     def search_offline_for_domain(self, domain):
         """Checks if the provided domain name is listed in the
