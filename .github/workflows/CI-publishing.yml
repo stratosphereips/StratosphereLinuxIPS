@@ -41,30 +41,6 @@ jobs:
             path: ./docker/macosm1-image/Dockerfile
 
     steps:
-    - name: Maximize build space
-      uses: easimon/maximize-build-space@master
-      with:
-        root-reserve-mb: 512
-        swap-size-mb: 1024
-
-    - name: Free some space
-      run: |
-         rm -rf /usr/share/dotnet
-         rm -rf /opt/ghc
-         rm -rf "/usr/local/share/boost"
-         rm -rf "$AGENT_TOOLSDIRECTORY"
-
-    - name: Free disk space on Ubuntu runner
-      uses: kfir4444/free-disk-space@main
-      with:
-        # frees about 6 GB, warning: may remove required tools
-        tool-cache: false
-        android: true
-        dotnet: true
-        haskell: true
-        large-packages: true
-        swap-storage: true
-
     - name: Get Slips version
       run: |
         VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
@@ -84,13 +60,6 @@ jobs:
       with:
         username: stratosphereips
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
-    - name: Free some space
-      run: |
-           rm -rf /usr/share/dotnet
-           rm -rf /opt/ghc
-           rm -rf "/usr/local/share/boost"
-           rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Build ${{ matrix.name }} from Dockerfile
       id: docker_build_slips
