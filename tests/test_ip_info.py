@@ -3,8 +3,7 @@
 from tests.module_factory import ModuleFactory
 import maxminddb
 import pytest
-from unittest import mock
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import json
 import requests
 import socket
@@ -134,57 +133,125 @@ def test_get_vendor_broadcast_mac(mocker, mock_db):
     mock_db.set_mac_vendor_to_profile.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "domain, get_domain_data_return_value, "
-    "whois_creation_date, expected_age",
-    [
-        # Testcase 1: Returns correct age for a
-        # valid domain with existing data
-        ("google.com", None, None, 100),
-        # Testcase 2: Returns False for a domain
-        # with no creation date in whois
-        ("example.com", None, None, False),
-        # Testcase 3: Returns False for a domain
-        # with an invalid TLD
-        ("example.invalid", None, None, False),
-    ],
-)
-def test_get_age(
-    mock_db,
-    domain,
-    get_domain_data_return_value,
-    whois_creation_date,
-    expected_age,
-):
-    ip_info = mock_db.create_ip_info_obj()
-    mock_db.get_domain_data.return_value = get_domain_data_return_value
-    with mock.patch("whois.query") as mock_whois:
-        mock_whois.return_value.creation_date = whois_creation_date
-        ip_info.get_age.return_value = expected_age
-        assert ip_info.get_age(domain) == expected_age
+def test_get_age_no_creation_date(mock_db):
+    domain = "example.com"
+
+    mock_db.get_domain_data.return_value = None
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
+    with patch("whois.query") as mock_whois:
+        mock_whois.return_value = Mock(creation_date=None)
+
+        result = ip_info.get_age(domain)
+
+        assert result is False
+        mock_db.set_info_for_domains.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "ip_address, expected_rdns",
-    [
-        (  # Testcase1:valid IP address
-            "8.8.8.8",
-            {"reverse_dns": "dns.google"},
-        ),
-        (  # Testcase2:invalid IP address
-            "invalid_ip",
-            False,
-        ),
-        (  # Testcase3:localhost IP address
-            "127.0.0.1",
-            {"reverse_dns": "localhost.localdomain"},
-        ),
-    ],
-)
-def test_get_rdns(mock_db, ip_address, expected_rdns):
-    ip_info = mock_db.create_ip_info_obj()
-    ip_info.get_rdns.return_value = expected_rdns
-    assert ip_info.get_rdns(ip_address) == expected_rdns
+def test_get_age_invalid_tld(mock_db):
+    domain = "example.invalid"
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
+    result = ip_info.get_age(domain)
+
+    assert result is False
+    mock_db.get_domain_data.assert_not_called()
+    mock_db.set_info_for_domains.assert_not_called()
+
+
+def test_get_age_cached_data(mock_db):
+    domain = "cached.com"
+    cached_age = 100
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
+    mock_db.get_domain_data.return_value = {"Age": cached_age}
+
+    result = ip_info.get_age(domain)
+
+    assert result is False
+    mock_db.set_info_for_domains.assert_not_called()
+
+
+@pytest.mark.parametrize("domain", ["example.arpa", "example.local"])
+def test_get_age_special_domains(mock_db, domain):
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
+    result = ip_info.get_age(domain)
+
+    assert result is False
+    mock_db.get_domain_data.assert_not_called()
+    mock_db.set_info_for_domains.assert_not_called()
+
+
+def test_get_rdns_valid_ip(mock_db):
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
+    ip_address = "8.8.8.8"
+    expected_rdns = {"reverse_dns": "dns.google"}
+
+    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
+        "socket.inet_pton"
+    ) as mock_inet_pton:
+
+        mock_gethostbyaddr.return_value = ("dns.google", [], ["8.8.8.8"])
+        mock_inet_pton.side_effect = socket.error
+
+        result = ip_info.get_rdns(ip_address)
+        assert result == expected_rdns
+
+        mock_gethostbyaddr.assert_called_once_with(ip_address)
+        mock_inet_pton.assert_called_once()
+        mock_db.set_ip_info.assert_called_once_with(ip_address, expected_rdns)
+
+
+def test_get_rdns_invalid_ip(mock_db):
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
+    ip_address = "invalid_ip"
+
+    with patch("socket.gethostbyaddr") as mock_gethostbyaddr:
+        mock_gethostbyaddr.side_effect = socket.gaierror
+
+        result = ip_info.get_rdns(ip_address)
+        assert result is False
+
+        mock_gethostbyaddr.assert_called_once_with(ip_address)
+
+
+def test_get_rdns_no_reverse_dns(mock_db):
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
+    ip_address = "1.1.1.1"
+
+    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
+        "socket.inet_pton"
+    ) as mock_inet_pton:
+
+        mock_gethostbyaddr.return_value = ("1.1.1.1", [], ["1.1.1.1"])
+        mock_inet_pton.return_value = b"\x01\x01\x01\x01"
+
+        result = ip_info.get_rdns(ip_address)
+        assert result is False
+
+        mock_gethostbyaddr.assert_called_once_with(ip_address)
+        mock_inet_pton.assert_called_once()
+
+
+def test_get_rdns_localhost(mock_db):
+    ip_info = ModuleFactory().create_ip_info_obj(mock_db)
+    ip_address = "127.0.0.1"
+    expected_rdns = {"reverse_dns": "localhost.localdomain"}
+
+    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
+        "socket.inet_pton"
+    ) as mock_inet_pton:
+
+        mock_gethostbyaddr.return_value = (
+            "localhost.localdomain",
+            [],
+            ["127.0.0.1"],
+        )
+        mock_inet_pton.side_effect = socket.error
+
+        result = ip_info.get_rdns(ip_address)
+        assert result == expected_rdns
+
+        mock_gethostbyaddr.assert_called_once_with(ip_address)
+        mock_inet_pton.assert_called_once()
+        mock_db.set_ip_info.assert_called_once_with(ip_address, expected_rdns)
 
 
 def test_set_evidence_malicious_jarm_hash(mocker, mock_db):
@@ -415,7 +482,7 @@ def test_check_if_we_have_pending_mac_queries_empty_queue(mocker, mock_db):
     mock_get_vendor.assert_not_called()
 
 
-def test_get_gateway_MAC_cached(mocker, mock_db):
+def test_get_gateway_MAC_cached(mock_db):
     ip_info = ModuleFactory().create_ip_info_obj(mock_db)
     gw_ip = "192.168.1.1"
     cached_mac = "00:11:22:33:44:55"
