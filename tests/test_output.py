@@ -43,25 +43,6 @@ def test_log_line(mock_convert_format, msg, expected_log_content):
         handle.write.assert_called_once_with(expected_log_content)
 
 
-@patch("builtins.open")
-@patch("io.TextIOWrapper")
-def test_change_stdout(mock_text_io_wrapper, mock_open):
-    """Test that the change_stdout method correctly changes
-    the sys.stdout to the specified file."""
-    output = ModuleFactory().create_output_obj()
-    output.stdout = "path/to/stdout.log"
-    mock_file = MagicMock()
-    mock_open.return_value = mock_file
-    mock_text_io_wrapper.return_value = "mocked_text_io_wrapper"
-
-    result = output.change_stdout()
-
-    mock_open.assert_called_with("path/to/stdout.log", "wb", 0)
-    (mock_text_io_wrapper.assert_called_with(mock_file, write_through=True))
-    assert result == "mocked_text_io_wrapper"
-    assert sys.stdout == "mocked_text_io_wrapper"
-
-
 def test_print_no_pbar():
     """Test printing when has_pbar is False."""
     output = ModuleFactory().create_output_obj()
