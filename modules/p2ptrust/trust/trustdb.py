@@ -116,9 +116,6 @@ class TrustDB(IObservable):
     ):
         if timestamp is None:
             timestamp = time.time()
-        else:
-            k = 3
-        timestamp = time.time()
         print("###################3Slips score timeout: ", timestamp)
         parameters = (ip, score, confidence, timestamp)
         self.conn.execute(
