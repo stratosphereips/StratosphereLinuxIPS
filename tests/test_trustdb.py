@@ -1,0 +1,563 @@
+import pytest
+from unittest.mock import patch, call, MagicMock
+from tests.module_factory import ModuleFactory
+import datetime
+import time
+
+
+@pytest.mark.parametrize(
+    "existing_tables",
+    [
+        # Testcase 1: All tables exist
+        (['opinion_cache', 'slips_reputation', 
+          'go_reliability', 'peer_ips', 'reports']),
+        # Testcase 2: Some tables missing
+        (['slips_reputation', 'peer_ips']),
+        # Testcase 3: No tables exist
+        ([]),
+    ]
+)
+def test_delete_tables(mock_db, existing_tables):
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+    mock_db.execute.side_effect = \
+        lambda query: None if query.startswith('DROP TABLE') else ['table']
+    mock_db.fetchall.return_value = existing_tables
+
+    expected_calls = [
+        call('DROP TABLE IF EXISTS opinion_cache;'),
+        call('DROP TABLE IF EXISTS slips_reputation;'),
+        call('DROP TABLE IF EXISTS go_reliability;'),
+        call('DROP TABLE IF EXISTS peer_ips;'),
+        call('DROP TABLE IF EXISTS reports;')
+    ]
+
+    with patch.object(mock_db, 'execute') as mock_execute:
+        trust_db.delete_tables()
+        assert mock_execute.call_args_list == expected_calls
+
+
+@pytest.mark.parametrize(
+    "ipaddress, reports_data, peer_ips_data, slips_reputation_data, "
+    "go_reliability_data, expected_result",
+    [  # testcase1:No reports for the IP
+        (
+                "192.168.1.1",
+                [],
+                [],
+                [],
+                [],
+                [],
+        ),
+        # Testcase2:One report, reporter's IP matches target IP
+        (
+
+                "192.168.1.1",
+                [
+                    (
+                            "reporter_1",
+                            "ip",
+                            "192.168.1.1",
+                            0.5,
+                            0.8,
+                            1678886400,
+                    ),
+                ],
+                [
+                    ("192.168.1.1", "reporter_1", 1678886300),
+                ],
+                [],
+                [],
+                [],
+        ),
+        # Testcase3:One valid report
+        (
+                "192.168.1.1",
+                [
+                    (
+                            "reporter_1",
+                            "ip",
+                            "192.168.1.1",
+                            0.5,
+                            0.8,
+                            1678886400,
+                    ),
+                ],
+                [
+                    ("192.168.1.2", "reporter_1", 1678886300),
+                ],
+                [
+                    ("192.168.1.2", 0.6, 0.9, 1678886350),
+                ],
+                [(("reporter_1",), 0.7)],
+                [],
+        ),
+        # Testcase4:Multiple valid reports
+        (
+                "192.168.1.1",
+                [
+                    (
+                            "reporter_1",
+                            "ip",
+                            "192.168.1.1",
+                            0.5,
+                            0.8,
+                            1678886400,
+                    ),
+                    (
+                            "reporter_2",
+                            "ip",
+                            "192.168.1.1",
+                            0.3,
+                            0.6,
+                            1678886500,
+                    ),
+                ],
+                [
+                    ("192.168.1.2", "reporter_1", 1678886300),
+                    ("192.168.1.3", "reporter_2", 1678886450),
+                ],
+                [
+                    ("192.168.1.2", 0.6, 0.9, 1678886350),
+                    ("192.168.1.3", 0.2, 0.5, 1678886480),
+                ],
+                [(("reporter_1",), 0.7), (("reporter_2",), 0.4)],
+                [],
+        ),
+    ],
+)
+def test_get_opinion_on_ip(
+        mock_db,
+        ipaddress,
+        reports_data,
+        peer_ips_data,
+        slips_reputation_data,
+        go_reliability_data,
+        expected_result,
+):
+    mock_db.execute.side_effect = None
+    mock_db.fetchall.side_effect = [
+        reports_data,
+        peer_ips_data,
+        slips_reputation_data,
+        go_reliability_data,
+    ]
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+    result = trust_db.get_opinion_on_ip(ipaddress)
+    assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "key_type, reported_key, fetchone_result, expected_result",
+    [
+        # Testcase 1: Cache hit
+        (
+                "ip",
+                "192.168.1.1",
+                (0.8, 0.9, 0.7, 1678886400),  
+                (0.8, 0.9, 0.7, 1678886400),
+        ),
+        # Testcase 2: Cache miss
+        (
+                "peerid",
+                "some_peer_id",
+                None,
+                (None, None, None, None),
+        ),
+    ]
+)
+def test_get_cached_network_opinion(
+        mock_db,
+        key_type,
+        reported_key,
+        fetchone_result,
+        expected_result,
+):
+    mock_db.execute.return_value.fetchone.return_value = fetchone_result
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+    result = trust_db.get_cached_network_opinion(key_type, reported_key)
+    assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "key_type, reported_key, score, confidence, "
+    "network_score, expected_query, expected_params",
+    [  # Test Case 1: Update IP reputation in cache
+        (
+                "ip",
+                "192.168.1.1",
+                0.8,
+                0.9,
+                0.7,
+                "REPLACE INTO opinion_cache (key_type, reported_key, score, "
+                "confidence, network_score, "
+                "update_time)VALUES (?, ?, ?, ?, ?, strftime('%s','now'));",
+                ("ip", "192.168.1.1", 0.8, 0.9, 0.7),
+        ),
+        # Test Case 2: Update Peer ID reputation in cache
+        (
+                "peerid",
+                "some_peer_id",
+                0.5,
+                0.6,
+                0.4,
+                "REPLACE INTO opinion_cache (key_type, reported_key, score, "
+                "confidence, network_score, "
+                "update_time)VALUES (?, ?, ?, ?, ?, strftime('%s','now'));",
+                ("peerid", "some_peer_id", 0.5, 0.6, 0.4),
+        ),
+    ],
+)
+def test_update_cached_network_opinion(
+        mock_db,
+        key_type,
+        reported_key,
+        score,
+        confidence,
+        network_score,
+        expected_query,
+        expected_params,
+):
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+    with patch.object(mock_db, 'execute') as mock_execute:
+        with patch.object(mock_db, 'commit') as mock_commit:
+            trust_db.update_cached_network_opinion(
+                key_type, reported_key, score, confidence, network_score
+            )
+
+            mock_execute.assert_called_once_with(expected_query, 
+                                                 expected_params)
+            mock_commit.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "reports, expected_calls",
+    [
+        (
+                # Testcase 1: Single report
+                [
+                    (
+                            "reporter_1",
+                            "ip",
+                            "192.168.1.1",
+                            0.5,
+                            0.8,
+                            1678886400,  # Fixed timestamp
+                    )
+                ],
+                [
+                    call(
+                        "INSERT INTO reports "
+                        "(reporter_peerid, key_type, reported_key, "
+                        "score, confidence, update_time) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        [
+                            (
+                                    "reporter_1",
+                                    "ip",
+                                    "192.168.1.1",
+                                    0.5,
+                                    0.8,
+                                    1678886400,
+                            )
+                        ],
+                    )
+                ],
+        ),
+        (
+                # Testcase 2: Multiple reports
+                [
+                    (
+                            "reporter_1",
+                            "ip",
+                            "192.168.1.1",
+                            0.5,
+                            0.8,
+                            1678886400,
+                    ),
+                    (
+                            "reporter_2",
+                            "peerid",
+                            "another_peer",
+                            0.3,
+                            0.6,
+                            1678886500,
+                    ),
+                ],
+                [
+                    call(
+                        "INSERT INTO reports "
+                        "(reporter_peerid, key_type, reported_key, "
+                        "score, confidence, update_time) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        [
+                            (
+                                    "reporter_1",
+                                    "ip",
+                                    "192.168.1.1",
+                                    0.5,
+                                    0.8,
+                                    1678886400,
+                            ),
+                            (
+                                    "reporter_2",
+                                    "peerid",
+                                    "another_peer",
+                                    0.3,
+                                    0.6,
+                                    1678886500,
+                            ),
+                        ],
+                    )
+                ],
+        ),
+    ],
+)
+def test_insert_new_go_data(mock_db, reports, expected_calls):
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+    with patch.object(mock_db, "executemany") as mock_executemany:
+        trust_db.insert_new_go_data(reports)
+
+    mock_executemany.assert_has_calls(expected_calls)
+    assert mock_executemany.call_count == len(expected_calls)
+
+
+@pytest.mark.parametrize(
+    "peerid, ip, timestamp, expected_params",
+    [  # Testcase 1: Using provided timestamp
+        (
+                "peer_123",
+                "192.168.1.20",
+                1678887000,
+                ("192.168.1.20", "peer_123", 1678887000),
+        ),
+        # Testcase 2: Using current time as timestamp
+        (
+                "another_peer",
+                "10.0.0.5",
+                datetime.datetime(2024, 7, 24, 20, 26, 35),
+                ("10.0.0.5", "another_peer",
+                 datetime.datetime(2024, 7, 24, 20, 26, 35)),
+        ),
+    ],
+)
+def test_insert_go_ip_pairing(mock_db, peerid, ip, timestamp, expected_params):
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+
+    with patch.object(mock_db, 'execute') as mock_execute:
+        with patch.object(mock_db, 'commit') as mock_commit:
+            trust_db.insert_go_ip_pairing(peerid, ip, timestamp)
+            mock_execute.assert_called_once_with(
+                "INSERT INTO peer_ips (ipaddress, peerid, "
+                "update_time) VALUES (?, ?, ?);",
+                expected_params
+            )
+            mock_commit.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "ip, score, confidence, timestamp, expected_timestamp",
+    [
+        # Testcase 1: Using provided timestamp
+        (
+                "192.168.1.10",
+                0.85,
+                0.95,
+                1678886400,
+                1678886400
+        ),
+        # Testcase 2: Using current time as timestamp
+        (
+                "10.0.0.1",
+                0.6,
+                0.7,
+                None,
+                time.time()
+        ),
+    ],
+)
+def test_insert_slips_score(mock_db, ip, score, confidence,
+                            timestamp, expected_timestamp):
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+
+    with patch.object(time, 'time', return_value=time.time()) as mock_time:
+        trust_db.insert_slips_score(ip, score, confidence, timestamp)
+
+        expected_params = (ip, score, confidence, timestamp or mock_time.return_value)
+
+        mock_db.execute.assert_called_once_with(
+            "INSERT INTO slips_reputation (ipaddress, score, confidence, "
+            "update_time) VALUES (?, ?, ?, ?);",
+            expected_params
+        )
+        mock_db.commit.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "peerid, reliability, timestamp, expected_timestamp",
+    [
+        # Testcase 1: Using provided timestamp
+        (
+                "peer_123",
+                0.92,
+                1678887000,
+                1678887000
+        ),
+        # Testcase 2: Using current time as timestamp
+        (
+                "another_peer",
+                0.55,
+                None,
+                datetime.datetime.now()
+        ),
+    ],
+)
+def test_insert_go_reliability(mock_db, peerid, reliability,
+                               timestamp, expected_timestamp):
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+
+    with patch.object(datetime, 'datetime',
+                      wraps=datetime.datetime) as mock_datetime:
+        mock_datetime.now.return_value = expected_timestamp
+        trust_db.insert_go_reliability(peerid, reliability, timestamp)
+
+        expected_params = (peerid, reliability, timestamp or
+                           expected_timestamp)
+
+        mock_db.execute.assert_called_once_with(
+            "INSERT INTO go_reliability (peerid, reliability, "
+            "update_time) VALUES (?, ?, ?);",
+            expected_params
+        )
+        mock_db.commit.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "peerid, fetchone_result, expected_result",
+    [
+        # Testcase 1: IP found for peerid
+        ("peer_123", (1678887000, "192.168.1.20"),
+         (1678887000, "192.168.1.20")),
+        # Testcase 2: No IP found for peerid
+        ("unknown_peer", None, (False, False)),
+    ],
+)
+def test_get_ip_of_peer(mock_db, peerid, fetchone_result, expected_result):
+    mock_db.execute.return_value.fetchone.return_value = fetchone_result
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+    result = trust_db.get_ip_of_peer(peerid)
+    assert result == expected_result
+
+
+def test_create_tables(mock_db):
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+
+    expected_calls = [
+        call(
+            "CREATE TABLE IF NOT EXISTS slips_reputation ("
+            "id INTEGER PRIMARY KEY NOT NULL, "
+            "ipaddress TEXT NOT NULL, "
+            "score REAL NOT NULL, "
+            "confidence REAL NOT NULL, "
+            "update_time REAL NOT NULL);"
+        ),
+        call(
+            "CREATE TABLE IF NOT EXISTS go_reliability ("
+            "id INTEGER PRIMARY KEY NOT NULL, "
+            "peerid TEXT NOT NULL, "
+            "reliability REAL NOT NULL, "
+            "update_time REAL NOT NULL);"
+        ),
+        call(
+            "CREATE TABLE IF NOT EXISTS peer_ips ("
+            "id INTEGER PRIMARY KEY NOT NULL, "
+            "ipaddress TEXT NOT NULL, "
+            "peerid TEXT NOT NULL, "
+            "update_time REAL NOT NULL);"
+        ),
+        call(
+            "CREATE TABLE IF NOT EXISTS reports ("
+            "id INTEGER PRIMARY KEY NOT NULL, "
+            "reporter_peerid TEXT NOT NULL, "
+            "key_type TEXT NOT NULL, "
+            "reported_key TEXT NOT NULL, "
+            "score REAL NOT NULL, "
+            "confidence REAL NOT NULL, "
+            "update_time REAL NOT NULL);"
+        ),
+        call(
+            "CREATE TABLE IF NOT EXISTS opinion_cache ("
+            "key_type TEXT NOT NULL, "
+            "reported_key TEXT NOT NULL PRIMARY KEY, "
+            "score REAL NOT NULL, "
+            "confidence REAL NOT NULL, "
+            "network_score REAL NOT NULL, "
+            "update_time DATE NOT NULL);"
+        ),
+    ]
+
+    with patch.object(mock_db, 'execute') as mock_execute:
+        trust_db.create_tables()
+        mock_execute.assert_has_calls(expected_calls, any_order=True)
+
+
+@pytest.mark.parametrize(
+    "reporter_peerid, key_type, reported_key, score, confidence, "
+    "timestamp, expected_query, expected_params",
+    [
+        # Testcase 1: Using provided timestamp
+        (
+                "peer_123",
+                "ip",
+                "192.168.1.1",
+                0.8,
+                0.9,
+                1678887000,
+                "INSERT INTO reports (reporter_peerid, key_type, reported_key, "
+                "score, confidence, update_time) VALUES (?, ?, ?, ?, ?, ?)",
+                ("peer_123", "ip", "192.168.1.1", 0.8, 0.9, 1678887000)
+        ),
+        # Testcase 2: Using current time as timestamp
+        (
+                "another_peer",
+                "peerid",
+                "target_peer",
+                0.6,
+                0.7,
+                None,
+                "INSERT INTO reports (reporter_peerid, key_type, reported_key, "
+                "score, confidence, update_time) VALUES (?, ?, ?, ?, ?, ?)",
+                ("another_peer", "peerid", "target_peer", 0.6, 0.7, 1678887000.0)
+        ),
+    ]
+)
+def test_insert_new_go_report(
+        mock_db,
+        reporter_peerid,
+        key_type,
+        reported_key,
+        score,
+        confidence,
+        timestamp,
+        expected_query,
+        expected_params
+):
+    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+
+    with patch('time.time', return_value=1678887000.0):
+        with patch.object(mock_db, 'execute') as mock_execute:
+            with patch.object(mock_db, 'commit') as mock_commit:
+                trust_db.insert_new_go_report(
+                    reporter_peerid,
+                    key_type,
+                    reported_key,
+                    score,
+                    confidence,
+                    timestamp
+                )
+                mock_execute.assert_called_once()
+                actual_query, actual_params = mock_execute.call_args[0]
+                assert actual_query == expected_query
+                assert actual_params[:-1] == expected_params[:-1]
+                assert isinstance(actual_params[-1], (float, int))
+                assert abs(actual_params[-1] - expected_params[-1]) < 0.001
+                mock_commit.assert_called_once()
