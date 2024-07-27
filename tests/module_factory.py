@@ -4,6 +4,7 @@ import os
 
 from modules.flowalerts.conn import Conn
 from modules.flowalerts.dns import DNS
+from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
 from modules.progress_bar.progress_bar import PBar
 from modules.flowalerts.notice import Notice
