@@ -222,6 +222,12 @@ jobs:
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
+          - name: daemon test
+            run: |
+               coverage run --source=./ -m pytest tests/test_daemon.py -p no:warnings -vv
+               coverage report --include="slips/daemon.py*"
+               coverage html --include="slips/daemon.py*" -d coverage_reports/daemon     
+
 
   dataset_integration_tests:
       # specify the host OS
