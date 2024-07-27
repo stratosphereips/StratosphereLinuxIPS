@@ -222,6 +222,13 @@ jobs:
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
+          - name: cesnet test
+            run: |
+               coverage run --source=./ -m pytest tests/test_cesnet.py -p no:warnings -vv
+               coverage report --include="modules/cesnet/cesnet.py*"
+               coverage html --include="modules/cesnet/cesnet.py*" -d coverage_reports/cesnet
+     
+
 
   dataset_integration_tests:
       # specify the host OS
