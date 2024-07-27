@@ -5,6 +5,9 @@ on:
     branches:
     - 'master'
     - '!develop'
+  pull_request:
+    branches:
+      - 'alya/have_separate_workflows_for_differemt_docker_imgs'
 
 jobs:
   build_and_push_dependency_image:
@@ -27,5 +30,5 @@ jobs:
       with:
         context: ./
         file: ./docker/dependency-image/Dockerfile
-        tags: stratosphereips/slips_dependencies:latest
+        tags: stratosphereips/slips_dependencies_TEST:latest
         push: true
