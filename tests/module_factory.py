@@ -3,6 +3,7 @@ from unittest.mock import patch, Mock
 import os
 
 from modules.flowalerts.conn import Conn
+import sys
 from modules.flowalerts.dns import DNS
 from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
