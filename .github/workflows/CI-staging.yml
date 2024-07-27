@@ -222,6 +222,12 @@ jobs:
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
+          - name: markov_chain test
+            run: |
+               coverage run --source=./ -m pytest tests/test_markov_chain.py -p no:warnings -vv
+               coverage report --include="slips_files/common/markov_chains.py*"
+               coverage html --include="slips_files/common/markov_chains.py*" -d coverage_reports/markov_chains    
+
 
   dataset_integration_tests:
       # specify the host OS
