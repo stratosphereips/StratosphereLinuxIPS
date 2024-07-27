@@ -38,7 +38,7 @@ from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
-from modules.p2ptrust.p2ptrust import Trust
+from modules.p2ptrust.trust.trustdb import TrustDB
 from modules.arp.arp import ARP
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
