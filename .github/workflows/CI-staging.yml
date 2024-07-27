@@ -225,8 +225,8 @@ jobs:
           - name: checker test
             run: |
                coverage run --source=./ -m pytest tests/test_checker.py -p no:warnings -vv
-               coverage report --include="slips_files/core/helper/checker.py*"
-               coverage html --include="slips_files/core/helper/checker.py*" -d coverage_reports/checker
+               coverage report --include="slips_files/core/helpers/checker.py*"
+               coverage html --include="slips_files/core/helpers/checker.py*" -d coverage_reports/checker
     
 
 
