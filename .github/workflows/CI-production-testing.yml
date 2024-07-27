@@ -172,9 +172,9 @@ jobs:
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
-    - name: progress_bar Unit Tests
+    - name: base model Unit Tests
       run: |
-        python3 -m pytest tests/test_progress_bar.py -p no:warnings -vv    
+        python3 -m pytest tests/test_base_model.py -p no:warnings -vv    
 
     - name: Clear redis cache
       run: ./slips.py -cc
