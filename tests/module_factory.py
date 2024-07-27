@@ -39,6 +39,7 @@ from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
+from modules.cesnet.cesnet import CESNET
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
@@ -417,4 +418,19 @@ class ModuleFactory:
             network_discovery = NetworkDiscovery(mock_db)
             network_discovery.db = mock_db 
         return network_discovery
+
+    def create_cesnet_obj(self):
+        logger = MagicMock()
+        output_dir = "dummy_output_dir"
+        redis_port = 6379
+        termination_event = MagicMock()
+
+        with patch.object(DBManager, "create_sqlite_db", return_value=MagicMock()):
+            cesnet = CESNET(logger, output_dir, redis_port, termination_event)
+            cesnet.db = MagicMock()
+            cesnet.wclient = MagicMock()
+            cesnet.node_info = [{"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}]
+
+        cesnet.print = MagicMock()
+        return cesnet
 
