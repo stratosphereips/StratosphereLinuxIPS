@@ -39,6 +39,7 @@ from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
+from slips_files.common.markov_chains import Matrix
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
@@ -417,4 +418,8 @@ class ModuleFactory:
             network_discovery = NetworkDiscovery(mock_db)
             network_discovery.db = mock_db 
         return network_discovery
+        
+    def create_markov_chain_obj(self):
+        return Matrix()     
+
 
