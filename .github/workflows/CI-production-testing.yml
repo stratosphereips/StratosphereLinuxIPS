@@ -168,6 +168,10 @@ jobs:
       run: |
         python3 -m pytest tests/test_urlhaus.py -p no:warnings -vv
 
+    - name: markov chains Unit Tests
+      run: |
+        python3 -m pytest tests/test_markov_chains.py -p no:warnings -vv    
+
     - name: Input Unit Tests
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
