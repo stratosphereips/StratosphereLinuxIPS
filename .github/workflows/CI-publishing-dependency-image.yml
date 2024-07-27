@@ -28,5 +28,5 @@ jobs:
       with:
         context: ./
         file: ./docker/dependency-image/Dockerfile
-        tags: stratosphereips/slips_dependencies_TEST:latest
+        tags: stratosphereips/slips_dependencies_test:latest
         push: true

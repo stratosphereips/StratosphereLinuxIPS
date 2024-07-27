@@ -49,6 +49,6 @@ jobs:
         context: ./
         file: ./docker/P2P-image/Dockerfile
         tags: |
-          stratosphereips/slips_p2p_TEST:latest
-          stratosphereips/slips_p2p_TEST:${{ env.SLIPS_VERSION }}
+          stratosphereips/slips_p2p_test:latest
+          stratosphereips/slips_p2p_test:${{ env.SLIPS_VERSION }}
         push: true
