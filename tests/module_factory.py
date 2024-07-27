@@ -39,6 +39,7 @@ from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
+from slips_files.core.helpers.checker import Checker
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
@@ -418,3 +419,18 @@ class ModuleFactory:
             network_discovery.db = mock_db 
         return network_discovery
 
+    def create_checker_obj(self):
+        mock_main = Mock()
+        mock_main.args = MagicMock()
+        mock_main.args.output = "test_output"  
+        mock_main.args.verbose = "0" 
+        mock_main.args.debug = "0"
+        mock_main.redis_man = Mock()
+        mock_main.terminate_slips = Mock()
+        mock_main.print_version = Mock()
+        mock_main.get_input_file_type = Mock()
+        mock_main.handle_flows_from_stdin = Mock()
+        mock_main.pid = 12345  
+        
+        checker = Checker(mock_main)
+        return checker
