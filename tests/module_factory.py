@@ -1,5 +1,5 @@
 import shutil
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 import os
 
 from modules.flowalerts.conn import Conn
