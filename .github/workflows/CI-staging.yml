@@ -222,6 +222,12 @@ jobs:
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
+          - name: trustdb test
+            run: |
+               coverage run --source=./ -m pytest tests/test_trustdb.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/trust/trustdb.py*"
+               coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb    
+
 
   dataset_integration_tests:
       # specify the host OS
