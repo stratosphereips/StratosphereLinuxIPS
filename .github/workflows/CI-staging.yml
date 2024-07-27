@@ -222,6 +222,12 @@ jobs:
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
+          - name: riskiq test
+            run: |
+               coverage run --source=./ -m pytest tests/test_riskiq.py -p no:warnings -vv
+               coverage report --include="modules/riskiq/riskiq.py*"
+               coverage html --include="modules/riskiq/riskiq.py*" -d coverage_reports/riskiq    
+
 
   dataset_integration_tests:
       # specify the host OS
