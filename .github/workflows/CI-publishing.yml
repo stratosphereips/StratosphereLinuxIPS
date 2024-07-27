@@ -7,7 +7,7 @@ on:
     - '!develop'
 
 jobs:
-   # auto add release tag
+  # auto add release tag
   create_tag:
     runs-on: ubuntu-latest
 
@@ -23,7 +23,7 @@ jobs:
           tag: ${{ env.SLIPS_VERSION }}
           message: ""
 
-  publish_image:
+  publish_ubuntu_image:
     # runs the tests in a docker(built by this job) on top of a GH VM
     runs-on: ubuntu-20.04
 
@@ -34,11 +34,6 @@ jobs:
             name: ubuntu-image
             image_name: slips
             path: ./docker/ubuntu-image/Dockerfile
-
-          - type: macosm1-image
-            name: macosm1-image
-            image_name: slips_macos_m1
-            path: ./docker/macosm1-image/Dockerfile
 
     steps:
     - name: Get Slips version
