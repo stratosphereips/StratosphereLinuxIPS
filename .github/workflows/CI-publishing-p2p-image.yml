@@ -5,6 +5,9 @@ on:
     branches:
     - 'master'
     - '!develop'
+  pull_request:
+    branches:
+      - 'alya/have_separate_workflows_for_differemt_docker_imgs'
 
 jobs:
   publish_P2P_docker_image:
@@ -48,6 +51,6 @@ jobs:
         context: ./
         file: ./docker/P2P-image/Dockerfile
         tags: |
-          stratosphereips/slips_p2p:latest
-          stratosphereips/slips_p2p:${{ env.SLIPS_VERSION }}
+          stratosphereips/slips_p2p_TEST:latest
+          stratosphereips/slips_p2p_TEST:${{ env.SLIPS_VERSION }}
         push: true
