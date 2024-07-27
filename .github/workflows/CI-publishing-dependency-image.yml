@@ -3,11 +3,9 @@ name: CI-production
 on:
   push:
     branches:
-    - 'master'
+    - '!master'
     - '!develop'
-  pull_request:
-    branches:
-      - 'alya/have_separate_workflows_for_differemt_docker_imgs'
+    - 'alya/have_separate_workflows_for_differemt_docker_imgs'
 
 jobs:
   build_and_push_dependency_image:
