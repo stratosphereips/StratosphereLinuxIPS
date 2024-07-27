@@ -38,6 +38,8 @@ from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
+from modules.p2ptrust.trust.base_model import BaseModel
+from modules.p2ptrust.trust.trustdb import TrustDB
 from modules.arp.arp import ARP
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
@@ -417,4 +419,22 @@ class ModuleFactory:
             network_discovery = NetworkDiscovery(mock_db)
             network_discovery.db = mock_db 
         return network_discovery
+
+    def create_trust_db_obj(self, mock_db=None):
+        with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
+            trust_db = TrustDB(
+                self.logger,
+                "dummy_trust.db",
+                drop_tables_on_startup=False
+            )
+            if mock_db:
+                trust_db.conn = mock_db
+
+        trust_db.print = do_nothing
+        return trust_db          
+
+    def create_base_model_obj(self):
+        logger = Mock(spec=Output)
+        trustdb = Mock()
+        return BaseModel(logger, trustdb)
 
