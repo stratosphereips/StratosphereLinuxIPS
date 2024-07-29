@@ -141,6 +141,7 @@ class FlowMLDetection(IModule):
                 "dpkts",
                 "smac",
                 "dmac",
+                "uid",
             ]
             for field in to_drop:
                 try:
