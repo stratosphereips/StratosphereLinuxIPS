@@ -514,17 +514,14 @@ def test_print_version_no_git(mock_db):
 
     with (
         patch(
-            "slips_files.common." "slips_utils.utils.get_branch_info"
+            "slips_files.common.slips_utils.utils.get_branch_info"
         ) as mock_get_branch_info,
         patch("builtins.print") as mock_print,
+        patch("slips_files.common.style.green", lambda x: x),
     ):
         mock_get_branch_info.return_value = False
-
         main.print_version()
-
-        mock_print.assert_called_once_with(
-            f"Slips. Version \x1b[32m{main.version}\x1b[0m"
-        )
+        mock_print.assert_called_once_with("Slips. Version 1.0.0")
 
 
 def test_prepare_output_dir_with_o_flag(mock_db):
