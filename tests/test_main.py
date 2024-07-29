@@ -523,7 +523,7 @@ def test_print_version_no_git(mock_db):
         main.print_version()
 
         mock_print.assert_called_once_with(
-            "Slips. Version \x1b[32m1.0.0\x1b[0m"
+            f"Slips. Version \x1b[32m{main.version}\x1b[0m"
         )
 
 
