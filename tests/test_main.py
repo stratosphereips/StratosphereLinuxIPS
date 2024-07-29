@@ -296,7 +296,7 @@ def test_print(
         # Test Case 6: Valid BINETFLOW (tab-separated) file
         (
             "/path/to/file.binetflow",
-            b"StartTime,EndTime,SrcIp,DstIp",
+            b"StartTime\tDur\tProto\tSrcAddr\tSport",
             "binetflow-tabs",
         ),
     ],
@@ -306,12 +306,13 @@ def test_get_input_file_type(
 ):
     main = ModuleFactory().create_main_obj(mock_db)
 
-    with patch("subprocess.run") as mock_run, patch(
-        "os.path.isfile", return_value=True
-    ), patch(
-        "os.path.isdir", return_value=expected_input_type == "zeek_folder"
-    ), patch(
-        "builtins.open", mock_open(read_data=cmd_result.decode())
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("os.path.isfile", return_value=True),
+        patch(
+            "os.path.isdir", return_value=expected_input_type == "zeek_folder"
+        ),
+        patch("builtins.open", mock_open(read_data=cmd_result.decode())),
     ):
         mock_run.return_value.stdout = cmd_result
 
@@ -337,9 +338,7 @@ def test_save_the_db(mock_db, input_information, expected_filepath):
     main.args = MagicMock()
     main.args.output = "output"
     main.db = MagicMock()
-
     main.save_the_db()
-
     main.db.save.assert_called_once_with(expected_filepath)
 
 
@@ -437,9 +436,10 @@ def test_check_zeek_or_bro_not_found(mock_db):
     main = ModuleFactory().create_main_obj(mock_db)
     main.input_type = "pcap"
 
-    with patch("shutil.which", return_value=None), patch.object(
-        main, "terminate_slips"
-    ) as mock_terminate:
+    with (
+        patch("shutil.which", return_value=None),
+        patch.object(main, "terminate_slips") as mock_terminate,
+    ):
         result = main.check_zeek_or_bro()
 
     expected_result = False
@@ -512,9 +512,12 @@ def test_print_version_no_git(mock_db):
     main = ModuleFactory().create_main_obj(mock_db)
     main.version = "1.0.0"
 
-    with patch(
-        "slips_files.common." "slips_utils.utils.get_branch_info"
-    ) as mock_get_branch_info, patch("builtins.print") as mock_print:
+    with (
+        patch(
+            "slips_files.common." "slips_utils.utils.get_branch_info"
+        ) as mock_get_branch_info,
+        patch("builtins.print") as mock_print,
+    ):
         mock_get_branch_info.return_value = False
 
         main.print_version()
@@ -530,14 +533,13 @@ def test_prepare_output_dir_with_o_flag(mock_db):
     main.args.output = "custom_output_dir"
     main.args.testing = False
 
-    with patch.object(sys, "argv", ["-o"]), patch(
-        "os.path.exists", return_value=True
-    ), patch("os.listdir", return_value=["file1.txt", "dir1"]), patch(
-        "os.path.isfile", return_value=True
-    ), patch(
-        "os.remove"
-    ) as mock_remove, patch(
-        "os.path.isdir", return_value=False
+    with (
+        patch.object(sys, "argv", ["-o"]),
+        patch("os.path.exists", return_value=True),
+        patch("os.listdir", return_value=["file1.txt", "dir1"]),
+        patch("os.path.isfile", return_value=True),
+        patch("os.remove") as mock_remove,
+        patch("os.path.isdir", return_value=False),
     ):
         main.prepare_output_dir()
         assert mock_remove.call_count == 2
@@ -568,12 +570,12 @@ def test_prepare_output_dir_testing_mode(
     main.args.output = "test_output"
     main.args.testing = testing
 
-    with patch.object(sys, "argv", ["-o"]), patch(
-        "os.path.exists", return_value=True
-    ), patch("os.listdir", return_value=[filename]), patch(
-        "os.path.isfile", return_value=True
-    ), patch(
-        "os.remove"
-    ) as mock_remove:
+    with (
+        patch.object(sys, "argv", ["-o"]),
+        patch("os.path.exists", return_value=True),
+        patch("os.listdir", return_value=[filename]),
+        patch("os.path.isfile", return_value=True),
+        patch("os.remove") as mock_remove,
+    ):
         main.prepare_output_dir()
         assert mock_remove.call_count == expected_call_count
