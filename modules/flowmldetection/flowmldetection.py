@@ -10,6 +10,7 @@ import pandas as pd
 import json
 import traceback
 import warnings
+import sys
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -55,12 +56,8 @@ class FlowMLDetection(IModule):
         # Set the output queue of our database instance
         # Read the configuration
         self.read_configuration()
-        # Minum amount of new labels needed to start the train
-        self.minimum_labels_to_start_train = 50
-        # Minum amount of new labels needed to retrain
-        self.minimum_labels_to_retrain = 50
-        # The number of flows when last trained
-        self.last_number_of_flows_when_trained = 0
+        # Minum amount of new lables needed to trigger the train
+        self.minimum_lables_to_retrain = 50
         # To plot the scores of training
         # self.scores = []
         # The scaler trained during training and to use during testing
@@ -71,25 +68,26 @@ class FlowMLDetection(IModule):
     def read_configuration(self):
         conf = ConfigParser()
         self.mode = conf.get_ml_mode()
-        self.label = conf.label()
 
     def train(self):
         """
         Train a model based on the flows we receive and the labels
         """
         try:
-            # Get the flows from the DB
-            # self.flows = self.db.get_all_flows_in_profileid_twid(self.profileid, self.twid)
-            # Convert to pandas df
-            # self.flows = pd.DataFrame(self.flows)
-            # Process the features
-            # X_flow = self.process_features(self.flows)
+            # Process the labels to have only Normal and Malware
+            self.flows.label = self.flows.label.str.replace(
+                r"(^.*ormal.*$)", "Normal", regex=True
+            )
+            self.flows.label = self.flows.label.str.replace(
+                r"(^.*alware.*$)", "Malware", regex=True
+            )
+            self.flows.label = self.flows.label.str.replace(
+                r"(^.*alicious.*$)", "Malware", regex=True
+            )
 
-            # Create X_flow with the current flows minus the label
+            # Separate
+            y_flow = self.flows["label"]
             X_flow = self.flows.drop("label", axis=1)
-            # Create y_flow with the label
-            y_flow = numpy.full(X_flow.shape[0], self.label)
-            # Drop the module_labels
             X_flow = X_flow.drop("module_labels", axis=1)
 
             # Normalize this batch of data so far. This can get progressivle slow
@@ -98,7 +96,7 @@ class FlowMLDetection(IModule):
             # Train
             try:
                 self.clf.partial_fit(
-                    X_flow, y_flow, classes=["Malicious", "Benign"]
+                    X_flow, y_flow, classes=["Malware", "Normal"]
                 )
             except Exception:
                 self.print("Error while calling clf.train()")
@@ -121,7 +119,142 @@ class FlowMLDetection(IModule):
             self.store_model()
 
         except Exception:
-            self.print("Error in train().", 0, 1)
+            self.print("Error in train()", 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
+    
+    def get_final_state_from_flags(self, state, pkts):
+        """
+        Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
+        We receive the pakets to distinguish some Reset connections
+        """
+        try:
+            pre = state.split("_")[0]
+            try:
+                # Try suricata states
+                """
+                There are different states in which a flow can be.
+                Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
+                these are: New, Established and Closed,for UDP only new and established.
+                For each of these states Suricata can employ different timeouts.
+                """
+                if "new" in state or "established" in state:
+                    return "Established"
+                elif "closed" in state:
+                    return "Not Established"
+
+                # We have varius type of states depending on the type of flow.
+                # For Zeek
+                if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
+                    return "Not Established"
+                elif state in ("S1", "SF", "S2", "S3", "RSTO", "RSTP", "OTH"):
+                    return "Established"
+
+                # For Argus
+                suf = state.split("_")[1]
+                if "S" in pre and "A" in pre and "S" in suf and "A" in suf:
+                    """
+                    Examples:
+                    SA_SA
+                    SR_SA
+                    FSRA_SA
+                    SPA_SPA
+                    SRA_SPA
+                    FSA_FSA
+                    FSA_FSPA
+                    SAEC_SPA
+                    SRPA_SPA
+                    FSPA_SPA
+                    FSRPA_SPA
+                    FSPA_FSPA
+                    FSRA_FSPA
+                    SRAEC_SPA
+                    FSPA_FSRPA
+                    FSAEC_FSPA
+                    FSRPA_FSPA
+                    SRPAEC_SPA
+                    FSPAEC_FSPA
+                    SRPAEC_FSRPA
+                    """
+                    return "Established"
+                elif "PA" in pre and "PA" in suf:
+                    # Tipical flow that was reported in the middle
+                    """
+                    Examples:
+                    PA_PA
+                    FPA_FPA
+                    """
+                    return "Established"
+                elif "ECO" in pre:
+                    return "ICMP Echo"
+                elif "ECR" in pre:
+                    return "ICMP Reply"
+                elif "URH" in pre:
+                    return "ICMP Host Unreachable"
+                elif "URP" in pre:
+                    return "ICMP Port Unreachable"
+                else:
+                    """
+                    Examples:
+                    S_RA
+                    S_R
+                    A_R
+                    S_SA
+                    SR_SA
+                    FA_FA
+                    SR_RA
+                    SEC_RA
+                    """
+                    return "Not Established"
+            except IndexError:
+                # suf does not exist, which means that this is some ICMP or no response was sent for UDP or TCP
+                if "ECO" in pre:
+                    # ICMP
+                    return "Established"
+                elif "UNK" in pre:
+                    # ICMP6 unknown upper layer
+                    return "Established"
+                elif "CON" in pre:
+                    # UDP
+                    return "Established"
+                elif "INT" in pre:
+                    # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
+                    # is no confirmation of what happened.
+                    return "Not Established"
+                elif "EST" in pre:
+                    # TCP
+                    return "Established"
+                elif "RST" in pre:
+                    # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
+                    # It can happen that is reseted being not established, but we can't tell without -z b.
+                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
+                    return (
+                        "Not Established" if int(pkts) <= 3 else "Established"
+                    )
+                elif "FIN" in pre:
+                    # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
+                    # It can happen that is finished being not established, but we can't tell without -z b.
+                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
+                    return (
+                        "Not Established" if int(pkts) <= 3 else "Established"
+                    )
+                else:
+                    """
+                    Examples:
+                    S_
+                    FA_
+                    PA_
+                    FSA_
+                    SEC_
+                    SRPA_
+                    """
+                    return "Not Established"
+        except Exception:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(
+                f"Error in get_final_state_from_flags() in FlowMLDetection.py line {exception_line}",
+                0,
+                1,
+            )
             self.print(traceback.format_exc(), 0, 1)
 
     def process_features(self, dataset):
@@ -135,12 +268,7 @@ class FlowMLDetection(IModule):
             for proto in to_discard:
                 dataset = dataset[dataset.proto != proto]
 
-            # If te proto is in the list to delete and there is only one flow, then the dataset will be empty
-            if dataset.empty:
-                # DataFrame is empty now, so return empty
-                return dataset
-
-            # For now, discard these
+            # For now, discard the ports
             to_drop = [
                 "appproto",
                 "daddr",
@@ -152,7 +280,9 @@ class FlowMLDetection(IModule):
                 "history",
                 "uid",
                 "dir_",
+                "dbytes",
                 "endtime",
+                "bytes",
                 "flow_source",
             ]
             for field in to_drop:
@@ -161,16 +291,12 @@ class FlowMLDetection(IModule):
                 except (ValueError, KeyError):
                     pass
 
-            # When flows are read from Slips sqlite,
-            # the state is not transformed to 'Established' or
-            # 'Not Established', it is still 'S0' and others
+            # When flows are read from Slips sqlite, the state is not transformed to 'Established' or 'Not Established', it is still 'S0' and others
             # So transform here
-            dataset["state"] = dataset.apply(
-                lambda row: self.db.get_final_state_from_flags(
-                    row["state"], (row["spkts"] + row["dpkts"])
-                ),
-                axis=1,
-            )
+            #new_state_column = dataset.state.apply(self.get_final_state_from_flags(dataset.state, dataset.pkts))
+            dataset['state'] = dataset.apply(lambda row: self.get_final_state_from_flags(row['state'], row['pkts']), axis=1)
+
+            #dataset.state = new_state_column
 
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(
@@ -204,11 +330,7 @@ class FlowMLDetection(IModule):
             dataset.proto = dataset.proto.str.replace(
                 r"(^.*arp.*$)", "4", regex=True
             )
-
-            dataset["allbytes"] = dataset["sbytes"] + dataset["dbytes"]
-            dataset["pkts"] = dataset["spkts"] + dataset["dpkts"]
-
-            fields_to_convert_to_float = [
+            fields_to_convert_to_flow = [
                 dataset.proto,
                 dataset.dport,
                 dataset.sport,
@@ -219,10 +341,10 @@ class FlowMLDetection(IModule):
                 dataset.sbytes,
                 dataset.state,
             ]
-            for field in fields_to_convert_to_float:
+            for field in fields_to_convert_to_flow:
                 try:
                     field = field.astype("float64")
-                except (ValueError, AttributeError):
+                except ValueError:
                     pass
 
             return dataset
@@ -231,9 +353,9 @@ class FlowMLDetection(IModule):
             self.print("Error in process_features()")
             self.print(traceback.format_exc(), 0, 1)
 
-    def process_training_flows(self):
+    def process_flows(self):
         """
-        Process all the flows in the DB
+        Process all the flwos in the DB
         Store the pandas df in self.flows
         """
         try:
@@ -249,48 +371,44 @@ class FlowMLDetection(IModule):
                 # that are fake but representative of a normal and malware flow
                 # they are only for the training process
                 # At least 1 flow of each label is required
-
-                # These flows should be in the same format as the ones in the DB. 
-                # Which means the satate is still SF, S0, etc.
+                # self.print(f'Amount of labeled flows: {labels}', 0, 1)
                 flows.append(
                     {
-                        "starttime": 1594417039.029793,
+                        "ts": 1594417039.029793,
                         "dur": "1.9424750804901123",
                         "saddr": "10.7.10.101",
                         "sport": "49733",
                         "daddr": "40.70.224.145",
                         "dport": "443",
                         "proto": "tcp",
-                        "state": "SF",
-                        "spkts": 17,
-                        "dpkts": 27,
+                        "state": "Established",
+                        "allbytes": 42764,
+                        "spkts": 37,
                         "sbytes": 25517,
-                        "dbytes": 17247,
                         "appproto": "ssl",
-                        "label": "Malicious",
+                        "label": "Malware",
                         "module_labels": {
-                            "flowalerts-long-connection": "Malicious"
+                            "flowalerts-long-connection": "Malware"
                         },
                     }
                 )
                 flows.append(
                     {
-                        "starttime": 1382355032.706468,
+                        "ts": 1382355032.706468,
                         "dur": "10.896695",
                         "saddr": "147.32.83.52",
                         "sport": "47956",
                         "daddr": "80.242.138.72",
                         "dport": "80",
                         "proto": "tcp",
-                        "state": "SF",
+                        "state": "Established",
+                        "allbytes": 67696,
                         "spkts": 1,
-                        "dpkts": 0,
                         "sbytes": 100,
-                        "dbytes": 67596,
                         "appproto": "http",
-                        "label": "Benign",
+                        "label": "Normal",
                         "module_labels": {
-                            "flowalerts-long-connection": "Benign"
+                            "flowalerts-long-connection": "Normal"
                         },
                     }
                 )
@@ -318,8 +436,6 @@ class FlowMLDetection(IModule):
             # Convert the flow to a pandas dataframe
             raw_flow = pd.DataFrame(flow_to_process, index=[0])
             dflow = self.process_features(raw_flow)
-            if dflow.empty:
-                return None
             # Update the flow to the processed version
             return dflow
         except Exception:
@@ -333,6 +449,7 @@ class FlowMLDetection(IModule):
         and returns the predection array
         """
         try:
+            given_x_flow = x_flow
             # clean the flow
             fields_to_drop = [
                 "label",
@@ -340,28 +457,12 @@ class FlowMLDetection(IModule):
                 "uid",
                 "history",
                 "dir_",
+                "dbytes",
+                "dpkts",
                 "endtime",
+                "bytes",
                 "flow_source",
-                "ground_truth_label",  # todo now we can use them
-                "detailed_ground_truth_label",
             ]
-            # For argus binetflows this fails because ther is a field calle bytes that was not in other flows. It should be called allbytes.
-            # Error
-            ''' [Flow ML Detection] Error in detect() while processing                                                                                                                                                                                                                         
-            dur proto  sport dport  state  pkts  spkts  dpkts  bytes  sbytes  dbytes  allbytes                                                                                                                                                                                    
-            0  63.822830     0  56119   981    0.0    15     15      0   8764    1887       0      1887                                                                                                                                                                                    
-            The feature names should match those that were passed during fit.                                                                                                                                                                                                              
-            Feature names unseen at fit time:                                                                                                                                                                                                                                              
-            - bytes     
-            '''
-
-            # IF we delete here the filed bytes the error is
-            # [Flow ML Detection] Error in detect() while processing 
-            # dur proto sport dport  state  pkts  spkts  dpkts  sbytes  dbytes allbytes                                                                                                                                                             
-            # 0  63.822830     0  56120   980    0.0    15     15      0    1887       0      1887                                                                                                                                                             
-            # The feature names should match those that were passed during fit.                                                                                                                                                                                
-            # Feature names must be in the same order as they were in fit.                                                                                                                                                                                     
-                                                                                                                                                                                                                                                 
             for field in fields_to_drop:
                 try:
                     x_flow = x_flow.drop(field, axis=1)
@@ -373,7 +474,7 @@ class FlowMLDetection(IModule):
             return pred
         except Exception as e:
             self.print(
-                f"Error in detect() while processing " f"\n{x_flow}\n{e}"
+                f"Error in detect() while processing " f"\n{given_x_flow}\n{e}"
             )
             self.print(traceback.format_exc(), 0, 1)
 
@@ -465,16 +566,18 @@ class FlowMLDetection(IModule):
 
     def main(self):
         if msg := self.get_msg("new_flow"):
-            # When a new flow arrives
             msg = json.loads(msg["data"])
-            self.twid = msg["twid"]
-            self.profileid = msg["profileid"]
+            twid = msg["twid"]
             self.flow = msg["flow"]
-            # These following extra fields are expected in testing. update the original
+            # these fields are expected in testing. update the original
             # flow dict to have them
             self.flow.update(
                 {
+                    "allbytes": (self.flow["sbytes"] + self.flow["dbytes"]),
+                    # the flow["state"] is the origstate, we dont need that here
+                    # we need the interpreted state
                     "state": msg["interpreted_state"],
+                    "pkts": self.flow["spkts"] + self.flow["dpkts"],
                     "label": msg["label"],
                     "module_labels": msg["module_labels"],
                 }
@@ -487,31 +590,23 @@ class FlowMLDetection(IModule):
                 # Use labeled flows
                 labels = self.db.get_labels()
                 sum_labeled_flows = sum(i[1] for i in labels)
-
-                # The min labels to retrain is the min number of flows 
-                # we should have seen so far in this capture to start training
-                # This is so we dont _start_ training with only 1 flow
-
-                # Once we are over the start minimum, the second condition is 
-                # to force to retrain every a minimum_labels_to_retrain number
-                # of flows. So we dont retrain every 1 flow.
                 if (
-                    sum_labeled_flows >= self.minimum_labels_to_start_train
+                    sum_labeled_flows >= self.minimum_lables_to_retrain
+                    and sum_labeled_flows % self.minimum_lables_to_retrain == 1
                 ):
-                    if (sum_labeled_flows - self.last_number_of_flows_when_trained >= self.minimum_labels_to_retrain):
-                        # So for example we retrain every 50 labels and only when
-                        # we have at least 50 labels
-                        self.print(
-                            f"Training the model with the last group of "
-                            f"flows and labels. Total flows: {sum_labeled_flows}."
-                        )
-                        # Process all flows in the DB and make them ready
-                        # for pandas
-                        self.process_training_flows()
-                        # Train an algorithm
-                        self.train()
-                        self.last_number_of_flows_when_trained = sum_labeled_flows
-
+                    # We get here every 'self.minimum_lables_to_retrain'
+                    # amount of labels
+                    # So for example we retrain every 100 labels and only when
+                    # we have at least 100 labels
+                    self.print(
+                        f"Training the model with the last group of "
+                        f"flows and labels. Total flows: {sum_labeled_flows}."
+                    )
+                    # Process all flows in the DB and make them ready
+                    # for pandas
+                    self.process_flows()
+                    # Train an algorithm
+                    self.train()
             elif self.mode == "test":
                 # We are testing, which means using the model to detect
                 processed_flow = self.process_flow(self.flow)
@@ -531,8 +626,8 @@ class FlowMLDetection(IModule):
                         # and the label is diff from the prediction,
                         # print in debug mode
                         self.print(
-                            f"Predicted {pred[0]} for ground-truth label"
-                            f' {label}. Flow {self.flow["saddr"]}:'
+                            f"Report Prediction {pred[0]} for label"
+                            f' {label} flow {self.flow["saddr"]}:'
                             f'{self.flow["sport"]} ->'
                             f' {self.flow["daddr"]}:'
                             f'{self.flow["dport"]}/'
@@ -540,9 +635,9 @@ class FlowMLDetection(IModule):
                             0,
                             3,
                         )
-                    if pred[0] == "Malicious":
+                    if pred[0] == "Malware":
                         # Generate an alert
-                        self.set_evidence_malicious_flow(self.flow, self.twid)
+                        self.set_evidence_malicious_flow(self.flow, twid)
                         self.print(
                             f"Prediction {pred[0]} for label {label}"
                             f' flow {self.flow["saddr"]}:'
