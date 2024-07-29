@@ -34,9 +34,7 @@ def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     ],
 )
 def test_is_growing_zeek_dir(zeek_dir: str, is_tabs: bool, mock_db):
-    input = ModuleFactory().create_input_obj(
-        zeek_dir, "zeek_folder", mock_db
-    )
+    input = ModuleFactory().create_input_obj(zeek_dir, "zeek_folder", mock_db)
     mock_db.get_all_zeek_files.return_value = [
         os.path.join(zeek_dir, "conn.log")
     ]
@@ -52,9 +50,7 @@ def test_is_growing_zeek_dir(zeek_dir: str, is_tabs: bool, mock_db):
     ],
 )
 def test_is_zeek_tabs_file(path: str, expected_val: bool, mock_db):
-    input = ModuleFactory().create_input_obj(
-        path, "zeek_folder", mock_db
-    )
+    input = ModuleFactory().create_input_obj(path, "zeek_folder", mock_db)
     assert input.is_zeek_tabs_file(path) == expected_val
 
 
@@ -88,9 +84,7 @@ def test_cache_nxt_line_in_file(
     :param line_cached: should slips cache
     the first line of this file or not
     """
-    input = ModuleFactory().create_input_obj(
-        path, "zeek_log_file", mock_db
-    )
+    input = ModuleFactory().create_input_obj(path, "zeek_log_file", mock_db)
     input.cache_lines = {}
     input.file_time = {}
     input.is_zeek_tabs = is_tabs
@@ -143,9 +137,7 @@ def test_cache_nxt_line_in_file(
 def test_get_ts_from_line(
     path: str, is_tabs: str, zeek_line: str, expected_val: float, mock_db
 ):
-    input = ModuleFactory().create_input_obj(
-        path, "zeek_log_file", mock_db
-    )
+    input = ModuleFactory().create_input_obj(path, "zeek_log_file", mock_db)
     input.is_zeek_tabs = is_tabs
     input.get_ts_from_line(zeek_line)
 
@@ -162,9 +154,7 @@ def test_get_ts_from_line(
 def test_reached_timeout(
     last_updated_file_time, now, bro_timeout, expected_val, mock_db
 ):
-    input = ModuleFactory().create_input_obj(
-        "", "zeek_log_file", mock_db
-    )
+    input = ModuleFactory().create_input_obj("", "zeek_log_file", mock_db)
     input.last_updated_file_time = last_updated_file_time
     input.bro_timeout = bro_timeout
     input.cache_lines = False
@@ -183,9 +173,7 @@ def test_handle_nfdump(path, mock_db):
 
 
 def test_get_earliest_line(mock_db):
-    input = ModuleFactory().create_input_obj(
-        "", "zeek_log_file", mock_db
-    )
+    input = ModuleFactory().create_input_obj("", "zeek_log_file", mock_db)
     input.file_time = {
         "software.log": 3,
         "ssh.log": 2,
@@ -321,10 +309,9 @@ def test_read_from_stdin(line_type: str, line: str, mock_db):
 def test_give_profiler(
     mock_db, line, input_type, expected_line, expected_input_type
 ):
-    """Test that the give_profiler function correctly sends the given line to the profiler queue."""
-    input_process = ModuleFactory().create_input_obj(
-        "", input_type, mock_db
-    )
+    """Test that the give_profiler function correctly sends the given line to
+    the profiler queue."""
+    input_process = ModuleFactory().create_input_obj("", input_type, mock_db)
     input_process.total_flows = (
         1000 if expected_line.get("total_flows") else None
     )
@@ -336,34 +323,34 @@ def test_give_profiler(
 
 @pytest.mark.parametrize(
     "filepath, expected_result",
-    [   # Testcase 1: Supported file 
-        ("path/to/conn.log", None),
-        # Testcase 2: Supported file 
-        ("path/to/dns.log", None),
-        # Testcase 3: Supported file 
-        ("path/to/http.log", None),
-        # Testcase 4: Supported file 
-        ("path/to/ssl.log", None),
+    [  # Testcase 1: Supported file
+        ("path/to/conn.log", False),
+        # Testcase 2: Supported file
+        ("path/to/dns.log", False),
+        # Testcase 3: Supported file
+        ("path/to/http.log", False),
+        # Testcase 4: Supported file
+        ("path/to/ssl.log", False),
         # Testcase 5: Supported file
-        ("path/to/ssh.log", None),
-        # Testcase 6: Supported file 
-        ("path/to/dhcp.log", None),
-        # Testcase 7: Supported file 
-        ("path/to/ftp.log", None),
-        # Testcase 8: Supported file 
-        ("path/to/smtp.log", None),
-        # Testcase 9: Supported file 
-        ("path/to/tunnel.log", None),
-        # Testcase 10: Supported file 
-        ("path/to/notice.log", None),
-        # Testcase 11: Supported file 
-        ("path/to/files.log", None),
-        # Testcase 12: Supported file 
-        ("path/to/arp.log", None),
-        # Testcase 13: Supported file 
-        ("path/to/software.log", None),
-        # Testcase 14: Supported file 
-        ("path/to/weird.log", None),
+        ("path/to/ssh.log", False),
+        # Testcase 6: Supported file
+        ("path/to/dhcp.log", False),
+        # Testcase 7: Supported file
+        ("path/to/ftp.log", False),
+        # Testcase 8: Supported file
+        ("path/to/smtp.log", False),
+        # Testcase 9: Supported file
+        ("path/to/tunnel.log", False),
+        # Testcase 10: Supported file
+        ("path/to/notice.log", False),
+        # Testcase 11: Supported file
+        ("path/to/files.log", False),
+        # Testcase 12: Supported file
+        ("path/to/arp.log", False),
+        # Testcase 13: Supported file
+        ("path/to/software.log", False),
+        # Testcase 14: Supported file
+        ("path/to/weird.log", False),
         # Testcase 15: Unsupported file
         ("path/to/unsupported.log", True),
     ],
@@ -490,7 +477,8 @@ def test_shutdown_gracefully_remover_thread_not_running(mock_db):
 
 
 def test_stop_queues(mock_db):
-    """Test that the stop_queues method correctly cancels the join thread for the profiler queue."""
+    """Test that the stop_queues method correctly cancels the join thread for
+    the profiler queue."""
     input_process = ModuleFactory().create_input_obj(
         "", "zeek_log_file", mock_db
     )
