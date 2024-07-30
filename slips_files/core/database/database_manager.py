@@ -613,9 +613,6 @@ class DBManager:
     def add_port(self, *args, **kwargs):
         return self.rdb.add_port(*args, **kwargs)
 
-    def get_final_state_from_flags(self, *args, **kwargs):
-        return self.rdb.get_final_state_from_flags(*args, **kwargs)
-
     def add_ips(self, *args, **kwargs):
         return self.rdb.add_ips(*args, **kwargs)
 
