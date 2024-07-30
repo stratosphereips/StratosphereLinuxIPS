@@ -1,4 +1,4 @@
-name: CI-production
+name: CI-production-update-code-docs
 
 on:
   push:

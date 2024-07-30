@@ -1,4 +1,4 @@
-name: CI-production
+name: CI-production-publishing-dependency-image
 
 on:
   push:

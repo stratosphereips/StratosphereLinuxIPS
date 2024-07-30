@@ -1,4 +1,4 @@
-name: CI-production
+name: CI-production-testing
 
 on:
   pull_request:
