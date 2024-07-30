@@ -1,4 +1,4 @@
-name: CI-production
+name: CI-production-publishing-p2p-image
 
 on:
   push:

@@ -53,27 +53,27 @@ parameters:
     analysis_direction : all
 
 # Parameter to know if we should create the log files or not. Only yes or no
-    create_log_files : 'no'
+    create_log_files : False
 
 # Delete zeek log files after stopping slips. Only yes or no
-    delete_zeek_files : 'yes'
+    delete_zeek_files : True
 
 # Store zeek files in the output dir. Only yes or no
-    store_a_copy_of_zeek_files : 'yes'
+    store_a_copy_of_zeek_files : True
 
 
-    store_zeek_files_in_the_output_dir : 'no'
+    store_zeek_files_in_the_output_dir : False
 
 
 # Create a metadata dir output/metadata/ that has a copy of slips.yaml, whitelist file, current commit and date
 # available options are yes or no
-    metadata_dir : 'yes'
+    metadata_dir : True
 
 # Default pcap packet filter. Used with zeek
 #pcapfilter = 'ip or not ip'
 # If you want more important traffic and forget the multicast and broadcast stuff, you can use
 #pcapfilter = 'not icmp and not multicast and not broadcast and not arp and not port 5353 and not port 67'
-    pcapfilter : 'no'
+    pcapfilter : False
 
 # tcp_inactivity_timeout (in minutes). Used with zeek
 # Default tcp_inactivity_timeout is 5 minutes.
@@ -82,7 +82,7 @@ parameters:
 
 # Should we delete the previously stored data in the DB when we start??
 # By default False. Meaning we don't DELETE the DB by default.
-    deletePrevdb : 'true'
+    deletePrevdb : True
 # You can remember the data in all the previous runs of the DB if you put False.
 #  Redis will remember as long as the redis server is not down. The persistance is on the memory, not disk.
 #deletePrevdb = False
@@ -102,7 +102,7 @@ parameters:
 # which means slips will delete all zeek log
 #  files after 1 day of running, so that zeek doesn't use too much disk space
 # rotation = no
-    rotation : 'yes'
+    rotation : True
 # how often do you want to delete zeek files
 # can be written as a numeric constant followed by a time unit where
 # the time unit is one of usec, msec, sec, min, hr, or day which respectively
@@ -122,7 +122,7 @@ parameters:
 # how many minutes to wait for all modules to finish before killing them
     wait_for_modules_to_finish : 15 mins
 # flows are labeled to normal/malicious and added to the sqlite db in the output dir by default
-    export_labeled_flows : 'no'
+    export_labeled_flows : False
 # export_format can be csv or json. this parameter is ignored if export_labeled_flows is set to no
     export_format : json
 
@@ -137,7 +137,7 @@ detection:
 #evidence_detection_threshold = 10
 
 # Slips can show a popup/notification with every alert. Only yes or no
-    popup_alerts : 'no'
+    popup_alerts : False
 
 #####################
 # [3] Generic Confs for the modules or to process the modules
@@ -150,7 +150,7 @@ modules:
 # For each line in timeline file there is a timestamp.
 # By default the timestamp is seconds in unix time. However
 # by setting this variable to "True" value the time will be human readable.
-    timeline_human_timestamp : 'true'
+    timeline_human_timestamp : True
 
 
 #####################
@@ -264,7 +264,7 @@ exporting_alerts:
 # Server to use if you enable exporting STIX
     TAXII_server : localhost
     port : 1234
-    use_https : 'false'
+    use_https : False
     discovery_path : /services/discovery-a
     inbox_path : /services/inbox-a
 # Collection on the server you want to push stix data to
@@ -287,9 +287,9 @@ CESNET:
 # Slips supports exporting and importing evidence in the IDEA format to/from warden servers.
 
 # supported values are yes or no
-    send_alerts : 'no'
+    send_alerts : False
 
-    receive_alerts : 'no'
+    receive_alerts : False
 
 # warden configuration file. For format instructions check
 # https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html?highlight=exporting#cesnet-sharing
@@ -337,7 +337,7 @@ Profiling:
 # [11] CPU profiling
 
 # enable cpu profiling [yes,no]
-    cpu_profiler_enable : 'no'
+    cpu_profiler_enable : False
 
 # Available options are [dev,live]
 # dev for deterministic profiling. this will give precise information about the CPU usage
@@ -346,7 +346,7 @@ Profiling:
     cpu_profiler_mode : dev
 
 # profile all subprocesses in dev mode [yes,no].
-    cpu_profiler_multiprocess : 'yes'
+    cpu_profiler_multiprocess : True
 
 # set number of tracer entries (dev mode only)
     cpu_profiler_dev_mode_entries : 1000000
@@ -366,6 +366,6 @@ web_interface:
 # [10] enable or disable p2p for slips
 P2P:
 # create p2p.log with additional info about peer communications? yes or no
-    create_p2p_logfile : 'no'
+    create_p2p_logfile : False
 # use_p2p = yes
-    use_p2p : 'no'
+    use_p2p : False

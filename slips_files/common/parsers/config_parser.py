@@ -114,8 +114,7 @@ class ConfigParser(object):
         return threshold
 
     def packet_filter(self):
-        pcapfilter = self.read_configuration("parameters", "pcapfilter", "no")
-        return False if pcapfilter in ("no") else pcapfilter
+        return self.read_configuration("parameters", "pcapfilter", False)
 
     def online_whitelist(self):
         return self.read_configuration(
@@ -143,14 +142,13 @@ class ConfigParser(object):
         return update_period
 
     def popup_alerts(self):
-        popups = self.read_configuration("detection", "popup_alerts", "False")
-        return "yes" in popups.lower()
+        return self.read_configuration("detection", "popup_alerts", False)
+        
 
     def export_labeled_flows(self):
-        export = self.read_configuration(
-            "parameters", "export_labeled_flows", "no"
+        return self.read_configuration(
+            "parameters", "export_labeled_flows", False
         )
-        return "yes" in export.lower()
 
     def export_labeled_flows_to(self):
         export = self.read_configuration(
@@ -163,14 +161,12 @@ class ConfigParser(object):
         return False
 
     def rotation(self):
-        rotation = self.read_configuration("parameters", "rotation", "yes")
-        return "yes" in rotation.lower()
+        return self.read_configuration("parameters", "rotation", True)
 
     def store_a_copy_of_zeek_files(self):
-        store_a_copy_of_zeek_files = self.read_configuration(
-            "parameters", "store_a_copy_of_zeek_files", "no"
+        return self.read_configuration(
+            "parameters", "store_a_copy_of_zeek_files", False
         )
-        return "no" not in store_a_copy_of_zeek_files.lower()
 
     def whitelist_path(self):
         return self.read_configuration(
@@ -187,25 +183,22 @@ class ConfigParser(object):
         return self.read_configuration("modes", "stderr", "errors.log")
 
     def create_p2p_logfile(self):
-        create_p2p_logfile = self.read_configuration(
-            "P2P", "create_p2p_logfile", "no"
+        return self.read_configuration(
+            "P2P", "create_p2p_logfile", False
         )
-        return "yes" in create_p2p_logfile.lower()
 
     def ts_format(self):
         return self.read_configuration("timestamp", "format", None)
 
     def delete_zeek_files(self):
-        delete = self.read_configuration(
-            "parameters", "delete_zeek_files", "no"
+        return self.read_configuration(
+            "parameters", "delete_zeek_files", False
         )
-        return "yes" in delete.lower()
 
     def store_zeek_files_copy(self):
-        store_copy = self.read_configuration(
-            "parameters", "store_a_copy_of_zeek_files", "yes"
+        return self.read_configuration(
+            "parameters", "store_a_copy_of_zeek_files", True
         )
-        return "yes" in store_copy.lower()
 
     def get_tw_width_as_float(self):
         try:
@@ -281,14 +274,12 @@ class ConfigParser(object):
         return twid_width
 
     def enable_metadata(self):
-        enable_metadata = self.read_configuration(
-            "parameters", "metadata_dir", "no"
+        return self.read_configuration(
+            "parameters", "metadata_dir", False
         )
-        return "no" not in enable_metadata.lower()
 
     def use_p2p(self):
-        use_p2p = self.read_configuration("P2P", "use_p2p", "no")
-        return "no" not in use_p2p.lower()
+        return self.read_configuration("P2P", "use_p2p", False)
 
     def cesnet_conf_file(self):
         return self.read_configuration("CESNET", "configuration_file", False)
@@ -304,16 +295,14 @@ class ConfigParser(object):
         return poll_delay
 
     def send_to_warden(self):
-        send_to_warden = self.read_configuration(
-            "CESNET", "send_alerts", "no"
-        ).lower()
-        return "no" not in send_to_warden.lower()
-
+        return self.read_configuration(
+            "CESNET", "send_alerts", False
+        )
+ 
     def receive_from_warden(self):
-        receive_from_warden = self.read_configuration(
-            "CESNET", "receive_alerts", "no"
-        ).lower()
-        return "no" not in receive_from_warden.lower()
+        return self.read_configuration(
+            "CESNET", "receive_alerts", False
+        )
 
     def verbose(self):
         verbose = self.read_configuration("parameters", "verbose", 1)
@@ -343,11 +332,10 @@ class ConfigParser(object):
         )
 
     def export_strato_letters(self) -> bool:
-        export = self.read_configuration(
-            "parameters", "export_strato_letters", "no"
+        return self.read_configuration(
+            "parameters", "export_strato_letters", False
         )
-        return "yes" in export
-
+    
     def slack_token_filepath(self):
         return self.read_configuration(
             "exporting_alerts", "slack_api_path", False
@@ -373,10 +361,9 @@ class ConfigParser(object):
         return self.read_configuration("exporting_alerts", "port", False)
 
     def use_https(self):
-        use_https = self.read_configuration(
-            "exporting_alerts", "use_https", "false"
+        return self.read_configuration(
+            "exporting_alerts", "use_https", False
         )
-        return use_https.lower() == "true"
 
     def discovery_path(self):
         return self.read_configuration(
@@ -473,11 +460,10 @@ class ConfigParser(object):
         )
 
     def wait_for_TI_to_finish(self) -> bool:
-        wait = self.read_configuration(
-            "threatintelligence", "wait_for_TI_to_finish", "no"
+        return self.read_configuration(
+            "threatintelligence", "wait_for_TI_to_finish", False
         )
-        return "yes" in wait
-
+    
     def remote_ti_data_path(self):
         path = self.read_configuration(
             "threatintelligence",
@@ -563,8 +549,7 @@ class ConfigParser(object):
         return update_period
 
     def deletePrevdb(self):
-        delete = self.read_configuration("parameters", "deletePrevdb", True)
-        return delete != "False"
+        return self.read_configuration("parameters", "deletePrevdb", True)
 
     def rotation_period(self):
         rotation_period = self.read_configuration(
@@ -627,10 +612,9 @@ class ConfigParser(object):
         )
 
     def store_zeek_files_in_the_output_dir(self):
-        store_in_output = self.read_configuration(
-            "parameters", "store_zeek_files_in_the_output_dir", "no"
+        return self.read_configuration(
+            "parameters", "store_zeek_files_in_the_output_dir", False
         )
-        return "yes" in store_in_output
 
     def label(self):
         return self.read_configuration("parameters", "label", "unknown")
@@ -701,7 +685,7 @@ class ConfigParser(object):
 
     def get_cpu_profiler_enable(self):
         return self.read_configuration(
-            "Profiling", "cpu_profiler_enable", "no"
+            "Profiling", "cpu_profiler_enable", False
         )
 
     def get_cpu_profiler_mode(self):
@@ -709,7 +693,7 @@ class ConfigParser(object):
 
     def get_cpu_profiler_multiprocess(self):
         return self.read_configuration(
-            "Profiling", "cpu_profiler_multiprocess", "yes"
+            "Profiling", "cpu_profiler_multiprocess", True
         )
 
     def get_cpu_profiler_output_limit(self) -> int:
@@ -735,7 +719,7 @@ class ConfigParser(object):
 
     def get_memory_profiler_enable(self):
         return self.read_configuration(
-            "Profiling", "memory_profiler_enable", "no"
+            "Profiling", "memory_profiler_enable", False
         )
 
     def get_memory_profiler_mode(self):
@@ -745,5 +729,5 @@ class ConfigParser(object):
 
     def get_memory_profiler_multiprocess(self):
         return self.read_configuration(
-            "Profiling", "memory_profiler_multiprocess", "yes"
+            "Profiling", "memory_profiler_multiprocess", True
         )

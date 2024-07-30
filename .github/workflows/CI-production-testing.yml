@@ -1,4 +1,4 @@
-name: CI-production
+name: CI-production-testing
 
 on:
   pull_request:
@@ -54,6 +54,10 @@ jobs:
     - name: Run database unit tests
       run: |
         python3 -m pytest tests/test_database.py -p no:warnings -vv
+
+    - name: main unit tests
+      run: |
+        python3 -m pytest tests/test_main.py -p no:warnings -vv     
 
     - name: Flowalerts Unit Tests
       run: |

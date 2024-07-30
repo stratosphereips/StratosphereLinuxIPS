@@ -37,7 +37,6 @@ jobs:
           - name: Clear redis cache
             run: ./slips.py -cc
 
-
           - name: Flowalerts  Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_flowalerts.py -p no:warnings -vv
@@ -101,6 +100,11 @@ jobs:
               coverage run --source=./ -m pytest tests/test_smtp.py -p no:warnings -vv
               coverage report  --include="modules/flowalerts/smtp.py*"
               coverage html  --include="modules/flowalerts/smtp.py*" -d coverage_reports/flowalerts
+          - name: main  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_main.py -p no:warnings -vv
+              coverage report  --include="slips/main.py*"
+              coverage html  --include="slips/main.py*" -d coverage_reports/main    
 
           - name: Whitelist  Unit Tests
             run: |
