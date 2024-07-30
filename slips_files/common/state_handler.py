@@ -1,4 +1,6 @@
 from typing import Optional
+import sys
+import traceback
 
 
 def interpret_suricata_states(state) -> Optional[str]:
