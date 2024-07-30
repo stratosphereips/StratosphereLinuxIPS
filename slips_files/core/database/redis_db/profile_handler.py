@@ -14,7 +14,7 @@ from typing import (
 
 import redis
 import validators
-
+from slips_files.common.state_handler import get_final_state_from_flags
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.output import Output
 
@@ -324,14 +324,15 @@ class ProfileHandler(IObservable):
         state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
 
         if "^" in state_hist:
-            # The majority of the FP with horizontal port scan detection happen because a
-            # benign computer changes wifi, and many not established conns are redone,
-            # which look like a port scan to 10 webpages. To avoid this, we IGNORE all
-            # the flows that have in the history of flags (field history in zeek), the ^,
+            # The majority of the FP with horizontal port scan detection
+            # happen because a benign computer changes wifi, and many not
+            # established conns are redone, which look like a port scan to
+            # 10 webpages. To avoid this, we IGNORE all the flows that have
+            # in the history of flags (field history in zeek), the ^,
             # that means that the flow was swapped/flipped.
-            # The below key_name is only used by the portscan module to check for horizontal
-            # portscan, which means we can safely ignore it here and it won't affect the rest
-            # of slips
+            # The below key_name is only used by the portscan module to
+            # check for horizontal portscan, which means we can safely
+            # ignore it here and it won't affect the rest  of slips
             return False
 
         # Choose which port to use based if we were asked Dst or Src
@@ -342,10 +343,10 @@ class ProfileHandler(IObservable):
         ip_key = "srcips" if role == "Server" else "dstips"
 
         # Get the state. Established, NotEstablished
-        summaryState = self.get_final_state_from_flags(state, pkts)
+        state = get_final_state_from_flags(state, pkts)
 
         old_profileid_twid_data = self.get_data_from_profile_tw(
-            profileid, twid, port_type, summaryState, proto, role, "Ports"
+            profileid, twid, port_type, state, proto, role, "Ports"
         )
 
         try:
@@ -355,7 +356,8 @@ class ProfileHandler(IObservable):
             port_data["totalpkt"] += pkts
             port_data["totalbytes"] += totbytes
 
-            # if there's a conn from this ip on this port, update the pkts of this conn
+            # if there's a conn from this ip on this port, update the pkts
+            # of this conn
             if ip in port_data[ip_key]:
                 port_data[ip_key][ip]["pkts"] += pkts
                 port_data[ip_key][ip]["spkts"] += spkts
@@ -386,144 +388,9 @@ class ProfileHandler(IObservable):
         old_profileid_twid_data[port] = port_data
         data = json.dumps(old_profileid_twid_data)
         hash_key = f"{profileid}{self.separator}{twid}"
-        key_name = f"{port_type}Ports{role}{proto}{summaryState}"
+        key_name = f"{port_type}Ports{role}{proto}{state}"
         self.r.hset(hash_key, key_name, str(data))
         self.mark_profile_tw_as_modified(profileid, twid, starttime)
-
-    def get_final_state_from_flags(self, state, pkts):
-        """
-        Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
-        We receive the pakets to distinguish some Reset connections
-        """
-        try:
-            pre = state.split("_")[0]
-            try:
-                # Try suricata states
-                """
-                There are different states in which a flow can be.
-                Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
-                these are: New, Established and Closed,for UDP only new and established.
-                For each of these states Suricata can employ different timeouts.
-                """
-                if "new" in state or "established" in state:
-                    return "Established"
-                elif "closed" in state:
-                    return "Not Established"
-
-                # We have varius type of states depending on the type of flow.
-                # For Zeek
-                if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
-                    return "Not Established"
-                elif state in ("S1", "SF", "S2", "S3", "RSTO", "RSTP", "OTH"):
-                    return "Established"
-
-                # For Argus
-                suf = state.split("_")[1]
-                if "S" in pre and "A" in pre and "S" in suf and "A" in suf:
-                    """
-                    Examples:
-                    SA_SA
-                    SR_SA
-                    FSRA_SA
-                    SPA_SPA
-                    SRA_SPA
-                    FSA_FSA
-                    FSA_FSPA
-                    SAEC_SPA
-                    SRPA_SPA
-                    FSPA_SPA
-                    FSRPA_SPA
-                    FSPA_FSPA
-                    FSRA_FSPA
-                    SRAEC_SPA
-                    FSPA_FSRPA
-                    FSAEC_FSPA
-                    FSRPA_FSPA
-                    SRPAEC_SPA
-                    FSPAEC_FSPA
-                    SRPAEC_FSRPA
-                    """
-                    return "Established"
-                elif "PA" in pre and "PA" in suf:
-                    # Tipical flow that was reported in the middle
-                    """
-                    Examples:
-                    PA_PA
-                    FPA_FPA
-                    """
-                    return "Established"
-                elif "ECO" in pre:
-                    return "ICMP Echo"
-                elif "ECR" in pre:
-                    return "ICMP Reply"
-                elif "URH" in pre:
-                    return "ICMP Host Unreachable"
-                elif "URP" in pre:
-                    return "ICMP Port Unreachable"
-                else:
-                    """
-                    Examples:
-                    S_RA
-                    S_R
-                    A_R
-                    S_SA
-                    SR_SA
-                    FA_FA
-                    SR_RA
-                    SEC_RA
-                    """
-                    return "Not Established"
-            except IndexError:
-                # suf does not exist, which means that this is some ICMP or no response was sent for UDP or TCP
-                if "ECO" in pre:
-                    # ICMP
-                    return "Established"
-                elif "UNK" in pre:
-                    # ICMP6 unknown upper layer
-                    return "Established"
-                elif "CON" in pre:
-                    # UDP
-                    return "Established"
-                elif "INT" in pre:
-                    # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
-                    # is no confirmation of what happened.
-                    return "Not Established"
-                elif "EST" in pre:
-                    # TCP
-                    return "Established"
-                elif "RST" in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
-                    # It can happen that is reseted being not established, but we can't tell without -z b.
-                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    return (
-                        "Not Established" if int(pkts) <= 3 else "Established"
-                    )
-                elif "FIN" in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
-                    # It can happen that is finished being not established, but we can't tell without -z b.
-                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    return (
-                        "Not Established" if int(pkts) <= 3 else "Established"
-                    )
-                else:
-                    """
-                    Examples:
-                    S_
-                    FA_
-                    PA_
-                    FSA_
-                    SEC_
-                    SRPA_
-                    """
-                    return "Not Established"
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(
-                f"Error in getFinalStateFromFlags() in database.py line {exception_line}",
-                0,
-                1,
-            )
-            self.print(traceback.format_exc(), 0, 1)
 
     def get_data_from_profile_tw(
         self,
@@ -722,14 +589,14 @@ class ProfileHandler(IObservable):
         self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
-        summaryState = self.get_final_state_from_flags(flow.state, flow.pkts)
-        key_name = f"{direction}IPs{role}{flow.proto.upper()}{summaryState}"
+        state = get_final_state_from_flags(flow.state, flow.pkts)
+        key_name = f"{direction}IPs{role}{flow.proto.upper()}{state}"
         # Get the previous data about this key
         old_profileid_twid_data = self.get_data_from_profile_tw(
             profileid,
             twid,
             direction,
-            summaryState,
+            state,
             flow.proto,
             role,
             "IPs",
@@ -806,7 +673,7 @@ class ProfileHandler(IObservable):
         The profileid is the main profile that this flow is related too.
         : param new_profile_added : is set to True for everytime we see a new srcaddr
         """
-        summary_state = self.get_final_state_from_flags(flow.state, flow.pkts)
+        summary_state = get_final_state_from_flags(flow.state, flow.pkts)
         flow_dict = {
             "ts": flow.starttime,
             "dur": flow.dur,

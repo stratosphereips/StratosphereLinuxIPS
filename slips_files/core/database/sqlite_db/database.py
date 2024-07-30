@@ -31,11 +31,13 @@ class SQLiteDB(IObservable):
         """
         db_newly_created = False
         if not os.path.exists(self._flows_db):
-            # db not created, mark it as first time accessing it so we can init tables once we connect
+            # db not created, mark it as first time accessing it so we can
+            # init tables once we connect
             db_newly_created = True
             self._init_db()
 
-        # you can get multithreaded access on a single pysqlite connection by passing "check_same_thread=False"
+        # you can get multithreaded access on a single pysqlite connection
+        # by passing "check_same_thread=False"
         self.conn = sqlite3.connect(
             self._flows_db, check_same_thread=False, timeout=20
         )
