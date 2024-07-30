@@ -1,9 +1,7 @@
 from typing import Optional
-import sys
-import traceback
 
 
-def check_suricata_states(state) -> Optional[str]:
+def interpret_suricata_states(state) -> Optional[str]:
     """
     There are different states in which a flow can be.
     Suricata distinguishes three flow-states for TCP and two for
@@ -18,7 +16,7 @@ def check_suricata_states(state) -> Optional[str]:
         return "Not Established"
 
 
-def check_zeek_states(state) -> Optional[str]:
+def interpret_zeek_states(state) -> Optional[str]:
     # We have varius type of states depending on the type of flow.
     # For Zeek
     if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
@@ -27,9 +25,13 @@ def check_zeek_states(state) -> Optional[str]:
         return "Established"
 
 
-def check_argus_states(state) -> Optional[str]:
+def interpret_argus_states(state) -> Optional[str]:
     pre = state.split("_")[0]
-    suf = state.split("_")[1]
+    try:
+        suf = state.split("_")[1]
+    except IndexError:
+        return
+
     if "S" in pre and "A" in pre and "S" in suf and "A" in suf:
         """
         Examples:
@@ -86,7 +88,7 @@ def check_argus_states(state) -> Optional[str]:
         return "Not Established"
 
 
-def check_tcp_states(state, pkts) -> Optional[str]:
+def interpret_tcp_states(state, pkts) -> Optional[str]:
     pre = state.split("_")[0]
     if "EST" in pre:
         # TCP
@@ -122,7 +124,7 @@ def check_tcp_states(state, pkts) -> Optional[str]:
         return "Not Established"
 
 
-def check_udp_states(state) -> Optional[str]:
+def interpret_udp_states(state) -> Optional[str]:
     pre = state.split("_")[0]
     if "CON" in pre:
         # UDP
@@ -134,7 +136,7 @@ def check_udp_states(state) -> Optional[str]:
         return "Not Established"
 
 
-def check_icmp_states(state) -> Optional[str]:
+def interpret_icmp_states(state) -> Optional[str]:
     pre = state.split("_")[0]
     if "ECO" in pre:
         # ICMP
@@ -144,36 +146,25 @@ def check_icmp_states(state) -> Optional[str]:
         return "Established"
 
 
-def get_final_state_from_flags(self, state, pkts) -> str:
+def get_final_state_from_flags(state, pkts) -> str:
     """
-    Analyze the flags given and return a summary of the state.
-    Should work with Argus and Bro flags
-    We receive the pakets to distinguish some Reset connections
+    Converts the original flags from the flow, to a state that slips
+    understands
+    Works with Argus, suricata, and Bro flags
+    We receive the packets to distinguish some Reset connections
     """
-    try:
-        if state := check_suricata_states(state):
-            return state
-        if state := check_zeek_states(state):
-            return state
-        if state := check_argus_states(state):
-            return state
-    except IndexError:
-        # suf does not exist, which means that this is some ICMP or
-        # no response was sent for UDP or TCP
-        if state := check_icmp_states(state):
-            return state
-        if state := check_udp_states(state):
-            return state
-        if state := check_tcp_states(state, pkts):
-            return state
 
-        return "Not Established"
+    for interpreter in (
+        interpret_suricata_states,
+        interpret_zeek_states,
+        interpret_argus_states,
+        interpret_icmp_states,
+        interpret_udp_states,
+    ):
+        if interpreted_state := interpreter(state):
+            return interpreted_state
 
-    except Exception:
-        exception_line = sys.exc_info()[2].tb_lineno
-        self.print(
-            f"Error in get_final_state_from_flags() " f"line {exception_line}",
-            0,
-            1,
-        )
-        self.print(traceback.format_exc(), 0, 1)
+    if interpreted_state := interpret_tcp_states(state, pkts):
+        return interpreted_state
+
+    return "Not Established"
