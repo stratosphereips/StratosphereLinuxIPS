@@ -33,10 +33,10 @@ jobs:
         sudo apt install -y --no-install-recommends zeek
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
-    - name: Set up Python 3.8
+    - name: Set up Python 3.10.12
       uses: actions/setup-python@v2
       with:
-        python-version: "3.8"
+        python-version: "3.10.12"
 
     - name: Install Python dependencies
       run: |
@@ -57,7 +57,7 @@ jobs:
 
     - name: main unit tests
       run: |
-        python3 -m pytest tests/test_main.py -p no:warnings -vv     
+        python3 -m pytest tests/test_main.py -p no:warnings -vv
 
     - name: Flowalerts Unit Tests
       run: |
