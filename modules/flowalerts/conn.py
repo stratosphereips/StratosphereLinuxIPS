@@ -246,7 +246,7 @@ class Conn(IFlowalertsAnalyzer):
             or ip_obj.is_reserved
         ):
             return True
-        
+
         return False
 
     def get_sent_bytes(
@@ -265,7 +265,7 @@ class Conn(IFlowalertsAnalyzer):
         bytes_sent = {}
         for uid, flow in all_flows.items():
             daddr = flow["daddr"]
-            sbytes: int = flow.get("sbytes", 0)
+            sbytes: int = int(flow.get("sbytes", 0))
             ts: str = flow.get("starttime", "")
 
             if self.is_ignored_ip_data_upload(daddr) or not sbytes:
@@ -273,7 +273,7 @@ class Conn(IFlowalertsAnalyzer):
 
             if daddr in bytes_sent:
                 mbs_sent, uids, _ = bytes_sent[daddr]
-                mbs_sent += sbytes
+                mbs_sent += int(sbytes)
                 uids.append(uid)
                 bytes_sent[daddr] = (mbs_sent, uids, ts)
             else:
@@ -298,7 +298,6 @@ class Conn(IFlowalertsAnalyzer):
         for ip, ip_info in bytes_sent.items():
             ip_info: Tuple[int, List[str], str]
             bytes_uploaded, uids, ts = ip_info
-
             mbs_uploaded = utils.convert_to_mb(bytes_uploaded)
             if mbs_uploaded < self.data_exfiltration_threshold:
                 continue
@@ -720,7 +719,7 @@ class Conn(IFlowalertsAnalyzer):
                 # (fb, twitter, microsoft, etc.)
                 if self.whitelist.org_analyzer.is_ip_in_org(ip, org):
                     return True
-            return False   
+            return False
 
     def check_different_localnet_usage(
         self,
