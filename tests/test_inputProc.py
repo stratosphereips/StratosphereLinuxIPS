@@ -9,7 +9,8 @@ import json
 
 @pytest.mark.parametrize(
     "input_type,input_information",
-    [("pcap", "dataset/test12-icmp-portscan.pcap")],
+    # the pcaps here must have a conn.log when read by zeek
+    [("pcap", "dataset/test7-malicious.pcap")],
 )
 def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     # no need to test interfaces because in that case read_zeek_files runs in a loop and never returns
