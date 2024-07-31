@@ -19,7 +19,9 @@ def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     )
     input.zeek_pid = "False"
     input.is_zeek_tabs = False
-    assert input.handle_pcap_and_interface() is True
+    with patch.object(input, "print", return_value=None):
+        assert input.handle_pcap_and_interface() is True
+
     # delete the zeek logs created
     shutil.rmtree(input.zeek_dir)
 
