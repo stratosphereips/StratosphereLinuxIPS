@@ -474,7 +474,7 @@ def test_terminate_slips_interactive(mock_db):
     main = ModuleFactory().create_main_obj(mock_db)
     main.mode = "interactive"
     main.conf = MagicMock()
-    main.conf.get_cpu_profiler_enable.return_value = "no"
+    main.conf.get_cpu_profiler_enable.return_value = False
 
     with patch.object(sys, "exit") as mock_exit:
         main.terminate_slips()
@@ -487,7 +487,7 @@ def test_terminate_slips_daemonized(mock_db):
     main.mode = "daemonized"
     main.daemon = MagicMock()
     main.conf = MagicMock()
-    main.conf.get_cpu_profiler_enable.return_value = "no"
+    main.conf.get_cpu_profiler_enable.return_value = False
 
     with patch.object(sys, "exit") as mock_exit:
         main.terminate_slips()
@@ -496,17 +496,16 @@ def test_terminate_slips_daemonized(mock_db):
     mock_exit.assert_called_once_with(0)
 
 
-#
-# def test_terminate_slips_cpu_profiler_enabled(mock_db):
-#     main = ModuleFactory().create_main_obj(mock_db)
-#     main.mode = "interactive"
-#     main.conf = MagicMock()
-#     main.conf.get_cpu_profiler_enable.return_value = "yes"
-#
-#     with patch.object(sys, "exit") as mock_exit:
-#         main.terminate_slips()
-#
-#     mock_exit.assert_not_called()
+def test_terminate_slips_cpu_profiler_enabled(mock_db):
+    main = ModuleFactory().create_main_obj(mock_db)
+    main.mode = "interactive"
+    main.conf = MagicMock()
+    main.conf.get_cpu_profiler_enable.return_value = True
+
+    with patch.object(sys, "exit") as mock_exit:
+        main.terminate_slips()
+
+    mock_exit.assert_not_called()
 
 
 def test_print_version_no_git(mock_db):
