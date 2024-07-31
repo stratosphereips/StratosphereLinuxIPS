@@ -27,10 +27,10 @@ jobs:
 
     - name: Install Zeek
       run: |
-        echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list
-        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
-        apt update && apt install -y --no-install-recommends --fix-missing zeek
-        ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+        sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
     - name: confirm that zeek is installed
       run: |
