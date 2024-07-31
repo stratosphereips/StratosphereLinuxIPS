@@ -139,8 +139,6 @@ detection:
 # Slips can show a popup/notification with every alert. Only yes or no
     popup_alerts : False
 
-#####################
-# [3] Generic Confs for the modules or to process the modules
 modules:
 # List of modules to ignore. By default we always ignore the template! do not remove it from the list
     disable : "[template , ensembling, Flow ML Detection, Update Manager]"

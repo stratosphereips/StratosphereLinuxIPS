@@ -167,8 +167,8 @@ detection:
    # Slips can show a popup/notification with every alert. Only yes or no
    popup_alerts : False
 
-   #############################
-   modules:
+#############################
+modules:
    # List of modules to ignore. By default we always ignore the template! do not remove it from the list
    # Names of other modules that you can disable (they all should be lowercase with no special characters):
    # ensembling, threatintelligence, blocking,
