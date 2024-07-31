@@ -178,18 +178,25 @@ jobs:
     - name: Clear redis cache
       run: ./slips.py -cc
 
+    - name confirm that zeek is installed
+      run: |
+        which zeek
+        which bro
+        bro -h
+        zeek -h
+
+    - name: Config file tests
+      run: |
+        python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
+
     - name: Portscan tests
       run: |
         python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv
-
 
     - name: Dataset Integration tests
       run: |
         python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
 
-    - name: Config file tests
-      run: |
-        python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
 
     - name: Upload Artifacts
       # run this job whether the above jobs failed or passed
