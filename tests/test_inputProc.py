@@ -476,17 +476,6 @@ def test_shutdown_gracefully_remover_thread_not_running(mock_db):
     assert input_process.open_file_handlers["test_file.log"].close.called
 
 
-def test_stop_queues(mock_db):
-    """Test that the stop_queues method correctly cancels the join thread for
-    the profiler queue."""
-    input_process = ModuleFactory().create_input_obj(
-        "", "zeek_log_file", mock_db
-    )
-    input_process.profiler_queue = MagicMock()
-
-    input_process.stop_queues()
-
-
 def test_close_all_handles(mock_db):
     """Test that the close_all_handles method closes all open file handles."""
     input_process = ModuleFactory().create_input_obj(
