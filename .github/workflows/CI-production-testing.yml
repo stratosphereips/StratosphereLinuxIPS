@@ -178,7 +178,7 @@ jobs:
     - name: Clear redis cache
       run: ./slips.py -cc
 
-    - name confirm that zeek is installed
+    - name: confirm that zeek is installed
       run: |
         which zeek
         which bro
