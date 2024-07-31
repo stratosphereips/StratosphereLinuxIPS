@@ -32,6 +32,11 @@ jobs:
         apt update && apt install -y --no-install-recommends --fix-missing zeek
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
+    - name: confirm that zeek is installed
+      run: |
+        which bro
+        bro -h
+
     - name: Set up Python 3.10.12
       uses: actions/setup-python@v2
       with:
@@ -178,12 +183,7 @@ jobs:
     - name: Clear redis cache
       run: ./slips.py -cc
 
-    - name: confirm that zeek is installed
-      run: |
-        which zeek
-        which bro
-        bro -h
-        zeek -h
+
 
     - name: Config file tests
       run: |
