@@ -45,9 +45,6 @@ jobs:
     - name: Start redis server
       run: redis-server --daemonize yes
 
-    - name: Run unit tests
-      run: python3 -m pytest tests/ --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
-
 
     - name: Run database unit tests
       run: |
@@ -65,7 +62,7 @@ jobs:
       run: |
         python3 -m pytest tests/test_conn.py -p no:warnings -vv
 
-    - name: downloaded_file Unit Tests
+    - name: downloaded file Unit Tests
       run: |
         python3 -m pytest tests/test_downloaded_file.py -p no:warnings -vv
 
@@ -90,11 +87,11 @@ jobs:
       run: |
         python3 -m pytest tests/test_notice.py -p no:warnings -vv
 
-    - name: software Unit Tests
+    - name: Software Unit Tests
       run: |
         python3 -m pytest tests/test_software.py -p no:warnings -vv
 
-    - name: smtp Unit Tests
+    - name: SMTP Unit Tests
       run: |
         python3 -m pytest tests/test_smtp.py -p no:warnings -vv
 
@@ -110,7 +107,7 @@ jobs:
       run: |
         python3 -m pytest tests/test_blocking.py -p no:warnings -vv
 
-    - name: Flowhandler Unit Test
+    - name: Flow handler Unit Tests
       run: |
         python3 -m pytest tests/test_flow_handler.py -p no:warnings -vv
 
@@ -126,7 +123,7 @@ jobs:
       run: |
         python3 -m pytest tests/test_vertical_portscans.py -p no:warnings -vv
 
-    - name: Network discovery Unit Tests
+    - name: Network Discovery Unit Tests
       run: |
         python3 -m pytest tests/test_network_discovery.py -p no:warnings -vv
 
@@ -166,7 +163,7 @@ jobs:
       run: |
         python3 -m pytest -s tests/test_evidence.py -p no:warnings -vv
 
-    - name: urlhaus Unit Tests
+    - name: Urlhaus Unit Tests
       run: |
         python3 -m pytest tests/test_urlhaus.py -p no:warnings -vv
 
@@ -174,7 +171,7 @@ jobs:
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
-    - name: set evidence test
+    - name: set Evidence Unit Tests
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
 
