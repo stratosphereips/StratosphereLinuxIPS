@@ -119,15 +119,13 @@ def test_handle_printing_stats_pbar_not_finished():
     output.has_pbar = True
     output.pbar_finished = MagicMock()
     output.pbar_finished.is_set.return_value = False
-    output.pbar_sender_pipe = MagicMock()
+    output.tell_pbar = MagicMock() 
     stats = "Analyzed IPs: 10"
 
     output.handle_printing_stats(stats)
 
-    (
-        output.pbar_sender_pipe.send.assert_called_once_with(
-            {"event": "update_stats", "stats": stats}
-        )
+    output.tell_pbar.assert_called_once_with(
+        {"event": "update_stats", "stats": stats}
     )
 
 
@@ -223,6 +221,10 @@ def test_output_line_all_outputs(mock_log_error, mock_log_line, mock_print):
 @patch("slips_files.core.output.Output.log_line")
 @patch("slips_files.core.output.Output.log_error")
 def test_output_line_no_outputs(mock_log_error, mock_log_line, mock_print):
+    """
+    Test that output_line doesn't print or log when the provided 
+    verbose level (3) is higher than the module's verbose level (2).
+    """
     output = ModuleFactory().create_output_obj()
     output.verbose = 2
     output.debug = 2
