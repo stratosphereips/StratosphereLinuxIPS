@@ -19,7 +19,7 @@ def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     )
     input.zeek_pid = "False"
     input.is_zeek_tabs = False
-    with patch.object(input, "print", return_value=None):
+    with patch.object(input, "get_flows_number", return_value=500):
         assert input.handle_pcap_and_interface() is True
 
     # delete the zeek logs created
