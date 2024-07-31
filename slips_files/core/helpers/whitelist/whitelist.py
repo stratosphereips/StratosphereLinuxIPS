@@ -34,7 +34,7 @@ class Whitelist(IObservable):
 
     def update(self):
         """
-        parses the whitelist specified in the slips.conf and stores the
+        parses the whitelist specified in the slips.yaml and stores the
         parsed results in the db
         """
         self.parser.parse()

@@ -28,7 +28,7 @@ class ICore(IModule, Process):
         contains common initializations in all core files in
          slips_files/core/
         the goal of this is to have one common __init__()
-        for all modules, which is the one in this file
+        for all core file, which is the one in this file
         """
         Process.__init__(self)
         self.output_dir = output_dir
@@ -37,10 +37,10 @@ class ICore(IModule, Process):
         self.termination_event: Event = termination_event
         self.redis_port = redis_port
         self.db = DBManager(self.logger, output_dir, redis_port)
-        self.msg_received = False
         IObservable.__init__(self)
         self.add_observer(self.logger)
         self.init(**kwargs)
+        self.channel_tracker = self.init_channel_tracker()
 
     def run(self):
         """

@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.0.15
+Slips v1.1
 </h1>
 
 
@@ -84,9 +84,10 @@ cat output_dir/alerts.log
 ```
 
 #### Macos M1
+In macos do not use --net=host if you want to access the internal container's ports from the host.
 
 ```
-docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
+docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
 ```
 
 ```
@@ -149,7 +150,7 @@ For more info about the Kalipso interface, check the docs: https://stratospherel
 
 # Requirements
 
-Slips requires Python 3.8+ and at least 4 GBs of RAM to run smoothly.
+Slips requires Python 3.10.12 and at least 4 GBs of RAM to run smoothly.
 
 
 # Installation

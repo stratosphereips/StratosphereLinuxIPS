@@ -1,3 +1,15 @@
+- 1.1 (July 2024)
+- Update Python version to 3.10.12 and all python libraries used by Slips.
+- Update nodejs and zeek.
+- Improve the stopping of Slips. Modules now have more time to process flows.
+- Fix database unit tests overwriting config/redis.conf.
+- New config file format, Slips is now using yaml thanks to @patel-lay.
+- Better unit tests. thanks to @Sekhar-Kumar-Dash.
+- Github workflow improvements.
+- Fix RNN module and add a new model.
+- Horizontal port scan detection improvements.
+
+
 - 1.0.15 (June 2024)
 - Add a Parameter to export strato letters to re-train the RNN model.
 - Better organization of flowalerts module by splitting it into many specialized files.
@@ -658,5 +670,3 @@
 	- This is a mayor version change. Implementing new algorithms for analyzing the results, management of IPs, connections, whois database and more features.
 	- A new parameter to specify the file (-r). This is as fast as reading the file from stdin.
 	- Now we have a configuration file slips.conf. In there you can specify from fixed parameters, the time formats, to the columns in the flow file.
-- 0.3.3alpha
-	- First stable version with a minimal algorithm for detecting behavioral threats.

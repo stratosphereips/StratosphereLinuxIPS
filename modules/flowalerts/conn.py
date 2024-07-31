@@ -40,7 +40,7 @@ class Conn(IFlowalertsAnalyzer):
         self.long_connection_threshold = conf.long_connection_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
-        self.our_ips = utils.get_own_IPs()
+        self.our_ips = utils.get_own_ips()
         self.client_ips: List[str] = conf.client_ips()
 
     def name(self) -> str:
@@ -89,7 +89,7 @@ class Conn(IFlowalertsAnalyzer):
                 # first time seeing this daddr
                 self.p2p_daddrs[daddr] = 1
 
-            if len(self.p2p_daddrs) == 5:
+            if len(self.p2p_daddrs) >= 5:
                 # this is another connection on port 3000+/udp and we already have 5 of them
                 # probably p2p
                 return True
@@ -247,6 +247,8 @@ class Conn(IFlowalertsAnalyzer):
         ):
             return True
 
+        return False
+
     def get_sent_bytes(
         self, all_flows: Dict[str, dict]
     ) -> Dict[str, Tuple[int, List[str], str]]:
@@ -263,7 +265,7 @@ class Conn(IFlowalertsAnalyzer):
         bytes_sent = {}
         for uid, flow in all_flows.items():
             daddr = flow["daddr"]
-            sbytes: int = flow.get("sbytes", 0)
+            sbytes: int = int(flow.get("sbytes", 0))
             ts: str = flow.get("starttime", "")
 
             if self.is_ignored_ip_data_upload(daddr) or not sbytes:
@@ -271,7 +273,7 @@ class Conn(IFlowalertsAnalyzer):
 
             if daddr in bytes_sent:
                 mbs_sent, uids, _ = bytes_sent[daddr]
-                mbs_sent += sbytes
+                mbs_sent += int(sbytes)
                 uids.append(uid)
                 bytes_sent[daddr] = (mbs_sent, uids, ts)
             else:
@@ -296,7 +298,6 @@ class Conn(IFlowalertsAnalyzer):
         for ip, ip_info in bytes_sent.items():
             ip_info: Tuple[int, List[str], str]
             bytes_uploaded, uids, ts = ip_info
-
             mbs_uploaded = utils.convert_to_mb(bytes_uploaded)
             if mbs_uploaded < self.data_exfiltration_threshold:
                 continue
@@ -377,6 +378,7 @@ class Conn(IFlowalertsAnalyzer):
                 timestamp,
             )
             return True
+        return False
 
     def should_ignore_conn_without_dns(
         self, flow_type, appproto, daddr
@@ -388,7 +390,7 @@ class Conn(IFlowalertsAnalyzer):
         # private ip or in the list of client_ips
         return (
             flow_type != "conn"
-            or appproto == "dns"
+            or appproto in ("dns", "icmp")
             or utils.is_ignored_ip(daddr)
             # if the daddr is a client ip, it means that this is a conn
             # from the internet to our ip, the dns res was probably
@@ -717,6 +719,7 @@ class Conn(IFlowalertsAnalyzer):
                 # (fb, twitter, microsoft, etc.)
                 if self.whitelist.org_analyzer.is_ip_in_org(ip, org):
                     return True
+            return False
 
     def check_different_localnet_usage(
         self,

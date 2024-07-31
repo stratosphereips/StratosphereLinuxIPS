@@ -36,7 +36,7 @@ class Daemon:
             self.pid = None
 
     def print(self, text):
-        """Prints output to logsfile specified in slips.conf"""
+        """Prints output to logsfile specified in slips.yaml"""
         with open(self.logsfile, "a") as f:
             f.write(f"{text}\n")
 

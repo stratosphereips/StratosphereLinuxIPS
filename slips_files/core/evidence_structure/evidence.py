@@ -20,7 +20,7 @@ def validate_timestamp(ts) -> str:
     the ts of all evidence should be in
      the alerts time format, if not, raise an exception
     """
-    if utils.define_time_format(ts) == utils.alerts_format:
+    if utils.get_time_format(ts) == utils.alerts_format:
         return ts
     else:
         raise ValueError(

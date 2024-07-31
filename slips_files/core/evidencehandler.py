@@ -92,8 +92,7 @@ class EvidenceHandler(ICore):
 
         self.print(f"Storing Slips logs in {self.output_dir}")
         # this list will have our local and public ips when using -i
-        self.our_ips = utils.get_own_IPs()
-        self.discarded_bc_never_processed = {}
+        self.our_ips = utils.get_own_ips()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -110,7 +109,7 @@ class EvidenceHandler(ICore):
         self.UID = conf.get_UID()
 
         self.popup_alerts = conf.popup_alerts()
-        # In docker, disable alerts no matter what slips.conf says
+        # In docker, disable alerts no matter what slips.yaml says
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
 
@@ -764,7 +763,6 @@ class EvidenceHandler(ICore):
                 profile_already_blocked = self.db.checkBlockedProfTW(
                     profileid, twid
                 )
-
                 # This is the part to detect if the accumulated
                 # evidence was enough for generating a detection
                 # The detection should be done in attacks per minute.

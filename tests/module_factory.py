@@ -18,7 +18,9 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.core.profiler import Profiler
 from slips_files.core.output import Output
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
+from modules.threat_intelligence.urlhaus import URLhaus
 from modules.flowalerts.flowalerts import FlowAlerts
+from modules.flowalerts.set_evidence import SetEvidnceHelper
 from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
@@ -34,8 +36,24 @@ from multiprocessing import Queue, Event, Semaphore
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
+from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
+from slips_files.core.evidence_structure.evidence import (
+    Attacker,
+    Direction,
+    Evidence,
+    EvidenceType,
+    IDEACategory,
+    IoCType,
+    ProfileID,
+    Proto,
+    Tag,
+    ThreatLevel,
+    TimeWindow,
+    Victim,
+    
+)
 
 
 def read_configuration():
@@ -68,7 +86,12 @@ class ModuleFactory:
     def create_db_manager_obj(
         self, port, output_dir="output/", flush_db=False
     ):
-        db = DBManager(self.logger, output_dir, port, flush_db=flush_db)
+        # to prevent config/redis.conf from being overwritten
+        with patch(
+            "slips_files.core.database.redis_db.database.RedisDB._set_redis_options",
+            return_value=Mock(),
+        ):
+            db = DBManager(self.logger, output_dir, port, flush_db=flush_db)
         db.r = db.rdb.r
         db.print = do_nothing
         assert db.get_used_redis_port() == port
@@ -341,3 +364,57 @@ class ModuleFactory:
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
             vertical_ps = VerticalPortscan(mock_db)
             return vertical_ps
+
+    def create_urlhaus_obj(self, mock_db):
+        """Create an instance of URLhaus."""
+        urlhaus = URLhaus(mock_db)
+        return urlhaus
+
+    def create_set_evidence_helper(self, mock_db):
+        """Create an instance of SetEvidenceHelper."""
+        set_evidence_helper = SetEvidnceHelper(mock_db)
+        return set_evidence_helper
+
+    def create_attacker_obj(self, value="192.168.1.1", direction=Direction.SRC, attacker_type=IoCType.IP):
+        return Attacker(direction=direction, attacker_type=attacker_type, value=value)
+    
+    def create_victim_obj(self, value="192.168.1.2", direction=Direction.DST, victim_type=IoCType.IP):
+        return Victim(direction=direction, victim_type=victim_type, value=value)
+    
+    def create_profileid_obj(self, ip="192.168.1.3"):
+        return ProfileID(ip=ip)
+    
+    def create_timewindow_obj(self,number=1):
+        return TimeWindow(number=number)
+    
+    def create_proto_obj(self):
+        return Proto
+    
+    def create_evidence_obj(self, evidence_type, description, attacker, threat_level,
+                            category, victim, profile, timewindow, uid, timestamp,
+                            proto, port, source_target_tag, id, conn_count, confidence):
+        return Evidence(
+            evidence_type=evidence_type,
+            description=description,
+            attacker=attacker,
+            threat_level=threat_level,
+            category=category,
+            victim=victim,
+            profile=profile,
+            timewindow=timewindow,
+            uid=uid,
+            timestamp=timestamp,
+            proto=proto,
+            port=port,
+            source_target_tag=source_target_tag,
+            id=id,
+            conn_count=conn_count,
+            confidence=confidence
+        )
+
+    def create_network_discovery_obj(self, mock_db):
+        with patch('modules.network_discovery.network_discovery.NetworkDiscovery.__init__', return_value=None):
+            network_discovery = NetworkDiscovery(mock_db)
+            network_discovery.db = mock_db 
+        return network_discovery
+

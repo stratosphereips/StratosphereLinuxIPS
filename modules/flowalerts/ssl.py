@@ -17,11 +17,10 @@ class SSL(IFlowalertsAnalyzer):
         # this is the dict of ssl flows we're waiting for
         self.pending_ssl_flows = multiprocessing.Queue()
         # thread that waits for ssl flows to appear in conn.log
+        self.ssl_thread_started = False
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
-        self.ssl_waiting_thread.start()
-        self.channels = {"new_flow": self.db.subscribe("new_flow")}
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -45,13 +44,12 @@ class SSL(IFlowalertsAnalyzer):
         # this thread shouldn't run on interface only because in zeek dirs we
         # we should wait for the conn.log to be read too
 
-        while True:
+        while not self.flowalerts.should_stop():
             size = self.pending_ssl_flows.qsize()
             if size == 0:
                 # nothing in queue
                 time.sleep(30)
                 continue
-
             # try to get the conn of each pending flow only once
             # this is to ensure that re-added flows to the queue aren't checked twice
             for ssl_flow in range(size):
@@ -70,7 +68,7 @@ class SSL(IFlowalertsAnalyzer):
                 flow: dict = self.db.get_flow(uid)
                 if flow := flow.get(uid):
                     flow = json.loads(flow)
-                    if "ts" in flow:
+                    if "starttime" in flow:
                         # this means the flow is found in conn.log
                         self.check_pastebin_download(*ssl_flow, flow)
                 else:
@@ -198,7 +196,7 @@ class SSL(IFlowalertsAnalyzer):
         # found one of our supported orgs in the cn but
         # it doesn't belong to any of this org's
         # domains or ips
-        self.set_evidence.incompatible_CN(
+        self.set_evidence.incompatible_cn(
             found_org_in_cn, timestamp, daddr, profileid, twid, uid
         )
 
@@ -247,6 +245,9 @@ class SSL(IFlowalertsAnalyzer):
         self.db.set_ip_info(daddr, {"is_doh_server": True})
 
     def analyze(self):
+        if not self.ssl_thread_started:
+            self.ssl_waiting_thread.start()
+            self.ssl_thread_started = True
         if msg := self.flowalerts.get_msg("new_ssl"):
             data = msg["data"]
             data = json.loads(data)

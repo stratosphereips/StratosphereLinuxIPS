@@ -9,6 +9,8 @@ from slips_files.common.slips_utils import utils
 
 
 class WhitelistParser:
+    """Parses the whitelist in config/whitelist.conf"""
+
     def __init__(self, db, manager):
         self.db = db
         # to have access to the print function
@@ -267,7 +269,7 @@ class WhitelistParser:
         return org_subnets
 
     def parse(self) -> bool:
-        """parses the whitelist specified in the slips.conf"""
+        """parses the whitelist specified in the slips.yaml"""
         line_number = 0
 
         whitelist = self.open_whitelist_for_reading()
@@ -288,7 +290,7 @@ class WhitelistParser:
             # was whitelisted before, we need to remove it from the db
             if line.startswith("#"):
                 self.remove_entry_from_cache_db(
-                    self.parse_line(line.replace("#"))
+                    self.parse_line(line.replace("#", ""))
                 )
                 continue
 
@@ -304,6 +306,5 @@ class WhitelistParser:
                 continue
 
             self.call_handler(parsed_line)
-
         whitelist.close()
         return True

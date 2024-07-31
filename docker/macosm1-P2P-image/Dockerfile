@@ -1,10 +1,16 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using sudo
-ENV IS_IN_A_DOCKER_CONTAINER True
+ENV IS_IN_A_DOCKER_CONTAINER=True
 # destionation dir for slips inside the container
-ENV SLIPS_DIR /StratosphereLinuxIPS
+ENV SLIPS_DIR=/StratosphereLinuxIPS
+
+ENV NODE_VERSION=22.5.0
+ENV NVM_DIR=/root/.nvm
+
+# use bash instead of sh
+SHELL ["/bin/bash", "-c"]
 
 # Install wget and add Zeek and redis repositories to our sources.
 RUN apt update && apt install -y --no-install-recommends \
@@ -58,11 +64,7 @@ WORKDIR ${SLIPS_DIR}
 
 COPY . $SLIPS_DIR
 
-
-
-# we're excluding black here because it has conflicts with the tensorflow version required in requirements.txt
-# this is temporary until we upgrade tensorflow to the latest version
-RUN grep -v 'black' docker/macosm1-P2P-image/requirements-macos-m1-docker.txt | xargs pip3 install  --no-cache-dir \
+RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
@@ -70,11 +72,11 @@ RUN grep -v 'black' docker/macosm1-P2P-image/requirements-macos-m1-docker.txt | 
     && npm install
 
 # Change the configuration file to have use_p2p = yes
-RUN sed -i "s/use_p2p = no/use_p2p = yes/g" config/slips.conf
+RUN sed -i "s/use_p2p : 'no'/use_p2p : 'yes'/" config/slips.yaml
 
 # build the pigeon and add pigeon to path
-SHELL ["/bin/bash", "-c"]
-RUN cd p2p4slips && go build && echo "export PATH=$PATH:/StratosphereLinuxIPS/p2p4slips/" >> ~/.bashrc && source ~/.bashrc
+RUN cd p2p4slips \
+    && go build \
+    && export PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/";
 
-
-CMD redis-server --daemonize yes && /bin/bash
+CMD /bin/bash

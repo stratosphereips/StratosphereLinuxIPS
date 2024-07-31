@@ -97,17 +97,18 @@ class Utils(object):
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels
 
-    def sanitize(self, string):
+    def sanitize(self, input_string):
         """
         Sanitize strings taken from the user
         """
-        string = string.replace(";", "")
-        string = string.replace("\`", "")
-        string = string.replace("&", "")
-        string = string.replace("|", "")
-        string = string.replace("$(", "")
-        string = string.replace("\n", "")
-        return string
+        characters_to_remove = set(";`&|$\n()")
+        input_string = input_string.strip()
+        remove_characters = str.maketrans(
+            "", "", "".join(characters_to_remove)
+        )
+        sanitized_string = input_string.translate(remove_characters)
+
+        return sanitized_string
 
     def detect_data_type(self, data):
         """
@@ -203,7 +204,7 @@ class Utils(object):
         Detects and converts the given ts to the given format
         :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
         """
-        given_format = self.define_time_format(ts)
+        given_format = self.get_time_format(ts)
         if given_format == required_format:
             return ts
 
@@ -214,7 +215,7 @@ class Utils(object):
 
         # convert to the req format
         if required_format == "iso":
-            return datetime_obj.astimezone().isoformat()
+            return datetime_obj.astimezone(self.local_tz).isoformat()
         elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
         else:
@@ -236,28 +237,27 @@ class Utils(object):
         datetime_obj = self.convert_to_datetime(ts)
         return datetime_obj.astimezone(self.local_tz)
 
-    def is_datetime_obj(self, ts):
+    def is_datetime_obj(self, ts) -> bool:
         """
         checks if the given ts is a datetime obj
         """
         try:
-            ts.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
-            return True
-        except AttributeError:
+            return isinstance(ts, datetime)
+        except Exception:
             return False
 
     def convert_to_datetime(self, ts):
         if self.is_datetime_obj(ts):
             return ts
 
-        given_format = self.define_time_format(ts)
+        given_format = self.get_time_format(ts)
         return (
-            datetime.fromtimestamp(float(ts))
+            datetime.fromtimestamp(float(ts), tz=self.local_tz)
             if given_format == "unixtimestamp"
             else datetime.strptime(ts, given_format)
         )
 
-    def define_time_format(self, time: str) -> Optional[str]:
+    def get_time_format(self, time) -> Optional[str]:
         if self.is_datetime_obj(time):
             return "datetimeobj"
 
@@ -280,7 +280,7 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
-    def get_own_IPs(self) -> list:
+    def get_own_ips(self) -> list:
         """
         Returns a list of our local and public IPs
         """
@@ -374,25 +374,21 @@ class Utils(object):
             )
         )
 
-    def get_hash_from_file(self, filename):
+    def get_sha256_hash(self, filename: str):
         """
         Compute the sha256 hash of a file
         """
         # The size of each read from the file
-        BLOCK_SIZE = 65536
-        # Create the hash object, can use something other
-        # than `.sha256()` if you wish
+        block_size = 65536
+        # Create the hash object
         file_hash = hashlib.sha256()
-        # Open the file to read it's bytes
         with open(filename, "rb") as f:
-            # Read from the file. Take in the amount declared above
-            fb = f.read(BLOCK_SIZE)
-            # While there is still data being read from the file
-            while len(fb) > 0:
-                # Update the hash
-                file_hash.update(fb)
+            file_bytes = f.read(block_size)
+            while len(file_bytes) > 0:
+                file_hash.update(file_bytes)
                 # Read the next block from the file
-                fb = f.read(BLOCK_SIZE)
+                file_bytes = f.read(block_size)
+
         return file_hash.hexdigest()
 
     def is_msg_intended_for(self, message, channel):
@@ -411,7 +407,7 @@ class Utils(object):
     def change_logfiles_ownership(self, file: str, UID, GID):
         """
         if slips is running in docker, the owner of the alerts log files is always root
-        this function changes it to the user ID and GID in slips.conf to be able to
+        this function changes it to the user ID and GID in slips.yaml to be able to
         rwx the files from outside of docker
         """
         if not (IS_IN_A_DOCKER_CONTAINER and UID and GID):
@@ -434,6 +430,17 @@ class Utils(object):
             # when in docker, we copy the repo instead of clone it so there's no .git files
             # we can't add repo metadata
             return False
+
+    def convert_ts_to_tz_aware(self, naive_datetime: datetime) -> datetime:
+        """adds the current local tz (self.local_tz) to the given dt obj"""
+        naive_datetime = utils.convert_to_datetime(naive_datetime)
+        return naive_datetime.replace(tzinfo=self.local_tz)
+
+    def is_aware(self, dt: datetime) -> bool:
+        """
+        checks if the given datetime object is timemzone aware or not
+        """
+        return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
 
     def get_time_diff(
         self, start_time: float, end_time: float, return_type="seconds"
