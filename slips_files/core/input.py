@@ -201,8 +201,7 @@ class Input(ICore):
         :param filepath: full path to a zeek log file
         """
         filename_without_ext = Path(filepath).stem
-        if filename_without_ext not in SUPPORTED_LOGFILES:
-            return True
+        return filename_without_ext not in SUPPORTED_LOGFILES
 
     def get_file_handle(self, filename):
         # Update which files we know about
@@ -221,11 +220,14 @@ class Input(ICore):
                 # delete the old .log file, that has a timestamp in its name.
             except FileNotFoundError:
                 # for example dns.log
-                # zeek changes the dns.log file name every 1d, it adds a timestamp to it
-                # it doesn't create the new dns.log until a new dns request occurs
-                # if slips tries to read from the old dns.log now it won't find it
-                # because it's been renamed and the new one isn't created yet
-                # simply continue until the new log file is created and added to the zeek_files list
+                # zeek changes the dns.log file name every 1d, it adds a
+                # timestamp to it it doesn't create the new dns.log until a
+                # new dns request
+                # occurs
+                # if slips tries to read from the old dns.log now it won't
+                # find it because it's been renamed and the new one isn't
+                # created yet simply continue until the new log file is
+                # created and added to the zeek_files list
                 return False
         return file_handler
 
