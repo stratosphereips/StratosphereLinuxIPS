@@ -952,7 +952,10 @@ class Input(ICore):
             input_handlers[self.input_type]()
         except KeyError:
             self.print(
-                f'Unrecognized file type "{self.input_type}". Stopping.'
+                f'Error: Unrecognized file type "{self.input_type}". '
+                f"Stopping.",
+                0,
+                1,
             )
             return False
 

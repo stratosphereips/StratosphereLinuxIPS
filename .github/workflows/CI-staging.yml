@@ -37,13 +37,12 @@ jobs:
           - name: Clear redis cache
             run: ./slips.py -cc
 
-
           - name: Flowalerts  Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_flowalerts.py -p no:warnings -vv
               coverage report  --include="modules/flowalerts/*"
               coverage html  --include="modules/flowalerts/*" -d coverage_reports/flowalerts
-       
+
           - name: conn  Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_conn.py -p no:warnings -vv
@@ -101,6 +100,11 @@ jobs:
               coverage run --source=./ -m pytest tests/test_smtp.py -p no:warnings -vv
               coverage report  --include="modules/flowalerts/smtp.py*"
               coverage html  --include="modules/flowalerts/smtp.py*" -d coverage_reports/flowalerts
+          - name: main  Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_main.py -p no:warnings -vv
+              coverage report  --include="slips/main.py*"
+              coverage html  --include="slips/main.py*" -d coverage_reports/main    
 
           - name: Whitelist  Unit Tests
             run: |
@@ -154,7 +158,7 @@ jobs:
             run: |
               coverage run --source=./ -m pytest tests/test_evidence.py -p no:warnings -vv
               coverage report  --include="slips_files/core/evidence_structure/evidence.py*"
-              coverage html  --include="slips_files/core/evidence_structure/evidence.py*" -d coverage_reports/evidence_structure   
+              coverage html  --include="slips_files/core/evidence_structure/evidence.py*" -d coverage_reports/evidence_structure
 
           - name: Virustotal Unit Tests
             run: |
@@ -229,6 +233,7 @@ jobs:
                coverage html --include="slips_files/common/markov_chains.py*" -d coverage_reports/markov_chains    
 
 
+
   dataset_integration_tests:
       # specify the host OS
       runs-on: ubuntu-latest
@@ -247,6 +252,14 @@ jobs:
             run: |
               python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
 
+          - name: Upload Artifacts
+            if: failure()
+            uses: actions/upload-artifact@v3
+            with:
+              name: dataset_integration_tests_output
+              path: |
+                output/integration_tests
+
   zeek_integration_tests:
       # specify the host OS
       runs-on: ubuntu-latest
@@ -264,6 +277,14 @@ jobs:
           - name: Dataset Integration Tests
             run: |
               python3 -m pytest -s tests/integration_tests/test_pcap_dataset.py -p no:warnings -vv
+          - name: Upload Artifacts
+            # run this job whether the above jobs failed or passed
+            if: success() || failure()
+            uses: actions/upload-artifact@v3
+            with:
+              name: zeek_integration_tests_output
+              path: |
+                output/integration_tests
 
   pcap_integration_tests:
       # specify the host OS
@@ -282,7 +303,15 @@ jobs:
           - name: Dataset Integration Tests
             run: |
               python3 -m pytest -s tests/integration_tests/test_zeek_dataset.py -p no:warnings -vv
-
+          - name: Upload Artifact
+            # run this job whether the above jobs failed or passed
+            if: success() || failure()
+            uses: actions/upload-artifact@v3
+            with:
+              name: pcap_integration_tests_output
+              path: |
+                output/integration_tests
+                coverage_reports/
 
 
   port_scans_integration_tests:
@@ -306,6 +335,14 @@ jobs:
               coverage report --include="modules/network_discovery/*"
               coverage html --include="modules/network_discovery/*" -d coverage_reports/network_discovery
 
+          - name: Upload Artifacts
+            # run this job whether the above jobs failed or passed
+            if: success() || failure()
+            uses: actions/upload-artifact@v3
+            with:
+              name: port_scans_integration_tests_output
+              path: |
+                output/integration_tests
 
   config_files_integration_tests:
       # specify the host OS
@@ -325,12 +362,11 @@ jobs:
             run: |
               python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
 
-          - name: Upload Artifact
+          - name: Upload Artifacts
             # run this job whether the above jobs failed or passed
             if: success() || failure()
             uses: actions/upload-artifact@v3
             with:
-              name: test_slips_locally-integration-tests-output
+              name: config_files_integration_tests_output
               path: |
                 output/integration_tests
-                coverage_reports/
