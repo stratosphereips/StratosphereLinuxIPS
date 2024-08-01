@@ -32,11 +32,6 @@ jobs:
         sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
-    - name: confirm that zeek is installed
-      run: |
-        which bro
-        bro -h
-
     - name: Set up Python 3.10.12
       uses: actions/setup-python@v2
       with:
