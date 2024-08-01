@@ -171,6 +171,13 @@ jobs:
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
+    - name: Checker Unit Tests
+      run: |
+        python3 -m pytest tests/test_checker.py -p no:warnings -vv
+        
+    - name: Clear redis cache
+      run: ./slips.py -cc
+
     - name: Set Evidence Unit Tests
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
