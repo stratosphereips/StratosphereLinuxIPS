@@ -375,6 +375,10 @@ class ModuleFactory:
         """Create an instance of SetEvidenceHelper."""
         set_evidence_helper = SetEvidnceHelper(mock_db)
         return set_evidence_helper
+      
+
+    def create_output_obj(self):
+        return Output()       
 
     def create_attacker_obj(self, value="192.168.1.1", direction=Direction.SRC, attacker_type=IoCType.IP):
         return Attacker(direction=direction, attacker_type=attacker_type, value=value)
@@ -412,6 +416,7 @@ class ModuleFactory:
             conn_count=conn_count,
             confidence=confidence
         )
+
 
     def create_network_discovery_obj(self, mock_db):
         with patch('modules.network_discovery.network_discovery.NetworkDiscovery.__init__', return_value=None):
