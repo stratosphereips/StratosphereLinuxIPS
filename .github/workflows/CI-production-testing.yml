@@ -165,7 +165,7 @@ jobs:
 
     - name: ASN info Unit Tests
       run: |
-        python3 -m pytest tests/test_asn_info.py -p no:warnings -vv    
+        python3 -m pytest tests/test_asn_info.py -p no:warnings -vv
 
     - name: Urlhaus Unit Tests
       run: |
