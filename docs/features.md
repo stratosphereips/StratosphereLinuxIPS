@@ -994,8 +994,22 @@ The threshold that controls Slips sensitivity is determined
 by the ```evidence_detection_threshold``` key in ```config/slips.conf```,
 by default it is set to ```3.46```.
 
-This threshold is the minimum accumulated threat level per
-time window needed to generate an alert.
+
+This threshold is used in slips according to the following equation
+
+threshold per width = detection_threshold * width / 60
+
+For example, if you're using the default slips width 3600, the threshold used in slips will be
+
+3.46 * 3600 / 60 = 207.6
+
+This equation's goal is to make it more sensitive on smaller tws, and less sensitive on longer tws
+
+
+When the accumulated threat levels of all evidence detected in a timewindow exceeds 207.6, slips will generate an alert.
+
+In simple terms, it means slips will alert when users get the equivalent of 1 alert per minute.
+
 
 The default threshold of 3.46 gives you balanced detections with
 the optimal false positive rate and accuracy.
