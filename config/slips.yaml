@@ -141,8 +141,8 @@ parameters:
    # client_ips : [10.0.0.1, 172.16.0.9, 172.217.171.238]
    client_ips : "[]"
 
-   #############################
-   detection:
+#############################
+detection:
    # This threshold is the minimum accumulated threat level per
    # time window needed to generate an alert.
    # It controls how sensitive Slips is.
@@ -167,8 +167,8 @@ parameters:
    # Slips can show a popup/notification with every alert. Only yes or no
    popup_alerts : False
 
-   #############################
-   modules:
+#############################
+modules:
    # List of modules to ignore. By default we always ignore the template! do not remove it from the list
    # Names of other modules that you can disable (they all should be lowercase with no special characters):
    # ensembling, threatintelligence, blocking,
@@ -406,8 +406,6 @@ Profiling:
 
    # set the wait time between sampling sequences in seconds (live mode only)
    cpu_profiler_sampling_interval : 20
-
-   # [12] Memory Profiling
 
    # enable memory profiling [yes,no]
    memory_profiler_enable : False

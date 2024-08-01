@@ -105,12 +105,12 @@ class ConfigParser(object):
 
     def evidence_detection_threshold(self):
         threshold = self.read_configuration(
-            "detection", "evidence_detection_threshold", 2
+            "detection", "evidence_detection_threshold", 3.46
         )
         try:
             threshold = float(threshold)
         except ValueError:
-            threshold = 2
+            threshold = 3.46
         return threshold
 
     def packet_filter(self):
@@ -143,7 +143,6 @@ class ConfigParser(object):
 
     def popup_alerts(self):
         return self.read_configuration("detection", "popup_alerts", False)
-        
 
     def export_labeled_flows(self):
         return self.read_configuration(
@@ -183,9 +182,7 @@ class ConfigParser(object):
         return self.read_configuration("modes", "stderr", "errors.log")
 
     def create_p2p_logfile(self):
-        return self.read_configuration(
-            "P2P", "create_p2p_logfile", False
-        )
+        return self.read_configuration("P2P", "create_p2p_logfile", False)
 
     def ts_format(self):
         return self.read_configuration("timestamp", "format", None)
@@ -274,9 +271,7 @@ class ConfigParser(object):
         return twid_width
 
     def enable_metadata(self):
-        return self.read_configuration(
-            "parameters", "metadata_dir", False
-        )
+        return self.read_configuration("parameters", "metadata_dir", False)
 
     def use_p2p(self):
         return self.read_configuration("P2P", "use_p2p", False)
@@ -295,14 +290,10 @@ class ConfigParser(object):
         return poll_delay
 
     def send_to_warden(self):
-        return self.read_configuration(
-            "CESNET", "send_alerts", False
-        )
- 
+        return self.read_configuration("CESNET", "send_alerts", False)
+
     def receive_from_warden(self):
-        return self.read_configuration(
-            "CESNET", "receive_alerts", False
-        )
+        return self.read_configuration("CESNET", "receive_alerts", False)
 
     def verbose(self):
         verbose = self.read_configuration("parameters", "verbose", 1)
@@ -335,7 +326,7 @@ class ConfigParser(object):
         return self.read_configuration(
             "parameters", "export_strato_letters", False
         )
-    
+
     def slack_token_filepath(self):
         return self.read_configuration(
             "exporting_alerts", "slack_api_path", False
@@ -361,9 +352,7 @@ class ConfigParser(object):
         return self.read_configuration("exporting_alerts", "port", False)
 
     def use_https(self):
-        return self.read_configuration(
-            "exporting_alerts", "use_https", False
-        )
+        return self.read_configuration("exporting_alerts", "use_https", False)
 
     def discovery_path(self):
         return self.read_configuration(
@@ -463,7 +452,7 @@ class ConfigParser(object):
         return self.read_configuration(
             "threatintelligence", "wait_for_TI_to_finish", False
         )
-    
+
     def remote_ti_data_path(self):
         path = self.read_configuration(
             "threatintelligence",

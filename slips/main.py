@@ -68,10 +68,10 @@ class Main(IObservable):
                 self.twid_width = self.conf.get_tw_width()
 
     def cpu_profiler_init(self):
-        self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable() == True
+        self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable()
         self.cpuProfilerMode = self.conf.get_cpu_profiler_mode()
         self.cpuProfilerMultiprocess = (
-            self.conf.get_cpu_profiler_multiprocess() == True
+            self.conf.get_cpu_profiler_multiprocess()
         )
         if self.cpuProfilerEnabled:
             try:
@@ -125,12 +125,10 @@ class Main(IObservable):
                 self.cpuProfiler.print()
 
     def memory_profiler_init(self):
-        self.memoryProfilerEnabled = (
-            self.conf.get_memory_profiler_enable() == True
-        )
+        self.memoryProfilerEnabled = self.conf.get_memory_profiler_enable()
         memoryProfilerMode = self.conf.get_memory_profiler_mode()
         memoryProfilerMultiprocess = (
-            self.conf.get_memory_profiler_multiprocess() == True
+            self.conf.get_memory_profiler_multiprocess()
         )
         if self.memoryProfilerEnabled:
             output_dir = os.path.join(self.args.output, "memoryprofile/")
@@ -227,7 +225,7 @@ class Main(IObservable):
         """
         if self.mode == "daemonized":
             self.daemon.stop()
-        if self.conf.get_cpu_profiler_enable() != True:
+        if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)
 
     def save_the_db(self):
@@ -392,6 +390,9 @@ class Main(IObservable):
         input_type = "stdin"
         return input_type, line_type.lower()
 
+    def is_binetflow_line(self, line: str) -> bool:
+        return "->" in line or "StartTime" in line
+
     def get_input_file_type(self, given_path):
         """
         given_path: given file
@@ -451,9 +452,9 @@ class Main(IObservable):
                     first_line = f.readline().replace("\n", "")
                     if not first_line.startswith("#"):
                         break
-            if "flow_id" in first_line and os.path.isfile(given_path):
+            if "flow_id" in first_line:
                 input_type = "suricata"
-            elif os.path.isfile(given_path):
+            else:
                 # this is a text file, it can be binetflow or zeek_log_file
                 try:
                     # is it a json log file
@@ -468,13 +469,18 @@ class Main(IObservable):
                         "\s{1,}-\s{1,}", first_line
                     )
                     tabs_found = re.search("\t{1,}", first_line)
+                    commas_found = re.search(",{1,}", first_line)
                     if sequential_spaces_found or tabs_found:
-                        if "->" in first_line or "StartTime" in first_line:
+                        if self.is_binetflow_line(first_line):
                             # tab separated files are usually binetflow tab files
                             input_type = "binetflow-tabs"
                         else:
                             input_type = "zeek_log_file"
-
+                    elif commas_found and self.is_binetflow_line(first_line):
+                        # sometimes modified binetflow files aren't CSV,
+                        # and the file command return ASCII text, this is
+                        # probably the case
+                        return "binetflow"
         return input_type
 
     def setup_print_levels(self):
