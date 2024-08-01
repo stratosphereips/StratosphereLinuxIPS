@@ -41,14 +41,14 @@ def test_should_detect_dns_without_conn(
     [
         # Testcase1: CNAME resolves to a contacted IP
         (
-            ["192.168.1.1", "CNAME_example.com"],
+            ["192.168.1.1", "google.com"],
             ["192.168.1.2"],
             ["192.168.1.1", "192.168.1.2"],
             True,
         ),
         # Testcase2: CNAME does not resolve to a contacted IP
         (
-            ["192.168.1.1", "CNAME_not_contacted.com"],
+            ["192.168.1.1", "google.com"],
             ["10.0.0.1"],
             ["192.168.1.1", "192.168.1.2"],
             False,
@@ -138,7 +138,7 @@ def test_extract_ips_from_dns_answers(mock_db):
 
 @pytest.mark.parametrize(
     "contacted_ips, other_ip, expected_result",
-    [   # Testcase1: Connection exists from other IP version
+    [  # Testcase1: Connection exists from other IP version
         (["8.8.8.8"], ["192.168.1.2"], True),
         # Testcase2: No connection from other IP version
         (["1.1.1.1"], ["192.168.1.2"], None),
@@ -169,7 +169,7 @@ def test_is_connection_made_by_different_version(
 
 @pytest.mark.parametrize(
     "string, expected_result",
-    [   # Testcase1: High entropy string
+    [  # Testcase1: High entropy string
         ("qwerty123!@#$%^&*()_+", True),
         # Testcase2: Low entropy string
         ("aaaaaaaaaaaaaaaaaaaa", False),
@@ -187,7 +187,7 @@ def test_estimate_shannon_entropy(mock_db, string, expected_result):
 
 @pytest.mark.parametrize(
     "domain, answers, " "expected_evidence_calls, expected_db_deletes",
-    [   # Testcase1:Invalid answer found
+    [  # Testcase1:Invalid answer found
         ("example.com", ["127.0.0.1"], 1, 1),
         # Testcase2:No invalid answer
         ("example.com", ["8.8.8.8"], 0, 0),
@@ -637,7 +637,7 @@ def test_detect_dga_whitelisted(mocker, mock_db):
 
 @pytest.mark.parametrize(
     "query, expected_result",
-    [   # Testcase1:NXDOMAIN_arpa_domain
+    [  # Testcase1:NXDOMAIN_arpa_domain
         ("example.in-addr.arpa", False),
         # Testcase2:NXDOMAIN_local_domain
         ("example.local", False),

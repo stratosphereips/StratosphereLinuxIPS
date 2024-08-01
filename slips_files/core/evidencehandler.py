@@ -93,7 +93,6 @@ class EvidenceHandler(ICore):
         self.print(f"Storing Slips logs in {self.output_dir}")
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_ips()
-        self.discarded_bc_never_processed = {}
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -764,7 +763,6 @@ class EvidenceHandler(ICore):
                 profile_already_blocked = self.db.checkBlockedProfTW(
                     profileid, twid
                 )
-
                 # This is the part to detect if the accumulated
                 # evidence was enough for generating a detection
                 # The detection should be done in attacks per minute.
