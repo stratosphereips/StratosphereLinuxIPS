@@ -68,10 +68,10 @@ class Main(IObservable):
                 self.twid_width = self.conf.get_tw_width()
 
     def cpu_profiler_init(self):
-        self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable() == "yes"
+        self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable()
         self.cpuProfilerMode = self.conf.get_cpu_profiler_mode()
         self.cpuProfilerMultiprocess = (
-            self.conf.get_cpu_profiler_multiprocess() == "yes"
+            self.conf.get_cpu_profiler_multiprocess()
         )
         if self.cpuProfilerEnabled:
             try:
@@ -125,12 +125,10 @@ class Main(IObservable):
                 self.cpuProfiler.print()
 
     def memory_profiler_init(self):
-        self.memoryProfilerEnabled = (
-            self.conf.get_memory_profiler_enable() == "yes"
-        )
+        self.memoryProfilerEnabled = self.conf.get_memory_profiler_enable()
         memoryProfilerMode = self.conf.get_memory_profiler_mode()
         memoryProfilerMultiprocess = (
-            self.conf.get_memory_profiler_multiprocess() == "yes"
+            self.conf.get_memory_profiler_multiprocess()
         )
         if self.memoryProfilerEnabled:
             output_dir = os.path.join(self.args.output, "memoryprofile/")
@@ -227,7 +225,7 @@ class Main(IObservable):
         """
         if self.mode == "daemonized":
             self.daemon.stop()
-        if self.conf.get_cpu_profiler_enable() != "yes":
+        if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)
 
     def save_the_db(self):
@@ -242,7 +240,7 @@ class Main(IObservable):
         # if the input is a zeek dir, remove the / at the end
         if self.input_information.endswith("/"):
             self.input_information = self.input_information[:-1]
-        # We need to separate it from the path
+        # remove the path
         self.input_information = os.path.basename(self.input_information)
         # Remove the extension from the filename
         with contextlib.suppress(ValueError):
@@ -260,7 +258,7 @@ class Main(IObservable):
         )
 
     def was_running_zeek(self) -> bool:
-        """returns true if zeek wa sused in this run"""
+        """returns true if zeek was used in this run"""
         return (
             self.db.get_input_type() in ("pcap", "interface")
             or self.db.is_growing_zeek_dir()
@@ -373,6 +371,7 @@ class Main(IObservable):
     def handle_flows_from_stdin(self, input_information):
         """
         Make sure the stdin line type is valid (argus, suricata, or zeek)
+        when using -f stdin-type
         """
         if input_information.lower() not in (
             "argus",
@@ -390,6 +389,9 @@ class Main(IObservable):
         line_type = input_information
         input_type = "stdin"
         return input_type, line_type.lower()
+
+    def is_binetflow_line(self, line: str) -> bool:
+        return "->" in line or "StartTime" in line
 
     def get_input_file_type(self, given_path):
         """
@@ -450,9 +452,9 @@ class Main(IObservable):
                     first_line = f.readline().replace("\n", "")
                     if not first_line.startswith("#"):
                         break
-            if "flow_id" in first_line and os.path.isfile(given_path):
+            if "flow_id" in first_line:
                 input_type = "suricata"
-            elif os.path.isfile(given_path):
+            else:
                 # this is a text file, it can be binetflow or zeek_log_file
                 try:
                     # is it a json log file
@@ -467,13 +469,18 @@ class Main(IObservable):
                         "\s{1,}-\s{1,}", first_line
                     )
                     tabs_found = re.search("\t{1,}", first_line)
-
-                    if "->" in first_line or "StartTime" in first_line:
-                        # tab separated files are usually binetflow tab files
-                        input_type = "binetflow-tabs"
-                    elif sequential_spaces_found or tabs_found:
-                        input_type = "zeek_log_file"
-
+                    commas_found = re.search(",{1,}", first_line)
+                    if sequential_spaces_found or tabs_found:
+                        if self.is_binetflow_line(first_line):
+                            # tab separated files are usually binetflow tab files
+                            input_type = "binetflow-tabs"
+                        else:
+                            input_type = "zeek_log_file"
+                    elif commas_found and self.is_binetflow_line(first_line):
+                        # sometimes modified binetflow files aren't CSV,
+                        # and the file command return ASCII text, this is
+                        # probably the case
+                        return "binetflow"
         return input_type
 
     def setup_print_levels(self):

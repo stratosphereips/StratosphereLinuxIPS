@@ -1,0 +1,63 @@
+name: CI-production-publishing-ubuntu-image
+
+on:
+  push:
+    branches:
+    - 'master'
+    - '!develop'
+
+jobs:
+  create_release_tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get slips version
+        run: |
+          VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+
+      # add release tag
+      - uses: actions/checkout@v3
+      - uses: rickstaa/action-create-tag@v1
+        with:
+          tag: ${{ env.SLIPS_VERSION }}
+          message: ""
+
+  publish_ubuntu_image:
+    # runs the tests in a docker(built by this job) on top of a GH VM
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Get Slips version
+      run: |
+        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+        echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+
+    # clone slips and checkout branch
+    # By default it checks out only one commit
+    - uses: actions/checkout@v3
+      with:
+        ref: 'master'
+        # Fetch all history for all tags and branches
+        fetch-depth: ''
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: stratosphereips
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - name: Build and publish ubuntu image from Dockerfile
+      id: docker_build_slips
+      timeout-minutes: 15
+      uses: docker/build-push-action@v5
+      with:
+        debug: true
+        verbose-debug: true
+        no-cache: true
+        context: ./
+        file: ./docker/ubuntu-image/Dockerfile
+        tags: |
+          stratosphereips/ubuntu_image:latest
+          stratosphereips/ubuntu_image:${{ env.SLIPS_VERSION }}
+        push: true
