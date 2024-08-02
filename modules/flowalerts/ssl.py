@@ -17,11 +17,10 @@ class SSL(IFlowalertsAnalyzer):
         # this is the dict of ssl flows we're waiting for
         self.pending_ssl_flows = multiprocessing.Queue()
         # thread that waits for ssl flows to appear in conn.log
+        self.ssl_thread_started = False
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
-        self.ssl_waiting_thread.start()
-        self.channels = {"new_flow": self.db.subscribe("new_flow")}
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -246,6 +245,9 @@ class SSL(IFlowalertsAnalyzer):
         self.db.set_ip_info(daddr, {"is_doh_server": True})
 
     def analyze(self):
+        if not self.ssl_thread_started:
+            self.ssl_waiting_thread.start()
+            self.ssl_thread_started = True
         if msg := self.flowalerts.get_msg("new_ssl"):
             data = msg["data"]
             data = json.loads(data)

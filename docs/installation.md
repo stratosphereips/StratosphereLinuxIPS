@@ -27,7 +27,7 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 
 ## Requirements
 
-Slips requires Python 3.8+ and at least 4 GBs of RAM to run smoothly.
+Slips requires Python 3.10.12 and at least 4 GBs of RAM to run smoothly.
 
 ## Slips in Docker
 
@@ -246,8 +246,9 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
 
-**NOTE: replace ubuntu-image with the image that fits your archiecture**
-**NOTE: you have to be in the main Slips directory to build this. **
+**NOTE**: replace ubuntu-image with the image that fits your architecture
+
+**NOTE**: you have to be in the main Slips directory to build this.
 
 
 	cd ~/StratosphereLinuxIPS
@@ -278,7 +279,7 @@ To fix this you can disable all machine learning based modules when running Slip
 
 Slips is dependent on three major elements:
 
-Python 3.8
+Python 3.10.12
 Zeek
 Redis database 7.0.4
 
@@ -306,10 +307,10 @@ Update the repository of packages so you see the latest versions:
 
 Install the required packages (-y to install without asking for approval):
 
-    apt-get -y install tshark iproute2 python3.8 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek whois yara
+    apt-get -y install tshark iproute2 python3.10.12 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek whois yara
     apt install -y --no-install-recommends nodejs
 
-Even though we just installed pip3, the package installer for Python (3.8), we need to upgrade it to its latest version:
+Even though we just installed pip3, the package installer for Python (3.10.12), we need to upgrade it to its latest version:
 
 	python3 -m pip install --upgrade pip
 
@@ -317,7 +318,7 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 
 	sudo pip3 install -r install/requirements.txt
 
-_Note: for those using a different base image, you need to also install tensorflow==2.2.0 via pip3._
+_Note: for those using a different base image, you need to also install tensorflow==2.16.1 via pip3._
 
 As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs v19. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
 

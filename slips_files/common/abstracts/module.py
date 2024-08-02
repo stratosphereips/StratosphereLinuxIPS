@@ -2,6 +2,7 @@ import sys
 import traceback
 from abc import ABC, abstractmethod
 from multiprocessing import Process, Event
+from typing import Dict
 
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
@@ -17,6 +18,8 @@ class IModule(IObservable, ABC, Process):
     name = ""
     description = "Template module"
     authors = ["Template Author"]
+    # should be filled with the channels each module subscribes to
+    channels = {}
 
     def __init__(
         self,
@@ -37,6 +40,11 @@ class IModule(IObservable, ABC, Process):
         IObservable.__init__(self)
         self.add_observer(self.logger)
         self.init(**kwargs)
+        # should after the module's init() so the module has a chance to
+        # set its own channels
+        # tracks whether or not in the last iteration there was a msg
+        # received in that channel
+        self.channel_tracker = self.init_channel_tracker()
 
     @property
     @abstractmethod
@@ -52,6 +60,24 @@ class IModule(IObservable, ABC, Process):
     @abstractmethod
     def authors(self):
         pass
+
+    def init_channel_tracker(self) -> Dict[str, bool]:
+        """
+        tracks if in the last loop, a msg was received in any of the
+        subscribed channels or not
+        the goal of this is to keep looping if only 1 channel did receive
+        a msg, bc it's possible that that 1 channel will receive another msg
+        return a dict with the channel name and the values are either 0 or 1
+        False: received a msg in the last loop for this channel
+        True: didn't receive a msg
+        The goal of this whole thing is to terminate the module only if no
+        channels receive msgs in the last iteration, but keep looping
+        otherwise.
+        """
+        tracker = {}
+        for channel_name in self.channels:
+            tracker[channel_name] = False
+        return tracker
 
     @abstractmethod
     def init(self, **kwargs):
@@ -71,7 +97,10 @@ class IModule(IObservable, ABC, Process):
             module is subscribed to
         2. the termination event is set by the process_manager.py
         """
-        if self.msg_received or not self.termination_event.is_set():
+        if (
+            any(self.channel_tracker.values())
+            or not self.termination_event.is_set()
+        ):
             # this module is still receiving msgs,
             # don't stop
             return False
@@ -131,10 +160,10 @@ class IModule(IObservable, ABC, Process):
     def get_msg(self, channel_name):
         message = self.db.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
-            self.msg_received = True
+            self.channel_tracker[channel_name] = True
             return message
         else:
-            self.msg_received = False
+            self.channel_tracker[channel_name] = False
             return False
 
     def run(self):

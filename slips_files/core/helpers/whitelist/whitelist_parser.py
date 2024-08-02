@@ -9,6 +9,8 @@ from slips_files.common.slips_utils import utils
 
 
 class WhitelistParser:
+    """Parses the whitelist in config/whitelist.conf"""
+
     def __init__(self, db, manager):
         self.db = db
         # to have access to the print function
