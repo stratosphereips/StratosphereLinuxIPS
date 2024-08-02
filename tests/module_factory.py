@@ -3,6 +3,7 @@ from unittest.mock import patch, Mock, MagicMock
 import os
 
 from modules.flowalerts.conn import Conn
+from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
 from modules.flowalerts.notice import Notice
@@ -438,4 +439,9 @@ class ModuleFactory:
             daemon.daemon_stop_lock = "slips_daemon_stop"
             daemon.pid = None
             return daemon
+
+    def create_notify_obj(self):
+        notify = Notify()
+        return notify
+
 

@@ -238,7 +238,11 @@ jobs:
                coverage report --include="slips/daemon.py*"
                coverage html --include="slips/daemon.py*" -d coverage_reports/daemon     
 
-
+          - name: notify test
+            run: |
+               coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
+               coverage report --include="slips_files/core/helpers/notify.py*"
+               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify    
 
   dataset_integration_tests:
       # specify the host OS
