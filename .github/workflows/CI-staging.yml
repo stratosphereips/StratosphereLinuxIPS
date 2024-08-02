@@ -238,8 +238,11 @@ jobs:
                coverage report --include="modules/p2ptrust/trust/base_model.py*"
                coverage html --include="modules/p2ptrust/trust/base_model.py*" -d coverage_reports/set_evidence
      
-
-
+          - name: notify test
+            run: |
+               coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
+               coverage report --include="slips_files/core/helpers/notify.py*"
+               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify    
 
   dataset_integration_tests:
       # specify the host OS

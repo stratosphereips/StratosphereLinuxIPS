@@ -171,7 +171,6 @@ jobs:
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
-
     - name: base model Unit Tests
       run: |
         python3 -m pytest tests/test_base_model.py -p no:warnings -vv    
@@ -180,7 +179,11 @@ jobs:
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
 
-    - name: Set Evidence Unit Tests
+    - name: notify Tests
+      run: |
+        python3 -m pytest tests/test_notify.py -p no:warnings -vv
+    
+    - name: set Evidence Unit Tests
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
 
@@ -190,7 +193,6 @@ jobs:
 
     - name: Clear redis cache
       run: ./slips.py -cc
-
 
 
     - name: Config file tests

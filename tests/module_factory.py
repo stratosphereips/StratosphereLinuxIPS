@@ -3,6 +3,7 @@ from unittest.mock import patch, Mock
 import os
 
 from modules.flowalerts.conn import Conn
+from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
 from modules.flowalerts.notice import Notice
@@ -442,4 +443,9 @@ class ModuleFactory:
         logger = Mock(spec=Output)
         trustdb = Mock()
         return BaseModel(logger, trustdb)
+
+    def create_notify_obj(self):
+        notify = Notify()
+        return notify
+
 
