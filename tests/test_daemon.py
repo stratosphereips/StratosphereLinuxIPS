@@ -48,13 +48,7 @@ def test_print(test_message, expected_log_content, tmpdir):
             ["errors.log", "slips.log"],
         ),
         # testcase2: Create only stderr when stopping
-        (
-            ["-S"],
-            "errors.log",
-            "slips.log",
-            "slips.log",
-            ["errors.log"],
-        ),
+        (["-S"], "errors.log", "slips.log", "slips.log", ["errors.log"]),
     ],
 )
 def test_create_std_streams(
@@ -62,12 +56,21 @@ def test_create_std_streams(
 ):
     output_dir = tmpdir.mkdir("output")
     daemon = ModuleFactory().create_daemon_object()
+
+    daemon.stderr = stderr
+    daemon.stdout = stdout
+    daemon.logsfile = logsfile
+
     daemon.prepare_std_streams(str(output_dir))
 
     with patch.object(sys, "argv", argv):
         daemon.create_std_streams()
-        created_files = os.listdir(output_dir)
-        assert sorted(created_files) == sorted(expected_files)
+
+        expected_paths = [os.path.join(output_dir, f) for f in expected_files]
+        created_files = [
+            os.path.join(output_dir, f) for f in os.listdir(output_dir)
+        ]
+        assert sorted(created_files) == sorted(expected_paths)
 
 
 @pytest.mark.parametrize(
@@ -104,7 +107,6 @@ def test_prepare_std_streams(
 @patch("os.fork")
 @patch("os.setsid")
 @patch("os.umask")
-@patch("sys.exit")
 @patch("os.dup2")
 @patch("builtins.open", new_callable=mock_open)
 @patch("sys.stdin")
@@ -116,7 +118,6 @@ def test_daemonize(
     mock_stdin,
     mock_open,
     mock_dup2,
-    mock_exit,
     mock_umask,
     mock_setsid,
     mock_fork,
@@ -236,13 +237,13 @@ def test_killdaemon(pid, os_kill_side_effect):
 @pytest.mark.parametrize(
     "pid, lock_side_effect," " expected_result",
     [
-        # Testcase1:pid_exists_lock_acquired
+        # Testcase1:pid exists lock acquired
         (12345, None, True),
-        # Testcase2:no_pid_lock_acquired
+        # Testcase2:no pid lock acquired
         (None, None, False),
-        # Testcase3:pid_exists_lock_not_acquired
+        # Testcase3:pid exists lock not acquired
         (12345, CannotAcquireLock(), True),
-        # Testcase4:no_pid_lock_not_acquired
+        # Testcase4:no pid lock not acquired
         (None, CannotAcquireLock(), False),
     ],
 )
@@ -256,3 +257,4 @@ def test_is_running(pid, lock_side_effect, expected_result):
         result = daemon._is_running()
 
     assert result == expected_result
+
