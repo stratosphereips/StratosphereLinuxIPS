@@ -241,7 +241,7 @@ def test_update_cached_network_opinion(
                             "192.168.1.1",
                             0.5,
                             0.8,
-                            1678886400,  # Fixed timestamp
+                            1678886400,  
                     )
                 ],
                 [
