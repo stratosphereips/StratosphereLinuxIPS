@@ -37,12 +37,12 @@ echo $TZ > /etc/timezone
 exit_on_cmd_failure
 
 print_green "Running apt update"
-apt-get update
+sudo apt-get update
 
 exit_on_cmd_failure
 
 print_green "Installing Slips dependencies ..."
- apt-get install  -y --no-install-recommends \
+ sudo apt-get install  -y --no-install-recommends \
     cmake \
     make \
     gcc\
@@ -94,7 +94,7 @@ ZEEK_REPO_URL="download.opensuse.org/repositories/security:/zeek/xUbuntu_${UBUNT
 # Add the repository to the sources list
 echo "deb http://${ZEEK_REPO_URL}/ /" |  tee /etc/apt/sources.list.d/security:zeek.list \
 && curl -fsSL "https://${ZEEK_REPO_URL}/Release.key" | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
-&& apt update && apt install -y --no-install-recommends zeek
+&& sudo apt update && sudo apt install -y --no-install-recommends zeek
 
 # create a symlink to zeek so that slips can find it
 ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
@@ -111,8 +111,8 @@ fi
 print_green "Installing Redis"
 curl -fsSL https://packages.redis.io/gpg |  gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list
-apt-get update
-apt install -y --no-install-recommends redis
+sudo apt-get update
+sudo apt install -y --no-install-recommends redis
 
 exit_on_cmd_failure
 
@@ -127,7 +127,7 @@ exit_on_cmd_failure
 
 # For Kalipso
 print_green "Installing nodejs and npm dependencies"
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash - \
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | sudo bash - \
     && export NVM_DIR="$HOME/.nvm" \
     && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" \
     && nvm install 22 \
