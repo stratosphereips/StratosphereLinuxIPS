@@ -43,6 +43,7 @@ from slips_files.core.profiler import Profiler
 class ProcessManager:
     def __init__(self, main):
         self.main = main
+        self.s = time.time()
         # this will be set by main.py if slips is not daemonized,
         # it'll be set to the children of main.py
         self.processes: Dict[str, Process]
@@ -787,6 +788,8 @@ class ProcessManager:
                     f"shutdown gracefully - {reason}\n",
                     log_to_logfiles_only=True,
                 )
+            t = time.time() - self.s
+            print(f"@@@@@@@@@@@@@@@@ slips took {t} to finish")
 
         except KeyboardInterrupt:
             return False

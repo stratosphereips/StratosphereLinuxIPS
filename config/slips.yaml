@@ -126,7 +126,7 @@ parameters:
    keep_rotated_files_for : 1 day
 
    # how many minutes to wait for all modules to finish before killing them
-   wait_for_modules_to_finish : 15 mins
+   wait_for_modules_to_finish : 9999999 mins
 
    # flows are labeled to normal/malicious and added to the sqlite db in the output dir by default
    export_labeled_flows : False
@@ -212,7 +212,7 @@ threatintelligence:
    # if thi option is set to yes, slips will not start untill the update manager is done
    # and all TI files are loaded successfully
    # this is usefull if you want to ensure that slips doesn't miss the detection of any blacklisted IPs
-   wait_for_TI_to_finish : False
+   wait_for_TI_to_finish : True
 
    # Default Path to the folder with files holding malcious IPs
    # All the files in this folder are read and the IPs are considered malicious

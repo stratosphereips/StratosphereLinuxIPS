@@ -20,9 +20,11 @@ import queue
 import ipaddress
 import pprint
 import multiprocessing
-from datetime import datetime
+from datetime import (
+    datetime,
+)
 from typing import List
-
+import time
 import validators
 
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -71,6 +73,7 @@ class Profiler(ICore):
         # that's how the process_manager knows it's done
         # when both the input and the profiler are done,
         # the input process signals the rest of the modules to stop
+        self.starttime = time.time()
         self.done_processing: multiprocessing.Semaphore = is_profiler_done
         # every line put in this queue should be profiled
         self.profiler_queue = profiler_queue
@@ -343,6 +346,8 @@ class Profiler(ICore):
             f"Stopping. Total lines read: {self.rec_lines}",
             log_to_logfiles_only=True,
         )
+        t = time.time() - self.starttime
+        self.print(f"@@@@@@@@@@@@@@@@@@@@@@@@ profiler took {t}s to finish")
         # By default if a process(profiler) is not the creator of
         # the queue(profiler_queue) then on
         # exit it will attempt to join the queue’s background thread.
