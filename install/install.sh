@@ -13,6 +13,19 @@ exit_on_cmd_failure() {
   fi
 }
 
+
+
+# Function to check if zeek or bro is available
+check_zeek_or_bro() {
+    if which zeek > /dev/null 2>&1 || which bro > /dev/null 2>&1; then
+        return 0 # Indicate success (found)
+    else
+        return 1 # Indicate failure (not found)
+    fi
+}
+
+
+
 # to disable prompts
 export DEBIAN_FRONTEND=noninteractive
 
@@ -75,34 +88,38 @@ exit_on_cmd_failure
 
 
 print_green "Installing Zeek"
-UBUNTU_VERSION=$(lsb_release -r | awk '{print $2}' | sed 's/\./_/')
-ZEEK_REPO_URL="http://download.opensuse.org/repositories/security:/zeek/xUbuntu_${UBUNTU_VERSION}/"
+UBUNTU_VERSION=$(lsb_release -r | awk '{print $2}')
+ZEEK_REPO_URL="download.opensuse.org/repositories/security:/zeek/xUbuntu_${UBUNTU_VERSION}"
 
 # Add the repository to the sources list
-echo "deb ${ZEEK_REPO_URL} /" |  tee /etc/apt/sources.list.d/security:zeek.list \
-&& curl -fsSL "${ZEEK_REPO_URL}/Release.key" | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
-&& apt install -y  --no-install-recommends zeek
-
+echo "deb http://${ZEEK_REPO_URL}/ /" |  tee /etc/apt/sources.list.d/security:zeek.list \
+&& curl -fsSL "https://${ZEEK_REPO_URL}/Release.key" | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
+&& apt update && apt install -y --no-install-recommends zeek
 
 # create a symlink to zeek so that slips can find it
- ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 export PATH=$PATH:/usr/local/zeek/bin
 echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
 
-exit_on_cmd_failure
+# dont continue with slips installation if zeek isn't installed
+if ! check_zeek_or_bro; then
+    echo "Problem installing Slips. Aborting."
+    exit 1
+fi
 
 
 print_green "Installing Redis"
 curl -fsSL https://packages.redis.io/gpg |  gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list
 apt-get update
-apt install -y --no-install-recommends  redis
+apt install -y --no-install-recommends redis
 
 exit_on_cmd_failure
 
 print_green "Installing Python requirements"
+
 python3 -m pip install --upgrade pip \
-&& pip3 install -r install/requirements.txt \
+&& pip3 install --ignore-installed -r install/requirements.txt \
 && pip3 install --ignore-installed six
 
 exit_on_cmd_failure
@@ -130,3 +147,5 @@ print_green "Executing 'redis-server --daemonize yes'"
 redis-server --daemonize yes
 
 exit_on_cmd_failure
+
+print_green "Successfully installed Slips."
