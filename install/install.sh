@@ -1,50 +1,70 @@
 #!/bin/sh
 
+
 sudo apt-get update
-echo "[+] Installing slips dependencies ...\n"
-sudo apt-get install cmake make gcc g++ flex bison libpcap-dev libssl-dev python3 python3-dev swig zlib1g-dev
-sudo apt install -y --no-install-recommends \
+
+echo "[+] Installing Slips dependencies ...\n"
+sudo apt-get install  -y --no-install-recommends \
+    cmake \
+    make \
+    gcc\
+    g++ \
+    flex \
+    bison \
+    libpcap-dev \
+    libssl-dev \
+    swig \
+    zlib1g-dev \
     wget \
     ca-certificates \
     git \
     curl \
     gnupg \
-    lsb-release
+    lsb-release \
+    software-properties-common \
+    build-essential \
+    file \
+    lsof \
+    iptables \
+    iproute2 \
+    nfdump \
+    tshark \
+    whois \
+    yara \
+    net-tools \
+    vim \
+    less \
+    unzip \
+    python3-certifi \
+    python3-dev \
+    python3-tzlocal \
+    python3-pip \
+    golang \
+    notify-osd \
+    libnotify-bin \
+    net-tools \
+    lsb_release
 
-echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
-curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+UBUNTU_VERSION=$(lsb_release -r | awk '{print $2}' | sed 's/\./_/')
+ZEEK_REPO_URL="http://download.opensuse.org/repositories/security:/zeek/xUbuntu_${UBUNTU_VERSION}/"
 
+# Add the repository to the sources list
+echo "deb ${ZEEK_REPO_URL} /" | sudo tee /etc/apt/sources.list.d/security:zeek.list
+
+# Add the zeek repository key
+curl -fsSL "${ZEEK_REPO_URL}/Release.key" | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+
+# install redis
 curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
 
 sudo apt-get update
 
-
-echo "[+] Installing Slips dependencies ...\n"
 sudo apt install -y --no-install-recommends \
   python3 \
   redis \
-  zeek \
-  python3-pip \
-  python3-certifi \
-  python3-dev \
-  build-essential \
-  file \
-  lsof \
-  net-tools \
-  iproute2 \
-  iptables \
-  python3-tzlocal \
-  nfdump \
-  tshark \
-  git \
-  whois \
-  golang \
-  notify-osd \
-  yara \
-  libnotify-bin
+  zeek
 
-echo "[+] Installing zeek ..."
 # create a symlink to zeek so that slips can find it
 sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 export PATH=$PATH:/usr/local/zeek/bin
@@ -60,9 +80,13 @@ pip3 install --ignore-installed six
 
 # For Kalipso
 echo "[+] Downloading nodejs v19 and npm dependencies"
-curl -fsSL https://deb.nodesource.com/setup_21.x |  sudo -E bash - && sudo apt install -y --no-install-recommends nodejs
-cd ./modules/kalipso && npm install
-cd ../..
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash - \
+    && export NVM_DIR="$HOME/.nvm" \
+    && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" \
+    && nvm install 22 \
+    && cd modules/kalipso && npm install \
+    && cd ../..
+
 
 echo "[+] Installing p2p4slips\n"
 # build the pigeon and Add pigeon to path
