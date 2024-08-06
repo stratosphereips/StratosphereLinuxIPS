@@ -50,7 +50,7 @@ jobs:
     - name: Build and publish ubuntu image from Dockerfile
       id: docker_build_slips
       timeout-minutes: 15
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         debug: true
         verbose-debug: true
