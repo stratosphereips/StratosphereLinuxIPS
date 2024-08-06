@@ -3,6 +3,7 @@ from unittest.mock import patch, Mock
 import os
 
 from modules.flowalerts.conn import Conn
+from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
 from modules.flowalerts.notice import Notice
@@ -44,16 +45,11 @@ from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
     Evidence,
-    EvidenceType,
-    IDEACategory,
     IoCType,
     ProfileID,
     Proto,
-    Tag,
-    ThreatLevel,
     TimeWindow,
     Victim,
-    
 )
 
 
@@ -375,29 +371,58 @@ class ModuleFactory:
         """Create an instance of SetEvidenceHelper."""
         set_evidence_helper = SetEvidnceHelper(mock_db)
         return set_evidence_helper
-      
 
     def create_output_obj(self):
-        return Output()       
+        return Output()
 
-    def create_attacker_obj(self, value="192.168.1.1", direction=Direction.SRC, attacker_type=IoCType.IP):
-        return Attacker(direction=direction, attacker_type=attacker_type, value=value)
-    
-    def create_victim_obj(self, value="192.168.1.2", direction=Direction.DST, victim_type=IoCType.IP):
-        return Victim(direction=direction, victim_type=victim_type, value=value)
-    
+    def create_attacker_obj(
+        self,
+        value="192.168.1.1",
+        direction=Direction.SRC,
+        attacker_type=IoCType.IP,
+    ):
+        return Attacker(
+            direction=direction, attacker_type=attacker_type, value=value
+        )
+
+    def create_victim_obj(
+        self,
+        value="192.168.1.2",
+        direction=Direction.DST,
+        victim_type=IoCType.IP,
+    ):
+        return Victim(
+            direction=direction, victim_type=victim_type, value=value
+        )
+
     def create_profileid_obj(self, ip="192.168.1.3"):
         return ProfileID(ip=ip)
-    
-    def create_timewindow_obj(self,number=1):
+
+    def create_timewindow_obj(self, number=1):
         return TimeWindow(number=number)
-    
+
     def create_proto_obj(self):
         return Proto
-    
-    def create_evidence_obj(self, evidence_type, description, attacker, threat_level,
-                            category, victim, profile, timewindow, uid, timestamp,
-                            proto, port, source_target_tag, id, conn_count, confidence):
+
+    def create_evidence_obj(
+        self,
+        evidence_type,
+        description,
+        attacker,
+        threat_level,
+        category,
+        victim,
+        profile,
+        timewindow,
+        uid,
+        timestamp,
+        proto,
+        port,
+        source_target_tag,
+        id,
+        conn_count,
+        confidence,
+    ):
         return Evidence(
             evidence_type=evidence_type,
             description=description,
@@ -414,26 +439,29 @@ class ModuleFactory:
             source_target_tag=source_target_tag,
             id=id,
             conn_count=conn_count,
-            confidence=confidence
+            confidence=confidence,
         )
 
-
     def create_network_discovery_obj(self, mock_db):
-        with patch('modules.network_discovery.network_discovery.NetworkDiscovery.__init__', return_value=None):
+        with patch(
+            "modules.network_discovery.network_discovery.NetworkDiscovery.__init__",
+            return_value=None,
+        ):
             network_discovery = NetworkDiscovery(mock_db)
-            network_discovery.db = mock_db 
+            network_discovery.db = mock_db
         return network_discovery
+
+    def create_notify_obj(self):
+        notify = Notify()
+        return notify
 
     def create_trust_db_obj(self, mock_db=None):
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
             trust_db = TrustDB(
-                self.logger,
-                "dummy_trust.db",
-                drop_tables_on_startup=False
+                self.logger, "dummy_trust.db", drop_tables_on_startup=False
             )
             if mock_db:
                 trust_db.conn = mock_db
 
         trust_db.print = do_nothing
-        return trust_db        
-
+        return trust_db

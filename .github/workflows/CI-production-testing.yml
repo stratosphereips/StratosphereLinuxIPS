@@ -159,9 +159,13 @@ jobs:
       run: |
         python3 -m pytest tests/test_ip_info.py -p no:warnings -vv
 
-    - name: evidence tests
+    - name: Evidence tests
       run: |
         python3 -m pytest -s tests/test_evidence.py -p no:warnings -vv
+
+    - name: ASN info Unit Tests
+      run: |
+        python3 -m pytest tests/test_asn_info.py -p no:warnings -vv
 
     - name: Urlhaus Unit Tests
       run: |
@@ -171,17 +175,16 @@ jobs:
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
-    - name: Trustdb Tests
+    - name: Notify Tests
       run: |
-        python3 -m pytest tests/test_trustdb.py -p no:warnings -vv    
+        python3 -m pytest tests/test_notify.py -p no:warnings -vv
 
-    - name: Clear redis cache
-      run: ./slips.py -cc
+    - name: TrustDB Tests
+      run: |
+        python3 -m pytest tests/test_trustdb.py -p no:warnings -vv
 
-    - name: Portscan tests
 
     - name: Set Evidence Unit Tests
-
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
 
