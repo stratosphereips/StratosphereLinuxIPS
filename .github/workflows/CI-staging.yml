@@ -208,6 +208,12 @@ jobs:
               coverage report  --include="modules/ip_info/ip_info.py*"
               coverage html  --include="modules/ip_info/ip_info.py*" -d coverage_reports/ip_info
 
+          - name: asn_info Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_asn_info.py -p no:warnings -vv
+              coverage report  --include="modules/ip_info/asn_info.py*"
+              coverage html  --include="modules/ip_info/asn_info.py*" -d coverage_reports/ip_info
+
           - name: Input Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_inputProc.py -p no:warnings -vv
