@@ -38,7 +38,7 @@ jobs:
     # Set up Docker Buildx with docker-container driver is required
     # at the moment to be able to use a subdirectory with Git context
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
 
     - name: Build and push p2p image using dockerfile
       id: docker_build_p2p_for_slips
