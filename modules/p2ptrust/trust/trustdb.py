@@ -116,7 +116,6 @@ class TrustDB(IObservable):
     ):
         if timestamp is None:
             timestamp = time.time()
-        print("###################3Slips score timeout: ", timestamp)
         parameters = (ip, score, confidence, timestamp)
         self.conn.execute(
             "INSERT INTO slips_reputation (ipaddress, score, confidence, update_time) "
@@ -175,8 +174,6 @@ class TrustDB(IObservable):
         #       f"from {reporter_peerid} a report about {reported_key} "
         #       f"score: {score} confidence: {confidence} timestamp: {timestamp} ")
 
-        if timestamp is None:
-            timestamp = datetime.datetime.now()
         timestamp = time.time()
 
         parameters = (
