@@ -17,7 +17,7 @@ def test_update_bar_normal(
     initial_value, update_count, expected_final_value, total_flows, mock_db
 ):
     pbar = ModuleFactory().create_progress_bar_obj(mock_db)
-    pbar.slips_mode = "normal"
+    pbar.slips_mode = "interactive"
     pbar.total_flows = total_flows
     pbar.pbar_finished = Event()
 
@@ -64,7 +64,14 @@ def test_update_bar_no_progress_bar(mock_db):
     pbar = ModuleFactory().create_progress_bar_obj(mock_db)
     pbar.slips_mode = "normal"
 
-    pbar.update_bar()
+    assert not hasattr(pbar, "progress_bar")
+
+    try:
+        pbar.update_bar()
+    except AttributeError:
+        pytest.fail("update_bar() raised AttributeError unexpectedly")
+
+    assert not hasattr(pbar, "progress_bar")
 
 
 def test_update_bar_daemonized_mode(mock_db):
