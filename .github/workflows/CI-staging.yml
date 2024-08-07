@@ -23,7 +23,7 @@ jobs:
           image: stratosphereips/slips_dependencies:latest
 
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -265,7 +265,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -291,7 +291,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -317,7 +317,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -345,7 +345,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -375,7 +375,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
