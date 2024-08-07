@@ -254,7 +254,14 @@ jobs:
             run: |
                coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
                coverage report --include="slips_files/core/helpers/notify.py*"
-               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify    
+               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify
+
+          - name: symbols handler test
+            run: |
+               coverage run --source=./ -m pytest tests/test_symbols_handler.py -p no:warnings -vv
+               coverage report --include="slips_files/core/helpers/symbols_handler.py*"
+               coverage html --include="slips_files/core/helpers/symbols_handler.py*" -d coverage_reports/notify     
+ 
 
   dataset_integration_tests:
       # specify the host OS
