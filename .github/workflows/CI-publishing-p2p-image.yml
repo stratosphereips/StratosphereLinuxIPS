@@ -42,7 +42,7 @@ jobs:
 
     - name: Build and push p2p image using dockerfile
       id: docker_build_p2p_for_slips
-      uses: docker/build-push-action@v3
+      uses: docker/build-push-action@v6
       with:
         allow: network.host
         context: ./
