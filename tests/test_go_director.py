@@ -1,6 +1,8 @@
 from unittest.mock import Mock, patch
 import pytest
 from tests.module_factory import ModuleFactory
+import tempfile
+import os
 
 
 @pytest.mark.parametrize(
@@ -276,26 +278,36 @@ def test_set_evidence_p2p_report(
 
 
 def test_read_configuration(mock_db):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
-    go_director.read_configuration()
-    assert go_director.width == 3600.0
+    with patch(
+        "slips_files.common.parsers.config_parser.ConfigParser",
+        return_value=3600.0,
+    ):
+        go_director = ModuleFactory().create_go_director_obj(mock_db)
+        go_director.read_configuration()
+        assert go_director.width == 3600.0
 
 
 @pytest.mark.parametrize(
     "text, expected_log_content",
-    [
+    [  # Test case 1: Basic log message
         ("Test log message", " - Test log message\n"),
+        # Test case 2: Another log message
         ("Another test message", " - Another test message\n"),
     ],
 )
 def test_log(text, expected_log_content, mock_db):
     go_director = ModuleFactory().create_go_director_obj(mock_db)
-    go_director.log(text)
-    go_director.reports_logfile.flush()
 
-    with open(go_director.reports_logfile.name, "r") as log_file:
-        last_line = log_file.readlines()[-1]
-        assert expected_log_content in last_line
+    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
+        temp_filename = temp_file.name
+
+        with patch.object(go_director, "reports_logfile", temp_file):
+            go_director.log(text)
+
+    with open(temp_filename, "r") as f:
+        log_content = f.read()
+    os.unlink(temp_filename)
+    assert expected_log_content in log_content
 
 
 def test_process_message_request_valid_request(mock_db):
