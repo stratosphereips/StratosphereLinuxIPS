@@ -3,9 +3,12 @@ from unittest.mock import patch, Mock, MagicMock
 import os
 
 from modules.flowalerts.conn import Conn
+import sys
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
+from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
+from modules.progress_bar.progress_bar import PBar
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
 from modules.flowalerts.software import Software
@@ -425,6 +428,30 @@ class ModuleFactory:
             network_discovery.db = mock_db 
         return network_discovery
 
+      
+    def create_progress_bar_obj(self, mock_db):
+        mock_pipe = Mock(spec=Connection)
+        mock_pbar_finished = Mock(spec=Event)
+        
+        with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
+            pbar = PBar(
+                self.logger,
+                "dummy_output_dir",
+                6379,
+                self.dummy_termination_event,
+            )
+            pbar.db.rdb = mock_db
+        pbar.init(
+            stdout=sys.stdout,
+            pipe=mock_pipe,
+            slips_mode="normal",
+            pbar_finished=mock_pbar_finished
+        )
+        pbar.print = do_nothing
+
+        return pbar 
+
+      
     def create_daemon_object(self):
         with patch("slips.daemon.Daemon.__init__", return_value=None):
             daemon = Daemon(None)
