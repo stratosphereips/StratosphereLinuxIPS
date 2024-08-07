@@ -86,7 +86,7 @@ class DNS(IFlowalertsAnalyzer):
         check if any ip of the given CNAMEs is contacted
         """
         for CNAME in answers:
-            if not validators.domain(CNAME):
+            if not utils.is_valid_domain(CNAME):
                 # it's an ip
                 continue
             ips = self.db.get_domain_resolution(CNAME)

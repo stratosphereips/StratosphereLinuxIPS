@@ -1,9 +1,10 @@
 import shutil
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 import os
 
 from modules.flowalerts.conn import Conn
 import sys
+from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
@@ -42,6 +43,7 @@ from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.arp.arp import ARP
+from slips.daemon import Daemon
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
@@ -426,6 +428,7 @@ class ModuleFactory:
             network_discovery.db = mock_db 
         return network_discovery
 
+      
     def create_progress_bar_obj(self, mock_db):
         mock_pipe = Mock(spec=Connection)
         mock_pbar_finished = Mock(spec=Event)
@@ -447,3 +450,25 @@ class ModuleFactory:
         pbar.print = do_nothing
 
         return pbar 
+
+      
+    def create_daemon_object(self):
+        with patch("slips.daemon.Daemon.__init__", return_value=None):
+            daemon = Daemon(None)
+            daemon.stderr = "errors.log"
+            daemon.stdout = "slips.log"
+            daemon.stdin = "/dev/null"
+            daemon.logsfile = "slips.log"
+            daemon.pidfile_dir = "/tmp"
+            daemon.pidfile = os.path.join(daemon.pidfile_dir, "slips_daemon.lock")
+            daemon.slips = MagicMock()
+            daemon.daemon_start_lock = "slips_daemon_start"
+            daemon.daemon_stop_lock = "slips_daemon_stop"
+            daemon.pid = None
+            return daemon
+
+    def create_notify_obj(self):
+        notify = Notify()
+        return notify
+
+

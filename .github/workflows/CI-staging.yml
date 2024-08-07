@@ -208,6 +208,12 @@ jobs:
               coverage report  --include="modules/ip_info/ip_info.py*"
               coverage html  --include="modules/ip_info/ip_info.py*" -d coverage_reports/ip_info
 
+          - name: asn_info Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_asn_info.py -p no:warnings -vv
+              coverage report  --include="modules/ip_info/asn_info.py*"
+              coverage html  --include="modules/ip_info/asn_info.py*" -d coverage_reports/ip_info
+
           - name: Input Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_inputProc.py -p no:warnings -vv
@@ -238,7 +244,17 @@ jobs:
                coverage report --include="modules/progress_bar/progress_bar.py*"
                coverage html --include="modules/progress_bar/progress_bar.py*" -d coverage_reports/progress_bar     
 
+          - name: daemon test
+            run: |
+               coverage run --source=./ -m pytest tests/test_daemon.py -p no:warnings -vv
+               coverage report --include="slips/daemon.py*"
+               coverage html --include="slips/daemon.py*" -d coverage_reports/daemon     
 
+          - name: notify test
+            run: |
+               coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
+               coverage report --include="slips_files/core/helpers/notify.py*"
+               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify    
 
   dataset_integration_tests:
       # specify the host OS

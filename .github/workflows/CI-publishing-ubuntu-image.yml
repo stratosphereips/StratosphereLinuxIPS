@@ -58,6 +58,6 @@ jobs:
         context: ./
         file: ./docker/ubuntu-image/Dockerfile
         tags: |
-          stratosphereips/ubuntu_image:latest
-          stratosphereips/ubuntu_image:${{ env.SLIPS_VERSION }}
+          stratosphereips/slips:latest
+          stratosphereips/slips:${{ env.SLIPS_VERSION }}
         push: true
