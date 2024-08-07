@@ -288,6 +288,13 @@ jobs:
                coverage report --include="modules/p2ptrust/trust/trustdb.py*"
                coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb
 
+          - name: Symbols Handler Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_symbols_handler.py -p no:warnings -vv
+               coverage report --include="slips_files/core/helpers/symbols_handler.py*"
+               coverage html --include="slips_files/core/helpers/symbols_handler.py*" -d coverage_reports/notify     
+ 
+
   dataset_integration_tests:
       # specify the host OS
       runs-on: ubuntu-latest
