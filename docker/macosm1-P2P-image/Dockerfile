@@ -71,8 +71,8 @@ RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && cd modules/kalipso \
     && npm install
 
-# Change the configuration file to have use_p2p = yes
-RUN sed -i "s/use_p2p : 'no'/use_p2p : 'yes'/" config/slips.yaml
+RUN sed -i "s/use_p2p : False/use_p2p : True/" config/slips.yaml
+
 
 # build the pigeon and add pigeon to path
 RUN cd p2p4slips \
