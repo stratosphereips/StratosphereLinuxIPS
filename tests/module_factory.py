@@ -8,6 +8,7 @@ from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
+from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.progress_bar.progress_bar import PBar
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
@@ -470,5 +471,11 @@ class ModuleFactory:
     def create_notify_obj(self):
         notify = Notify()
         return notify
+
+    def create_symbol_handler(self, mocker):
+        mock_logger = mocker.Mock()
+        mock_db = mocker.Mock()
+        mock_db.get_t2_for_profile_tw.return_value = (1000.0, 2000.0)
+        return SymbolHandler(mock_logger, mock_db)
 
 
