@@ -17,6 +17,13 @@ Steps to reproduce the behavior:
 3. Scroll down to '....'
 4. See error
 
+**errors.log**
+If there's an error logged to the errors.log in your output directory, you can post it here
+```
+Error goes here
+```
+
+
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
@@ -33,7 +40,7 @@ Master or Develop?
  - Are you running slips in docker or locally? [yes/no]
  - Docker version (if running slips in docker) [e.g. 20.10.22]
  - Slips docker image used (if running slips in docker) [e.g. macosm1-image, macosm1-P2P-image, ubuntu-image, dependency-image]
-
+ - Commit hash: ( `git rev-parse --short HEAD` )
 
 **Additional context**
 Add any other context about the problem here.
