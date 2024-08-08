@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, call, MagicMock
-from module_factory import ModuleFactory
+from tests.module_factory import ModuleFactory
 import datetime
 import time
 
