@@ -16,7 +16,7 @@ jobs:
 
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: 'develop'
         # Fetch all history for all tags and branches
@@ -33,7 +33,7 @@ jobs:
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
     - name: Set up Python 3.10.12
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10.12"
 
@@ -159,9 +159,13 @@ jobs:
       run: |
         python3 -m pytest tests/test_ip_info.py -p no:warnings -vv
 
-    - name: evidence tests
+    - name: Evidence tests
       run: |
         python3 -m pytest -s tests/test_evidence.py -p no:warnings -vv
+
+    - name: ASN info Unit Tests
+      run: |
+        python3 -m pytest tests/test_asn_info.py -p no:warnings -vv
 
     - name: Urlhaus Unit Tests
       run: |
@@ -171,9 +175,27 @@ jobs:
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
+    - name: progress_bar Unit Tests
+      run: |
+        python3 -m pytest tests/test_progress_bar.py -p no:warnings -vv
+
+    - name: daemon Tests
+      run: |
+        python3 -m pytest tests/test_daemon.py -p no:warnings -vv
+
+    - name: Clear redis cache
+      run: ./slips.py -cc
+
+    - name: go_director Unit Tests
+      run: |
+        python3 -m pytest tests/test_go_director.py -p no:warnings -vv
+
+    - name: Clear redis cache
+      run: ./slips.py -cc
+
     - name: base model Unit Tests
       run: |
-        python3 -m pytest tests/test_base_model.py -p no:warnings -vv    
+        python3 -m pytest tests/test_base_model.py -p no:warnings -vv
 
     - name: set Evidence Unit Tests
       run: |
@@ -182,7 +204,7 @@ jobs:
     - name: notify Tests
       run: |
         python3 -m pytest tests/test_notify.py -p no:warnings -vv
-    
+
     - name: set Evidence Unit Tests
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
@@ -190,6 +212,7 @@ jobs:
     - name: Output Unit Tests
       run: |
         python3 -m pytest tests/test_output.py -p no:warnings -vv
+
 
     - name: Clear redis cache
       run: ./slips.py -cc
