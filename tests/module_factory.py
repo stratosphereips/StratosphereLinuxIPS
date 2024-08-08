@@ -1,17 +1,22 @@
 import shutil
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 import os
 
 from modules.flowalerts.conn import Conn
+import sys
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
+from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
+from modules.progress_bar.progress_bar import PBar
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
 from modules.flowalerts.software import Software
 from modules.flowalerts.ssh import SSH
 from modules.flowalerts.ssl import SSL
 from modules.flowalerts.tunnel import Tunnel
+from modules.p2ptrust.trust.trustdb import TrustDB
+from modules.p2ptrust.utils.go_director import GoDirector
 from slips.main import Main
 from modules.update_manager.update_manager import UpdateManager
 from modules.leak_detector.leak_detector import LeakDetector
@@ -41,6 +46,7 @@ from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.p2ptrust.trust.trustdb import TrustDB
 from modules.arp.arp import ARP
+from slips.daemon import Daemon
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
@@ -451,9 +457,66 @@ class ModuleFactory:
             network_discovery.db = mock_db
         return network_discovery
 
+
+    def create_go_director_obj(self, mock_db):
+        with patch('modules.p2ptrust.utils.utils.send_evaluation_to_go'):
+            go_director = GoDirector(
+                logger=self.logger,
+                trustdb=Mock(spec=TrustDB),
+                db=mock_db,
+                storage_name="test_storage",
+                override_p2p=False,
+                gopy_channel="test_gopy",
+                pygo_channel="test_pygo",
+                p2p_reports_logfile="test_reports.log"
+            )
+            go_director.print = Mock()  
+        return go_director
+
+      
+    def create_progress_bar_obj(self, mock_db):
+        mock_pipe = Mock(spec=Connection)
+        mock_pbar_finished = Mock(spec=Event)
+        
+        with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
+            pbar = PBar(
+                self.logger,
+                "dummy_output_dir",
+                6379,
+                self.dummy_termination_event,
+            )
+            pbar.db.rdb = mock_db
+        pbar.init(
+            stdout=sys.stdout,
+            pipe=mock_pipe,
+            slips_mode="normal",
+            pbar_finished=mock_pbar_finished
+        )
+        pbar.print = do_nothing
+
+        return pbar 
+
+      
+    def create_daemon_object(self):
+        with patch("slips.daemon.Daemon.__init__", return_value=None):
+            daemon = Daemon(None)
+            daemon.stderr = "errors.log"
+            daemon.stdout = "slips.log"
+            daemon.stdin = "/dev/null"
+            daemon.logsfile = "slips.log"
+            daemon.pidfile_dir = "/tmp"
+            daemon.pidfile = os.path.join(daemon.pidfile_dir, "slips_daemon.lock")
+            daemon.slips = MagicMock()
+            daemon.daemon_start_lock = "slips_daemon_start"
+            daemon.daemon_stop_lock = "slips_daemon_stop"
+            daemon.pid = None
+            return daemon
+
+
     def create_notify_obj(self):
         notify = Notify()
         return notify
+
 
     def create_trust_db_obj(self, mock_db=None):
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
@@ -465,3 +528,4 @@ class ModuleFactory:
 
         trust_db.print = do_nothing
         return trust_db
+

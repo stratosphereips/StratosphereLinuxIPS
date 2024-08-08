@@ -23,7 +23,7 @@ jobs:
           image: stratosphereips/slips_dependencies:latest
 
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -238,7 +238,26 @@ jobs:
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
-          - name: Notify Unit tests
+
+          - name: go_director test
+            run: |
+               coverage run --source=./ -m pytest tests/test_go_director.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/utils/go_director.py*"
+               coverage html --include="modules/p2ptrust/utils/go_director.py*" -d coverage_reports/go_director     
+
+          - name: progress bar test
+            run: |
+               coverage run --source=./ -m pytest tests/test_progress_bar.py -p no:warnings -vv
+               coverage report --include="modules/progress_bar/progress_bar.py*"
+               coverage html --include="modules/progress_bar/progress_bar.py*" -d coverage_reports/progress_bar     
+
+          - name: daemon test
+            run: |
+               coverage run --source=./ -m pytest tests/test_daemon.py -p no:warnings -vv
+               coverage report --include="slips/daemon.py*"
+               coverage html --include="slips/daemon.py*" -d coverage_reports/daemon     
+
+          - name: notify test
             run: |
                coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
                coverage report --include="slips_files/core/helpers/notify.py*"
@@ -250,8 +269,6 @@ jobs:
                coverage report --include="modules/p2ptrust/trust/trustdb.py*"
                coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb
 
-
-
   dataset_integration_tests:
       # specify the host OS
       runs-on: ubuntu-latest
@@ -261,7 +278,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -287,7 +304,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -313,7 +330,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -341,7 +358,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -371,7 +388,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
