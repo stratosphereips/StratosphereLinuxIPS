@@ -227,7 +227,7 @@ jobs:
     - name: Upload Artifacts
       # run this job whether the above jobs failed or passed
       if: success() || failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test_slips_locally-integration-tests-output
         path: |

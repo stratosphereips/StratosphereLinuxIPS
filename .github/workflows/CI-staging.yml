@@ -282,7 +282,7 @@ jobs:
 
           - name: Upload Artifacts
             if: failure()
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: dataset_integration_tests_output
               path: |
@@ -308,7 +308,7 @@ jobs:
           - name: Upload Artifacts
             # run this job whether the above jobs failed or passed
             if: success() || failure()
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: zeek_integration_tests_output
               path: |
@@ -334,7 +334,7 @@ jobs:
           - name: Upload Artifact
             # run this job whether the above jobs failed or passed
             if: success() || failure()
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: pcap_integration_tests_output
               path: |
@@ -366,7 +366,7 @@ jobs:
           - name: Upload Artifacts
             # run this job whether the above jobs failed or passed
             if: success() || failure()
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: port_scans_integration_tests_output
               path: |
@@ -393,7 +393,7 @@ jobs:
           - name: Upload Artifacts
             # run this job whether the above jobs failed or passed
             if: success() || failure()
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: config_files_integration_tests_output
               path: |
