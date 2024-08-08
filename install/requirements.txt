@@ -43,5 +43,5 @@ aid_hash
 black==24.4.2
 ruff==0.5.6
 pre-commit==3.7.1
-coverage==7.6.0
+coverage==7.6.1
 pyyaml
