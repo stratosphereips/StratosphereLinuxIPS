@@ -339,7 +339,6 @@ class Input(ICore):
             # and there is still no files for us.
             # To cover this case, just refresh the list of files
             self.zeek_files = self.db.get_all_zeek_files()
-            # time.sleep(1)
             return False, False
 
         # to fix the problem of evidence being generated BEFORE their corresponding flows are added to our db
@@ -901,7 +900,6 @@ class Input(ICore):
                 self.give_profiler(line_info)
                 self.lines += 1
                 self.print("Done reading 1 CYST flow.\n ", 0, 3)
-                time.sleep(2)
 
         self.is_done_processing()
 

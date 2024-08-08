@@ -2,7 +2,10 @@ import sys
 import traceback
 from abc import ABC, abstractmethod
 from multiprocessing import Process, Event
-from typing import Dict
+from typing import (
+    Dict,
+    Optional,
+)
 
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
@@ -104,7 +107,6 @@ class IModule(IObservable, ABC, Process):
             # this module is still receiving msgs,
             # don't stop
             return False
-
         return True
 
     def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
@@ -157,16 +159,20 @@ class IModule(IObservable, ABC, Process):
         executed once before the main loop
         """
 
-    def get_msg(self, channel_name):
+    def get_msg(self, channel_name: str) -> Optional[dict]:
         message = self.db.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
             self.channel_tracker[channel_name] = True
             return message
-        else:
-            self.channel_tracker[channel_name] = False
-            return False
 
-    def run(self):
+        self.channel_tracker[channel_name] = False
+
+    def print_traceback(self):
+        exception_line = sys.exc_info()[2].tb_lineno
+        self.print(f"Problem in pre_main() line {exception_line}", 0, 1)
+        self.print(traceback.format_exc(), 0, 1)
+
+    def run(self) -> bool:
         """
         This is the loop function, it runs non-stop as long as
         the module is running
@@ -180,24 +186,32 @@ class IModule(IObservable, ABC, Process):
             self.shutdown_gracefully()
             return True
         except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f"Problem in pre_main() line {exception_line}", 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
+            self.print_traceback()
             return True
 
-        try:
-            while not self.should_stop():
-                # keep running main() in a loop as long as the module is
-                # online
+        keyboard_int_ctr = 0
+        while True:
+            try:
+                if self.should_stop():
+                    self.shutdown_gracefully()
+                    return True
+
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
                 error: bool = self.main()
                 if error:
                     self.shutdown_gracefully()
 
-        except KeyboardInterrupt:
-            self.shutdown_gracefully()
-        except Exception:
-            self.print(f"Problem in {self.name}", 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
-        return True
+            except KeyboardInterrupt:
+                keyboard_int_ctr += 1
+
+                if keyboard_int_ctr >= 2:
+                    # on the second ctrl+c Slips immediately stop
+                    return True
+
+                # on the first ctrl + C keep looping until the should_stop
+                # returns true
+                continue
+            except Exception:
+                self.print_traceback()
+                return False
