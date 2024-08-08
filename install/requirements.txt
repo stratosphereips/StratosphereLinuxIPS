@@ -41,7 +41,7 @@ pytest-sugar==1.0.0
 memray==1.13.3
 aid_hash
 black==24.4.2
-ruff==0.5.2
+ruff==0.5.6
 pre-commit==3.7.1
 coverage==7.6.0
 pyyaml
