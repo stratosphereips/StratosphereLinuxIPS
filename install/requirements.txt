@@ -33,7 +33,7 @@ whois==1.20240129.2
 wheel
 flask
 tldextract==5.1.2
-tqdm==4.66.4
+tqdm==4.66.5
 termcolor==2.4.0
 viztracer==0.16.3
 yappi==1.6.0
