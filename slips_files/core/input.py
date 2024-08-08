@@ -486,8 +486,8 @@ class Input(ICore):
 
     def print_lines_read(self):
         self.print(
-            f"We read everything. No more input. "
-            f"Stopping input process. Sent {self.lines} lines"
+            f"Done reading all flows. Stopping the input process. "
+            f"Sent {self.lines} lines for the profiler process."
         )
 
     def stdin(self):
