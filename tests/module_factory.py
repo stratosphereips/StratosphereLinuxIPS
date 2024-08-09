@@ -6,6 +6,7 @@ from modules.flowalerts.conn import Conn
 import sys
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
+from slips_files.core.evidencehandler import EvidenceHandler  
 from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
 from modules.progress_bar.progress_bar import PBar
@@ -489,5 +490,14 @@ class ModuleFactory:
     def create_notify_obj(self):
         notify = Notify()
         return notify
+
+    def create_evidence_handler_obj(self):
+        logger = Mock()
+        output_dir = "/tmp"
+        redis_port = 6379
+        termination_event = Mock()
+        handler = EvidenceHandler(logger, output_dir, redis_port, termination_event)
+        handler.db = Mock()
+        return handler
 
 
