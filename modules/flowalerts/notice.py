@@ -3,6 +3,7 @@ import json
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.slips_utils import utils
 
 
 class Notice(IFlowalertsAnalyzer):
@@ -54,9 +55,8 @@ class Notice(IFlowalertsAnalyzer):
 
         self.set_evidence.pw_guessing(msg, timestamp, twid, uid, by="Zeek")
 
-    def analyze(self):
-        msg = self.flowalerts.get_msg("new_notice")
-        if not msg:
+    def analyze(self, msg):
+        if not utils.is_msg_intended_for(msg, "new_notice"):
             return False
 
         data = json.loads(msg["data"])

@@ -24,7 +24,6 @@ class FlowAlerts(IModule):
     def init(self):
         self.subscribe_to_channels()
         self.whitelist = Whitelist(self.logger, self.db)
-
         self.dns = DNS(self.db, flowalerts=self)
         self.software = Software(self.db, flowalerts=self)
         self.notice = Notice(self.db, flowalerts=self)
@@ -36,42 +35,45 @@ class FlowAlerts(IModule):
         self.conn = Conn(self.db, flowalerts=self)
 
     def subscribe_to_channels(self):
-        self.c1 = self.db.subscribe("new_flow")
-        self.c2 = self.db.subscribe("new_ssh")
-        self.c3 = self.db.subscribe("new_notice")
-        self.c4 = self.db.subscribe("new_ssl")
-        self.c5 = self.db.subscribe("tw_closed")
-        self.c6 = self.db.subscribe("new_dns")
-        self.c7 = self.db.subscribe("new_downloaded_file")
-        self.c8 = self.db.subscribe("new_smtp")
-        self.c9 = self.db.subscribe("new_software")
-        self.c10 = self.db.subscribe("new_weird")
-        self.c11 = self.db.subscribe("new_tunnel")
-
-        self.channels = {
-            "new_flow": self.c1,
-            "new_ssh": self.c2,
-            "new_notice": self.c3,
-            "new_ssl": self.c4,
-            "tw_closed": self.c5,
-            "new_dns": self.c6,
-            "new_downloaded_file": self.c7,
-            "new_smtp": self.c8,
-            "new_software": self.c9,
-            "new_weird": self.c10,
-            "new_tunnel": self.c11,
-        }
+        channels = (
+            "new_flow",
+            "new_ssh",
+            "new_notice",
+            "new_ssl",
+            "tw_closed",
+            "new_dns",
+            "new_downloaded_file",
+            "new_smtp",
+            "new_software",
+            "new_tunnel",
+        )
+        for channel in channels:
+            channel_obj = self.db.subscribe(channel)
+            self.channels.update({channel: channel_obj})
 
     def pre_main(self):
         utils.drop_root_privs()
+        self.analyzers_map = {
+            "new_downloaded_file": self.downloaded_file.analyze,
+            "new_notice": self.notice.analyze,
+            "new_smtp": self.smtp.analyze,
+            "new_flow": [self.conn.analyze, self.ssl.analyze],
+            "new_dns": self.dns.analyze,
+            "tw_closed": self.conn.analyze,
+            "new_ssh": self.ssh.analyze,
+            "new_software": self.software.analyze,
+            "new_tunnel": self.tunnel.analyze,
+            "new_ssl": self.ssl.analyze,
+        }
 
     def main(self):
-        self.conn.analyze()
-        self.notice.analyze()
-        self.dns.analyze()
-        self.smtp.analyze()
-        self.ssl.analyze()
-        self.ssh.analyze()
-        self.downloaded_file.analyze()
-        self.tunnel.analyze()
-        self.software.analyze()
+        for channel, analyzers in self.analyzers_map.items():
+            msg = self.get_msg(channel)
+            if not msg:
+                continue
+
+            if isinstance(analyzers, list):
+                for analyzer in analyzers:
+                    analyzer(msg)
+            else:
+                analyzers(msg)

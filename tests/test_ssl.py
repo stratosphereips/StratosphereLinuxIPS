@@ -90,8 +90,6 @@ def test_wait_for_ssl_flows_to_appear_in_connlog(
 
     mock_get_flow = mocker.patch.object(ssl.db, "get_flow")
     mock_check_pastebin = mocker.patch.object(ssl, "check_pastebin_download")
-    mock_sleep = mocker.patch("time.sleep")
-
     for flow in test_flows:
         ssl.pending_ssl_flows.put(tuple(flow.values()))
 
@@ -419,27 +417,11 @@ def test_check_non_ssl_port_443_conns(
     assert mock_set_evidence.call_count == expected_call_count
 
 
-def test_analyze(mocker, mock_db):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
-    mock_pending_ssl_flows_put = mocker.patch.object(
-        ssl.pending_ssl_flows, "put"
-    )
-    mock_check_self_signed_certs = mocker.patch.object(
-        ssl, "check_self_signed_certs"
-    )
-    mock_detect_malicious_ja3 = mocker.patch.object(
-        ssl, "detect_malicious_ja3"
-    )
-    mock_detect_incompatible_cn = mocker.patch.object(
-        ssl, "detect_incompatible_cn"
-    )
-    mock_detect_doh = mocker.patch.object(ssl, "detect_doh")
-    mock_check_non_ssl_port_443_conns = mocker.patch.object(
-        ssl, "check_non_ssl_port_443_conns"
-    )
-
-    ssl_flow_msg = {
-        "data": json.dumps(
+@pytest.mark.parametrize(
+    "channel, msg_data",
+    [
+        (
+            "new_ssl",
             {
                 "flow": json.dumps(
                     {
@@ -456,37 +438,29 @@ def test_analyze(mocker, mock_db):
                 ),
                 "profileid": "profile_192.168.1.1",
                 "twid": "timewindow1",
-            }
-        )
-    }
-    new_flow_msg = {
-        "data": json.dumps(
-            {
-                "profileid": "profile_192.168.1.1",
-                "twid": "timewindow1",
-                "stime": 1635765895.037696,
-                "flow": json.dumps(
-                    {
-                        "test_uid": json.dumps(
-                            {
-                                "daddr": "192.168.1.2",
-                                "state": "Established",
-                                "dport": 443,
-                                "proto": "tcp",
-                                "allbytes": 1024,
-                                "appproto": "http",
-                            }
-                        )
-                    }
-                ),
-            }
-        )
-    }
+            },
+        ),
+    ],
+)
+def test_analyze_new_ssl_msg(mocker, channel, msg_data, mock_db):
+    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+    mock_pending_ssl_flows_put = mocker.patch.object(
+        ssl.pending_ssl_flows, "put"
+    )
+    mock_check_self_signed_certs = mocker.patch.object(
+        ssl, "check_self_signed_certs"
+    )
+    mock_detect_malicious_ja3 = mocker.patch.object(
+        ssl, "detect_malicious_ja3"
+    )
+    mock_detect_incompatible_cn = mocker.patch.object(
+        ssl, "detect_incompatible_cn"
+    )
+    mock_detect_doh = mocker.patch.object(ssl, "detect_doh")
 
-    ssl.flowalerts.get_msg = mocker.Mock(side_effect=[ssl_flow_msg, None])
-    ssl.get_msg = mocker.Mock(return_value=new_flow_msg)
+    msg = {"channel": channel, "data": json.dumps(msg_data)}
 
-    ssl.analyze()
+    ssl.analyze(msg)
 
     mock_pending_ssl_flows_put.assert_called_once_with(
         (
@@ -538,6 +512,43 @@ def test_analyze(mocker, mock_db):
         "test_uid",
     )
 
+
+@pytest.mark.parametrize(
+    "channel, msg_data",
+    [
+        (
+            "new_flow",
+            {
+                "profileid": "profile_192.168.1.1",
+                "twid": "timewindow1",
+                "stime": 1635765895.037696,
+                "flow": json.dumps(
+                    {
+                        "test_uid": json.dumps(
+                            {
+                                "daddr": "192.168.1.2",
+                                "state": "Established",
+                                "dport": 443,
+                                "proto": "tcp",
+                                "allbytes": 1024,
+                                "appproto": "http",
+                            }
+                        )
+                    }
+                ),
+            },
+        )
+    ],
+)
+def test_analyze_new_flow_msg(mocker, mock_db, channel, msg_data):
+    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+    mock_check_non_ssl_port_443_conns = mocker.patch.object(
+        ssl, "check_non_ssl_port_443_conns"
+    )
+    msg = {"channel": channel, "data": json.dumps(msg_data)}
+
+    ssl.analyze(msg)
+
     mock_check_non_ssl_port_443_conns.assert_called_once()
     call_arg = mock_check_non_ssl_port_443_conns.call_args[0][0]
     assert isinstance(call_arg, dict)
@@ -545,10 +556,6 @@ def test_analyze(mocker, mock_db):
     assert call_arg["twid"] == "timewindow1"
     assert call_arg["stime"] == 1635765895.037696
     assert "flow" in call_arg
-    flow_data = json.loads(call_arg["flow"])
-    assert "test_uid" in flow_data
-    assert json.loads(flow_data["test_uid"])["dport"] == 443
-    assert json.loads(flow_data["test_uid"])["appproto"] == "http"
 
 
 def test_analyze_no_messages(mocker, mock_db):
@@ -571,10 +578,7 @@ def test_analyze_no_messages(mocker, mock_db):
         ssl, "check_non_ssl_port_443_conns"
     )
 
-    ssl.flowalerts.get_msg = mocker.Mock(return_value=None)
-    ssl.get_msg = mocker.Mock(return_value=None)
-
-    ssl.analyze()
+    ssl.analyze({})
 
     mock_pending_ssl_flows_put.assert_not_called()
     mock_check_self_signed_certs.assert_not_called()

@@ -84,13 +84,8 @@ def test_analyze_with_valid_message(mock_db, msg_data, expected_check_args):
     """Tests the analyze method of the SMTP class when a valid message is received."""
     smtp = ModuleFactory().create_smtp_analyzer_obj(mock_db)
     smtp.check_smtp_bruteforce = MagicMock()
-    mock_flowalerts = MagicMock()
-    smtp.flowalerts = mock_flowalerts
-    mock_flowalerts.get_msg.return_value = {"data": json.dumps(msg_data)}
-
-    smtp.analyze()
-
-    smtp.flowalerts.get_msg.assert_called_once_with("new_smtp")
+    msg = {"channel": "new_smtp", "data": json.dumps(msg_data)}
+    smtp.analyze(msg)
     smtp.check_smtp_bruteforce.assert_called_once_with(*expected_check_args)
 
 
@@ -98,11 +93,5 @@ def test_analyze_with_no_message(mock_db):
     """Tests the analyze method of the SMTP class when no message is received."""
     smtp = ModuleFactory().create_smtp_analyzer_obj(mock_db)
     smtp.check_smtp_bruteforce = MagicMock()
-    mock_flowalerts = MagicMock()
-    smtp.flowalerts = mock_flowalerts
-    mock_flowalerts.get_msg.return_value = None
-
-    smtp.analyze()
-
-    smtp.flowalerts.get_msg.assert_called_once_with("new_smtp")
+    smtp.analyze({})
     smtp.check_smtp_bruteforce.assert_not_called()

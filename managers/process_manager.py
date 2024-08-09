@@ -717,6 +717,7 @@ class ProcessManager:
                 hitlist = self.get_hitlist_in_order()
                 to_kill_first: List[Process] = hitlist[0]
                 to_kill_last: List[Process] = hitlist[1]
+
                 self.termination_event.set()
 
                 # to make sure we only warn the user once about

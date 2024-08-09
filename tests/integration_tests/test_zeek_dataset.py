@@ -107,7 +107,8 @@ def test_zeek_dir(
         (
             "dataset/test9-mixed-zeek-dir/conn.log",
             4,
-            "non-HTTP established connection",
+            "non-HTTP established connection",  # the flows with uid
+            # CAwUdr34dVnyOwbUuj should trigger this
             "test9-conn_log_only/",
             6659,
         ),

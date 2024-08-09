@@ -318,9 +318,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         cls.r.set("slips_start_time", now)
 
-    def publish(self, channel, data):
-        """Publish something"""
-        self.r.publish(channel, data)
+    def publish(self, channel, msg):
+        """Publish a msg in the given channel"""
+        # keeps track of how many msgs were published in the given channel
+        self.r.hincrby("msgs_published_at_runtime", channel, 1)
+        self.r.publish(channel, msg)
+
+    def get_msgs_published_in_channel(self, channel: str) -> int:
+        """returns the number of msgs published in a channel"""
+        return self.r.hget("msgs_published_at_runtime", channel)
 
     def subscribe(self, channel: str, ignore_subscribe_messages=True):
         """Subscribe to channel"""
@@ -499,7 +505,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.zscore("labels", label)
 
-    def get_disabled_modules(self) -> dict:
+    def get_enabled_modules(self) -> List[str]:
+        """
+        Returns a list of the loaded/enabled modules
+        """
+        return self.r.hkeys("PIDs")
+
+    def get_disabled_modules(self) -> List[str]:
         if disabled_modules := self.r.hget("analysis", "disabled_modules"):
             return json.loads(disabled_modules)
         else:
@@ -1163,11 +1175,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         else:
             return self.rcache.hgetall("cached_asn")
 
-    def store_pid(self, process, pid):
+    def store_pid(self, process: str, pid: int):
         """
         Stores each started process or module with it's PID
         :param pid: int
-        :param process: str
+        :param process: module name, str
         """
         self.r.hset("PIDs", process, pid)
 
@@ -1415,3 +1427,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def get_stdfile(self, file_type):
         return self.r.get(file_type)
+
+    def incr_msgs_received_in_channel(self, module: str, channel: str):
+        """increments the number of msgs received by a module in the given
+        channel by 1"""
+        self.r.hincrby(f"{module}_msgs_received_at_runtime", channel, 1)
+
+    def get_msgs_received_at_runtime(self, module: str) -> Dict[str, int]:
+        """
+        returns a list of channels this module is subscribed to, and how
+        many msgs were received on each one
+        :returns: {channel_name: number_of_msgs, ...}
+        """
+        return self.r.hgetall(f"{module}_msgs_received_at_runtime")

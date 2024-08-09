@@ -4,6 +4,7 @@ import shutil
 import binascii
 import subprocess
 import base64
+from typing import Dict
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -62,6 +63,23 @@ def create_output_dir(dirname):
     return path
 
 
+def msgs_published_are_eq_msgs_received_by_each_module(db) -> bool:
+    """
+    This functions checks that all modules received all msgs that were
+    published for the channels they subscribed to
+    """
+    for module in db.get_enabled_modules():
+        # get channels subscribed to by this module
+        msg_tracker: Dict[str, int] = db.get_msgs_received_at_runtime(module)
+
+        for channel, msgs_received in msg_tracker.items():
+            msgs_received: int
+            channel: str
+            assert db.get_msgs_published_in_channel(channel) == msgs_received
+
+        return True
+
+
 def check_for_text(txt, output_dir):
     """function to parse slips_output file and check for a given string"""
     slips_output = os.path.join(output_dir, "slips_output.txt")
@@ -117,13 +135,3 @@ def has_errors(output_dir):
                     return True
 
     return False
-
-
-alerts_file = "alerts.log"
-
-
-def run_slips(cmd):
-    """runs slips and waits for it to end"""
-    slips = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)
-    return_code = slips.wait()
-    return return_code
