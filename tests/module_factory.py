@@ -13,6 +13,8 @@ from slips_files.core.database.database_manager import DBManager
 
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
+from slips_files.core.evidencehandler import EvidenceHandler
+from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.flowalerts.notice import Notice
@@ -564,7 +566,18 @@ class ModuleFactory:
 
         cesnet.print = MagicMock()
         return cesnet
+    
+    def create_evidence_handler_obj(self):
+        logger = Mock()
+        output_dir = "/tmp"
+        redis_port = 6379
+        termination_event = Mock()
+        handler = EvidenceHandler(logger, output_dir, redis_port, termination_event)
+        handler.db = Mock()
+        return handler
 
+
+    
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_symbol_handler_obj(self, mock_db):
         mock_logger = Mock()
