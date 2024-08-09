@@ -318,9 +318,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         cls.r.set("slips_start_time", now)
 
-    def publish(self, channel, data):
-        """Publish something"""
-        self.r.publish(channel, data)
+    def publish(self, channel, msg):
+        """Publish a msg in the given channel"""
+        # keeps track of how many msgs were published in the given channel
+        self.r.hincrby("msgs_received_in_channel", channel, 1)
+        self.r.publish(channel, msg)
 
     def subscribe(self, channel: str, ignore_subscribe_messages=True):
         """Subscribe to channel"""
