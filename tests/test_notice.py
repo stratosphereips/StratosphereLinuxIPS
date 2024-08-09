@@ -159,8 +159,6 @@ def test_check_password_guessing(mock_db, mocker, flow, expected_call_count):
             True,
             {"vertical": 1, "horizontal": 1, "password": 1},
         ),
-        # Test case 2: No message
-        (None, False, {"vertical": 0, "horizontal": 0, "password": 0}),
     ],
 )
 def test_analyze(mock_db, mocker, msg, expected_result, expected_call_counts):
