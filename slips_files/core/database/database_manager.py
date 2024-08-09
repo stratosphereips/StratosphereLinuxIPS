@@ -551,6 +551,9 @@ class DBManager(IObservable):
     def get_intuples_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_intuples_from_profile_tw(*args, **kwargs)
 
+    def incr_msgs_received_in_channel(self, *args, **kwargs):
+        return self.rdb.incr_msgs_received_in_channel(*args, **kwargs)
+
     def get_dhcp_flows(self, *args, **kwargs):
         return self.rdb.get_dhcp_flows(*args, **kwargs)
 

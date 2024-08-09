@@ -321,7 +321,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def publish(self, channel, msg):
         """Publish a msg in the given channel"""
         # keeps track of how many msgs were published in the given channel
-        self.r.hincrby("msgs_received_in_channel", channel, 1)
+        self.r.hincrby("msgs_published_at_runtime", channel, 1)
         self.r.publish(channel, msg)
 
     def subscribe(self, channel: str, ignore_subscribe_messages=True):
@@ -1417,3 +1417,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def get_stdfile(self, file_type):
         return self.r.get(file_type)
+
+    def incr_msgs_received_in_channel(self, module: str, channel: str):
+        """increments the number of msgs received by a module in the given
+        channel by 1"""
+        self.r.hincrby(f"{module}_msgs_received_at_runtime", channel, 1)

@@ -81,7 +81,6 @@ class IModule(IObservable, ABC, Process):
         for channel_name in self.channels:
             tracker[channel_name] = {
                 "msg_received": False,
-                "number_of_msgs_received": 0,
             }
         return tracker
 
@@ -171,14 +170,14 @@ class IModule(IObservable, ABC, Process):
         executed once before the main loop
         """
 
-    def get_msg(self, channel_name: str) -> Optional[dict]:
-        message = self.db.get_message(self.channels[channel_name])
-        if utils.is_msg_intended_for(message, channel_name):
-            self.channel_tracker[channel_name]["msg_received"] = True
-            self.channel_tracker[channel_name]["number_of_msgs_received"] += 1
+    def get_msg(self, channel: str) -> Optional[dict]:
+        message = self.db.get_message(self.channels[channel])
+        if utils.is_msg_intended_for(message, channel):
+            self.channel_tracker[channel]["msg_received"] = True
+            self.db.incr_msgs_received_in_channel(self.name, channel)
             return message
 
-        self.channel_tracker[channel_name]["msg_received"] = False
+        self.channel_tracker[channel]["msg_received"] = False
 
     def print_traceback(self):
         exception_line = sys.exc_info()[2].tb_lineno
