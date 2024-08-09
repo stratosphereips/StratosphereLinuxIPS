@@ -3,6 +3,7 @@ import json
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.slips_utils import utils
 
 
 class DownloadedFile(IFlowalertsAnalyzer):
@@ -33,9 +34,8 @@ class DownloadedFile(IFlowalertsAnalyzer):
 
         self.set_evidence.malicious_ssl(ssl_info, ssl_info_from_db)
 
-    def analyze(self):
-        msg = self.flowalerts.get_msg("new_downloaded_file")
-        if not msg:
+    def analyze(self, msg):
+        if not utils.is_msg_intended_for(msg, "new_downloaded_file"):
             return
 
         ssl_info = json.loads(msg["data"])
