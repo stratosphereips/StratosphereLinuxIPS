@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Tuple
 
 import validators
-
+import logging
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
@@ -45,7 +45,7 @@ def extract_cc_botnet_ip(evidence: Evidence) -> Tuple[str, str]:
     return srcip, get_ip_version(srcip)
 
 
-def extract_role_type(evidence: Evidence, role=None) -> str:
+def extract_role_type(evidence: Evidence, role=None) -> Tuple[str, str]:
     """
     extracts the attacker or victim's ip/domain/url from the evidence
     :param role: can be "victim" or "attacker"
@@ -56,16 +56,19 @@ def extract_role_type(evidence: Evidence, role=None) -> str:
     elif role == "victim":
         ioc = evidence.victim.value
         ioc_type = evidence.victim.victim_type
+    else:
+        return ioc, "Unknown"
 
-    if ioc_type == IoCType.IP.name:
+    if ioc_type == IoCType.IP:
         return ioc, get_ip_version(ioc)
 
     # map of slips victim types to IDEA supported types
     idea_type = {
-        IoCType.DOMAIN.name: "Hostname",
-        IoCType.URL.name: "URL",
+        IoCType.DOMAIN: "Hostname",
+        IoCType.URL: "URL",
+        IoCType.MD5: "Hash",
     }
-    return ioc, idea_type[ioc_type]
+    return ioc, idea_type.get(ioc_type, "Unknown")
 
 
 def idea_format(evidence: Evidence):
@@ -90,12 +93,12 @@ def idea_format(evidence: Evidence):
 
         attacker, attacker_type = extract_role_type(evidence, role="attacker")
         idea_dict["Source"][0].update({attacker_type: [attacker]})
-
         # according to the IDEA format
         # When someone communicates with C&C, both sides of communication are
         # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
         # https://idea.cesnet.cz/en/design#:~:text=to%20string%20%E2%80%9CIDEA1
         # %E2%80%9D.-,Sources%20and%20targets,-As%20source%20of
+
         if evidence.evidence_type == EvidenceType.COMMAND_AND_CONTROL_CHANNEL:
             # botnet, ip_version = extract_cc_botnet_ip(evidence)
             idea_dict["Source"][0].update({"Type": ["Botnet"]})
@@ -104,8 +107,8 @@ def idea_format(evidence: Evidence):
             server_info: dict = {ip_version: [cc_server], "Type": ["CC"]}
 
             idea_dict["Source"].append(server_info)
+            # the idx of the daddr, in CC detections, it's the second one
 
-        # the idx of the daddr, in CC detections, it's the second one
         idx = (
             1
             if (
@@ -120,20 +123,15 @@ def idea_format(evidence: Evidence):
             idea_dict["Source"][idx].update({"Proto": [evidence.proto.name]})
 
         if hasattr(evidence, "victim") and evidence.victim:
-            # is the dstip ipv4/ipv6 or mac?
-            victims_ip: str
-            victim_type: str
             victims_ip, victim_type = extract_role_type(
                 evidence, role="victim"
             )
             idea_dict["Target"] = [{victim_type: [victims_ip]}]
 
-        # update the dstip description if specified in the evidence
         if (
             hasattr(evidence, "source_target_tag")
             and evidence.source_target_tag
         ):
-            # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
             idea_dict["Source"][0].update(
                 {"Type": [evidence.source_target_tag.value]}
             )
@@ -161,17 +159,19 @@ def idea_format(evidence: Evidence):
                 }
             ]
             if "size" in evidence.description:
-                idea_dict.update(
-                    {
-                        "Size": int(
-                            evidence.description.replace(".", "")
-                            .split("size:")[1]
-                            .split("from")[0]
-                        )
-                    }
+                size_str = (
+                    evidence.description.split("size:")[1]
+                    .split("from")[0]
+                    .strip()
                 )
+                try:
+                    size = int("".join(filter(str.isdigit, size_str)))
+                    idea_dict.update({"Size": size})
+                except ValueError:
+                    logging.warning(f"Could not parse size from '{size_str}'")
 
         return idea_dict
     except Exception as e:
-        print(f"Error in idea_format(): {e}")
-        print(traceback.format_exc())
+        logging.error(f"Error in idea_format(): {e}")
+        logging.error(traceback.format_exc())
+        return None
