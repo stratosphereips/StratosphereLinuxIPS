@@ -260,7 +260,13 @@ jobs:
             run: |
                coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
                coverage report --include="slips_files/core/helpers/notify.py*"
-               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify    
+               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify
+
+          - name: idea format test
+            run: |
+               coverage run --source=./ -m pytest tests/test_idea_format.py -p no:warnings -vv
+               coverage report --include="slips_files/common/idea_format.py*"
+               coverage html --include="slips_files/common/idea_format.py*" -d coverage_reports/idea_format     
 
   dataset_integration_tests:
       # specify the host OS
