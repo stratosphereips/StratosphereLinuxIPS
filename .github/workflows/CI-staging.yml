@@ -262,6 +262,12 @@ jobs:
                coverage report --include="slips_files/core/helpers/notify.py*"
                coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify    
 
+          - name: evidence handler test
+            run: |
+               coverage run --source=./ -m pytest tests/test_evidence_handler.py -p no:warnings -vv
+               coverage report --include="slips_files/core/evidencehandler.py*"
+               coverage html --include="slips_files/core/evidencehandler.py*" -d coverage_reports/evidencehandler        
+
   dataset_integration_tests:
       # specify the host OS
       runs-on: ubuntu-latest
