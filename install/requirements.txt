@@ -8,7 +8,7 @@ tzlocal==5.2
 cabby==0.1.23
 stix2==3.0.1
 certifi==2024.7.4
-tensorflow==2.16.1
+tensorflow==2.17.0
 colorama==0.4.6
 Keras
 validators==0.33.0
