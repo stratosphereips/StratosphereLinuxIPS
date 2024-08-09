@@ -324,6 +324,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         self.r.hincrby("msgs_published_at_runtime", channel, 1)
         self.r.publish(channel, msg)
 
+    def get_msgs_published_in_channel(self, channel: str) -> int:
+        """returns the number of msgs published in a channel"""
+        return self.r.hget("msgs_published_at_runtime", channel)
+
     def subscribe(self, channel: str, ignore_subscribe_messages=True):
         """Subscribe to channel"""
         # For when a TW is modified
@@ -501,7 +505,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.zscore("labels", label)
 
-    def get_disabled_modules(self) -> dict:
+    def get_enabled_modules(self) -> List[str]:
+        """
+        Returns a list of the loaded/enabled modules
+        """
+        return self.r.hkeys("PIDs")
+
+    def get_disabled_modules(self) -> List[str]:
         if disabled_modules := self.r.hget("analysis", "disabled_modules"):
             return json.loads(disabled_modules)
         else:
@@ -1165,11 +1175,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         else:
             return self.rcache.hgetall("cached_asn")
 
-    def store_pid(self, process, pid):
+    def store_pid(self, process: str, pid: int):
         """
         Stores each started process or module with it's PID
         :param pid: int
-        :param process: str
+        :param process: module name, str
         """
         self.r.hset("PIDs", process, pid)
 
@@ -1422,3 +1432,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """increments the number of msgs received by a module in the given
         channel by 1"""
         self.r.hincrby(f"{module}_msgs_received_at_runtime", channel, 1)
+
+    def get_msgs_received_at_runtime(self, module: str) -> Dict[str, int]:
+        """
+        returns a list of channels this module is subscribed to, and how
+        many msgs were received on each one
+        :returns: {channel_name: number_of_msgs, ...}
+        """
+        return self.r.hgetall(f"{module}_msgs_received_at_runtime")
