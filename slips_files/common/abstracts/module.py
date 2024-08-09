@@ -47,7 +47,7 @@ class IModule(IObservable, ABC, Process):
         # set its own channels
         # tracks whether or not in the last iteration there was a msg
         # received in that channel
-        self.channel_tracker = self.init_channel_tracker()
+        self.channel_tracker: Dict[str, dict] = self.init_channel_tracker()
 
     @property
     @abstractmethod
@@ -79,7 +79,7 @@ class IModule(IObservable, ABC, Process):
         """
         tracker = {}
         for channel_name in self.channels:
-            tracker[channel_name] = False
+            tracker[channel_name] = {"msg_received": False}
         return tracker
 
     @abstractmethod
@@ -93,6 +93,15 @@ class IModule(IObservable, ABC, Process):
         initializing the module
         """
 
+    def is_msg_received_in_any_channel(self) -> bool:
+        """
+        return True if a msg was received in any channel of the ones
+        this module is subscribed to
+        """
+        return any(
+            info["msg_received"] for info in self.channel_tracker.values()
+        )
+
     def should_stop(self) -> bool:
         """
         The module should stop on the following 2 conditions
@@ -101,7 +110,7 @@ class IModule(IObservable, ABC, Process):
         2. the termination event is set by the process_manager.py
         """
         if (
-            any(self.channel_tracker.values())
+            self.is_msg_received_in_any_channel()
             or not self.termination_event.is_set()
         ):
             # this module is still receiving msgs,
@@ -162,10 +171,10 @@ class IModule(IObservable, ABC, Process):
     def get_msg(self, channel_name: str) -> Optional[dict]:
         message = self.db.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
-            self.channel_tracker[channel_name] = True
+            self.channel_tracker[channel_name]["msg_received"] = True
             return message
 
-        self.channel_tracker[channel_name] = False
+        self.channel_tracker[channel_name]["msg_received"] = False
 
     def print_traceback(self):
         exception_line = sys.exc_info()[2].tb_lineno
