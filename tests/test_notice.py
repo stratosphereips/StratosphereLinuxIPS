@@ -165,16 +165,11 @@ def test_check_password_guessing(mock_db, mocker, flow, expected_call_count):
 )
 def test_analyze(mock_db, mocker, msg, expected_result, expected_call_counts):
     notice = ModuleFactory().create_notice_analyzer_obj(mock_db)
-    mock_get_msg = mocker.patch.object(
-        notice.flowalerts, "get_msg", return_value=msg
-    )
     mock_vertical = mocker.patch.object(notice, "check_vertical_portscan")
     mock_horizontal = mocker.patch.object(notice, "check_horizontal_portscan")
     mock_password = mocker.patch.object(notice, "check_password_guessing")
-
-    result = notice.analyze()
-
-    mock_get_msg.assert_called_once_with("new_notice")
+    msg.update({"channel": "new_notice"})
+    result = notice.analyze(msg)
     assert mock_vertical.call_count == expected_call_counts["vertical"]
     assert mock_horizontal.call_count == expected_call_counts["horizontal"]
     assert mock_password.call_count == expected_call_counts["password"]

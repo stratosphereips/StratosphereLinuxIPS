@@ -154,7 +154,7 @@ class SSH(IFlowalertsAnalyzer):
             del self.password_guessing_cache[cache_key]
 
     def analyze(self, msg):
-        if utils.is_msg_intended_for(msg, "new_ssh"):
+        if not utils.is_msg_intended_for(msg, "new_ssh"):
             return
 
         data = msg["data"]
