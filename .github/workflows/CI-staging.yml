@@ -104,7 +104,7 @@ jobs:
             run: |
               coverage run --source=./ -m pytest tests/test_main.py -p no:warnings -vv
               coverage report  --include="slips/main.py*"
-              coverage html  --include="slips/main.py*" -d coverage_reports/main    
+              coverage html  --include="slips/main.py*" -d coverage_reports/main
 
           - name: Whitelist  Unit Tests
             run: |
@@ -224,7 +224,7 @@ jobs:
             run: |
               coverage run --source=./ -m pytest tests/test_output.py -p no:warnings -vv
               coverage report  --include="slips_files/core/output.py*"
-              coverage html  --include="slips_files/core/output.py*" -d coverage_reports/output   
+              coverage html  --include="slips_files/core/output.py*" -d coverage_reports/output
 
           - name: urlhaus Unit Tests
             run: |
@@ -238,29 +238,35 @@ jobs:
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
-          - name: go_director test
+          - name: Go Director tests
             run: |
                coverage run --source=./ -m pytest tests/test_go_director.py -p no:warnings -vv
                coverage report --include="modules/p2ptrust/utils/go_director.py*"
-               coverage html --include="modules/p2ptrust/utils/go_director.py*" -d coverage_reports/go_director     
+               coverage html --include="modules/p2ptrust/utils/go_director.py*" -d coverage_reports/go_director
 
-          - name: progress bar test
+          - name: Progress Bar tests
             run: |
                coverage run --source=./ -m pytest tests/test_progress_bar.py -p no:warnings -vv
                coverage report --include="modules/progress_bar/progress_bar.py*"
-               coverage html --include="modules/progress_bar/progress_bar.py*" -d coverage_reports/progress_bar     
+               coverage html --include="modules/progress_bar/progress_bar.py*" -d coverage_reports/progress_bar
 
-          - name: daemon test
+          - name: Daemon tests
             run: |
                coverage run --source=./ -m pytest tests/test_daemon.py -p no:warnings -vv
                coverage report --include="slips/daemon.py*"
-               coverage html --include="slips/daemon.py*" -d coverage_reports/daemon     
+               coverage html --include="slips/daemon.py*" -d coverage_reports/daemon
+
+          - name: Base Model Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_base_model.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/trust/base_model.py*"
+               coverage html --include="modules/p2ptrust/trust/base_model.py*" -d coverage_reports/set_evidence
 
           - name: notify test
             run: |
                coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
                coverage report --include="slips_files/core/helpers/notify.py*"
-               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify    
+               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify
 
   dataset_integration_tests:
       # specify the host OS

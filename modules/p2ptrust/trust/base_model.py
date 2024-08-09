@@ -16,6 +16,7 @@ class BaseModel(IObservable):
         IObservable.__init__(self)
         self.add_observer(self.logger)
         self.reliability_weight = 0.7
+        self.name = "BaseModel"
 
     def print(self, text, verbose=1, debug=0):
         """
