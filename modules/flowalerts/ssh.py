@@ -6,6 +6,7 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 
 
 class SSH(IFlowalertsAnalyzer):
@@ -152,9 +153,8 @@ class SSH(IFlowalertsAnalyzer):
             # reset the counter
             del self.password_guessing_cache[cache_key]
 
-    def analyze(self):
-        msg = self.flowalerts.get_msg("new_ssh")
-        if not msg:
+    def analyze(self, msg):
+        if utils.is_msg_intended_for(msg, "new_ssh"):
             return
 
         data = msg["data"]
