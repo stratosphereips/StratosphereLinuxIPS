@@ -776,7 +776,6 @@ class ProcessManager:
             # if delete_zeek_files is set to yes in slips.yaml,
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
-            self.main.db.rdb.get_x()
             self.main.db.close()
             if graceful_shutdown:
                 print(

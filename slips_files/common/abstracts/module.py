@@ -79,7 +79,10 @@ class IModule(IObservable, ABC, Process):
         """
         tracker = {}
         for channel_name in self.channels:
-            tracker[channel_name] = {"msg_received": False}
+            tracker[channel_name] = {
+                "msg_received": False,
+                "number_of_msgs_received": 0,
+            }
         return tracker
 
     @abstractmethod
@@ -172,6 +175,7 @@ class IModule(IObservable, ABC, Process):
         message = self.db.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
             self.channel_tracker[channel_name]["msg_received"] = True
+            self.channel_tracker[channel_name]["number_of_msgs_received"] += 1
             return message
 
         self.channel_tracker[channel_name]["msg_received"] = False
