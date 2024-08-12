@@ -232,7 +232,7 @@ jobs:
               coverage report  --include="modules/threat_intelligence/urlhaus.py*"
               coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/urlhaus
 
-          - name: set evidence test
+          - name: set evidence Unit Test
             run: |
                coverage run --source=./ -m pytest tests/test_set_evidence.py -p no:warnings -vv
                coverage report --include="modules/flowalerts/set_evidence.py*"
@@ -256,15 +256,19 @@ jobs:
                coverage report --include="slips_files/core/helpers/checker.py*"
                coverage html --include="slips_files/core/helpers/checker.py*" -d coverage_reports/checker
 
-
-
-          - name: daemon test
+          - name: Daemon Unit Tests
             run: |
                coverage run --source=./ -m pytest tests/test_daemon.py -p no:warnings -vv
                coverage report --include="slips/daemon.py*"
                coverage html --include="slips/daemon.py*" -d coverage_reports/daemon
 
-          - name: notify test
+          - name: Base Model Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_base_model.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/trust/base_model.py*"
+               coverage html --include="modules/p2ptrust/trust/base_model.py*" -d coverage_reports/set_evidence
+
+          - name: notify Unit Tests
             run: |
                coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
                coverage report --include="slips_files/core/helpers/notify.py*"

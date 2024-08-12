@@ -44,6 +44,7 @@ from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
+from modules.p2ptrust.trust.base_model import BaseModel
 from modules.arp.arp import ARP
 from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
@@ -526,6 +527,23 @@ class ModuleFactory:
             daemon.daemon_stop_lock = "slips_daemon_stop"
             daemon.pid = None
             return daemon
+
+
+    def create_trust_db_obj(self, mock_db=None):
+        with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
+            trust_db = TrustDB(
+                self.logger, "dummy_trust.db", drop_tables_on_startup=False
+            )
+            if mock_db:
+                trust_db.conn = mock_db
+
+        trust_db.print = do_nothing
+        return trust_db
+
+    def create_base_model_obj(self):
+        logger = Mock(spec=Output)
+        trustdb = Mock()
+        return BaseModel(logger, trustdb)
 
     def create_notify_obj(self):
         notify = Notify()

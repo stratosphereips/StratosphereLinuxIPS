@@ -187,9 +187,6 @@ jobs:
       run: |
         python3 -m pytest tests/test_go_director.py -p no:warnings -vv
 
-    - name: Clear redis cache
-      run: ./slips.py -cc
-
     - name: Notify Tests
       run: |
         python3 -m pytest tests/test_notify.py -p no:warnings -vv
@@ -201,19 +198,25 @@ jobs:
     - name: Clear redis cache
       run: ./slips.py -cc
 
-    - name: Set Evidence Unit Tests
+    - name: base model Unit Tests
+      run: |
+        python3 -m pytest tests/test_base_model.py -p no:warnings -vv
+
+    - name: set Evidence Unit Tests
+      run: |
+        python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
+
+    - name: notify Tests
+      run: |
+        python3 -m pytest tests/test_notify.py -p no:warnings -vv
+
+    - name: set Evidence Unit Tests
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
 
     - name: Output Unit Tests
       run: |
         python3 -m pytest tests/test_output.py -p no:warnings -vv
-
-
-    - name: Clear redis cache
-      run: ./slips.py -cc
-
-
 
     - name: Config file tests
       run: |
