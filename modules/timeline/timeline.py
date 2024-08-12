@@ -314,7 +314,10 @@ class Timeline(IModule):
                 "IPV4-ICMP": self.process_icmp_flow,
                 "IGMP": self.process_igmp_flow,
             }
-            activity = proto_handlers[proto](profileid, dport_name, flow)
+            if proto in proto_handlers:
+                activity = proto_handlers[proto](profileid, dport_name, flow)
+            else:
+                activity = {}
             #################################
             # Now process the alternative flows
             # Sometimes we need to wait a little to give time to Zeek to find
