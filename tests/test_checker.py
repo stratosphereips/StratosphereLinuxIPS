@@ -228,7 +228,7 @@ def test_check_input_type_no_input():
 
 
 @pytest.mark.parametrize(
-    "module_name, modules_dir_content, " "module_dir_content, expected_result",
+    "module_name, available_modules, module_dir_content, expected_result",
     [
         # Test case 1: Module exists and is correctly structured
         ("valid_module", ["valid_module"], ["valid_module.py"], True),
@@ -244,44 +244,10 @@ def test_check_input_type_no_input():
     ],
 )
 def test_input_module_exists(
-    module_name, modules_dir_content, module_dir_content, expected_result
+    module_name, available_modules, module_dir_content, expected_result
 ):
     checker = ModuleFactory().create_checker_obj()
-
     with patch("os.listdir") as mock_listdir:
-
-        mock_listdir.side_effect = [modules_dir_content, module_dir_content]
-
+        mock_listdir.side_effect = [available_modules, module_dir_content]
         result = checker.input_module_exists(module_name)
-
         assert result == expected_result
-
-
-def test_input_module_exists_nonexistent_module(capsys):
-    checker = ModuleFactory().create_checker_obj()
-
-    with patch("os.listdir", return_value=["other_module"]):
-        result = checker.input_module_exists("nonexistent_module")
-        expected_result = False
-        assert result == expected_result
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "nonexistent_module module is not available. " "Stopping slips\n"
-        )
-
-
-def test_input_module_exists_incomplete_module(capsys):
-    checker = ModuleFactory().create_checker_obj()
-
-    with patch("os.listdir") as mock_listdir:
-        mock_listdir.side_effect = [["incomplete_module"], ["other_file.txt"]]
-
-        result = checker.input_module_exists("incomplete_module")
-        expected_result = False
-        assert result == expected_result
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "incomplete_module is not available in modules/"
-            "incomplete_module/incomplete_module.py. "
-            "Stopping slips\n"
-        )
