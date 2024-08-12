@@ -2,7 +2,6 @@ import warnings
 import json
 from typing import Dict
 import numpy as np
-from typing import Optional
 from tensorflow.keras.models import load_model
 
 from slips_files.common.slips_utils import utils
@@ -186,23 +185,21 @@ class CCDetection(IModule):
 
         if "tcp" not in tupleid.lower():
             return
-        
+
         if "established" not in state.lower():
             return
 
         # to reduce false positives
         threshold = 0.99
         # function to convert each letter of behavioral model to ascii
-        behavioral_model = self.convert_input_for_module(
-            pre_behavioral_model
-        )
+        behavioral_model = self.convert_input_for_module(pre_behavioral_model)
         # predict the score of behavioral model being c&c channel
         self.print(
             f"predicting the sequence: {pre_behavioral_model}",
             3,
             0,
         )
-        score = self.tcpmodel.predict(behavioral_model, verbose = 0)
+        score = self.tcpmodel.predict(behavioral_model, verbose=0)
         self.print(
             f" >> sequence: {pre_behavioral_model}. "
             f"final prediction score: {score[0][0]:.20f}",
@@ -216,9 +213,7 @@ class CCDetection(IModule):
             if len(pre_behavioral_model) >= threshold_confidence:
                 confidence = 1
             else:
-                confidence = (
-                    len(pre_behavioral_model) / threshold_confidence
-                )
+                confidence = len(pre_behavioral_model) / threshold_confidence
             uid = msg["uid"]
             stime = flow["starttime"]
             self.set_evidence_cc_channel(
@@ -239,7 +234,6 @@ class CCDetection(IModule):
             # we only check malicious jarm hashes when there's a CC
             # detection
             self.db.publish("check_jarm_hash", json.dumps(to_send))
-
 
     def handle_tw_closed(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
@@ -263,5 +257,6 @@ class CCDetection(IModule):
     def main(self):
         if msg := self.get_msg("new_letters"):
             self.handle_new_letters(msg)
-        elif msg := self.get_msg("tw_closed"):
+
+        if msg := self.get_msg("tw_closed"):
             self.handle_tw_closed(msg)

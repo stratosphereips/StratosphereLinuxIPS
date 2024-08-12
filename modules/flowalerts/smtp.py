@@ -68,9 +68,8 @@ class SMTP(IFlowalertsAnalyzer):
         # remove all 3 logins that caused this alert
         self.smtp_bruteforce_cache[profileid] = ([], [])
 
-    def analyze(self):
-        msg = self.flowalerts.get_msg("new_smtp")
-        if not msg:
+    def analyze(self, msg):
+        if not utils.is_msg_intended_for(msg, "new_smtp"):
             return
 
         smtp_info = json.loads(msg["data"])
