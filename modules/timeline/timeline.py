@@ -123,9 +123,10 @@ class Timeline(IModule):
 
     def process_altflow(self, profileid, twid, uid) -> dict:
         alt_flow: dict = self.db.get_altflow_from_uid(profileid, twid, uid)
+        altflow_info = {"info": ""}
 
         if not alt_flow:
-            return {"info": ""}
+            return altflow_info
 
         flow_type = alt_flow["type_"]
         flow_type_map = {
@@ -134,7 +135,11 @@ class Timeline(IModule):
             "ssl": self.process_ssl_altflow,
             "ssh": self.process_ssh_altflow,
         }
-        return flow_type_map[flow_type](alt_flow)
+        try:
+            altflow_info = flow_type_map[flow_type](alt_flow)
+        except KeyError:
+            pass
+        return altflow_info
 
     def get_dns_resolution(self, ip):
         """
@@ -273,6 +278,18 @@ class Timeline(IModule):
             "duration": dur,
         }
 
+    def interpret_dport(self, flow) -> str:
+        """tries to get a meaningful name of the dport used
+        in the given flow"""
+        dport_name = flow.get("appproto", "")
+        # suricata does this
+        if not dport_name or dport_name == "failed":
+            dport = flow["dport"]
+            proto = flow["proto"]
+            dport_name = self.db.get_port_info(f"{dport}/{proto.lower()}")
+        dport_name = "" if not dport_name else dport_name.upper()
+        return dport_name
+
     def process_flow(self, profileid, twid, flow, timestamp: float):
         """
         Process the received flow  for this profileid and twid
@@ -281,14 +298,8 @@ class Timeline(IModule):
         try:
             uid = next(iter(flow))
             flow: dict = json.loads(flow[uid])
-            dport = flow["dport"]
             proto = flow["proto"].upper()
-            dport_name = flow.get("appproto", "")
-            # suricata does this
-            if dport_name == "failed":
-                dport_name = self.db.get_port_info(f"{dport}/{proto.lower()}")
-            dport_name = dport_name.upper()
-
+            dport_name = self.interpret_dport(flow)
             # interpret the given flow and and create an activity line to
             # display in slips Web interface/Kalipso
             # Change the format of timeline in the case of inbound
@@ -299,6 +310,8 @@ class Timeline(IModule):
                 "TCP": self.process_tcp_udp_flow,
                 "UDP": self.process_tcp_udp_flow,
                 "ICMP": self.process_icmp_flow,
+                "IPV6-ICMP": self.process_icmp_flow,
+                "IPV4-ICMP": self.process_icmp_flow,
                 "IGMP": self.process_igmp_flow,
             }
             activity = proto_handlers[proto](profileid, dport_name, flow)
