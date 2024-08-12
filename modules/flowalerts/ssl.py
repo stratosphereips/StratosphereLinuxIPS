@@ -244,11 +244,12 @@ class SSL(IFlowalertsAnalyzer):
         self.set_evidence.doh(daddr, profileid, twid, timestamp, uid)
         self.db.set_ip_info(daddr, {"is_doh_server": True})
 
-    def analyze(self):
+    def analyze(self, msg: dict):
         if not self.ssl_thread_started:
             self.ssl_waiting_thread.start()
             self.ssl_thread_started = True
-        if msg := self.flowalerts.get_msg("new_ssl"):
+
+        if utils.is_msg_intended_for(msg, "new_ssl"):
             data = msg["data"]
             data = json.loads(data)
             flow = data["flow"]
@@ -297,6 +298,6 @@ class SSL(IFlowalertsAnalyzer):
                 uid,
             )
 
-        if msg := self.get_msg("new_flow"):
+        if utils.is_msg_intended_for(msg, "new_flow"):
             new_flow = json.loads(msg["data"])
             self.check_non_ssl_port_443_conns(new_flow)
