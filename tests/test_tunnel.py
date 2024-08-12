@@ -33,25 +33,25 @@ def test_check_GRE_tunnel(mocker, mock_db, test_input, expected_call_count):
 def test_analyze_with_message(mocker, mock_db):
     """Tests analyze when flowalerts.get_msg returns data."""
 
-    test_msg_data = {"flow": {"tunnel_type": "Tunnel::GRE"}}
+    msg = {
+        "channel": "new_tunnel",
+        "data": json.dumps({"tunnel_type": "Tunnel::GRE"}),
+    }
     expected_check_gre_call_count = 1
     tunnel = ModuleFactory().create_tunnel_analyzer_obj(mock_db)
     mocker.patch.object(
         tunnel.flowalerts,
         "get_msg",
-        return_value={"data": json.dumps(test_msg_data)},
+        return_value=msg,
     )
     mock_check_gre_tunnel = mocker.patch.object(tunnel, "check_gre_tunnel")
-    tunnel.analyze()
+    tunnel.analyze(msg)
     assert mock_check_gre_tunnel.call_count == expected_check_gre_call_count
 
 
 def test_analyze_without_message(mocker, mock_db):
-    """Tests analyze when flowalerts.get_msg returns None."""
-
     tunnel = ModuleFactory().create_tunnel_analyzer_obj(mock_db)
-    mocker.patch.object(tunnel.flowalerts, "get_msg", return_value=None)
     mock_check_gre_tunnel = mocker.patch.object(tunnel, "check_gre_tunnel")
 
-    tunnel.analyze()
+    tunnel.analyze(None)
     assert mock_check_gre_tunnel.call_count == 0
