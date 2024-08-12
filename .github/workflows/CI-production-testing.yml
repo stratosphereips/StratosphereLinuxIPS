@@ -206,9 +206,13 @@ jobs:
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
 
-    - name: notify Tests
+    - name: Notify Tests
       run: |
         python3 -m pytest tests/test_notify.py -p no:warnings -vv
+
+    - name: TrustDB Tests
+      run: |
+        python3 -m pytest tests/test_trustdb.py -p no:warnings -vv
 
     - name: set Evidence Unit Tests
       run: |

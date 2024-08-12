@@ -116,9 +116,6 @@ class TrustDB(IObservable):
     ):
         if timestamp is None:
             timestamp = time.time()
-        else:
-            k = 3
-        timestamp = time.time()
         print("###################3Slips score timeout: ", timestamp)
         parameters = (ip, score, confidence, timestamp)
         self.conn.execute(
@@ -243,115 +240,105 @@ class TrustDB(IObservable):
             return last_update_time, ip
         return False, False
 
-    def get_opinion_on_ip(self, ipaddress: str):
+    def get_reports_for_ip(self, ipaddress):
         """
-        :param ipaddress: The ip we're asking other peers about
+        Returns a list of all reports for the given IP address.
         """
         reports_cur = self.conn.execute(
-            "SELECT reports.reporter_peerid AS reporter_peerid,"
-            "       MAX(reports.update_time) AS report_timestamp,"
-            "       reports.score AS report_score,"
-            "       reports.confidence AS report_confidence,"
-            "       reports.reported_key AS reported_ip "
+            "SELECT reports.reporter_peerid, reports.update_time, reports.score, "
+            "       reports.confidence, reports.reported_key "
             "FROM reports "
-            "WHERE reports.reported_key = ?"
-            "       AND reports.key_type = 'ip' "
-            "GROUP BY reports.reporter_peerid;",
+            "WHERE reports.reported_key = ? AND reports.key_type = 'ip'"
+            "ORDER BY reports.update_time DESC;",
             (ipaddress,),
         )
+        return reports_cur.fetchall()
 
+    def get_reporter_ip(self, reporter_peerid, report_timestamp):
+        """
+        Returns the IP address of the reporter at the time of the report.
+        """
+        ip_cur = self.conn.execute(
+            "SELECT MAX(update_time), ipaddress "
+            "FROM peer_ips "
+            "WHERE update_time <= ? AND peerid = ? "
+            "ORDER BY update_time DESC "
+            "LIMIT 1;",
+            (report_timestamp, reporter_peerid),
+        )
+        if res := ip_cur.fetchone():
+            return res[1]
+        return None
+
+    def get_reporter_reliability(self, reporter_peerid):
+        """
+        Returns the latest reliability score for the given peer.
+        """
+        go_reliability_cur = self.conn.execute(
+            "SELECT reliability "
+            "FROM go_reliability "
+            "WHERE peerid = ? "
+            "ORDER BY update_time DESC "
+            "LIMIT 1;"
+        )
+        if res := go_reliability_cur.fetchone():
+            return res[0]
+        return None
+
+    def get_reporter_reputation(self, reporter_ipaddress):
+        """
+        Returns the latest reputation score and confidence for the given IP address.
+        """
+        slips_reputation_cur = self.conn.execute(
+            "SELECT score, confidence "
+            "FROM slips_reputation "
+            "WHERE ipaddress = ? "
+            "ORDER BY update_time DESC "
+            "LIMIT 1;",
+            (reporter_ipaddress,),
+        )
+        if res := slips_reputation_cur.fetchone():
+            return res
+        return None, None
+
+    def get_opinion_on_ip(self, ipaddress):
+        """
+        Returns a list of tuples, where each tuple contains the report score, report confidence,
+        reporter reliability, reporter score, and reporter confidence for a given IP address.
+        """
+        reports = self.get_reports_for_ip(ipaddress)
         reporters_scores = []
 
-        # iterate over all peers that reported the ip
         for (
             reporter_peerid,
             report_timestamp,
             report_score,
             report_confidence,
             reported_ip,
-        ) in reports_cur.fetchall():
-            # get the ip address the reporting peer had when doing the report
-            ip_cur = self.conn.execute(
-                "SELECT MAX(update_time) AS ip_update_time, ipaddress "
-                "FROM peer_ips "
-                "WHERE update_time <= ? AND peerid = ?;",
-                (report_timestamp, reporter_peerid),
+        ) in reports:
+            reporter_ipaddress = self.get_reporter_ip(
+                reporter_peerid, report_timestamp
             )
-            _, reporter_ipaddress = ip_cur.fetchone()
-            # TODO: handle empty response
-
-            # prevent peers from reporting about themselves
             if reporter_ipaddress == ipaddress:
                 continue
 
-            # get the most recent score and confidence for the given IP-peerID pair
-            parameters_dict = {
-                "peerid": reporter_peerid,
-                "ipaddress": reporter_ipaddress,
-            }
-
-            # probably what this query means is:
-            # get latest reports by this peer, whether using it's peer ID or IP
-            # within this time range: last update time until now
-
-            slips_reputation_cur = self.conn.execute(
-                "SELECT * FROM (  "
-                "    SELECT b.update_time AS lower_bound,  "
-                "           COALESCE( "
-                "              MIN(lj.min_update_time), strftime('%s','now')"
-                "           ) AS upper_bound,  "
-                "           b.ipaddress AS ipaddress,  "
-                "           b.peerid AS peerid  "
-                "    FROM peer_ips b  "
-                "        LEFT JOIN(  "
-                "            SELECT a.update_time AS min_update_time  "
-                "            FROM peer_ips a  "
-                "            WHERE a.peerid = :peerid OR a.ipaddress = :ipaddress "
-                "            ORDER BY min_update_time  "
-                "            ) lj  "
-                "            ON lj.min_update_time > b.update_time  "
-                "    WHERE b.peerid = :peerid AND b.ipaddress = :ipaddress  "
-                "    GROUP BY lower_bound  "
-                "    ORDER BY lower_bound DESC  "
-                "    ) x  "
-                "LEFT JOIN slips_reputation sr USING (ipaddress)  "
-                "WHERE sr.update_time <= x.upper_bound AND "
-                "      sr.update_time >= x.lower_bound  "
-                "ORDER BY sr.update_time DESC  "
-                "LIMIT 1  "
-                ";",
-                parameters_dict,
+            reporter_reliability = self.get_reporter_reliability(
+                reporter_peerid
             )
-            data = slips_reputation_cur.fetchone()
-            if data is None:
-                self.print(f"No slips reputation data for {parameters_dict}")
+            if reporter_reliability is None:
                 continue
 
-            go_reliability_cur = self.conn.execute(
-                "SELECT reliability FROM main.go_reliability WHERE peerid = ? ORDER BY update_time DESC LIMIT 1;",
-                (reporter_peerid,),
+            reporter_score, reporter_confidence = self.get_reporter_reputation(
+                reporter_ipaddress
             )
-            reliability = go_reliability_cur.fetchone()
-            if reliability is None:
-                self.print(f"No reliability for {reporter_peerid}")
+            if reporter_score is None or reporter_confidence is None:
                 continue
-            reliability = reliability[0]
 
-            (
-                _,
-                _,
-                _,
-                _,
-                _,
-                reporter_score,
-                reporter_confidence,
-                reputation_update_time,
-            ) = data
             reporters_scores.append(
                 (
                     report_score,
                     report_confidence,
-                    reliability,
+                    reporter_reliability,
                     reporter_score,
                     reporter_confidence,
                 )

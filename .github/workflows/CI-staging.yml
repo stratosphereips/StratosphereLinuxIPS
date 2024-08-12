@@ -208,7 +208,7 @@ jobs:
               coverage report  --include="modules/ip_info/ip_info.py*"
               coverage html  --include="modules/ip_info/ip_info.py*" -d coverage_reports/ip_info
 
-          - name: asn_info Unit Tests
+          - name: ASN Info Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_asn_info.py -p no:warnings -vv
               coverage report  --include="modules/ip_info/asn_info.py*"
@@ -273,6 +273,12 @@ jobs:
                coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
                coverage report --include="slips_files/core/helpers/notify.py*"
                coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify
+
+          - name: TrustDB Unit tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_trustdb.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/trust/trustdb.py*"
+               coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb
 
   dataset_integration_tests:
       # specify the host OS
