@@ -183,12 +183,17 @@ jobs:
       run: |
         python3 -m pytest tests/test_daemon.py -p no:warnings -vv
 
-    - name: Clear redis cache
-      run: ./slips.py -cc
-
     - name: go_director Unit Tests
       run: |
         python3 -m pytest tests/test_go_director.py -p no:warnings -vv
+
+    - name: Notify Tests
+      run: |
+        python3 -m pytest tests/test_notify.py -p no:warnings -vv
+
+    - name: Checker Unit Tests
+      run: |
+        python3 -m pytest tests/test_checker.py -p no:warnings -vv
 
     - name: Clear redis cache
       run: ./slips.py -cc
@@ -212,11 +217,6 @@ jobs:
     - name: Output Unit Tests
       run: |
         python3 -m pytest tests/test_output.py -p no:warnings -vv
-
-
-    - name: Clear redis cache
-      run: ./slips.py -cc
-
 
     - name: Config file tests
       run: |
