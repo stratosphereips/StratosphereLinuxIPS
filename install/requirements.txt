@@ -40,7 +40,7 @@ yappi==1.6.0
 pytest-sugar==1.0.0
 memray==1.13.3
 aid_hash
-black==24.4.2
+black==24.8.0
 ruff==0.5.7
 pre-commit==3.7.1
 coverage==7.6.1
