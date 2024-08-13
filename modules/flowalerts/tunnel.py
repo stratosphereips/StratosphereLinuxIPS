@@ -3,6 +3,7 @@ import json
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.slips_utils import utils
 
 
 class Tunnel(IFlowalertsAnalyzer):
@@ -24,10 +25,7 @@ class Tunnel(IFlowalertsAnalyzer):
 
         self.set_evidence.GRE_tunnel(tunnel_info)
 
-    def analyze(self):
-        msg = self.flowalerts.get_msg("new_tunnel")
-        if not msg:
-            return
-
-        msg = json.loads(msg["data"])
-        self.check_gre_tunnel(msg)
+    def analyze(self, msg):
+        if utils.is_msg_intended_for(msg, "new_tunnel"):
+            msg = json.loads(msg["data"])
+            self.check_gre_tunnel(msg)

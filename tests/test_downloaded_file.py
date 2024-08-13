@@ -2,7 +2,6 @@
 
 from tests.module_factory import ModuleFactory
 import json
-from unittest.mock import MagicMock
 import pytest
 
 
@@ -88,27 +87,22 @@ def test_check_malicious_ssl(
     ],
 )
 def test_analyze_with_data(mocker, mock_db, msg, expected_call_count):
-    mock_flowalerts = MagicMock()
-    mock_flowalerts.get_msg.return_value = msg
     downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj(mock_db)
-    downloadfile.flowalerts = mock_flowalerts
     mock_check_malicious_ssl = mocker.patch.object(
         downloadfile, "check_malicious_ssl"
     )
-    downloadfile.analyze()
-    mock_flowalerts.get_msg.assert_called_once_with("new_downloaded_file")
+    msg.update({"channel": "new_downloaded_file"})
+
+    downloadfile.analyze(msg)
+
     assert mock_check_malicious_ssl.call_count == expected_call_count
     mock_check_malicious_ssl.assert_called_with(json.loads(msg["data"]))
 
 
 def test_analyze_no_msg(mocker, mock_db):
-    mock_flowalerts = MagicMock()
-    mock_flowalerts.get_msg.return_value = None
     downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj(mock_db)
-    downloadfile.flowalerts = mock_flowalerts
     mock_check_malicious_ssl = mocker.patch.object(
         downloadfile, "check_malicious_ssl"
     )
-    downloadfile.analyze()
-    (mock_flowalerts.get_msg.assert_called_once_with("new_downloaded_file"))
+    downloadfile.analyze({})
     mock_check_malicious_ssl.assert_not_called()

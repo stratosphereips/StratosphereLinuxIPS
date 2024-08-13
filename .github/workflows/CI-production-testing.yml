@@ -16,7 +16,7 @@ jobs:
 
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: 'develop'
         # Fetch all history for all tags and branches
@@ -31,8 +31,9 @@ jobs:
         curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
         sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
     - name: Set up Python 3.10.12
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10.12"
 
@@ -158,9 +159,13 @@ jobs:
       run: |
         python3 -m pytest tests/test_ip_info.py -p no:warnings -vv
 
-    - name: evidence tests
+    - name: Evidence tests
       run: |
         python3 -m pytest -s tests/test_evidence.py -p no:warnings -vv
+
+    - name: ASN info Unit Tests
+      run: |
+        python3 -m pytest tests/test_asn_info.py -p no:warnings -vv
 
     - name: Urlhaus Unit Tests
       run: |
@@ -170,12 +175,46 @@ jobs:
       run: |
         python3 -m pytest tests/test_inputProc.py -p no:warnings -vv
 
-    - name: riskiq Unit Tests
+    - name: progress_bar Unit Tests
       run: |
-        python3 -m pytest tests/test_riskiq.py -p no:warnings -vv    
+        python3 -m pytest tests/test_progress_bar.py -p no:warnings -vv
 
-    - name: Clear redis cache
-      run: ./slips.py -cc
+    - name: daemon Tests
+      run: |
+        python3 -m pytest tests/test_daemon.py -p no:warnings -vv
+
+    - name: go_director Unit Tests
+      run: |
+        python3 -m pytest tests/test_go_director.py -p no:warnings -vv
+
+    - name: Notify Tests
+      run: |
+        python3 -m pytest tests/test_notify.py -p no:warnings -vv
+
+    - name: Checker Unit Tests
+      run: |
+        python3 -m pytest tests/test_checker.py -p no:warnings -vv
+
+    - name: Base Model Unit Tests
+      run: |
+        python3 -m pytest tests/test_base_model.py -p no:warnings -vv
+
+    - name: set Evidence Unit Tests
+      run: |
+        python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv
+
+    - name: Notify Tests
+      run: |
+        python3 -m pytest tests/test_notify.py -p no:warnings -vv
+
+    - name: TrustDB Tests
+      run: |
+        python3 -m pytest tests/test_trustdb.py -p no:warnings -vv
+
+    - name: RiskIQ Unit Tests
+      run: |
+        python3 -m pytest tests/test_riskiq.py -p no:warnings -vv
+
 
     - name: Set Evidence Unit Tests
       run: |
@@ -187,8 +226,6 @@ jobs:
 
     - name: Clear redis cache
       run: ./slips.py -cc
-
-
 
     - name: Config file tests
       run: |

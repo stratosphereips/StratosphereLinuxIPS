@@ -12,7 +12,6 @@ from typing import (
 )
 
 import requests
-import validators
 from exclusiveprocess import (
     Lock,
     CannotAcquireLock,
@@ -859,7 +858,8 @@ class UpdateManager(IModule):
                             )
                     except IndexError:
                         self.print(
-                            f"IndexError Description column: {description_column}. Line: {line}",
+                            f"IndexError Description column: "
+                            f"{description_column}. Line: {line}",
                             0,
                             1,
                         )
@@ -883,7 +883,8 @@ class UpdateManager(IModule):
                         )
                     else:
                         self.print(
-                            f"The data {data} is not valid. It was found in {filename}.",
+                            f"The data {data} is not valid. "
+                            f"It was found in {filename}.",
                             3,
                             3,
                         )
@@ -960,7 +961,7 @@ class UpdateManager(IModule):
                     if diff > self.interval:
                         continue
                     domain = ioc["DomainAddress"]
-                    if not validators.domain(domain):
+                    if not utils.is_valid_domain(domain):
                         continue
                     malicious_domains_dict[domain] = json.dumps(
                         {

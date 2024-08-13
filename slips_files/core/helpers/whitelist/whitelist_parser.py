@@ -94,7 +94,7 @@ class WhitelistParser:
         self.NUMBER_OF_WHITELIST_COLUMNS: int = len(line.split(","))
 
     def update_whitelisted_domains(self, domain: str, info: Dict[str, str]):
-        if not validators.domain(domain):
+        if not utils.is_valid_domain(domain):
             return
 
         self.whitelisted_domains[domain] = info

@@ -233,7 +233,7 @@ def test_analyze_no_message(mock_db):
     ssh.check_successful_ssh = MagicMock()
     ssh.check_ssh_password_guessing = MagicMock()
 
-    ssh.analyze()
+    ssh.analyze({})
 
     ssh.check_successful_ssh.assert_not_called()
     ssh.check_ssh_password_guessing.assert_not_called()
@@ -242,7 +242,6 @@ def test_analyze_no_message(mock_db):
 @pytest.mark.parametrize("auth_success", ["true", "false"])
 def test_analyze_with_message(mock_db, auth_success):
     ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
-    ssh.flowalerts = MagicMock()
     ssh.check_successful_ssh = MagicMock()
     ssh.check_ssh_password_guessing = MagicMock()
 
@@ -257,9 +256,8 @@ def test_analyze_with_message(mock_db, auth_success):
         "twid": twid,
         "flow": json.dumps(flow_data),
     }
-    ssh.flowalerts.get_msg.return_value = {"data": json.dumps(msg_data)}
 
-    ssh.analyze()
+    ssh.analyze({"channel": "new_ssh", "data": json.dumps(msg_data)})
 
     ssh.check_successful_ssh.assert_called_once_with(
         uid, timestamp, profileid, twid, auth_success
