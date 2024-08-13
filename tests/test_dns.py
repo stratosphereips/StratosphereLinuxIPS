@@ -441,9 +441,9 @@ def test_check_high_entropy_dns_answers_no_call(
         ),
     ],
 )
-def test_analyze(mocker, mock_db, test_case, expected_calls):
+def test_analyze_new_flow_msg(mocker, mock_db, test_case, expected_calls):
     dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
-
+    dns.connections_checked_in_dns_conn_timer_thread = []
     mock_check_dns_without_connection = mocker.patch.object(
         dns, "check_dns_without_connection"
     )
@@ -459,16 +459,7 @@ def test_analyze(mocker, mock_db, test_case, expected_calls):
     )
     mock_check_dns_arpa_scan = mocker.patch.object(dns, "check_dns_arpa_scan")
 
-    dns.flowalerts = Mock(
-        get_msg=Mock(
-            side_effect=[
-                {"data": test_case["data"]},
-                {"data": test_case.get("data2", False)},
-            ]
-        )
-    )
-
-    dns.analyze()
+    dns.analyze({"channel": "new_dns", "data": test_case["data"]})
 
     assert (
         mock_check_dns_without_connection.call_count

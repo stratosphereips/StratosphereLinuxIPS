@@ -23,7 +23,7 @@ jobs:
           image: stratosphereips/slips_dependencies:latest
 
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -104,7 +104,7 @@ jobs:
             run: |
               coverage run --source=./ -m pytest tests/test_main.py -p no:warnings -vv
               coverage report  --include="slips/main.py*"
-              coverage html  --include="slips/main.py*" -d coverage_reports/main    
+              coverage html  --include="slips/main.py*" -d coverage_reports/main
 
           - name: Whitelist  Unit Tests
             run: |
@@ -208,6 +208,12 @@ jobs:
               coverage report  --include="modules/ip_info/ip_info.py*"
               coverage html  --include="modules/ip_info/ip_info.py*" -d coverage_reports/ip_info
 
+          - name: ASN Info Unit Tests
+            run: |
+              coverage run --source=./ -m pytest tests/test_asn_info.py -p no:warnings -vv
+              coverage report  --include="modules/ip_info/asn_info.py*"
+              coverage html  --include="modules/ip_info/asn_info.py*" -d coverage_reports/ip_info
+
           - name: Input Unit Tests
             run: |
               coverage run --source=./ -m pytest tests/test_inputProc.py -p no:warnings -vv
@@ -218,7 +224,7 @@ jobs:
             run: |
               coverage run --source=./ -m pytest tests/test_output.py -p no:warnings -vv
               coverage report  --include="slips_files/core/output.py*"
-              coverage html  --include="slips_files/core/output.py*" -d coverage_reports/output   
+              coverage html  --include="slips_files/core/output.py*" -d coverage_reports/output
 
           - name: urlhaus Unit Tests
             run: |
@@ -226,20 +232,61 @@ jobs:
               coverage report  --include="modules/threat_intelligence/urlhaus.py*"
               coverage html  --include="modules/threat_intelligence/urlhaus.py*" -d coverage_reports/urlhaus
 
-          - name: set evidence test
+          - name: set evidence Unit Test
             run: |
                coverage run --source=./ -m pytest tests/test_set_evidence.py -p no:warnings -vv
                coverage report --include="modules/flowalerts/set_evidence.py*"
                coverage html --include="modules/flowalerts/set_evidence.py*" -d coverage_reports/set_evidence
 
-          - name: cesnet test
+          - name: Go Director Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_go_director.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/utils/go_director.py*"
+               coverage html --include="modules/p2ptrust/utils/go_director.py*" -d coverage_reports/go_director
+
+          - name: Progress Bar Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_progress_bar.py -p no:warnings -vv
+               coverage report --include="modules/progress_bar/progress_bar.py*"
+               coverage html --include="modules/progress_bar/progress_bar.py*" -d coverage_reports/progress_bar
+
+          - name: CESNET Unit Tests
             run: |
                coverage run --source=./ -m pytest tests/test_cesnet.py -p no:warnings -vv
                coverage report --include="modules/cesnet/cesnet.py*"
                coverage html --include="modules/cesnet/cesnet.py*" -d coverage_reports/cesnet
-     
 
 
+
+          - name: Checker Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_checker.py -p no:warnings -vv
+               coverage report --include="slips_files/core/helpers/checker.py*"
+               coverage html --include="slips_files/core/helpers/checker.py*" -d coverage_reports/checker
+
+          - name: Daemon Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_daemon.py -p no:warnings -vv
+               coverage report --include="slips/daemon.py*"
+               coverage html --include="slips/daemon.py*" -d coverage_reports/daemon
+
+          - name: Base Model Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_base_model.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/trust/base_model.py*"
+               coverage html --include="modules/p2ptrust/trust/base_model.py*" -d coverage_reports/set_evidence
+
+          - name: notify Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv
+               coverage report --include="slips_files/core/helpers/notify.py*"
+               coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify
+
+          - name: TrustDB Unit tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_trustdb.py -p no:warnings -vv
+               coverage report --include="modules/p2ptrust/trust/trustdb.py*"
+               coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb
 
   dataset_integration_tests:
       # specify the host OS
@@ -250,7 +297,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -276,7 +323,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -302,7 +349,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -330,7 +377,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes
@@ -360,7 +407,7 @@ jobs:
       container:
           image: stratosphereips/slips_dependencies:latest
       steps:
-          - uses: actions/checkout@v2
+          - uses: actions/checkout@v4
 
           - name: Start redis server
             run: redis-server --daemonize yes

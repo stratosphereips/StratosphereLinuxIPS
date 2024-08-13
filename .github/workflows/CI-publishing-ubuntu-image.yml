@@ -17,7 +17,7 @@ jobs:
           echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
 
       # add release tag
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: rickstaa/action-create-tag@v1
         with:
           tag: ${{ env.SLIPS_VERSION }}
@@ -35,14 +35,14 @@ jobs:
 
     # clone slips and checkout branch
     # By default it checks out only one commit
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: 'master'
         # Fetch all history for all tags and branches
         fetch-depth: ''
 
     - name: Login to DockerHub
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: stratosphereips
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
@@ -50,7 +50,7 @@ jobs:
     - name: Build and publish ubuntu image from Dockerfile
       id: docker_build_slips
       timeout-minutes: 15
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         debug: true
         verbose-debug: true
@@ -58,6 +58,6 @@ jobs:
         context: ./
         file: ./docker/ubuntu-image/Dockerfile
         tags: |
-          stratosphereips/ubuntu_image:latest
-          stratosphereips/ubuntu_image:${{ env.SLIPS_VERSION }}
+          stratosphereips/slips:latest
+          stratosphereips/slips:${{ env.SLIPS_VERSION }}
         push: true

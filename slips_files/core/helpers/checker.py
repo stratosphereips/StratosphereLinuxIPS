@@ -34,7 +34,8 @@ class Checker:
         if self.main.args.input_module:
             input_information = "input_module"
             input_type = self.main.args.input_module
-            # this is the default value of the type of flows slips reads from a module
+            # this is the default value of the type of flows slips reads from
+            # a module
             line_type = "zeek"
             return input_type, input_information, line_type
 
@@ -170,12 +171,16 @@ class Checker:
             child.kill()
 
     def clear_redis_cache(self):
+        redis_cache_default_server_port = 6379
+        redis_cache_server_pid = self.main.redis_man.get_pid_of_redis_server(
+            redis_cache_default_server_port
+        )
         print("Deleting Cache DB in Redis.")
         self.main.redis_man.clear_redis_cache_database()
         self.main.input_information = ""
         self.main.zeek_dir = ""
         self.main.redis_man.log_redis_server_pid(
-            6379, self.main.redis_man.get_pid_of_redis_server(6379)
+            redis_cache_default_server_port, redis_cache_server_pid
         )
         self.main.terminate_slips()
 
@@ -193,7 +198,8 @@ class Checker:
         # this function assumes that the module is created in module/name/name.py
         if f"{module}.py" not in os.listdir(f"modules/{module}/"):
             print(
-                f"{module} is not available in modules/{module}/{module}.py. Stopping slips"
+                f"{module} is not available in modules/{module}/{module}.py. "
+                f"Stopping Slips."
             )
             return False
 

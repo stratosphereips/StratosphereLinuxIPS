@@ -814,8 +814,8 @@ class Conn(IFlowalertsAnalyzer):
             timestamp,
         )
 
-    def analyze(self):
-        if msg := self.flowalerts.get_msg("new_flow"):
+    def analyze(self, msg):
+        if utils.is_msg_intended_for(msg, "new_flow"):
             new_flow = json.loads(msg["data"])
             profileid = new_flow["profileid"]
             twid = new_flow["twid"]
@@ -937,7 +937,7 @@ class Conn(IFlowalertsAnalyzer):
                 flow_type, smac, profileid, twid, uid, timestamp
             )
 
-        if msg := self.flowalerts.get_msg("tw_closed"):
+        if utils.is_msg_intended_for(msg, "tw_closed"):
             profileid_tw = msg["data"].split("_")
             profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
             twid = profileid_tw[-1]

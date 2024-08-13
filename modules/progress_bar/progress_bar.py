@@ -62,7 +62,7 @@ class PBar(IModule):
             total=self.total_flows,
             leave=True,
             colour="green",
-            desc="Flows read",
+            desc="Flows Processed",
             mininterval=0,  # defines how long to wait between each refresh.
             unit=" flow",
             smoothing=1,

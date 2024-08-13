@@ -34,11 +34,8 @@ class IFlowalertsAnalyzer(ABC):
         initializing the module
         """
 
-    def get_msg(self, channel_name):
-        return self.flowalerts.get_msg(channel_name)
-
     @abstractmethod
-    def analyze(self) -> bool:
+    def analyze(self, msg: dict) -> bool:
         """
         Analyzes a certain flow type and runs all supported detections
         returns True if there was a detection
