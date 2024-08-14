@@ -276,6 +276,13 @@ jobs:
                coverage report --include="modules/p2ptrust/trust/base_model.py*"
                coverage html --include="modules/p2ptrust/trust/base_model.py*" -d coverage_reports/set_evidence
 
+          - name: Markov Chain Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_markov_chain.py -p no:warnings -vv
+               coverage report --include="slips_files/common/markov_chains.py*"
+               coverage html --include="slips_files/common/markov_chains.py*" -d coverage_reports/markov_chains
+
+
           - name: notify Unit Tests
             run: |
                coverage run --source=./ -m pytest tests/test_notice.py -p no:warnings -vv -s -n 5

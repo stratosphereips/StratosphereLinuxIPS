@@ -49,6 +49,7 @@ from modules.arp.arp import ARP
 from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
+from slips_files.common.markov_chains import Matrix
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
@@ -458,6 +459,9 @@ class ModuleFactory:
             network_discovery = NetworkDiscovery(mock_db)
             network_discovery.db = mock_db
         return network_discovery
+
+    def create_markov_chain_obj(self):
+        return Matrix()
 
     def create_checker_obj(self):
         mock_main = Mock()
