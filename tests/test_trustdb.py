@@ -262,7 +262,7 @@ def test_insert_go_ip_pairing(mock_db, peerid, ip, timestamp, expected_params):
         # Testcase 1: Using provided timestamp
         ("192.168.1.10", 0.85, 0.95, 1678886400, 1678886400),
         # Testcase 2: Using current time as timestamp
-        ("10.0.0.1", 0.6, 0.7, None, time.time()),
+        ("10.0.0.1", 0.6, 0.7, None, 1234),
     ],
 )
 def test_insert_slips_score(
