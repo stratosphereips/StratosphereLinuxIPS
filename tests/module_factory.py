@@ -48,6 +48,7 @@ from modules.p2ptrust.trust.base_model import BaseModel
 from modules.arp.arp import ARP
 from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
+from modules.cesnet.cesnet import CESNET
 from modules.riskiq.riskiq import RiskIQ
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
@@ -548,6 +549,25 @@ class ModuleFactory:
     def create_notify_obj(self):
         notify = Notify()
         return notify
+
+    def create_cesnet_obj(self):
+        logger = MagicMock()
+        output_dir = "dummy_output_dir"
+        redis_port = 6379
+        termination_event = MagicMock()
+
+        with patch.object(
+            DBManager, "create_sqlite_db", return_value=MagicMock()
+        ):
+            cesnet = CESNET(logger, output_dir, redis_port, termination_event)
+            cesnet.db = MagicMock()
+            cesnet.wclient = MagicMock()
+            cesnet.node_info = [
+                {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
+            ]
+
+        cesnet.print = MagicMock()
+        return cesnet
 
     def create_riskiq_obj(self, mock_db):
         with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):

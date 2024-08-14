@@ -250,6 +250,14 @@ jobs:
                coverage report --include="modules/progress_bar/progress_bar.py*"
                coverage html --include="modules/progress_bar/progress_bar.py*" -d coverage_reports/progress_bar
 
+          - name: CESNET Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_cesnet.py -p no:warnings -vv
+               coverage report --include="modules/cesnet/cesnet.py*"
+               coverage html --include="modules/cesnet/cesnet.py*" -d coverage_reports/cesnet
+
+
+
           - name: RiskIQ Unit Tests
             run: |
                coverage run --source=./ -m pytest tests/test_riskiq.py -p no:warnings -vv
