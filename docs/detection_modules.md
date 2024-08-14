@@ -471,6 +471,10 @@ By default, the files are stored in the Slips directory ```modules/ThreatIntelli
 are deleted after slips is done reading them.
 
 
+Domains found in remote feeds are considered invalid, and therefore discarded by Slips,
+if they have suffix that doesn't exist in
+https://publicsuffix.org/list/public_suffix_list.dat
+
 ### Commenting a remote TI feed
 
 If you have a remote file link that you wish to comment and remove from the database
