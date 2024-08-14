@@ -41,7 +41,6 @@ from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event, Semaphore
 from slips_files.core.helpers.flow_handler import FlowHandler
-from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
@@ -564,10 +563,9 @@ class ModuleFactory:
             cesnet.node_info = [
                 {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
             ]
-
         cesnet.print = MagicMock()
         return cesnet
-        
+
     def create_symbol_handler(self, mocker):
         mock_logger = mocker.Mock()
         mock_db = mocker.Mock()

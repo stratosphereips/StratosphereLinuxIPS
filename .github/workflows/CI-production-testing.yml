@@ -228,7 +228,7 @@ jobs:
 
     - name: Symbols Handler Unit Tests
       run: |
-        python3 -m pytest tests/test_symbols_handler.py -p no:warnings -vv    
+        python3 -m pytest tests/test_symbols_handler.py -p no:warnings -vv
 
 
     - name: Clear redis cache
