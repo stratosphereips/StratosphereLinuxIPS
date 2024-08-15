@@ -67,10 +67,15 @@ def test_compute_periodicity(
     mock_db, now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3, expected_result
 ):
     symbol_handler = ModuleFactory().create_symbol_handler(mock_db)
+
+    profileid = "test_profile"
+    tupleid = "test_tuple"
+
     result = symbol_handler.compute_periodicity(
-        now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3
+        now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3, profileid, tupleid
     )
-    assert result == expected_result
+
+    assert result[:3] == expected_result
 
 
 @pytest.mark.parametrize(
