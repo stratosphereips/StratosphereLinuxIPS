@@ -48,55 +48,45 @@ class SymbolHandler(IObservable):
         tt1: float,
         tt2: float,
         tt3: float,
+        profileid: str,
+        tupleid: str
     ):
-        """Function to compute the periodicity"""
         zeros = ""
         if last_last_ts is False or last_ts is False:
             TD = -1
             T1 = None
             T2 = None
         else:
-            # Time diff between the past flow and the past-past flow.
             T1 = last_ts - last_last_ts
-            # Time diff between the current flow and the past flow.
-            # We already computed this before, but we can do it here
-            # again just in case
             T2 = now_ts - last_ts
-            # We have a time out of 1hs. After that, put 1 number 0
-            # for each hs
-            # It should not happen that we also check T1... right?
+
             if T2 >= tto.total_seconds():
                 t2_in_hours = T2 / tto.total_seconds()
-                # Shoud round it. Because we need the time to pass to
-                # really count it
-                # For example:
-                # 7100 / 3600 =~ 1.972  ->  int(1.972) = 1
                 for i in range(int(t2_in_hours)):
-                    # Add the zeros to the symbol object
                     zeros += "0"
 
-            # Compute TD
             try:
                 TD = T2 / T1 if T2 >= T1 else T1 / T2
             except ZeroDivisionError:
                 TD = 1
 
-            # Decide the periodic based on TD and the thresholds
             if TD <= tt1:
-                # Strongly periodicity
                 TD = 1
             elif TD <= tt2:
-                # Weakly periodicity
                 TD = 2
             elif TD <= tt3:
-                # Weakly not periodicity
                 TD = 3
             elif TD > tt3:
-                # Strongly not periodicity
                 TD = 4
 
+        self.print(
+            f"Compute Periodicity: Profileid: {profileid}, Tuple: {tupleid}, T1={T1}, "
+            f"T2={T2}, TD={TD}",
+            3,
+            0,
+        )
         return TD, zeros, T2
-
+    
     def compute_duration(
         self, current_duration: float, td1: float, td2: float
     ):
@@ -174,16 +164,6 @@ class SymbolHandler(IObservable):
             return ""
 
     def compute(self, flow, twid: str, tuple_key: str):
-        """
-        This function computes the new symbol for the tuple according to the
-        original stratosphere IPS model of letters
-        Here we do not apply any detection model, we just create the letters
-        as one more feature twid is the starttime of the flow
-        :param tuple_key: can be 'InTuples' or 'OutTuples'
-        return the following tuple (symbol_to_add, (previous_two_timestamps))
-        previous_two_timestamps is a tuple with the ts of the last flow, and the ts
-        of the flow before the last flow
-        """
         daddr_as_obj = ip_address(flow.daddr)
         profileid = f"profile_{flow.saddr}"
         tupleid = f"{daddr_as_obj}-{flow.dport}-{flow.proto}"
@@ -200,7 +180,6 @@ class SymbolHandler(IObservable):
                 0,
             )
 
-            # Thresholds learnt from Stratosphere ips first version
             tto = timedelta(seconds=3600)
             tt1, tt2, tt3 = 1.05, 1.3, 5.0
             td1, td2 = 0.1, 10.0
@@ -211,7 +190,7 @@ class SymbolHandler(IObservable):
             )
 
             periodicity, zeros, T2 = self.compute_periodicity(
-                now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3
+                now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3, profileid, tupleid
             )
             duration = self.compute_duration(current_duration, td1, td2)
             size = self.compute_size(current_size, ts1, ts2)
