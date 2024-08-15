@@ -58,22 +58,27 @@ RUN apt update && apt install -y --no-install-recommends \
     && nvm install 22 \
 
 
-# Upgrade pip3 and install slips requirements
 RUN pip3 install --no-cache-dir --upgrade pip
+
+RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
+    && cd python-idmefv2 \
+    && git submodule update --init --recursive \
+    && python3 setup.py install \
+    && cd ..
+
 
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}
 
 COPY . $SLIPS_DIR
 
-# we're excluding black here because it has conflicts with the tensorflow version required in requirements.txt
-# this is temporary until we upgrade tensorflow to the latest version
 RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
     && cd modules/kalipso \
-    && npm install
+    && npm install \
+
 
 # set use_p2p to yes in the config file
 RUN sed -i "s/use_p2p : False/use_p2p : True/" config/slips.yaml
