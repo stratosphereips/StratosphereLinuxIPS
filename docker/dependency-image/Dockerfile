@@ -60,6 +60,11 @@ RUN apt update && apt install -y --no-install-recommends \
     && apt clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
+    && cd python-idmefv2 \
+    && git submodule update --init --recursive \
+    && python3 setup.py install \
+    && cd ..
 
 # you should build the image using
 # docker build --no-cache -t slips_dependencies -f docker/dependency-image/Dockerfile .
