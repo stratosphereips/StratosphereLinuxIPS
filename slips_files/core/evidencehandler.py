@@ -25,7 +25,8 @@ import sys
 import os
 import time
 import traceback
-from slips_files.common.idea_format import idea_format
+
+from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.style import red, cyan
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -57,6 +58,7 @@ class EvidenceHandler(ICore):
 
     def init(self):
         self.whitelist = Whitelist(self.logger, self.db)
+        self.idmefv2 = IDMEFv2(self.logger, self.db)
         self.separator = self.db.get_separator()
         self.read_configuration()
         self.detection_threshold_in_this_width = (
@@ -68,7 +70,8 @@ class EvidenceHandler(ICore):
         if self.popup_alerts:
             self.notify = Notify()
             if self.notify.bin_found:
-                # The way we send notifications differ depending on the user and the OS
+                # The way we send notifications differ depending
+                # on the user and the OS
                 self.notify.setup_notifications()
             else:
                 self.popup_alerts = False
@@ -177,30 +180,36 @@ class EvidenceHandler(ICore):
 
     def add_to_json_log_file(
         self,
-        idea_dict: dict,
+        evidence_dict: dict,
         all_uids: list,
         timewindow: str,
         accumulated_threat_level: float = 0,
     ):
         """
         Add a new evidence line to our alerts.json file in json format.
-        :param idea_dict: dict containing 1 alert
+        :param evidence_dict: dict containing 1 alert
         :param all_uids: the uids of the flows causing this evidence
         """
-        if not idea_dict:
+        if not evidence_dict:
             self.handle_unable_to_log_evidence()
             return
 
         try:
             # we add extra fields to alerts.json that are not in the IDEA format
-            idea_dict.update(
+            evidence_dict.update(
                 {
-                    "uids": all_uids,
-                    "accumulated_threat_level": accumulated_threat_level,
-                    "timewindow": int(timewindow.replace("timewindow", "")),
+                    "Note": json.dumps(
+                        {
+                            "uids": all_uids,
+                            "accumulated_threat_level": accumulated_threat_level,
+                            "timewindow": int(
+                                timewindow.replace("timewindow", "")
+                            ),
+                        }
+                    )
                 }
             )
-            json.dump(idea_dict, self.jsonfile)
+            json.dump(evidence_dict, self.jsonfile)
             self.jsonfile.write("\n")
         except KeyboardInterrupt:
             return True
@@ -369,7 +378,7 @@ class EvidenceHandler(ICore):
         twid,
         flow_datetime,
         accumulated_threat_level,
-        IDEA_dict,
+        evidence_dict,
         blocked=False,
     ):
         """
@@ -378,7 +387,7 @@ class EvidenceHandler(ICore):
         :param blocked: bool. if the ip was blocked by the blocking module,
                 we should say so
                     in alerts.log, if not, we should say that we generated an alert
-        :param IDEA_dict: the last evidence of this alert,
+        :param evidence_dict: the last evidence of this alert,
                         used for logging the blocking
         """
         self.db.mark_profile_as_malicious(profileid)
@@ -406,15 +415,15 @@ class EvidenceHandler(ICore):
         # Add a json field stating that this ip is blocked in alerts.json
         # replace the evidence description with slips msg that this is a
         # blocked profile
-        IDEA_dict["Format"] = "Json"
-        IDEA_dict["Category"] = "Alert"
-        IDEA_dict["profileid"] = profileid
-        IDEA_dict["threat_level"] = accumulated_threat_level
-        IDEA_dict["Attach"][0]["Content"] = line
+        evidence_dict["Format"] = "Json"
+        evidence_dict["Category"] = "Alert"
+        evidence_dict["profileid"] = profileid
+        evidence_dict["threat_level"] = accumulated_threat_level
+        evidence_dict["Attach"][0]["Content"] = line
 
         # add to alerts.json
         self.add_to_json_log_file(
-            IDEA_dict, [], twid, accumulated_threat_level
+            evidence_dict, [], twid, accumulated_threat_level
         )
 
     def shutdown_gracefully(self):
@@ -746,10 +755,11 @@ class EvidenceHandler(ICore):
                         self.db.get_accumulated_threat_level(profileid, twid)
                     )
                 # prepare evidence for json log file
-                idea_dict: dict = idea_format(evidence)
+                # idea_dict: dict = idea_format(evidence)
+                idmef_evidence = self.idmefv2.convert(evidence)
                 # add to alerts.json
                 self.add_to_json_log_file(
-                    idea_dict,
+                    idmef_evidence,
                     all_uids,
                     twid,
                     accumulated_threat_level,
@@ -819,7 +829,7 @@ class EvidenceHandler(ICore):
                             twid,
                             flow_datetime,
                             accumulated_threat_level,
-                            idea_dict,
+                            {},  # TODO temporariyyy @@@@@
                             blocked=blocked,
                         )
 
