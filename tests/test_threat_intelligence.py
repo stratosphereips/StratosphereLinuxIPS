@@ -826,7 +826,7 @@ def test_search_offline_for_ip(
 ):
     """Test `search_offline_for_ip` for querying local threat intelligence data."""
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.search_IP_in_IoC.return_value = mock_return_value
+    mock_db.search_for_ip_in_iocs.return_value = mock_return_value
     result = threatintel.search_offline_for_ip(ip_address)
     assert result == expected_result
 

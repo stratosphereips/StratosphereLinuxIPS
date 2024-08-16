@@ -227,7 +227,7 @@ class VT(IModule):
                         self.set_domain_data_in_DomainInfo(ioc, cached_data)
 
                 elif ioc_type == "url":
-                    cached_data = self.db.getURLData(ioc)
+                    cached_data = self.db.search_for_url_in_iocs(ioc)
                     # If VT data of this domain is not in the
                     # DomainInfo, ask VT
                     # If 'Virustotal' key is not in the DomainInfo
@@ -316,7 +316,7 @@ class VT(IModule):
     def get_ioc_type(self, ioc):
         """Check the type of ioc, returns url, ip, domain or hash type"""
         # don't move this to utils, this is the only module that supports urls
-        return "url" if validators.url(ioc) else utils.detect_data_type(ioc)
+        return "url" if validators.url(ioc) else utils.detect_ioc_type(ioc)
 
     def api_query_(self, ioc, save_data=False):
         """
@@ -620,7 +620,7 @@ class VT(IModule):
             # twid = data['twid']
             flow_data = json.loads(data["flow"])
             url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
-            cached_data = self.db.getURLData(url)
+            cached_data = self.db.search_for_url_in_iocs(url)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
             if not cached_data or "VirusTotal" not in cached_data:

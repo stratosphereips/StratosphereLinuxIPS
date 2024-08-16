@@ -220,7 +220,7 @@ class CCDetection(IModule):
                 twid,
             )
             to_send = {
-                "attacker_type": utils.detect_data_type(flow["daddr"]),
+                "attacker_type": utils.detect_ioc_type(flow["daddr"]),
                 "profileid": profileid,
                 "twid": twid,
                 "flow": flow,
