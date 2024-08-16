@@ -5,7 +5,9 @@ import threading
 from multiprocessing import Queue
 from typing import List
 
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -16,8 +18,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -79,7 +79,7 @@ class ARP(IModule):
                 time.sleep(5)
                 continue
             # unpack the evidence that triggered the thread
-            (ts, profileid, twid, uids, conn_count) = evidence
+            (ts, profileid, twid, uids) = evidence
 
             # wait 10s if a new evidence arrived
             time.sleep(self.time_to_wait)
@@ -93,12 +93,11 @@ class ARP(IModule):
                     # queue is empty
                     break
 
-                (ts2, profileid2, twid2, uids2, conn_count2) = new_evidence
+                (ts2, profileid2, twid2, uids2) = new_evidence
                 if profileid == profileid2 and twid == twid2:
                     # this should be combined with the past alert
                     ts = ts2
                     uids += uids2
-                    conn_count = conn_count2
                 else:
                     # this is an ip performing arp scan in a diff
                     # profile or a diff twid, we shouldn't accumulate its
@@ -110,7 +109,7 @@ class ARP(IModule):
                         scans_ctr = 0
                         break
 
-            self.set_evidence_arp_scan(ts, profileid, twid, uids, conn_count)
+            self.set_evidence_arp_scan(ts, profileid, twid, uids)
 
     def check_arp_scan(
         self, profileid, twid, daddr, uid, ts, operation, dst_hw
@@ -189,27 +188,22 @@ class ARP(IModule):
 
             # in seconds
             if self.diff <= 30.00:
-                conn_count = len(daddrs)
                 uids = get_uids()
                 # we are sure this is an arp scan
                 if not self.alerted_once_arp_scan:
                     self.alerted_once_arp_scan = True
-                    self.set_evidence_arp_scan(
-                        ts, profileid, twid, uids, conn_count
-                    )
+                    self.set_evidence_arp_scan(ts, profileid, twid, uids)
                 else:
                     # after alerting once, wait 10s to see
                     # if more evidence are coming
                     self.pending_arp_scan_evidence.put(
-                        (ts, profileid, twid, uids, conn_count)
+                        (ts, profileid, twid, uids)
                     )
 
                 return True
         return False
 
-    def set_evidence_arp_scan(
-        self, ts, profileid, twid, uids: List[str], conn_count
-    ):
+    def set_evidence_arp_scan(self, ts, profileid, twid, uids: List[str]):
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split("_")[1]
@@ -229,9 +223,6 @@ class ARP(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uids,
             timestamp=ts,
-            category=IDEACategory.RECON_SCANNING,
-            source_target_tag=Tag.RECON,
-            conn_count=conn_count,
         )
 
         self.db.set_evidence(evidence)
@@ -301,7 +292,6 @@ class ARP(IModule):
                 ),
                 uid=[uid],
                 timestamp=ts,
-                category=IDEACategory.ANOMALY_BEHAVIOUR,
                 victim=victim,
             )
 
@@ -354,8 +344,6 @@ class ARP(IModule):
                 ),
                 uid=[uid],
                 timestamp=ts,
-                source_target_tag=Tag.RECON,
-                category=IDEACategory.INFO,
             )
 
             self.db.set_evidence(evidence)
@@ -460,8 +448,6 @@ class ARP(IModule):
                 ),
                 uid=[uid],
                 timestamp=ts,
-                category=IDEACategory.RECON,
-                source_target_tag=Tag.MITM,
                 victim=victim,
             )
 

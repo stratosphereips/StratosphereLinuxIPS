@@ -23,8 +23,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -239,8 +237,6 @@ class LeakDetector(IModule):
             timestamp=ts,
             proto=Proto(proto.lower()),
             port=dport,
-            source_target_tag=Tag.CC,
-            category=IDEACategory.MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -259,8 +255,6 @@ class LeakDetector(IModule):
             timestamp=ts,
             proto=Proto(proto.lower()),
             port=dport,
-            source_target_tag=Tag.CC,
-            category=IDEACategory.MALWARE,
         )
 
         self.db.set_evidence(evidence)

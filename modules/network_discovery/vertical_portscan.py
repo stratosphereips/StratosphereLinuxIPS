@@ -8,10 +8,8 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
     Victim,
     Proto,
-    Tag,
 )
 
 
@@ -85,10 +83,7 @@ class VerticalPortscan:
             timewindow=TimeWindow(number=twid),
             uid=evidence["uid"],
             timestamp=evidence["timestamp"],
-            category=IDEACategory.RECON_SCANNING,
-            conn_count=evidence["pkts_sent"],
             proto=Proto(evidence["protocol"].lower()),
-            source_target_tag=Tag.RECON,
             victim=victim,
         )
 

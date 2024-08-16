@@ -14,8 +14,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 BROADCAST_ADDR = "255.255.255.255"
@@ -203,10 +201,7 @@ class HorizontalPortscan:
             ),
             uid=evidence["uids"],
             timestamp=evidence["timestamp"],
-            category=IDEACategory.RECON_SCANNING,
-            conn_count=evidence["pkts_sent"],
             proto=Proto(evidence["protocol"].lower()),
-            source_target_tag=Tag.RECON,
             port=evidence["dport"],
         )
 

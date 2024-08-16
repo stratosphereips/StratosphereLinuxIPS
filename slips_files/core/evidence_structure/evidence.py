@@ -123,53 +123,6 @@ class ThreatLevel(Enum):
         return self.name.lower()
 
 
-class Anomaly(Enum):
-    """
-    https://idea.cesnet.cz/en/classifications
-    """
-
-    TRAFFIC = "Anomaly.Traffic"
-    FILE = "Anomaly.File"
-    CONNECTION = "Anomaly.Connection"
-    BEHAVIOUR = "Anomaly.Behaviour"
-
-
-class Recon(Enum):
-    RECON = "Recon"
-    SCANNING = "Recon.Scanning"
-
-
-class Attempt(Enum):
-    LOGIN = "Attempt.Login"
-
-
-class Tag(Enum):
-    """
-    this is the IDEA category of the source and dst ip used in the evidence
-    if the Attacker.Direction is srcip this describes the source ip,
-    if the Attacker.Direction is dstip this describes the dst ip.
-    supported source and dst types are in the SourceTargetTag
-    section https://idea.cesnet.cz/en/classifications
-    this is optional in an evidence because it shouldn't
-    be used with dports and sports Attacker.Direction
-    """
-
-    SUSPICIOUS_USER_AGENT = "SuspiciousUserAgent"
-    INCOMPATIBLE_USER_AGENT = "IncompatibleUserAgent"
-    EXECUTABLE_MIME_TYPE = "ExecutableMIMEType"
-    MULTIPLE_USER_AGENT = "MultipleUserAgent"
-    SENDING_UNENCRYPTED_DATA = "SendingUnencryptedData"
-    MALWARE = "Malware"
-    RECON = "Recon"
-    MITM = "MITM"
-    ORIGIN_MALWARE = "OriginMalware"
-    CC = "CC"
-    BOTNET = "Botnet"
-    BLACKLISTED_ASN = "BlacklistedASN"
-    BLACKLISTED_IP = "BlacklistedIP"
-    BLACKLISTED_DOMAIN = "BlacklistedDomain"
-
-
 class Proto(Enum):
     TCP = "tcp"
     UDP = "udp"
@@ -185,24 +138,6 @@ class Victim:
     def __post_init__(self):
         if self.victim_type == IoCType.IP:
             validate_ip(self.value)
-
-
-class IDEACategory(Enum):
-    """
-    The evidence category according to IDEA categories
-    https://idea.cesnet.cz/en/classifications
-    """
-
-    ANOMALY_TRAFFIC = "Anomaly.Traffic"
-    ANOMALY_FILE = "Anomaly.File"
-    ANOMALY_CONNECTION = "Anomaly.Connection"
-    ANOMALY_BEHAVIOUR = "Anomaly.Behaviour"
-    INFO = "Information"
-    MALWARE = "Malware"
-    RECON_SCANNING = "Recon.Scanning"
-    ATTEMPT_LOGIN = "Attempt.Login"
-    RECON = "Recon"
-    INTRUSION_BOTNET = "Intrusion.Botnet"
 
 
 @dataclass
@@ -254,7 +189,6 @@ class Evidence:
     description: str
     attacker: Attacker
     threat_level: ThreatLevel
-    category: IDEACategory
     # profile of the srcip detected this evidence
     profile: ProfileID
     timewindow: TimeWindow
@@ -266,13 +200,8 @@ class Evidence:
     victim: Optional[Victim] = field(default=False)
     proto: Optional[Proto] = field(default=False)
     port: int = field(default=None)
-    source_target_tag: Tag = field(default=False)
-    # every evidence should have an ID according to the IDEA format
+    # every evidence should have an ID according to the IDMEF format
     id: str = field(default_factory=lambda: str(uuid4()))
-    # the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
-    conn_count: int = field(
-        default=1, metadata={"validate": lambda x: isinstance(x, int)}
-    )
     # the confidence of this evidence on a scale from 0 to 1.
     # How sure you are that this evidence is what you say it is?
     confidence: float = field(
@@ -321,7 +250,6 @@ def dict_to_evidence(evidence: dict):
         "description": evidence["description"],
         "attacker": Attacker(**evidence["attacker"]),
         "threat_level": ThreatLevel[evidence["threat_level"].upper()],
-        "category": IDEACategory[evidence["category"]],
         "victim": (
             Victim(**evidence["victim"])
             if "victim" in evidence and evidence["victim"]
@@ -341,14 +269,7 @@ def dict_to_evidence(evidence: dict):
             else None
         ),
         "port": evidence["port"],
-        "source_target_tag": (
-            Tag[evidence["source_target_tag"]]
-            if "source_target_tag" in evidence
-            and evidence["source_target_tag"]
-            else None
-        ),
         "id": evidence["id"],
-        "conn_count": evidence["conn_count"],
         "confidence": evidence["confidence"],
     }
 

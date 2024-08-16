@@ -365,8 +365,6 @@ def set_evidence(profile, timewindow, alert_id):
 
         for evidence_id in evidence_ids:
             temp_evidence = json.loads(evidence[evidence_id])
-            if "source_target_tag" not in temp_evidence:
-                temp_evidence["source_target_tag"] = "-"
             data.append(temp_evidence)
     return {"data": data}
 
@@ -388,8 +386,6 @@ def set_evidence_general(profile: str, timewindow: str):
     if evidence:
         for evidence_details in evidence.values():
             evidence_details: dict = json.loads(evidence_details)
-            if "source_target_tag" not in evidence_details:
-                evidence_details["source_target_tag"] = "-"
             data.append(evidence_details)
     return {"data": data}
 

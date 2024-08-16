@@ -5,8 +5,11 @@ import pandas as pd
 import json
 import datetime
 import traceback
+import warnings
 
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     ProfileID,
@@ -16,7 +19,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
 )
 
 # Only for debbuging
@@ -27,8 +29,6 @@ from slips_files.core.evidence_structure.evidence import (
 def warn(*args, **kwargs):
     pass
 
-
-import warnings
 
 warnings.warn = warn
 
@@ -315,7 +315,7 @@ class FlowMLDetection(IModule):
         """
         try:
             # Store the real label if there is one
-            y_flow = self.flow["label"]
+            # y_flow = self.flow["label"]
             # remove the real label column
             self.flow = self.flow.drop("label", axis=1)
             # remove the label predictions column of the other modules
@@ -401,7 +401,6 @@ class FlowMLDetection(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_TRAFFIC,
         )
 
         self.db.set_evidence(evidence)
@@ -421,7 +420,7 @@ class FlowMLDetection(IModule):
             data = msg["data"]
             # Convert from json to dict
             data = json.loads(data)
-            profileid = data["profileid"]
+            # profileid = data["profileid"]
             twid = data["twid"]
             # Get flow that is now in json format
             flow = data["flow"]

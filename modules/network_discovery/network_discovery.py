@@ -16,8 +16,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -98,9 +96,6 @@ class NetworkDiscovery(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.RECON_SCANNING,
-            conn_count=hosts_scanned,
-            source_target_tag=Tag.RECON,
         )
 
         self.db.set_evidence(evidence)
@@ -292,10 +287,7 @@ class NetworkDiscovery(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=icmp_flows_uids,
             timestamp=timestamp,
-            category=IDEACategory.RECON_SCANNING,
-            conn_count=pkts_sent,
             proto=Proto(protocol.lower()),
-            source_target_tag=Tag.RECON,
             victim=victim,
         )
 
@@ -324,9 +316,6 @@ class NetworkDiscovery(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=uids,
             timestamp=timestamp,
-            category=IDEACategory.RECON_SCANNING,
-            conn_count=number_of_requested_addrs,
-            source_target_tag=Tag.RECON,
         )
 
         self.db.set_evidence(evidence)
