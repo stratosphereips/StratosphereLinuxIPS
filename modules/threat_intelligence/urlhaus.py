@@ -12,7 +12,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
 )
 
 
@@ -209,7 +208,6 @@ class URLhaus:
             confidence=confidence,
             description=description,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[flow["uid"]],
@@ -226,7 +224,6 @@ class URLhaus:
             confidence=confidence,
             description=description,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
             profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[flow["uid"]],
@@ -273,7 +270,6 @@ class URLhaus:
             confidence=0.7,
             description=description,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
@@ -289,7 +285,6 @@ class URLhaus:
             confidence=0.7,
             description=description,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],

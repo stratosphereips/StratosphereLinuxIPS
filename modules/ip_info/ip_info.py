@@ -29,8 +29,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -536,10 +534,8 @@ class IPInfo(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[flow["uid"]],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             proto=Proto(protocol.lower()),
             port=dport,
-            source_target_tag=Tag.MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -556,10 +552,8 @@ class IPInfo(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[flow["uid"]],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             proto=Proto(protocol.lower()),
             port=dport,
-            source_target_tag=Tag.MALWARE,
         )
 
         self.db.set_evidence(evidence)

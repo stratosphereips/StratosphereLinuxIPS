@@ -15,9 +15,7 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
     Proto,
-    Tag,
     Victim,
 )
 from modules.rnn_cc_detection.strato_letters_exporter import (
@@ -89,8 +87,6 @@ class CCDetection(IModule):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.BOTNET,
             port=int(port),
             proto=Proto(proto.lower()) if proto else None,
         )
@@ -111,8 +107,6 @@ class CCDetection(IModule):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.CC,
             port=int(port),
             proto=Proto(proto.lower()) if proto else None,
         )

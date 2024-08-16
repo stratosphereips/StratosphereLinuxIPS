@@ -14,8 +14,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -38,7 +36,6 @@ class SetEvidnceHelper:
                 value=daddr,
             ),
             threat_level=ThreatLevel.INFO,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             victim=Victim(
                 direction=Direction.SRC,
@@ -49,7 +46,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=0.9,
         )
         self.db.set_evidence(evidence)
@@ -81,13 +77,11 @@ class SetEvidnceHelper:
                     value=attacker,
                 ),
                 threat_level=ThreatLevel.LOW,
-                category=IDEACategory.ANOMALY_TRAFFIC,
                 description=description,
                 profile=ProfileID(ip=attacker),
                 timewindow=TimeWindow(number=twid_number),
                 uid=[uid],
                 timestamp=stime,
-                conn_count=1,
                 confidence=1.0,
             )
             self.db.set_evidence(evidence)
@@ -100,13 +94,11 @@ class SetEvidnceHelper:
                 value=saddr,
             ),
             threat_level=ThreatLevel.INFO,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=stime,
-            conn_count=1,
             confidence=1.0,
         )
         self.db.set_evidence(evidence)
@@ -139,15 +131,12 @@ class SetEvidnceHelper:
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
             ),
             threat_level=ThreatLevel.MEDIUM,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=timestamp,
-            conn_count=1,
             confidence=0.9,
-            source_target_tag=Tag.RECON,
         )
         self.db.set_evidence(evidence)
 
@@ -206,14 +195,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DIFFERENT_LOCALNET,
             attacker=attacker,
             threat_level=threat_level,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             victim=victim,
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
         )
         self.db.set_evidence(evidence)
@@ -243,14 +230,12 @@ class SetEvidnceHelper:
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             threat_level=threat_level,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             victim=None,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
         )
 
@@ -279,13 +264,11 @@ class SetEvidnceHelper:
                 value=daddr,
             ),
             threat_level=ThreatLevel.LOW,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=0.8,
         )
         self.db.set_evidence(evidence)
@@ -299,13 +282,11 @@ class SetEvidnceHelper:
                 direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.MEDIUM,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=0.8,
         )
 
@@ -333,13 +314,11 @@ class SetEvidnceHelper:
                 direction=Direction.DST, victim_type=IoCType.IP, value=daddr
             ),
             threat_level=ThreatLevel.MEDIUM,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
         )
 
@@ -373,13 +352,11 @@ class SetEvidnceHelper:
                 direction=Direction.DST, victim_type=IoCType.IP, value=daddr
             ),
             threat_level=ThreatLevel.MEDIUM,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
         )
 
@@ -410,15 +387,12 @@ class SetEvidnceHelper:
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.HIGH,
-            category=IDEACategory.ANOMALY_BEHAVIOUR,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=stime,
-            conn_count=nxdomains,
             confidence=confidence,
-            source_target_tag=Tag.ORIGIN_MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -441,13 +415,11 @@ class SetEvidnceHelper:
                 value=domain,
             ),
             threat_level=ThreatLevel.LOW,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=0.8,
         )
 
@@ -476,14 +448,11 @@ class SetEvidnceHelper:
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.INFO,
-            category=IDEACategory.ANOMALY_BEHAVIOUR,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            source_target_tag=Tag.MALWARE,
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
         )
 
@@ -522,14 +491,11 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS,
             attacker=attacker,
             threat_level=threat_level,
-            source_target_tag=Tag.MALWARE,
-            category=IDEACategory.ANOMALY_CONNECTION,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
         )
 
@@ -560,12 +526,10 @@ class SetEvidnceHelper:
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             threat_level=threat_level,
-            category=IDEACategory.RECON_SCANNING,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=stime,
-            conn_count=arpa_scan_threshold,
             confidence=confidence,
         )
 
@@ -603,13 +567,11 @@ class SetEvidnceHelper:
                 direction=Direction.DST, victim_type=IoCType.IP, value=daddr
             ),
             threat_level=ThreatLevel.HIGH,
-            category=IDEACategory.ANOMALY_CONNECTION,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
         )
 
@@ -627,7 +589,6 @@ class SetEvidnceHelper:
         scanning_ip: str = msg.split(" appears")[0]
 
         description: str = f"password guessing. {msg}. by {by}."
-        conn_count: int = int(msg.split("in ")[1].split("connections")[0])
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.PASSWORD_GUESSING,
@@ -637,15 +598,12 @@ class SetEvidnceHelper:
                 value=scanning_ip,
             ),
             threat_level=ThreatLevel.HIGH,
-            category=IDEACategory.ATTEMPT_LOGIN,
             description=description,
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=conn_count,
             confidence=confidence,
-            source_target_tag=Tag.MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -658,8 +616,6 @@ class SetEvidnceHelper:
         saddr = profileid.split("_")[-1]
 
         description: str = f"horizontal port scan by Zeek engine. {msg}"
-        # get the number of unique hosts scanned on a specific port
-        conn_count: int = int(msg.split("least")[1].split("unique")[0])
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
@@ -667,15 +623,12 @@ class SetEvidnceHelper:
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.HIGH,
-            category=IDEACategory.RECON_SCANNING,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=conn_count,
             confidence=confidence,
-            source_target_tag=Tag.RECON,
         )
 
         self.db.set_evidence(evidence)
@@ -707,13 +660,11 @@ class SetEvidnceHelper:
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.INFO,
-            category=IDEACategory.RECON,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
             victim=Victim(
                 direction=Direction.DST, victim_type=IoCType.IP, value=daddr
@@ -753,13 +704,11 @@ class SetEvidnceHelper:
                 direction=Direction.DST, victim_type=IoCType.IP, value=daddr
             ),
             threat_level=threat_level,
-            category=IDEACategory.INFO,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=ts,
-            conn_count=1,
             confidence=confidence,
         )
 
@@ -774,7 +723,6 @@ class SetEvidnceHelper:
         twid: int = int(twid.replace("timewindow", ""))
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
         description: str = f"vertical port scan by Zeek engine. {msg}"
-        conn_count: int = int(msg.split("least ")[1].split(" unique")[0])
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
@@ -789,15 +737,12 @@ class SetEvidnceHelper:
                 value=msg.split("ports of host ")[-1].split(" in")[0],
             ),
             threat_level=ThreatLevel.HIGH,
-            category=IDEACategory.RECON_SCANNING,
             description=description,
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=conn_count,
             confidence=confidence,
-            source_target_tag=Tag.RECON,
         )
 
         self.db.set_evidence(evidence)
@@ -846,7 +791,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.INFO,
         )
 
         self.db.set_evidence(evidence)
@@ -891,7 +835,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_CONNECTION,
             victim=Victim(
                 direction=Direction.DST, victim_type=IoCType.IP, value=daddr
             ),
@@ -932,7 +875,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_BEHAVIOUR,
         )
         self.db.set_evidence(evidence)
 
@@ -949,7 +891,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_BEHAVIOUR,
         )
         self.db.set_evidence(evidence)
 
@@ -985,7 +926,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_TRAFFIC,
         )
 
         self.db.set_evidence(evidence)
@@ -1039,7 +979,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_CONNECTION,
         )
 
         self.db.set_evidence(evidence)
@@ -1077,7 +1016,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=stime,
-            category=IDEACategory.ANOMALY_TRAFFIC,
         )
 
         self.db.set_evidence(evidence)
@@ -1094,7 +1032,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=stime,
-            category=IDEACategory.ANOMALY_TRAFFIC,
         )
         self.db.set_evidence(evidence)
 
@@ -1125,7 +1062,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=stime,
-            category=IDEACategory.ANOMALY_BEHAVIOUR,
         )
 
         self.db.set_evidence(evidence)
@@ -1180,9 +1116,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_CONNECTION,
-            source_target_tag=Tag.RECON,
-            conn_count=1,
         )
 
         self.db.set_evidence(evidence)
@@ -1227,8 +1160,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.CC,
         )
 
         self.db.set_evidence(evidence)
@@ -1244,8 +1175,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.CC,
         )
 
         self.db.set_evidence(evidence)
@@ -1292,8 +1221,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.BOTNET,
         )
 
         self.db.set_evidence(evidence)
@@ -1328,8 +1255,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid_number),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
-            source_target_tag=Tag.ORIGIN_MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -1346,8 +1271,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid_number),
             uid=uid,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
-            source_target_tag=Tag.ORIGIN_MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -1378,7 +1301,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=stime,
-            category=IDEACategory.ATTEMPT_LOGIN,
         )
 
         self.db.set_evidence(evidence)
@@ -1409,7 +1331,6 @@ class SetEvidnceHelper:
         victim = Victim(
             direction=Direction.DST, victim_type=IoCType.IP, value=daddr
         )
-        conn_count: int = smtp_bruteforce_threshold
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.SMTP_LOGIN_BRUTEFORCE,
@@ -1422,8 +1343,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uid,
             timestamp=stime,
-            category=IDEACategory.ATTEMPT_LOGIN,
-            conn_count=conn_count,
         )
 
         self.db.set_evidence(evidence)
@@ -1465,8 +1384,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=ts,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.CC,
         )
 
         self.db.set_evidence(evidence)
@@ -1483,8 +1400,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=ts,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.CC,
         )
 
         self.db.set_evidence(evidence)

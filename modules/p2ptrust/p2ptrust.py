@@ -27,7 +27,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
 )
 
 
@@ -468,7 +467,6 @@ class Trust(IModule):
                 timewindow=TimeWindow(number=twid_int),
                 uid=[ip_info.get("uid")],
                 timestamp=str(ip_info.get("stime")),
-                category=IDEACategory.ANOMALY_TRAFFIC,
             )
 
             self.db.set_evidence(evidence)

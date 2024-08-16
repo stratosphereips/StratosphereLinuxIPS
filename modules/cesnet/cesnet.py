@@ -103,42 +103,36 @@ class CESNET(IModule):
         evidence_type = evidence["evidence_type"]
         attacker_direction = evidence["attacker_direction"]
         attacker = evidence["attacker"]
-        ID = evidence["ID"]
+        evidence_id = evidence["ID"]
         confidence = evidence.get("confidence")
-        category = evidence.get("category")
-        conn_count = evidence.get("conn_count")
-        source_target_tag = evidence.get("source_target_tag")
         port = evidence.get("port")
         proto = evidence.get("proto")
 
-        evidence_in_IDEA = utils.IDEA_format(
+        evidence_in_idea = utils.IDEA_format(
             srcip,
             evidence_type,
             attacker_direction,
             attacker,
             description,
             confidence,
-            category,
-            conn_count,
-            source_target_tag,
             port,
             proto,
-            ID,
+            evidence_id,
         )
 
         # remove private ips from the alert
-        evidence_in_IDEA = self.remove_private_ips(evidence_in_IDEA)
+        evidence_in_idea = self.remove_private_ips(evidence_in_idea)
 
         # make sure we still have an IoC in th alert, a valid domain/mac/public ip
-        if not self.is_valid_alert(evidence_in_IDEA):
+        if not self.is_valid_alert(evidence_in_idea):
             return False
 
         # add Node info to the alert
-        evidence_in_IDEA.update({"Node": self.node_info})
+        evidence_in_idea.update({"Node": self.node_info})
 
         # Add test to the categories because we're still in probation mode
-        evidence_in_IDEA["Category"].append("Test")
-        evidence_in_IDEA.update({"Category": evidence_in_IDEA["Category"]})
+        evidence_in_idea["Category"] = ["Test"]
+        evidence_in_idea.update({"Category": evidence_in_idea["Category"]})
 
         # [2] Upload to warden server
         self.print("Uploading 1 event to warden server.", 2, 0)
@@ -146,7 +140,7 @@ class CESNET(IModule):
         # and don't stop this module until the thread is done
         q = queue.Queue()
         self.sender_thread = threading.Thread(
-            target=self.wclient.sendEvents, args=[[evidence_in_IDEA], q]
+            target=self.wclient.sendEvents, args=[[evidence_in_idea], q]
         )
         self.sender_thread.start()
         self.sender_thread.join()

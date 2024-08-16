@@ -24,7 +24,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
 )
 
 
@@ -536,7 +535,6 @@ class GoDirector(IObservable):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[""],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_CONNECTION,
         )
 
         self.db.set_evidence(evidence)

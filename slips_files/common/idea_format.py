@@ -83,7 +83,6 @@ def idea_format(evidence: Evidence):
             # don't need flow_datetime
             "DetectTime": datetime.now(utils.local_tz).isoformat(),
             "EventTime": datetime.now(utils.local_tz).isoformat(),
-            "Category": [evidence.category.value],
             "Confidence": evidence.confidence,
             "Source": [{}],
         }
@@ -128,16 +127,6 @@ def idea_format(evidence: Evidence):
             )
             idea_dict["Target"] = [{victim_type: [victims_ip]}]
 
-        # update the dstip description if specified in the evidence
-        if (
-            hasattr(evidence, "source_target_tag")
-            and evidence.source_target_tag
-        ):
-            # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
-            idea_dict["Source"][0].update(
-                {"Type": [evidence.source_target_tag.value]}
-            )
-
         # add the description
         attachment = {
             "Attach": [
@@ -148,10 +137,6 @@ def idea_format(evidence: Evidence):
             ]
         }
         idea_dict.update(attachment)
-
-        # only evidence of type scanning have conn_count
-        if evidence.conn_count:
-            idea_dict["ConnCount"] = evidence.conn_count
 
         if evidence.evidence_type == EvidenceType.MALICIOUS_DOWNLOADED_FILE:
             idea_dict["Attach"] = [

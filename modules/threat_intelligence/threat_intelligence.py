@@ -22,8 +22,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
     Victim,
 )
 
@@ -243,8 +241,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.BLACKLISTED_ASN,
         )
 
         self.db.set_evidence(evidence)
@@ -263,8 +259,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.BLACKLISTED_ASN,
         )
 
         self.db.set_evidence(evidence)
@@ -340,8 +334,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.BLACKLISTED_IP,
         )
 
         self.db.set_evidence(evidence)
@@ -361,8 +353,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.BLACKLISTED_IP,
         )
 
         self.db.set_evidence(evidence)
@@ -455,8 +445,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.BLACKLISTED_IP,
         )
         self.db.set_evidence(evidence)
 
@@ -475,8 +463,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.BLACKLISTED_IP,
         )
         self.db.set_evidence(evidence)
 
@@ -570,8 +556,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.BLACKLISTED_DOMAIN,
         )
 
         self.db.set_evidence(evidence)
@@ -597,8 +581,6 @@ class ThreatIntel(IModule, URLhaus):
                 timewindow=TimeWindow(number=twid_number),
                 uid=[uid],
                 timestamp=utils.convert_format(timestamp, utils.alerts_format),
-                category=IDEACategory.ANOMALY_TRAFFIC,
-                source_target_tag=Tag.BLACKLISTED_DOMAIN,
             )
 
             self.db.set_evidence(evidence)
@@ -1223,7 +1205,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=twid,
             uid=[file_info["flow"]["uid"]],
             timestamp=ts,
-            category=IDEACategory.MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -1243,7 +1224,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=twid,
             uid=[file_info["flow"]["uid"]],
             timestamp=ts,
-            category=IDEACategory.MALWARE,
         )
 
         self.db.set_evidence(evidence)
@@ -1778,8 +1758,6 @@ class ThreatIntel(IModule, URLhaus):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.BLACKLISTED_DOMAIN,
         )
 
         self.db.set_evidence(evidence)

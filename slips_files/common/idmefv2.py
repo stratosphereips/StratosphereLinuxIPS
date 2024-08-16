@@ -98,14 +98,15 @@ class IDMEFv2(IObservable):
             ioc_type = evidence.victim.victim_type
 
         # map of slips victim types to IDMEF supported types
-        idea_type = {
+        type_ = {
             IoCType.IP.name: "IP",
             IoCType.DOMAIN.name: "Hostname",
             IoCType.URL.name: "URL",
         }
+        # todo update cesnet module
         # todo make sure that its a fq domain
         # todo we can add TI here
-        return ioc, idea_type[ioc_type]
+        return ioc, type_[ioc_type]
 
     def extract_file_size_from_evidence(self, evidence: Evidence) -> int:
         """
@@ -189,9 +190,9 @@ class IDMEFv2(IObservable):
                 )
                 msg["Target"] = [{victim_type: victim}]
 
-            # todo remove all source_target_tag, ConnCount logic from slips
             # todo check that we added all the fields from the plan
             # todo add alerts too not just evidence
+            # todo move the note from evidence handler
             if (
                 evidence.evidence_type
                 == EvidenceType.MALICIOUS_DOWNLOADED_FILE

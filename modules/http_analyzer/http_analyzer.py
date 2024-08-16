@@ -16,8 +16,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -112,8 +110,6 @@ class HTTPAnalyzer(IModule):
                     ),
                     uid=[uid],
                     timestamp=timestamp,
-                    category=IDEACategory.ANOMALY_TRAFFIC,
-                    source_target_tag=Tag.SUSPICIOUS_USER_AGENT,
                 )
 
                 self.db.set_evidence(evidence)
@@ -186,7 +182,6 @@ class HTTPAnalyzer(IModule):
                 ),
                 uid=uids,
                 timestamp=timestamp,
-                category=IDEACategory.ANOMALY_CONNECTION,
             )
 
             self.db.set_evidence(evidence)
@@ -232,7 +227,6 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_BEHAVIOUR,
         )
 
         self.db.set_evidence(evidence)
@@ -266,8 +260,6 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_FILE,
-            source_target_tag=Tag.EXECUTABLE_MIME_TYPE,
         )
 
         self.db.set_evidence(evidence)
@@ -284,8 +276,6 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_FILE,
-            source_target_tag=Tag.EXECUTABLE_MIME_TYPE,
         )
 
         self.db.set_evidence(evidence)
@@ -530,8 +520,6 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_BEHAVIOUR,
-            source_target_tag=Tag.MULTIPLE_USER_AGENT,
         )
 
         self.db.set_evidence(evidence)
@@ -557,8 +545,6 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_TRAFFIC,
-            source_target_tag=Tag.SENDING_UNENCRYPTED_DATA,
             victim=Victim(
                 direction=Direction.DST, victim_type=IoCType.IP, value=daddr
             ),
@@ -607,8 +593,6 @@ class HTTPAnalyzer(IModule):
                 ),
                 uid=[uid],
                 timestamp=timestamp,
-                category=IDEACategory.ANOMALY_BEHAVIOUR,
-                source_target_tag=Tag.MALWARE,
             )
 
             self.db.set_evidence(evidence)
@@ -647,13 +631,11 @@ class HTTPAnalyzer(IModule):
             attacker=attacker,
             victim=victim,
             threat_level=threat_level,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
             timestamp=timestamp,
-            conn_count=1,
             confidence=confidence,
         )
 

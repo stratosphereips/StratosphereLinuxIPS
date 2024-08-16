@@ -427,9 +427,7 @@ class ModuleFactory:
         timestamp,
         proto,
         port,
-        source_target_tag,
         id,
-        conn_count,
         confidence,
     ):
         return Evidence(
@@ -445,9 +443,7 @@ class ModuleFactory:
             timestamp=timestamp,
             proto=proto,
             port=port,
-            source_target_tag=source_target_tag,
             id=id,
-            conn_count=conn_count,
             confidence=confidence,
         )
 
