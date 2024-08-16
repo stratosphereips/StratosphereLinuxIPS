@@ -15,8 +15,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -285,10 +283,8 @@ def test_set_evidence_malicious_jarm_hash(mocker, mock_db):
     assert dst_evidence.timewindow.number == 1
     assert dst_evidence.uid == ["CuTCcR1Bbp9Je7LVqa"]
     assert dst_evidence.timestamp == 1625097600
-    assert dst_evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert dst_evidence.proto == Proto.TCP
     assert dst_evidence.port == 443
-    assert dst_evidence.source_target_tag == Tag.MALWARE
     src_evidence = mock_set_evidence.call_args_list[1][0][0]
     assert isinstance(src_evidence, Evidence)
     assert src_evidence.evidence_type == EvidenceType.MALICIOUS_JARM
@@ -304,10 +300,8 @@ def test_set_evidence_malicious_jarm_hash(mocker, mock_db):
     assert src_evidence.timewindow.number == 1
     assert src_evidence.uid == ["CuTCcR1Bbp9Je7LVqa"]
     assert src_evidence.timestamp == 1625097600
-    assert src_evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert src_evidence.proto == Proto.TCP
     assert src_evidence.port == 443
-    assert src_evidence.source_target_tag == Tag.MALWARE
 
 
 @pytest.mark.parametrize(

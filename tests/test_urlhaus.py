@@ -6,7 +6,6 @@ from modules.threat_intelligence.urlhaus import (
     URLhaus,
     ThreatLevel,
     EvidenceType,
-    IDEACategory,
     Direction,
 )
 from tests.module_factory import ModuleFactory
@@ -459,7 +458,6 @@ def test_set_evidence_malicious_url(
         assert evidence.confidence == 0.7
         assert evidence.description == expected_description
         assert evidence.timestamp == timestamp
-        assert evidence.category == IDEACategory.MALWARE
         assert evidence.timewindow.number == 1
         assert evidence.uid == [uid]
     assert evidence_objects[0].attacker.direction == Direction.SRC

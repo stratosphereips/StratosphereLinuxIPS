@@ -220,16 +220,14 @@ def test_set_evidence_arp_scan(mock_db):
     ARP = ModuleFactory().create_arp_obj(mock_db)
     ts = "1632214645.783595"
     uids = ["5678", "1234"]
-    conn_count = 5
 
-    ARP.set_evidence_arp_scan(ts, profileid, twid, uids, conn_count)
+    ARP.set_evidence_arp_scan(ts, profileid, twid, uids)
 
     mock_db.set_evidence.assert_called_once()
     call_args = mock_db.set_evidence.call_args[0]
     evidence = call_args[0]
     assert evidence.evidence_type == EvidenceType.ARP_SCAN
     assert evidence.attacker.value == "192.168.1.1"
-    assert evidence.conn_count == conn_count
     assert set(evidence.uid) == set(uids)
 
 
@@ -329,4 +327,3 @@ def test_wait_for_arp_scans(mock_db):
     assert ARP.pending_arp_scan_evidence.empty()
     ARP.stop_thread = True
     thread.join(timeout=1)
-
