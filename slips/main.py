@@ -40,7 +40,7 @@ class Main(IObservable):
         self.metadata_man = MetadataManager(self)
         self.conf = ConfigParser()
         self.ui_man = UIManager(self)
-        self.version = self.get_slips_version()
+        self.version = utils.get_slips_version()
         # will be filled later
         self.commit = "None"
         self.branch = "None"
@@ -183,12 +183,6 @@ class Main(IObservable):
         # start successfully
         self.db.publish("memory_profile", processes[0].pid)
         input()
-
-    def get_slips_version(self):
-        version_file = "VERSION"
-        with open(version_file, "r") as f:
-            version = f.read()
-        return version
 
     def check_zeek_or_bro(self):
         """
