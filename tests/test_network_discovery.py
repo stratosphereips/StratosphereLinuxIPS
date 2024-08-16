@@ -217,7 +217,6 @@ def test_check_dhcp_scan_with_evidence():
         + flow_info["flow"]["uids"]
     )
     assert called_evidence.timestamp == flow_info["flow"]["starttime"]
-    assert called_evidence.conn_count == len(existing_dhcp_flows)
 
 
 @pytest.mark.parametrize(
@@ -384,7 +383,6 @@ def test_set_evidence_dhcp_scan(
     )
     assert set(called_evidence.uid) == set(uids)
     assert called_evidence.timestamp == timestamp
-    assert called_evidence.conn_count == number_of_requested_addrs
     assert called_evidence.description == expected_description
 
 

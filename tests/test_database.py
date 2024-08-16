@@ -11,7 +11,6 @@ from slips_files.core.evidence_structure.evidence import (
     Direction,
     IoCType,
     EvidenceType,
-    IDEACategory,
     Attacker,
     Victim,
     ThreatLevel,
@@ -117,7 +116,6 @@ def test_set_evidence():
         timewindow=TimeWindow(number=1),
         uid=uid,
         timestamp=timestamp,
-        category=IDEACategory.INFO,
     )
 
     db.set_evidence(evidence)

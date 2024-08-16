@@ -3,8 +3,6 @@ import datetime
 from slips_files.core.evidence_structure.evidence import (
     ThreatLevel,
     EvidenceType,
-    IDEACategory,
-    Tag,
     Direction,
 )
 
@@ -142,11 +140,9 @@ def test_multiple_ssh_versions(
     assert evidence.evidence_type == EvidenceType.MULTIPLE_SSH_VERSIONS
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.MEDIUM
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 2
     assert sorted(evidence.uid) == sorted(["unique_id1", "unique_id2"])
-    assert evidence.source_target_tag == Tag.RECON
     assert evidence.description == expected_description
 
 
@@ -229,7 +225,6 @@ def test_different_localnet_usage(
     assert evidence.attacker.direction == expected_attacker_direction
     assert evidence.victim.direction == expected_victim_direction
     assert evidence.threat_level == expected_threat_level
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 3
     assert evidence.uid == ["unique_id"]
@@ -254,7 +249,6 @@ def test_device_changing_ips():
     assert evidence.evidence_type == EvidenceType.DEVICE_CHANGING_IP
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.MEDIUM
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 4
     assert evidence.uid == ["unique_id"]
@@ -278,7 +272,6 @@ def test_non_ssl_port_443_conn():
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.victim.value == "10.0.0.1"
     assert evidence.threat_level == ThreatLevel.MEDIUM
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 6
     assert evidence.uid == ["unique_id"]
@@ -330,7 +323,6 @@ def test_incompatible_cn(org, daddr, expected_description):
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.victim.value == daddr
     assert evidence.threat_level == ThreatLevel.MEDIUM
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 1
     assert evidence.uid == ["unique_id"]
@@ -367,13 +359,10 @@ def test_dga(nxdomains, expected_confidence):
     assert evidence.evidence_type == EvidenceType.DGA_NXDOMAINS
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.HIGH
-    assert evidence.category == IDEACategory.ANOMALY_BEHAVIOUR
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["unique_id"]
-    assert evidence.conn_count == nxdomains
     assert evidence.confidence == expected_confidence
-    assert evidence.source_target_tag == Tag.ORIGIN_MALWARE
 
 
 @pytest.mark.parametrize(
@@ -405,12 +394,10 @@ def test_pastebin_download(bytes_downloaded, expected_response_body_len):
     assert evidence.evidence_type == EvidenceType.PASTEBIN_DOWNLOAD
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.INFO
-    assert evidence.category == IDEACategory.ANOMALY_BEHAVIOUR
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["unique_id"]
     assert evidence.confidence == 1.0
-    assert evidence.source_target_tag == Tag.MALWARE
     assert evidence.description == (
         f"A downloaded file from pastebin.com. "
         f"size: {expected_response_body_len} MBs"
@@ -468,7 +455,6 @@ def test_dns_without_conn(
     assert evidence.attacker.value == expected_attacker
     assert evidence.victim.value == expected_victim
     assert evidence.threat_level == ThreatLevel.LOW
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == expected_attacker
     assert evidence.timewindow.number == int(twid.replace("timewindow", ""))
     assert evidence.uid == [uid]
@@ -493,11 +479,9 @@ def test_dns_arpa_scan():
     assert evidence.evidence_type == EvidenceType.DNS_ARPA_SCAN
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.MEDIUM
-    assert evidence.category == IDEACategory.RECON_SCANNING
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["unique_id"]
-    assert evidence.conn_count == 150
     assert evidence.confidence == 0.7
 
 
@@ -582,7 +566,6 @@ def test_unknown_port(daddr, dport, proto, expected_description):
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.victim.value == daddr
     assert evidence.threat_level == ThreatLevel.HIGH
-    assert evidence.category == IDEACategory.ANOMALY_CONNECTION
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 1
     assert evidence.uid == ["unique_id"]
@@ -607,25 +590,22 @@ def test_pw_guessing():
     assert evidence.evidence_type == EvidenceType.PASSWORD_GUESSING
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.HIGH
-    assert evidence.category == IDEACategory.ATTEMPT_LOGIN
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["unique_id"]
-    assert evidence.conn_count == 30
-    assert evidence.source_target_tag == Tag.MALWARE
 
 
 @pytest.mark.parametrize(
-    "msg, expected_conn_count",
+    "msg",
     [
         # Testcase 1: Standard message format
-        ("Seen at least 10 unique hosts scanned on 80/tcp", 10),
+        "Seen at least 10 unique hosts scanned on 80/tcp",
         # Testcase 2: Different port and protocol
-        ("Seen at least 25 unique hosts scanned on 443/udp", 25),
+        "Seen at least 25 unique hosts scanned on 443/udp",
         # Testcase 3: Single host scanned
-        ("Seen at least 1 unique hosts scanned on 22/tcp", 1),
+        "Seen at least 1 unique hosts scanned on 22/tcp",
         # Testcase 4: Large number of hosts scanned
-        ("Seen at least 1000 unique hosts scanned on 53/tcp", 1000),
+        "Seen at least 1000 unique hosts scanned on 53/tcp",
     ],
 )
 def test_horizontal_portscan(msg, expected_conn_count):
@@ -645,12 +625,9 @@ def test_horizontal_portscan(msg, expected_conn_count):
     assert evidence.evidence_type == EvidenceType.HORIZONTAL_PORT_SCAN
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.HIGH
-    assert evidence.category == IDEACategory.RECON_SCANNING
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 3
     assert evidence.uid == ["unique_id"]
-    assert evidence.conn_count == expected_conn_count
-    assert evidence.source_target_tag == Tag.RECON
 
 
 @pytest.mark.parametrize(
@@ -706,7 +683,6 @@ def test_conn_to_private_ip(proto, daddr, dport, expected_description):
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.victim.value == daddr
     assert evidence.threat_level == ThreatLevel.INFO
-    assert evidence.category == IDEACategory.RECON
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 4
     assert evidence.uid == ["unique_id"]
@@ -735,7 +711,6 @@ def test_gre_tunnel():
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.victim.value == "10.0.0.1"
     assert evidence.threat_level == ThreatLevel.INFO
-    assert evidence.category == IDEACategory.INFO
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 5
     assert evidence.uid == ["unique_id"]
@@ -812,7 +787,6 @@ def test_ssh_successful(
     assert evidence.profile.ip == saddr
     assert evidence.timewindow.number == int(twid.replace("timewindow", ""))
     assert evidence.uid == [uid]
-    assert evidence.category == IDEACategory.INFO
     assert evidence.description == expected_description
 
 
@@ -839,7 +813,6 @@ def test_long_connection():
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 8
     assert evidence.uid == ["unique_id"]
-    assert evidence.category == IDEACategory.ANOMALY_CONNECTION
 
 
 @pytest.mark.parametrize(
@@ -915,7 +888,6 @@ def test_self_signed_certificates(
     assert evidence.attacker.value == expected_attacker_ip_1
     assert evidence.threat_level == ThreatLevel.LOW
     assert evidence.confidence == 0.5
-    assert evidence.category == IDEACategory.ANOMALY_BEHAVIOUR
     assert evidence.profile.ip == expected_profile_ip_1
     assert evidence.timewindow.number == 1
     call_args, _ = set_ev.db.set_evidence.call_args_list[1]
@@ -924,7 +896,6 @@ def test_self_signed_certificates(
     assert evidence.attacker.value == expected_attacker_ip_2
     assert evidence.threat_level == ThreatLevel.LOW
     assert evidence.confidence == 0.5
-    assert evidence.category == IDEACategory.ANOMALY_BEHAVIOUR
     assert evidence.profile.ip == expected_profile_ip_2
     assert evidence.timewindow.number == 1
 
@@ -951,7 +922,6 @@ def test_multiple_reconnection_attempts():
     assert evidence.victim.value == "10.0.0.1"
     assert evidence.threat_level == ThreatLevel.MEDIUM
     assert evidence.confidence == 0.5
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 2
     assert sorted(evidence.uid) == sorted(["unique_id1", "unique_id2"])
@@ -1010,7 +980,6 @@ def test_connection_to_multiple_ports(
     assert evidence.profile.ip == profileid.split("_")[-1]
     assert evidence.threat_level == ThreatLevel.INFO
     assert evidence.confidence == 0.5
-    assert evidence.category == IDEACategory.ANOMALY_CONNECTION
     assert evidence.timewindow.number == 3
     assert evidence.uid == ["unique_id"]
 
@@ -1065,7 +1034,6 @@ def test_suspicious_dns_answer(
     assert evidence.attacker.value == daddr
     assert evidence.threat_level == ThreatLevel.MEDIUM
     assert evidence.confidence == 0.6
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == daddr
     assert evidence.timewindow.number == int(twid.replace("timewindow", ""))
     assert evidence.uid == [uid]
@@ -1075,7 +1043,6 @@ def test_suspicious_dns_answer(
     assert evidence.attacker.value == profileid.split("_")[-1]
     assert evidence.threat_level == ThreatLevel.LOW
     assert evidence.confidence == 0.6
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == profileid.split("_")[-1]
     assert evidence.timewindow.number == int(twid.replace("timewindow", ""))
     assert evidence.uid == [uid]
@@ -1119,7 +1086,6 @@ def test_invalid_dns_answer(query, answer, expected_description):
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.INFO
     assert evidence.confidence == 0.7
-    assert evidence.category == IDEACategory.ANOMALY_BEHAVIOUR
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 5
     assert evidence.uid == ["unique_id"]
@@ -1179,11 +1145,9 @@ def test_for_port_0_connection(
     assert evidence.victim.value == victim
     assert evidence.threat_level == ThreatLevel.HIGH
     assert evidence.confidence == 0.8
-    assert evidence.category == IDEACategory.ANOMALY_CONNECTION
     assert evidence.profile.ip == profile_ip
     assert evidence.timewindow.number == 6
     assert evidence.uid == ["unique_id"]
-    assert evidence.source_target_tag == Tag.RECON
     assert evidence.attacker.direction == attacker_direction
     assert evidence.victim.direction == victim_direction
 
@@ -1271,11 +1235,9 @@ def test_malicious_ja3(attacker_ip, threat_level, description, tags):
     assert evidence.attacker.value == attacker_ip
     assert evidence.victim.value == "10.0.0.1"
     assert evidence.threat_level == threat_level
-    assert evidence.category == IDEACategory.INTRUSION_BOTNET
     assert evidence.profile.ip == attacker_ip
     assert evidence.timewindow.number == 10
     assert evidence.uid == ["unique_id"]
-    assert evidence.source_target_tag == Tag.BOTNET
     expected_description_with_tags = (
         f"Malicious JA3: ja3_hash_{int(threat_level.value * 10)} "
         f"from source address {attacker_ip}  "
@@ -1358,7 +1320,6 @@ def test_bad_smtp_login(saddr, daddr, stime, twid, uid):
     assert evidence.attacker.value == saddr
     assert evidence.victim.value == daddr
     assert evidence.threat_level == ThreatLevel.HIGH
-    assert evidence.category == IDEACategory.ATTEMPT_LOGIN
     assert evidence.profile.ip == saddr
     assert evidence.timewindow.number == int(twid.replace("timewindow", ""))
     assert evidence.uid == [uid]
@@ -1407,11 +1368,9 @@ def test_smtp_bruteforce(flow, twid, uid, smtp_bruteforce_threshold):
     assert evidence.attacker.value == flow["saddr"]
     assert evidence.victim.value == flow["daddr"]
     assert evidence.threat_level == ThreatLevel.HIGH
-    assert evidence.category == IDEACategory.ATTEMPT_LOGIN
     assert evidence.profile.ip == flow["saddr"]
     assert evidence.timewindow.number == int(twid.replace("timewindow", ""))
     assert sorted(evidence.uid) == sorted(uid)
-    assert evidence.conn_count == smtp_bruteforce_threshold
 
 
 @pytest.mark.parametrize(
@@ -1505,7 +1464,6 @@ def test_doh(attacker_ip, victim_ip, profile_ip):
     assert evidence.attacker.value == attacker_ip
     assert evidence.victim.value == victim_ip
     assert evidence.threat_level == ThreatLevel.INFO
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == profile_ip
     assert evidence.timewindow.number == 1
     assert evidence.uid == ["unique_id"]
@@ -1529,7 +1487,6 @@ def test_non_http_port_80_conn():
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.victim.value == "10.0.0.1"
     assert evidence.threat_level == ThreatLevel.LOW
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["unique_id"]
@@ -1540,7 +1497,6 @@ def test_non_http_port_80_conn():
     assert evidence.attacker.value == "10.0.0.1"
     assert evidence.victim.value == "192.168.0.1"
     assert evidence.threat_level == ThreatLevel.MEDIUM
-    assert evidence.category == IDEACategory.ANOMALY_TRAFFIC
     assert evidence.profile.ip == "10.0.0.1"
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["unique_id"]
@@ -1564,9 +1520,6 @@ def test_vertical_portscan():
     assert evidence.attacker.value == "192.168.0.1"
     assert evidence.victim.value == "192.168.0.2"
     assert evidence.threat_level == ThreatLevel.HIGH
-    assert evidence.category == IDEACategory.RECON_SCANNING
     assert evidence.profile.ip == "192.168.0.1"
     assert evidence.timewindow.number == 1
     assert evidence.uid == ["unique_id"]
-    assert evidence.conn_count == 60
-    assert evidence.source_target_tag == Tag.RECON

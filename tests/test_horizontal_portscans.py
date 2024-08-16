@@ -6,8 +6,6 @@ from tests.module_factory import ModuleFactory
 from slips_files.core.evidence_structure.evidence import (
     Proto,
     EvidenceType,
-    IDEACategory,
-    Tag,
 )
 
 random_ports = {
@@ -438,10 +436,7 @@ def test_set_evidence_horizontal_portscan():
     assert call_args.timewindow.number == 0
     assert set(call_args.uid) == {"uid2", "uid1"}
     assert call_args.timestamp == "1234.56"
-    assert call_args.category == IDEACategory.RECON_SCANNING
-    assert call_args.conn_count == 100
     assert call_args.proto == Proto("tcp")
-    assert call_args.source_target_tag == Tag.RECON
     assert call_args.port == 80
 
 

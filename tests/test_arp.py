@@ -216,16 +216,14 @@ def test_set_evidence_arp_scan():
     ARP = ModuleFactory().create_arp_obj()
     ts = "1632214645.783595"
     uids = ["5678", "1234"]
-    conn_count = 5
 
-    ARP.set_evidence_arp_scan(ts, profileid, twid, uids, conn_count)
+    ARP.set_evidence_arp_scan(ts, profileid, twid, uids)
 
     ARP.db.set_evidence.assert_called_once()
     call_args = ARP.db.set_evidence.call_args[0]
     evidence = call_args[0]
     assert evidence.evidence_type == EvidenceType.ARP_SCAN
     assert evidence.attacker.value == "192.168.1.1"
-    assert evidence.conn_count == conn_count
     assert set(evidence.uid) == set(uids)
 
 
