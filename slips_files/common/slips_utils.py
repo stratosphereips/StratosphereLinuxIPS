@@ -396,6 +396,12 @@ class Utils(object):
             and message["channel"] == channel
         )
 
+    def get_slips_version(self) -> str:
+        version_file = "VERSION"
+        with open(version_file, "r") as f:
+            version = f.read()
+        return version
+
     def change_logfiles_ownership(self, file: str, UID, GID):
         """
         if slips is running in docker, the owner of the alerts log files is always root
