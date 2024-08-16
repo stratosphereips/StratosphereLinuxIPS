@@ -670,7 +670,7 @@ class ThreatIntel(IModule, URLhaus):
                 }
                 ioc_info: str = json.dumps(ioc_info)
 
-                data_type = utils.detect_data_type(ioc.strip())
+                data_type = utils.detect_ioc_type(ioc.strip())
                 if data_type == "ip":
                     ip_address = ipaddress.ip_address(ioc.strip())
                     # Only use global addresses. Ignore multicast,
@@ -1373,7 +1373,7 @@ class ThreatIntel(IModule, URLhaus):
         This function queries the local database for any matches
         to the provided IP address.
         """
-        ip_info = self.db.search_IP_in_IoC(ip)
+        ip_info = self.db.search_for_ip_in_iocs(ip)
         # check if it's a blacklisted ip
         return json.loads(ip_info) if ip_info else False
 
@@ -1994,7 +1994,7 @@ class ThreatIntel(IModule, URLhaus):
             to_lookup = data.get("to_lookup", "")
             # detect the type given because sometimes,
             # http.log host field has ips OR domains
-            type_ = utils.detect_data_type(to_lookup)
+            type_ = utils.detect_ioc_type(to_lookup)
 
             # ip_state will say if it is a srcip or if it was a dst_ip
             ip_state = data.get("ip_state")

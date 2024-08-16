@@ -1059,7 +1059,7 @@ class UpdateManager(IModule):
             return 0
 
         for column_idx in range(amount_of_columns):
-            if utils.detect_data_type(line_fields[column_idx]):
+            if utils.detect_ioc_type(line_fields[column_idx]):
                 return column_idx
         # Some unknown string and we cant detect the type of it
         # can't find a column that contains an ioc
@@ -1358,7 +1358,7 @@ class UpdateManager(IModule):
         if len(ioc) < 3:
             return False
 
-        data_type = utils.detect_data_type(ioc)
+        data_type = utils.detect_ioc_type(ioc)
         if data_type is None:
             self.print(
                 f"The data {ioc} is not valid. It "
@@ -1415,7 +1415,7 @@ class UpdateManager(IModule):
             ):
                 continue
 
-            data_type = utils.detect_data_type(ioc)
+            data_type = utils.detect_ioc_type(ioc)
             handlers = {
                 "domain": self.extract_domain_info,
                 "ip": self.extract_ip_info,

@@ -165,7 +165,7 @@ class IoCHandler:
         """
         return self.rcache.hget("IoC_JARM", jarm_hash)
 
-    def search_IP_in_IoC(self, ip: str) -> str:
+    def search_for_ip_in_iocs(self, ip: str) -> str:
         """
         Search in the dB of malicious IPs and return a
         description if we found a match
@@ -197,11 +197,11 @@ class IoCHandler:
 
     def set_malicious_domain(self, domain, profileid, twid):
         """
-        Save in DB a malicious domain found in the traffic
-        with its profileid and twid
+        Adds this domain to MaliciousDomains key in the db, or updates its
+        list of profileid and timewindows if it's already there.
         """
-        # get all profiles and twis where this IP was met
-        domain_profiled_twid = self.get_malicious_domain(domain)
+        # get all profiles and twis where this domain was seen
+        domain_profiled_twid = self.search_for_domain_in_iocs(domain)
         try:
             profile_tws = domain_profiled_twid[
                 profileid
@@ -226,7 +226,7 @@ class IoCHandler:
         data = json.loads(data) if data else {}
         return data
 
-    def get_malicious_domain(self, domain):
+    def search_for_domain_in_iocs(self, domain):
         """
         Return malicious domain and its list of presence in
         the traffic (profileid, twid)
@@ -327,7 +327,7 @@ class IoCHandler:
     def delete_file_info(self, file):
         self.rcache.hdel("TI_files_info", file)
 
-    def getURLData(self, url):
+    def search_for_url_in_iocs(self, url):
         """
         Return information about this URL
         Returns a dictionary or False if there is no IP in the database
@@ -346,7 +346,7 @@ class IoCHandler:
         2- Publishes in the channels that there is a new URL, and that we want
             data from the Threat Intelligence modules
         """
-        data = self.getURLData(url)
+        data = self.search_for_url_in_iocs(url)
         if data is False:
             # If there is no data about this URL
             # Set this URL for the first time in the URLsInfo
@@ -410,7 +410,7 @@ class IoCHandler:
             # info_to_set can be {'VirusTotal': [1,2,3,4]}
 
             # I think we dont need this anymore of the conversion
-            if type(domain_data) == str:
+            if isinstance(domain_data, str):
                 # Convert the str to a dict
                 domain_data = json.loads(domain_data)
 
@@ -423,7 +423,7 @@ class IoCHandler:
                 _ = domain_data[key]
 
                 # convert incoming data to list
-                if type(data_to_store) != list:
+                if not isinstance(data_to_store, list):
                     # data_to_store and prev_info Should both be lists, so we can extend
                     data_to_store = [data_to_store]
 
@@ -432,11 +432,11 @@ class IoCHandler:
                 elif mode == "add":
                     prev_info = domain_data[key]
 
-                    if type(prev_info) == list:
+                    if isinstance(prev_info, list):
                         # for example, list of IPs
                         prev_info.extend(data_to_store)
                         domain_data[key] = list(set(prev_info))
-                    elif type(prev_info) == str:
+                    elif isinstance(prev_info, str):
                         # previous info about this domain is a str, we should make it a list and extend
                         prev_info = [prev_info]
                         # add the new data_to_store to our prev_info
@@ -450,7 +450,7 @@ class IoCHandler:
 
             except KeyError:
                 # There is no data for the key so far. Add it
-                if type(data_to_store) == list:
+                if isinstance(data_to_store, list):
                     domain_data[key] = list(set(data_to_store))
                 else:
                     domain_data[key] = data_to_store
@@ -468,7 +468,7 @@ class IoCHandler:
         If it was not there before we store it. If it was there before, we
         overwrite it
         """
-        data = self.getURLData(url)
+        data = self.search_for_url_in_iocs(url)
         if data is False:
             # This URL is not in the dictionary, add it first:
             self.setNewURL(url)

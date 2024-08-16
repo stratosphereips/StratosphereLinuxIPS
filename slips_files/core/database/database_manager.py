@@ -486,8 +486,8 @@ class DBManager(IObservable):
     def is_malicious_jarm(self, *args, **kwargs):
         return self.rdb.is_malicious_jarm(*args, **kwargs)
 
-    def search_IP_in_IoC(self, *args, **kwargs):
-        return self.rdb.search_IP_in_IoC(*args, **kwargs)
+    def search_for_ip_in_iocs(self, *args, **kwargs):
+        return self.rdb.search_for_ip_in_iocs(*args, **kwargs)
 
     def set_malicious_ip(self, *args, **kwargs):
         return self.rdb.set_malicious_ip(*args, **kwargs)
@@ -498,8 +498,8 @@ class DBManager(IObservable):
     def get_malicious_ip(self, *args, **kwargs):
         return self.rdb.get_malicious_ip(*args, **kwargs)
 
-    def get_malicious_domain(self, *args, **kwargs):
-        return self.rdb.get_malicious_domain(*args, **kwargs)
+    def search_for_domain_in_iocs(self, *args, **kwargs):
+        return self.rdb.search_for_domain_in_iocs(*args, **kwargs)
 
     def get_ssl_info(self, *args, **kwargs):
         return self.rdb.get_ssl_info(*args, **kwargs)
@@ -525,8 +525,8 @@ class DBManager(IObservable):
     def delete_file_info(self, *args, **kwargs):
         return self.rdb.delete_file_info(*args, **kwargs)
 
-    def getURLData(self, *args, **kwargs):
-        return self.rdb.getURLData(*args, **kwargs)
+    def search_for_url_in_iocs(self, *args, **kwargs):
+        return self.rdb.search_for_url_in_iocs(*args, **kwargs)
 
     def setNewURL(self, *args, **kwargs):
         return self.rdb.setNewURL(*args, **kwargs)

@@ -110,11 +110,15 @@ class Utils(object):
 
         return sanitized_string
 
+    def extract_domain_from_url(self, url: str) -> str:
+        extracted = tldextract.extract(url)
+        return f"{extracted.domain}.{extracted.suffix}"
+
     def is_valid_domain(self, domain: str) -> bool:
         extracted = tldextract.extract(domain)
         return bool(extracted.domain) and bool(extracted.suffix)
 
-    def detect_data_type(self, data):
+    def detect_ioc_type(self, data) -> str:
         """
         Detects the type of incoming data:
         ipv4, ipv6, domain, ip range, asn, md5, etc

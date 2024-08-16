@@ -76,7 +76,7 @@ def test_sanitize(input_string, expected_output):
 )
 def test_detect_data_type(data, expected_type):
     utils = ModuleFactory().create_utils_obj()
-    assert utils.detect_data_type(data) == expected_type
+    assert utils.detect_ioc_type(data) == expected_type
 
 
 @pytest.mark.parametrize(

@@ -192,7 +192,7 @@ class StixExporter(IExporter):
         )
         # Get the right description to use in stix
         name = evidence_type
-        ioc_type = utils.detect_data_type(attacker)
+        ioc_type = utils.detect_ioc_type(attacker)
         pattern: str = self.get_ioc_pattern(ioc_type, attacker)
         # Required Indicator Properties: type, spec_version, id, created,
         # modified , all are set automatically
