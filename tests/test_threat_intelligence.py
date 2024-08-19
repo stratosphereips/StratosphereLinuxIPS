@@ -1823,7 +1823,6 @@ def test_set_evidence_malicious_ip_in_dns_response(
         assert evidence.threat_level == expected_threat_level
 
     assert threatintel.db.set_ip_info.call_count == 1
-    assert threatintel.db.set_malicious_ip.call_count == 1
 
 
 def test_read_configuration(mocker):

@@ -117,9 +117,6 @@ class IoCHandler:
         :param file: a valid filename not a feed url
         :param data: dict containing info about TI file
         """
-        # data = self.get_malicious_file_info(file)
-        # for key in file_data:
-        # data[key] = file_data[key]
         data = json.dumps(data)
         self.rcache.hset(self.constants.TI_FILES_INFO, file, data)
 
@@ -279,28 +276,6 @@ class IoCHandler:
         """
         return self.rcache.hgetall(self.constants.IOC_JA3)
 
-    def set_malicious_ip(self, ip, profileid, twid):
-        """
-        Save in DB malicious IP found in the traffic
-        with its profileid and twid
-        """
-        # Retrieve all profiles and twis, where this malicios IP was met.
-        ip_profileid_twid = self._get_malicious_ip(ip)
-        try:
-            profile_tws = ip_profileid_twid[
-                profileid
-            ]  # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)  # set(tw1, tw2)
-            profile_tws.add(twid)
-            ip_profileid_twid[profileid] = str(profile_tws)
-        except KeyError:
-            ip_profileid_twid[profileid] = str(
-                {twid}
-            )  # add key-pair to the dict if does not exist
-        data = json.dumps(ip_profileid_twid)
-
-        self.r.hset(self.constants.MALICIOUS_IPS, ip, data)
-
     def set_malicious_domain(self, domain, profileid, twid):
         """
         Adds this domain to MaliciousDomains key in the db, or updates its
@@ -322,15 +297,6 @@ class IoCHandler:
         data = json.dumps(domain_profiled_twid)
 
         self.r.hset(self.constants.MALICIOUS_DOMAINS, domain, data)
-
-    def _get_malicious_ip(self, ip):
-        """
-        Return malicious IP and its list of presence in
-        the traffic (profileid, twid)
-        """
-        data = self.r.hget(self.constants.MALICIOUS_IPS, ip)
-        data = json.loads(data) if data else {}
-        return data
 
     def search_for_domain_in_iocs(self, domain):
         """

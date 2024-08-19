@@ -361,9 +361,6 @@ class ThreatIntel(IModule, URLhaus):
         ip_info = {"threatintelligence": ip_info}
         self.db.set_ip_info(ip, ip_info)
 
-        # add this ip to our MaliciousIPs hash in the database
-        self.db.set_malicious_ip(ip, profileid, twid)
-
     def set_evidence_malicious_ip(
         self,
         ip: str,
@@ -469,9 +466,6 @@ class ThreatIntel(IModule, URLhaus):
         # mark this ip as malicious in our database
         ip_info = {"threatintelligence": ip_info}
         self.db.set_ip_info(ip, ip_info)
-
-        # add this ip to our MaliciousIPs hash in the database
-        self.db.set_malicious_ip(ip, profileid, twid)
 
     def set_evidence_malicious_domain(
         self,
