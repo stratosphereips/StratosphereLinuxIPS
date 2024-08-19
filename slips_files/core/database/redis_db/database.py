@@ -469,7 +469,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         Return information about this IP from IPsInfo key
         :return: a dictionary or False if there is no IP in the database
         """
-        data = self.rcache.hget("IPsInfo", ip)
+        data = self.rcache.hget(self.constants.IPS_INFO, ip)
         return json.loads(data) if data else False
 
     def set_new_ip(self, ip: str):
@@ -488,7 +488,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # Its VERY important that the data of the first time we see an IP
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an IP exists or not
-            self.rcache.hset("IPsInfo", ip, "{}")
+            self.rcache.hset(self.constants.IPS_INFO, ip, "{}")
             # Publish that there is a new IP ready in the channel
             self.publish("new_ip", ip)
 
@@ -643,7 +643,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
             cached_ip_info[info_type] = info_val
 
-        self.rcache.hset("IPsInfo", ip, json.dumps(cached_ip_info))
+        self.rcache.hset(
+            self.constants.IPS_INFO, ip, json.dumps(cached_ip_info)
+        )
         if is_new_info:
             self.r.publish("ip_info_change", ip)
 
