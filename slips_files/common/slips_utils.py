@@ -2,6 +2,7 @@ import hashlib
 from datetime import datetime, timedelta
 from re import findall
 
+from uuid import UUID
 import tldextract
 import validators
 from git import Repo
@@ -109,6 +110,14 @@ class Utils(object):
         sanitized_string = input_string.translate(remove_characters)
 
         return sanitized_string
+
+    def is_valid_uuid4(self, uuid_string: str) -> bool:
+        """Validate that the given str in UUID4"""
+        try:
+            UUID(uuid_string, version=4)
+            return True
+        except ValueError:
+            return False
 
     def extract_domain_from_url(self, url: str) -> str:
         extracted = tldextract.extract(url)

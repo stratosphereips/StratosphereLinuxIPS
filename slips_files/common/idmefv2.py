@@ -207,6 +207,10 @@ class IDMEFv2(IObservable):
                             )
                         }
                     )
+
+            if evidence.rel_id:
+                msg["RelID"] = evidence.rel_id
+
             # PS: The "Note" field is added by the evidencehandler before
             # logging the evidence to alerts.json
             msg.validate()

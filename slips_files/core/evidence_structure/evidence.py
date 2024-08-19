@@ -207,6 +207,16 @@ class Evidence:
     confidence: float = field(
         default=0.0, metadata={"validate": lambda x: 0 <= x <= 1}
     )
+    # uuid4 of a related evidence, for example CC client and server
+    # evidence are related.
+    rel_id: List[str] = field(
+        default=None,
+        metadata={
+            "validate": lambda x: (
+                all(utils.is_valid_uuid4(uuid_) for uuid_ in x) if x else True
+            )
+        },
+    )
 
     def __post_init__(self):
         if not isinstance(self.uid, list) or not all(
@@ -270,6 +280,7 @@ def dict_to_evidence(evidence: dict):
         ),
         "port": evidence["port"],
         "id": evidence["id"],
+        "rel_id": evidence["rel_id"],
         "confidence": evidence["confidence"],
     }
 

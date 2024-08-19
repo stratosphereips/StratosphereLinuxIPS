@@ -202,7 +202,7 @@ class EvidenceHandler(ICore):
                             # this evidence
                             "uids": evidence.uid,
                             "accumulated_threat_level": accumulated_threat_level,
-                            "threat_level": evidence.threat_level,
+                            "threat_level": str(evidence.threat_level),
                             "timewindow": twid,
                         }
                     )
