@@ -437,9 +437,6 @@ class Trust(IModule):
         threat_level = ThreatLevel[threat_level.upper()]
         twid_int = int(ip_info.get("twid").replace("timewindow", ""))
 
-        # add this ip to our MaliciousIPs hash in the database
-        self.db.set_malicious_ip(attacker_ip, profileid, ip_info.get("twid"))
-
         ip_identification = self.db.get_ip_identification(attacker_ip)
 
         if "src" in ip_info.get("ip_state"):
