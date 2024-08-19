@@ -14,6 +14,7 @@ class Constants:
     LABELED_AS_MALICIOUS = "labeled_as_malicious"
     URLS_INFO = "URLsInfo"
     DOMAINS_INFO = "DomainsInfo"
+    IPS_INFO = "IPsInfo"
 
 
 class Channels:
