@@ -103,9 +103,7 @@ class IDMEFv2(IObservable):
             IoCType.DOMAIN.name: "Hostname",
             IoCType.URL.name: "URL",
         }
-        # todo update cesnet module
         # todo make sure that its a fq domain
-        # todo we can add TI here
         return ioc, type_[ioc_type]
 
     def extract_file_size_from_evidence(self, evidence: Evidence) -> int:
@@ -132,7 +130,8 @@ class IDMEFv2(IObservable):
     def convert(self, evidence: Evidence) -> Message:
         """
         Function to convert Slips evidence to
-        The Incident Detection Message Exchange Format version 2 (IDMEFv2 format).
+        The Incident Detection Message Exchange Format version 2
+        (IDMEFv2 format).
         More Details about it here:
         https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
         """
@@ -152,8 +151,6 @@ class IDMEFv2(IObservable):
 
             msg.update(
                 {
-                    # todo check if the msg is valid without an analyzer bc this is
-                    #  too much
                     "Version": "2.0.3",
                     "Analyzer": {
                         "IP": "192.168.1.2",
@@ -170,8 +167,7 @@ class IDMEFv2(IObservable):
                     # Timestamp indicating the deduced start of the event
                     "StartTime": iso_ts,
                     # Timestamp indicating when the message was created
-                    "CreateTime": now,  # todo remove category values from all
-                    # evidence
+                    "CreateTime": now,
                     "Confidence": evidence.confidence,
                     "Description": evidence.description,
                     "Source": [{attacker_type: attacker}],
@@ -192,7 +188,6 @@ class IDMEFv2(IObservable):
 
             # todo check that we added all the fields from the plan
             # todo add alerts too not just evidence
-            # todo move the note from evidence handler
             if (
                 evidence.evidence_type
                 == EvidenceType.MALICIOUS_DOWNLOADED_FILE
@@ -212,7 +207,8 @@ class IDMEFv2(IObservable):
                             )
                         }
                     )
-
+            # PS: The "Note" field is added by the evidencehandler before
+            # logging the evidence to alerts.json
             msg.validate()
             msg = self.remove_unwanted_fields(msg)
             return msg
