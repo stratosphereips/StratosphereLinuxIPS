@@ -180,36 +180,35 @@ class EvidenceHandler(ICore):
 
     def add_to_json_log_file(
         self,
-        evidence_dict: dict,
-        all_uids: list,
-        timewindow: str,
+        evidence,
         accumulated_threat_level: float = 0,
     ):
         """
         Add a new evidence line to our alerts.json file in json format.
-        :param evidence_dict: dict containing 1 alert
-        :param all_uids: the uids of the flows causing this evidence
         """
-        if not evidence_dict:
+        idmef_evidence: dict = self.idmefv2.convert(evidence)
+        if not idmef_evidence:
             self.handle_unable_to_log_evidence()
             return
 
+        twid: str = str(evidence.timewindow)
+
         try:
-            # we add extra fields to alerts.json that are not in the IDEA format
-            evidence_dict.update(
+            idmef_evidence.update(
                 {
                     "Note": json.dumps(
                         {
-                            "uids": all_uids,
+                            # this is all the uids of the flows that cause
+                            # this evidence
+                            "uids": evidence.uid,
                             "accumulated_threat_level": accumulated_threat_level,
-                            "timewindow": int(
-                                timewindow.replace("timewindow", "")
-                            ),
+                            "threat_level": evidence.threat_level,
+                            "timewindow": twid,
                         }
                     )
                 }
             )
-            json.dump(evidence_dict, self.jsonfile)
+            json.dump(idmef_evidence, self.jsonfile)
             self.jsonfile.write("\n")
         except KeyboardInterrupt:
             return True
@@ -421,10 +420,11 @@ class EvidenceHandler(ICore):
         evidence_dict["threat_level"] = accumulated_threat_level
         evidence_dict["Attach"][0]["Content"] = line
 
+        # TODO handle this
         # add to alerts.json
-        self.add_to_json_log_file(
-            evidence_dict, [], twid, accumulated_threat_level
-        )
+        # self.add_to_json_log_file(
+        #     evidence, evidence_dict, [], twid, accumulated_threat_level
+        # )
 
     def shutdown_gracefully(self):
         self.logfile.close()
@@ -703,8 +703,7 @@ class EvidenceHandler(ICore):
                 twid: str = str(evidence.timewindow)
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
-                # this is all the uids of the flows that cause this evidence
-                all_uids: list = evidence.uid
+
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence
                 # below.
@@ -756,12 +755,10 @@ class EvidenceHandler(ICore):
                     )
                 # prepare evidence for json log file
                 # idea_dict: dict = idea_format(evidence)
-                idmef_evidence = self.idmefv2.convert(evidence)
+
                 # add to alerts.json
                 self.add_to_json_log_file(
-                    idmef_evidence,
-                    all_uids,
-                    twid,
+                    evidence,
                     accumulated_threat_level,
                 )
 
