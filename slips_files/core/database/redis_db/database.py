@@ -848,9 +848,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # these ips will be associated with the query in our db
             ips_to_add.append(answer)
 
-            #  For each CNAME in the answer
-            # store it in DomainsInfo in the cache db (used for kalipso)
-            # and in CNAMEsInfo in the maion db  (used for detecting dns without resolution)
+        # For each CNAME in the answer
+        # store it in DomainsInfo in the cache db (used for kalipso)
+        # and in CNAMEsInfo in the main db  (used for detecting dns
+        # without resolution)
         if ips_to_add:
             domaindata = {"IPs": ips_to_add}
             # if an ip came in the DNS answer along with the last seen CNAME

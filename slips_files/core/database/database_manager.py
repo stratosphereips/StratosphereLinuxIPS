@@ -513,8 +513,8 @@ class DBManager(IObservable):
     def delete_ti_feed(self, *args, **kwargs):
         return self.rdb.delete_ti_feed(*args, **kwargs)
 
-    def search_for_url_in_iocs(self, *args, **kwargs):
-        return self.rdb.search_for_url_in_iocs(*args, **kwargs)
+    def is_cached_url_by_vt(self, *args, **kwargs):
+        return self.rdb.is_cached_url_by_vt(*args, **kwargs)
 
     def get_domain_data(self, *args, **kwargs):
         return self.rdb.get_domain_data(*args, **kwargs)
@@ -522,8 +522,8 @@ class DBManager(IObservable):
     def set_info_for_domains(self, *args, **kwargs):
         return self.rdb.set_info_for_domains(*args, **kwargs)
 
-    def set_info_for_urls(self, *args, **kwargs):
-        return self.rdb.set_info_for_urls(*args, **kwargs)
+    def cache_url_info_by_virustotal(self, *args, **kwargs):
+        return self.rdb.cache_url_info_by_virustotal(*args, **kwargs)
 
     def get_data_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_data_from_profile_tw(*args, **kwargs)
