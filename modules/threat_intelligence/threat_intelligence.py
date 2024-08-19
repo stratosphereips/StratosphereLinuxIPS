@@ -1832,9 +1832,6 @@ class ThreatIntel(IModule, URLhaus):
         domain_info = {"threatintelligence": domain_info}
         self.db.set_info_for_domains(cname, domain_info)
 
-        # add this domain to our MaliciousDomains hash in the database
-        self.db.set_malicious_domain(cname, profileid, twid)
-
     def is_malicious_domain(
         self,
         domain,
@@ -1895,9 +1892,6 @@ class ThreatIntel(IModule, URLhaus):
         # mark this domain as malicious in our database
         domain_info = {"threatintelligence": domain_info}
         self.db.set_info_for_domains(domain, domain_info)
-
-        # add this domain to our MaliciousDomains hash in the database
-        self.db.set_malicious_domain(domain, profileid, twid)
 
     def update_local_file(self, filename):
         """Checks for updates to a specified local threat intelligence

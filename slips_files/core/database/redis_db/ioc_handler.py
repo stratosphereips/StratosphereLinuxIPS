@@ -1,5 +1,4 @@
 import json
-import ast
 from typing import (
     Dict,
     List,
@@ -275,37 +274,6 @@ class IoCHandler:
         Get all ja3 and their description from IoC_JA3
         """
         return self.rcache.hgetall(self.constants.IOC_JA3)
-
-    def set_malicious_domain(self, domain, profileid, twid):
-        """
-        Adds this domain to MaliciousDomains key in the db, or updates its
-        list of profileid and timewindows if it's already there.
-        """
-        # get all profiles and twis where this domain was seen
-        domain_profiled_twid = self.search_for_domain_in_iocs(domain)
-        try:
-            profile_tws = domain_profiled_twid[
-                profileid
-            ]  # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)  # set(tw1, tw2)
-            profile_tws.add(twid)
-            domain_profiled_twid[profileid] = str(profile_tws)
-        except KeyError:
-            domain_profiled_twid[profileid] = str(
-                {twid}
-            )  # add key-pair to the dict if does not exist
-        data = json.dumps(domain_profiled_twid)
-
-        self.r.hset(self.constants.MALICIOUS_DOMAINS, domain, data)
-
-    def search_for_domain_in_iocs(self, domain):
-        """
-        Return malicious domain and its list of presence in
-        the traffic (profileid, twid)
-        """
-        data = self.r.hget(self.constants.MALICIOUS_DOMAINS, domain)
-        data = json.loads(data) if data else {}
-        return data
 
     def is_profile_malicious(self, profileid: str) -> str:
         return (

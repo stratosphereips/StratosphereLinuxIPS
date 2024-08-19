@@ -10,7 +10,6 @@ class Constants:
     IOC_JARM = "IoC_JARM"
     IOC_SSL = "IoC_SSL"
     MALICIOUS_IPS = "MaliciousIPs"
-    MALICIOUS_DOMAINS = "MaliciousDomains"
     LABELED_AS_MALICIOUS = "labeled_as_malicious"
     URLS_INFO = "URLsInfo"
     DOMAINS_INFO = "DomainsInfo"
