@@ -489,12 +489,6 @@ class DBManager(IObservable):
     def is_blacklisted_ip(self, *args, **kwargs):
         return self.rdb.is_blacklisted_ip(*args, **kwargs)
 
-    def set_malicious_domain(self, *args, **kwargs):
-        return self.rdb.set_malicious_domain(*args, **kwargs)
-
-    def search_for_domain_in_iocs(self, *args, **kwargs):
-        return self.rdb.search_for_domain_in_iocs(*args, **kwargs)
-
     def is_blacklisted_ssl(self, *args, **kwargs):
         return self.rdb.is_blacklisted_ssl(*args, **kwargs)
 
