@@ -54,7 +54,7 @@ def test_check_malicious_ssl(
         downloadfile.set_evidence, "malicious_ssl"
     )
 
-    mock_db.get_ssl_info.return_value = db_result
+    mock_db.is_blacklisted_ssl.return_value = db_result
     downloadfile.check_malicious_ssl(ssl_info)
 
     assert mock_set_evidence.call_count == expected_call_count

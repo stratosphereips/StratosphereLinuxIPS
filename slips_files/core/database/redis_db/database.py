@@ -1,5 +1,9 @@
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.core.database.redis_db.constants import (
+    Constants,
+    Channels,
+)
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
@@ -25,6 +29,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     # should be created for the same port at the same time
     _obj = None
     _port = None
+    constants = Constants()
+    channels = Channels()
     # Stores instances per port
     _instances = {}
     supported_channels = {

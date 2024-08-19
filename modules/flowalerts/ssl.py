@@ -137,7 +137,7 @@ class SSL(IFlowalertsAnalyzer):
             return
 
         # get the dict of malicious ja3 stored in our db
-        malicious_ja3_dict = self.db.get_ja3_in_IoC()
+        malicious_ja3_dict = self.db.get_all_blacklisted_ja3()
 
         if ja3 in malicious_ja3_dict:
             self.set_evidence.malicious_ja3(

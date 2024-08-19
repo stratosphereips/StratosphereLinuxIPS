@@ -177,7 +177,7 @@ def test_detect_malicious_ja3(
 
     saddr = "192.168.1.1"
 
-    mock_db.get_ja3_in_IoC.return_value = {
+    mock_db.get_all_blacklisted_ja3.return_value = {
         "malicious_ja3": "Malicious JA3",
         "malicious_ja3s": "Malicious JA3S",
     }

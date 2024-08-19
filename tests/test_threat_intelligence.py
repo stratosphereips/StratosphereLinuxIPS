@@ -104,7 +104,7 @@ def test_check_local_ti_files_for_update(
 
     mock_hash.return_value = current_hash
 
-    mock_db.get_TI_file_info.return_value = {"hash": old_hash}
+    mock_db.get_ti_feed_info.return_value = {"hash": old_hash}
 
     # the test asserts return value of should_update_local_tii_file matches expected_return
     # for each scenario. This method should return new hash if an update is needed or False if not
@@ -168,8 +168,8 @@ def test_get_malicious_ip_ranges(
     This test covers both IPv4 and IPv6 range scenarios.
     """
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_malicious_ip_ranges.return_value = mock_ip_ranges
-    threatintel.get_malicious_ip_ranges()
+    mock_db.get_all_blacklisted_ip_ranges.return_value = mock_ip_ranges
+    threatintel.get_all_blacklisted_ip_ranges()
 
     assert threatintel.cached_ipv4_ranges == expected_ipv4_ranges
     assert threatintel.cached_ipv6_ranges == expected_ipv6_ranges
@@ -416,7 +416,7 @@ def test_delete_old_source_ips_with_deletions(
     Test `__delete_old_source_ips` when there are IPs to delete.
     """
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_IPs_in_IoC.return_value = mock_ioc_data
+    mock_db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
     mock_db.delete_ips_from_IoC_ips.assert_called_once_with(
         expected_deleted_ips
@@ -444,7 +444,7 @@ def test_delete_old_source_ips_no_deletions(
     Test `__delete_old_source_ips` when there are no IPs to delete.
     """
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_IPs_in_IoC.return_value = mock_ioc_data
+    mock_db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
     mock_db.delete_ips_from_IoC_ips.assert_not_called()
 
@@ -490,7 +490,7 @@ def test_delete_old_source_domains(
     for removing outdated domain IoCs.
     """
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_Domains_in_IoC.return_value = domains_in_ioc
+    mock_db.get_all_blacklisted_domains.return_value = domains_in_ioc
     threatintel._ThreatIntel__delete_old_source_domains(file_to_delete)
     assert mock_db.delete_domains_from_IoC_domains.call_count == expected_calls
 
@@ -565,8 +565,8 @@ def test_delete_old_source_data_from_database(
     """
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
 
-    mock_db.get_IPs_in_IoC.return_value = mock_ips_ioc
-    mock_db.get_Domains_in_IoC.return_value = mock_domains_ioc
+    mock_db.get_all_blacklisted_ips.return_value = mock_ips_ioc
+    mock_db.get_all_blacklisted_domains.return_value = mock_domains_ioc
 
     threatintel._ThreatIntel__delete_old_source_data_from_database(data_file)
 
@@ -606,7 +606,7 @@ def test_should_update_local_ti_file(
         "slips_files.common.slips_utils.Utils.get_sha256_hash"
     )
     mock_hash.return_value = current_hash
-    mock_db.get_TI_file_info.return_value = {"hash": old_hash}
+    mock_db.get_ti_feed_info.return_value = {"hash": old_hash}
 
     assert (
         threatintel.should_update_local_ti_file(own_malicious_iocs)
@@ -826,7 +826,7 @@ def test_search_offline_for_ip(
 ):
     """Test `search_offline_for_ip` for querying local threat intelligence data."""
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.search_for_ip_in_iocs.return_value = mock_return_value
+    mock_db.is_blacklisted_ip.return_value = mock_return_value
     result = threatintel.search_offline_for_ip(ip_address)
     assert result == expected_result
 
@@ -890,7 +890,7 @@ def test_ip_belongs_to_blacklisted_range(
     threatintel.cached_ipv6_ranges = (
         {first_octet: [range_value]} if ip_type == "ipv6" else {}
     )
-    mock_db.get_malicious_ip_ranges.return_value = (
+    mock_db.get_all_blacklisted_ip_ranges.return_value = (
         {
             range_value: '{"description": "Bad range", "source": "Example Source", "threat_level": "high"}'
         }
@@ -952,7 +952,7 @@ def test_search_offline_for_domain(
     """Test `search_offline_for_domain` for checking domain blacklisting."""
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
     mock_db = mocker.patch.object(threatintel, "db")
-    mock_db.is_domain_malicious.return_value = mock_return_value
+    mock_db.is_blacklisted_domain.return_value = mock_return_value
     result = threatintel.search_offline_for_domain(domain)
     assert result == expected_result
 
@@ -1086,7 +1086,7 @@ def test_is_malicious_cname(
     """
     threatintel = ModuleFactory().create_threatintel_obj(mock_db)
     mock_db = mocker.patch.object(threatintel, "db")
-    mock_db.is_domain_malicious.return_value = (
+    mock_db.is_blacklisted_domain.return_value = (
         is_domain_malicious_return,
         False,
     )

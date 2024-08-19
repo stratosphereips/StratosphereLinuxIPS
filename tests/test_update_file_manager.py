@@ -9,7 +9,7 @@ from unittest.mock import Mock, mock_open, patch
 
 
 def test_check_if_update_based_on_update_period(mock_db):
-    mock_db.get_TI_file_info.return_value = {"time": float("inf")}
+    mock_db.get_ti_feed_info.return_value = {"time": float("inf")}
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     url = "abc.com/x"
     # update period hasn't passed
@@ -22,7 +22,7 @@ def test_check_if_update_based_on_e_tag(mocker, mock_db):
     # period passed, etag same
     etag = "1234"
     url = "google.com/images"
-    mock_db.get_TI_file_info.return_value = {"e-tag": etag}
+    mock_db.get_ti_feed_info.return_value = {"e-tag": etag}
 
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
@@ -33,7 +33,7 @@ def test_check_if_update_based_on_e_tag(mocker, mock_db):
     # period passed, etag different
     etag = "1111"
     url = "google.com/images"
-    mock_db.get_TI_file_info.return_value = {"e-tag": etag}
+    mock_db.get_ti_feed_info.return_value = {"e-tag": etag}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {"ETag": "2222"}
@@ -47,7 +47,7 @@ def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     # period passed, no etag, last modified the same
     url = "google.com/photos"
 
-    mock_db.get_TI_file_info.return_value = {"Last-Modified": 10.0}
+    mock_db.get_ti_feed_info.return_value = {"Last-Modified": 10.0}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {"Last-Modified": 10.0}
@@ -58,7 +58,7 @@ def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     # period passed, no etag, last modified changed
     url = "google.com/photos"
 
-    mock_db.get_TI_file_info.return_value = {"Last-Modified": 10}
+    mock_db.get_ti_feed_info.return_value = {"Last-Modified": 10}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {"Last-Modified": 11}
@@ -90,7 +90,7 @@ def test_check_if_update_local_file(
         "slips_files.common.slips_utils.Utils.get_sha256_hash",
         return_value=new_hash,
     )
-    mock_db.get_TI_file_info.return_value = {"hash": old_hash}
+    mock_db.get_ti_feed_info.return_value = {"hash": old_hash}
 
     file_path = "path/to/my/file.txt"
     assert (
@@ -263,7 +263,7 @@ def test_update_local_file(
     update_manager.new_hash = "test_hash"
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     result = update_manager.update_local_file(str(tmp_path / file_name))
-    mock_db.set_TI_file_info.assert_called_once_with(
+    mock_db.set_ti_feed_info.assert_called_once_with(
         str(tmp_path / file_name), {"hash": "test_hash"}
     )
     assert result is True
@@ -271,7 +271,7 @@ def test_update_local_file(
 
 def test_check_if_update_online_whitelist_download_updated(mocker, mock_db):
     """Update period passed, download succeeds."""
-    mock_db.get_TI_file_info.return_value = {"time": 0}
+    mock_db.get_ti_feed_info.return_value = {"time": 0}
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
 
@@ -280,7 +280,7 @@ def test_check_if_update_online_whitelist_download_updated(mocker, mock_db):
     result = update_manager.check_if_update_online_whitelist()
 
     assert result is True
-    mock_db.set_TI_file_info.assert_called_once_with(
+    mock_db.set_ti_feed_info.assert_called_once_with(
         "tranco_whitelist", {"time": mocker.ANY}
     )
     assert "tranco_whitelist" in update_manager.responses
@@ -290,10 +290,10 @@ def test_check_if_update_online_whitelist_not_updated(mock_db):
     """Update period hasn't passed - no update needed."""
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
-    mock_db.get_TI_file_info.return_value = {"time": time.time()}
+    mock_db.get_ti_feed_info.return_value = {"time": time.time()}
     result = update_manager.check_if_update_online_whitelist()
     assert result is False
-    mock_db.set_TI_file_info.assert_not_called()
+    mock_db.set_ti_feed_info.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -361,7 +361,7 @@ def test_write_file_to_disk(mocker, mock_db, tmp_path):
 def test_delete_old_source_ips(mock_db):
     """Test delete_old_source_IPs."""
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    mock_db.get_IPs_in_IoC.return_value = {
+    mock_db.get_all_blacklisted_ips.return_value = {
         "1.2.3.4": json.dumps(
             {"description": "old IP", "source": "old_file.txt"}
         ),
@@ -376,7 +376,7 @@ def test_delete_old_source_ips(mock_db):
 def test_delete_old_source_domains(mock_db):
     """Test delete_old_source_Domains."""
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    mock_db.get_Domains_in_IoC.return_value = {
+    mock_db.get_all_blacklisted_domains.return_value = {
         "olddomain.com": json.dumps(
             {"description": "old domain", "source": "old_file.txt"}
         ),
@@ -413,7 +413,7 @@ def test_update_riskiq_feed(mocker, mock_db):
             )
         }
     )
-    mock_db.set_TI_file_info.assert_called_once_with(
+    mock_db.set_ti_feed_info.assert_called_once_with(
         "riskiq_domains", {"time": mocker.ANY}
     )
     assert result is True
@@ -433,7 +433,7 @@ def test_update_riskiq_feed_invalid_api_key(mocker, mock_db):
     result = update_manager.update_riskiq_feed()
     assert result is False
     mock_db.add_domains_to_IoC.assert_not_called()
-    mock_db.set_TI_file_info.assert_not_called()
+    mock_db.set_ti_feed_info.assert_not_called()
 
 
 def test_update_riskiq_feed_request_exception(mocker, mock_db):
@@ -449,7 +449,7 @@ def test_update_riskiq_feed_request_exception(mocker, mock_db):
     result = update_manager.update_riskiq_feed()
     assert result is False
     mock_db.add_domains_to_IoC.assert_not_called()
-    mock_db.set_TI_file_info.assert_not_called()
+    mock_db.set_ti_feed_info.assert_not_called()
 
 
 def test_delete_old_source_data_from_database(mock_db):
@@ -457,7 +457,7 @@ def test_delete_old_source_data_from_database(mock_db):
     Test delete_old_source_data_from_database for deleting old IPs and domains.
     """
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    mock_db.get_IPs_in_IoC.return_value = {
+    mock_db.get_all_blacklisted_ips.return_value = {
         "1.2.3.4": json.dumps(
             {"description": "old IP", "source": "old_file.txt"}
         ),
@@ -465,7 +465,7 @@ def test_delete_old_source_data_from_database(mock_db):
             {"description": "new IP", "source": "new_file.txt"}
         ),
     }
-    mock_db.get_Domains_in_IoC.return_value = {
+    mock_db.get_all_blacklisted_domains.return_value = {
         "olddomain.com": json.dumps(
             {"description": "old domain", "source": "old_file.txt"}
         ),
@@ -728,7 +728,7 @@ def test_check_if_update_org(
     """Test check_if_update_org with different file and cache scenarios."""
     update_manager = ModuleFactory().create_update_manager_obj(mock_db)
 
-    mock_db.get_TI_file_info.return_value = {"hash": cached_hash}
+    mock_db.get_ti_feed_info.return_value = {"hash": cached_hash}
     mocker.patch(
         "slips_files.common." "slips_utils.Utils.get_sha256_hash",
         return_value=hash(file_content.encode()),
@@ -766,7 +766,7 @@ def test_update_mac_db(
     result = update_manager.update_mac_db()
 
     assert result is expected_result
-    assert mock_db.set_TI_file_info.call_count == db_call_count
+    assert mock_db.set_ti_feed_info.call_count == db_call_count
 
 
 def test_shutdown_gracefully(mocker, mock_db):
