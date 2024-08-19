@@ -163,7 +163,7 @@ class VT(IModule):
         # Score of this url didn't change
         vtdata = {"URL": score, "timestamp": time.time()}
         data = {"VirusTotal": vtdata}
-        self.db.set_info_for_urls(url, data)
+        self.db.cache_url_info_by_virustotal(url, data)
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
         """
@@ -227,7 +227,7 @@ class VT(IModule):
                         self.set_domain_data_in_DomainInfo(ioc, cached_data)
 
                 elif ioc_type == "url":
-                    cached_data = self.db.search_for_url_in_iocs(ioc)
+                    cached_data = self.db.is_cached_url_by_vt(ioc)
                     # If VT data of this domain is not in the
                     # DomainInfo, ask VT
                     # If 'Virustotal' key is not in the DomainInfo
@@ -620,7 +620,7 @@ class VT(IModule):
             # twid = data['twid']
             flow_data = json.loads(data["flow"])
             url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
-            cached_data = self.db.search_for_url_in_iocs(url)
+            cached_data = self.db.is_cached_url_by_vt(url)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
             if not cached_data or "VirusTotal" not in cached_data:

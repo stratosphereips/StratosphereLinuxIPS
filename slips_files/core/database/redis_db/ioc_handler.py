@@ -282,7 +282,7 @@ class IoCHandler:
             else False
         )
 
-    def search_for_url_in_iocs(self, url):
+    def is_cached_url_by_vt(self, url):
         """
         Return information about this URL
         Returns a dictionary or False if there is no IP in the database
@@ -290,8 +290,9 @@ class IoCHandler:
         1- IP is in the DB without data. Return empty dict.
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
+        this is used to cache url info by the virustotal module only
         """
-        data = self.rcache.hget(self.constants.URLS_INFO, url)
+        data = self.rcache.hget(self.constants.VT_CACHED_URL_INFO, url)
         data = json.loads(data) if data else False
         return data
 
@@ -301,14 +302,14 @@ class IoCHandler:
         2- Publishes in the channels that there is a new URL, and that we want
             data from the Threat Intelligence modules
         """
-        data = self.search_for_url_in_iocs(url)
+        data = self.is_cached_url_by_vt(url)
         if data is False:
             # If there is no data about this URL
-            # Set this URL for the first time in the URLsInfo
+            # Set this URL for the first time in the virustotal_cached_url_info
             # Its VERY important that the data of the first time we see a URL
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an URL exists or not
-            self.rcache.hset(self.constants.URLS_INFO, url, "{}")
+            self.rcache.hset(self.constants.VT_CACHED_URL_INFO, url, "{}")
 
     def get_domain_data(self, domain):
         """
@@ -414,15 +415,16 @@ class IoCHandler:
             self.rcache.hset(self.constants.DOMAINS_INFO, domain, domain_data)
             self.r.publish(self.channels.DNS_INFO_CHANGE, domain)
 
-    def set_info_for_urls(self, url: str, urldata: dict):
+    def cache_url_info_by_virustotal(self, url: str, urldata: dict):
         """
         Store information for this URL
         We receive a dictionary, such as {'VirusTotal': {'URL':score}} that we are
         going to store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
+        this is used to cache url info by the virustotal module only
         """
-        data = self.search_for_url_in_iocs(url)
+        data = self.is_cached_url_by_vt(url)
         if data is False:
             # This URL is not in the dictionary, add it first:
             self._store_new_url(url)
@@ -446,8 +448,10 @@ class IoCHandler:
                     # self.r.publish('url_info_change', url)
                 data[key] = data_to_store
                 newdata_str = json.dumps(data)
-                self.rcache.hset(self.constants.URLS_INFO, url, newdata_str)
+                self.rcache.hset(
+                    self.constants.VT_CACHED_URL_INFO, url, newdata_str
+                )
         else:
             # URL found in the database but has no keys , set the keys now
             urldata = json.dumps(urldata)
-            self.rcache.hset(self.constants.URLS_INFO, url, urldata)
+            self.rcache.hset(self.constants.VT_CACHED_URL_INFO, url, urldata)
