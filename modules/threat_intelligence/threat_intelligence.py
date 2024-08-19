@@ -120,7 +120,7 @@ class ThreatIntel(IModule, URLhaus):
             dictionaries with malicious IP ranges categorized by their
             first octet or hextet.
         """
-        ip_ranges = self.db.get_malicious_ip_ranges()
+        ip_ranges = self.db.get_all_blacklisted_ip_ranges()
         self.cached_ipv6_ranges = {}
         self.cached_ipv4_ranges = {}
         for range in ip_ranges.keys():
@@ -728,7 +728,7 @@ class ThreatIntel(IModule, URLhaus):
             - Modifies the database by removing IPs that are associated
             with the specified source file.
         """
-        all_data = self.db.get_IPs_in_IoC()
+        all_data = self.db.get_all_blacklisted_ips()
         old_data = []
         for ip_data in all_data.items():
             ip = ip_data[0]
@@ -752,7 +752,7 @@ class ThreatIntel(IModule, URLhaus):
             are removed from the database. This operation directly
             modifies the database's domain IoCs records.
         """
-        all_data = self.db.get_Domains_in_IoC()
+        all_data = self.db.get_all_blacklisted_domains()
         old_data = []
         for domain_data in all_data.items():
             domain = domain_data[0]
@@ -959,7 +959,7 @@ class ThreatIntel(IModule, URLhaus):
         filename = os.path.basename(path_to_local_ti_file)
 
         self.print(f"Loading local TI file {path_to_local_ti_file}", 2, 0)
-        data = self.db.get_TI_file_info(filename)
+        data = self.db.get_ti_feed_info(filename)
         old_hash = data.get("hash", False)
 
         new_hash = utils.get_sha256_hash(path_to_local_ti_file)
@@ -1373,7 +1373,7 @@ class ThreatIntel(IModule, URLhaus):
         This function queries the local database for any matches
         to the provided IP address.
         """
-        ip_info = self.db.search_for_ip_in_iocs(ip)
+        ip_info = self.db.is_blacklisted_ip(ip)
         # check if it's a blacklisted ip
         return json.loads(ip_info) if ip_info else False
 
@@ -1486,7 +1486,7 @@ class ThreatIntel(IModule, URLhaus):
         for range in ranges_starting_with_octet:
             if ip_obj in ipaddress.ip_network(range):
                 # ip was found in one of the blacklisted ranges
-                ip_info = self.db.get_malicious_ip_ranges()[range]
+                ip_info = self.db.get_all_blacklisted_ip_ranges()[range]
                 ip_info = json.loads(ip_info)
                 self.set_evidence_malicious_ip(
                     ip,
@@ -1524,7 +1524,7 @@ class ThreatIntel(IModule, URLhaus):
         (
             domain_info,
             is_subdomain,
-        ) = self.db.is_domain_malicious(domain)
+        ) = self.db.is_blacklisted_domain(domain)
         if (
             domain_info is not False
         ):  # Dont change this condition. This is the only way it works
@@ -1951,7 +1951,7 @@ class ThreatIntel(IModule, URLhaus):
                 self.parse_local_ti_file(fullpath)
             # Store the new etag and time of file in the database
             malicious_file_info = {"hash": filehash}
-            self.db.set_TI_file_info(filename, malicious_file_info)
+            self.db.set_ti_feed_info(filename, malicious_file_info)
             return True
 
     def pre_main(self):

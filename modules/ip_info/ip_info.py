@@ -649,5 +649,5 @@ class IPInfo(IModule):
                     flow["daddr"], flow["dport"]
                 )
 
-                if self.db.is_malicious_jarm(jarm_hash):
+                if self.db.is_blacklisted_jarm(jarm_hash):
                     self.set_evidence_malicious_jarm_hash(flow, msg["twid"])

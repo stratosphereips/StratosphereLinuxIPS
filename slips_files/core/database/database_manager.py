@@ -423,8 +423,8 @@ class DBManager(IObservable):
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
 
-    def get_loaded_ti_files(self, *args, **kwargs):
-        return self.rdb.get_loaded_ti_files(*args, **kwargs)
+    def get_loaded_ti_feeds(self, *args, **kwargs):
+        return self.rdb.get_loaded_ti_feeds(*args, **kwargs)
 
     def mark_as_analyzed_by_ti_module(self, *args, **kwargs):
         return self.rdb.mark_as_analyzed_by_ti_module(*args, **kwargs)
@@ -471,23 +471,23 @@ class DBManager(IObservable):
     def add_ssl_sha1_to_IoC(self, *args, **kwargs):
         return self.rdb.add_ssl_sha1_to_IoC(*args, **kwargs)
 
-    def get_malicious_ip_ranges(self, *args, **kwargs):
-        return self.rdb.get_malicious_ip_ranges(*args, **kwargs)
+    def get_all_blacklisted_ip_ranges(self, *args, **kwargs):
+        return self.rdb.get_all_blacklisted_ip_ranges(*args, **kwargs)
 
-    def get_IPs_in_IoC(self, *args, **kwargs):
-        return self.rdb.get_IPs_in_IoC(*args, **kwargs)
+    def get_all_blacklisted_ips(self, *args, **kwargs):
+        return self.rdb.get_all_blacklisted_ips(*args, **kwargs)
 
-    def get_Domains_in_IoC(self, *args, **kwargs):
-        return self.rdb.get_Domains_in_IoC(*args, **kwargs)
+    def get_all_blacklisted_domains(self, *args, **kwargs):
+        return self.rdb.get_all_blacklisted_domains(*args, **kwargs)
 
-    def get_ja3_in_IoC(self, *args, **kwargs):
-        return self.rdb.get_ja3_in_IoC(*args, **kwargs)
+    def get_all_blacklisted_ja3(self, *args, **kwargs):
+        return self.rdb.get_all_blacklisted_ja3(*args, **kwargs)
 
-    def is_malicious_jarm(self, *args, **kwargs):
-        return self.rdb.is_malicious_jarm(*args, **kwargs)
+    def is_blacklisted_jarm(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_jarm(*args, **kwargs)
 
-    def search_for_ip_in_iocs(self, *args, **kwargs):
-        return self.rdb.search_for_ip_in_iocs(*args, **kwargs)
+    def is_blacklisted_ip(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_ip(*args, **kwargs)
 
     def set_malicious_ip(self, *args, **kwargs):
         return self.rdb.set_malicious_ip(*args, **kwargs)
@@ -495,47 +495,38 @@ class DBManager(IObservable):
     def set_malicious_domain(self, *args, **kwargs):
         return self.rdb.set_malicious_domain(*args, **kwargs)
 
-    def get_malicious_ip(self, *args, **kwargs):
-        return self.rdb.get_malicious_ip(*args, **kwargs)
-
     def search_for_domain_in_iocs(self, *args, **kwargs):
         return self.rdb.search_for_domain_in_iocs(*args, **kwargs)
 
-    def get_ssl_info(self, *args, **kwargs):
-        return self.rdb.get_ssl_info(*args, **kwargs)
+    def is_blacklisted_ssl(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_ssl(*args, **kwargs)
 
-    def is_domain_malicious(self, *args, **kwargs):
-        return self.rdb.is_domain_malicious(*args, **kwargs)
+    def is_blacklisted_domain(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_domain(*args, **kwargs)
 
-    def delete_feed(self, *args, **kwargs):
-        return self.rdb.delete_feed(*args, **kwargs)
+    def delete_feed_entries(self, *args, **kwargs):
+        return self.rdb.delete_feed_entries(*args, **kwargs)
 
     def is_profile_malicious(self, *args, **kwargs):
         return self.rdb.is_profile_malicious(*args, **kwargs)
 
-    def set_TI_file_info(self, *args, **kwargs):
-        return self.rdb.set_TI_file_info(*args, **kwargs)
+    def set_ti_feed_info(self, *args, **kwargs):
+        return self.rdb.set_ti_feed_info(*args, **kwargs)
 
-    def set_last_update_time(self, *args, **kwargs):
-        return self.rdb.set_last_update_time(*args, **kwargs)
+    def set_feed_last_update_time(self, *args, **kwargs):
+        return self.rdb.set_feed_last_update_time(*args, **kwargs)
 
-    def get_TI_file_info(self, *args, **kwargs):
-        return self.rdb.get_TI_file_info(*args, **kwargs)
+    def get_ti_feed_info(self, *args, **kwargs):
+        return self.rdb.get_ti_feed_info(*args, **kwargs)
 
-    def delete_file_info(self, *args, **kwargs):
-        return self.rdb.delete_file_info(*args, **kwargs)
+    def delete_ti_feed(self, *args, **kwargs):
+        return self.rdb.delete_ti_feed(*args, **kwargs)
 
     def search_for_url_in_iocs(self, *args, **kwargs):
         return self.rdb.search_for_url_in_iocs(*args, **kwargs)
 
-    def setNewURL(self, *args, **kwargs):
-        return self.rdb.setNewURL(*args, **kwargs)
-
     def get_domain_data(self, *args, **kwargs):
         return self.rdb.get_domain_data(*args, **kwargs)
-
-    def set_new_domain(self, *args, **kwargs):
-        return self.rdb.set_new_domain(*args, **kwargs)
 
     def set_info_for_domains(self, *args, **kwargs):
         return self.rdb.set_info_for_domains(*args, **kwargs)

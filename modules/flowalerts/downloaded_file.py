@@ -28,7 +28,7 @@ class DownloadedFile(IFlowalertsAnalyzer):
             return False
 
         # check if we have this sha1 marked as malicious from one of our feeds
-        ssl_info_from_db = self.db.get_ssl_info(sha1)
+        ssl_info_from_db = self.db.is_blacklisted_ssl(sha1)
         if not ssl_info_from_db:
             return False
 

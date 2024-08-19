@@ -163,10 +163,10 @@ class UpdateManager(IModule):
             # remove commented lines from the cache db
             if url.startswith(";"):
                 feed = url.split("/")[-1]
-                if self.db.get_TI_file_info(feed):
-                    self.db.delete_feed(feed)
+                if self.db.get_ti_feed_info(feed):
+                    self.db.delete_feed_entries(feed)
                     # to avoid calling delete_feed again with the same feed
-                    self.db.delete_file_info(feed)
+                    self.db.delete_ti_feed(feed)
                 continue
 
             # make sure the given tl is valid
@@ -272,7 +272,7 @@ class UpdateManager(IModule):
 
             # Store the new hash of file in the database
             file_info = {"hash": self.new_hash}
-            self.db.set_TI_file_info(file_path, file_info)
+            self.db.set_ti_feed_info(file_path, file_info)
             return True
 
         except OSError:
@@ -289,7 +289,7 @@ class UpdateManager(IModule):
         new_hash = utils.get_sha256_hash(file_path)
 
         # Get last hash of the file stored in the database
-        file_info = self.db.get_TI_file_info(file_path)
+        file_info = self.db.get_ti_feed_info(file_path)
         old_hash = file_info.get("hash", False)
 
         if not old_hash or old_hash != new_hash:
@@ -307,7 +307,7 @@ class UpdateManager(IModule):
         Used for online whitelist specified in slips.conf
         """
         # Get the last time this file was updated
-        ti_file_info = self.db.get_TI_file_info("tranco_whitelist")
+        ti_file_info = self.db.get_ti_feed_info("tranco_whitelist")
         last_update = ti_file_info.get("time", float("-inf"))
 
         now = time.time()
@@ -323,7 +323,7 @@ class UpdateManager(IModule):
             return False
 
         # update the timestamp in the db
-        self.db.set_TI_file_info("tranco_whitelist", {"time": time.time()})
+        self.db.set_ti_feed_info("tranco_whitelist", {"time": time.time()})
         self.responses["tranco_whitelist"] = response
         return True
 
@@ -368,7 +368,7 @@ class UpdateManager(IModule):
         """
         # the response will be stored in self.responses if the file is old and needs to be updated
         # Get the last time this file was updated
-        ti_file_info: dict = self.db.get_TI_file_info(file_to_download)
+        ti_file_info: dict = self.db.get_ti_feed_info(file_to_download)
         last_update = ti_file_info.get("time", float("-inf"))
         if last_update + update_period > time.time():
             # Update period hasn't passed yet, but the file is in our db
@@ -395,7 +395,7 @@ class UpdateManager(IModule):
                 return True
 
             # Get the E-TAG of this file to compare with current files
-            ti_file_info: dict = self.db.get_TI_file_info(file_to_download)
+            ti_file_info: dict = self.db.get_ti_feed_info(file_to_download)
             old_e_tag = ti_file_info.get("e-tag", "")
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
@@ -417,7 +417,9 @@ class UpdateManager(IModule):
                     return True
                 else:
                     # update the time we last checked this file for update
-                    self.db.set_last_update_time(file_to_download, time.time())
+                    self.db.set_feed_last_update_time(
+                        file_to_download, time.time()
+                    )
                     self.loaded_ti_files += 1
                     return False
 
@@ -432,7 +434,9 @@ class UpdateManager(IModule):
                 # update period passed but the file hasnt changed on the server, no need to update
                 # Store the update time like we downloaded it anyway
                 # Store the new etag and time of file in the database
-                self.db.set_last_update_time(file_to_download, time.time())
+                self.db.set_feed_last_update_time(
+                    file_to_download, time.time()
+                )
                 self.loaded_ti_files += 1
                 return False
 
@@ -591,8 +595,8 @@ class UpdateManager(IModule):
             self.write_file_to_disk(response, full_path)
 
             # File is updated in the server and was in our database.
-            # Delete previous IPs of this file.
-            self.delete_old_source_data_from_database(file_name_to_download)
+            # Delete previous iocs of this file.
+            self.db.delete_feed_entries(link_to_download)
 
             # ja3 files and ti_files are parsed differently, check which file is this
             # is it ja3 feed?
@@ -636,7 +640,7 @@ class UpdateManager(IModule):
                 "time": time.time(),
                 "Last-Modified": self.get_last_modified(response),
             }
-            self.db.set_TI_file_info(link_to_download, file_info)
+            self.db.set_ti_feed_info(link_to_download, file_info)
 
             self.log(
                 f"Successfully updated in DB the remote file {link_to_download}"
@@ -706,7 +710,7 @@ class UpdateManager(IModule):
 
             # update the timestamp in the db
             malicious_file_info = {"time": time.time()}
-            self.db.set_TI_file_info("riskiq_domains", malicious_file_info)
+            self.db.set_ti_feed_info("riskiq_domains", malicious_file_info)
             self.log("Successfully updated RiskIQ domains.")
             return True
         except Exception as e:
@@ -716,43 +720,6 @@ class UpdateManager(IModule):
             self.print("An error occurred while updating RiskIQ feed.", 0, 1)
             self.print(f"Error: {e}", 0, 1)
             return False
-
-    def delete_old_source_IPs(self, file):
-        """
-        When file is updated, delete the old IPs in the cache
-        """
-        all_data = self.db.get_IPs_in_IoC()
-        old_data = []
-        for ip_data in all_data.items():
-            ip = ip_data[0]
-            data = json.loads(ip_data[1])
-            if data["source"] == file:
-                old_data.append(ip)
-        if old_data:
-            self.db.delete_ips_from_IoC_ips(old_data)
-
-    def delete_old_source_Domains(self, file):
-        """
-        When file is updated, delete the old Domains in the cache
-        """
-        all_data = self.db.get_Domains_in_IoC()
-        old_data = []
-        for domain_data in all_data.items():
-            domain = domain_data[0]
-            data = json.loads(domain_data[1])
-            if data["source"] == file:
-                old_data.append(domain)
-        if old_data:
-            self.db.delete_domains_from_IoC_domains(old_data)
-
-    def delete_old_source_data_from_database(self, data_file):
-        """
-        Delete old IPs of the source from the database.
-        :param data_file: the name of source to delete old IPs from.
-        """
-        # Only read the files with .txt or .csv
-        self.delete_old_source_IPs(data_file)
-        self.delete_old_source_Domains(data_file)
 
     def parse_ja3_feed(self, url, ja3_feed_path: str) -> bool:
         """
@@ -1445,7 +1412,7 @@ class UpdateManager(IModule):
     def check_if_update_org(self, file):
         """checks if we should update organizations' info
         based on the hash of thegiven file"""
-        cached_hash = self.db.get_TI_file_info(file).get("hash", "")
+        cached_hash = self.db.get_ti_feed_info(file).get("hash", "")
         if utils.get_sha256_hash(file) != cached_hash:
             return True
 
@@ -1480,7 +1447,7 @@ class UpdateManager(IModule):
                 info = {
                     "hash": utils.get_sha256_hash(file),
                 }
-                self.db.set_TI_file_info(file, info)
+                self.db.set_ti_feed_info(file, info)
 
     def update_ports_info(self):
         for file in os.listdir("slips_files/ports_info"):
@@ -1543,7 +1510,7 @@ class UpdateManager(IModule):
         with open(path_to_mac_db, "w") as mac_db:
             mac_db.write(mac_info)
 
-        self.db.set_TI_file_info(self.mac_db_link, {"time": time.time()})
+        self.db.set_ti_feed_info(self.mac_db_link, {"time": time.time()})
         return True
 
     def update_online_whitelist(self):
@@ -1646,7 +1613,7 @@ class UpdateManager(IModule):
         self.update_finished = asyncio.create_task(self.update())
         await self.update_finished
         self.print(
-            f"{self.db.get_loaded_ti_files()} "
+            f"{self.db.get_loaded_ti_feeds()} "
             f"TI files successfully loaded."
         )
 

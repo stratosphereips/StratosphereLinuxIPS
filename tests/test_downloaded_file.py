@@ -52,7 +52,7 @@ def test_check_malicious_ssl(mocker, ssl_info, db_result, expected_call_count):
     downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj()
     downloadfile.set_evidence.malicious_ssl = Mock()
 
-    downloadfile.db.get_ssl_info.return_value = db_result
+    downloadfile.db.is_blacklisted_ssl.return_value = db_result
     downloadfile.check_malicious_ssl(ssl_info)
 
     assert (
