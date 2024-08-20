@@ -1,9 +1,13 @@
-from typing import List
+from typing import (
+    List,
+    Dict,
+)
 
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.evidence_structure.evidence import Evidence
 from slips_files.core.output import Output
 
 
@@ -383,6 +387,25 @@ class DBManager(IObservable):
 
     def set_evidence(self, *args, **kwargs):
         return self.rdb.set_evidence(*args, **kwargs)
+
+    def set_alert(
+        self, alert_id: str, evidence_causing_the_alert: Dict[str, Evidence]
+    ):
+        """
+        Sets the alert in the rdb and sqlite databases
+        """
+        profile, srcip, twid, _ = alert_id.split("_")
+        profileid = f"{profile}_{srcip}"
+
+        self.rdb.set_alert(profileid, twid, alert_id)
+
+        tw_start, tw_end = self.rdb.get_tw_limits(profileid, twid)
+        self.sqlite.add_alert(alert_id, tw_start, tw_end)
+
+        for evidence_id in evidence_causing_the_alert.keys():
+            uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
+            self.set_flow_label(uids, "malicious")
+        return
 
     def get_user_agents_count(self, *args, **kwargs):
         return self.rdb.get_user_agents_count(*args, **kwargs)
@@ -766,11 +789,9 @@ class DBManager(IObservable):
 
     def label_flows_causing_alert(self, evidence_ids: List[str]):
         """
+        Uses sqlite and rdb
         :param evidence_ids: list of ids of evidence causing an alert
         """
-        for evidence_id in evidence_ids:
-            uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
-            self.set_flow_label(uids, "malicious")
 
     def set_mac_vendor_to_profile(self, *args, **kwargs):
         return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
@@ -883,13 +904,8 @@ class DBManager(IObservable):
     def get_branch(self, *args, **kwargs):
         return self.rdb.get_branch(*args, **kwargs)
 
-    def add_alert(self, alert: dict):
-        twid_starttime: float = self.rdb.get_tw_start_time(
-            alert["profileid"], alert["twid"]
-        )
-        twid_endtime: float = twid_starttime + RedisDB.width
-        alert.update({"tw_start": twid_starttime, "tw_end": twid_endtime})
-        return self.sqlite.add_alert(alert)
+    def get_tw_limits(self, *args, **kwargs):
+        return self.rdb.get_tw_limits(*args, **kwargs)
 
     def close(self, *args, **kwargs):
         self.rdb.r.close()
