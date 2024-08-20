@@ -1,7 +1,7 @@
-from modules.ip_info.jarm import JARM
 import platform
 import sys
 from typing import Union
+from uuid import uuid4
 import datetime
 import maxminddb
 import ipaddress
@@ -16,6 +16,7 @@ import time
 import asyncio
 import multiprocessing
 
+from modules.ip_info.jarm import JARM
 from .asn_info import ASN
 from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
@@ -521,8 +522,12 @@ class IPInfo(IModule):
             f" on port: {portproto} {port_info}. {dstip_id}"
         )
         twid_number = int(twid.replace("timewindow", ""))
-
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_JARM,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=dstip
@@ -541,6 +546,8 @@ class IPInfo(IModule):
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_JARM,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr

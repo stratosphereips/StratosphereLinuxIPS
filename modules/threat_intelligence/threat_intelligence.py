@@ -1,6 +1,7 @@
 import ipaddress
 import os
 import json
+from uuid import uuid4
 import validators
 import dns
 import requests
@@ -226,7 +227,12 @@ class ThreatIntel(IModule, URLhaus):
             f"Tags: {tags} {identification}"
         )
         twid_int = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_ASN,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -245,6 +251,8 @@ class ThreatIntel(IModule, URLhaus):
 
         self.db.set_evidence(evidence)
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_ASN,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
@@ -319,7 +327,12 @@ class ThreatIntel(IModule, URLhaus):
         )
 
         twid_int = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=ip
@@ -339,6 +352,8 @@ class ThreatIntel(IModule, URLhaus):
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -427,7 +442,13 @@ class ThreatIntel(IModule, URLhaus):
         )
 
         twid_int = int(twid.replace("timewindow", ""))
+
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
@@ -446,6 +467,8 @@ class ThreatIntel(IModule, URLhaus):
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -462,7 +485,6 @@ class ThreatIntel(IModule, URLhaus):
             timestamp=utils.convert_format(timestamp, utils.alerts_format),
         )
         self.db.set_evidence(evidence)
-
         # mark this ip as malicious in our database
         ip_info = {"threatintelligence": ip_info}
         self.db.set_ip_info(ip, ip_info)
@@ -533,7 +555,12 @@ class ThreatIntel(IModule, URLhaus):
         if tags:
             description += f"with tags: {tags}. "
         twid_number = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
@@ -557,6 +584,8 @@ class ThreatIntel(IModule, URLhaus):
         if domain_resolution:
             domain_resolution: str = domain_resolution[0]
             evidence = Evidence(
+                id=evidence_id_of_dstip_as_the_attacker,
+                rel_id=[evidence_id_of_srcip_as_the_attacker],
                 evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN,
                 attacker=Attacker(
                     direction=Direction.DST,
@@ -1187,7 +1216,12 @@ class ThreatIntel(IModule, URLhaus):
         twid = TimeWindow(
             number=int(file_info["twid"].replace("timewindow", ""))
         )
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
@@ -1204,6 +1238,8 @@ class ThreatIntel(IModule, URLhaus):
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr

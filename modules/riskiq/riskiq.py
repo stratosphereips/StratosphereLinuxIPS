@@ -1,10 +1,11 @@
-# Must imports
-from slips_files.common.imports import *
-
-# Your imports
 import json
 import requests
 from requests.auth import HTTPBasicAuth
+from typing import Optional
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 
 
 class RiskIQ(IModule):
@@ -22,10 +23,9 @@ class RiskIQ(IModule):
 
     def read_configuration(self):
         conf = ConfigParser()
-        # Read the riskiq api key
-        RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
+        risk_iq_credentials_path = conf.RiskIQ_credentials_path()
         try:
-            with open(RiskIQ_credentials_path, "r") as f:
+            with open(risk_iq_credentials_path, "r") as f:
                 self.riskiq_email = f.readline().replace("\n", "")
                 self.riskiq_key = f.readline().replace("\n", "")
                 if len(self.riskiq_key) != 64:
@@ -37,7 +37,7 @@ class RiskIQ(IModule):
             self.riskiq_email = None
             self.riskiq_key = None
 
-    def get_passive_dns(self, ip) -> list:
+    def get_passive_dns(self, ip) -> Optional[list]:
         """
         Get passive dns info about this ip from passive total/RiskIQ
         """
@@ -88,12 +88,12 @@ class RiskIQ(IModule):
             return 1
 
     def main(self):
-        # Main loop function
         if msg := self.get_msg("new_ip"):
             ip = msg["data"]
             if utils.is_ignored_ip(ip):
                 # return here means keep looping
                 return
+
             # Only get passive total dns data if we don't have it in the db
             if self.db.get_passive_dns(ip):
                 return
