@@ -127,7 +127,9 @@ class IDMEFv2(IObservable):
             msg.pop(field)
         return msg
 
-    def convert(self, evidence: Evidence) -> Message:
+    # def convert_to_idmef_alert(self, ):
+
+    def convert_to_idmef_event(self, evidence: Evidence) -> Message:
         """
         Function to convert Slips evidence to
         The Incident Detection Message Exchange Format version 2
@@ -218,6 +220,7 @@ class IDMEFv2(IObservable):
             return msg
 
         except jsonschema.exceptions.ValidationError as e:
+            # TODO should be logged using a module's print!
             print(f"IDMEFv2 Validation failure: {e.message}")
 
         except Exception as e:
