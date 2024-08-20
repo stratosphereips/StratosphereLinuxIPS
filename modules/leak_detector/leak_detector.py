@@ -10,6 +10,7 @@ from typing import (
     Dict,
     List,
 )
+from uuid import uuid4
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
@@ -223,7 +224,12 @@ class LeakDetector(IModule):
             return
 
         twid_number = int(twid[0].replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
@@ -236,12 +242,14 @@ class LeakDetector(IModule):
             uid=[uid],
             timestamp=ts,
             proto=Proto(proto.lower()),
-            port=dport,
+            port=int(dport),
         )
 
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=dstip

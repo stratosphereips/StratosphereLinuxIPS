@@ -1,5 +1,7 @@
 from typing import Dict, Any
 import json
+from uuid import uuid4
+
 import requests
 
 from slips_files.common.slips_utils import utils
@@ -199,7 +201,12 @@ class URLhaus:
 
         timestamp: str = flow["starttime"]
         twid_int = int(file_info["twid"].replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -216,6 +223,8 @@ class URLhaus:
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
@@ -261,7 +270,12 @@ class URLhaus:
         description: str = url_info.get("description", "")
         saddr: str = profileid.split("_")[-1]
         twid_int = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -277,6 +291,8 @@ class URLhaus:
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr

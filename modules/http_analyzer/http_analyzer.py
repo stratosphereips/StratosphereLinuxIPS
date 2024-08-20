@@ -1,5 +1,7 @@
 import json
 import urllib
+from uuid import uuid4
+
 import requests
 from typing import Union, Dict
 
@@ -85,6 +87,7 @@ class HTTPAnalyzer(IModule):
             "jndi",
             "tesseract",
         )
+
         for suspicious_ua in suspicious_user_agents:
             if suspicious_ua.lower() in user_agent.lower():
                 confidence: float = 1
@@ -161,34 +164,32 @@ class HTTPAnalyzer(IModule):
             return False
 
         uids, connections = self.connections_counter[host]
-        if connections == self.empty_connections_threshold:
-            confidence: float = 1
-            saddr: str = profileid.split("_")[-1]
-            description: str = f"Multiple empty HTTP connections to {host}"
+        if connections != self.empty_connections_threshold:
+            return False
+        confidence: float = 1
+        saddr: str = profileid.split("_")[-1]
+        description: str = f"Multiple empty HTTP connections to {host}"
 
-            evidence: Evidence = Evidence(
-                evidence_type=EvidenceType.EMPTY_CONNECTIONS,
-                attacker=Attacker(
-                    direction=Direction.SRC,
-                    attacker_type=IoCType.IP,
-                    value=saddr,
-                ),
-                threat_level=ThreatLevel.MEDIUM,
-                confidence=confidence,
-                description=description,
-                profile=ProfileID(ip=saddr),
-                timewindow=TimeWindow(
-                    number=int(twid.replace("timewindow", ""))
-                ),
-                uid=uids,
-                timestamp=timestamp,
-            )
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.EMPTY_CONNECTIONS,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=saddr,
+            ),
+            threat_level=ThreatLevel.MEDIUM,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=uids,
+            timestamp=timestamp,
+        )
 
-            self.db.set_evidence(evidence)
-            # reset the counter
-            self.connections_counter[host] = ([], 0)
-            return True
-        return False
+        self.db.set_evidence(evidence)
+        # reset the counter
+        self.connections_counter[host] = ([], 0)
+        return True
 
     def set_evidence_incompatible_user_agent(
         self,
@@ -248,7 +249,12 @@ class HTTPAnalyzer(IModule):
             f"by {saddr} from {daddr} {ip_identification}."
         )
         twid_number = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence: Evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -265,6 +271,8 @@ class HTTPAnalyzer(IModule):
         self.db.set_evidence(evidence)
 
         evidence: Evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
@@ -563,40 +571,40 @@ class HTTPAnalyzer(IModule):
             return False
 
         ip_identification = self.db.get_ip_identification(daddr)
-        if (
+        if not (
             "pastebin" in ip_identification
             and response_body_len > self.pastebin_downloads_threshold
             and method == "GET"
         ):
-            confidence: float = 1
-            threat_level: ThreatLevel = ThreatLevel.INFO
-            saddr = profileid.split("_")[1]
+            return False
 
-            response_body_len = utils.convert_to_mb(response_body_len)
-            description: str = (
-                f"A downloaded file from pastebin.com. "
-                f"Size: {response_body_len} MBs"
-            )
-            attacker = Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
-            )
+        confidence: float = 1
+        threat_level: ThreatLevel = ThreatLevel.INFO
+        saddr = profileid.split("_")[1]
 
-            evidence: Evidence = Evidence(
-                evidence_type=EvidenceType.PASTEBIN_DOWNLOAD,
-                attacker=attacker,
-                threat_level=threat_level,
-                confidence=confidence,
-                description=description,
-                profile=ProfileID(ip=saddr),
-                timewindow=TimeWindow(
-                    number=int(twid.replace("timewindow", ""))
-                ),
-                uid=[uid],
-                timestamp=timestamp,
-            )
+        response_body_len = utils.convert_to_mb(response_body_len)
+        description: str = (
+            f"A downloaded file from pastebin.com. "
+            f"Size: {response_body_len} MBs"
+        )
+        attacker = Attacker(
+            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+        )
 
-            self.db.set_evidence(evidence)
-            return True
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.PASTEBIN_DOWNLOAD,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[uid],
+            timestamp=timestamp,
+        )
+
+        self.db.set_evidence(evidence)
+        return True
 
     def set_evidence_weird_http_method(
         self, profileid: str, twid: str, flow: dict

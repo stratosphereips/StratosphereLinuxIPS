@@ -1,6 +1,8 @@
 import warnings
 import json
 from typing import Dict
+from uuid import uuid4
+
 import numpy as np
 from tensorflow.keras.models import load_model
 
@@ -72,7 +74,12 @@ class CCDetection(IModule):
 
         timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
         twid_int = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence: Evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
@@ -93,6 +100,8 @@ class CCDetection(IModule):
         self.db.set_evidence(evidence)
 
         evidence: Evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=dstip

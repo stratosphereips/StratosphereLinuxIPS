@@ -68,21 +68,24 @@ class NetworkDiscovery(IModule):
         Use our own Zeek scripts to detect ICMP scans.
         Threshold is on the scripts and it is 25 ICMP flows
         """
-        if "TimestampScan" in note:
-            evidence_type = EvidenceType.ICMP_TIMESTAMP_SCAN
-        elif "ICMPAddressScan" in note:
-            evidence_type = EvidenceType.ICMP_ADDRESS_SCAN
-        elif "AddressMaskScan" in note:
-            evidence_type = EvidenceType.ICMP_ADDRESS_MASK_SCAN
-        else:
+        scan_mapping = {
+            "TimestampScan": EvidenceType.ICMP_TIMESTAMP_SCAN,
+            "ICMPAddressScan": EvidenceType.ICMP_ADDRESS_SCAN,
+            "AddressMaskScan": EvidenceType.ICMP_ADDRESS_MASK_SCAN,
+        }
+
+        evidence_type: EvidenceType = next(
+            (scan_mapping[key] for key in scan_mapping if key in note), False
+        )
+        if not evidence_type:
             # unsupported notice type
-            return False
+            return
 
         hosts_scanned = int(msg.split("on ")[1].split(" hosts")[0])
         # get the confidence from 0 to 1 based on the number of hosts scanned
         confidence = 1 / (255 - 5) * (hosts_scanned - 255) + 1
         saddr = profileid.split("_")[1]
-
+        twid = int(twid.replace("timewindow", ""))
         # this one is detected by Zeek, so we can't track the UIDs causing it
         evidence = Evidence(
             evidence_type=evidence_type,
@@ -93,7 +96,7 @@ class NetworkDiscovery(IModule):
             confidence=confidence,
             description=msg,
             profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            timewindow=TimeWindow(number=twid),
             uid=[uid],
             timestamp=timestamp,
         )

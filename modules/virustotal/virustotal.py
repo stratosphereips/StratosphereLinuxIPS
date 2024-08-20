@@ -47,7 +47,7 @@ class VT(IModule):
         )
         # create the queue thread
         self.api_calls_thread = threading.Thread(
-            target=self.API_calls_thread, daemon=True
+            target=self.api_calls_thread, daemon=True
         )
         # this will be true when there's a problem with the
         # API key, then the module will exit
@@ -165,7 +165,7 @@ class VT(IModule):
         data = {"VirusTotal": vtdata}
         self.db.cache_url_info_by_virustotal(url, data)
 
-    def set_domain_data_in_DomainInfo(self, domain, cached_data):
+    def update_domain_info_cache(self, domain, cached_data):
         """
         Function to set VirusTotal data of the domain in the DomainInfo.
         It also sets asn data if it is unknown or does not exist.
@@ -186,7 +186,7 @@ class VT(IModule):
             data["asn"] = {"number": f"AS{as_owner}"}
         self.db.set_info_for_domains(domain, data)
 
-    def API_calls_thread(self):
+    def api_calls_thread(self):
         """
         This thread starts if there's an API calls queue,
         it operates every minute, and executes 4 api calls
@@ -224,7 +224,7 @@ class VT(IModule):
                 elif ioc_type == "domain":
                     cached_data = self.db.get_domain_data(ioc)
                     if not cached_data or "VirusTotal" not in cached_data:
-                        self.set_domain_data_in_DomainInfo(ioc, cached_data)
+                        self.update_domain_info_cache(ioc, cached_data)
 
                 elif ioc_type == "url":
                     cached_data = self.db.is_cached_url_by_vt(ioc)
@@ -604,14 +604,14 @@ class VT(IModule):
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
             if domain and (not cached_data or "VirusTotal" not in cached_data):
-                self.set_domain_data_in_DomainInfo(domain, cached_data)
+                self.update_domain_info_cache(domain, cached_data)
             elif domain and cached_data and "VirusTotal" in cached_data:
                 # If VT is in data, check timestamp. Take time difference,
                 # if not valid, update vt scores.
                 if (
                     time.time() - cached_data["VirusTotal"]["timestamp"]
                 ) > self.update_period:
-                    self.set_domain_data_in_DomainInfo(domain, cached_data)
+                    self.update_domain_info_cache(domain, cached_data)
 
         if msg := self.get_msg("new_url"):
             data = msg["data"]
