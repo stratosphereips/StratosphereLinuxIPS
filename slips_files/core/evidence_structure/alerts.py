@@ -12,6 +12,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
     ProfileID,
     TimeWindow,
+    Evidence,
 )
 
 
@@ -25,10 +26,15 @@ def is_valid_correl_id(correl_id: List[str]) -> bool:
 class Alert:
     profileid: ProfileID
     timewindow: TimeWindow
-    start_time: str
+    # the last evidence that triggered this alert
+    last_evidence: Evidence
+    start_time: str  # Todo force iso format
     end_time: str
+    # accumulated threat level of all evidence in this alert
+    accumulated_threat_level: float
     # every alert should have an ID according to the IDMEF format
     id: str = field(default_factory=lambda: str(uuid4()))
+    # basically the last evidence that triggered the threshold for this alert
     # list of evidence acausing this alert
     correl_id: List[str] = field(
         default=None,
@@ -38,6 +44,7 @@ class Alert:
             )
         },
     )
+    last_flow_datetime: str = ""
 
     def __post_init__(self):
         if not is_valid_correl_id(self.correl_id):
@@ -45,6 +52,12 @@ class Alert:
         else:
             # remove duplicate uids
             self.correl_id = list(set(self.correl_id))
+        # timestamp of the flow causing the last evidence of this alert
+        if not self.last_flow_datetime:
+            last_flow_timestamp: str = self.last_evidence.timestamp
+            self.last_flow_datetime = utils.convert_format(
+                last_flow_timestamp, "iso"
+            )
 
 
 def dict_to_alert(alert: dict) -> Alert:
@@ -58,8 +71,10 @@ def dict_to_alert(alert: dict) -> Alert:
             ProfileID(alert["profile"]["ip"]) if "profile" in alert else None
         ),
         timewindow=TimeWindow(alert["timewindow"]["number"]),
+        last_evidence=alert["last_evidence"],
         start_time=alert.get("start_time"),
         end_time=alert.get("end_time"),
+        accumulated_threat_level=alert.get("accumulated_threat_level"),
         id=alert.get("id", ""),
         correl_id=alert.get("correl_id"),
     )
