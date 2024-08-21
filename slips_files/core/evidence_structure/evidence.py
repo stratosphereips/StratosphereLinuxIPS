@@ -171,6 +171,8 @@ class Attacker:
 @dataclass
 class TimeWindow:
     number: int
+    start_time: Optional[str] = ""
+    end_time: Optional[str] = ""
 
     def __post_init__(self):
         if not isinstance(self.number, int):

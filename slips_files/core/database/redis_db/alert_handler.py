@@ -47,7 +47,7 @@ class AlertHandler:
         old_profileid_twid_alerts: Dict[str, List[str]]
 
         old_profileid_twid_alerts = self.get_profileid_twid_alerts(
-            str(alert.profileid), str(alert.twid)
+            str(alert.profile), str(alert.timewindow)
         )
 
         alert_dict = {alert.id: json.dumps(alert.correl_id)}
@@ -59,10 +59,12 @@ class AlertHandler:
             profileid_twid_alerts = json.dumps(old_profileid_twid_alerts)
         else:
             # no previous alerts for this profileid twid
-            profileid_twid_alerts = json.dumps(alert)
+            profileid_twid_alerts = json.dumps(alert_dict)
 
         self.r.hset(
-            f"{alert.profileid}_{alert.twid}", "alerts", profileid_twid_alerts
+            f"{alert.profile}_{alert.timewindow}",
+            "alerts",
+            profileid_twid_alerts,
         )
         self.r.incr("number_of_alerts", 1)
 
@@ -116,9 +118,9 @@ class AlertHandler:
 
     def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
         """returns the timewindow start and endtime"""
-        twid_starttime: float = self.rdb.get_tw_start_time(profileid, twid)
-        twid_endtime: float = twid_starttime + self.width
-        return twid_starttime, twid_endtime
+        twid_start_time: float = self.get_tw_start_time(profileid, twid)
+        twid_end_time: float = twid_start_time + self.width
+        return twid_start_time, twid_end_time
 
     def set_evidence(self, evidence: Evidence):
         """
@@ -170,18 +172,18 @@ class AlertHandler:
         # when an alert is generated , we should set the threat level of the
         # attacker's profile to 1(critical) and confidence 1
         # so that it gets reported to other peers with these numbers
-        self.update_threat_level(str(alert.profileid), "critical", 1)
+        self.update_threat_level(str(alert.profile), "critical", 1)
 
         # reset the accumulated threat level now that an alert is generated
         self.set_accumulated_threat_level(alert, 0)
-        self.mark_profile_as_malicious(alert.profileid)
+        self.mark_profile_as_malicious(alert.profile)
 
         alert_details = {
             "alert_ID": alert.id,
-            "profileid": str(alert.profileid),
+            "profileid": str(alert.profile),
             "twid": str(alert.timewindow),
         }
-        self.db.publish("new_alert", json.dumps(alert_details))
+        self.publish("new_alert", json.dumps(alert_details))
 
     def init_evidence_number(self):
         """used when the db starts to initialize number of
@@ -296,7 +298,7 @@ class AlertHandler:
         alert: Alert,
         accumulated_threat_lvl: float,
     ):
-        profile_twid = f"{alert.profileid}_{alert.timewindow}"
+        profile_twid = f"{alert.profile}_{alert.timewindow}"
         self.r.zadd(
             "accumulated_threat_levels",
             {profile_twid: accumulated_threat_lvl},

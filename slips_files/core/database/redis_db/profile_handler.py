@@ -767,7 +767,7 @@ class ProfileHandler(IObservable):
             contacted_ips[daddr] = uid
         return contacted_ips
 
-    def markProfileTWAsBlocked(self, profileid, twid):
+    def mark_profile_and_timewindow_as_blocked(self, profileid, twid):
         """Add this profile and tw to the list of blocked
         a profile is only blocked if it was blocked using the user's
         firewall, not if it just generated an alert

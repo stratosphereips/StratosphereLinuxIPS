@@ -24,12 +24,11 @@ def is_valid_correl_id(correl_id: List[str]) -> bool:
 
 @dataclass
 class Alert:
-    profileid: ProfileID
+    profile: ProfileID
+    # this should have the fields start_Time and end_time set #TODO force it
     timewindow: TimeWindow
     # the last evidence that triggered this alert
     last_evidence: Evidence
-    start_time: str  # Todo force iso format
-    end_time: str
     # accumulated threat level of all evidence in this alert
     accumulated_threat_level: float
     # every alert should have an ID according to the IDMEF format
@@ -67,13 +66,15 @@ def dict_to_alert(alert: dict) -> Alert:
     returns an instance of the alerts class.
     """
     return Alert(
-        profileid=(
+        profile=(
             ProfileID(alert["profile"]["ip"]) if "profile" in alert else None
         ),
-        timewindow=TimeWindow(alert["timewindow"]["number"]),
+        timewindow=TimeWindow(
+            alert["timewindow"]["number"],
+            alert["timewindow"]["start_time"],
+            alert["timewindow"]["end_time"],
+        ),
         last_evidence=alert["last_evidence"],
-        start_time=alert.get("start_time"),
-        end_time=alert.get("end_time"),
         accumulated_threat_level=alert.get("accumulated_threat_level"),
         id=alert.get("id", ""),
         correl_id=alert.get("correl_id"),
