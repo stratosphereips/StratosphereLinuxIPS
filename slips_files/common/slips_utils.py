@@ -111,6 +111,26 @@ class Utils(object):
 
         return sanitized_string
 
+    def to_dict(self, obj):
+        """
+        Converts an Evidence object to a dictionary (aka json serializable)
+        :param obj: object of any type.
+        """
+        if is_dataclass(obj):
+            # run this function on each value of the given dataclass
+            return {k: self.to_dict(v) for k, v in asdict(obj).items()}
+
+        if isinstance(obj, Enum):
+            return obj.name
+
+        if isinstance(obj, list):
+            return [self.to_dict(item) for item in obj]
+
+        if isinstance(obj, dict):
+            return {k: self.to_dict(v) for k, v in obj.items()}
+
+        return obj
+
     def is_valid_uuid4(self, uuid_string: str) -> bool:
         """Validate that the given str in UUID4"""
         try:

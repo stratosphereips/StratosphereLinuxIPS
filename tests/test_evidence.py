@@ -1,5 +1,6 @@
 from tests.module_factory import ModuleFactory
 import pytest
+from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import validate_timestamp
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
@@ -14,7 +15,6 @@ from slips_files.core.evidence_structure.evidence import (
     Anomaly,
     Recon,
     Attempt,
-    evidence_to_dict,
 )
 
 
@@ -239,7 +239,7 @@ def test_evidence_to_dict(
         confidence=confidence,
     )
 
-    evidence_dict = evidence_to_dict(evidence)
+    evidence_dict = utils.to_dict(evidence)
 
     assert isinstance(evidence_dict, dict)
     assert evidence_dict["evidence_type"] == evidence_type.name
