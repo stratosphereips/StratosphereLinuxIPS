@@ -2,10 +2,12 @@ import time
 import json
 from typing import List, Tuple, Optional, Dict
 from slips_files.common.slips_utils import utils
+from slips_files.core.evidence_structure.alerts import Alert
 from slips_files.core.evidence_structure.evidence import (
     Evidence,
     EvidenceType,
     Victim,
+    ProfileID,
 )
 
 
@@ -32,38 +34,36 @@ class AlertHandler:
             f"{attacker}_evidence_summary", f"{victim}_{evidence_type}", 1
         )
 
-    def mark_profile_as_malicious(self, profileid: str):
+    def mark_profile_as_malicious(self, profileid: ProfileID):
         """keeps track of profiles that generated an alert"""
-        self.r.sadd("malicious_profiles", profileid)
+        self.r.sadd("malicious_profiles", str(profileid))
 
-    def set_evidence_causing_alert(
-        self, profileid, twid, alert_ID, evidence_IDs: list
-    ):
+    def set_evidence_causing_alert(self, alert: Alert):
         """
         When we have a bunch of evidence causing an alert,
         we associate all evidence IDs with the alert ID in our database
         this function stores evidence in 'alerts_profile_twid' key only
-        :param alert ID: the profileid_twid_ID of the last evidence
-            causing this alert
-        :param evidence_IDs: all IDs of the evidence causing this alert
         """
         old_profileid_twid_alerts: Dict[str, List[str]]
+
         old_profileid_twid_alerts = self.get_profileid_twid_alerts(
-            profileid, twid
+            str(alert.profileid), str(alert.twid)
         )
 
-        alert = {alert_ID: json.dumps(evidence_IDs)}
+        alert_dict = {alert.id: json.dumps(alert.correl_id)}
 
         if old_profileid_twid_alerts:
             # update previous alerts for this profileid twid
             # add the alert we have to the old alerts of this profileid_twid
-            old_profileid_twid_alerts.update(alert)
+            old_profileid_twid_alerts.update(alert_dict)
             profileid_twid_alerts = json.dumps(old_profileid_twid_alerts)
         else:
             # no previous alerts for this profileid twid
             profileid_twid_alerts = json.dumps(alert)
 
-        self.r.hset(f"{profileid}_{twid}", "alerts", profileid_twid_alerts)
+        self.r.hset(
+            f"{alert.profileid}_{alert.twid}", "alerts", profileid_twid_alerts
+        )
         self.r.incr("number_of_alerts", 1)
 
     def get_evidence_causing_alert(
@@ -165,23 +165,21 @@ class AlertHandler:
 
         return False
 
-    def set_alert(self, profileid: str, twid: str, alert_id: str):
-        self.db.set_evidence_causing_alert(
-            profileid, twid, alert_id, self.IDs_causing_an_alert
-        )
+    def set_alert(self, alert: Alert):
+        self.set_evidence_causing_alert(alert)
         # when an alert is generated , we should set the threat level of the
         # attacker's profile to 1(critical) and confidence 1
         # so that it gets reported to other peers with these numbers
-        self.update_threat_level(profileid, "critical", 1)
+        self.update_threat_level(str(alert.profileid), "critical", 1)
 
         # reset the accumulated threat level now that an alert is generated
-        self.set_accumulated_threat_level(profileid, twid, 0)
-        self.mark_profile_as_malicious(profileid)
+        self.set_accumulated_threat_level(alert, 0)
+        self.mark_profile_as_malicious(alert.profileid)
 
         alert_details = {
-            "alert_ID": alert_id,
-            "profileid": profileid,
-            "twid": twid,
+            "alert_ID": alert.id,
+            "profileid": str(alert.profileid),
+            "twid": str(alert.timewindow),
         }
         self.db.publish("new_alert", json.dumps(alert_details))
 
@@ -295,13 +293,13 @@ class AlertHandler:
 
     def set_accumulated_threat_level(
         self,
-        profileid: str,
-        twid: str,
+        alert: Alert,
         accumulated_threat_lvl: float,
     ):
+        profile_twid = f"{alert.profileid}_{alert.timewindow}"
         self.r.zadd(
             "accumulated_threat_levels",
-            {f"{profileid}_{twid}": accumulated_threat_lvl},
+            {profile_twid: accumulated_threat_lvl},
         )
 
     def update_max_threat_level(

@@ -3,6 +3,7 @@ from typing import (
     Dict,
 )
 
+from fides.fides.model.alert import Alert
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -389,18 +390,13 @@ class DBManager(IObservable):
         return self.rdb.set_evidence(*args, **kwargs)
 
     def set_alert(
-        self, alert_id: str, evidence_causing_the_alert: Dict[str, Evidence]
+        self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
     ):
         """
         Sets the alert in the rdb and sqlite databases
         """
-        profile, srcip, twid, _ = alert_id.split("_")
-        profileid = f"{profile}_{srcip}"
-
-        self.rdb.set_alert(profileid, twid, alert_id)
-
-        tw_start, tw_end = self.rdb.get_tw_limits(profileid, twid)
-        self.sqlite.add_alert(alert_id, tw_start, tw_end)
+        self.rdb.set_alert(alert)
+        self.sqlite.add_alert(alert)
 
         for evidence_id in evidence_causing_the_alert.keys():
             uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)

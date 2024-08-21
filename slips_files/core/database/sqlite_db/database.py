@@ -9,6 +9,7 @@ from threading import Lock
 from time import sleep
 
 from slips_files.common.slips_utils import utils
+from slips_files.core.evidence_structure.alerts import Alert
 from slips_files.core.output import Output
 from slips_files.common.abstracts.observer import IObservable
 
@@ -318,24 +319,21 @@ class SQLiteDB(IObservable):
             parameters,
         )
 
-    def add_alert(self, alert_id: str, tw_start: float, tw_end: float):
+    def add_alert(self, alert: Alert):
         """
         adds an alert to the alerts table
-        :param alert_id: - separated profile, script, timewindow and alert
-        uuid4
         """
-        profile, srcip, twid, _ = alert_id.split("_")
         now = utils.convert_format(datetime.now(), "unixtimestamp")
         self.execute(
             "INSERT OR REPLACE INTO alerts "
             "(alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) "
             "VALUES (?, ?, ?, ?, ?, ?, ?);",
             (
-                alert_id,
-                srcip,
-                twid,
-                tw_start,
-                tw_end,
+                alert.id,
+                alert.profile.ip,
+                str(alert.timewindow),
+                alert.start_time,
+                alert.end_time,
                 "malicious",
                 # This is the local time slips detected this alert, not the
                 # network time
