@@ -1,3 +1,4 @@
+import json
 from enum import Enum
 from idmefv2 import Message
 import traceback
@@ -7,6 +8,7 @@ from uuid import uuid4
 import jsonschema
 
 from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.evidence_structure.alerts import Alert
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.evidence import (
@@ -31,6 +33,14 @@ class IDMEFv2Severity(Enum):
 
 
 class IDMEFv2(IObservable):
+    """
+    Class to convert Slips evidence and alerts to
+    The Incident Detection Message Exchange Format version 2 (IDMEFv2 format).
+    More Details about it here:
+    https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
+
+    """
+
     def __init__(self, logger: Output, db):
         IObservable.__init__(self)
         self.logger = logger
@@ -38,6 +48,16 @@ class IDMEFv2(IObservable):
         self.name = "IDMEFv2"
         self.db = db
         self.model = f"Stratosphere Linux IPS {utils.get_slips_version()}"
+        self.analyzer = {
+            "IP": "192.168.1.2",
+            "Name": "Slips",
+            "Model": self.model,
+            "Category": ["NIDS"],
+            "Data": ["Flow"],
+            "Method": ["Heuristic"],
+        }
+        # the used idmef version
+        self.version = "2.0.3"
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -127,7 +147,53 @@ class IDMEFv2(IObservable):
             msg.pop(field)
         return msg
 
-    # def convert_to_idmef_alert(self, ):
+    def convert_to_idmef_alert(self, alert: Alert) -> Message:
+        """
+        converts the given alert to IDMEFv2 alert
+        """
+        try:
+            now = datetime.now(utils.local_tz).isoformat("T")
+            iso_start_time = utils.convert_format(
+                alert.timewindow.start_time, "iso"
+            ).replace(" ", "T")
+            iso_end_time = utils.convert_format(
+                alert.timewindow.end_time, "iso"
+            ).replace(" ", "T")
+
+            msg = Message()
+            msg.update(
+                {
+                    "Version": self.version,
+                    "Analyzer": self.analyzer,
+                    "Source": [{"IP": alert.profile.ip}],
+                    "ID": alert.id,
+                    "Status": "Incident",
+                    "StartTime": iso_start_time,
+                    # Timestamp indicating when the message was created
+                    "CreateTime": now,
+                    "CorrelID": alert.correl_id,
+                    "Note": json.dumps(
+                        {
+                            "accumulated_threat_level": alert.accumulated_threat_level,
+                            "timewindow": alert.timewindow.number,
+                            # temporary. there's an issue with the imefv2 python
+                            # library validator, it doesn't recognize the endtime
+                            # as a supported property!
+                            "EndTime": iso_end_time,
+                        }
+                    ),
+                }
+            )
+            msg.validate()
+            return msg
+
+        except jsonschema.exceptions.ValidationError as e:
+            # TODO should be logged using a module's print!
+            print(f"IDMEFv2 Validation failure: {e.message}")
+
+        except Exception as e:
+            print(f"Error in convert(): {e}")
+            print(traceback.format_exc())
 
     def convert_to_idmef_event(self, evidence: Evidence) -> Message:
         """
@@ -150,18 +216,10 @@ class IDMEFv2(IObservable):
             )
 
             msg = Message()
-
             msg.update(
                 {
-                    "Version": "2.0.3",
-                    "Analyzer": {
-                        "IP": "192.168.1.2",
-                        "Name": "Slips",
-                        "Model": self.model,
-                        "Category": ["NIDS"],
-                        "Data": ["Flow"],
-                        "Method": ["Heuristic"],
-                    },
+                    "Version": self.version,
+                    "Analyzer": self.analyzer,
                     "Status": IDMEFv2Status.EVIDENCE.value,
                     # that is a uuid4()
                     "ID": evidence.id,
