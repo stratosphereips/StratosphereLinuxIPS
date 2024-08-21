@@ -537,6 +537,7 @@ class Main(IObservable):
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         msg = (
+            f"[Main] "
             f"Total analyzed IPs so far: "
             f"{green(profiles_len)}. "
             f"Evidence Added: {green(evidence_number)}. "

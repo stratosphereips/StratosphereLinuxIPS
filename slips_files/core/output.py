@@ -266,6 +266,8 @@ class Output(IObserver):
         writes to the pbar pipe. anything sent by this method
         will be received by the pbar class
         """
+        if not msg:
+            return
         self.pbar_sender_pipe.send(msg)
 
     def is_pbar_finished(self) -> bool:

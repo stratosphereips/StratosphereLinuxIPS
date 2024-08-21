@@ -410,7 +410,7 @@ def test_tell_pbar_empty_message():
     msg = {}
     output.tell_pbar(msg)
 
-    output.pbar_sender_pipe.send.assert_called_once_with(msg)
+    output.pbar_sender_pipe.send.assert_not_called()
 
 
 def test_tell_pbar_none_message():
@@ -421,7 +421,7 @@ def test_tell_pbar_none_message():
     msg = None
     output.tell_pbar(msg)
 
-    output.pbar_sender_pipe.send.assert_called_once_with(msg)
+    output.pbar_sender_pipe.send.assert_not_called()
 
 
 def test_tell_pbar_large_message():
