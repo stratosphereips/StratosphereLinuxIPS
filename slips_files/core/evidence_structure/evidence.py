@@ -3,7 +3,7 @@ Contains evidence dataclass that is used in slips
 """
 
 import ipaddress
-from dataclasses import dataclass, field, asdict, is_dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from uuid import uuid4
 from typing import List, Optional
@@ -228,31 +228,10 @@ class Evidence:
             self.uid = list(set(self.uid))
 
 
-def evidence_to_dict(obj):
-    """
-    Converts an Evidence object to a dictionary (aka json serializable)
-    :param obj: object of any type.
-    """
-    if is_dataclass(obj):
-        # run this function on each value of the given dataclass
-        return {k: evidence_to_dict(v) for k, v in asdict(obj).items()}
-
-    if isinstance(obj, Enum):
-        return obj.name
-
-    if isinstance(obj, list):
-        return [evidence_to_dict(item) for item in obj]
-
-    if isinstance(obj, dict):
-        return {k: evidence_to_dict(v) for k, v in obj.items()}
-
-    return obj
-
-
-def dict_to_evidence(evidence: dict):
+def dict_to_evidence(evidence: dict) -> Evidence:
     """
     Convert a dictionary to an Evidence object.
-    :param evidence (dict): Dictionary with evidence details.
+    :param evidence: Dictionary with evidence details.
     returns an instance of the Evidence class.
     """
     evidence_attributes = {

@@ -6,7 +6,6 @@ from slips_files.core.evidence_structure.evidence import (
     Evidence,
     EvidenceType,
     Victim,
-    evidence_to_dict,
 )
 
 
@@ -138,7 +137,7 @@ class AlertHandler:
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
 
-        evidence_to_send: dict = evidence_to_dict(evidence)
+        evidence_to_send: dict = utils.to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)
 
         evidence_hash = f"{evidence.profile}_{evidence.timewindow}_evidence"
