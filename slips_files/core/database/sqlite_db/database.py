@@ -332,8 +332,8 @@ class SQLiteDB(IObservable):
                 alert.id,
                 alert.profile.ip,
                 str(alert.timewindow),
-                alert.start_time,
-                alert.end_time,
+                alert.timewindow.start_time,
+                alert.timewindow.end_time,
                 "malicious",
                 # This is the local time slips detected this alert, not the
                 # network time
