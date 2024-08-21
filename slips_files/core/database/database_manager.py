@@ -3,12 +3,12 @@ from typing import (
     Dict,
 )
 
-from fides.fides.model.alert import Alert
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.evidence_structure.evidence import Evidence
+from slips_files.core.evidence_structure.alerts import Alert
 from slips_files.core.output import Output
 
 
@@ -393,7 +393,8 @@ class DBManager(IObservable):
         self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
     ):
         """
-        Sets the alert in the rdb and sqlite databases
+        Sets the alert in the rdb and sqlite databases and labels each flow
+        that was responsible for this alert as "malicious"
         """
         self.rdb.set_alert(alert)
         self.sqlite.add_alert(alert)
@@ -609,8 +610,8 @@ class DBManager(IObservable):
             *args, **kwargs
         )
 
-    def markProfileTWAsBlocked(self, *args, **kwargs):
-        return self.rdb.markProfileTWAsBlocked(*args, **kwargs)
+    def mark_profile_and_timewindow_as_blocked(self, *args, **kwargs):
+        return self.rdb.mark_profile_and_timewindow_as_blocked(*args, **kwargs)
 
     def getBlockedProfTW(self, *args, **kwargs):
         return self.rdb.getBlockedProfTW(*args, **kwargs)

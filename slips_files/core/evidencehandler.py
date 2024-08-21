@@ -176,11 +176,28 @@ class EvidenceHandler(ICore):
             open(logfile_path, "w").close()
         return open(logfile_path, "a")
 
-    def handle_unable_to_log_evidence(self):
-        self.print("Error in add_to_json_log_file()")
+    def handle_unable_to_log(self):
+        self.print("Error logging evidence/alert.")
         self.print(traceback.format_exc(), 0, 1)
 
-    def add_to_json_log_file(
+    def add_alert_to_json_log_file(self, alert: Alert):
+        """
+        Add a new alert/event line to our alerts.json file in json format.
+        """
+        idmef_alert: dict = self.idmefv2.convert_to_idmef_alert(alert)
+        if not idmef_alert:
+            self.handle_unable_to_log()
+            return
+
+        try:
+            json.dump(idmef_alert, self.jsonfile)
+            self.jsonfile.write("\n")
+        except KeyboardInterrupt:
+            return True
+        except Exception:
+            self.handle_unable_to_log()
+
+    def add_evidence_to_json_log_file(
         self,
         evidence,
         accumulated_threat_level: float = 0,
@@ -190,10 +207,8 @@ class EvidenceHandler(ICore):
         """
         idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
         if not idmef_evidence:
-            self.handle_unable_to_log_evidence()
+            self.handle_unable_to_log()
             return
-
-        twid: str = str(evidence.timewindow)
 
         try:
             idmef_evidence.update(
@@ -205,7 +220,7 @@ class EvidenceHandler(ICore):
                             "uids": evidence.uid,
                             "accumulated_threat_level": accumulated_threat_level,
                             "threat_level": str(evidence.threat_level),
-                            "timewindow": twid,
+                            "timewindow": str(evidence.timewindow),
                         }
                     )
                 }
@@ -215,7 +230,7 @@ class EvidenceHandler(ICore):
         except KeyboardInterrupt:
             return True
         except Exception:
-            self.handle_unable_to_log_evidence()
+            self.handle_unable_to_log()
 
     def add_to_log_file(self, data):
         """
@@ -280,13 +295,15 @@ class EvidenceHandler(ICore):
         """
         time_format = "%Y/%m/%d %H:%M:%S"
         twid_start_time: str = utils.convert_format(
-            alert.start_time, time_format
+            alert.timewindow.start_time, time_format
         )
-        tw_stop_time: str = utils.convert_format(alert.end_time, time_format)
+        tw_stop_time: str = utils.convert_format(
+            alert.timewindow.end_time, time_format
+        )
 
-        alert_to_print = f"IP {alert.profileid.ip} "
+        alert_to_print = f"IP {alert.profile.ip} "
         hostname: Optional[str] = self.db.get_hostname_from_profile(
-            str(alert.profileid)
+            str(alert.profile)
         )
         if hostname:
             alert_to_print += f"({hostname}) "
@@ -300,23 +317,22 @@ class EvidenceHandler(ICore):
 
     def format_evidence_for_printing(
         self,
+        alert: Alert,
         all_evidence: Dict[str, Evidence],
     ) -> str:
         """
-        Function to format the string with all evidence causing an alert
-        : param flow_datetime: time of the last evidence received
+        Function to format the string with all the desciptions of the
+        evidence causing an alert
         """
         # get the first evidence
         # doesnt matter which one here because they all share the profile
         # and twid
-        evidence = all_evidence.values()[0]
+        evidence = list(all_evidence.values())[0]
         # once we reach a certain threshold of accumulated
         # threat_levels, we produce an alert
         # Now instead of printing the last evidence only,
         # we print all of them
-        alert_to_print: str = red(
-            self.get_alert_time_description(evidence.profileid, evidence.twid)
-        )
+        alert_to_print: str = red(self.get_alert_time_description(alert))
         alert_to_print += red("given the following evidence:\n")
 
         for evidence in all_evidence.values():
@@ -329,9 +345,10 @@ class EvidenceHandler(ICore):
             alert_to_print += cyan(f"\t- {evidence_string}\n")
 
         # Add the timestamp to the alert.
-        # The datetime printed will be of the last evidence only
+        # this datetime, the one that is printed, will be of the last
+        # evidence only
         readable_datetime: str = utils.convert_format(
-            evidence.timestamp, utils.alerts_format
+            alert.last_evidence.timestamp, utils.alerts_format
         )
         alert_to_print: str = red(f"{readable_datetime} ") + alert_to_print
         return alert_to_print
@@ -339,56 +356,35 @@ class EvidenceHandler(ICore):
     def is_running_on_interface(self):
         return "-i" in sys.argv or self.db.is_growing_zeek_dir()
 
-    # def log_the_alert(
-    #     self,
-    #     profileid,
-    #     twid,
-    #     alert_datetime: str,
-    #     accumulated_threat_level,
-    #     evidence_dict,
-    #     blocked=False,
-    # ):
-    #     """
-    #     Marks the profileid and twid as blocked and logs it to alerts.log
-    #     we don't block when running slips on files, we log it in alerts.log only
-    #     :param blocked: bool. if the ip was blocked by the blocking module,
-    #             we should say so in alerts.log, if not, we should say that
-    #             we generated an alert
-    #     :param evidence_dict: the last evidence of this alert,
-    #                     used for logging the blocking
-    #     """
-    #     now = datetime.now()
-    #     now = utils.convert_format(now, utils.alerts_format)
-    #     ip = profileid.split("_")[-1].strip()
-    #
-    #     line = f"{alert_datetime}: Src IP {ip:26}. "
-    #     if blocked:
-    #         self.db.markProfileTWAsBlocked(profileid, twid)
-    #         # Add to log files that this srcip is being blocked
-    #         line += "Is blocked "
-    #     else:
-    #         line += "Generated an alert "
-    #
-    #     line += (
-    #         f"given enough evidence on timewindow "
-    #         f'{twid.split("timewindow")[1]}. (real time {now})'
-    #     )
-    #
-    #     # log in alerts.log
-    #     self.add_to_log_file(line)
-    #
-    #     # # Add a json field stating that this ip is blocked in alerts.json
-    #     # evidence_dict["Format"] = "Json"
-    #     # evidence_dict["Category"] = "Alert"
-    #     # evidence_dict["profileid"] = profileid
-    #     # evidence_dict["threat_level"] = accumulated_threat_level
-    #     # evidence_dict["Attach"][0]["Content"] = line
-    #
-    #     # TODO handle this
-    #     # add to alerts.json
-    #     # self.add_to_json_log_file(
-    #     #     evidence, evidence_dict, [], twid, accumulated_threat_level
-    #     # )
+    def log_alert(self, alert: Alert, blocked=False):
+        """
+        constructs the alert descript ion from the given alert and logs it
+        to alerts.log and alerts.json
+        :param blocked: bool. if the ip was blocked by the blocking module,
+                we should say so in alerts.log, if not, we should say that
+                we generated an alert
+        """
+        now = datetime.now()
+        now = utils.convert_format(now, utils.alerts_format)
+
+        alert_description = (
+            f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
+        )
+        if blocked:
+            # Add to log files that this srcip is being blocked
+            alert_description += "Is blocked "
+        else:
+            alert_description += "Generated an alert "
+
+        alert_description += (
+            f"given enough evidence on timewindow "
+            f"{alert.timewindow.number}. (real time {now})"
+        )
+
+        # log to alerts.log
+        self.add_to_log_file(alert_description)
+        # log to alerts.json
+        self.add_alert_to_json_log_file(alert)
 
     def shutdown_gracefully(self):
         self.logfile.close()
@@ -534,29 +530,23 @@ class EvidenceHandler(ICore):
         """
         saves alert details in the db and informs exporting modules about it
         """
-        self.db.set_alert(alert)
-
+        self.db.set_alert(alert, evidence_causing_the_alert)
         self.send_to_exporting_module(evidence_causing_the_alert)
-
         alert_to_print: str = self.format_evidence_for_printing(
-            evidence_causing_the_alert
+            alert, evidence_causing_the_alert
         )
 
         self.print(f"{alert_to_print}", 1, 0)
 
         if self.popup_alerts:
             self.show_popup(alert)
-        # is_blocked: bool = self.decide_blocking(alert.profile.ip)
 
-        # self.log_the_alert(
-        #     profileid,
-        #     twid,
-        #     alert_datetime,
-        #     accumulated_threat_level,
-        #     {},  # TODO temporariyyy @@@@@
-        #     blocked=is_blocked,
-        # )
-        #
+        is_blocked: bool = self.decide_blocking(alert.profile.ip)
+        if is_blocked:
+            self.db.mark_profile_and_timewindow_as_blocked(
+                str(alert.profile), str(alert.timewindow)
+            )
+        self.log_alert(alert, blocked=is_blocked)
 
     def decide_blocking(self, ip_to_block: str) -> bool:
         """
@@ -727,7 +717,7 @@ class EvidenceHandler(ICore):
                     )
 
                 # add to alerts.json
-                self.add_to_json_log_file(
+                self.add_evidence_to_json_log_file(
                     evidence,
                     accumulated_threat_level,
                 )
@@ -755,16 +745,16 @@ class EvidenceHandler(ICore):
                     tw_evidence: Dict[str, Evidence]
                     tw_evidence = self.get_evidence_for_tw(profileid, twid)
                     if tw_evidence:
-                        tw_start, tw_end = self.rdb.get_tw_limits(
+                        tw_start, tw_end = self.db.get_tw_limits(
                             profileid, twid
                         )
+                        evidence.timewindow.start_time = tw_start
+                        evidence.timewindow.end_time = tw_end
 
                         alert = Alert(
-                            profileid=evidence.profile,
+                            profile=evidence.profile,
                             timewindow=evidence.timewindow,
                             last_evidence=evidence,
-                            start_time=tw_start,
-                            end_time=tw_end,
                             accumulated_threat_level=accumulated_threat_level,
                             correl_id=list(tw_evidence.keys()),
                         )
