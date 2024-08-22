@@ -11,52 +11,17 @@ from typing import (
     List,
     Set,
 )
-
 import redis
 import validators
 
-from slips_files.common.abstracts.observer import IObservable
-from slips_files.core.output import Output
 
-
-class ProfileHandler(IObservable):
+class ProfileHandler:
     """
     Helper class for the Redis class in database.py
     Contains all the logic related to flows, profiles and timewindows
     """
 
     name = "DB"
-
-    def __init__(self, logger: Output):
-        IObservable.__init__(self)
-        self.logger = logger
-        self.add_observer(self.logger)
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like f'Test {here}'
-        """
-
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
 
     def is_doh_server(self, ip: str) -> bool:
         """returns whether the given ip is a DoH server"""

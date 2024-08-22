@@ -3,16 +3,16 @@ from typing import (
     Dict,
 )
 
+from slips_files.common.printer import Printer
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.observer import IObservable
 from slips_files.core.evidence_structure.evidence import Evidence
 from slips_files.core.evidence_structure.alerts import Alert
 from slips_files.core.output import Output
 
 
-class DBManager(IObservable):
+class DBManager:
     """
     This class will be calling methods from the appropriate db.
     each method added to any of the dbs should have a
@@ -33,8 +33,7 @@ class DBManager(IObservable):
         self.output_dir = output_dir
         self.redis_port = redis_port
         self.logger = logger
-        IObservable.__init__(self)
-        self.add_observer(self.logger)
+        self.printer = Printer(self.logger, self.name)
         self.rdb = RedisDB(
             self.logger, redis_port, start_redis_server, **kwargs
         )
@@ -45,6 +44,9 @@ class DBManager(IObservable):
         self.sqlite = None
         if start_sqlite:
             self.sqlite = self.create_sqlite_db(output_dir)
+
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def create_sqlite_db(self, output_dir):
         return SQLiteDB(self.logger, output_dir)
@@ -74,9 +76,6 @@ class DBManager(IObservable):
 
     def get_message(self, *args, **kwargs):
         return self.rdb.get_message(*args, **kwargs)
-
-    def print(self, *args, **kwargs):
-        return self.rdb.print(*args, **kwargs)
 
     def get_ip_info(self, *args, **kwargs):
         return self.rdb.get_ip_info(*args, **kwargs)

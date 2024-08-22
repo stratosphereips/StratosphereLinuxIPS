@@ -5,7 +5,7 @@ from typing import Dict
 import time
 
 
-from slips_files.common.abstracts.observer import IObservable
+from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 from modules.p2ptrust.utils.utils import (
     validate_ip_address,
@@ -27,11 +27,12 @@ from slips_files.core.evidence_structure.evidence import (
 )
 
 
-class GoDirector(IObservable):
+class GoDirector:
     """Class that deals with requests and reports from the go part of p2ptrust
-
-    The reports from other peers are processed and inserted into the database directly.
-    Requests from other peers are validated, data is read from the database and from slips, and the response is sent.
+    The reports from other peers are processed and inserted into the database
+     directly.
+    Requests from other peers are validated, data is read from the database
+    and from slips, and the response is sent.
     If peer sends invalid data, his reputation is lowered.
     """
 
@@ -50,9 +51,8 @@ class GoDirector(IObservable):
         pygo_channel: str = "p2p_pygo",
         p2p_reports_logfile: str = "p2p_reports.log",
     ):
-        self.logger = logger
-        IObservable.__init__(self)
-        self.add_observer(self.logger)
+        self.printer = Printer(logger, self.name)
+
         # todo what is override_p2p
         if override_p2p and not (report_func and request_func):
             raise Exception(
@@ -68,7 +68,8 @@ class GoDirector(IObservable):
         open(p2p_reports_logfile, "w").close()
         self.reports_logfile = open(p2p_reports_logfile, "a")
         self.print(f"Storing peer reports in {p2p_reports_logfile}")
-        # TODO: there should be some better mechanism to add new processing functions.. Maybe load from files?
+        # TODO: there should be some better mechanism to add new processing
+        #  functions.. Maybe load from files?
         self.evaluation_processors = {
             "score_confidence": self.process_evaluation_score_confidence
         }
@@ -76,30 +77,8 @@ class GoDirector(IObservable):
         self.read_configuration()
         self.db = db
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -205,7 +184,8 @@ class GoDirector(IObservable):
         else:
             # TODO: lower reputation
             self.print(
-                f"Peer {report} sent unknown message type {message_type}: {data}",
+                f"Peer {report} sent unknown message type "
+                f"{message_type}: {data}",
                 0,
                 2,
             )
@@ -213,7 +193,8 @@ class GoDirector(IObservable):
 
     def validate_message(self, message: str) -> (str, dict):
         """
-        Check that message is formatted correctly, read message type and return decoded data.
+        Check that message is formatted correctly, read message type and
+         return decoded data.
 
         :param message: base64 encoded message sent by the peer
         :return: message type, message as dictionary
@@ -238,7 +219,8 @@ class GoDirector(IObservable):
 
     def validate_message_request(self, data: Dict) -> bool:
         """
-        Validate keys in message request. Check for corrupted fields and also supported fields
+        Validate keys in message request. Check for corrupted fields and also
+         supported fields
         """
         try:
             key = data["key"]
@@ -256,7 +238,8 @@ class GoDirector(IObservable):
 
         if not self.key_type_processors[key_type](key):
             self.print(
-                f"Provided key {key} isn't a valid value for it's type {key_type}",
+                f"Provided key {key} isn't a valid value for "
+                f"it's type {key_type}",
                 0,
                 2,
             )
@@ -266,7 +249,9 @@ class GoDirector(IObservable):
         # validate evaluation type
         if evaluation_type != "score_confidence":
             self.print(
-                f"Module can't process evaluation type {evaluation_type}", 0, 2
+                f"Module can't process evaluation type " f"{evaluation_type}",
+                0,
+                2,
             )
             return False
         return True
@@ -277,7 +262,8 @@ class GoDirector(IObservable):
         """
         Process and answer a msg from a peer that requests info about an IP
 
-        Details are read from the request, and response is read from slips database.
+        Details are read from the request, and response is read from slips
+         database.
         Response data is formatted as json
         and sent to the peer that asked.
 
@@ -323,7 +309,8 @@ class GoDirector(IObservable):
             # confidence={confidence} about IP: {key} to {reporter}.")
         else:
             self.print(
-                f"[Slips -> The Network] Slips has no info about IP: {key}. Not responding to {reporter}",
+                f"[Slips -> The Network] Slips has no info about IP:"
+                f" {key}. Not responding to {reporter}",
                 2,
                 0,
             )
@@ -337,7 +324,8 @@ class GoDirector(IObservable):
         Details are read from the report and inserted into the database.
 
         :param reporter: The peer that sent the report
-        :param report_time: Time of receiving the report, provided by the go part
+        :param report_time: Time of receiving the report, provided by
+        the go part
         :param data: Report data
         :return: None. Result is saved to the database
         """
@@ -380,7 +368,10 @@ class GoDirector(IObservable):
             reporter, report_time, key_type, key, evaluation
         )
         if evaluation is not None:
-            msg = f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}"
+            msg = (
+                f"[The Network -> Slips] Peer report about {key} "
+                f"Evaluation: {evaluation}"
+            )
             self.print(msg)
             # log the reporter too
             msg += f" from peer: {reporter}"
@@ -403,7 +394,8 @@ class GoDirector(IObservable):
 
         :param reporter: The peer that sent the data
         :param report_time: Time of receiving the data, provided by the go part
-        :param key_type: The type of key the peer is reporting (only "ip" is supported now)
+        :param key_type: The type of key the peer is reporting (only "ip" is
+        supported now)
         :param key: The key itself
         :param evaluation: Dictionary containing score and confidence values
         :return: None, data is saved to the database
@@ -543,11 +535,14 @@ class GoDirector(IObservable):
         """
         Handle update in peers reliability or IP address.
 
-        The message is expected to be JSON string, and it should contain data according to the specified format.
-        It must have the field `peerid`, which specifies the peer that is being updated,
+        The message is expected to be JSON string, and it should contain data
+         according to the specified format.
+        It must have the field `peerid`, which specifies the peer that is
+        being updated,
         and then values to update: `ip` or `reliability`.
         It is OK if only one of these is provided.
-        Additionally, `timestamp` may be set, but is not mandatory - if it is missing, current time will be used.
+        Additionally, `timestamp` may be set, but is not mandatory - if it is
+        missing, current time will be used.
         :param message: A string sent from go, should be json as specified above
         :return: None
         """

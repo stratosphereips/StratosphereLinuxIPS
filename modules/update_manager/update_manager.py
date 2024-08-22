@@ -25,7 +25,6 @@ from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 
 class UpdateManager(IModule):
-    # Name: short name of the module. Do not use spaces
     name = "Update Manager"
     description = "Update Threat Intelligence files"
     authors = ["Kamila Babayeva", "Alya Gomaa"]
@@ -76,7 +75,8 @@ class UpdateManager(IModule):
         # to track how many times an ip is present in different blacklists
         self.ips_ctr = {}
         self.first_time_reading_files = False
-        # store the responses of the files that should be updated when their update period passed
+        # store the responses of the files that should be updated when their
+        # update period passed
         self.responses = {}
 
     def read_configuration(self):
@@ -185,17 +185,10 @@ class UpdateManager(IModule):
 
     def log(self, text):
         """
-        sends the text to output process to log it to slips.log without outputting to the terminal
+        sends the text to output process to log it to slips.log without
+         printing to the cli
         """
-        self.notify_observers(
-            {
-                "from": self.name,
-                "log_to_logfiles_only": True,
-                "txt": text,
-                "verbose": 0,
-                "debug": 1,
-            }
-        )
+        self.print(text, verbose=0, debug=1, log_to_logfiles_only=True)
 
     def read_ports_info(self, ports_info_filepath) -> int:
         """
