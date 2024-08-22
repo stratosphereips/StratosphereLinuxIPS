@@ -4,7 +4,7 @@ from typing import List
 import validators
 
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
     TimeWindow,

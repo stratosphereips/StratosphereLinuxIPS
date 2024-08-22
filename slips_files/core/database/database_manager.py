@@ -7,8 +7,8 @@ from slips_files.common.printer import Printer
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.core.evidence_structure.evidence import Evidence
-from slips_files.core.evidence_structure.alerts import Alert
+from slips_files.core.structures.evidence import Evidence
+from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
 
 

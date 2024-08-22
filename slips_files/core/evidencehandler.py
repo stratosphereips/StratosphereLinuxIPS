@@ -34,13 +34,13 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
 from slips_files.common.abstracts.core import ICore
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
     Victim,
     EvidenceType,
 )
-from slips_files.core.evidence_structure.alerts import (
+from slips_files.core.structures.alerts import (
     Alert,
 )
 

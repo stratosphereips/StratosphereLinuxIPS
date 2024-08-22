@@ -3,7 +3,7 @@ from typing import List, Dict
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Direction,
 )
 

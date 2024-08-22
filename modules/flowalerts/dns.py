@@ -14,7 +14,7 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
 )
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import Direction
+from slips_files.core.structures.evidence import Direction
 
 
 class DNS(IFlowalertsAnalyzer):

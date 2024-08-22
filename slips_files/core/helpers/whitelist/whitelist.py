@@ -10,7 +10,7 @@ from slips_files.core.helpers.whitelist.organization_whitelist import (
 )
 from slips_files.core.helpers.whitelist.whitelist_parser import WhitelistParser
 from slips_files.core.output import Output
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     Direction,
     Attacker,
