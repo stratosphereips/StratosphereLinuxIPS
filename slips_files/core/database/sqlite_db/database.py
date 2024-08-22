@@ -8,13 +8,13 @@ from dataclasses import asdict
 from threading import Lock
 from time import sleep
 
+from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_structure.alerts import Alert
 from slips_files.core.output import Output
-from slips_files.common.abstracts.observer import IObservable
 
 
-class SQLiteDB(IObservable):
+class SQLiteDB:
     """Stores all the flows slips reads and handles labeling them"""
 
     name = "SQLiteDB"
@@ -23,9 +23,7 @@ class SQLiteDB(IObservable):
     trial = 0
 
     def __init__(self, logger: Output, output_dir: str):
-        IObservable.__init__(self)
-        self.logger = logger
-        self.add_observer(self.logger)
+        self.printer = Printer(logger, self.name)
         self._flows_db = os.path.join(output_dir, "flows.sqlite")
         self.connect()
 
@@ -35,11 +33,13 @@ class SQLiteDB(IObservable):
         """
         db_newly_created = False
         if not os.path.exists(self._flows_db):
-            # db not created, mark it as first time accessing it so we can init tables once we connect
+            # db not created, mark it as first time accessing it so we can
+            # init tables once we connect
             db_newly_created = True
             self._init_db()
 
-        # you can get multithreaded access on a single pysqlite connection by passing "check_same_thread=False"
+        # you can get multithreaded access on a single pysqlite connection by
+        # passing "check_same_thread=False"
         self.conn = sqlite3.connect(
             self._flows_db, check_same_thread=False, timeout=20
         )
@@ -78,33 +78,8 @@ class SQLiteDB(IObservable):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
         self.execute(query)
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-        try:
-            self.notify_observers(
-                {
-                    "from": self.name,
-                    "txt": text,
-                    "verbose": verbose,
-                    "debug": debug,
-                }
-            )
-        except AttributeError:
-            pass
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def get_db_path(self) -> str:
         """

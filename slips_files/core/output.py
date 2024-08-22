@@ -30,11 +30,9 @@ from slips_files.common.style import red
 
 class Output(IObserver):
     """
-    A class to process the output of everything Slips need.
-    Manages all the output
-    If any Slips module or process needs to output anything to screen,
-     or logs, it should use always this process.
-     Then this output class will handle how to deal with it
+    A class to process and output all text to cli and to slips log files.
+    If any Slips module or process needs to print or log anything to screen,
+     or logs, it should use The printer that uses this process.
     """
 
     name = "Output"

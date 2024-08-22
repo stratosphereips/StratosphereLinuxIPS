@@ -1,3 +1,4 @@
+from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.redis_db.constants import (
@@ -7,7 +8,6 @@ from slips_files.core.database.redis_db.constants import (
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
-from slips_files.common.abstracts.observer import IObservable
 
 import os
 import signal
@@ -24,7 +24,7 @@ from typing import List, Dict, Optional
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
-class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
+class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
     _obj = None
@@ -77,8 +77,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         "new_module_flow" "cpu_profile",
         "memory_profile",
     }
-    # The name is used to print in the outputprocess
-    name = "DB"
     separator = "_"
     normal_label = "benign"
     malicious_label = "malicious"
@@ -116,6 +114,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         cls.flush_db = flush_db
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
+        cls.printer = Printer(logger, cls.name)
 
         if cls.redis_port not in cls._instances:
             cls._set_redis_options()
@@ -133,13 +132,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 return False
         return cls._instances[cls.redis_port]
 
-    def __init__(
-        self, logger, redis_port, start_redis_server=True, flush_db=True
-    ):
-        # the main purpose of this init is to call the parent's __init__
-        IObservable.__init__(self)
-        self.add_observer(logger)
-        self.observer_added = True
+    def __init__(self, *args, **kwargs):
+        pass
 
     @classmethod
     def _set_redis_options(cls):
@@ -390,31 +384,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 self.connection_retry += 1
                 self.get_message(channel, timeout)
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def get_ip_info(self, ip: str) -> dict:
         """

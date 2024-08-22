@@ -16,21 +16,22 @@ from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
 from managers.ui_manager import UIManager
-from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
 from slips_files.common.performance_profilers.memory_profiler import (
     MemoryProfiler,
 )
+from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
 
+DAEMONIZED_MODE = "daemonized"
 
-class Main(IObservable):
+
+class Main:
     def __init__(self, testing=False):
-        IObservable.__init__(self)
         self.name = "Main"
         self.alerts_default_path = "output/"
         self.mode = "interactive"
@@ -217,7 +218,7 @@ class Main(IObservable):
         Shutdown slips, is called when stopping slips before
         starting all modules. for example using -cb
         """
-        if self.mode == "daemonized":
+        if self.mode == DAEMONIZED_MODE:
             self.daemon.stop()
         if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)
@@ -335,32 +336,8 @@ class Main(IObservable):
         with open(self.daemon.stdout, "a") as f:
             f.write(f"{txt}\n")
 
-    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by
-        taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like f'Test {here}'
-        """
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-                "log_to_logfiles_only": log_to_logfiles_only,
-            }
-        )
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def handle_flows_from_stdin(self, input_information):
         """
@@ -375,7 +352,7 @@ class Main(IObservable):
             print(f"[Main] Invalid file path {input_information}. Stopping.")
             sys.exit(-1)
 
-        if self.mode == "daemonized":
+        if self.mode == DAEMONIZED_MODE:
             print(
                 "Can't read input from stdin in daemonized mode. " "Stopping"
             )
@@ -584,7 +561,7 @@ class Main(IObservable):
             self.logger = self.proc_man.start_output_process(
                 current_stdout, stderr, slips_logfile
             )
-            self.add_observer(self.logger)
+            self.printer = Printer(self.logger, self.name)
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -652,7 +629,7 @@ class Main(IObservable):
 
             self.db.set_slips_mode(self.mode)
 
-            if self.mode == "daemonized":
+            if self.mode == DAEMONIZED_MODE:
                 std_files = {
                     "stderr": self.daemon.stderr,
                     "stdout": self.daemon.stdout,

@@ -25,6 +25,7 @@ from typing import List
 
 import validators
 
+from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.core import ICore
@@ -55,7 +56,7 @@ SEPARATORS = {
 }
 
 
-class Profiler(ICore):
+class Profiler(ICore, IObservable):
     """A class to create the profiles for IPs"""
 
     name = "Profiler"
@@ -67,6 +68,10 @@ class Profiler(ICore):
         is_profiler_done_event: multiprocessing.Event = None,
         has_pbar: bool = False,
     ):
+        # we made it an observable to be able to pass msgs to Output.py
+        # to init the pbar.
+        IObservable.__init__(self)
+        self.add_observer(self.logger)
         # when profiler is done processing, it releases this semaphore,
         # that's how the process_manager knows it's done
         # when both the input and the profiler are done,

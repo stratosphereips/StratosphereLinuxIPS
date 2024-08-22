@@ -7,7 +7,7 @@ from typing import Tuple
 from uuid import uuid4
 import jsonschema
 
-from slips_files.common.abstracts.observer import IObservable
+from slips_files.common.printer import Printer
 from slips_files.core.evidence_structure.alerts import Alert
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
@@ -32,20 +32,18 @@ class IDMEFv2Severity(Enum):
     HIGH = "High"
 
 
-class IDMEFv2(IObservable):
+class IDMEFv2:
     """
     Class to convert Slips evidence and alerts to
     The Incident Detection Message Exchange Format version 2 (IDMEFv2 format).
     More Details about it here:
     https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
-
     """
 
+    name = "IDMEFv2"
+
     def __init__(self, logger: Output, db):
-        IObservable.__init__(self)
-        self.logger = logger
-        self.add_observer(self.logger)
-        self.name = "IDMEFv2"
+        self.printer = Printer(logger, self.name)
         self.db = db
         self.model = f"Stratosphere Linux IPS {utils.get_slips_version()}"
         self.analyzer = {
@@ -59,33 +57,8 @@ class IDMEFv2(IObservable):
         # the used idmef version
         self.version = "2.0.3"
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        # the only observer we have for now in the output.
-        # used for logging the msgs too cli and slips log files
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def convert_threat_level_to_idmefv2_severity(
         self, threat_lvl: ThreatLevel
