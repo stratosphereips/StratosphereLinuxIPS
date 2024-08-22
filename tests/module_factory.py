@@ -573,5 +573,5 @@ class ModuleFactory:
         cesnet.print = MagicMock()
         return cesnet
 
-     def create_alert_handler(self):
-         return AlertHandler()
+    def create_alert_handler(self):
+        return AlertHandler()
