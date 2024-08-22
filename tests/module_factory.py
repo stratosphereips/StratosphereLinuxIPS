@@ -603,4 +603,4 @@ class ModuleFactory:
         return riskiq
 
      def create_alert_handler(self):
-        return AlertHandler()
+         return AlertHandler()
