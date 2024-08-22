@@ -171,14 +171,20 @@ class Attacker:
 @dataclass
 class TimeWindow:
     number: int
-    start_time: Optional[str] = ""
-    end_time: Optional[str] = ""
+    start_time: Optional[str] = field(default="")
+    end_time: Optional[str] = field(default="")
 
     def __post_init__(self):
+        for timestamp in [self.start_time, self.end_time]:
+            if timestamp and not utils.is_iso_format(timestamp):
+                raise ValueError(
+                    f"Invalid ISO format for start_time: " f"{timestamp}"
+                )
+
         if not isinstance(self.number, int):
             raise ValueError(
                 f"timewindow number must be an int. "
-                f"{self.number} is invalid!"
+                f"{self.number} is invalid."
             )
 
     def __repr__(self):
