@@ -1,8 +1,7 @@
 import json
-import time
 from typing import List, Dict
 from uuid import uuid4
-
+from datetime import datetime
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -489,8 +488,8 @@ class SetEvidnceHelper:
 
         # The first 5 hours the confidence of connection w/o DNS
         # is 0.1 in case of interface only, until slips learns all the DNS
-        start_time: float = self.db.get_slips_start_time()
-        now: float = time.time()
+        start_time: str = self.db.get_slips_start_time()
+        now = datetime.now()
         if self.db.is_running_non_stop():
             diff: float = utils.get_time_diff(
                 start_time, now, return_type="hours"
