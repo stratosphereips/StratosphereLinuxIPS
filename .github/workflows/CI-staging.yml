@@ -295,6 +295,12 @@ jobs:
                coverage report --include="modules/p2ptrust/trust/trustdb.py*"
                coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb
 
+          - name: Alert Handler Unit tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_alert_handler.py -p no:warnings -vv -s -n 5
+               coverage report --include="slips_files/core/database/redis_db/alert_handler.py*"
+               coverage html --include="slips_files/core/database/redis_db/alert_handler.py*" -d coverage_reports/alert_handler    
+
   dataset_integration_tests:
       # specify the host OS
       runs-on: ubuntu-latest
