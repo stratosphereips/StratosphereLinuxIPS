@@ -71,18 +71,7 @@ class FlowHandler:
         self.publisher = Publisher(self.db)
         self.flow = flow
         self.symbol = symbol_handler
-        self.running_non_stop: bool = self.is_running_non_stop()
-
-    def is_running_non_stop(self) -> bool:
-        """
-        Slips runs non-stop in case of an interface or a growing zeek dir,
-        it only stops on ctrl+c
-        """
-        if (
-            self.db.get_input_type() == "interface"
-            or self.db.is_growing_zeek_dir()
-        ):
-            return True
+        self.running_non_stop: bool = self.db.is_running_non_stop()
 
     def is_supported_flow(self):
         supported_types = (
