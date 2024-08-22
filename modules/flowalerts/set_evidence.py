@@ -1,5 +1,4 @@
 import json
-import sys
 import time
 from typing import List, Dict
 from uuid import uuid4
@@ -492,7 +491,7 @@ class SetEvidnceHelper:
         # is 0.1 in case of interface only, until slips learns all the DNS
         start_time: float = self.db.get_slips_start_time()
         now: float = time.time()
-        if "-i" in sys.argv or self.db.is_growing_zeek_dir():
+        if self.db.is_running_non_stop():
             diff: float = utils.get_time_diff(
                 start_time, now, return_type="hours"
             )

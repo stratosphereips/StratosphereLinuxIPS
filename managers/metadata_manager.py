@@ -43,26 +43,23 @@ class MetadataManager:
 
     def store_host_ip(self):
         """
-        Store the host IP address if input type is interface
+        Store the host IP address if slips is running on an interface
         """
-        running_on_interface = (
-            "-i" in sys.argv or self.main.db.is_growing_zeek_dir()
-        )
-        if not running_on_interface:
+        if not self.main.db.is_running_non_stop():
             return
 
-        hostIP = self.get_host_ip()
+        host_ip = self.get_host_ip()
         while True:
             try:
-                self.main.db.set_host_ip(hostIP)
+                self.main.db.set_host_ip(host_ip)
                 break
             except redis.exceptions.DataError:
                 self.main.print(
                     "Not Connected to the internet. Reconnecting in 10s."
                 )
                 time.sleep(10)
-                hostIP = self.get_host_ip()
-        return hostIP
+                host_ip = self.get_host_ip()
+        return host_ip
 
     def add_metadata(self):
         """

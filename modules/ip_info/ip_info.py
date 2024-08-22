@@ -1,5 +1,4 @@
 import platform
-import sys
 from typing import Union
 from uuid import uuid4
 import datetime
@@ -162,9 +161,11 @@ class IPInfo(IModule):
             ".xyz",
             ".za",
         ]
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     async def open_dbs(self):
-        """Function to open the different offline databases used in this module. ASN, Country etc.."""
+        """Function to open the different offline databases used in this
+        module. ASN, Country etc.."""
         # Open the maxminddb ASN offline db
         try:
             self.asn_db = maxminddb.open_database(
@@ -395,7 +396,7 @@ class IPInfo(IModule):
         this method tries to get the default gateway IP address using ip route
         only works when running on an interface
         """
-        if not ("-i" in sys.argv or self.db.is_growing_zeek_dir()):
+        if not self.is_running_non_stop:
             # only works if running on an interface
             return False
 
@@ -433,11 +434,7 @@ class IPInfo(IModule):
             self.db.set_default_gateway("MAC", gw_MAC)
             return gw_MAC
 
-        # we don't have it in arp.log(in the db)
-        running_on_interface = (
-            "-i" in sys.argv or self.db.is_growing_zeek_dir()
-        )
-        if not running_on_interface:
+        if not self.is_running_non_stop:
             # no MAC in arp.log (in the db) and can't use arp tables,
             # so it's up to the db.is_gw_mac() function to determine the gw mac
             # if it's seen associated with a public IP
@@ -456,7 +453,8 @@ class IPInfo(IModule):
             self.db.set_default_gateway("MAC", gw_MAC)
             return gw_MAC
         except (subprocess.CalledProcessError, FileNotFoundError):
-            # If the ip command doesn't exist or has failed, try using the arp command
+            # If the ip command doesn't exist or has failed, try using the
+            # arp command
             try:
                 arp_output = subprocess.run(
                     ["arp", "-an"], capture_output=True, check=True, text=True

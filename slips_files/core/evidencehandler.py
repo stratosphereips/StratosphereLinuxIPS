@@ -66,7 +66,6 @@ class EvidenceHandler(ICore):
         self.detection_threshold_in_this_width = (
             self.detection_threshold * self.width / 60
         )
-        self.running_non_stop = self.is_running_on_interface()
         # to keep track of the number of generated evidence
         self.db.init_evidence_number()
         if self.popup_alerts:
@@ -89,7 +88,7 @@ class EvidenceHandler(ICore):
         self.logfile = self.clean_file(self.output_dir, "alerts.log")
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
-        self.is_interface = self.is_running_on_interface()
+        self.is_running_non_stop = self.db.is_running_non_stop()
 
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
@@ -353,9 +352,6 @@ class EvidenceHandler(ICore):
         alert_to_print: str = red(f"{readable_datetime} ") + alert_to_print
         return alert_to_print
 
-    def is_running_on_interface(self):
-        return "-i" in sys.argv or self.db.is_growing_zeek_dir()
-
     def log_alert(self, alert: Alert, blocked=False):
         """
         constructs the alert descript ion from the given alert and logs it
@@ -518,10 +514,9 @@ class EvidenceHandler(ICore):
         flows by a custom module not by
         inputprocess. there's no need for -p to enable the blocking
         """
-
         custom_flows = "-im" in sys.argv or "--input-module" in sys.argv
         return (
-            self.is_running_on_interface() and "-p" not in sys.argv
+            self.is_running_non_stop and "-p" not in sys.argv
         ) or custom_flows
 
     def handle_new_alert(
@@ -681,7 +676,7 @@ class EvidenceHandler(ICore):
                     continue
 
                 # convert time to local timezone
-                if self.running_non_stop:
+                if self.is_running_non_stop:
                     timestamp: datetime = utils.convert_to_local_timezone(
                         timestamp
                     )

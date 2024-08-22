@@ -1,7 +1,6 @@
 import contextlib
 import ipaddress
 import json
-import sys
 from datetime import datetime
 from typing import Tuple, List, Dict
 import validators
@@ -34,6 +33,7 @@ class Conn(IFlowalertsAnalyzer):
         # In mins
         self.conn_without_dns_interface_wait_time = 30
         self.dns_analyzer = DNS(self.db, flowalerts=self)
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -448,7 +448,7 @@ class Conn(IFlowalertsAnalyzer):
         # don't alert ConnectionWithoutDNS
         # until 30 minutes has passed
         # after starting slips because the dns may have happened before starting slips
-        if "-i" in sys.argv or self.db.is_growing_zeek_dir():
+        if self.is_running_non_stop:
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning

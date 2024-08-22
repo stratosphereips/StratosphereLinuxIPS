@@ -114,6 +114,7 @@ class Input(ICore):
         # is set by the profiler to tell this proc that we it is done processing
         # the input process and shut down and close the profiler queue no issue
         self.is_profiler_done_event = is_profiler_done_event
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     def is_done_processing(self):
         """
@@ -929,7 +930,7 @@ class Input(ICore):
 
     def main(self):
         utils.drop_root_privs()
-        if "-i" in sys.argv or self.db.is_growing_zeek_dir():
+        if self.is_running_non_stop:
             # this thread should be started from run() to get the PID of inputprocess and have shared variables
             # if it started from __init__() it will have the PID of slips.py therefore,
             # any changes made to the shared variables in inputprocess will not appear in the thread

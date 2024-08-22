@@ -1121,6 +1121,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         dns_resolutions = self.r.hgetall("DNSresolution")
         return dns_resolutions or []
 
+    def is_running_non_stop(self) -> bool:
+        """
+        Slips runs non-stop in case of an interface or a growing zeek dir,
+        in these 2 cases, it only stops on ctrl+c
+        """
+        return (
+            self.get_input_type() == "interface" or self.is_growing_zeek_dir()
+        )
+
     def set_passive_dns(self, ip, data):
         """
         Save in DB passive DNS from virus total
