@@ -193,8 +193,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         cls.r.set("slips_internal_time", timestamp)
 
     @classmethod
-    def get_slips_start_time(cls):
-        """get the time slips started (datetime obj)"""
+    def get_slips_start_time(cls) -> str:
+        """get the time slips started"""
         if start_time := cls.r.get("slips_start_time"):
             start_time = utils.convert_format(start_time, utils.alerts_format)
             return start_time

@@ -65,7 +65,8 @@ class Utils(object):
             "%Y/%m/%d-%H:%M:%S",
             "%Y-%m-%dT%H:%M:%S",
         )
-        # this format will be used accross all modules and logfiles of slips
+        # this format will be used across all modules and logfiles of slips
+        # its timezone aware
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
@@ -234,7 +235,9 @@ class Utils(object):
     def convert_format(self, ts, required_format: str):
         """
         Detects and converts the given ts to the given format
-        :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
+        PS: it sets iso format datetime in the local timezone
+        :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f'
+        or 'unixtimestamp', 'iso'
         """
         given_format = self.get_time_format(ts)
         if given_format == required_format:
@@ -496,7 +499,8 @@ class Utils(object):
         end_time = self.convert_to_datetime(end_time)
 
         diff = str(end_time - start_time)
-        # if there are days diff between the flows, diff will be something like 1 day, 17:25:57.458395
+        # if there are days diff between the flows, diff will be something
+        # like 1 day, 17:25:57.458395
         try:
             # calculate the days difference
             diff_in_days = float(diff.split(", ")[0].split(" ")[0])
