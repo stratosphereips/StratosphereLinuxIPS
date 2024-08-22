@@ -54,6 +54,7 @@ from modules.p2ptrust.trust.base_model import BaseModel
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from modules.arp.arp import ARP
 from slips.daemon import Daemon
+from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
 from modules.riskiq.riskiq import RiskIQ
@@ -551,8 +552,12 @@ class ModuleFactory:
         notify = Notify()
         return notify
 
+    def create_ioc_handler(self):
+        return IoCHandler()
+        
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_cesnet_obj(self, mock_db):
+    def create_cesnet_obj(self):
+        logger = MagicMock()
         output_dir = "dummy_output_dir"
         redis_port = 6379
         termination_event = MagicMock()
