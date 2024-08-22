@@ -126,7 +126,7 @@ class AlertHandler:
         """
         Set the evidence for this Profile and Timewindow.
         :param evidence: an Evidence obj (defined in
-        slips_files/core/evidence_structure/evidence.py) with all the
+        slips_files/core/structures/evidence.py) with all the
         evidence details,
         """
 
