@@ -574,4 +574,4 @@ class ModuleFactory:
         return cesnet
 
      def create_alert_handler(self):
-        return AlertHandler()
+         return AlertHandler()
