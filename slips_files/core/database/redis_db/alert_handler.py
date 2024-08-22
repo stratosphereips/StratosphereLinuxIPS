@@ -2,8 +2,8 @@ import time
 import json
 from typing import List, Tuple, Optional, Dict
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.alerts import Alert
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.alerts import Alert
+from slips_files.core.structures.evidence import (
     Evidence,
     EvidenceType,
     Victim,

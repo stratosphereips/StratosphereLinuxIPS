@@ -8,10 +8,10 @@ from uuid import uuid4
 import jsonschema
 
 from slips_files.common.printer import Printer
-from slips_files.core.evidence_structure.alerts import Alert
+from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     IoCType,
     ThreatLevel,

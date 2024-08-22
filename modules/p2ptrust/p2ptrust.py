@@ -17,7 +17,7 @@ import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.trust.trustdb as trustdb
 import modules.p2ptrust.utils.utils as p2p_utils
 from modules.p2ptrust.utils.go_director import GoDirector
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
     ProfileID,

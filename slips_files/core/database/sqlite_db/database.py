@@ -10,7 +10,7 @@ from time import sleep
 
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.alerts import Alert
+from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
 
 
