@@ -47,6 +47,7 @@ from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.p2ptrust.trust.base_model import BaseModel
 from modules.arp.arp import ARP
 from slips.daemon import Daemon
+from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
 from slips_files.common.markov_chains import Matrix
@@ -552,6 +553,11 @@ class ModuleFactory:
     def create_notify_obj(self):
         notify = Notify()
         return notify
+
+
+    def create_ioc_handler(self):
+        return IoCHandler()
+        
 
     def create_cesnet_obj(self):
         logger = MagicMock()
