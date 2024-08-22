@@ -70,6 +70,13 @@ class Utils(object):
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
 
+    def is_iso_format(self, date_time: str) -> bool:
+        try:
+            datetime.fromisoformat(date_time)
+            return True
+        except ValueError:
+            return False
+
     def extract_hostname(self, url: str) -> str:
         """
         extracts the parent domain from the given domain/url
