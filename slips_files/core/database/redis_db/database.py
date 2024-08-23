@@ -1158,13 +1158,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         data = json.dumps(data)
         self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
 
-    def get_host_ip(self):
-        """Get the IP addresses of the host from a db. There can be more than one"""
-        return self.r.smembers("hostIP")
+    def get_host_ip(self) -> Optional[str]:
+        """Greturns the latest added host ip"""
+        host_ip: List[str] = self.r.zrevrange(
+            "host_ip", 0, 0, withscores=False
+        )
+        return host_ip[0] if host_ip else None
 
     def set_host_ip(self, ip):
-        """Store the IP address of the host in a db. There can be more than one"""
-        self.r.sadd("hostIP", ip)
+        """Store the IP address of the host in a db.
+        There can be more than one"""
+        # stored them in a sorted set to be able to retrieve the latest one
+        # of them as the host ip
+        host_ips_added = self.r.zcard("host_ip")
+        self.r.zadd("host_ip", {ip: host_ips_added + 1})
 
     def set_asn_cache(self, org: str, asn_range: str, asn_number: str) -> None:
         """

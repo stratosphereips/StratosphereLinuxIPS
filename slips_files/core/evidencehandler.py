@@ -50,13 +50,7 @@ IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 # Evidence Process
 class EvidenceHandler(ICore):
-    """
-    A class to process the evidence from the alerts and update the threat level
-    It only work on evidence for IPs that were profiled
-    This should be converted into a module
-    """
-
-    name = "Evidence"
+    name = "EvidenceHandler"
 
     def init(self):
         self.whitelist = Whitelist(self.logger, self.db)
