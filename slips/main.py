@@ -12,6 +12,7 @@ from datetime import datetime
 from distutils.dir_util import copy_tree
 from typing import Set
 
+from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
@@ -41,6 +42,7 @@ class Main:
         self.metadata_man = MetadataManager(self)
         self.conf = ConfigParser()
         self.ui_man = UIManager(self)
+
         self.version = utils.get_slips_version()
         # will be filled later
         self.commit = "None"
@@ -67,6 +69,8 @@ class Main:
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
+                # should be initialised after self.input_type is set
+                self.host_ip_man = HostIPManager(self)
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable()
@@ -516,17 +520,6 @@ class Main:
         )
         self.print(msg)
 
-    def update_host_ip(self, host_ip: str, modified_profiles: Set[str]) -> str:
-        """
-        when running on an interface we keep track of the host IP.
-        If there was no  modified TWs in the host IP, we check if the
-        network was changed.
-        """
-        if self.is_interface and host_ip not in modified_profiles:
-            if host_ip := self.metadata_man.get_host_ip():
-                self.db.set_host_ip(host_ip)
-        return host_ip
-
     def is_total_flows_unknown(self) -> bool:
         """
         Determines if slips knows the total flows it's gonna be
@@ -585,8 +578,17 @@ class Main:
                     "output_dir": self.args.output,
                     "commit": self.commit,
                     "branch": self.branch,
+                    # we need to set this in the db because some modules use
+                    # it as soon as they start
+                    "input_type": self.input_type,
                 }
             )
+            # this line should happen as soon as we start the db
+            # to be able to use the host IP as analyzer IP in alerts.json
+            # should be after setting the input metadata with "input_type"
+            # TLDR; dont change the order of this line
+            host_ip = self.host_ip_man.store_host_ip()
+
             self.print(
                 f"Using redis server on "
                 f"port: "
@@ -707,8 +709,6 @@ class Main:
                 "of traffic by querying TI sites."
             )
 
-            host_ip = self.metadata_man.store_host_ip()
-
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
             self.is_interface: bool = self.db.is_running_non_stop()
@@ -732,7 +732,7 @@ class Main:
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
-                self.update_host_ip(host_ip, modified_profiles)
+                self.host_ip_man.update_host_ip(host_ip, modified_profiles)
 
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while
