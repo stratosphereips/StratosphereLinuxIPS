@@ -32,6 +32,9 @@ class IDMEFv2Severity(Enum):
     HIGH = "High"
 
 
+DEFAULT_ADDRESS = "0.0.0.0"
+
+
 class IDMEFv2:
     """
     Class to convert Slips evidence and alerts to
@@ -47,7 +50,7 @@ class IDMEFv2:
         self.db = db
         self.model = f"Stratosphere Linux IPS {utils.get_slips_version()}"
         self.analyzer = {
-            "IP": "192.168.1.2",
+            "IP": self.get_host_ip(),
             "Name": "Slips",
             "Model": self.model,
             "Category": ["NIDS"],
@@ -56,6 +59,13 @@ class IDMEFv2:
         }
         # the used idmef version
         self.version = "2.0.3"
+
+    def get_host_ip(self) -> str:
+        if not self.db.is_running_non_stop():
+            return DEFAULT_ADDRESS
+        if host_ip := self.db.get_host_ip():
+            return host_ip
+        return DEFAULT_ADDRESS
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -110,15 +120,6 @@ class IDMEFv2:
             .split("size:")[1]
             .split("from")[0]
         )
-
-    def remove_unwanted_fields(self, msg: Message) -> Message:
-        # these fields contain nothing about the details of the evidence
-        # and they are duplicate striongs in every evidence that take space
-        # in alerts.json
-        # it's better to remove them after validating the msg
-        for field in ("Analyzer", "Version"):
-            msg.pop(field)
-        return msg
 
     def convert_to_idmef_alert(self, alert: Alert) -> Message:
         """
@@ -208,7 +209,7 @@ class IDMEFv2:
             )
 
             if evidence.port:
-                msg["Source"][0].update({"Port": [evidence.port]})
+                msg["Source"][0].update({"Port": [int(evidence.port)]})
 
             if evidence.proto:
                 msg["Source"][0].update({"Protocol": [evidence.proto.name]})
@@ -247,7 +248,6 @@ class IDMEFv2:
             # PS: The "Note" field is added by the evidencehandler before
             # logging the evidence to alerts.json
             msg.validate()
-            msg = self.remove_unwanted_fields(msg)
             return msg
 
         except jsonschema.exceptions.ValidationError as e:
