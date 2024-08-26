@@ -3,11 +3,13 @@ import json
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
 
 
 class Software(IFlowalertsAnalyzer):
-    def init(self): ...
+    def init(self):
+        self.classifier = FlowClassifier()
 
     def name(self) -> str:
         return "software_analyzer"
@@ -63,6 +65,6 @@ class Software(IFlowalertsAnalyzer):
 
         msg = json.loads(msg["data"])
         twid = msg["twid"]
-        flow = utils.convert_to_flow_obj(msg["sw_flow"])
+        flow = self.classifier.convert_to_flow_obj(msg["sw_flow"])
         self.check_multiple_ssh_versions(flow, twid, role="SSH::CLIENT")
         self.check_multiple_ssh_versions(flow, twid, role="SSH::SERVER")

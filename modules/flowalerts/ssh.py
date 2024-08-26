@@ -5,6 +5,7 @@ from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 
@@ -18,6 +19,7 @@ class SSH(IFlowalertsAnalyzer):
         self.pw_guessing_threshold = 20
         self.read_configuration()
         self.password_guessing_cache = {}
+        self.classifier = FlowClassifier()
 
     def name(self) -> str:
         return "ssh_analyzer"
@@ -155,7 +157,7 @@ class SSH(IFlowalertsAnalyzer):
         data = json.loads(data)
         profileid = data["profileid"]
         twid = data["twid"]
-        flow = utils.convert_to_flow_obj(data["flow"])
+        flow = self.classifier.convert_to_flow_obj(data["flow"])
 
         self.check_successful_ssh(profileid, twid, flow)
         self.check_ssh_password_guessing(profileid, twid, flow)

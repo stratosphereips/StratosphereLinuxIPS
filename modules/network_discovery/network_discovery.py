@@ -1,6 +1,7 @@
 import json
 from typing import List
 
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
@@ -54,6 +55,7 @@ class NetworkDiscovery(IModule):
         # when a client is seen requesting this minimum addresses in 1 tw,
         # slips sets dhcp scan evidence
         self.minimum_requested_addrs = 4
+        self.classifier = FlowClassifier()
 
     def check_icmp_sweep(self, profileid, twid, flow):
         """
@@ -410,12 +412,12 @@ class NetworkDiscovery(IModule):
             data = json.loads(msg["data"])
             profileid = data["profileid"]
             twid = data["twid"]
-            flow = utils.convert_to_flow_obj(data["flow"])
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
             self.check_icmp_sweep(profileid, twid, flow)
 
         if msg := self.get_msg("new_dhcp"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
             twid = msg["twid"]
-            flow = utils.convert_to_flow_obj(msg["flow"])
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
             self.check_dhcp_scan(profileid, twid, flow)

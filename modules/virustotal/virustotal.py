@@ -8,6 +8,7 @@ import ipaddress
 import threading
 import validators
 
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
@@ -32,7 +33,6 @@ class VT(IModule):
             "new_dns": self.c2,
             "new_url": self.c3,
         }
-
         # Read the conf file
         self.__read_configuration()
         # query counter for debugging purposes
@@ -52,6 +52,7 @@ class VT(IModule):
         # this will be true when there's a problem with the
         # API key, then the module will exit
         self.incorrect_API_key = False
+        self.classifier = FlowClassifier()
 
     def read_api_key(self):
         self.key = None
@@ -554,7 +555,7 @@ class VT(IModule):
         if msg := self.get_msg("new_flow"):
             data = json.loads(msg["data"])
             flow = json.loads(data["flow"])
-            flow = utils.convert_to_flow_obj(flow)
+            flow = self.classifier.convert_to_flow_obj(flow)
             ip = flow.daddr
             cached_data = self.db.get_ip_info(ip)
             if not cached_data:
@@ -586,7 +587,7 @@ class VT(IModule):
         if msg := self.get_msg("new_dns"):
             data = json.loads(msg["data"])
             flow = json.loads(data["flow"])
-            flow = utils.convert_to_flow_obj(flow)
+            flow = self.classifier.convert_to_flow_obj(flow)
             cached_data = self.db.get_domain_data(flow.query)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
@@ -605,7 +606,7 @@ class VT(IModule):
         if msg := self.get_msg("new_url"):
             data = json.loads(msg["data"])
             flow = json.loads(data["flow"])
-            flow = utils.convert_to_flow_obj(flow)
+            flow = self.classifier.convert_to_flow_obj(flow)
             url = f"http://{flow.host}{flow.uri}"
             cached_data = self.db.is_cached_url_by_vt(url)
             # If VT data of this domain is not in the DomainInfo, ask VT

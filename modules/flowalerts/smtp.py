@@ -5,6 +5,7 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.slips_utils import utils
+from slips_files.common.flow_classifier import FlowClassifier
 
 
 class SMTP(IFlowalertsAnalyzer):
@@ -12,6 +13,7 @@ class SMTP(IFlowalertsAnalyzer):
         # when the ctr reaches the threshold in 10 seconds,
         # we detect an smtp bruteforce
         self.smtp_bruteforce_threshold = 3
+        self.classifier = FlowClassifier()
         # dict to keep track of bad smtp logins to check for bruteforce later
         # format {profileid: [ts,ts,...]}
         self.smtp_bruteforce_cache = {}
@@ -70,6 +72,6 @@ class SMTP(IFlowalertsAnalyzer):
         smtp_info = json.loads(msg["data"])
         profileid = smtp_info["profileid"]
         twid = smtp_info["twid"]
-        flow = utils.convert_to_flow_obj(smtp_info["flow"])
+        flow = self.classifier.convert_to_flow_obj(smtp_info["flow"])
 
         self.check_smtp_bruteforce(profileid, twid, flow)

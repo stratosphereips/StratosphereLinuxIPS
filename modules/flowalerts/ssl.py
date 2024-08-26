@@ -6,12 +6,14 @@ import time
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 
 
 class SSL(IFlowalertsAnalyzer):
     def init(self):
+        self.classifier = FlowClassifier()
         # in pastebin download detection, we wait for each conn.log flow
         # of the seen ssl flow to appear
         # this is the dict of ssl flows we're waiting for
@@ -93,8 +95,8 @@ class SSL(IFlowalertsAnalyzer):
         : param flow: this is the conn.log of the ssl flow
         we're currently checking
         """
-        ssl_flow = utils.convert_to_flow_obj(ssl_flow)
-        conn_log_flow = utils.convert_to_flow_obj(conn_log_flow)
+        ssl_flow = self.classifier.convert_to_flow_obj(ssl_flow)
+        conn_log_flow = self.classifier.convert_to_flow_obj(conn_log_flow)
         if "pastebin" not in ssl_flow.server_name:
             return False
 
@@ -102,7 +104,7 @@ class SSL(IFlowalertsAnalyzer):
         downloaded_bytes = conn_log_flow.resp_bytes
         if downloaded_bytes >= self.pastebin_downloads_threshold:
             self.set_evidence.pastebin_download(
-                profileid, twid, ssl_flow, downloaded_bytes
+                twid, ssl_flow, downloaded_bytes
             )
             return True
 
@@ -209,7 +211,7 @@ class SSL(IFlowalertsAnalyzer):
             profileid = data["profileid"]
             twid = data["twid"]
             flow = json.loads(data["flow"])
-            flow = utils.convert_to_flow_obj(flow)
+            flow = self.classifier.convert_to_flow_obj(flow)
 
             # we'll be checking pastebin downloads of this ssl flow
             # later
@@ -235,5 +237,5 @@ class SSL(IFlowalertsAnalyzer):
             profileid = msg["profileid"]
             twid = msg["twid"]
             flow = msg["flow"]
-            flow = utils.convert_to_flow_obj(flow)
+            flow = self.classifier.convert_to_flow_obj(flow)
             self.check_non_ssl_port_443_conns(profileid, twid, flow)

@@ -12,6 +12,7 @@ from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import Direction
@@ -33,6 +34,7 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_arpa_queries = {}
         # after this number of arpa queries, slips will detect an arpa scan
         self.arpa_scan_threshold = 10
+        self.classifier = FlowClassifier()
 
     def name(self) -> str:
         return "DNS_analyzer"
@@ -423,7 +425,7 @@ class DNS(IFlowalertsAnalyzer):
         msg = json.loads(msg["data"])
         profileid = msg["profileid"]
         twid = msg["twid"]
-        flow = utils.convert_to_flow_obj(msg["flow"])
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
         self.check_dns_without_connection(profileid, twid, flow)
         self.check_high_entropy_dns_answers(profileid, twid, flow)
         self.check_invalid_dns_answers(profileid, twid, flow)

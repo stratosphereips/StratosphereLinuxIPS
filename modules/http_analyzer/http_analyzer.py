@@ -5,6 +5,7 @@ from uuid import uuid4
 import requests
 from typing import Union, Dict
 
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
@@ -55,6 +56,7 @@ class HTTPAnalyzer(IModule):
             "application/octet-stream",
             "application/x-dosexec",
         ]
+        self.classifier = FlowClassifier()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -652,7 +654,7 @@ class HTTPAnalyzer(IModule):
             profileid = message["profileid"]
             twid = message["twid"]
             flow = json.loads(message["flow"])
-            flow = utils.convert_to_flow_obj(flow)
+            flow = self.classifier.convert_to_flow_obj(flow)
             self.check_suspicious_user_agents(profileid, twid, flow)
             self.check_multiple_empty_connections(profileid, twid, flow)
             # find the UA of this profileid if we don't have it

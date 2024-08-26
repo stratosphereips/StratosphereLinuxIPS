@@ -12,6 +12,7 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
 )
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.common.flow_classifier import FlowClassifier
 
 
 class Conn(IFlowalertsAnalyzer):
@@ -34,6 +35,7 @@ class Conn(IFlowalertsAnalyzer):
         self.conn_without_dns_interface_wait_time = 30
         self.dns_analyzer = DNS(self.db, flowalerts=self)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        self.classifier = FlowClassifier()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -731,7 +733,7 @@ class Conn(IFlowalertsAnalyzer):
             twid = new_flow["twid"]
             flow = new_flow["flow"]
             flow = json.loads(flow)
-            flow = utils.convert_to_flow_obj(flow)
+            flow = self.classifier.convert_to_flow_obj(flow)
             flow.state = self.db.get_final_state_from_flags(
                 flow.state, flow.pkts
             )

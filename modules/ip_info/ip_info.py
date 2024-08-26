@@ -16,6 +16,7 @@ import asyncio
 import multiprocessing
 
 from modules.ip_info.jarm import JARM
+from slips_files.common.flow_classifier import FlowClassifier
 from .asn_info import ASN
 from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
@@ -43,6 +44,7 @@ class IPInfo(IModule):
         self.pending_mac_queries = multiprocessing.Queue()
         self.asn = ASN(self.db)
         self.JARM = JARM()
+        self.classifier = FlowClassifier()
         # Set the output queue of our database instance
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = self.db.subscribe("new_ip")
@@ -618,8 +620,7 @@ class IPInfo(IModule):
                     self.is_gw_mac_set = True
 
         if msg := self.get_msg("new_dns"):
-            profileid = msg["profileid"]
-            flow = utils.convert_to_flow_obj(msg["flow"])
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
             if domain := flow.query:
                 self.get_age(domain)
 

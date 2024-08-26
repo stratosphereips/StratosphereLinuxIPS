@@ -4,10 +4,13 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.slips_utils import utils
+from slips_files.common.flow_classifier import FlowClassifier
 
 
 class Tunnel(IFlowalertsAnalyzer):
-    def init(self): ...
+    def init(self):
+        self.classifier = FlowClassifier()
+
     def name(self) -> str:
         return "tunnel_analyzer"
 
@@ -25,5 +28,7 @@ class Tunnel(IFlowalertsAnalyzer):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
             twid = msg["twid"]
-            flow = utils.convert_to_flow_obj(profileid, twid, msg["flow"])
+            flow = self.classifier.convert_to_flow_obj(
+                profileid, twid, msg["flow"]
+            )
             self.check_gre_tunnel(flow)

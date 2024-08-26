@@ -4,6 +4,7 @@ import time
 import json
 from typing import Any
 
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
@@ -27,6 +28,7 @@ class Timeline(IModule):
         conf = ConfigParser()
         self.is_human_timestamp = conf.timeline_human_timestamp()
         self.analysis_direction = conf.analysis_direction()
+        self.classifier = FlowClassifier()
 
     def convert_timestamp_to_slips_format(self, timestamp: float) -> str:
         if self.is_human_timestamp:
@@ -333,7 +335,7 @@ class Timeline(IModule):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
             twid = msg["twid"]
-            flow = utils.convert_to_flow_obj(msg["flow"])
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
             if hasattr(flow, "allbytes"):
                 flow.allbytes = flow.sbytes + flow.dbytes
             self.process_flow(profileid, twid, flow)
