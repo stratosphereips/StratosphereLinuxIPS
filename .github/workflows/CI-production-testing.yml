@@ -230,6 +230,10 @@ jobs:
       run: |
         python3 -m pytest tests/test_output.py -p no:warnings -vv -s -n 5
 
+    - name: Timeline Unit Tests
+      run: |
+        python3 -m pytest tests/test_timeline.py -p no:warnings -vv -s -n 5    
+
     - name: Config file tests
       run: |
         python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv -s -n 5
