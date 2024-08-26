@@ -20,25 +20,21 @@ class SMTP(IFlowalertsAnalyzer):
         return "smtp_analyzer"
 
     def check_smtp_bruteforce(self, profileid, twid, flow):
-        uid = flow["uid"]
-        daddr = flow["daddr"]
-        saddr = flow["saddr"]
-        stime = flow.get("starttime", False)
-        last_reply = flow.get("last_reply", False)
-
-        if "bad smtp-auth user" not in last_reply:
+        if "bad smtp-auth user" not in flow.last_reply:
             return False
 
         try:
             timestamps, uids = self.smtp_bruteforce_cache[profileid]
-            timestamps.append(stime)
-            uids.append(uid)
+            timestamps.append(flow.starttime)
+            uids.append(flow.uid)
             self.smtp_bruteforce_cache[profileid] = (timestamps, uids)
         except KeyError:
             # first time for this profileid to make bad smtp login
-            self.smtp_bruteforce_cache.update({profileid: ([stime], [uid])})
+            self.smtp_bruteforce_cache.update(
+                {profileid: ([flow.starttime], [flow.uid])}
+            )
 
-        self.set_evidence.bad_smtp_login(saddr, daddr, stime, twid, uid)
+        self.set_evidence.bad_smtp_login(flow, twid)
 
         timestamps = self.smtp_bruteforce_cache[profileid][0]
         uids = self.smtp_bruteforce_cache[profileid][1]
@@ -61,7 +57,6 @@ class SMTP(IFlowalertsAnalyzer):
         self.set_evidence.smtp_bruteforce(
             flow,
             twid,
-            uids,
             self.smtp_bruteforce_threshold,
         )
 
@@ -75,6 +70,6 @@ class SMTP(IFlowalertsAnalyzer):
         smtp_info = json.loads(msg["data"])
         profileid = smtp_info["profileid"]
         twid = smtp_info["twid"]
-        flow: dict = smtp_info["flow"]
+        flow = utils.convert_to_flow_obj(smtp_info["flow"])
 
         self.check_smtp_bruteforce(profileid, twid, flow)

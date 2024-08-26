@@ -34,7 +34,8 @@ class SSL(IFlowalertsAnalyzer):
     def wait_for_ssl_flows_to_appear_in_connlog(self):
         """
         thread that waits forever for ssl flows to appear in conn.log
-        whenever the conn.log of an ssl flow is found, thread calls check_pastebin_download
+        whenever the conn.log of an ssl flow is found, thread calls
+        check_pastebin_download
         ssl flows to wait for are stored in pending_ssl_flows
         """
         # this is the time we give ssl flows to appear in conn.log,
@@ -65,12 +66,14 @@ class SSL(IFlowalertsAnalyzer):
                 # returns {uid: {actual flow..}}
                 # always returns a dict, never returns None
                 # flow: dict = self.db.get_flow(profileid, twid, uid)
-                flow: dict = self.db.get_flow(uid)
-                if flow := flow.get(uid):
-                    flow = json.loads(flow)
-                    if "starttime" in flow:
+                conn_log_flow: str = self.db.get_flow(uid)
+                if conn_log_flow := conn_log_flow.get(uid):
+                    conn_log_flow: dict = json.loads(conn_log_flow)
+                    if "starttime" in conn_log_flow:
                         # this means the flow is found in conn.log
-                        self.check_pastebin_download(*ssl_flow, flow)
+                        self.check_pastebin_download(
+                            ssl_flow, conn_log_flow, profileid, twid
+                        )
                 else:
                     # flow not found in conn.log yet,
                     # re-add it to the queue to check it later
@@ -81,7 +84,7 @@ class SSL(IFlowalertsAnalyzer):
             time.sleep(wait_time)
 
     def check_pastebin_download(
-        self, daddr, server_name, uid, ts, profileid, twid, flow
+        self, ssl_flow, conn_log_flow, profileid, twid
     ):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
@@ -90,90 +93,61 @@ class SSL(IFlowalertsAnalyzer):
         : param flow: this is the conn.log of the ssl flow
         we're currently checking
         """
-
-        if "pastebin" not in server_name:
+        ssl_flow = utils.convert_to_flow_obj(ssl_flow)
+        conn_log_flow = utils.convert_to_flow_obj(conn_log_flow)
+        if "pastebin" not in ssl_flow.server_name:
             return False
 
         # orig_bytes is number of payload bytes downloaded
-        downloaded_bytes = flow.get("resp_bytes", 0)
+        downloaded_bytes = conn_log_flow.resp_bytes
         if downloaded_bytes >= self.pastebin_downloads_threshold:
             self.set_evidence.pastebin_download(
-                downloaded_bytes, ts, profileid, twid, uid
+                profileid, twid, ssl_flow, downloaded_bytes
             )
             return True
 
-        else:
-            # reaching this point means that the conn to pastebin did appear
-            # in conn.log, but the downloaded bytes didnt reach the threshold.
-            # maybe an empty file is downloaded
-            return False
+        # reaching here means that the conn to pastebin did appear
+        # in conn.log, but the downloaded bytes didnt reach the threshold.
+        # maybe an empty file is downloaded
+        return False
 
-    def check_self_signed_certs(
-        self,
-        validation_status,
-        daddr,
-        server_name,
-        profileid,
-        twid,
-        timestamp,
-        uid,
-    ):
+    def check_self_signed_certs(self, profileid, twid, flow):
         """
         checks the validation status of every a zeek ssl flow for self
         signed certs
         """
-        if "self signed" not in validation_status:
+        if "self signed" not in flow.validation_status:
             return
 
-        self.set_evidence.self_signed_certificates(
-            profileid, twid, daddr, uid, timestamp, server_name
-        )
+        self.set_evidence.self_signed_certificates(profileid, twid, flow)
 
-    def detect_malicious_ja3(
-        self, saddr, daddr, ja3, ja3s, twid, uid, timestamp
-    ):
-        if not (ja3 or ja3s):
+    def detect_malicious_ja3(self, profileid, twid, flow):
+        if not (flow.ja3 or flow.ja3s):
             # we don't have info about this flow's ja3 or ja3s fingerprint
             return
 
         # get the dict of malicious ja3 stored in our db
         malicious_ja3_dict = self.db.get_all_blacklisted_ja3()
 
-        if ja3 in malicious_ja3_dict:
+        if flow.ja3 in malicious_ja3_dict:
             self.set_evidence.malicious_ja3(
-                malicious_ja3_dict,
-                twid,
-                uid,
-                timestamp,
-                daddr,
-                saddr,
-                ja3=ja3,
+                profileid, twid, flow, malicious_ja3_dict
             )
 
-        if ja3s in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3s(
-                malicious_ja3_dict,
-                twid,
-                uid,
-                timestamp,
-                saddr,
-                daddr,
-                ja3=ja3s,
-            )
+        if flow.ja3s in malicious_ja3_dict:
+            self.set_evidence.malicious_ja3s(profileid, twid, flow)
 
-    def detect_incompatible_cn(
-        self, daddr, server_name, issuer, profileid, twid, uid, timestamp
-    ):
+    def detect_incompatible_cn(self, profileid, twid, flow):
         """
         Detects if a certificate claims that it's CN (common name) belongs
         to an org that the domain doesn't belong to
         """
-        if not issuer:
+        if not flow.issuer:
             return False
 
         found_org_in_cn = ""
         for org in utils.supported_orgs:
-            if org not in issuer.lower():
+            if org not in flow.issuer.lower():
                 continue
 
             # save the org this domain/ip is claiming to belong to,
@@ -181,12 +155,15 @@ class SSL(IFlowalertsAnalyzer):
             found_org_in_cn = org
 
             # check that the ip belongs to that same org
-            if self.whitelist.org_analyzer.is_ip_in_org(daddr, org):
+            if self.whitelist.org_analyzer.is_ip_in_org(flow.daddr, org):
                 return False
 
             # check that the domain belongs to that same org
-            if server_name and self.whitelist.org_analyzer.is_domain_in_org(
-                server_name, org
+            if (
+                flow.server_name
+                and self.whitelist.org_analyzer.is_domain_in_org(
+                    flow.server_name, org
+                )
             ):
                 return False
 
@@ -197,52 +174,30 @@ class SSL(IFlowalertsAnalyzer):
         # it doesn't belong to any of this org's
         # domains or ips
         self.set_evidence.incompatible_cn(
-            found_org_in_cn, timestamp, daddr, profileid, twid, uid
+            profileid, twid, flow, found_org_in_cn
         )
 
-    def check_non_ssl_port_443_conns(self, msg):
+    def check_non_ssl_port_443_conns(self, profileid, twid, flow):
         """
         alerts on established connections on port 443 that are not HTTPS (ssl)
         """
-        profileid = msg["profileid"]
-        twid = msg["twid"]
-        timestamp = msg["stime"]
-        flow = msg["flow"]
-        flow = json.loads(flow)
-        uid = next(iter(flow))
-        flow_dict = json.loads(flow[uid])
-        daddr = flow_dict["daddr"]
-        state = flow_dict["state"]
-        dport: int = flow_dict.get("dport", None)
-        proto = flow_dict.get("proto")
-        allbytes = flow_dict.get("allbytes")
-        appproto = str(flow_dict.get("appproto", ""))
+        flow.state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
         if (
-            str(dport) == "443"
-            and proto.lower() == "tcp"
-            and appproto.lower() != "ssl"
-            and state == "Established"
-            and allbytes != 0
+            str(flow.dport) == "443"
+            and flow.proto.lower() == "tcp"
+            and flow.appproto.lower() != "ssl"
+            and flow.state == "Established"
+            and flow.allbytes != 0
         ):
-            self.set_evidence.non_ssl_port_443_conn(
-                daddr, profileid, timestamp, twid, uid
-            )
+            self.set_evidence.non_ssl_port_443_conn(profileid, twid, flow)
 
-    def detect_doh(
-        self,
-        is_doh,
-        daddr,
-        profileid,
-        twid,
-        timestamp,
-        uid,
-    ):
-        if not is_doh:
+    def detect_doh(self, profileid, twid, flow):
+        if not flow.is_doh:
             return False
-        self.set_evidence.doh(daddr, profileid, twid, timestamp, uid)
-        self.db.set_ip_info(daddr, {"is_doh_server": True})
+        self.set_evidence.doh(twid, flow)
+        self.db.set_ip_info(flow.daddr, {"is_doh_server": True})
 
     def analyze(self, msg: dict):
         if not self.ssl_thread_started:
@@ -250,54 +205,35 @@ class SSL(IFlowalertsAnalyzer):
             self.ssl_thread_started = True
 
         if utils.is_msg_intended_for(msg, "new_ssl"):
-            data = msg["data"]
-            data = json.loads(data)
-            flow = data["flow"]
-            flow = json.loads(flow)
-            uid = flow["uid"]
-            timestamp = flow["stime"]
-            ja3 = flow.get("ja3", False)
-            ja3s = flow.get("ja3s", False)
-            issuer = flow.get("issuer", False)
+            data = json.loads(msg["data"])
             profileid = data["profileid"]
             twid = data["twid"]
-            daddr = flow["daddr"]
-            saddr = profileid.split("_")[1]
-            server_name = flow.get("server_name")
-            is_doh: bool = flow.get("is_DoH", False)
+            flow = json.loads(data["flow"])
+            flow = utils.convert_to_flow_obj(flow)
 
             # we'll be checking pastebin downloads of this ssl flow
             # later
+            # todo: can iput ssl flow obj in the queue??
             self.pending_ssl_flows.put(
-                (daddr, server_name, uid, timestamp, profileid, twid)
+                (
+                    flow.daddr,
+                    flow.server_name,
+                    flow.uid,
+                    flow.timestamp,
+                    profileid,
+                    twid,
+                )
             )
 
-            self.check_self_signed_certs(
-                flow["validation_status"],
-                daddr,
-                server_name,
-                profileid,
-                twid,
-                timestamp,
-                uid,
-            )
-
-            self.detect_malicious_ja3(
-                saddr, daddr, ja3, ja3s, twid, uid, timestamp
-            )
-
-            self.detect_incompatible_cn(
-                daddr, server_name, issuer, profileid, twid, uid, timestamp
-            )
-            self.detect_doh(
-                is_doh,
-                daddr,
-                profileid,
-                twid,
-                timestamp,
-                uid,
-            )
+            self.check_self_signed_certs(profileid, twid, flow)
+            self.detect_malicious_ja3(twid, flow)
+            self.detect_incompatible_cn(profileid, twid, flow)
+            self.detect_doh(profileid, twid, flow)
 
         if utils.is_msg_intended_for(msg, "new_flow"):
-            new_flow = json.loads(msg["data"])
-            self.check_non_ssl_port_443_conns(new_flow)
+            msg = json.loads(msg["data"])
+            profileid = msg["profileid"]
+            twid = msg["twid"]
+            flow = msg["flow"]
+            flow = utils.convert_to_flow_obj(flow)
+            self.check_non_ssl_port_443_conns(profileid, twid, flow)

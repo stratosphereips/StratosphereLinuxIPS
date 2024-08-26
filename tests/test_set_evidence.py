@@ -701,11 +701,11 @@ def test_gre_tunnel():
             "uid": "unique_id",
         },
     }
-    set_ev = ModuleFactory().create_set_evidence_helper()
-    set_ev.GRE_tunnel(tunnel_info)
+    set_evidence_helper = ModuleFactory().create_set_evidence_helper()
+    set_evidence_helper.gre_tunnel(tunnel_info)
 
-    assert set_ev.db.set_evidence.call_count == 1
-    args, _ = set_ev.db.set_evidence.call_args
+    assert set_evidence_helper.db.set_evidence.call_count == 1
+    args, _ = set_evidence_helper.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.GRE_TUNNEL
     assert evidence.attacker.value == "192.168.0.1"
