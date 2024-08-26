@@ -1632,7 +1632,8 @@ class UpdateManager(IModule):
                 # we have to return 1 for the process to terminate
                 return True
         except CannotAcquireLock:
-            # another instance of slips is updating TI files, tranco whitelists and mac db
+            # another instance of slips is updating TI files, tranco
+            # whitelists and mac db
             return 1
 
     def main(self):
