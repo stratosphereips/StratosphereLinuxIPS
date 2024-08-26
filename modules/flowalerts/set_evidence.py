@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict
+from typing import List
 from uuid import uuid4
 from datetime import datetime
 from slips_files.common.slips_utils import utils
@@ -20,56 +20,45 @@ class SetEvidnceHelper:
     def __init__(self, db):
         self.db = db
 
-    def doh(self, daddr, profileid, twid, timestamp, uid):
-        saddr: str = profileid.split("_")[-1]
+    def doh(self, twid, flow):
         twid_number: int = int(twid.replace("timewindow", ""))
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"using DNS over HTTPs. DNS server: {daddr} {ip_identification}"
+            f"using DNS over HTTPs. DNS server: {flow.daddr} {ip_identification}"
         )
         evidence = Evidence(
             evidence_type=EvidenceType.DIFFERENT_LOCALNET,
             attacker=Attacker(
                 direction=Direction.DST,
                 attacker_type=IoCType.IP,
-                value=daddr,
+                value=flow.daddr,
             ),
             threat_level=ThreatLevel.INFO,
             description=description,
             victim=Victim(
                 direction=Direction.SRC,
                 victim_type=IoCType.IP,
-                value=saddr,
+                value=flow.saddr,
             ),
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=0.9,
         )
         self.db.set_evidence(evidence)
 
-    def young_domain(
-        self,
-        domain: str,
-        age: int,
-        stime: str,
-        profileid: str,
-        twid: str,
-        uid: str,
-        answers: List[str],
-    ):
-        saddr: str = profileid.split("_")[-1]
+    def young_domain(self, twid, flow, age, ips_in_answer: List[str]):
         twid_number: int = int(twid.replace("timewindow", ""))
         description: str = (
-            f"connection to a young domain: {domain} "
+            f"connection to a young domain: {flow.query} "
             f"registered {age} days ago."
         )
 
         evidence_id_of_srcip_as_the_attacker = str(uuid4())
         uuids_list = [evidence_id_of_srcip_as_the_attacker]
         # set evidence for all the young domain dns answers
-        for attacker in answers:
+        for attacker in ips_in_answer:
             attacker: str
             evidence_id = str(uuid4())
             evidence = Evidence(
@@ -85,8 +74,8 @@ class SetEvidnceHelper:
                 description=description,
                 profile=ProfileID(ip=attacker),
                 timewindow=TimeWindow(number=twid_number),
-                uid=[uid],
-                timestamp=stime,
+                uid=[flow.uid],
+                timestamp=flow.timestamp,
                 confidence=1.0,
             )
             self.db.set_evidence(evidence)
@@ -102,26 +91,25 @@ class SetEvidnceHelper:
             attacker=Attacker(
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
-                value=saddr,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=stime,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=1.0,
         )
         self.db.set_evidence(evidence)
 
     def multiple_ssh_versions(
         self,
-        srcip: str,
+        flow,
         cached_versions: str,
         current_versions: str,
-        timestamp: str,
         twid: str,
-        uid: List[str],
+        uids: List[str],
         role: str = "",
     ):
         """
@@ -139,64 +127,69 @@ class SetEvidnceHelper:
         evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_SSH_VERSIONS,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
             description=description,
-            profile=ProfileID(ip=srcip),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(int(twid.replace("timewindow", ""))),
-            uid=uid,
-            timestamp=timestamp,
+            uid=uids,
+            timestamp=flow.timestamp,
             confidence=0.9,
         )
         self.db.set_evidence(evidence)
 
     def different_localnet_usage(
-        self,
-        daddr: str,
-        portproto: str,
-        profileid: str,
-        timestamp: str,
-        twid: str,
-        uid: str,
-        ip_outside_localnet: str = "",
+        self, profileid, twid, flow, ip_outside_localnet=""
     ):
         """
         :param ip_outside_localnet: was the
         'srcip' outside the localnet or the 'dstip'?
         """
-        srcip = profileid.split("_")[-1]
         # the attacker here is the IP found to be
         # private and outside the localnet
         if ip_outside_localnet == "srcip":
             attacker = Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             )
             victim = Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             )
             threat_level = ThreatLevel.LOW
             description = (
-                f"A connection from a private IP ({srcip}) "
+                f"A connection from a private IP ({flow.saddr}) "
                 f"outside of the used local network "
-                f"{self.db.get_local_network()}. To IP: {daddr} "
+                f"{self.db.get_local_network()}. To IP: {flow.daddr} "
             )
         else:
             attacker = Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=flow.daddr,
             )
             victim = Victim(
-                direction=Direction.SRC, victim_type=IoCType.IP, value=srcip
+                direction=Direction.SRC,
+                victim_type=IoCType.IP,
+                value=flow.saddr,
             )
             threat_level = ThreatLevel.HIGH
             description = (
-                f"A connection to a private IP ({daddr}) "
+                f"A connection to a private IP ({flow.daddr}) "
                 f"outside of the used local network "
                 f"{self.db.get_local_network()}. "
-                f"From IP: {srcip} "
+                f"From IP: {flow.saddr} "
             )
+            proto = flow.proto.lower()
             description += (
-                "using ARP" if "arp" in portproto else f"on port: {portproto}"
+                "using ARP"
+                if "arp" in proto
+                else f"on port: {flow.proto.lower()}"
             )
 
         confidence = 1.0
@@ -208,29 +201,20 @@ class SetEvidnceHelper:
             threat_level=threat_level,
             description=description,
             victim=victim,
-            profile=ProfileID(ip=srcip),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
         self.db.set_evidence(evidence)
 
-    def device_changing_ips(
-        self,
-        smac: str,
-        old_ip: str,
-        profileid: str,
-        twid: str,
-        uid: str,
-        timestamp: str,
-    ):
+    def device_changing_ips(self, profileid, twid, flow, old_ip: str):
         confidence = 0.8
         threat_level = ThreatLevel.MEDIUM
-        saddr: str = profileid.split("_")[-1]
         description = (
-            f"A device changing IPs. IP {saddr} was found "
-            f"with MAC address {smac} but the MAC belongs "
+            f"A device changing IPs. IP {flow.saddr} was found "
+            f"with MAC address {flow.smar} but the MAC belongs "
             f"originally to IP: {old_ip}. "
         )
         twid_number = int(twid.replace("timewindow", ""))
@@ -238,28 +222,27 @@ class SetEvidnceHelper:
         evidence = Evidence(
             evidence_type=EvidenceType.DEVICE_CHANGING_IP,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=threat_level,
             description=description,
             victim=None,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
-    def non_http_port_80_conn(
-        self, daddr: str, profileid: str, timestamp: str, twid: str, uid: str
-    ) -> None:
-        saddr: str = profileid.split("_")[-1]
-        ip_identification: str = self.db.get_ip_identification(daddr)
+    def non_http_port_80_conn(self, profileid, twid, flow) -> None:
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"non-HTTP established connection to port 80. "
-            f"destination IP: {daddr} {ip_identification}"
+            f"destination IP: {flow.daddr} {ip_identification}"
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -271,19 +254,21 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
                 victim_type=IoCType.IP,
-                value=daddr,
+                value=flow.daddr,
             ),
             threat_level=ThreatLevel.LOW,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=0.8,
         )
         self.db.set_evidence(evidence)
@@ -293,31 +278,32 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=flow.daddr,
             ),
             victim=Victim(
-                direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                victim_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
             description=description,
-            profile=ProfileID(ip=daddr),
+            profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=0.8,
         )
 
         self.db.set_evidence(evidence)
 
-    def non_ssl_port_443_conn(
-        self, daddr: str, profileid: str, timestamp: str, twid: str, uid: str
-    ) -> None:
+    def non_ssl_port_443_conn(self, profileid, twid, flow) -> None:
         confidence: float = 0.8
-        saddr: str = profileid.split("_")[-1]
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"non-SSL established connection to port 443. "
-            f"destination IP: {daddr} {ip_identification}"
+            f"destination IP: {flow.daddr} {ip_identification}"
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -325,36 +311,31 @@ class SetEvidnceHelper:
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.NON_SSL_PORT_443_CONNECTION,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
-    def incompatible_cn(
-        self,
-        org: str,
-        timestamp: str,
-        daddr: str,
-        profileid: str,
-        twid: str,
-        uid: str,
-    ) -> None:
+    def incompatible_cn(self, profileid, twid, flow, org: str) -> None:
         confidence: float = 0.9
-        saddr: str = profileid.split("_")[-1]
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"Incompatible certificate CN to IP: {daddr} "
+            f"Incompatible certificate CN to IP: {flow.daddr} "
             f"{ip_identification} claiming to "
             f"belong {org.capitalize()}."
         )
@@ -363,95 +344,89 @@ class SetEvidnceHelper:
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.INCOMPATIBLE_CN,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
     def dga(
-        self,
-        nxdomains: int,
-        stime: str,
-        profileid: str,
-        twid: str,
-        uid: List[str],
+        self, profileid, twid, flow, nxdomains: int, uids: List[str]
     ) -> None:
         # for each non-existent domain beyond the threshold of 100,
         # the confidence score is increased linearly.
         # +1 ensures that the minimum confidence score is 1.
         confidence: float = max(0, (1 / 100) * (nxdomains - 100) + 1)
         confidence = round(confidence, 2)  # for readability
-        saddr = profileid.split("_")[-1]
         description = (
-            f"Possible DGA or domain scanning. {saddr} "
+            f"Possible DGA or domain scanning. {flow.saddr} "
             f"failed to resolve {nxdomains} domains"
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.DGA_NXDOMAINS,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.HIGH,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
-            timestamp=stime,
+            uid=uids,
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
-    def dns_without_conn(
-        self, domain: str, timestamp: str, profileid: str, twid: str, uid: str
-    ) -> None:
-        saddr: str = profileid.split("_")[-1]
-        description: str = f"domain {domain} resolved with no connection"
+    def dns_without_conn(self, profileid, twid, flow):
+        description: str = f"domain {flow.query} resolved with no connection"
         twid_number: int = int(twid.replace("timewindow", ""))
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.DNS_WITHOUT_CONNECTION,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
                 victim_type=IoCType.DOMAIN,
-                value=domain,
+                value=flow.query,
             ),
             threat_level=ThreatLevel.LOW,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=0.8,
         )
 
         self.db.set_evidence(evidence)
 
     def pastebin_download(
-        self,
-        bytes_downloaded: int,
-        timestamp: str,
-        profileid: str,
-        twid: str,
-        uid: str,
+        self, profileid, twid, flow: dict, bytes_downloaded: int
     ) -> bool:
+        flow = utils.convert_to_flow_obj(flow)
         confidence: float = 1.0
-        saddr: str = profileid.split("_")[-1]
         response_body_len: float = utils.convert_to_mb(bytes_downloaded)
         description: str = (
             f"A downloaded file from pastebin.com. "
@@ -462,28 +437,28 @@ class SetEvidnceHelper:
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.PASTEBIN_DOWNLOAD,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
         return True
 
-    def conn_without_dns(
-        self, daddr: str, timestamp: str, profileid: str, twid: str, uid: str
-    ) -> None:
+    def conn_without_dns(self, profileid, twid, flow) -> None:
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.INFO
-        saddr: str = profileid.split("_")[-1]
+
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
         )
 
         # The first 5 hours the confidence of connection w/o DNS
@@ -497,10 +472,10 @@ class SetEvidnceHelper:
             if diff < 5:
                 confidence = 0.1
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"A connection without DNS resolution to IP: "
-            f"{daddr} {ip_identification}"
+            f"{flow.daddr} {ip_identification}"
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -509,27 +484,20 @@ class SetEvidnceHelper:
             attacker=attacker,
             threat_level=threat_level,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
     def dns_arpa_scan(
-        self,
-        arpa_scan_threshold: int,
-        stime: str,
-        profileid: str,
-        twid: str,
-        uid: List[str],
+        self, profileid, twid, flow, arpa_scan_threshold: int, uids: List[str]
     ) -> bool:
         threat_level = ThreatLevel.MEDIUM
         confidence = 0.7
-        saddr = profileid.split("_")[-1]
-
         description = (
             f"Doing DNS ARPA scan. Scanned {arpa_scan_threshold}"
             f" hosts within 2 seconds."
@@ -540,13 +508,15 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DNS_ARPA_SCAN,
             description=description,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=threat_level,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
-            timestamp=stime,
+            uid=uids,
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
@@ -555,57 +525,51 @@ class SetEvidnceHelper:
 
         return True
 
-    def unknown_port(
-        self,
-        daddr: str,
-        dport: int,
-        proto: str,
-        timestamp: str,
-        profileid: str,
-        twid: str,
-        uid: str,
-    ) -> None:
+    def unknown_port(self, profileid, twid, flow) -> None:
         confidence: float = 1.0
         twid_number: int = int(twid.replace("timewindow", ""))
-        saddr = profileid.split("_")[-1]
+        flow.saddr = profileid.split("_")[-1]
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"Connection to unknown destination port {dport}/{proto.upper()} "
-            f"destination IP {daddr}. {ip_identification}"
+            f"Connection to unknown destination port {flow.dport}/"
+            f"{flow.proto.upper()} "
+            f"destination IP {flow.daddr}. {ip_identification}"
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.UNKNOWN_PORT,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=ThreatLevel.HIGH,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
-    def pw_guessing(
-        self, msg: str, timestamp: str, twid: str, uid: str, by: str = ""
-    ) -> None:
+    def pw_guessing(self, profileid, twid, flow, by: str = "") -> None:
         # 222.186.30.112 appears to be guessing SSH passwords
         # (seen in 30 connections)
         # confidence = 1 because this detection is comming
         # from a zeek file so we're sure it's accurate
         confidence: float = 1.0
         twid_number: int = int(twid.replace("timewindow", ""))
-        scanning_ip: str = msg.split(" appears")[0]
+        scanning_ip: str = flow.msg.split(" appears")[0]
 
-        description: str = f"password guessing. {msg}. by {by}."
+        description: str = f"password guessing. {flow.msg}. by {by}."
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.PASSWORD_GUESSING,
@@ -618,21 +582,19 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
-    def horizontal_portscan(
-        self, msg: str, timestamp: str, profileid: str, twid: str, uid: str
-    ) -> None:
+    def horizontal_portscan(self, profileid, twid, flow) -> None:
         confidence: float = 1.0
         twid_number: int = int(twid.replace("timewindow", ""))
         saddr = profileid.split("_")[-1]
 
-        description: str = f"horizontal port scan by Zeek engine. {msg}"
+        description: str = f"horizontal port scan by Zeek engine. {flow.msg}"
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
@@ -643,244 +605,220 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
-    def conn_to_private_ip(
-        self,
-        proto: str,
-        daddr: str,
-        dport: int,
-        saddr: str,
-        twid: str,
-        uid: str,
-        timestamp: str,
-    ) -> None:
+    def conn_to_private_ip(self, profileid, twid, flow) -> None:
         confidence: float = 1.0
         twid_number: int = int(twid.replace("timewindow", ""))
-        description: str = f"Connecting to private IP: {daddr} "
+        description: str = f"Connecting to private IP: {flow.daddr} "
 
-        if proto.lower() == "arp" or dport == "":
+        if flow.proto.lower() == "arp" or flow.dport == "":
             pass
-        elif proto.lower() == "icmp":
+        elif flow.proto.lower() == "icmp":
             description += "protocol: ICMP"
         else:
-            description += f"on destination port: {dport}"
+            description += f"on destination port: {flow.dport}"
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.CONNECTION_TO_PRIVATE_IP,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
         )
 
         self.db.set_evidence(evidence)
 
-    def GRE_tunnel(self, tunnel_info: Dict[str, str]) -> None:
-        profileid: str = tunnel_info["profileid"]
-        twid: str = tunnel_info["twid"]
-        tunnel_flow: str = tunnel_info["flow"]
-
-        action = tunnel_flow["action"]
-        daddr = tunnel_flow["daddr"]
-        ts = tunnel_flow["starttime"]
-        uid: str = tunnel_flow["uid"]
+    def gre_tunnel(self, profileid, twid, flow) -> None:
 
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.INFO
         twid_number: int = int(twid.replace("timewindow", ""))
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
-        saddr: str = profileid.split("_")[-1]
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
+
         description: str = (
-            f"GRE tunnel from {saddr} "
-            f"to {daddr} {ip_identification} "
-            f"tunnel action: {action}"
+            f"GRE tunnel from {flow.saddr} "
+            f"to {flow.daddr} {ip_identification} "
+            f"tunnel action: {flow.action}"
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.GRE_TUNNEL,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=threat_level,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=ts,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
-    def vertical_portscan(
-        self, msg: str, scanning_ip: str, timestamp: str, twid: str, uid: str
-    ) -> None:
+    def vertical_portscan(self, profileid, twid, flow) -> None:
         # confidence = 1 because this detection is coming
         # from a Zeek file so we're sure it's accurate
         confidence: float = 1.0
         twid: int = int(twid.replace("timewindow", ""))
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
-        description: str = f"vertical port scan by Zeek engine. {msg}"
-
+        description: str = f"vertical port scan by Zeek engine. {flow.msg}"
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
             attacker=Attacker(
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
-                value=scanning_ip,
+                value=flow.scanning_ip,
             ),
             victim=Victim(
                 direction=Direction.DST,
                 victim_type=IoCType.IP,
-                value=msg.split("ports of host ")[-1].split(" in")[0],
+                value=flow.msg.split("ports of host ")[-1].split(" in")[0],
             ),
             threat_level=ThreatLevel.HIGH,
             description=description,
-            profile=ProfileID(ip=scanning_ip),
+            profile=ProfileID(ip=flow.scanning_ip),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
         self.db.set_evidence(evidence)
 
-    def ssh_successful(
-        self,
-        twid: str,
-        saddr: str,
-        daddr: str,
-        size: int,
-        uid: str,
-        timestamp: str,
-        by="",
-    ) -> None:
+    def ssh_successful(self, profileid, twid, flow, size: int, by="") -> None:
         """
         Set an evidence for a successful SSH login.
         This is not strictly a detection, but we don't have
         a better way to show it.
         The threat_level is 0.01 to show that this is not a detection
-        :param size: src and dst bytes sent and recieved
         """
 
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.INFO
         twid: int = int(twid.replace("timewindow", ""))
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"SSH successful to IP {daddr}. {ip_identification}. "
-            f"From IP {saddr}. Sent bytes: {str(size)}. Detection model {by}."
+            f"SSH successful to IP {flow.daddr}. {ip_identification}. "
+            f"From IP {flow.saddr}. Sent bytes: {str(size)}. Detection model {by}."
             f" Confidence {confidence}"
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.SSH_SUCCESSFUL,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
-    def long_connection(
-        self,
-        daddr: str,
-        duration,
-        profileid: str,
-        twid: str,
-        uid: str,
-        timestamp,
-    ) -> None:
+    def long_connection(self, profileid, twid, flow) -> None:
         """
         Set an evidence for a long connection.
         """
         twid: int = int(twid.replace("timewindow", ""))
         # Confidence depends on how long the connection.
         # Scale the confidence from 0 to 1; 1 means 24 hours long.
-        confidence: float = 1 / (3600 * 24) * (duration - 3600 * 24) + 1
+        confidence: float = 1 / (3600 * 24) * (flow.dur - 3600 * 24) + 1
         confidence = round(confidence, 2)
         # Get the duration in minutes.
-        duration_minutes: int = int(duration / 60)
-        srcip: str = profileid.split("_")[1]
-
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        if isinstance(flow.dur, str):
+            dur = float(flow.dur)
+        duration_minutes: int = int(dur / 60)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"Long Connection. Connection from {srcip} "
-            f"to destination address: {daddr} "
+            f"Long Connection. Connection from {flow.saddr} "
+            f"to destination address: {flow.daddr} "
             f"{ip_identification} took {duration_minutes} mins"
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.LONG_CONNECTION,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=srcip),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
         )
 
         self.db.set_evidence(evidence)
 
-    def self_signed_certificates(
-        self, profileid, twid, daddr, uid: str, timestamp, server_name
-    ) -> None:
+    def self_signed_certificates(self, profileid, twid, flow) -> None:
         """
         Set evidence for self-signed certificates.
         """
         confidence: float = 0.5
-        saddr: str = profileid.split("_")[-1]
+
         twid: int = int(twid.replace("timewindow", ""))
 
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
         )
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description = (
-            f"Self-signed certificate. Destination IP: {daddr}."
+            f"Self-signed certificate. Destination IP: {flow.daddr}."
             f" {ip_identification}"
         )
 
-        if server_name:
-            description += f" SNI: {server_name}."
+        if flow.server_name:
+            description += f" SNI: {flow.server_name}."
 
         # to add a correlation between the 2 evidence in alerts.json
         evidence_id_of_dstip_as_the_attacker = str(uuid4())
@@ -894,15 +832,15 @@ class SetEvidnceHelper:
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
         self.db.set_evidence(evidence)
 
         attacker: Attacker = Attacker(
-            direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+            direction=Direction.DST, attacker_type=IoCType.IP, value=flow.daddr
         )
         evidence: Evidence = Evidence(
             id=evidence_id_of_dstip_as_the_attacker,
@@ -912,58 +850,62 @@ class SetEvidnceHelper:
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
         self.db.set_evidence(evidence)
 
     def multiple_reconnection_attempts(
-        self, profileid, twid, daddr, uid: List[str], timestamp, reconnections
+        self, profileid, twid, flow, reconnections, uids: List[str]
     ) -> None:
         """
         Set evidence for Reconnection Attempts.
         """
         confidence: float = 0.5
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
-        saddr: str = profileid.split("_")[-1]
+
         twid: int = int(twid.replace("timewindow", ""))
 
-        ip_identification = self.db.get_ip_identification(daddr)
+        ip_identification = self.db.get_ip_identification(flow.daddr)
         description = (
             f"Multiple reconnection attempts to Destination IP:"
-            f" {daddr} {ip_identification} "
-            f"from IP: {saddr} reconnections: {reconnections}"
+            f" {flow.daddr} {ip_identification} "
+            f"from IP: {flow.saddr} reconnections: {reconnections}"
         )
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
-            uid=uid,
-            timestamp=timestamp,
+            uid=uids,
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
     def connection_to_multiple_ports(
         self,
-        profileid: str,
-        twid: str,
-        uid: List[str],
-        timestamp: str,
-        dstports: list,
+        profileid,
+        twid,
+        flow,
         victim: str,
         attacker: str,
+        dstports,
+        uids: List[str],
     ) -> None:
         """
         Set evidence for connection to multiple ports.
@@ -1002,30 +944,21 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=profile_ip),
             timewindow=TimeWindow(number=twid),
-            uid=uid,
-            timestamp=timestamp,
+            uid=uids,
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
     def suspicious_dns_answer(
-        self,
-        query: str,
-        answer: str,
-        entropy: float,
-        daddr: str,
-        profileid: str,
-        twid: str,
-        stime: str,
-        uid: str,
+        self, profileid, twid, flow, entropy: float, sus_answer: str
     ) -> None:
         confidence: float = 0.6
         twid: int = int(twid.replace("timewindow", ""))
-        saddr: str = profileid.split("_")[-1]
 
         description: str = (
             f"A DNS TXT answer with high entropy. "
-            f'query: {query} answer: "{answer}" '
+            f'query: {flow.query} answer: "{sus_answer}" '
             f"entropy: {round(entropy, 2)} "
         )
         # to add a correlation between the 2 evidence in alerts.json
@@ -1036,15 +969,17 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.HIGH_ENTROPY_DNS_ANSWER,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=daddr),
+            profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=stime,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -1054,61 +989,50 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.HIGH_ENTROPY_DNS_ANSWER,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=stime,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
         self.db.set_evidence(evidence)
 
     def invalid_dns_answer(
-        self,
-        query: str,
-        answer: str,
-        profileid: str,
-        twid: str,
-        stime: str,
-        uid: str,
+        self, profileid, twid, flow, invalid_answer
     ) -> None:
         confidence: float = 0.7
         twid: int = int(twid.replace("timewindow", ""))
-        saddr: str = profileid.split("_")[-1]
 
-        description: str = f"The DNS query {query} was resolved to {answer}"
+        description: str = (
+            f"The DNS query {flow.query} was " f"resolved to {invalid_answer}"
+        )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.INVALID_DNS_RESOLUTION,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=stime,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
-    def for_port_0_connection(
-        self,
-        saddr: str,
-        daddr: str,
-        sport: int,
-        dport: int,
-        profileid: str,
-        twid: str,
-        uid: str,
-        timestamp: str,
-        victim: str,
-        attacker: str,
+    def port_0_connection(
+        self, profileid, twid, flow, victim: str, attacker: str
     ) -> None:
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.HIGH
@@ -1122,10 +1046,10 @@ class SetEvidnceHelper:
             victim_direction = Direction.SRC
             profile_ip = victim
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"Connection on port 0 from {saddr}:{sport} "
-            f"to {daddr}:{dport}. {ip_identification}."
+            f"Connection on port 0 from {flow.saddr}:{flow.sport} "
+            f"to {flow.daddr}:{flow.dport}. {ip_identification}."
         )
 
         evidence: Evidence = Evidence(
@@ -1145,23 +1069,16 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=profile_ip),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
     def malicious_ja3s(
-        self,
-        malicious_ja3_dict: dict,
-        twid: str,
-        uid: str,
-        timestamp: str,
-        saddr: str,
-        daddr: str,
-        ja3: str = "",
+        self, profileid, twid, flow, malicious_ja3_dict: dict
     ) -> None:
-        ja3_info: dict = json.loads(malicious_ja3_dict[ja3])
+        ja3_info: dict = json.loads(malicious_ja3_dict[flow.ja3s])
 
         threat_level: str = ja3_info["threat_level"].upper()
         threat_level: ThreatLevel = ThreatLevel[threat_level]
@@ -1169,10 +1086,10 @@ class SetEvidnceHelper:
         tags: str = ja3_info.get("tags", "")
         ja3_description: str = ja3_info["description"]
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description = (
-            f"Malicious JA3s: (possible C&C server): {ja3} to server "
-            f"{daddr} {ip_identification} "
+            f"Malicious JA3s: (possible C&C server): {flow.ja3s} to server "
+            f"{flow.daddr} {ip_identification} "
         )
         if ja3_description != "None":
             description += f"description: {ja3_description} "
@@ -1187,15 +1104,17 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_JA3S,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=daddr),
+            profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -1204,30 +1123,25 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_JA3S,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
     def malicious_ja3(
-        self,
-        malicious_ja3_dict: dict,
-        twid: str,
-        uid: str,
-        timestamp: str,
-        daddr: str,
-        saddr: str,
-        ja3: str = "",
+        self, profileid, twid, flow, malicious_ja3_dict: dict
     ) -> None:
-        ja3_info: dict = json.loads(malicious_ja3_dict[ja3])
+        ja3_info: dict = json.loads(malicious_ja3_dict[flow.ja3])
 
         threat_level: str = ja3_info["threat_level"].upper()
         threat_level: ThreatLevel = ThreatLevel[threat_level]
@@ -1235,10 +1149,10 @@ class SetEvidnceHelper:
         tags: str = ja3_info.get("tags", "")
         ja3_description: str = ja3_info["description"]
 
-        ip_identification: str = self.db.get_ip_identification(saddr)
+        ip_identification: str = self.db.get_ip_identification(flow.saddr)
         description = (
-            f"Malicious JA3: {ja3} from source address "
-            f"{saddr} {ip_identification}"
+            f"Malicious JA3: {flow.ja3} from source address "
+            f"{flow.saddr} {ip_identification}"
         )
         if ja3_description != "None":
             description += f" description: {ja3_description} "
@@ -1247,18 +1161,22 @@ class SetEvidnceHelper:
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_JA3,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=threat_level,
             confidence=1,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -1269,7 +1187,7 @@ class SetEvidnceHelper:
         src_mbs: float,
         profileid: str,
         twid: str,
-        uid: List[str],
+        uids: List[str],
         timestamp,
     ) -> None:
         saddr: str = profileid.split("_")[-1]
@@ -1295,7 +1213,7 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=uids,
             timestamp=timestamp,
         )
 
@@ -1313,67 +1231,66 @@ class SetEvidnceHelper:
             description=description,
             profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=uid,
+            uid=uids,
             timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
 
-    def bad_smtp_login(
-        self, saddr: str, daddr: str, stime: str, twid: str, uid: str
-    ) -> None:
+    def bad_smtp_login(self, profileid, twid, flow) -> None:
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"doing bad SMTP login to {daddr} " f"{ip_identification}"
+            f"doing bad SMTP login to {flow.daddr} " f"{ip_identification}"
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.BAD_SMTP_LOGIN,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=stime,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
     def smtp_bruteforce(
         self,
-        flow: dict,
-        twid: str,
-        uid: List[str],
+        profileid,
+        twid,
+        flow,
         smtp_bruteforce_threshold: int,
+        uids: List[str],
     ) -> None:
-        saddr: str = flow["saddr"]
-        daddr: str = flow["daddr"]
-        stime: str = flow["starttime"]
-
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"doing SMTP login bruteforce to {daddr}. "
+            f"doing SMTP login bruteforce to {flow.daddr}. "
             f"{smtp_bruteforce_threshold} logins in 10 seconds. "
             f"{ip_identification}"
         )
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
         )
         victim = Victim(
-            direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+            direction=Direction.DST, victim_type=IoCType.IP, value=flow.daddr
         )
 
         evidence: Evidence = Evidence(
@@ -1383,22 +1300,17 @@ class SetEvidnceHelper:
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uid,
-            timestamp=stime,
+            uid=uids,
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
-    def malicious_ssl(self, ssl_info: dict, ssl_info_from_db: str) -> None:
-        flow: dict = ssl_info["flow"]
-        ts: str = flow.get("starttime", "")
-        daddr: str = flow.get("daddr", "")
-        saddr: str = flow.get("saddr", "")
-        uid: str = flow.get("uid", "")
-        twid: str = ssl_info.get("twid", "")
-
+    def malicious_ssl(
+        self, profileid, twid, flow, ssl_info_from_db: str
+    ) -> None:
         ssl_info_from_db: dict = json.loads(ssl_info_from_db)
         tags: str = ssl_info_from_db["tags"]
         cert_description: str = ssl_info_from_db["description"]
@@ -1409,9 +1321,9 @@ class SetEvidnceHelper:
         ]
         threat_level: ThreatLevel = ThreatLevel(threat_level)
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"Malicious SSL certificate to server {daddr}."
+            f"Malicious SSL certificate to server {flow.daddr}."
             f"{ip_identification} description: "
             f"{cert_description} {tags}  "
         )
@@ -1423,15 +1335,17 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_SSL_CERT,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=daddr),
+            profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=ts,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -1441,15 +1355,17 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_SSL_CERT,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=daddr),
+            profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=ts,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)

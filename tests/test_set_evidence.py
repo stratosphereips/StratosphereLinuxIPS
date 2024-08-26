@@ -708,7 +708,7 @@ def test_gre_tunnel(mock_db):
         },
     }
     set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.GRE_tunnel(tunnel_info)
+    set_evidence_helper.gre_tunnel(tunnel_info)
 
     assert mock_db.set_evidence.call_count == 1
     args, _ = mock_db.set_evidence.call_args
@@ -1134,7 +1134,7 @@ def test_for_port_0_connection(
 ):
     """Testing the for_port_0_connection method."""
     set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.for_port_0_connection(
+    set_evidence_helper.port_0_connection(
         saddr="192.168.0.1",
         daddr="10.0.0.1",
         sport=12345,

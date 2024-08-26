@@ -21,7 +21,6 @@ class Publisher:
         Publish the GW addr in the new_dhcp channel
         :param starttime: epoch starttime
         """
-
         # this channel is used for setting the default gw ip,
         # only 1 flow is enough for that
         # on home networks, the router serves as a simple DHCP server

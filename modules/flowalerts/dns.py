@@ -53,7 +53,7 @@ class DNS(IFlowalertsAnalyzer):
             return False
 
     @staticmethod
-    def should_detect_dns_without_conn(domain: str, rcode_name: str) -> bool:
+    def should_detect_dns_without_conn(flow) -> bool:
         """
         returns False in the following cases
          - All reverse dns resolutions
@@ -70,13 +70,14 @@ class DNS(IFlowalertsAnalyzer):
             connection later
         """
         if (
-            "arpa" in domain
-            or ".local" in domain
-            or "*" in domain
-            or ".cymru.com" in domain[-10:]
-            or len(domain.split(".")) == 1
-            or domain == "WPAD"
-            or rcode_name != "NOERROR"
+            "arpa" in flow.query
+            or ".local" in flow.query
+            or "*" in flow.query
+            or ".cymru.com" in flow.query[-10:]
+            or len(flow.query.split(".")) == 1
+            or flow.query == "WPAD"
+            or flow.rcode_name != "NOERROR"
+            or not flow.answers
         ):
             return False
         return True
@@ -107,19 +108,17 @@ class DNS(IFlowalertsAnalyzer):
             and not domain.endswith(".arpa")
         )
 
-    def detect_young_domains(
-        self, domain, answers: List[str], stime, profileid, twid, uid
-    ):
+    def detect_young_domains(self, profileid, twid, flow):
         """
         Detect domains that are too young.
         The threshold is 60 days
         """
-        if not self.should_detect_young_domain(domain):
+        if not self.should_detect_young_domain(flow.query):
             return False
 
         age_threshold = 60
 
-        domain_info: dict = self.db.get_domain_data(domain)
+        domain_info: dict = self.db.get_domain_data(flow.query)
         if not domain_info:
             return False
 
@@ -133,11 +132,9 @@ class DNS(IFlowalertsAnalyzer):
             return False
 
         ips_returned_in_answer: List[str] = self.extract_ips_from_dns_answers(
-            answers
+            flow.answers
         )
-        self.set_evidence.young_domain(
-            domain, age, stime, profileid, twid, uid, ips_returned_in_answer
-        )
+        self.set_evidence.young_domain(twid, flow, age, ips_returned_in_answer)
         return True
 
     @staticmethod
@@ -172,20 +169,11 @@ class DNS(IFlowalertsAnalyzer):
             # by this computer but using a different ip version
             return True
 
-    def check_dns_without_connection(
-        self,
-        domain,
-        answers: list,
-        rcode_name: str,
-        timestamp: str,
-        profileid,
-        twid,
-        uid,
-    ):
+    def check_dns_without_connection(self, profileid, twid, flow):
         """
         Makes sure all cached DNS answers are used in contacted_ips
         """
-        if not self.should_detect_dns_without_conn(domain, rcode_name):
+        if not self.should_detect_dns_without_conn(flow):
             return False
 
         # One DNS query may not be answered exactly by UID,
@@ -204,17 +192,21 @@ class DNS(IFlowalertsAnalyzer):
         # with AAAA, and the computer chooses the A address.
         # Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
-        if prev_domain_resolutions := self.db.get_domain_data(domain):
+        if prev_domain_resolutions := self.db.get_domain_data(flow.query):
             prev_domain_resolutions = prev_domain_resolutions.get("IPs", [])
             # if there's a domain in the cache
             # (prev_domain_resolutions) that is not in the
             # current answers given to this function,
             # append it to the answers list
-            answers.extend(
-                [ans for ans in prev_domain_resolutions if ans not in answers]
+            flow.answers.extend(
+                [
+                    ans
+                    for ans in prev_domain_resolutions
+                    if ans not in flow.answers
+                ]
             )
 
-        if answers == ["-"]:
+        if flow.answers == ["-"]:
             # If no IPs are in the answer, we can not expect
             # the computer to connect to anything
             # self.print(f'No ips in the answer, so ignoring')
@@ -231,7 +223,7 @@ class DNS(IFlowalertsAnalyzer):
         # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
-        for ip in self.extract_ips_from_dns_answers(answers):
+        for ip in self.extract_ips_from_dns_answers(flow.answers):
             # self.print(f'Checking if we have a connection to ip {ip}')
             if (
                 ip in contacted_ips
@@ -243,7 +235,7 @@ class DNS(IFlowalertsAnalyzer):
                 return False
 
         # Check if there was a connection to any of the CNAMEs
-        if self.is_cname_contacted(answers, contacted_ips):
+        if self.is_cname_contacted(flow.answers, contacted_ips):
             # this is not a DNS without resolution
             return False
 
@@ -253,19 +245,11 @@ class DNS(IFlowalertsAnalyzer):
         # Lets check back in some time
         # Create a timer thread that will wait some seconds for the
         # connection to arrive and then check again
-        if uid not in self.connections_checked_in_dns_conn_timer_thread:
+        if flow.uid not in self.connections_checked_in_dns_conn_timer_thread:
             # comes here if we haven't started the timer
             # thread for this dns before mark this dns as checked
-            self.connections_checked_in_dns_conn_timer_thread.append(uid)
-            params = [
-                domain,
-                answers,
-                rcode_name,
-                timestamp,
-                profileid,
-                twid,
-                uid,
-            ]
+            self.connections_checked_in_dns_conn_timer_thread.append(flow.uid)
+            params = [profileid, twid, flow]
             # self.print(f'Starting the timer to check on {domain}, uid {uid}.
             # time {datetime.datetime.now()}')
             timer = TimerThread(40, self.check_dns_without_connection, params)
@@ -273,13 +257,13 @@ class DNS(IFlowalertsAnalyzer):
         else:
             # It means we already checked this dns with the Timer process
             # but still no connection for it.
-            self.set_evidence.dns_without_conn(
-                domain, timestamp, profileid, twid, uid
-            )
+            self.set_evidence.dns_without_conn(profileid, twid, flow)
             # This UID will never appear again, so we can remove it and
             # free some memory
             with contextlib.suppress(ValueError):
-                self.connections_checked_in_dns_conn_timer_thread.remove(uid)
+                self.connections_checked_in_dns_conn_timer_thread.remove(
+                    flow.uid
+                )
 
     @staticmethod
     def estimate_shannon_entropy(string):
@@ -296,60 +280,46 @@ class DNS(IFlowalertsAnalyzer):
 
         return shannon_entropy_value * -1
 
-    def check_high_entropy_dns_answers(
-        self, domain, answers, daddr, profileid, twid, stime, uid
-    ):
+    def check_high_entropy_dns_answers(self, profileid, twid, flow):
         """
         Uses shannon entropy to detect DNS TXT answers
         with encoded/encrypted strings
         """
-        if not answers:
+        if not flow.answers:
             return
 
-        for answer in answers:
-            if "TXT" in answer:
-                entropy = self.estimate_shannon_entropy(answer)
-                if entropy >= self.shannon_entropy_threshold:
-                    self.set_evidence.suspicious_dns_answer(
-                        domain,
-                        answer,
-                        entropy,
-                        daddr,
-                        profileid,
-                        twid,
-                        stime,
-                        uid,
-                    )
+        for answer in flow.answers:
+            if "TXT" not in answer:
+                continue
+            entropy = self.estimate_shannon_entropy(answer)
+            if entropy >= self.shannon_entropy_threshold:
+                self.set_evidence.suspicious_dns_answer(profileid, twid, flow)
 
-    def check_invalid_dns_answers(
-        self, domain, answers, profileid, twid, stime, uid
-    ):
+    def check_invalid_dns_answers(self, profileid, twid, flow):
         # this function is used to check for certain IP
         # answers to DNS queries being blocked
         # (perhaps by ad blockers) and set to the following IP values
         # currently hardcoding blocked ips
         invalid_answers = {"127.0.0.1", "0.0.0.0"}
-        if not answers:
+        if not flow.answers:
             return
 
-        for answer in answers:
-            if answer in invalid_answers and domain != "localhost":
+        for answer in flow.answers:
+            if answer in invalid_answers and flow.query != "localhost":
                 # blocked answer found
-                self.set_evidence.invalid_dns_answer(
-                    domain, answer, profileid, twid, stime, uid
-                )
+                self.set_evidence.invalid_dns_answer(profileid, twid, flow)
                 # delete answer from redis cache to prevent
                 # associating this dns answer with this domain/query and
                 # avoid FP "DNS without connection" evidence
-                self.db.delete_dns_resolution(answer)
+                self.db.delete_dns_resolution(flow.answer)
 
-    def detect_dga(self, rcode_name, query, stime, profileid, twid, uid):
+    def detect_dga(self, profileid, twid, flow):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         alerts when 10 15 20 etc. nxdomains are found
         Ignore queries done to *.in-addr.arpa domains and to *.local domains
         """
-        if not rcode_name:
+        if not flow.rcode_name:
             return
 
         # check whitelisted queries because we
@@ -357,12 +327,12 @@ class DNS(IFlowalertsAnalyzer):
         # spamhaus as DGA as they're made
         # by slips
         if (
-            "NXDOMAIN" not in rcode_name
-            or not query
-            or query.endswith(".arpa")
-            or query.endswith(".local")
+            "NXDOMAIN" not in flow.rcode_name
+            or not flow.query
+            or flow.query.endswith(".arpa")
+            or flow.query.endswith(".local")
             or self.flowalerts.whitelist.domain_analyzer.is_whitelisted(
-                query, Direction.SRC, "alerts"
+                flow.query, Direction.SRC, "alerts"
             )
         ):
             return False
@@ -372,14 +342,14 @@ class DNS(IFlowalertsAnalyzer):
         # found NXDOMAIN by this profile
         try:
             # make sure all domains are unique
-            if query not in self.nxdomains[profileid_twid]:
+            if flow.query not in self.nxdomains[profileid_twid]:
                 queries, uids = self.nxdomains[profileid_twid]
-                queries.append(query)
-                uids.append(uid)
+                queries.append(flow.query)
+                uids.append(flow.uid)
                 self.nxdomains[profileid_twid] = (queries, uids)
         except KeyError:
             # first time seeing nxdomain in this profile and tw
-            self.nxdomains.update({profileid_twid: ([query], [uid])})
+            self.nxdomains.update({profileid_twid: ([flow.query], [flow.uid])})
             return False
 
         # every 5 nxdomains, generate an alert.
@@ -390,20 +360,20 @@ class DNS(IFlowalertsAnalyzer):
             and number_of_nxdomains >= self.nxdomains_threshold
         ):
             self.set_evidence.dga(
-                number_of_nxdomains, stime, profileid, twid, uids
+                profileid, twid, flow, number_of_nxdomains, uids
             )
             # clear the list of alerted queries and uids
             self.nxdomains[profileid_twid] = ([], [])
             return True
 
-    def check_dns_arpa_scan(self, domain, stime, profileid, twid, uid):
+    def check_dns_arpa_scan(self, profileid, twid, flow):
         """
         Detect and ARPA scan if an ip performed 10(arpa_scan_threshold)
         or more arpa queries within 2 seconds
         """
-        if not domain:
+        if not flow.query:
             return False
-        if not domain.endswith(".in-addr.arpa"):
+        if not flow.query.endswith(".in-addr.arpa"):
             return False
 
         try:
@@ -412,10 +382,9 @@ class DNS(IFlowalertsAnalyzer):
             timestamps, uids, domains_scanned = self.dns_arpa_queries[
                 profileid
             ]
-            timestamps.append(stime)
-            uids.append(uid)
-            uids.append(uid)
-            domains_scanned.add(domain)
+            timestamps.append(flow.timestamp)
+            uids.append(flow.uid)
+            domains_scanned.add(flow.query)
             self.dns_arpa_queries[profileid] = (
                 timestamps,
                 uids,
@@ -423,7 +392,11 @@ class DNS(IFlowalertsAnalyzer):
             )
         except KeyError:
             # first time for this profileid to perform an arpa query
-            self.dns_arpa_queries[profileid] = ([stime], [uid], {domain})
+            self.dns_arpa_queries[profileid] = (
+                [flow.timestamp],
+                [flow.uid],
+                {flow.query},
+            )
             return False
 
         if len(domains_scanned) < self.arpa_scan_threshold:
@@ -437,7 +410,7 @@ class DNS(IFlowalertsAnalyzer):
             return False
 
         self.set_evidence.dns_arpa_scan(
-            self.arpa_scan_threshold, stime, profileid, twid, uids
+            profileid, twid, flow, self.arpa_scan_threshold, uids
         )
         # empty the list of arpa queries for this profile,
         # we don't need them anymore
@@ -447,45 +420,15 @@ class DNS(IFlowalertsAnalyzer):
     def analyze(self, msg):
         if not utils.is_msg_intended_for(msg, "new_dns"):
             return False
-
-        data = json.loads(msg["data"])
-        profileid = data["profileid"]
-        twid = data["twid"]
-        uid = data["uid"]
-        daddr = data.get("daddr", False)
-        flow_data = json.loads(
-            data["flow"]
-        )  # this is a dict {'uid':json flow data}
-        domain = flow_data.get("query", False)
-        answers = flow_data.get("answers", False)
-        rcode_name = flow_data.get("rcode_name", False)
-        stime = data.get("stime", False)
-
-        # only check dns without connection if we have
-        # answers(we're sure the query is resolved)
-        # sometimes we have 2 dns flows, 1 for ipv4 and
-        # 1 fo ipv6, both have the
-        # same uid, this causes FP dns without connection,
-        # so make sure we only check the uid once
-        if (
-            answers
-            and uid not in self.connections_checked_in_dns_conn_timer_thread
-        ):
-            self.check_dns_without_connection(
-                domain, answers, rcode_name, stime, profileid, twid, uid
-            )
-
-        self.check_high_entropy_dns_answers(
-            domain, answers, daddr, profileid, twid, stime, uid
-        )
-
-        self.check_invalid_dns_answers(
-            domain, answers, profileid, twid, stime, uid
-        )
-
-        self.detect_dga(rcode_name, domain, stime, profileid, twid, uid)
-
+        msg = json.loads(msg["data"])
+        profileid = msg["profileid"]
+        twid = msg["twid"]
+        flow = utils.convert_to_flow_obj(msg["flow"])
+        self.check_dns_without_connection(profileid, twid, flow)
+        self.check_high_entropy_dns_answers(profileid, twid, flow)
+        self.check_invalid_dns_answers(profileid, twid, flow)
+        self.detect_dga(profileid, twid, flow)
         # TODO: not sure how to make sure IP_info is
         #  done adding domain age to the db or not
-        self.detect_young_domains(domain, answers, stime, profileid, twid, uid)
-        self.check_dns_arpa_scan(domain, stime, profileid, twid, uid)
+        self.detect_young_domains(profileid, twid, flow)
+        self.check_dns_arpa_scan(profileid, twid, flow)
