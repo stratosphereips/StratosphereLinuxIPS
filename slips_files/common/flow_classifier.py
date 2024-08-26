@@ -77,3 +77,11 @@ class FlowClassifier:
             return self.flow_map[given_flow_type]
         except KeyError:
             return
+
+    def convert_to_flow_obj(self, flow: dict):
+        """
+        returns the given flow in one of the types defined in
+         slips_files/core/flows/
+        """
+        flow_class = self.classify(flow)
+        return flow_class(**flow)

@@ -3,11 +3,13 @@ import json
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
 
 
 class Notice(IFlowalertsAnalyzer):
-    def init(self): ...
+    def init(self):
+        self.classifier = FlowClassifier()
 
     def name(self) -> str:
         return "notice_analyzer"
@@ -34,7 +36,7 @@ class Notice(IFlowalertsAnalyzer):
         data = json.loads(msg["data"])
         profileid = data["profileid"]
         twid = data["twid"]
-        flow = utils.convert_to_flow_obj(data["flow"])
+        flow = self.classifier.convert_to_flow_obj(data["flow"])
 
         self.check_vertical_portscan(profileid, twid, flow)
         self.check_horizontal_portscan(flow, profileid, twid)

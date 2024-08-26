@@ -423,9 +423,9 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
 
     def pastebin_download(
-        self, profileid, twid, flow: dict, bytes_downloaded: int
+        self, twid, flow: dict, bytes_downloaded: int
     ) -> bool:
-        flow = utils.convert_to_flow_obj(flow)
+        flow = self.classifier.convert_to_flow_obj(flow)
         confidence: float = 1.0
         response_body_len: float = utils.convert_to_mb(bytes_downloaded)
         description: str = (
