@@ -50,6 +50,7 @@ from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
 from slips_files.common.markov_chains import Matrix
+from managers.metadata_manager import MetadataManager
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
@@ -571,3 +572,28 @@ class ModuleFactory:
 
         cesnet.print = MagicMock()
         return cesnet
+
+    def create_metadata_manager_obj(self, mock_db):
+        main = self.create_main_obj("dummy_input")
+        metadata_manager = MetadataManager(main)
+
+        mock_attributes = {
+            'db': mock_db,
+            'print': MagicMock(),
+            'args': MagicMock(output="/tmp/output", config="config/slips.yaml", filepath=MagicMock()),
+            'conf': MagicMock(
+                enable_metadata=MagicMock(return_value=True),
+                whitelist_path=MagicMock(return_value="/path/to/whitelist.conf"),
+                get_disabled_modules=MagicMock(return_value=[]),
+                evidence_detection_threshold=MagicMock(return_value=0.5)
+            ),
+            'version': "1.0",
+            'input_information': "test_input",
+            'input_type': MagicMock(),
+            'zeek_dir': MagicMock()
+        }
+
+        for attr, value in mock_attributes.items():
+            setattr(metadata_manager.main, attr, value)
+
+        return metadata_manager
