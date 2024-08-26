@@ -62,16 +62,17 @@ class HTTPAnalyzer(IModule):
             conf.get_pastebin_download_threshold()
         )
 
-    def detect_executable_mime_types(self, resp_mime_types: list) -> bool:
+    def detect_executable_mime_types(self, profileid, twid, flow) -> bool:
         """
         detects the type of file in the http response,
         returns true if it's an executable
         """
-        if not resp_mime_types:
+        if not flow.resp_mime_types:
             return False
 
-        for mime_type in resp_mime_types:
+        for mime_type in flow.resp_mime_types:
             if mime_type in self.executable_mime_types:
+                self.set_evidence_executable_mime_type(profileid, twid, flow)
                 return True
         return False
 
@@ -192,17 +193,8 @@ class HTTPAnalyzer(IModule):
         return True
 
     def set_evidence_incompatible_user_agent(
-        self,
-        host,
-        uri,
-        vendor,
-        user_agent,
-        timestamp,
-        profileid,
-        twid,
-        uid: str,
+        self, profileid, twid, flow, user_agent
     ):
-        saddr = profileid.split("_")[1]
 
         os_type: str = user_agent.get("os_type", "").lower()
         os_name: str = user_agent.get("os_name", "").lower()
@@ -212,41 +204,36 @@ class HTTPAnalyzer(IModule):
             f"using incompatible user-agent ({user_agent}) "
             f"that belongs to OS: {os_name} "
             f"type: {os_type} browser: {browser}. "
-            f"while connecting to {host}{uri}. "
-            f"IP has MAC vendor: {vendor.capitalize()}"
+            f"while connecting to {flow.host}{flow.uri}. "
+            f"IP has MAC vendor: {flow.vendor.capitalize()}"
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.INCOMPATIBLE_USER_AGENT,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.HIGH,
             confidence=1,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
     def set_evidence_executable_mime_type(
-        self,
-        mime_type: str,
-        profileid: str,
-        twid: str,
-        uid: str,
-        timestamp: str,
-        daddr: str,
+        self, profileid, twid, flow, user_agent
     ):
-        saddr: str = profileid.split("_")[1]
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"Download of an executable with MIME type: {mime_type} "
-            f"by {saddr} from {daddr} {ip_identification}."
+            f"Download of an executable with MIME type: {flow.mime_type} "
+            f"by {flow.saddr} from {flow.daddr} {ip_identification}."
         )
         twid_number = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
@@ -257,15 +244,17 @@ class HTTPAnalyzer(IModule):
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,
             confidence=1,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -275,22 +264,22 @@ class HTTPAnalyzer(IModule):
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.EXECUTABLE_MIME_TYPE,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=flow.daddr,
             ),
             threat_level=ThreatLevel.LOW,
             confidence=1,
             description=description,
-            profile=ProfileID(ip=daddr),
+            profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
-    def check_incompatible_user_agent(
-        self, host, uri, timestamp, profileid, twid, uid: str
-    ):
+    def check_incompatible_user_agent(self, profileid, twid, flow):
         """
         Compare the user agent of this profile to the MAC vendor
         and check incompatibility
@@ -312,7 +301,7 @@ class HTTPAnalyzer(IModule):
         # user_agent = user_agent.get('user_agent', '')
         if "safari" in browser and "apple" not in vendor:
             self.set_evidence_incompatible_user_agent(
-                host, uri, vendor, user_agent, timestamp, profileid, twid, uid
+                profileid, twid, flow, user_agent
             )
             return True
 
@@ -355,16 +344,8 @@ class HTTPAnalyzer(IModule):
                     # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
                     # is found in the UA that belongs to an apple device
                     self.set_evidence_incompatible_user_agent(
-                        host,
-                        uri,
-                        vendor,
-                        user_agent,
-                        timestamp,
-                        profileid,
-                        twid,
-                        uid,
+                        profileid, twid, flow, user_agent
                     )
-
                     return True
 
     def get_ua_info_online(self, user_agent):
@@ -455,6 +436,9 @@ class HTTPAnalyzer(IModule):
         Zeek sometimes collects info about a specific UA,
         in this case the UA starts with 'server-bag'
         """
+        if "server-bag" not in user_agent:
+            return
+
         if self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return True
@@ -534,27 +518,30 @@ class HTTPAnalyzer(IModule):
 
         return True
 
-    def set_evidence_http_traffic(
-        self, daddr: str, profileid: str, twid: str, uid: str, timestamp: str
-    ):
+    def set_evidence_http_traffic(self, profileid, twid, flow):
         confidence: float = 1
-        saddr = profileid.split("_")[-1]
-        description = f"Unencrypted HTTP traffic from {saddr} to {daddr}."
+        description = (
+            f"Unencrypted HTTP traffic from {flow.saddr} to" f" {flow.daddr}."
+        )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.HTTP_TRAFFIC,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             ),
         )
 
@@ -562,25 +549,22 @@ class HTTPAnalyzer(IModule):
 
         return True
 
-    def check_pastebin_downloads(
-        self, daddr, response_body_len, method, profileid, twid, timestamp, uid
-    ):
+    def check_pastebin_downloads(self, profileid, twid, flow):
         try:
-            response_body_len = int(response_body_len)
+            response_body_len = int(flow.response_body_len)
         except ValueError:
             return False
 
-        ip_identification = self.db.get_ip_identification(daddr)
+        ip_identification = self.db.get_ip_identification(flow.daddr)
         if not (
             "pastebin" in ip_identification
             and response_body_len > self.pastebin_downloads_threshold
-            and method == "GET"
+            and flow.method == "GET"
         ):
             return False
 
         confidence: float = 1
         threat_level: ThreatLevel = ThreatLevel.INFO
-        saddr = profileid.split("_")[1]
 
         response_body_len = utils.convert_to_mb(response_body_len)
         description: str = (
@@ -588,7 +572,7 @@ class HTTPAnalyzer(IModule):
             f"Size: {response_body_len} MBs"
         )
         attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
         )
 
         evidence: Evidence = Evidence(
@@ -597,10 +581,10 @@ class HTTPAnalyzer(IModule):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -609,27 +593,21 @@ class HTTPAnalyzer(IModule):
     def set_evidence_weird_http_method(
         self, profileid: str, twid: str, flow: dict
     ) -> None:
-        daddr: str = flow["daddr"]
-        weird_method: str = flow["addl"]
-        uid: str = flow["uid"]
-        timestamp: str = flow["starttime"]
-
         confidence = 0.9
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
-        saddr: str = profileid.split("_")[-1]
 
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
         )
 
         victim: Victim = Victim(
-            direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+            direction=Direction.DST, victim_type=IoCType.IP, value=flow.daddr
         )
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
+        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f'Weird HTTP method "{weird_method}" to IP: '
-            f"{daddr} {ip_identification}. by Zeek."
+            f'Weird HTTP method "{flow.weird_method}" to IP: '
+            f"{flow.daddr} {ip_identification}. by Zeek."
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -640,10 +618,10 @@ class HTTPAnalyzer(IModule):
             victim=victim,
             threat_level=threat_level,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
             confidence=confidence,
         )
 
@@ -674,70 +652,34 @@ class HTTPAnalyzer(IModule):
             profileid = message["profileid"]
             twid = message["twid"]
             flow = json.loads(message["flow"])
-            uid = flow["uid"]
-            host = flow["host"]
-            uri = flow["uri"]
-            daddr = flow["daddr"]
-            timestamp = flow.get("stime", "")
-            user_agent = flow.get("user_agent", False)
-            request_body_len = flow.get("request_body_len")
-            response_body_len = flow.get("response_body_len")
-            method = flow.get("method")
-            resp_mime_types = flow.get("resp_mime_types")
-
-            self.check_suspicious_user_agents(
-                uid, host, uri, timestamp, user_agent, profileid, twid
-            )
-            self.check_multiple_empty_connections(
-                uid, host, uri, timestamp, request_body_len, profileid, twid
-            )
+            flow = utils.convert_to_flow_obj(flow)
+            self.check_suspicious_user_agents(profileid, twid, flow)
+            self.check_multiple_empty_connections(profileid, twid, flow)
             # find the UA of this profileid if we don't have it
             # get the last used ua of this profile
             cached_ua = self.db.get_user_agent_from_profile(profileid)
             if cached_ua:
                 self.check_multiple_user_agents_in_a_row(
-                    cached_ua,
-                    user_agent,
-                    timestamp,
+                    flow,
                     profileid,
                     twid,
-                    uid,
+                    cached_ua,
                 )
 
             if not cached_ua or (
                 isinstance(cached_ua, dict)
-                and cached_ua.get("user_agent", "") != user_agent
-                and "server-bag" not in user_agent
+                and cached_ua.get("user_agent", "") != flow.user_agent
+                and "server-bag" not in flow.user_agent
             ):
                 # only UAs of type dict are browser UAs,
                 # skips str UAs as they are SSH clients
-                self.get_user_agent_info(user_agent, profileid)
+                self.get_user_agent_info(flow.user_agent, profileid)
 
-            if "server-bag" in user_agent:
-                self.extract_info_from_ua(user_agent, profileid)
-
-            if self.detect_executable_mime_types(resp_mime_types):
-                self.set_evidence_executable_mime_type(
-                    resp_mime_types, profileid, twid, uid, timestamp, daddr
-                )
-
-            self.check_incompatible_user_agent(
-                host, uri, timestamp, profileid, twid, uid
-            )
-
-            self.check_pastebin_downloads(
-                daddr,
-                response_body_len,
-                method,
-                profileid,
-                twid,
-                timestamp,
-                uid,
-            )
-
-            self.set_evidence_http_traffic(
-                daddr, profileid, twid, uid, timestamp
-            )
+            self.extract_info_from_ua(flow.user_agent, profileid)
+            self.detect_executable_mime_types(profileid, twid, flow)
+            self.check_incompatible_user_agent(profileid, twid, flow)
+            self.check_pastebin_downloads(profileid, twid, flow)
+            self.set_evidence_http_traffic(profileid, twid, flow)
 
         if msg := self.get_msg("new_weird"):
             msg = json.loads(msg["data"])
