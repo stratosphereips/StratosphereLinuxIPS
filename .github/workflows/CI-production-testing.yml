@@ -234,6 +234,10 @@ jobs:
       run: |
         python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv -s -n 5
 
+    - name: rnn detection module file tests
+      run: |
+        python3 -m pytest -s tests/test_rnn_detection_cc.py  -p no:warnings -vv -s -n 5    
+
     - name: Portscan tests
       run: |
         python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv -s -n 5
