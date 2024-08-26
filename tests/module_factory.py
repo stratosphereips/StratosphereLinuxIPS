@@ -48,6 +48,7 @@ from modules.p2ptrust.trust.base_model import BaseModel
 from modules.arp.arp import ARP
 from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
+from modules.timeline.timeline import Timeline
 from modules.cesnet.cesnet import CESNET
 from slips_files.common.markov_chains import Matrix
 from slips_files.core.evidence_structure.evidence import (
@@ -571,3 +572,10 @@ class ModuleFactory:
 
         cesnet.print = MagicMock()
         return cesnet
+
+    def create_timeline_object(self):
+        logger = Mock()
+        output_dir = '/tmp'
+        redis_port = 6379
+        termination_event = Mock()
+        return Timeline(logger, output_dir, redis_port, termination_event)   
