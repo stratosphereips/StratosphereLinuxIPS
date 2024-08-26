@@ -279,7 +279,9 @@ class VT(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Problem in the get_ip_vt_data() line {exception_line}", 0, 1
+                f"Problem in the get_ip_vt_data() " f"line {exception_line}",
+                0,
+                1,
             )
             self.print(traceback.format_exc(), 0, 1)
 
@@ -550,8 +552,7 @@ class VT(IModule):
             return 1
 
         if msg := self.get_msg("new_flow"):
-            data = msg["data"]
-            data = json.loads(data)
+            data = json.loads(msg["data"])
             flow = json.loads(data["flow"])
             flow = utils.convert_to_flow_obj(flow)
             ip = flow.daddr
@@ -583,23 +584,23 @@ class VT(IModule):
                     self.set_vt_data_in_IPInfo(ip, cached_data)
 
         if msg := self.get_msg("new_dns"):
-            data = msg["data"]
-            data = json.loads(data)
+            data = json.loads(msg["data"])
             flow = json.loads(data["flow"])
             flow = utils.convert_to_flow_obj(flow)
-            domain = flow.query
-            cached_data = self.db.get_domain_data(domain)
+            cached_data = self.db.get_domain_data(flow.query)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
-            if domain and (not cached_data or "VirusTotal" not in cached_data):
-                self.update_domain_info_cache(domain, cached_data)
-            elif domain and cached_data and "VirusTotal" in cached_data:
+            if flow.query and (
+                not cached_data or "VirusTotal" not in cached_data
+            ):
+                self.update_domain_info_cache(flow.query, cached_data)
+            elif flow.query and cached_data and "VirusTotal" in cached_data:
                 # If VT is in data, check timestamp. Take time difference,
                 # if not valid, update vt scores.
                 if (
                     time.time() - cached_data["VirusTotal"]["timestamp"]
                 ) > self.update_period:
-                    self.update_domain_info_cache(domain, cached_data)
+                    self.update_domain_info_cache(flow.query, cached_data)
 
         if msg := self.get_msg("new_url"):
             data = json.loads(msg["data"])
