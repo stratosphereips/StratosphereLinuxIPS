@@ -131,7 +131,7 @@ def test_detect_MITM_ARP_attack_with_original_ip():
     ARP.db.get_gateway_ip.return_value = gateway_ip
     ARP.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = ARP.detect_mitm_arp_attack(twid, uid, saddr, ts, src_mac)
     assert result is True
 
 
@@ -150,7 +150,7 @@ def test_detect_MITM_ARP_attack_same_ip():
     ARP.db.get_gateway_ip.return_value = gateway_ip
     ARP.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = ARP.detect_mitm_arp_attack(twid, uid, saddr, ts, src_mac)
     assert result is None
 
 
@@ -169,7 +169,7 @@ def test_detect_mitm_arp_attack_gateway_mac():
     ARP.db.get_gateway_ip.return_value = gateway_ip
     ARP.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = ARP.detect_mitm_arp_attack(twid, uid, saddr, ts, src_mac)
     assert result is True
 
 
@@ -188,7 +188,7 @@ def test_detect_MITM_ARP_attack_gateway_ip_as_victim():
     ARP.db.get_gateway_ip.return_value = gateway_ip
     ARP.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = ARP.detect_mitm_arp_attack(twid, uid, saddr, ts, src_mac)
     assert result is True
 
 
@@ -206,7 +206,7 @@ def test_detect_MITM_ARP_attack_no_original_ip():
     ARP.db.get_gateway_ip.return_value = gateway_ip
     ARP.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = ARP.detect_mitm_arp_attack(twid, uid, saddr, ts, src_mac)
     assert result is None
 
 
@@ -245,7 +245,7 @@ def test_set_evidence_arp_scan():
 def test_check_if_gratutitous_arp(operation, dst_hw, expected_result):
     """Tests check_if_gratutitous_ARP function"""
     arp = ModuleFactory().create_arp_obj()
-    result = arp.check_if_gratutitous_ARP(dst_hw, operation)
+    result = arp.check_if_gratutitous_arp(dst_hw, operation)
     assert result == expected_result
 
 

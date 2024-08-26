@@ -37,7 +37,8 @@ class ARP(IModule):
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
-        # Threshold to use to detect a port scan. How many arp minimum are required?
+        # Threshold to use to detect a port scan. How many arp minimum
+        # are required?
         self.arp_scan_threshold = 5
         self.delete_arp_periodically = False
         self.arp_ts = 0
@@ -111,9 +112,7 @@ class ARP(IModule):
 
             self.set_evidence_arp_scan(ts, profileid, twid, uids)
 
-    def check_arp_scan(
-        self, profileid, twid, daddr, uid, ts, operation, dst_hw
-    ):
+    def check_arp_scan(self, profileid, twid, flow):
         """
         Check if the profile is doing an arp scan
         If IP X sends arp requests to 3 or more different
@@ -125,7 +124,10 @@ class ARP(IModule):
         """
 
         # ARP scans are always requests always? mostly? from 00:00:00:00:00:00
-        if "request" not in operation or "00:00:00:00:00:00" not in dst_hw:
+        if (
+            "request" not in flow.operation
+            or "00:00:00:00:00:00" not in flow.dst_hw
+        ):
             return False
 
         def get_uids():
@@ -141,24 +143,22 @@ class ARP(IModule):
         # The Gratuitous arp is sent as a broadcast, as a way for a
         # node to announce or update its IP to MAC mapping
         # to the entire network. It shouldn't be marked as an arp scan
-        saddr = profileid.split("_")[1]
-
         # Don't detect arp scan from the GW router
-        if self.db.get_gateway_ip() == saddr:
+        if self.db.get_gateway_ip() == flow.saddr:
             return False
 
         # What is this?
-        if saddr == "0.0.0.0":
+        if flow.saddr == "0.0.0.0":
             return False
 
-        daddr_info = {daddr: {"uids": [uid], "ts": ts}}
+        daddr_info = {flow.daddr: {"uids": [flow.uid], "ts": flow.timestamp}}
         try:
             # Get together all the arp requests to IPs in this TW
             cached_requests = self.cache_arp_requests[f"{profileid}_{twid}"]
             # Append the arp request, and when it happened
-            if daddr in cached_requests:
-                cached_requests[daddr]["uids"].append(uid)
-                cached_requests[daddr]["ts"] = ts
+            if flow.daddr in cached_requests:
+                cached_requests[flow.daddr]["uids"].append(flow.uid)
+                cached_requests[flow.daddr]["ts"] = flow.ts
                 self.cache_arp_requests[f"{profileid}_{twid}"] = (
                     cached_requests
                 )
@@ -192,12 +192,14 @@ class ARP(IModule):
                 # we are sure this is an arp scan
                 if not self.alerted_once_arp_scan:
                     self.alerted_once_arp_scan = True
-                    self.set_evidence_arp_scan(ts, profileid, twid, uids)
+                    self.set_evidence_arp_scan(
+                        flow.timestamp, profileid, twid, uids
+                    )
                 else:
                     # after alerting once, wait 10s to see
                     # if more evidence are coming
                     self.pending_arp_scan_evidence.put(
-                        (ts, profileid, twid, uids)
+                        (flow.timestamp, profileid, twid, uids)
                     )
 
                 return True
@@ -226,7 +228,8 @@ class ARP(IModule):
         )
 
         self.db.set_evidence(evidence)
-        # after we set evidence, clear the dict so we can detect if it does another scan
+        # after we set evidence, clear the dict so we can detect if it
+        # does another scan
         try:
             self.cache_arp_requests.pop(f"{profileid}_{twid}")
         except KeyError:
@@ -237,17 +240,15 @@ class ARP(IModule):
             # ignore it
             pass
 
-    def check_dstip_outside_localnet(
-        self, profileid, twid, daddr, uid: str, saddr, ts
-    ):
+    def check_dstip_outside_localnet(self, profileid, twid, flow):
         """Function to setEvidence when daddr is outside the local network"""
 
-        if "0.0.0.0" in saddr or "0.0.0.0" in daddr:
+        if "0.0.0.0" in flow.saddr or "0.0.0.0" in flow.daddr:
             # this is the case of arp probe, not an
             # arp outside of local network, don't alert
             return False
 
-        daddr_as_obj = ipaddress.IPv4Address(daddr)
+        daddr_as_obj = ipaddress.IPv4Address(flow.daddr)
         if daddr_as_obj.is_multicast or daddr_as_obj.is_link_local:
             # The arp to ‘outside’ the network should
             # not detect multicast or link-local addresses.
@@ -259,17 +260,17 @@ class ARP(IModule):
                 return False
 
         # to prevent arp alerts from one IP to itself
-        local_net = saddr.split(".")[0]
-        if not daddr.startswith(local_net):
+        local_net = flow.saddr.split(".")[0]
+        if not flow.daddr.startswith(local_net):
             # comes here if the IP isn't in any of the local networks
             confidence: float = 0.6
             threat_level: ThreatLevel = ThreatLevel.LOW
-            ip_identification: str = self.db.get_ip_identification(daddr)
+            ip_identification: str = self.db.get_ip_identification(flow.daddr)
             saddr: str = profileid.split("_")[1]
 
             description: str = (
                 f"{saddr} sending ARP packet to a destination "
-                f"address outside of local network: {daddr}. "
+                f"address outside of local network: {flow.daddr}. "
                 f"{ip_identification}"
             )
 
@@ -277,7 +278,9 @@ class ARP(IModule):
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             )
             victim = Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
             )
 
             evidence: Evidence = Evidence(
@@ -290,36 +293,25 @@ class ARP(IModule):
                 timewindow=TimeWindow(
                     number=int(twid.replace("timewindow", ""))
                 ),
-                uid=[uid],
-                timestamp=ts,
+                uid=[flow.uid],
+                timestamp=flow.timestamp,
                 victim=victim,
             )
-
             self.db.set_evidence(evidence)
             return True
 
         return False
 
-    def detect_unsolicited_arp(
-        self,
-        profileid: str,
-        twid: str,
-        uid: str,
-        ts: str,
-        dst_mac: str,
-        src_mac: str,
-        dst_hw: str,
-        src_hw: str,
-    ):
+    def detect_unsolicited_arp(self, profileid: str, twid: str, flow):
         """
         Unsolicited arp is used to update the neighbours'
         arp caches but can also be used in arp spoofing
         """
         if (
-            dst_mac == "ff:ff:ff:ff:ff:ff"
-            and dst_hw == "ff:ff:ff:ff:ff:ff"
-            and src_mac != "00:00:00:00:00:00"
-            and src_hw != "00:00:00:00:00:00"
+            flow.dst_mac == "ff:ff:ff:ff:ff:ff"
+            and flow.dst_hw == "ff:ff:ff:ff:ff:ff"
+            and flow.src_mac != "00:00:00:00:00:00"
+            and flow.src_hw != "00:00:00:00:00:00"
         ):
             # We're sure this is unsolicited arp
             # it may be arp spoofing
@@ -342,21 +334,14 @@ class ARP(IModule):
                 timewindow=TimeWindow(
                     number=int(twid.replace("timewindow", ""))
                 ),
-                uid=[uid],
-                timestamp=ts,
+                uid=[flow.uid],
+                timestamp=flow.timestamp,
             )
 
             self.db.set_evidence(evidence)
             return True
 
-    def detect_MITM_ARP_attack(
-        self,
-        twid: str,
-        uid: str,
-        saddr: str,
-        ts: str,
-        src_mac: str,
-    ):
+    def detect_mitm_arp_attack(self, twid: str, flow):
         """
         Detects when a MAC with IP A, is trying to tell others that
         now that MAC is also for IP B (arp cache attack)
@@ -380,18 +365,19 @@ class ARP(IModule):
         #  the original IP of this src mac is now the IP of the attacker?
 
         # get the original IP of the src mac from the database
-        original_IP: str = self.db.get_ip_of_mac(src_mac)
-        if original_IP is None:
+        original_ip: str = self.db.get_ip_of_mac(flow.src_mac)
+        if original_ip is None:
             return
 
         # original_IP is a serialized list
-        original_IP: str = json.loads(original_IP)[0]
-        original_IP = original_IP.replace("profile_", "")
+        original_ip: str = json.loads(original_ip)[0]
+        original_ip = original_ip.replace("profile_", "")
 
         # is this saddr trying to tell everyone that this
-        # it owns this src_mac even though we know this src_mac is associated
+        # it owns this flow.src_mac even though we know this
+        # src_mac is associated
         # with another IP (original_IP)?
-        if saddr != original_IP:
+        if flow.saddr != original_ip:
             # From our db we know that:
             # original_IP has src_MAC
             # now saddr has src_MAC and saddr isn't the same as original_IP
@@ -403,20 +389,24 @@ class ARP(IModule):
             confidence: float = 0.2  # low confidence for now
             threat_level: ThreatLevel = ThreatLevel.CRITICAL
 
-            attackers_ip = saddr
-            victims_ip = original_IP
+            attackers_ip = flow.saddr
+            victims_ip = original_ip
 
             gateway_ip = self.db.get_gateway_ip()
-            gateway_MAC = self.db.get_gateway_mac()
-            if saddr == gateway_ip:
-                saddr = f"The gateway {saddr}"
+            gateway_mac = self.db.get_gateway_mac()
+            if flow.saddr == gateway_ip:
+                saddr = f"The gateway {flow.saddr}"
+            else:
+                saddr = flow.saddr
 
-            if src_mac == gateway_MAC:
-                src_mac = f"of the gateway {src_mac}"
+            if flow.src_mac == gateway_mac:
+                src_mac = f"of the gateway {flow.src_mac}"
+            else:
+                src_mac = flow.src_mac
 
-            original_IP = f"IP {original_IP}"
-            if original_IP == gateway_ip:
-                original_IP = f"the gateway IP {original_IP}"
+            original_ip = f"IP {original_ip}"
+            if original_ip == gateway_ip:
+                original_ip = f"the gateway IP {original_ip}"
 
             attacker: Attacker = Attacker(
                 direction=Direction.SRC,
@@ -433,7 +423,7 @@ class ARP(IModule):
             description = (
                 f"{saddr} performing a MITM ARP attack. "
                 f"The MAC {src_mac}, now belonging to "
-                f"{saddr}, was seen before for {original_IP}."
+                f"{saddr}, was seen before for {original_ip}."
             )
 
             evidence: Evidence = Evidence(
@@ -446,15 +436,15 @@ class ARP(IModule):
                 timewindow=TimeWindow(
                     number=int(twid.replace("timewindow", ""))
                 ),
-                uid=[uid],
-                timestamp=ts,
+                uid=[flow.uid],
+                timestamp=flow.timestamp,
                 victim=victim,
             )
 
             self.db.set_evidence(evidence)
             return True
 
-    def check_if_gratutitous_ARP(self, dst_hw: str, operation: str):
+    def check_if_gratutitous_arp(self, flow):
         """
         Check if an ARP packet is gratuitous
 
@@ -479,13 +469,10 @@ class ARP(IModule):
         """
         # It should be a reply
         # The dst_mac should be ff:ff:ff:ff:ff:ff or 00:00:00:00:00:00
-        is_gratuitous = False
-        if "reply" in operation and dst_hw in [
+        return "reply" in flow.operation and flow.dst_hw in [
             "ff:ff:ff:ff:ff:ff",
             "00:00:00:00:00:00",
-        ]:
-            is_gratuitous = True
-        return is_gratuitous
+        ]
 
     def pre_main(self):
         """runs once before the main() is executed in a loop"""
@@ -493,8 +480,6 @@ class ARP(IModule):
         self.timer_thread_arp_scan.start()
 
     def main(self):
-        """main loop function"""
-
         if (
             self.delete_arp_periodically
             and time.time() >= self.arp_ts + self.period_before_deleting
@@ -505,51 +490,29 @@ class ARP(IModule):
             self.arp_ts = time.time()
 
         if msg := self.get_msg("new_arp"):
-            flow_details = json.loads(msg["data"])
-            profileid = flow_details["profileid"]
-            twid = flow_details["twid"]
+            msg = json.loads(msg["data"])
+            profileid = msg["profileid"]
+            twid = msg["twid"]
             # this is the actual arp flow
-            flow: dict = flow_details["flow"]
-            ts = flow["starttime"]
-            daddr = flow["daddr"]
-            saddr = flow["saddr"]
-            dst_mac = flow["dmac"]
-            src_mac = flow["smac"]
-            dst_hw = flow["dst_hw"]
-            src_hw = flow["src_hw"]
-            operation = flow["operation"]
-            # arp flows don't have uids, the uids received
+            flow: dict = utils.convert_to_flow_obj(msg["flow"])
+            # PS: arp flows don't have uids by zeek. the uids received
             # are randomly generated by slips
-            uid = flow["uid"]
 
-            if self.check_if_gratutitous_ARP(dst_hw, operation):
+            if self.check_if_gratutitous_arp(flow):
                 # for MITM arp attack, the arp has to be gratuitous
                 # and it has to be a reply operation, not a request.
                 # A gratuitous ARP is always a reply. A MITM attack
                 # happens when there is a reply without a request
-                self.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+                self.detect_mitm_arp_attack(twid, flow)
             else:
                 # not gratuitous and request, may be an arp scan
-                self.check_arp_scan(
-                    profileid, twid, daddr, uid, ts, operation, dst_hw
-                )
+                self.check_arp_scan(profileid, twid, flow)
 
-            if "request" in operation:
-                self.check_dstip_outside_localnet(
-                    profileid, twid, daddr, uid, saddr, ts
-                )
-            elif "reply" in operation:
+            if "request" in flow.operation:
+                self.check_dstip_outside_localnet(profileid, twid, flow)
+            elif "reply" in flow.operation:
                 # Unsolicited ARPs should be of type reply only, not request
-                self.detect_unsolicited_arp(
-                    profileid,
-                    twid,
-                    uid,
-                    ts,
-                    dst_mac,
-                    src_mac,
-                    dst_hw,
-                    src_hw,
-                )
+                self.detect_unsolicited_arp(profileid, twid, flow)
 
         # if the tw is closed, remove all its entries from the cache dict
         if msg := self.get_msg("tw_closed"):
