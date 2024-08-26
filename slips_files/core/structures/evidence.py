@@ -207,7 +207,9 @@ class Evidence:
     )
     victim: Optional[Victim] = field(default=False)
     proto: Optional[Proto] = field(default=False)
-    port: int = field(default=None)
+    # port: int = field(default=None)
+    dst_port: int = field(default=None)
+    src_port: int = field(default=None)
     # every evidence should have an ID according to the IDMEF format
     id: str = field(default_factory=lambda: str(uuid4()))
     # the confidence of this evidence on a scale from 0 to 1.

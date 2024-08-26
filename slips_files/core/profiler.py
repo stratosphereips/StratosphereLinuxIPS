@@ -149,7 +149,7 @@ class Profiler(ICore, IObservable):
         and does all the magic to convert it into a working data in our
         system.
         It includes checking if the profile exists and how to put
-        the flow correctly. It interprets each column
+        the flow correctly.
         """
         # try:
         if not hasattr(self, "flow"):
@@ -174,7 +174,7 @@ class Profiler(ICore, IObservable):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
 
-        # Check if the flow is whitelisted and we should not process
+        # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(self.flow):
             if "conn" in self.flow.type_:
                 self.whitelisted_flows_ctr += 1
