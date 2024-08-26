@@ -48,13 +48,13 @@ class IDMEFv2:
     def __init__(self, logger: Output, db):
         self.printer = Printer(logger, self.name)
         self.db = db
-        self.model = f"Stratosphere Linux IPS {utils.get_slips_version()}"
+        self.model: str = utils.get_slips_version()
         self.analyzer = {
             "IP": self.get_host_ip(),
             "Name": "Slips",
             "Model": self.model,
             "Category": ["NIDS"],
-            "Data": ["Flow"],
+            "Data": ["Flow", "Network"],
             "Method": ["Heuristic"],
         }
         # the used idmef version
