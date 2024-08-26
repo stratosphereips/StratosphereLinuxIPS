@@ -123,7 +123,8 @@ class CESNET(IModule):
         # remove private ips from the alert
         evidence_in_idea = self.remove_private_ips(evidence_in_idea)
 
-        # make sure we still have an IoC in th alert, a valid domain/mac/public ip
+        # make sure we still have an IoC in th alert, a valid
+        # domain/mac/public ip
         if not self.is_valid_alert(evidence_in_idea):
             return False
 
