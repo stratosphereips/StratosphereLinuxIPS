@@ -18,6 +18,8 @@ from typing import Any, Optional
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
+from slips_files.common.flow_classifier import FlowClassifier
+
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
@@ -70,6 +72,15 @@ class Utils(object):
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
+        self.flow_classifier = FlowClassifier()
+
+    def convert_to_flow_obj(self, flow: dict):
+        """
+        returns the given flow in one of the types defined in
+         slips_files/core/flows/
+        """
+        flow_class = self.flow_classifier.classify(flow)
+        return flow_class(**flow)
 
     def is_iso_format(self, date_time: str) -> bool:
         try:
