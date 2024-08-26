@@ -552,16 +552,9 @@ class VT(IModule):
         if msg := self.get_msg("new_flow"):
             data = msg["data"]
             data = json.loads(data)
-            # profileid = data['profileid']
-            # twid = data['twid']
-            # stime = data['stime']
-            flow = json.loads(
-                data["flow"]
-            )  # this is a dict {'uid':json flow data}
-            # there is only one pair key-value in the dictionary
-            for key, value in flow.items():
-                flow_data = json.loads(value)
-            ip = flow_data["daddr"]
+            flow = json.loads(data["flow"])
+            flow = utils.convert_to_flow_obj(flow)
+            ip = flow.daddr
             cached_data = self.db.get_ip_info(ip)
             if not cached_data:
                 cached_data = {}
@@ -592,14 +585,9 @@ class VT(IModule):
         if msg := self.get_msg("new_dns"):
             data = msg["data"]
             data = json.loads(data)
-            # profileid = data['profileid']
-            # twid = data['twid']
-            # uid = data['uid']
-            flow_data = json.loads(
-                data["flow"]
-            )  # this is a dict {'uid':json flow data}
-            domain = flow_data.get("query", False)
-
+            flow = json.loads(data["flow"])
+            flow = utils.convert_to_flow_obj(flow)
+            domain = flow.query
             cached_data = self.db.get_domain_data(domain)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
@@ -614,12 +602,10 @@ class VT(IModule):
                     self.update_domain_info_cache(domain, cached_data)
 
         if msg := self.get_msg("new_url"):
-            data = msg["data"]
-            data = json.loads(data)
-            # profileid = data['profileid']
-            # twid = data['twid']
-            flow_data = json.loads(data["flow"])
-            url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
+            data = json.loads(msg["data"])
+            flow = json.loads(data["flow"])
+            flow = utils.convert_to_flow_obj(flow)
+            url = f"http://{flow.host}{flow.uri}"
             cached_data = self.db.is_cached_url_by_vt(url)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
