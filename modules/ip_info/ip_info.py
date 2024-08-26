@@ -618,19 +618,12 @@ class IPInfo(IModule):
                     self.is_gw_mac_set = True
 
         if msg := self.get_msg("new_dns"):
-            data = msg["data"]
-            data = json.loads(data)
-            # profileid = data['profileid']
-            # twid = data['twid']
-            # uid = data['uid']
-            flow_data = json.loads(
-                data["flow"]
-            )  # this is a dict {'uid':json flow data}
-            if domain := flow_data.get("query", False):
+            profileid = msg["profileid"]
+            flow = utils.convert_to_flow_obj(msg["flow"])
+            if domain := flow.query:
                 self.get_age(domain)
 
         if msg := self.get_msg("new_ip"):
-            # Get the IP from the message
             ip = msg["data"]
             self.handle_new_ip(ip)
 
