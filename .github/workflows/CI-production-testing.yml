@@ -236,7 +236,7 @@ jobs:
 
     - name: rnn detection module file tests
       run: |
-        python3 -m pytest -s tests/test_rnn_detection_cc.py  -p no:warnings -vv -s -n 5    
+        python3 -m pytest -s tests/test_rnn_cc_detection.py  -p no:warnings -vv -s -n 5    
 
     - name: Portscan tests
       run: |
