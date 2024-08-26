@@ -55,15 +55,7 @@ class NetworkDiscovery(IModule):
         # slips sets dhcp scan evidence
         self.minimum_requested_addrs = 4
 
-    def check_icmp_sweep(
-        self,
-        msg: str,
-        note: str,
-        profileid: str,
-        uid: str,
-        twid: str,
-        timestamp: str,
-    ):
+    def check_icmp_sweep(self, profileid, twid, flow):
         """
         Use our own Zeek scripts to detect ICMP scans.
         Threshold is on the scripts and it is 25 ICMP flows
@@ -75,30 +67,32 @@ class NetworkDiscovery(IModule):
         }
 
         evidence_type: EvidenceType = next(
-            (scan_mapping[key] for key in scan_mapping if key in note), False
+            (scan_mapping[key] for key in scan_mapping if key in flow.note),
+            False,
         )
         if not evidence_type:
             # unsupported notice type
             return
 
-        hosts_scanned = int(msg.split("on ")[1].split(" hosts")[0])
+        hosts_scanned = int(flow.msg.split("on ")[1].split(" hosts")[0])
         # get the confidence from 0 to 1 based on the number of hosts scanned
         confidence = 1 / (255 - 5) * (hosts_scanned - 255) + 1
-        saddr = profileid.split("_")[1]
         twid = int(twid.replace("timewindow", ""))
         # this one is detected by Zeek, so we can't track the UIDs causing it
         evidence = Evidence(
             evidence_type=evidence_type,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
             confidence=confidence,
-            description=msg,
-            profile=ProfileID(ip=saddr),
+            description=flow.msg,
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -297,7 +291,7 @@ class NetworkDiscovery(IModule):
         self.db.set_evidence(evidence)
 
     def set_evidence_dhcp_scan(
-        self, timestamp, profileid, twid, uids, number_of_requested_addrs
+        self, profileid, twid, flow, number_of_requested_addrs
     ):
         srcip = profileid.split("_")[-1]
         confidence = 0.8
@@ -317,30 +311,21 @@ class NetworkDiscovery(IModule):
             description=description,
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=twid_number),
-            uid=uids,
-            timestamp=timestamp,
+            uid=flow.uids,
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
 
-    def check_dhcp_scan(self, flow_info):
+    def check_dhcp_scan(self, profileid, twid, flow):
         """
-        Detects DHCP scans, when a client requests 4+ different IPs in the same tw
+        Detects DHCP scans, when a client requests 4+ different IPs in the
+        same tw
         """
-        # this is the actual zeek flow
-        flow = flow_info["flow"]
-        requested_addr = flow["requested_addr"]
-        if not requested_addr:
+        if not flow.requested_addr:
             # we are only interested in DHCPREQUEST flows,
             # where a client is requesting an IP
             return
-
-        profileid = flow_info["profileid"]
-        twid = flow_info["twid"]
-        # this is a list of uids
-        uids = flow["uids"]
-        ts = flow["starttime"]
-
         # dhcp_flows format is
         #       { requested_addr: uid,
         #         requested_addr2: uid2... }
@@ -350,15 +335,19 @@ class NetworkDiscovery(IModule):
         if dhcp_flows:
             # client was seen requesting an addr before in this tw
             # was it requesting the same addr?
-            if requested_addr in dhcp_flows:
+            if flow.requested_addr in dhcp_flows:
                 # a client requesting the same addr twice isn't a scan
                 return
 
             # it was requesting a different addr, keep track of it and its uid
-            self.db.set_dhcp_flow(profileid, twid, requested_addr, uids)
+            self.db.set_dhcp_flow(
+                profileid, twid, flow.requested_addr, flow.uids
+            )
         else:
             # first time for this client to make a dhcp request in this tw
-            self.db.set_dhcp_flow(profileid, twid, requested_addr, uids)
+            self.db.set_dhcp_flow(
+                profileid, twid, flow.requested_addr, flow.uids
+            )
             return
 
         # TODO if we are not going to use the requested addr, no need to store it
@@ -372,10 +361,10 @@ class NetworkDiscovery(IModule):
             # was requesting an addr in this tw
 
             for uids_list in dhcp_flows.values():
-                uids.append(uids_list[0])
+                flow.uids.append(uids_list[0])
 
             self.set_evidence_dhcp_scan(
-                ts, profileid, twid, uids, number_of_requested_addrs
+                profileid, twid, flow, number_of_requested_addrs
             )
 
     def pre_main(self):
@@ -418,21 +407,15 @@ class NetworkDiscovery(IModule):
             self.check_icmp_scan(profileid, twid)
 
         if msg := self.get_msg("new_notice"):
-            data = msg["data"]
-            # Convert from json to dict
-            data = json.loads(data)
+            data = json.loads(msg["data"])
             profileid = data["profileid"]
             twid = data["twid"]
-            # Get flow as a json
-            flow = data["flow"]
-            # Convert flow to a dict
-            flow = json.loads(flow)
-            timestamp = flow["stime"]
-            uid = data["uid"]
-            msg = flow["msg"]
-            note = flow["note"]
-            self.check_icmp_sweep(msg, note, profileid, uid, twid, timestamp)
+            flow = utils.convert_to_flow_obj(data["flow"])
+            self.check_icmp_sweep(profileid, twid, flow)
 
         if msg := self.get_msg("new_dhcp"):
-            flow = json.loads(msg["data"])
-            self.check_dhcp_scan(flow)
+            msg = json.loads(msg["data"])
+            profileid = msg["profileid"]
+            twid = msg["twid"]
+            flow = utils.convert_to_flow_obj(msg["flow"])
+            self.check_dhcp_scan(profileid, twid, flow)
