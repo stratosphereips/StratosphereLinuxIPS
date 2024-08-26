@@ -48,6 +48,7 @@ class SuricataFlow:
     dmac: str = ""
     dir_: str = "->"
     type_: str = "conn"
+    flow_source = "suricata"
 
     def __post_init__(self):
         self.dur = (
@@ -89,6 +90,7 @@ class SuricataHTTP:
     resp_mime_types: str = ""
     resp_fuids: str = ""
     type_: str = "http"
+    flow_source = "suricata"
 
     def __post_init__(self):
         self.uid = str(self.uid)
@@ -117,6 +119,7 @@ class SuricataDNS:
     qclass_name: str = ""
     rcode_name: str = ""
     type_: str = "dns"
+    flow_source = "suricata"
 
     def __post_init__(self):
         self.uid = str(self.uid)
@@ -146,6 +149,7 @@ class SuricataTLS:
     notafter: str
 
     type_: str = "ssl"
+    flow_source = "suricata"
 
     def __post_init__(self):
         self.uid = str(self.uid)
@@ -167,6 +171,7 @@ class SuricataFile:
 
     size: int
     type_: str = "files"
+    flow_source = "suricata"
     # required to match zeek files.log
     md5: str = ""
     sha1: str = ""
@@ -208,6 +213,7 @@ class SuricataSSH:
     host_key: str = ""
 
     type_: str = "ssh"
+    flow_source = "suricata"
 
     def __post_init__(self):
         self.uid = str(self.uid)
