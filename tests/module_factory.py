@@ -670,3 +670,7 @@ class ModuleFactory:
             setattr(metadata_manager.main, attr, value)
 
         return metadata_manager
+    
+    def create_metadata_manager_obj(self):
+        main_mock = MagicMock()
+        return MetadataManager(main_mock)
