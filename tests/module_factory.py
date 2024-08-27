@@ -22,6 +22,7 @@ from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
 from slips_files.core.helpers.symbols_handler import SymbolHandler
+from slips_files.core.database.redis_db.profile_handler import ProfileHandler
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
 from modules.flowalerts.software import Software
@@ -633,3 +634,10 @@ class ModuleFactory:
         tl = Timeline(logger, output_dir, redis_port, termination_event)
         tl.db = mock_db
         return tl
+
+    def create_profile_handler_obj(self):
+        logger = MagicMock()
+        handler = ProfileHandler(logger)
+        handler.r = MagicMock()
+        handler.separator = "_"
+        return handler
