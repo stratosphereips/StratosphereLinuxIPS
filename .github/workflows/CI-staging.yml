@@ -295,6 +295,13 @@ jobs:
                coverage report --include="modules/p2ptrust/trust/trustdb.py*"
                coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb
 
+          - name: Process manager Unit tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_process_manager.py -p no:warnings -vv -s -n 5
+               coverage report --include="managers/process_manager.py*"
+               coverage html --include="managers/process_manager.py*" -d coverage_reports/process_manager
+     
+
   dataset_integration_tests:
       # specify the host OS
       runs-on: ubuntu-latest

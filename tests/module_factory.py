@@ -309,9 +309,7 @@ class ModuleFactory:
 
     def create_redis_manager_obj(self, main):
         return RedisManager(main)
-
-    def create_process_manager_obj(self):
-        return ProcessManager(self.create_main_obj(""))
+        
 
     def create_utils_obj(self):
         return utils
@@ -571,3 +569,12 @@ class ModuleFactory:
 
         cesnet.print = MagicMock()
         return cesnet
+
+    def create_process_manager_obj(self):
+        main_mock = Mock()
+        main_mock.conf.get_disabled_modules.return_value = []
+        main_mock.input_type = 'pcap'
+        main_mock.mode = 'normal'
+        main_mock.stdout = ''
+        main_mock.args = Mock(growing=False, input_module=False, testing=False)
+        return ProcessManager(main_mock)
