@@ -4,6 +4,7 @@ import os
 
 from modules.flowalerts.conn import Conn
 import sys
+from modules.rnn_cc_detection.rnn_cc_detection import CCDetection
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from multiprocessing.connection import Connection
@@ -571,3 +572,20 @@ class ModuleFactory:
 
         cesnet.print = MagicMock()
         return cesnet
+
+    def create_rnn_detection_object(self):
+        logger = Mock()
+        output_dir = "/tmp"
+        redis_port = 6379
+        termination_event = Mock()
+        
+        with patch.object(CCDetection, '__init__', return_value=None):
+            cc_detection = CCDetection(logger, output_dir, redis_port, termination_event)
+            cc_detection.db = Mock()
+            cc_detection.exporter = Mock()
+            return cc_detection
+  
+
+
+
+

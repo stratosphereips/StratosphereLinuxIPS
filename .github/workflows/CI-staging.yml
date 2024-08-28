@@ -289,11 +289,17 @@ jobs:
                coverage report --include="slips_files/core/helpers/notify.py*"
                coverage html --include="slips_files/core/helpers/notify.py*" -d coverage_reports/notify
 
+          - name: rnn detection  Unit Tests
+            run: |
+               coverage run --source=./ -m pytest tests/test_rnn_cc_detection.py -p no:warnings -vv -s -n 5
+               coverage report --include="modules/rnn_cc_detection/rnn_cc_detection.py*"
+               coverage html --include="modules/rnn_cc_detection/rnn_cc_detection.py*" -d coverage_reports/notify     
+
           - name: TrustDB Unit tests
             run: |
                coverage run --source=./ -m pytest tests/test_trustdb.py -p no:warnings -vv -s -n 5
                coverage report --include="modules/p2ptrust/trust/trustdb.py*"
-               coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb
+               coverage html --include="modules/p2ptrust/trust/trustdb.py*" -d coverage_reports/trustdb  
 
   dataset_integration_tests:
       # specify the host OS
