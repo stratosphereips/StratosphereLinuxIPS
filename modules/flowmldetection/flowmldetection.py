@@ -136,8 +136,10 @@ class FlowMLDetection(IModule):
                 "smac",
                 "dmac",
                 "history",
-                "uid" "dir_",
+                "uid",
+                "dir_",
                 "dbytes",
+                "endtime",
             ]
             for field in to_drop:
                 try:
@@ -303,6 +305,7 @@ class FlowMLDetection(IModule):
                 "dir_",
                 "dbytes",
                 "dpkts",
+                "endtime",
             ]
             for field in fields_to_drop:
                 try:
@@ -450,6 +453,7 @@ class FlowMLDetection(IModule):
                     # Train an algorithm
                     self.train()
             elif self.mode == "test":
+                origignal_flow = self.flow_dict
                 # We are testing, which means using the model to detect
                 self.process_flow()
 
@@ -458,9 +462,6 @@ class FlowMLDetection(IModule):
                 if self.flow is not None and not self.flow.empty:
                     # Predict
                     pred = self.detect()
-                    if not pred:
-                        print("@@@@@@@@@@@@@@@@ no pred")
-                        return 1
 
                     label = self.flow_dict["label"]
                     # Report
@@ -480,10 +481,7 @@ class FlowMLDetection(IModule):
                         )
                     if pred[0] == "Malware":
                         # Generate an alert
-                        self.set_evidence_malicious_flow(
-                            self.flow_dict,
-                            twid,
-                        )
+                        self.set_evidence_malicious_flow(origignal_flow, twid)
                         self.print(
                             f"Prediction {pred[0]} for label {label}"
                             f' flow {self.flow_dict["saddr"]}:'

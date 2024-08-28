@@ -62,7 +62,7 @@ class Conn(IFlowalertsAnalyzer):
             return
 
         # If duration is above threshold, we should set an evidence
-        if flow.dur > self.long_connection_threshold:
+        if float(flow.dur) > self.long_connection_threshold:
             self.set_evidence.long_connection(profileid, twid, flow)
             return True
         return False

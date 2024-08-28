@@ -72,7 +72,7 @@ class FlowHandler:
         self.symbol = symbol_handler
         self.running_non_stop: bool = self.db.is_running_non_stop()
 
-    def is_supported_flow(self):
+    def is_supported_flow_type(self):
         supported_types = (
             "ssh",
             "ssl",
@@ -105,8 +105,10 @@ class FlowHandler:
         if (type(self.flow) == DHCP and not self.flow.uids) or (
             type(self.flow) != DHCP and not self.flow.uid
         ):
-            # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
-            # Zeeks uses human-readable strings in Base62 format, from 112 bits usually.
+            # In the case of other tools that are not Zeek, there is no UID.
+            # So we generate a new one here
+            # Zeeks uses human-readable strings in Base62 format,
+            # from 112 bits usually.
             # We do base64 with some bits just because we need a fast unique way
             self.flow.uid = base64.b64encode(
                 binascii.b2a_hex(os.urandom(9))
