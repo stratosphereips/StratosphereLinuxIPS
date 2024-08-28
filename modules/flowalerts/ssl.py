@@ -191,7 +191,7 @@ class SSL(IFlowalertsAnalyzer):
             and flow.proto.lower() == "tcp"
             and flow.appproto.lower() != "ssl"
             and flow.state == "Established"
-            and flow.allbytes != 0
+            and (flow.sbytes + flow.dbytes) != 0
         ):
             self.set_evidence.non_ssl_port_443_conn(profileid, twid, flow)
 
@@ -215,7 +215,7 @@ class SSL(IFlowalertsAnalyzer):
 
             # we'll be checking pastebin downloads of this ssl flow
             # later
-            # todo: can iput ssl flow obj in the queue??
+            # todo: can i put ssl flow obj in the queue??
             self.pending_ssl_flows.put(
                 (
                     flow.daddr,

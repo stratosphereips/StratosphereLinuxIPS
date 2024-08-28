@@ -620,7 +620,7 @@ class Conn(IFlowalertsAnalyzer):
             and flow.proto.lower() == "tcp"
             and flow.appproto.lower() != "http"
             and flow.interpreted_state == "Established"
-            and flow.allbytes != 0
+            and (flow.sbytes + flow.dbytes) != 0
         ):
             self.set_evidence.non_http_port_80_conn(profileid, twid, flow)
 
