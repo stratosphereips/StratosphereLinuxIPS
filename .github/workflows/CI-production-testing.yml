@@ -222,6 +222,10 @@ jobs:
       run: |
         python3 -m pytest tests/test_set_evidence.py -p no:warnings -vv -s -n 5
 
+    - name: metadata manager Unit Tests
+      run: |
+        python3 -m pytest tests/test_metadata_manager.py -p no:warnings -vv -s -n 5    
+
     - name: CESNET Unit Tests
       run: |
         python3 -m pytest tests/test_cesnet.py -p no:warnings -vv -s -n 5

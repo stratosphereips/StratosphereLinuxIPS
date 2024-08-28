@@ -50,6 +50,7 @@ from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
 from slips_files.common.markov_chains import Matrix
+from managers.metadata_manager import MetadataManager
 from slips_files.core.evidence_structure.evidence import (
     Attacker,
     Direction,
@@ -571,3 +572,7 @@ class ModuleFactory:
 
         cesnet.print = MagicMock()
         return cesnet
+
+    def create_metadata_manager_obj(self):
+        main_mock = MagicMock()
+        return MetadataManager(main_mock)
