@@ -172,11 +172,13 @@ class Timeline(IModule):
             "daddr": flow.daddr,
             "dport/proto": f"{str(flow.dport)}/{flow.proto.upper()}",
             "state": self.db.get_final_state_from_flags(flow.state, flow.pkts),
-            "warning": "No data exchange!" if not flow.allbytes else "",
+            "warning": (
+                "No data exchange!" if not (flow.sbytes + flow.dbytes) else ""
+            ),
             "info": "",
             "sent": flow.sbytes,
             "recv": flow.dbytes,
-            "tot": flow.allbytes,
+            "tot": flow.sbytes + flow.dbytes,
             "duration": flow.dur,
             "critical warning": critical_warning_dport_name,
         }
@@ -218,7 +220,7 @@ class Timeline(IModule):
             "dport_name": dport_name,
             "preposition": "from",
             "saddr": flow.saddr,
-            "size": flow.allbytes,
+            "size": flow.sbytes + flow.dbytes,
             "duration": flow.dur,
         }
 
@@ -244,7 +246,7 @@ class Timeline(IModule):
             "dport_name": "IGMP",
             "preposition": "from",
             "saddr": flow.saddr,
-            "size": flow.allbytes,
+            "size": flow.sbytes + flow.dbytes,
             "duration": flow.dur,
         }
 
@@ -268,7 +270,7 @@ class Timeline(IModule):
         try:
             flow.dport_name = self.interpret_dport(flow)
             flow.sbytes = self.validate_bytes(flow.sbytes)
-            flow.allbytes = self.validate_bytes(flow.sbytes + flow.dbytes)
+            flow.dbytes = self.validate_bytes(flow.dbytes)
             flow.timestamp_human = self.convert_timestamp_to_slips_format(
                 flow.starttime
             )
@@ -323,6 +325,4 @@ class Timeline(IModule):
             profileid = msg["profileid"]
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            if hasattr(flow, "allbytes"):
-                flow.allbytes = flow.sbytes + flow.dbytes
             self.process_flow(profileid, twid, flow)
