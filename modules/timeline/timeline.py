@@ -142,19 +142,17 @@ class Timeline(IModule):
         return altflow_info
 
     def get_dns_resolution(self, ip):
-        """
-        returns a list or a str with the dns resolution of the given ip
-        """
         dns_resolution: dict = self.db.get_dns_resolution(ip)
         dns_resolution: list = dns_resolution.get("domains", [])
 
-        # we should take only one resolution, if there is more
-        # than 3, because otherwise it does not fit in the timeline.
         if len(dns_resolution) > 3:
             dns_resolution = dns_resolution[-1]
-
-        if not dns_resolution:
+        elif len(dns_resolution) == 1:
+            dns_resolution = dns_resolution[0]
+        elif not dns_resolution:
             dns_resolution = "????"
+        else:
+            dns_resolution = ', '.join(dns_resolution)
         return dns_resolution
 
     def process_tcp_udp_flow(
