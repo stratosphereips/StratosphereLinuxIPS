@@ -195,8 +195,8 @@ class SSL(IFlowalertsAnalyzer):
         ):
             self.set_evidence.non_ssl_port_443_conn(profileid, twid, flow)
 
-    def detect_doh(self, profileid, twid, flow):
-        if not flow.is_doh:
+    def detect_doh(self, twid, flow):
+        if not flow.is_DoH:
             return False
         self.set_evidence.doh(twid, flow)
         self.db.set_ip_info(flow.daddr, {"is_doh_server": True})
@@ -207,12 +207,10 @@ class SSL(IFlowalertsAnalyzer):
             self.ssl_thread_started = True
 
         if utils.is_msg_intended_for(msg, "new_ssl"):
-            data = json.loads(msg["data"])
-            profileid = data["profileid"]
-            twid = data["twid"]
-            flow = json.loads(data["flow"])
-            flow = self.classifier.convert_to_flow_obj(flow)
-
+            msg = json.loads(msg["data"])
+            profileid = msg["profileid"]
+            twid = msg["twid"]
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
             # we'll be checking pastebin downloads of this ssl flow
             # later
             # todo: can i put ssl flow obj in the queue??
@@ -228,9 +226,9 @@ class SSL(IFlowalertsAnalyzer):
             )
 
             self.check_self_signed_certs(profileid, twid, flow)
-            self.detect_malicious_ja3(twid, flow)
+            self.detect_malicious_ja3(profileid, twid, flow)
             self.detect_incompatible_cn(profileid, twid, flow)
-            self.detect_doh(profileid, twid, flow)
+            self.detect_doh(twid, flow)
 
         elif utils.is_msg_intended_for(msg, "new_flow"):
             msg = json.loads(msg["data"])

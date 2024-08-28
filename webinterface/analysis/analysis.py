@@ -287,14 +287,18 @@ def set_timeline(
 
             # TODO: check IGMP
             if flow["dport_name"] == "IGMP":
-                flow["dns_resolution"] = "????"
-                flow["dport/proto"] = "????"
-                flow["state"] = "????"
-                flow["sent"] = "????"
-                flow["recv"] = "????"
-                flow["tot"] = "????"
-                flow["warning"] = "????"
-                flow["critical warning"] = "????"
+                fields = [
+                    "dns_resolution",
+                    "dport/proto",
+                    "state",
+                    "sent",
+                    "recv",
+                    "tot",
+                    "warning",
+                    "critical",
+                ]
+                for field in fields:
+                    flow[field] = "????"
 
             # TODO: check this logic
             if flow["preposition"] == "from":

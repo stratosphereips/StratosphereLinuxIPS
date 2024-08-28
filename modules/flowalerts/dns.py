@@ -295,7 +295,13 @@ class DNS(IFlowalertsAnalyzer):
                 continue
             entropy = self.estimate_shannon_entropy(answer)
             if entropy >= self.shannon_entropy_threshold:
-                self.set_evidence.suspicious_dns_answer(profileid, twid, flow)
+                self.set_evidence.suspicious_dns_answer(
+                    profileid,
+                    twid,
+                    flow,
+                    entropy,
+                    answer,
+                )
 
     def check_invalid_dns_answers(self, profileid, twid, flow):
         # this function is used to check for certain IP

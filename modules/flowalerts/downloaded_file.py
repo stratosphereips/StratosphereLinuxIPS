@@ -5,6 +5,7 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
 )
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import SSL
 
 
 class DownloadedFile(IFlowalertsAnalyzer):
@@ -14,11 +15,7 @@ class DownloadedFile(IFlowalertsAnalyzer):
     def name(self) -> str:
         return "downloaded_files_analyzer"
 
-    def check_malicious_ssl(self, ssl_info: dict):
-        twid = ssl_info["timewindow"]
-        profileid = ssl_info["profileid"]
-        flow = self.classifier.convert_to_flow_obj(ssl_info["flow"])
-
+    def check_malicious_ssl(self, profileid, twid, flow):
         if flow.type_ != "zeek":
             # this detection only supports zeek files.log flows
             return False
@@ -38,6 +35,8 @@ class DownloadedFile(IFlowalertsAnalyzer):
     def analyze(self, msg):
         if not utils.is_msg_intended_for(msg, "new_downloaded_file"):
             return
-
-        ssl_info = json.loads(msg["data"])
-        self.check_malicious_ssl(ssl_info)
+        msg = json.loads(msg["data"])
+        twid = msg["twid"]
+        profileid = msg["profileid"]
+        flow: SSL = self.classifier.convert_to_flow_obj(msg["flow"])
+        self.check_malicious_ssl(profileid, twid, flow)
