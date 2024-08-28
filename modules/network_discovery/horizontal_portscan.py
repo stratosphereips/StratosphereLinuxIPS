@@ -202,7 +202,7 @@ class HorizontalPortscan:
             uid=evidence["uids"],
             timestamp=evidence["timestamp"],
             proto=Proto(evidence["protocol"].lower()),
-            port=evidence["dport"],
+            dst_port=evidence["dport"],
         )
 
         self.db.set_evidence(evidence)

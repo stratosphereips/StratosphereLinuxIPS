@@ -232,7 +232,7 @@ class SSL(IFlowalertsAnalyzer):
             self.detect_incompatible_cn(profileid, twid, flow)
             self.detect_doh(profileid, twid, flow)
 
-        if utils.is_msg_intended_for(msg, "new_flow"):
+        elif utils.is_msg_intended_for(msg, "new_flow"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
             twid = msg["twid"]

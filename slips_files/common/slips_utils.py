@@ -432,7 +432,6 @@ class Utils(object):
             1. If the given message is intended for this channel
             2. The msg has valid data
         """
-
         return (
             message
             and isinstance(message["data"], str)

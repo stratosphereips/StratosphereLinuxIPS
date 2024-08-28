@@ -207,7 +207,6 @@ class Evidence:
     )
     victim: Optional[Victim] = field(default=False)
     proto: Optional[Proto] = field(default=False)
-    # port: int = field(default=None)
     dst_port: int = field(default=None)
     src_port: int = field(default=None)
     # every evidence should have an ID according to the IDMEF format
@@ -267,7 +266,8 @@ def dict_to_evidence(evidence: dict) -> Evidence:
             if "proto" in evidence and evidence["proto"]
             else None
         ),
-        "port": evidence["port"],
+        "dst_port": evidence["dst_port"] if "dst_port" in evidence else None,
+        "src_port": evidence["src_port"] if "src_port" in evidence else None,
         "id": evidence["id"],
         "rel_id": evidence["rel_id"],
         "confidence": evidence["confidence"],
