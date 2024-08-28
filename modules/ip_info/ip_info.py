@@ -620,6 +620,7 @@ class IPInfo(IModule):
                     self.is_gw_mac_set = True
 
         if msg := self.get_msg("new_dns"):
+            msg = json.loads(msg["data"])
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             if domain := flow.query:
                 self.get_age(domain)
