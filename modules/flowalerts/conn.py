@@ -609,7 +609,7 @@ class Conn(IFlowalertsAnalyzer):
         if (
             str(flow.dport) == "80"
             and flow.proto.lower() == "tcp"
-            and flow.appproto.lower() != "http"
+            and str(flow.appproto).lower() != "http"
             and flow.interpreted_state == "Established"
             and (flow.sbytes + flow.dbytes) != 0
         ):

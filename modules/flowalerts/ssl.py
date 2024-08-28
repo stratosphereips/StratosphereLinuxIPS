@@ -189,7 +189,7 @@ class SSL(IFlowalertsAnalyzer):
         if (
             str(flow.dport) == "443"
             and flow.proto.lower() == "tcp"
-            and flow.appproto.lower() != "ssl"
+            and str(flow.appproto).lower() != "ssl"
             and flow.state == "Established"
             and (flow.sbytes + flow.dbytes) != 0
         ):

@@ -103,7 +103,8 @@ class FlowHandler:
         tupleid = f"{daddr_as_obj}-{self.flow.dport}-{self.flow.proto}"
 
         # Compute the symbol for this flow, for this TW, for this profile.
-        # The symbol is based on the 'letters' of the original Startosphere IPS tool
+        # The symbol is based on the 'letters' of the original
+        # Startosphere IPS tool
         symbol: Tuple = self.symbol.compute(self.flow, self.twid, "OutTuples")
 
         # Change symbol for its internal data. Symbol is a tuple and is

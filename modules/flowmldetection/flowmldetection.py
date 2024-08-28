@@ -140,6 +140,7 @@ class FlowMLDetection(IModule):
                 "dir_",
                 "dbytes",
                 "endtime",
+                "bytes",
             ]
             for field in to_drop:
                 try:
@@ -306,6 +307,7 @@ class FlowMLDetection(IModule):
                 "dbytes",
                 "dpkts",
                 "endtime",
+                "bytes",
             ]
             for field in fields_to_drop:
                 try:
@@ -313,7 +315,6 @@ class FlowMLDetection(IModule):
                     self.flow = self.flow.drop(field, axis=1)
                 except (KeyError, ValueError):
                     pass
-
             # Scale the flow
             self.flow = self.scaler.transform(self.flow)
             pred = self.clf.predict(self.flow)
