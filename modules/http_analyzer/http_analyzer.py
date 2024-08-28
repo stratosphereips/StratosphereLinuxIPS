@@ -223,7 +223,7 @@ class HTTPAnalyzer(IModule):
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -256,7 +256,7 @@ class HTTPAnalyzer(IModule):
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -276,7 +276,7 @@ class HTTPAnalyzer(IModule):
             profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -539,7 +539,7 @@ class HTTPAnalyzer(IModule):
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             victim=Victim(
                 direction=Direction.DST,
                 victim_type=IoCType.IP,
@@ -586,7 +586,7 @@ class HTTPAnalyzer(IModule):
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -623,7 +623,7 @@ class HTTPAnalyzer(IModule):
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 

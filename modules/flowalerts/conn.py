@@ -92,9 +92,18 @@ class Conn(IFlowalertsAnalyzer):
 
     def port_belongs_to_an_org(self, daddr, portproto, profileid):
         """
-        Checks wehether a port is known to be used by a specific
-        organization or not, and returns true if the daddr belongs to the
+        Checks whether the given port and daddr are known to be used by a
+        specific organization or not, and returns true if the daddr belongs to the
         same org as the port
+        This function says that the port belongs to an org if:
+        1. we have its info in ports_used_by_specific_orgs.csv
+        and considers the IP belongs to an org if:
+        1. both saddr and daddr have the Mac vendor fo this org e.g. apple
+        2. both saddr and daddr belong to the range specified in the
+        ports_used_by_specific_orgs.csv
+        3. if the SNI, hostname, rDNS, ASN of this ip belong to this org
+        4. match the IPs to orgs that slips has info about (apple, fb,
+        google,etc.)
         """
         organization_info = self.db.get_organization_of_port(portproto)
         if not organization_info:
@@ -357,7 +366,7 @@ class Conn(IFlowalertsAnalyzer):
                 profileid,
                 twid,
                 [flow.uid],
-                flow.timestamp,
+                flow.starttime,
             )
             return True
         return False
@@ -457,7 +466,7 @@ class Conn(IFlowalertsAnalyzer):
                 flow.daddr,
                 twid,
                 profileid,
-                flow.timestamp,
+                flow.starttime,
                 flow.uid,
             ]
 

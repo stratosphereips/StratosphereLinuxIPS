@@ -43,7 +43,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=0.9,
         )
         self.db.set_evidence(evidence)
@@ -75,7 +75,7 @@ class SetEvidnceHelper:
                 profile=ProfileID(ip=attacker),
                 timewindow=TimeWindow(number=twid_number),
                 uid=[flow.uid],
-                timestamp=flow.timestamp,
+                timestamp=flow.starttime,
                 confidence=1.0,
             )
             self.db.set_evidence(evidence)
@@ -98,7 +98,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=1.0,
         )
         self.db.set_evidence(evidence)
@@ -136,7 +136,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(int(twid.replace("timewindow", ""))),
             uid=uids,
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=0.9,
         )
         self.db.set_evidence(evidence)
@@ -204,7 +204,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
         self.db.set_evidence(evidence)
@@ -232,7 +232,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -268,7 +268,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=0.8,
         )
         self.db.set_evidence(evidence)
@@ -292,7 +292,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=0.8,
         )
 
@@ -325,7 +325,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -358,7 +358,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -389,7 +389,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uids,
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -416,7 +416,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=0.8,
         )
 
@@ -446,7 +446,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -487,7 +487,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -516,7 +516,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uids,
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -554,7 +554,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -583,7 +583,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -606,7 +606,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -636,7 +636,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
             victim=Victim(
                 direction=Direction.DST,
@@ -678,7 +678,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -708,7 +708,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.scanning_ip),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             confidence=confidence,
         )
 
@@ -751,7 +751,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -789,7 +789,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
             victim=Victim(
                 direction=Direction.DST,
                 victim_type=IoCType.IP,
@@ -835,7 +835,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
         self.db.set_evidence(evidence)
 
@@ -853,7 +853,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
         self.db.set_evidence(evidence)
 
@@ -892,7 +892,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
             uid=uids,
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -945,7 +945,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=profile_ip),
             timewindow=TimeWindow(number=twid),
             uid=uids,
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -979,7 +979,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -999,7 +999,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
         self.db.set_evidence(evidence)
 
@@ -1026,7 +1026,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -1070,7 +1070,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=profile_ip),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -1114,7 +1114,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -1133,7 +1133,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -1176,7 +1176,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -1264,7 +1264,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -1303,7 +1303,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=uids,
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -1345,7 +1345,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -1365,7 +1365,7 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)

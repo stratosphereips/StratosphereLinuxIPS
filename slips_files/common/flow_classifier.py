@@ -68,17 +68,17 @@ class FlowClassifier:
         # i added a field for suricata flows called flow_source
         # the goal of this is to be able to map the flow.type_ to the
         # correct Suricata* class
-        given_flow_type = flow.type_
-        if hasattr(flow, "flow_source"):
-            if flow.flow_source == "suricata":
-                given_flow_type = f"suricata_{flow.type_}"
+        flow_type = flow["type_"]
+        if "flow_source" in flow:
+            if flow["flow_source"] == "suricata":
+                flow_type = f"suricata_{flow_type}"
 
         try:
-            return self.flow_map[given_flow_type]
+            return self.flow_map[flow_type]
         except KeyError:
             return
 
-    def convert_to_flow_obj(self, flow: dict):
+    def convert_to_flow_obj(self, flow: Dict[str, Any]):
         """
         returns the given flow in one of the types defined in
          slips_files/core/flows/

@@ -94,7 +94,7 @@ class NetworkDiscovery(IModule):
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -314,7 +314,7 @@ class NetworkDiscovery(IModule):
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=twid_number),
             uid=flow.uids,
-            timestamp=flow.timestamp,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)

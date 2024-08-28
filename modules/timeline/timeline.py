@@ -157,45 +157,32 @@ class Timeline(IModule):
         return dns_resolution
 
     def process_tcp_udp_flow(self, flow):
-        dport_name = self.interpret_dport(flow)
-        sbytes = self.validate_bytes(flow.sbytes)
-        allbytes = self.validate_bytes(flow.allbytes)
-        timestamp_human = self.convert_timestamp_to_slips_format(
-            flow.timestamp
-        )
-
         critical_warning_dport_name = ""
-        if not dport_name:
-            dport_name = "????"
+        if not flow.dport_name:
+            flow.dport_name = "????"
             critical_warning_dport_name = (
                 "Protocol not recognized by Slips nor Zeek."
             )
 
         activity = {
-            "timestamp": timestamp_human,
-            "dport_name": dport_name,
+            "timestamp": flow.timestamp_human,
+            "dport_name": flow.dport_name,
             "preposition": ("from" if self.is_inbound_traffic(flow) else "to"),
             "dns_resolution": self.get_dns_resolution(flow.daddr),
             "daddr": flow.daddr,
             "dport/proto": f"{str(flow.dport)}/{flow.proto.upper()}",
             "state": self.db.get_final_state_from_flags(flow.state, flow.pkts),
-            "warning": "No data exchange!" if not allbytes else "",
+            "warning": "No data exchange!" if not flow.allbytes else "",
             "info": "",
-            "sent": sbytes,
-            "recv": allbytes - sbytes,
-            "tot": allbytes,
+            "sent": flow.sbytes,
+            "recv": flow.dbytes,
+            "tot": flow.allbytes,
             "duration": flow.dur,
             "critical warning": critical_warning_dport_name,
         }
         return activity
 
     def process_icmp_flow(self, flow: dict):
-        dur = round(float(flow.dur), 3)
-        allbytes = self.validate_bytes(flow.allbytes)
-        timestamp_human = self.convert_timestamp_to_slips_format(
-            flow.timestamp
-        )
-
         extra_info = {}
         warning = ""
 
@@ -221,19 +208,18 @@ class Timeline(IModule):
                 "0x000b": "",
                 "0x0003": "ICMP Destination Net Unreachable",
             }
-
             dport_name = icmp_types_str.get(flow.sport, "ICMP Unknown type")
 
             if flow.sport == "0x0303":
                 warning = f"Unreachable port is {int(flow.dport, 16)}"
 
         activity = {
-            "timestamp": timestamp_human,
+            "timestamp": flow.timestamp_human,
             "dport_name": dport_name,
             "preposition": "from",
             "saddr": flow.saddr,
-            "size": allbytes,
-            "duration": dur,
+            "size": flow.allbytes,
+            "duration": flow.dur,
         }
 
         extra_info.update(
@@ -253,18 +239,13 @@ class Timeline(IModule):
         return activity
 
     def process_igmp_flow(self, flow: dict):
-        dur = round(float(flow.dur), 3)
-        allbytes = self.validate_bytes(flow.allbytes)
-        timestamp_human = self.convert_timestamp_to_slips_format(
-            flow.timestamp
-        )
         return {
-            "timestamp": timestamp_human,
+            "timestamp": flow.timestamp_human,
             "dport_name": "IGMP",
             "preposition": "from",
             "saddr": flow.saddr,
-            "size": allbytes,
-            "duration": dur,
+            "size": flow.allbytes,
+            "duration": flow.dur,
         }
 
     def interpret_dport(self, flow) -> str:
@@ -285,7 +266,13 @@ class Timeline(IModule):
          so its printed by the logprocess later
         """
         try:
-            proto = flow.proto.upper()
+            flow.dport_name = self.interpret_dport(flow)
+            flow.sbytes = self.validate_bytes(flow.sbytes)
+            flow.allbytes = self.validate_bytes(flow.sbytes + flow.dbytes)
+            flow.timestamp_human = self.convert_timestamp_to_slips_format(
+                flow.starttime
+            )
+            flow.dur = round(float(flow.dur), 3)
             # interpret the given flow and and create an activity line to
             # display in slips Web interface/Kalipso
             # Change the format of timeline in the case of inbound
@@ -300,8 +287,8 @@ class Timeline(IModule):
                 "IPV4-ICMP": self.process_icmp_flow,
                 "IGMP": self.process_igmp_flow,
             }
-            if proto in proto_handlers:
-                activity = proto_handlers[proto](flow)
+            if flow.proto.upper() in proto_handlers:
+                activity = proto_handlers[flow.proto.upper()](flow)
             else:
                 activity = {}
             #################################
@@ -315,7 +302,7 @@ class Timeline(IModule):
             # flows and store in the DB for this profileid and twid
             activity.update(alt_activity)
             self.db.add_timeline_line(
-                profileid, twid, activity, flow.timestamp
+                profileid, twid, activity, flow.starttime
             )
 
         except Exception:
