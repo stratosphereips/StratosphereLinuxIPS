@@ -158,7 +158,7 @@ class Profiler(ICore, IObservable):
 
         self.flow_parser = FlowHandler(self.db, self.symbol, self.flow)
 
-        if not self.flow_parser.is_supported_flow():
+        if not self.flow_parser.is_supported_flow_type():
             return False
 
         self.flow_parser.make_sure_theres_a_uid()
@@ -230,9 +230,9 @@ class Profiler(ICore, IObservable):
             # call the function that handles this flow
             cases[self.flow.type_]()
         except KeyError:
-            for flow in cases:
-                if flow in self.flow.type_:
-                    cases[flow]()
+            for supported_type in cases:
+                if supported_type in self.flow.type_:
+                    cases[supported_type]()
             return False
 
         # if the flow type matched any of the ifs above,

@@ -725,7 +725,8 @@ class ProfileHandler:
         label="",
     ):
         """
-        Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
+        Function to add a flow by interpreting the data. The flow is added to
+        the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
         """
         if label:
@@ -749,7 +750,8 @@ class ProfileHandler:
             self.set_input_metadata({"file_start": flow.starttime})
             self.first_flow = False
 
-        # dont send arp flows in this channel, they have their own new_arp channel
+        # dont send arp flows in this channel, they have their own
+        # new_arp channel
         if flow.type_ != "arp":
             self.publish("new_flow", to_send)
         return True

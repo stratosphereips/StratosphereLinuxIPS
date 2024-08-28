@@ -11,7 +11,7 @@ from dataclasses import asdict
 def test_is_supported_flow_not_ts(flow, mock_db):
     flow.starttime = None
     flow_handler = ModuleFactory().create_flow_handler_obj(flow, mock_db)
-    assert flow_handler.is_supported_flow() is False
+    assert flow_handler.is_supported_flow_type() is False
 
 
 @pytest.mark.parametrize(
@@ -28,7 +28,7 @@ def test_is_supported_flow_without_ts(
     # just change the flow_type
     flow.type_ = flow_type
     flow_handler = ModuleFactory().create_flow_handler_obj(flow, mock_db)
-    assert flow_handler.is_supported_flow() == expected_val
+    assert flow_handler.is_supported_flow_type() == expected_val
 
 
 # testing handle_dns

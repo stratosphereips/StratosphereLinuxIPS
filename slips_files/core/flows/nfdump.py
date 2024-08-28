@@ -23,7 +23,7 @@ class NfdumpConn:
 
     sbytes: int
     dbytes: int
-    # required to be able to add_flow
+    # required to be able to call self.db.add_flow() in profiler
     smac = False
     dmac = False
     appproto = False
