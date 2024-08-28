@@ -1,13 +1,9 @@
-import base64
-import binascii
 import ipaddress
 import json
-import os
 from dataclasses import asdict
 from typing import Tuple
 
 from slips_files.core.flows.suricata import SuricataFile
-from slips_files.core.flows.zeek import DHCP
 from slips_files.common.slips_utils import utils
 
 
@@ -96,23 +92,6 @@ class FlowHandler:
             self.flow.starttime is not None
             and self.flow.type_ in supported_types
         )
-
-    def make_sure_theres_a_uid(self):
-        """
-        Generates a uid and adds it to the flow if none is found
-        """
-        # dhcp flows have uids field instead of uid
-        if (type(self.flow) == DHCP and not self.flow.uids) or (
-            type(self.flow) != DHCP and not self.flow.uid
-        ):
-            # In the case of other tools that are not Zeek, there is no UID.
-            # So we generate a new one here
-            # Zeeks uses human-readable strings in Base62 format,
-            # from 112 bits usually.
-            # We do base64 with some bits just because we need a fast unique way
-            self.flow.uid = base64.b64encode(
-                binascii.b2a_hex(os.urandom(9))
-            ).decode("utf-8")
 
     def handle_conn(self):
         role = "Client"

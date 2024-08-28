@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hashlib
 from datetime import datetime, timedelta
 from re import findall
@@ -70,6 +72,12 @@ class Utils(object):
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
+
+    def generate_uid(self):
+        """Generates a UID similar to what Zeek uses."""
+        return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
+            "utf-8"
+        )
 
     def is_iso_format(self, date_time: str) -> bool:
         try:
