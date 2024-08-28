@@ -161,7 +161,6 @@ class Profiler(ICore, IObservable):
         if not self.flow_parser.is_supported_flow_type():
             return False
 
-        self.flow_parser.make_sure_theres_a_uid()
         self.profileid = f"profile_{self.flow.saddr}"
         self.flow_parser.profileid = self.profileid
 
