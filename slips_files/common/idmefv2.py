@@ -208,8 +208,8 @@ class IDMEFv2:
                 }
             )
 
-            if evidence.port:
-                msg["Source"][0].update({"Port": [int(evidence.port)]})
+            if evidence.src_port:
+                msg["Source"][0].update({"Port": [int(evidence.src_port)]})
 
             if evidence.proto:
                 msg["Source"][0].update({"Protocol": [evidence.proto.name]})
@@ -219,6 +219,8 @@ class IDMEFv2:
                     evidence, role="victim"
                 )
                 msg["Target"] = [{victim_type: victim}]
+                if evidence.dst_port:
+                    msg["Target"][0].update({"Port": [int(evidence.dst_port)]})
 
             # todo check that we added all the fields from the plan
             # todo add alerts too not just evidence
