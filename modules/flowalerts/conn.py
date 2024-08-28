@@ -166,7 +166,7 @@ class Conn(IFlowalertsAnalyzer):
         """
         if not flow.dport:
             return
-        if flow.state != "Established":
+        if flow.interpreted_state != "Established":
             # detect unknown ports on established conns only
             return False
 
@@ -195,7 +195,7 @@ class Conn(IFlowalertsAnalyzer):
         Alerts when 5+ reconnection attempts from the same source IP to
         the same destination IP occurs
         """
-        if flow.origstate != "REJ":
+        if flow.state != "REJ":
             return
 
         key = f"{flow.saddr}-{flow.daddr}-{flow.dport}"
@@ -522,7 +522,7 @@ class Conn(IFlowalertsAnalyzer):
         )
 
     def detect_connection_to_multiple_ports(self, profileid, twid, flow):
-        if flow.proto != "tcp" or flow.state != "Established":
+        if flow.proto != "tcp" or flow.interpreted_state != "Established":
             return
 
         dport_name = flow.appproto
@@ -619,7 +619,7 @@ class Conn(IFlowalertsAnalyzer):
             str(flow.dport) == "80"
             and flow.proto.lower() == "tcp"
             and flow.appproto.lower() != "http"
-            and flow.state == "Established"
+            and flow.interpreted_state == "Established"
             and flow.allbytes != 0
         ):
             self.set_evidence.non_http_port_80_conn(profileid, twid, flow)
@@ -737,13 +737,11 @@ class Conn(IFlowalertsAnalyzer):
 
     def analyze(self, msg):
         if utils.is_msg_intended_for(msg, "new_flow"):
-            new_flow = json.loads(msg["data"])
-            profileid = new_flow["profileid"]
-            twid = new_flow["twid"]
-            flow = new_flow["flow"]
-            flow = json.loads(flow)
-            flow = self.classifier.convert_to_flow_obj(flow)
-            flow.state = self.db.get_final_state_from_flags(
+            msg = json.loads(msg["data"])
+            profileid = msg["profileid"]
+            twid = msg["twid"]
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
+            flow.interpreted_state = self.db.get_final_state_from_flags(
                 flow.state, flow.pkts
             )
             self.check_long_connection(profileid, twid, flow)
@@ -761,7 +759,7 @@ class Conn(IFlowalertsAnalyzer):
             self.check_connection_to_local_ip(profileid, twid, flow)
             self.check_device_changing_ips(profileid, twid, flow)
 
-        if utils.is_msg_intended_for(msg, "tw_closed"):
+        elif utils.is_msg_intended_for(msg, "tw_closed"):
             profileid_tw = msg["data"].split("_")
             profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
             twid = profileid_tw[-1]

@@ -736,7 +736,9 @@ class ProfileHandler:
             "twid": twid,
             "flow": asdict(flow),
             "stime": flow.starttime,
-            "state": self.get_final_state_from_flags(flow.state, flow.pkts),
+            "interpreted_state": self.get_final_state_from_flags(
+                flow.state, flow.pkts
+            ),
             "label": label,
             "module_labels": {},
         }
