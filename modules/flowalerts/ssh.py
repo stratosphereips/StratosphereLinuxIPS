@@ -53,7 +53,7 @@ class SSH(IFlowalertsAnalyzer):
                     daddr,
                     size,
                     flow.uid,
-                    flow.timestamp,
+                    flow.starttime,
                     by="Slips",
                 )
                 with contextlib.suppress(ValueError):
@@ -93,7 +93,7 @@ class SSH(IFlowalertsAnalyzer):
                 daddr,
                 size,
                 flow.uid,
-                flow.timestamp,
+                flow.starttime,
                 by="Zeek",
             )
             with contextlib.suppress(ValueError):
@@ -108,7 +108,7 @@ class SSH(IFlowalertsAnalyzer):
             # self.print(f'Starting the timer to check on {flow_dict},
             # uid {uid}. time {datetime.datetime.now()}')
             self.connections_checked_in_ssh_timer_thread.append(flow.uid)
-            params = [flow.uid, flow.timestamp, profileid, twid]
+            params = [flow.uid, flow.starttime, profileid, twid]
             timer = TimerThread(15, self.detect_successful_ssh_by_zeek, params)
             timer.start()
 
@@ -144,7 +144,7 @@ class SSH(IFlowalertsAnalyzer):
             description = f"SSH password guessing to IP {flow.daddr}"
             uids = self.password_guessing_cache[cache_key]
             self.set_evidence.pw_guessing(
-                description, flow.timestamp, twid, uids, by="Slips"
+                description, flow.starttime, twid, uids, by="Slips"
             )
             # reset the counter
             del self.password_guessing_cache[cache_key]

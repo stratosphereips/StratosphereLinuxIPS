@@ -384,7 +384,7 @@ class DNS(IFlowalertsAnalyzer):
             timestamps, uids, domains_scanned = self.dns_arpa_queries[
                 profileid
             ]
-            timestamps.append(flow.timestamp)
+            timestamps.append(flow.starttime)
             uids.append(flow.uid)
             domains_scanned.add(flow.query)
             self.dns_arpa_queries[profileid] = (
@@ -395,7 +395,7 @@ class DNS(IFlowalertsAnalyzer):
         except KeyError:
             # first time for this profileid to perform an arpa query
             self.dns_arpa_queries[profileid] = (
-                [flow.timestamp],
+                [flow.starttime],
                 [flow.uid],
                 {flow.query},
             )

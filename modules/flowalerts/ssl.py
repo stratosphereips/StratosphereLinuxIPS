@@ -221,7 +221,7 @@ class SSL(IFlowalertsAnalyzer):
                     flow.daddr,
                     flow.server_name,
                     flow.uid,
-                    flow.timestamp,
+                    flow.starttime,
                     profileid,
                     twid,
                 )
