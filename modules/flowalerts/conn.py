@@ -460,16 +460,7 @@ class Conn(IFlowalertsAnalyzer):
             # thread for this connection before
             # mark this connection as checked
             self.connections_checked_in_conn_dns_timer_thread.append(flow.uid)
-            params = [
-                flow.type_,
-                flow.appproto,
-                flow.daddr,
-                twid,
-                profileid,
-                flow.starttime,
-                flow.uid,
-            ]
-
+            params = [profileid, twid, flow]
             # There is no DNS resolution, but it can be that Slips is
             # still reading it from the files.
             # To give time to Slips to read all the files and get all the flows

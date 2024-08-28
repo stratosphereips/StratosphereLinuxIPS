@@ -650,11 +650,10 @@ class HTTPAnalyzer(IModule):
 
     def main(self):
         if msg := self.get_msg("new_http"):
-            message = json.loads(msg["data"])
-            profileid = message["profileid"]
-            twid = message["twid"]
-            flow = json.loads(message["flow"])
-            flow = self.classifier.convert_to_flow_obj(flow)
+            msg = json.loads(msg["data"])
+            profileid = msg["profileid"]
+            twid = msg["twid"]
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
             self.check_suspicious_user_agents(profileid, twid, flow)
             self.check_multiple_empty_connections(profileid, twid, flow)
             # find the UA of this profileid if we don't have it
