@@ -55,6 +55,8 @@ class FlowMLDetection(IModule):
         # self.scores = []
         # The scaler trained during training and to use during testing
         self.scaler = StandardScaler()
+        self.model_path = "./modules/flowmldetection/model.bin"
+        self.scaler_path = "./modules/flowmldetection/scaler.bin"
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -129,16 +131,18 @@ class FlowMLDetection(IModule):
                 "appproto",
                 "daddr",
                 "saddr",
-                "ts",
-                "origstate",
-                "flow_type",
+                "starttime",
+                "type_",
                 "smac",
                 "dmac",
+                "history",
+                "uid" "dir_",
+                "dbytes",
             ]
             for field in to_drop:
                 try:
                     dataset = dataset.drop(field, axis=1)
-                except ValueError:
+                except (ValueError, KeyError):
                     pass
 
             # Convert state to categorical
@@ -148,9 +152,8 @@ class FlowMLDetection(IModule):
             dataset.state = dataset.state.str.replace(
                 r"(^.*Established.*$)", "1", regex=True
             )
-            dataset.state = dataset.state.astype("float64")
-
-            # Convert proto to categorical. For now we only have few states, so we can hardcode...
+            # Convert proto to categorical. For now we only have few states,
+            # so we can hardcode...
             # We dont use the data to create categories because in testing mode
             # we dont see all the protocols
             # Also we dont store the Categorizer because the user can retrain
@@ -171,42 +174,23 @@ class FlowMLDetection(IModule):
             dataset.proto = dataset.proto.str.replace(
                 r"(^.*arp.*$)", "4", regex=True
             )
-            dataset.proto = dataset.proto.astype("float64")
-            try:
-                # Convert dport to float
-                dataset.dport = dataset.dport.astype("float")
-            except ValueError:
-                pass
-            try:
-                # Convert sport to float
-                dataset.sport = dataset.sport.astype("float")
-            except ValueError:
-                pass
-            try:
-                # Convert Dur to float
-                dataset.dur = dataset.dur.astype("float")
-            except ValueError:
-                pass
-            try:
-                # Convert TotPkts to float
-                dataset.pkts = dataset.pkts.astype("float")
-            except ValueError:
-                pass
-            try:
-                # Convert SrcPkts to float
-                dataset.spkts = dataset.spkts.astype("float")
-            except ValueError:
-                pass
-            try:
-                # Convert TotBytes to float
-                dataset.allbytes = dataset.allbytes.astype("float")
-            except ValueError:
-                pass
-            try:
-                # Convert SrcBytes to float
-                dataset.sbytes = dataset.sbytes.astype("float")
-            except ValueError:
-                pass
+            fields_to_convert_to_flow = [
+                dataset.proto,
+                dataset.dport,
+                dataset.sport,
+                dataset.dur,
+                dataset.pkts,
+                dataset.spkts,
+                dataset.allbytes,
+                dataset.sbytes,
+                dataset.state,
+            ]
+            for field in fields_to_convert_to_flow:
+                try:
+                    field = field.astype("float64")
+                except ValueError:
+                    pass
+
             return dataset
         except Exception:
             # Stop the timer
@@ -222,7 +206,6 @@ class FlowMLDetection(IModule):
             # We get all the flows so far
             # because this retraining happens in batches
             flows = self.db.get_all_flows()
-
             # Check how many different labels are in the DB
             # We need both normal and malware
             labels = self.db.get_labels()
@@ -242,9 +225,7 @@ class FlowMLDetection(IModule):
                         "daddr": "40.70.224.145",
                         "dport": "443",
                         "proto": "tcp",
-                        "origstate": "SRPA_SPA",
                         "state": "Established",
-                        "pkts": 84,
                         "allbytes": 42764,
                         "spkts": 37,
                         "sbytes": 25517,
@@ -264,9 +245,7 @@ class FlowMLDetection(IModule):
                         "daddr": "80.242.138.72",
                         "dport": "80",
                         "proto": "tcp",
-                        "origstate": "SRPA_SPA",
                         "state": "Established",
-                        "pkts": 67,
                         "allbytes": 67696,
                         "spkts": 1,
                         "sbytes": 100,
@@ -300,7 +279,6 @@ class FlowMLDetection(IModule):
         try:
             # Convert the flow to a pandas dataframe
             raw_flow = pd.DataFrame(self.flow_dict, index=[0])
-            # Process features
             dflow = self.process_features(raw_flow)
             # Update the flow to the processed version
             self.flow = dflow
@@ -317,17 +295,30 @@ class FlowMLDetection(IModule):
             # Store the real label if there is one
             # y_flow = self.flow["label"]
             # remove the real label column
-            self.flow = self.flow.drop("label", axis=1)
-            # remove the label predictions column of the other modules
-            X_flow = self.flow.drop("module_labels", axis=1)
+            fields_to_drop = [
+                "label",
+                "module_labels",
+                "uid",
+                "history",
+                "dir_",
+                "dbytes",
+                "dpkts",
+            ]
+            for field in fields_to_drop:
+                try:
+                    # remove the label predictions column of the other modules
+                    self.flow = self.flow.drop(field, axis=1)
+                except (KeyError, ValueError):
+                    pass
+
             # Scale the flow
-            X_flow = self.scaler.transform(X_flow)
-            pred = self.clf.predict(X_flow)
+            self.flow = self.scaler.transform(self.flow)
+            pred = self.clf.predict(self.flow)
             return pred
         except Exception:
             # Stop the timer
             self.print("Error in detect() X_flow:")
-            self.print(X_flow)
+            self.print(self.flow)
             self.print(traceback.format_exc(), 0, 1)
 
     def store_model(self):
@@ -335,10 +326,10 @@ class FlowMLDetection(IModule):
         Store the trained model on disk
         """
         self.print("Storing the trained model and scaler on disk.", 0, 2)
-        with open("./modules/flowmldetection/model.bin", "wb") as f:
+        with open(self.model_path, "wb") as f:
             data = pickle.dumps(self.clf)
             f.write(data)
-        with open("./modules/flowmldetection/scaler.bin", "wb") as g:
+        with open(self.scaler_path, "wb") as g:
             data = pickle.dumps(self.scaler)
             g.write(data)
 
@@ -348,20 +339,23 @@ class FlowMLDetection(IModule):
         """
         try:
             self.print("Reading the trained model from disk.", 0, 2)
-            with open("./modules/flowmldetection/model.bin", "rb") as f:
+            with open(self.model_path, "rb") as f:
                 self.clf = pickle.load(f)
             self.print("Reading the trained scaler from disk.", 0, 2)
-            with open("./modules/flowmldetection/scaler.bin", "rb") as g:
+            with open(self.scaler_path, "rb") as g:
                 self.scaler = pickle.load(g)
         except FileNotFoundError:
             # If there is no model, create one empty
-            self.print("There was no model. Creating a new empty model.", 0, 2)
+            self.print(
+                "There was no model. " "Creating a new empty model.", 0, 2
+            )
             self.clf = SGDClassifier(
                 warm_start=True, loss="hinge", penalty="l1"
             )
         except EOFError:
             self.print(
-                "Error reading model from disk. Creating a new empty model.",
+                "Error reading model from disk. "
+                "Creating a new empty model.",
                 0,
                 2,
             )
@@ -369,37 +363,32 @@ class FlowMLDetection(IModule):
                 warm_start=True, loss="hinge", penalty="l1"
             )
 
-    def set_evidence_malicious_flow(
-        self,
-        saddr: str,
-        sport: str,
-        daddr: str,
-        dport: str,
-        twid: str,
-        uid: str,
-    ):
+    def set_evidence_malicious_flow(self, flow: dict, twid: str):
         confidence: float = 0.1
-        ip_identification = self.db.get_ip_identification(daddr)
+        ip_identification = self.db.get_ip_identification(flow["daddr"])
         description = (
-            f"Malicious flow by ML. Src IP {saddr}:{sport} to "
-            f"{daddr}:{dport} {ip_identification}"
+            f"Malicious flow by ML. Src IP"
+            f" {flow['saddr']}:{flow['sport']} to "
+            f"{flow['daddr']}:{flow['dport']} {ip_identification}"
         )
 
         timestamp = utils.convert_format(
             datetime.datetime.now(), utils.alerts_format
         )
-
+        twid_number = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_FLOW,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow["saddr"],
             ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
+            profile=ProfileID(ip=flow["saddr"]),
+            timewindow=TimeWindow(twid_number),
+            uid=[flow["uid"]],
             timestamp=timestamp,
         )
 
@@ -417,20 +406,24 @@ class FlowMLDetection(IModule):
 
     def main(self):
         if msg := self.get_msg("new_flow"):
-            data = msg["data"]
-            # Convert from json to dict
-            data = json.loads(data)
-            # profileid = data["profileid"]
-            twid = data["twid"]
-            # Get flow that is now in json format
-            flow = data["flow"]
-            # Convert flow to a dict
-            flow = json.loads(flow)
-            # Convert the common fields to something that can
-            # be interpreted
-            # Get the uid which is the key
-            uid = next(iter(flow))
-            self.flow_dict = json.loads(flow[uid])
+            msg = json.loads(msg["data"])
+            twid = msg["twid"]
+            self.flow_dict = msg["flow"]
+            # these fields are expected in testing. update the original
+            # flow dict to have them
+            self.flow_dict.update(
+                {
+                    "allbytes": (
+                        self.flow_dict["sbytes"] + self.flow_dict["dbytes"]
+                    ),
+                    # the flow["state"] is the origstate, we dont need that here
+                    # we need the interpreted state
+                    "state": msg["interpreted_state"],
+                    "pkts": self.flow_dict["spkts"] + self.flow_dict["dpkts"],
+                    "label": msg["label"],
+                    "module_labels": msg["module_labels"],
+                }
+            )
 
             if self.mode == "train":
                 # We are training
@@ -443,12 +436,16 @@ class FlowMLDetection(IModule):
                     sum_labeled_flows >= self.minimum_lables_to_retrain
                     and sum_labeled_flows % self.minimum_lables_to_retrain == 1
                 ):
-                    # We get here every 'self.minimum_lables_to_retrain' amount of labels
-                    # So for example we retrain every 100 labels and only when we have at least 100 labels
+                    # We get here every 'self.minimum_lables_to_retrain'
+                    # amount of labels
+                    # So for example we retrain every 100 labels and only when
+                    # we have at least 100 labels
                     self.print(
-                        f"Training the model with the last group of flows and labels. Total flows: {sum_labeled_flows}."
+                        f"Training the model with the last group of "
+                        f"flows and labels. Total flows: {sum_labeled_flows}."
                     )
-                    # Process all flows in the DB and make them ready for pandas
+                    # Process all flows in the DB and make them ready
+                    # for pandas
                     self.process_flows()
                     # Train an algorithm
                     self.train()
@@ -456,38 +453,44 @@ class FlowMLDetection(IModule):
                 # We are testing, which means using the model to detect
                 self.process_flow()
 
-                # After processing the flow, it may happen that we delete icmp/arp/etc
-                # so the dataframe can be empty
+                # After processing the flow, it may happen that we
+                # delete icmp/arp/etc so the dataframe can be empty
                 if self.flow is not None and not self.flow.empty:
                     # Predict
                     pred = self.detect()
-                    label = self.flow_dict["label"]
+                    if not pred:
+                        print("@@@@@@@@@@@@@@@@ no pred")
+                        return 1
 
+                    label = self.flow_dict["label"]
                     # Report
                     if label and label != "unknown" and label != pred[0]:
-                        # If the user specified a label in test mode, and the label
-                        # is diff from the prediction, print in debug mode
+                        # If the user specified a label in test mode,
+                        # and the label is diff from the prediction,
+                        # print in debug mode
                         self.print(
-                            f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
-                            f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
-                            f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
+                            f"Report Prediction {pred[0]} for label"
+                            f' {label} flow {self.flow_dict["saddr"]}:'
+                            f'{self.flow_dict["sport"]} ->'
+                            f' {self.flow_dict["daddr"]}:'
+                            f'{self.flow_dict["dport"]}/'
+                            f'{self.flow_dict["proto"]}',
                             0,
                             3,
                         )
                     if pred[0] == "Malware":
                         # Generate an alert
                         self.set_evidence_malicious_flow(
-                            self.flow_dict["saddr"],
-                            self.flow_dict["sport"],
-                            self.flow_dict["daddr"],
-                            self.flow_dict["dport"],
+                            self.flow_dict,
                             twid,
-                            uid,
                         )
                         self.print(
-                            f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
-                            f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
-                            f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
+                            f"Prediction {pred[0]} for label {label}"
+                            f' flow {self.flow_dict["saddr"]}:'
+                            f'{self.flow_dict["sport"]} -> '
+                            f'{self.flow_dict["daddr"]}:'
+                            f'{self.flow_dict["dport"]}/'
+                            f'{self.flow_dict["proto"]}',
                             0,
                             2,
                         )
