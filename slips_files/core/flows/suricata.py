@@ -1,4 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Union
+
 from slips_files.common.slips_utils import utils
 
 #     suricata available event_type values:
@@ -40,7 +42,7 @@ class SuricataFlow:
     dport: str
 
     proto: str
-    appproto: str
+    appproto: Union[str, bool]
 
     starttime: str
     endtime: str
@@ -57,9 +59,9 @@ class SuricataFlow:
     For each of these states Suricata can employ different timeouts.
     """
     state: str
-    dur: float = field(init=False)
-    pkts: float = field(init=False)
-    bytes: float = field(init=False)
+    dur: Union[str, bool] = False
+    pkts: Union[str, bool] = False
+    bytes: Union[str, bool] = False
     # required to be able to add_flow
     smac: str = ""
     dmac: str = ""
@@ -92,6 +94,8 @@ class SuricataHTTP:
     appproto: str
 
     method: str
+    # this is the hostname field ina suricata http "flow" not the "host" field
+    # in the suricata logged flow
     host: str
     uri: str
 
@@ -111,6 +115,10 @@ class SuricataHTTP:
 
     def __post_init__(self):
         self.uid = str(self.uid)
+        # suricata flows dont have a contacted host field like zeek, instead
+        # they have a host that is either an ip or a domain, we're setting
+        # this here for the flow to be like zeek flows
+        self.contacted_host = self.host
 
 
 @dataclass
