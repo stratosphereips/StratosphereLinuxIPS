@@ -259,7 +259,7 @@ class DNS(IFlowalertsAnalyzer):
         else:
             # It means we already checked this dns with the Timer process
             # but still no connection for it.
-            self.set_evidence.dns_without_conn(profileid, twid, flow)
+            self.set_evidence.dns_without_conn(twid, flow)
             # This UID will never appear again, so we can remove it and
             # free some memory
             with contextlib.suppress(ValueError):
@@ -282,7 +282,7 @@ class DNS(IFlowalertsAnalyzer):
 
         return shannon_entropy_value * -1
 
-    def check_high_entropy_dns_answers(self, profileid, twid, flow):
+    def check_high_entropy_dns_answers(self, twid, flow):
         """
         Uses shannon entropy to detect DNS TXT answers
         with encoded/encrypted strings
@@ -296,14 +296,13 @@ class DNS(IFlowalertsAnalyzer):
             entropy = self.estimate_shannon_entropy(answer)
             if entropy >= self.shannon_entropy_threshold:
                 self.set_evidence.suspicious_dns_answer(
-                    profileid,
                     twid,
                     flow,
                     entropy,
                     answer,
                 )
 
-    def check_invalid_dns_answers(self, profileid, twid, flow):
+    def check_invalid_dns_answers(self, twid, flow):
         # this function is used to check for certain IP
         # answers to DNS queries being blocked
         # (perhaps by ad blockers) and set to the following IP values
@@ -315,7 +314,7 @@ class DNS(IFlowalertsAnalyzer):
         for answer in flow.answers:
             if answer in invalid_answers and flow.query != "localhost":
                 # blocked answer found
-                self.set_evidence.invalid_dns_answer(profileid, twid, flow)
+                self.set_evidence.invalid_dns_answer(twid, flow)
                 # delete answer from redis cache to prevent
                 # associating this dns answer with this domain/query and
                 # avoid FP "DNS without connection" evidence
@@ -367,9 +366,7 @@ class DNS(IFlowalertsAnalyzer):
             number_of_nxdomains % 5 == 0
             and number_of_nxdomains >= self.nxdomains_threshold
         ):
-            self.set_evidence.dga(
-                profileid, twid, flow, number_of_nxdomains, uids
-            )
+            self.set_evidence.dga(twid, flow, number_of_nxdomains, uids)
             # clear the list of alerted queries and uids
             self.nxdomains[profileid_twid] = ([], [])
             return True
@@ -418,7 +415,7 @@ class DNS(IFlowalertsAnalyzer):
             return False
 
         self.set_evidence.dns_arpa_scan(
-            profileid, twid, flow, self.arpa_scan_threshold, uids
+            twid, flow, self.arpa_scan_threshold, uids
         )
         # empty the list of arpa queries for this profile,
         # we don't need them anymore
@@ -433,8 +430,8 @@ class DNS(IFlowalertsAnalyzer):
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
         self.check_dns_without_connection(profileid, twid, flow)
-        self.check_high_entropy_dns_answers(profileid, twid, flow)
-        self.check_invalid_dns_answers(profileid, twid, flow)
+        self.check_high_entropy_dns_answers(twid, flow)
+        self.check_invalid_dns_answers(twid, flow)
         self.detect_dga(profileid, twid, flow)
         # TODO: not sure how to make sure IP_info is
         #  done adding domain age to the db or not

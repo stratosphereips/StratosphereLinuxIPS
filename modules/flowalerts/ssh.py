@@ -141,11 +141,9 @@ class SSH(IFlowalertsAnalyzer):
         conn_count = len(self.password_guessing_cache[cache_key])
 
         if conn_count >= self.pw_guessing_threshold:
-            description = f"SSH password guessing to IP {flow.daddr}"
+
             uids = self.password_guessing_cache[cache_key]
-            self.set_evidence.pw_guessing(
-                description, flow.starttime, twid, uids, by="Slips"
-            )
+            self.set_evidence.pw_guessing(flow, twid, uids)
             # reset the counter
             del self.password_guessing_cache[cache_key]
 
