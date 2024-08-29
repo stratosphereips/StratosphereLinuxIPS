@@ -36,7 +36,9 @@ class HTTPAnalyzer(IModule):
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware
         # to check your internet connection
-        self.hosts = [
+        # usually malware makes empty connections to these hosts while
+        # checking for internet
+        self.empty_connection_hosts = [
             "bing.com",
             "google.com",
             "yandex.com",
@@ -74,13 +76,11 @@ class HTTPAnalyzer(IModule):
 
         for mime_type in flow.resp_mime_types:
             if mime_type in self.executable_mime_types:
-                self.set_evidence_executable_mime_type(profileid, twid, flow)
+                self.set_evidence_executable_mime_type(twid, flow)
                 return True
         return False
 
-    def check_suspicious_user_agents(
-        self, uid: str, host, uri, timestamp, user_agent, profileid, twid
-    ):
+    def check_suspicious_user_agents(self, profileid, twid, flow):
         """Check unusual user agents and set evidence"""
 
         suspicious_user_agents = (
@@ -92,45 +92,39 @@ class HTTPAnalyzer(IModule):
         )
 
         for suspicious_ua in suspicious_user_agents:
-            if suspicious_ua.lower() in user_agent.lower():
-                confidence: float = 1
-                saddr = profileid.split("_")[1]
-                description: str = (
-                    f"Suspicious user-agent: "
-                    f"{user_agent} while "
-                    f"connecting to {host}{uri}"
-                )
-                evidence: Evidence = Evidence(
-                    evidence_type=EvidenceType.SUSPICIOUS_USER_AGENT,
-                    attacker=Attacker(
-                        direction=Direction.SRC,
-                        attacker_type=IoCType.IP,
-                        value=saddr,
-                    ),
-                    threat_level=ThreatLevel.HIGH,
-                    confidence=confidence,
-                    description=description,
-                    profile=ProfileID(ip=saddr),
-                    timewindow=TimeWindow(
-                        number=int(twid.replace("timewindow", ""))
-                    ),
-                    uid=[uid],
-                    timestamp=timestamp,
-                )
+            if suspicious_ua.lower() not in flow.user_agent.lower():
+                continue
+            confidence: float = 1
+            saddr = profileid.split("_")[1]
+            description: str = (
+                f"Suspicious user-agent: "
+                f"{flow.user_agent} while "
+                f"connecting to {flow.host}{flow.uri}"
+            )
+            evidence: Evidence = Evidence(
+                evidence_type=EvidenceType.SUSPICIOUS_USER_AGENT,
+                attacker=Attacker(
+                    direction=Direction.SRC,
+                    attacker_type=IoCType.IP,
+                    value=saddr,
+                ),
+                threat_level=ThreatLevel.HIGH,
+                confidence=confidence,
+                description=description,
+                profile=ProfileID(ip=saddr),
+                timewindow=TimeWindow(
+                    number=int(twid.replace("timewindow", ""))
+                ),
+                uid=[flow.uid],
+                timestamp=flow.starttime,
+            )
 
-                self.db.set_evidence(evidence)
-                return True
+            self.db.set_evidence(evidence)
+            return True
         return False
 
     def check_multiple_empty_connections(
-        self,
-        uid: str,
-        contacted_host: str,
-        uri: str,
-        timestamp: str,
-        request_body_len: int,
-        profileid: str,
-        twid: str,
+        self, profileid: str, twid: str, flow
     ):
         """
         Detects more than 4 empty connections to
@@ -140,25 +134,29 @@ class HTTPAnalyzer(IModule):
         # to test this wget google.com:80 twice
         # wget makes multiple connections per command,
         # 1 to google.com and another one to www.google.com
-        if uri != "/":
+        if flow.uri != "/":
             # emtpy detections are only done when we go to bing.com,
             # bing.com/something seems benign
             return False
 
-        for host in self.hosts:
+        if not utils.is_valid_domain(flow.contacted_host):
+            # may be an ip
+            return False
+
+        for host in self.empty_connection_hosts:
             if (
-                contacted_host in [host, f"www.{host}"]
-                and request_body_len == 0
+                flow.contacted_host in [host, f"www.{host}"]
+                and flow.request_body_len == 0
             ):
                 try:
                     # this host has past connections, add to counter
                     uids, connections = self.connections_counter[host]
                     connections += 1
-                    uids.append(uid)
+                    uids.append(flow.uid)
                     self.connections_counter[host] = (uids, connections)
                 except KeyError:
                     # first empty connection to this host
-                    self.connections_counter.update({host: ([uid], 1)})
+                    self.connections_counter.update({host: ([flow.uid], 1)})
                 break
         else:
             # it's an http connection to a domain that isn't
@@ -169,24 +167,24 @@ class HTTPAnalyzer(IModule):
         uids, connections = self.connections_counter[host]
         if connections != self.empty_connections_threshold:
             return False
-        confidence: float = 1
-        saddr: str = profileid.split("_")[-1]
-        description: str = f"Multiple empty HTTP connections to {host}"
 
+        confidence: float = 1
+        description: str = f"Multiple empty HTTP connections to {host}"
+        twid_number = twid.replace("timewindow", "")
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.EMPTY_CONNECTIONS,
             attacker=Attacker(
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
-                value=saddr,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=int(twid_number)),
             uid=uids,
-            timestamp=timestamp,
+            timestamp=flow.timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -228,10 +226,7 @@ class HTTPAnalyzer(IModule):
 
         self.db.set_evidence(evidence)
 
-    def set_evidence_executable_mime_type(
-        self, profileid, twid, flow, user_agent
-    ):
-
+    def set_evidence_executable_mime_type(self, twid, flow):
         ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"Download of an executable with MIME type: {flow.mime_type} "
@@ -468,12 +463,9 @@ class HTTPAnalyzer(IModule):
 
     def check_multiple_user_agents_in_a_row(
         self,
-        cached_ua: dict,
-        user_agent: dict,
-        timestamp,
-        profileid,
+        flow,
         twid,
-        uid: str,
+        cached_ua: dict,
     ):
         """
         Detect if the user is using an Apple UA, then android, then linux etc.
@@ -481,7 +473,7 @@ class HTTPAnalyzer(IModule):
         :param user_agent: UA of the current flow
         :param cached_ua: UA of this profile from the db
         """
-        if not cached_ua or not user_agent:
+        if not cached_ua or not flow.user_agent:
             return False
 
         os_type = cached_ua["os_type"]
@@ -489,31 +481,32 @@ class HTTPAnalyzer(IModule):
 
         for keyword in (os_type, os_name):
             # loop through each word in UA
-            if keyword in user_agent:
+            if keyword in flow.user_agent:
                 # for example if the os of the cached UA is
                 # Linux and the current UA is Mozilla/5.0 (X11;
                 # Fedora;Linux x86; rv:60.0) we will find the keyword
                 # 'Linux' in both UAs, so we shouldn't alert
                 return False
 
-        saddr: str = profileid.split("_")[1]
         ua: str = cached_ua.get("user_agent", "")
         description: str = (
-            f"Using multiple user-agents:" f' "{ua}" then "{user_agent}"'
+            f"Using multiple user-agents:" f' "{ua}" then "{flow.user_agent}"'
         )
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_USER_AGENT,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
             confidence=1,
             description=description,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=[uid],
-            timestamp=timestamp,
+            uid=[flow.uid],
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -662,7 +655,6 @@ class HTTPAnalyzer(IModule):
             if cached_ua:
                 self.check_multiple_user_agents_in_a_row(
                     flow,
-                    profileid,
                     twid,
                     cached_ua,
                 )
