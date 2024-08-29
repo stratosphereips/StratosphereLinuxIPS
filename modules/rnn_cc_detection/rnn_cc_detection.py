@@ -94,7 +94,7 @@ class CCDetection(IModule):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=timestamp,
-            port=int(port),
+            dst_port=int(port),
             proto=Proto(proto.lower()) if proto else None,
         )
         self.db.set_evidence(evidence)
@@ -116,7 +116,7 @@ class CCDetection(IModule):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=timestamp,
-            port=int(port),
+            dst_port=int(port),
             proto=Proto(proto.lower()) if proto else None,
         )
 
