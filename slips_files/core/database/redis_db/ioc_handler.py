@@ -2,13 +2,16 @@ import json
 from typing import (
     Dict,
     List,
+    Tuple,
+    Optional,
 )
 
 
 class IoCHandler:
     """
     Helper class for the Redis class in database.py
-    Contains all the logic related to setting and retrieving evidence and alerts in the db
+    Contains all the logic related to setting and retrieving evidence and
+    alerts in the db
     """
 
     name = "DB"
@@ -204,8 +207,8 @@ class IoCHandler:
         """
         self.rcache.hmset(self.constants.IOC_SSL, malicious_ssl_certs)
 
-    def is_blacklisted_ASN(self, ASN) -> bool:
-        return self.rcache.hget(self.constants.IOC_ASN, ASN)
+    def is_blacklisted_ASN(self, asn) -> bool:
+        return self.rcache.hget(self.constants.IOC_ASN, asn)
 
     def is_blacklisted_jarm(self, jarm_hash: str):
         """
@@ -213,19 +216,27 @@ class IoCHandler:
         """
         return self.rcache.hget(self.constants.IOC_JARM, jarm_hash)
 
-    def is_blacklisted_ip(self, ip: str) -> str:
+    def is_blacklisted_ip(self, ip: str) -> Optional[Dict[str, str]]:
         """
         Search in the dB of malicious IPs and return a
         description if we found a match
+        returns a dict like this
+            {"description": "1.4858919389330276e-05",
+            "source": "AIP_attackers.csv",
+            "threat_level": "medium",
+            "tags": ["phishing honeypot"]}
+
         """
-        ip_description = self.rcache.hget(self.constants.IOC_IPS, ip)
-        return False if ip_description is None else ip_description
+        ip_info: Dict[str, str] = self.rcache.hget(self.constants.IOC_IPS, ip)
+        return False if ip_info is None else ip_info
 
     def is_blacklisted_ssl(self, sha1):
         info = self.rcache.hmget(self.constants.IOC_SSL, sha1)[0]
         return False if info is None else info
 
-    def is_blacklisted_domain(self, domain: str) -> tuple:
+    def is_blacklisted_domain(
+        self, domain: str
+    ) -> Tuple[Dict[str, str], bool]:
         """
         Search in the dB of malicious domains and return a
         description if we found a match
@@ -239,12 +250,21 @@ class IoCHandler:
         )
         if domain_description is None:
             # try to match subdomain
-            ioc_domains = self.rcache.hgetall(self.constants.IOC_DOMAINS)
-            for malicious_domain, description in ioc_domains.items():
+            ioc_domains: Dict[str, Dict[str, str]] = self.rcache.hgetall(
+                self.constants.IOC_DOMAINS
+            )
+            for malicious_domain, domain_info in ioc_domains.items():
+                malicious_domain: str
+                # something like this
+                # {"description": "['hack''malware''phishing']",
+                # "source": "OCD-Datalake-russia-ukraine_IOCs-ALL.csv",
+                # "threat_level": "medium",
+                # "tags": ["Russia-UkraineIoCs"]}
+                domain_info: Dict[str, str]
                 #  if the we contacted images.google.com and we have
                 #  google.com in our blacklists, we find a match
                 if malicious_domain in domain:
-                    return description, True
+                    return domain_info, True
             return False, False
         else:
             return domain_description, False
