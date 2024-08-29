@@ -1365,7 +1365,7 @@ class ProfileHandler:
     def get_first_flow_time(self) -> Optional[str]:
         return self.r.hget("analysis", "file_start")
 
-    def add_profile(self, profileid, starttime, duration):
+    def add_profile(self, profileid, starttime):
         """
         Add a new profile to the DB. Both the list of profiles and the
          hashmap of profile data
@@ -1386,7 +1386,7 @@ class ProfileHandler:
             # Add the start time of profile
             self.r.hset(profileid, "starttime", starttime)
             # For now duration of the TW is fixed
-            self.r.hset(profileid, "duration", duration)
+            self.r.hset(profileid, "duration", self.width)
             # When a new profiled is created assign threat level = 0
             # and confidence = 0.05
             confidence = 0.05

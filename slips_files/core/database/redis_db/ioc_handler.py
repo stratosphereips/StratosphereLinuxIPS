@@ -3,7 +3,7 @@ from typing import (
     Dict,
     List,
     Tuple,
-    Optional,
+    Union,
 )
 
 
@@ -216,7 +216,7 @@ class IoCHandler:
         """
         return self.rcache.hget(self.constants.IOC_JARM, jarm_hash)
 
-    def is_blacklisted_ip(self, ip: str) -> Optional[Dict[str, str]]:
+    def is_blacklisted_ip(self, ip: str) -> Union[Dict[str, str], bool]:
         """
         Search in the dB of malicious IPs and return a
         description if we found a match
@@ -227,8 +227,8 @@ class IoCHandler:
             "tags": ["phishing honeypot"]}
 
         """
-        ip_info: Dict[str, str] = self.rcache.hget(self.constants.IOC_IPS, ip)
-        return False if ip_info is None else ip_info
+        ip_info: str = self.rcache.hget(self.constants.IOC_IPS, ip)
+        return False if ip_info is None else json.loads(ip_info)
 
     def is_blacklisted_ssl(self, sha1):
         info = self.rcache.hmget(self.constants.IOC_SSL, sha1)[0]
@@ -248,6 +248,7 @@ class IoCHandler:
         domain_description = self.rcache.hget(
             self.constants.IOC_DOMAINS, domain
         )
+        is_subdomain = False
         if domain_description is None:
             # try to match subdomain
             ioc_domains: Dict[str, Dict[str, str]] = self.rcache.hgetall(
@@ -255,19 +256,22 @@ class IoCHandler:
             )
             for malicious_domain, domain_info in ioc_domains.items():
                 malicious_domain: str
+                domain_info: str
                 # something like this
                 # {"description": "['hack''malware''phishing']",
                 # "source": "OCD-Datalake-russia-ukraine_IOCs-ALL.csv",
                 # "threat_level": "medium",
                 # "tags": ["Russia-UkraineIoCs"]}
-                domain_info: Dict[str, str]
+                domain_info: Dict[str, str] = json.loads(domain_info)
                 #  if the we contacted images.google.com and we have
                 #  google.com in our blacklists, we find a match
                 if malicious_domain in domain:
-                    return domain_info, True
-            return False, False
+                    is_subdomain = True
+                    return domain_info, is_subdomain
+
+            return False, is_subdomain
         else:
-            return domain_description, False
+            return domain_description, is_subdomain
 
     def get_all_blacklisted_ip_ranges(self) -> dict:
         """
