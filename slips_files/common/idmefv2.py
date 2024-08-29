@@ -214,6 +214,9 @@ class IDMEFv2:
             if evidence.proto:
                 msg["Source"][0].update({"Protocol": [evidence.proto.name]})
 
+            if evidence.attacker.TI:
+                msg["Source"][0].update({"TI": [evidence.attacker.TI]})
+
             if hasattr(evidence, "victim") and evidence.victim:
                 victim, victim_type = self.extract_role_type(
                     evidence, role="victim"
@@ -221,6 +224,10 @@ class IDMEFv2:
                 msg["Target"] = [{victim_type: victim}]
                 if evidence.dst_port:
                     msg["Target"][0].update({"Port": [int(evidence.dst_port)]})
+                if evidence.victim.TI:
+                    msg["Target"][0].update(
+                        {"Note": json.dumps({"TI": [evidence.victim.TI]})}
+                    )
 
             # todo check that we added all the fields from the plan
             # todo add alerts too not just evidence
