@@ -343,9 +343,7 @@ class Conn(IFlowalertsAnalyzer):
             if old_ip != flow.saddr:
                 # we found this smac associated with an
                 # ip other than this saddr
-                self.set_evidence.device_changing_ips(
-                    profileid, twid, flow, old_ip
-                )
+                self.set_evidence.device_changing_ips(twid, flow, old_ip)
 
     def check_data_upload(self, profileid, twid, flow):
         """
@@ -487,7 +485,7 @@ class Conn(IFlowalertsAnalyzer):
                 # well-known org, then this is a FP
                 return False
 
-            self.set_evidence.conn_without_dns(profileid, twid, flow)
+            self.set_evidence.conn_without_dns(twid, flow)
             # This UID will never appear again, so we can remove it and
             # free some memory
             with contextlib.suppress(ValueError):
@@ -600,7 +598,7 @@ class Conn(IFlowalertsAnalyzer):
                 uids,
             )
 
-    def check_non_http_port_80_conns(self, profileid, twid, flow):
+    def check_non_http_port_80_conns(self, twid, flow):
         """
         alerts on established connections on port 80 that are not HTTP
         """
@@ -613,7 +611,7 @@ class Conn(IFlowalertsAnalyzer):
             and flow.interpreted_state == "Established"
             and (flow.sbytes + flow.dbytes) != 0
         ):
-            self.set_evidence.non_http_port_80_conn(profileid, twid, flow)
+            self.set_evidence.non_http_port_80_conn(twid, flow)
 
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
@@ -691,13 +689,12 @@ class Conn(IFlowalertsAnalyzer):
             return
 
         self.set_evidence.different_localnet_usage(
-            profileid,
             twid,
             flow,
             ip_outside_localnet=what_to_check,
         )
 
-    def check_connection_to_local_ip(self, profileid, twid, flow):
+    def check_connection_to_local_ip(self, twid, flow):
         """
         Alerts when there's a connection from a private IP to
         another private IP except for DNS connections to the gateway
@@ -724,7 +721,7 @@ class Conn(IFlowalertsAnalyzer):
         ):
             return
 
-        self.set_evidence.conn_to_private_ip(profileid, twid, flow)
+        self.set_evidence.conn_to_private_ip(twid, flow)
 
     def analyze(self, msg):
         if utils.is_msg_intended_for(msg, "new_flow"):
@@ -746,8 +743,8 @@ class Conn(IFlowalertsAnalyzer):
             self.check_connection_without_dns_resolution(profileid, twid, flow)
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
-            self.check_non_http_port_80_conns(profileid, twid, flow)
-            self.check_connection_to_local_ip(profileid, twid, flow)
+            self.check_non_http_port_80_conns(twid, flow)
+            self.check_connection_to_local_ip(twid, flow)
             self.check_device_changing_ips(profileid, twid, flow)
 
         elif utils.is_msg_intended_for(msg, "tw_closed"):

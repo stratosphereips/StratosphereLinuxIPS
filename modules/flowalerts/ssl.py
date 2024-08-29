@@ -123,7 +123,7 @@ class SSL(IFlowalertsAnalyzer):
 
         self.set_evidence.self_signed_certificates(profileid, twid, flow)
 
-    def detect_malicious_ja3(self, profileid, twid, flow):
+    def detect_malicious_ja3(self, twid, flow):
         if not (flow.ja3 or flow.ja3s):
             # we don't have info about this flow's ja3 or ja3s fingerprint
             return
@@ -132,12 +132,10 @@ class SSL(IFlowalertsAnalyzer):
         malicious_ja3_dict = self.db.get_all_blacklisted_ja3()
 
         if flow.ja3 in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3(
-                profileid, twid, flow, malicious_ja3_dict
-            )
+            self.set_evidence.malicious_ja3(twid, flow, malicious_ja3_dict)
 
         if flow.ja3s in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3s(profileid, twid, flow)
+            self.set_evidence.malicious_ja3s(twid, flow)
 
     def detect_incompatible_cn(self, profileid, twid, flow):
         """
@@ -175,11 +173,9 @@ class SSL(IFlowalertsAnalyzer):
         # found one of our supported orgs in the cn but
         # it doesn't belong to any of this org's
         # domains or ips
-        self.set_evidence.incompatible_cn(
-            profileid, twid, flow, found_org_in_cn
-        )
+        self.set_evidence.incompatible_cn(twid, flow, found_org_in_cn)
 
-    def check_non_ssl_port_443_conns(self, profileid, twid, flow):
+    def check_non_ssl_port_443_conns(self, twid, flow):
         """
         alerts on established connections on port 443 that are not HTTPS (ssl)
         """
@@ -193,7 +189,7 @@ class SSL(IFlowalertsAnalyzer):
             and flow.state == "Established"
             and (flow.sbytes + flow.dbytes) != 0
         ):
-            self.set_evidence.non_ssl_port_443_conn(profileid, twid, flow)
+            self.set_evidence.non_ssl_port_443_conn(twid, flow)
 
     def detect_doh(self, twid, flow):
         if not flow.is_DoH:
@@ -226,14 +222,13 @@ class SSL(IFlowalertsAnalyzer):
             )
 
             self.check_self_signed_certs(profileid, twid, flow)
-            self.detect_malicious_ja3(profileid, twid, flow)
+            self.detect_malicious_ja3(twid, flow)
             self.detect_incompatible_cn(profileid, twid, flow)
             self.detect_doh(twid, flow)
 
         elif utils.is_msg_intended_for(msg, "new_flow"):
             msg = json.loads(msg["data"])
-            profileid = msg["profileid"]
             twid = msg["twid"]
             flow = msg["flow"]
             flow = self.classifier.convert_to_flow_obj(flow)
-            self.check_non_ssl_port_443_conns(profileid, twid, flow)
+            self.check_non_ssl_port_443_conns(twid, flow)

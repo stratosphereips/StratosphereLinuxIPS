@@ -141,9 +141,7 @@ class SetEvidnceHelper:
         )
         self.db.set_evidence(evidence)
 
-    def different_localnet_usage(
-        self, profileid, twid, flow, ip_outside_localnet=""
-    ):
+    def different_localnet_usage(self, twid, flow, ip_outside_localnet=""):
         """
         :param ip_outside_localnet: was the
         'srcip' outside the localnet or the 'dstip'?
@@ -209,7 +207,7 @@ class SetEvidnceHelper:
         )
         self.db.set_evidence(evidence)
 
-    def device_changing_ips(self, profileid, twid, flow, old_ip: str):
+    def device_changing_ips(self, twid, flow, old_ip: str):
         confidence = 0.8
         threat_level = ThreatLevel.MEDIUM
         description = (
@@ -238,7 +236,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def non_http_port_80_conn(self, profileid, twid, flow) -> None:
+    def non_http_port_80_conn(self, twid, flow) -> None:
         ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"non-HTTP established connection to port 80. "
@@ -298,7 +296,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def non_ssl_port_443_conn(self, profileid, twid, flow) -> None:
+    def non_ssl_port_443_conn(self, twid, flow) -> None:
         confidence: float = 0.8
         ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
@@ -331,7 +329,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def incompatible_cn(self, profileid, twid, flow, org: str) -> None:
+    def incompatible_cn(self, twid, flow, org: str) -> None:
         confidence: float = 0.9
         ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
@@ -364,9 +362,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def dga(
-        self, profileid, twid, flow, nxdomains: int, uids: List[str]
-    ) -> None:
+    def dga(self, twid, flow, nxdomains: int, uids: List[str]) -> None:
         # for each non-existent domain beyond the threshold of 100,
         # the confidence score is increased linearly.
         # +1 ensures that the minimum confidence score is 1.
@@ -395,7 +391,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def dns_without_conn(self, profileid, twid, flow):
+    def dns_without_conn(self, twid, flow):
         description: str = f"domain {flow.query} resolved with no connection"
         twid_number: int = int(twid.replace("timewindow", ""))
 
@@ -453,7 +449,7 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
         return True
 
-    def conn_without_dns(self, profileid, twid, flow) -> None:
+    def conn_without_dns(self, twid, flow) -> None:
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.INFO
 
@@ -494,7 +490,7 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
 
     def dns_arpa_scan(
-        self, profileid, twid, flow, arpa_scan_threshold: int, uids: List[str]
+        self, twid, flow, arpa_scan_threshold: int, uids: List[str]
     ) -> bool:
         threat_level = ThreatLevel.MEDIUM
         confidence = 0.7
@@ -560,7 +556,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def pw_guessing(self, profileid, twid, flow, by: str = "") -> None:
+    def pw_guessing(self, twid, flow) -> None:
         # 222.186.30.112 appears to be guessing SSH passwords
         # (seen in 30 connections)
         # confidence = 1 because this detection is comming
@@ -569,7 +565,7 @@ class SetEvidnceHelper:
         twid_number: int = int(twid.replace("timewindow", ""))
         scanning_ip: str = flow.msg.split(" appears")[0]
 
-        description: str = f"password guessing. {flow.msg}. by {by}."
+        description: str = f"password guessing. {flow.msg}. Detected by zeek."
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.PASSWORD_GUESSING,
@@ -583,6 +579,30 @@ class SetEvidnceHelper:
             profile=ProfileID(ip=scanning_ip),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=confidence,
+        )
+
+        self.db.set_evidence(evidence)
+
+    def ssh_pw_guessing(self, flow, twid, uids: List[str]):
+        confidence: float = 1.0
+        description = (
+            f"SSH password guessing to IP {flow.daddr}. Detected " f"by Slips"
+        )
+        twid_number: int = int(twid.replace("timewindow", ""))
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.PASSWORD_GUESSING,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            threat_level=ThreatLevel.HIGH,
+            description=description,
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uids,
             timestamp=flow.starttime,
             confidence=confidence,
         )
@@ -612,7 +632,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def conn_to_private_ip(self, profileid, twid, flow) -> None:
+    def conn_to_private_ip(self, twid, flow) -> None:
         confidence: float = 1.0
         twid_number: int = int(twid.replace("timewindow", ""))
         description: str = f"Connecting to private IP: {flow.daddr} "
@@ -647,7 +667,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def gre_tunnel(self, profileid, twid, flow) -> None:
+    def gre_tunnel(self, twid, flow) -> None:
 
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.INFO
@@ -684,7 +704,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def vertical_portscan(self, profileid, twid, flow) -> None:
+    def vertical_portscan(self, twid, flow) -> None:
         # confidence = 1 because this detection is coming
         # from a Zeek file so we're sure it's accurate
         confidence: float = 1.0
@@ -714,22 +734,23 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def ssh_successful(self, profileid, twid, flow, size: int, by="") -> None:
+    def ssh_successful(
+        self, twid, saddr, daddr, size, uid, timestamp, by=""
+    ) -> None:
         """
         Set an evidence for a successful SSH login.
         This is not strictly a detection, but we don't have
         a better way to show it.
         The threat_level is 0.01 to show that this is not a detection
         """
-
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.INFO
         twid: int = int(twid.replace("timewindow", ""))
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
+        ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = (
-            f"SSH successful to IP {flow.daddr}. {ip_identification}. "
-            f"From IP {flow.saddr}. Sent bytes: {str(size)}. Detection model {by}."
+            f"SSH successful to IP {daddr}. {ip_identification}. "
+            f"From IP {saddr}. Sent bytes: {str(size)}. Detection model {by}."
             f" Confidence {confidence}"
         )
 
@@ -738,20 +759,20 @@ class SetEvidnceHelper:
             attacker=Attacker(
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
-                value=flow.saddr,
+                value=saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
                 victim_type=IoCType.IP,
-                value=flow.daddr,
+                value=daddr,
             ),
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=flow.saddr),
+            profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid),
-            uid=[flow.uid],
-            timestamp=flow.starttime,
+            uid=[uid],
+            timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -951,7 +972,7 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
 
     def suspicious_dns_answer(
-        self, profileid, twid, flow, entropy: float, sus_answer: str
+        self, twid, flow, entropy: float, sus_answer: str
     ) -> None:
         confidence: float = 0.6
         twid: int = int(twid.replace("timewindow", ""))
@@ -1003,9 +1024,7 @@ class SetEvidnceHelper:
         )
         self.db.set_evidence(evidence)
 
-    def invalid_dns_answer(
-        self, profileid, twid, flow, invalid_answer
-    ) -> None:
+    def invalid_dns_answer(self, twid, flow, invalid_answer) -> None:
         confidence: float = 0.7
         twid: int = int(twid.replace("timewindow", ""))
 
@@ -1075,9 +1094,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def malicious_ja3s(
-        self, profileid, twid, flow, malicious_ja3_dict: dict
-    ) -> None:
+    def malicious_ja3s(self, twid, flow, malicious_ja3_dict: dict) -> None:
         ja3_info: dict = json.loads(malicious_ja3_dict[flow.ja3s])
 
         threat_level: str = ja3_info["threat_level"].upper()
@@ -1138,9 +1155,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def malicious_ja3(
-        self, profileid, twid, flow, malicious_ja3_dict: dict
-    ) -> None:
+    def malicious_ja3(self, twid, flow, malicious_ja3_dict: dict) -> None:
         ja3_info: dict = json.loads(malicious_ja3_dict[flow.ja3])
 
         threat_level: str = ja3_info["threat_level"].upper()
@@ -1237,7 +1252,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def bad_smtp_login(self, profileid, twid, flow) -> None:
+    def bad_smtp_login(self, twid, flow) -> None:
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
 
@@ -1271,9 +1286,8 @@ class SetEvidnceHelper:
 
     def smtp_bruteforce(
         self,
-        profileid,
-        twid,
         flow,
+        twid,
         smtp_bruteforce_threshold: int,
         uids: List[str],
     ) -> None:
@@ -1308,9 +1322,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def malicious_ssl(
-        self, profileid, twid, flow, ssl_info_from_db: str
-    ) -> None:
+    def malicious_ssl(self, twid, flow, ssl_info_from_db: str) -> None:
         ssl_info_from_db: dict = json.loads(ssl_info_from_db)
         tags: str = ssl_info_from_db["tags"]
         cert_description: str = ssl_info_from_db["description"]

@@ -57,9 +57,7 @@ class SMTP(IFlowalertsAnalyzer):
             return
 
         self.set_evidence.smtp_bruteforce(
-            flow,
-            twid,
-            self.smtp_bruteforce_threshold,
+            flow, twid, self.smtp_bruteforce_threshold, uids
         )
 
         # remove all 3 logins that caused this alert
