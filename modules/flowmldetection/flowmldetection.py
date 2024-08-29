@@ -142,6 +142,7 @@ class FlowMLDetection(IModule):
                 "dbytes",
                 "endtime",
                 "bytes",
+                "flow_source",
             ]
             for field in to_drop:
                 try:
@@ -308,6 +309,7 @@ class FlowMLDetection(IModule):
                 "dpkts",
                 "endtime",
                 "bytes",
+                "flow_source",
             ]
             for field in fields_to_drop:
                 try:

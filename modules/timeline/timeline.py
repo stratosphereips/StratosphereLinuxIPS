@@ -267,6 +267,8 @@ class Timeline(IModule):
         Process the received flow  for this profileid and twid
          so its printed by the logprocess later
         """
+        if not flow:
+            return
         try:
             flow.dport_name = self.interpret_dport(flow)
             flow.sbytes = self.validate_bytes(flow.sbytes)

@@ -54,11 +54,11 @@ class FlowClassifier:
             "weird": Weird,
             "argus": ArgusConn,
             "nfdump": NfdumpConn,
-            "suricata_flow": SuricataFlow,
+            "suricata_conn": SuricataFlow,
             "suricata_http": SuricataHTTP,
             "suricata_dns": SuricataDNS,
             "suricata_tls": SuricataTLS,
-            "suricata_file": SuricataFile,
+            "suricata_files": SuricataFile,
             "suricata_ssh": SuricataSSH,
         }
 
@@ -69,14 +69,10 @@ class FlowClassifier:
         # the goal of this is to be able to map the flow.type_ to the
         # correct Suricata* class
         flow_type = flow["type_"]
-        if "flow_source" in flow:
-            if flow["flow_source"] == "suricata":
-                flow_type = f"suricata_{flow_type}"
+        if flow.get("flow_source", "") == "suricata":
+            flow_type = f"suricata_{flow_type}"
 
-        try:
-            return self.flow_map[flow_type]
-        except KeyError:
-            return
+        return self.flow_map[flow_type]
 
     def convert_to_flow_obj(self, flow: Dict[str, Any]):
         """
