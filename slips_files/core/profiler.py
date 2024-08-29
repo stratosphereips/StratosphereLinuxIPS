@@ -134,7 +134,7 @@ class Profiler(ICore, IObservable):
         if not rev_profileid:
             # the profileid is not present in the db, create it
             rev_profileid = f"profile_{self.flow.daddr}"
-            self.db.add_profile(rev_profileid, self.flow.starttime, self.width)
+            self.db.add_profile(rev_profileid, self.flow.starttime)
 
         # in the database, Find and register the id of the tw where the flow
         # belongs.
@@ -190,7 +190,7 @@ class Profiler(ICore, IObservable):
         self.flow_parser.twid = self.twid
 
         # Create profiles for all ips we see
-        self.db.add_profile(self.profileid, self.flow.starttime, self.width)
+        self.db.add_profile(self.profileid, self.flow.starttime)
         self.store_features_going_out()
         if self.analysis_direction == "all":
             self.handle_in_flows()

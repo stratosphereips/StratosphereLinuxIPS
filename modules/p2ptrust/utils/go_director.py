@@ -462,7 +462,7 @@ class GoDirector:
         # with the width from slips.yaml and the starttime as the report time
         if key_type == "ip":
             profileid_of_attacker = f"profile_{key}"
-            self.db.add_profile(profileid_of_attacker, report_time, self.width)
+            self.db.add_profile(profileid_of_attacker, report_time)
             self.set_evidence_p2p_report(
                 key,
                 reporter,

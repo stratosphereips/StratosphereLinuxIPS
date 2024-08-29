@@ -1,6 +1,12 @@
 import time
 import json
-from typing import List, Tuple, Optional, Dict
+from typing import (
+    List,
+    Tuple,
+    Optional,
+    Dict,
+    Union,
+)
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import (
@@ -8,6 +14,8 @@ from slips_files.core.structures.evidence import (
     EvidenceType,
     Victim,
     ProfileID,
+    IoCType,
+    Attacker,
 )
 
 
@@ -122,6 +130,25 @@ class AlertHandler:
         twid_end_time: float = twid_start_time + self.width
         return twid_start_time, twid_end_time
 
+    def get_ti(self, to_lookup: Union[Victim, Attacker]) -> Optional[str]:
+        """
+        if the victim/attacker's ip/domain was part of a ti feed,
+        this function returns the name of the feed
+        """
+        if type(to_lookup) == Victim:
+            ioc_type = to_lookup.victim_type.name
+        else:
+            ioc_type = to_lookup.attacker_type.name
+
+        cases = {
+            IoCType.IP.name: self.is_blacklisted_ip,
+            IoCType.DOMAIN.name: self.is_blacklisted_domain,
+        }
+        try:
+            return cases[ioc_type](to_lookup.value)["source"]
+        except (KeyError, TypeError):
+            return
+
     def set_evidence(self, evidence: Evidence):
         """
         Set the evidence for this Profile and Timewindow.
@@ -129,15 +156,18 @@ class AlertHandler:
         slips_files/core/structures/evidence.py) with all the
         evidence details,
         """
-
         # create the profile if it doesn't exist
-        self.add_profile(str(evidence.profile), evidence.timestamp, self.width)
+        self.add_profile(str(evidence.profile), evidence.timestamp)
 
         # Ignore evidence if it's disabled in the configuration file
         if self.is_detection_disabled(evidence.evidence_type):
             return False
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
+
+        evidence.attacker.TI = self.get_ti(evidence.attacker)
+        if hasattr(evidence, "victim") and evidence.victim:
+            evidence.victim.TI = self.get_ti(evidence.victim)
 
         evidence_to_send: dict = utils.to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)

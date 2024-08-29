@@ -1403,9 +1403,8 @@ class ThreatIntel(IModule, URLhaus):
         This function queries the local database for any matches
         to the provided IP address.
         """
-        ip_info = self.db.is_blacklisted_ip(ip)
-        # check if it's a blacklisted ip
-        return json.loads(ip_info) if ip_info else False
+        ip_info: Dict[str, str] = self.db.is_blacklisted_ip(ip)
+        return ip_info
 
     def search_online_for_ip(self, ip):
         if spamhaus_res := self.spamhaus(ip):

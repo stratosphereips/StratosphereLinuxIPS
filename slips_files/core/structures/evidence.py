@@ -134,6 +134,9 @@ class Victim:
     direction: Direction
     victim_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
+    # if the victim is part of a TI feed that slips knows  about,
+    # the feed name goes here
+    TI: str = field(default=None)
 
     def __post_init__(self):
         if self.victim_type == IoCType.IP:
@@ -159,6 +162,9 @@ class Attacker:
     attacker_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
     profile: ProfileID = ""
+    # if the victim is part of a TI feed that slips knows  about,
+    # the feed name goes here
+    TI: str = field(default=None)
 
     def __post_init__(self):
         if self.attacker_type == IoCType.IP:
