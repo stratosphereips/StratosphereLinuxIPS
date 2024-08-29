@@ -1,3 +1,4 @@
+import numpy
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
@@ -274,30 +275,29 @@ class FlowMLDetection(IModule):
             self.print("Error in process_flows()")
             self.print(traceback.format_exc(), 0, 1)
 
-    def process_flow(self):
+    def process_flow(self, flow_to_process: dict):
         """
         Process one flow. Only used during detection in testing
-        Store the pandas df in self.flow
+        returns the pandas df with the processed flow
         """
         try:
             # Convert the flow to a pandas dataframe
-            raw_flow = pd.DataFrame(self.flow_dict, index=[0])
+            raw_flow = pd.DataFrame(flow_to_process, index=[0])
             dflow = self.process_features(raw_flow)
             # Update the flow to the processed version
-            self.flow = dflow
+            return dflow
         except Exception:
             # Stop the timer
             self.print("Error in process_flow()")
             self.print(traceback.format_exc(), 0, 1)
 
-    def detect(self):
+    def detect(self, x_flow) -> numpy.ndarray:
         """
-        Detect this flow with the current model stored
+        Detects the given flow with the current model stored
+        and returns the predection array
         """
         try:
-            # Store the real label if there is one
-            # y_flow = self.flow["label"]
-            # remove the real label column
+            # clean the flow
             fields_to_drop = [
                 "label",
                 "module_labels",
@@ -311,18 +311,15 @@ class FlowMLDetection(IModule):
             ]
             for field in fields_to_drop:
                 try:
-                    # remove the label predictions column of the other modules
-                    self.flow = self.flow.drop(field, axis=1)
+                    x_flow = x_flow.drop(field, axis=1)
                 except (KeyError, ValueError):
                     pass
             # Scale the flow
-            self.flow = self.scaler.transform(self.flow)
-            pred = self.clf.predict(self.flow)
+            x_flow: numpy.ndarray = self.scaler.transform(x_flow)
+            pred: numpy.ndarray = self.clf.predict(x_flow)
             return pred
-        except Exception:
-            # Stop the timer
-            self.print("Error in detect() X_flow:")
-            self.print(self.flow)
+        except Exception as e:
+            self.print(f"Error in detect(): {e}")
             self.print(traceback.format_exc(), 0, 1)
 
     def store_model(self):
@@ -412,18 +409,16 @@ class FlowMLDetection(IModule):
         if msg := self.get_msg("new_flow"):
             msg = json.loads(msg["data"])
             twid = msg["twid"]
-            self.flow_dict = msg["flow"]
+            self.flow = msg["flow"]
             # these fields are expected in testing. update the original
             # flow dict to have them
-            self.flow_dict.update(
+            self.flow.update(
                 {
-                    "allbytes": (
-                        self.flow_dict["sbytes"] + self.flow_dict["dbytes"]
-                    ),
+                    "allbytes": (self.flow["sbytes"] + self.flow["dbytes"]),
                     # the flow["state"] is the origstate, we dont need that here
                     # we need the interpreted state
                     "state": msg["interpreted_state"],
-                    "pkts": self.flow_dict["spkts"] + self.flow_dict["dpkts"],
+                    "pkts": self.flow["spkts"] + self.flow["dpkts"],
                     "label": msg["label"],
                     "module_labels": msg["module_labels"],
                 }
@@ -454,42 +449,39 @@ class FlowMLDetection(IModule):
                     # Train an algorithm
                     self.train()
             elif self.mode == "test":
-                origignal_flow = self.flow_dict
                 # We are testing, which means using the model to detect
-                self.process_flow()
+                processed_flow = self.process_flow(self.flow)
 
                 # After processing the flow, it may happen that we
                 # delete icmp/arp/etc so the dataframe can be empty
-                if self.flow is not None and not self.flow.empty:
+                if processed_flow is not None and not processed_flow.empty:
                     # Predict
-                    pred = self.detect()
-
-                    label = self.flow_dict["label"]
-                    # Report
+                    pred: numpy.ndarray = self.detect(processed_flow)
+                    label = self.flow["label"]
                     if label and label != "unknown" and label != pred[0]:
                         # If the user specified a label in test mode,
                         # and the label is diff from the prediction,
                         # print in debug mode
                         self.print(
                             f"Report Prediction {pred[0]} for label"
-                            f' {label} flow {self.flow_dict["saddr"]}:'
-                            f'{self.flow_dict["sport"]} ->'
-                            f' {self.flow_dict["daddr"]}:'
-                            f'{self.flow_dict["dport"]}/'
-                            f'{self.flow_dict["proto"]}',
+                            f' {label} flow {self.flow["saddr"]}:'
+                            f'{self.flow["sport"]} ->'
+                            f' {self.flow["daddr"]}:'
+                            f'{self.flow["dport"]}/'
+                            f'{self.flow["proto"]}',
                             0,
                             3,
                         )
                     if pred[0] == "Malware":
                         # Generate an alert
-                        self.set_evidence_malicious_flow(origignal_flow, twid)
+                        self.set_evidence_malicious_flow(self.flow, twid)
                         self.print(
                             f"Prediction {pred[0]} for label {label}"
-                            f' flow {self.flow_dict["saddr"]}:'
-                            f'{self.flow_dict["sport"]} -> '
-                            f'{self.flow_dict["daddr"]}:'
-                            f'{self.flow_dict["dport"]}/'
-                            f'{self.flow_dict["proto"]}',
+                            f' flow {self.flow["saddr"]}:'
+                            f'{self.flow["sport"]} -> '
+                            f'{self.flow["daddr"]}:'
+                            f'{self.flow["dport"]}/'
+                            f'{self.flow["proto"]}',
                             0,
                             2,
                         )
