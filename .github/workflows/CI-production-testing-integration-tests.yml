@@ -1,0 +1,64 @@
+name: CI-production-testing-integration-tests
+
+on:
+  pull_request:
+    branches:
+      - 'master'
+      - '!develop'
+
+jobs:
+
+  unit_and_integration_tests:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 7200
+
+    strategy:
+      matrix:
+        test_file:
+          - tests/integration_tests/test_config_files.py
+          - tests/integration_tests/test_portscans.py
+          - tests/integration_tests/test_dataset.py
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: 'develop'
+        fetch-depth: ''
+
+    - name: Install slips dependencies
+      run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
+
+    - name: Install Zeek
+      run: |
+        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+        sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
+    - name: Set up Python 3.10.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10.12"
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python3 -m pip install --no-cache-dir -r install/requirements.txt
+
+    - name: Start redis server
+      run: redis-server --daemonize yes
+
+    - name: Run Integration Tests for ${{ matrix.test_file }}
+      run: |
+        python3 -m pytest ${{ matrix.test_file }} -p no:warnings -vv -s
+
+    - name: Clear redis cache
+      run: ./slips.py -cc
+
+    - name: Upload Artifacts
+      if: success() || failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test_slips_locally-integration-tests-output
+        path: |
+          output/integration_tests

@@ -1,4 +1,4 @@
-name: CI-production-testing
+name: CI-production-testing-unit-tests
 
 on:
   pull_request:
@@ -58,9 +58,6 @@ jobs:
           - tests/test_trustdb.py
           - tests/test_cesnet.py
           - tests/test_output.py
-          - tests/integration_tests/test_config_files.py
-          - tests/integration_tests/test_portscans.py
-          - tests/integration_tests/test_dataset.py
 
     steps:
     - uses: actions/checkout@v4
