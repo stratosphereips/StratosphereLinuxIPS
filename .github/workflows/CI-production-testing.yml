@@ -50,7 +50,11 @@ jobs:
       run: |
         python3 -m pytest tests/test_database.py -p no:warnings -vv -s
 
-    - name: main unit tests
+    - name: Input Unit Tests
+      run: |
+        python3 -m pytest tests/test_inputProc.py -p no:warnings -vv -s -n 5
+
+    - name: Main Unit Tests
       run: |
         python3 -m pytest tests/test_main.py -p no:warnings -vv -s -n 5
 
@@ -175,9 +179,6 @@ jobs:
       run: |
         python3 -m pytest tests/test_markov_chain.py -p no:warnings -vv
 
-    - name: Input Unit Tests
-      run: |
-        python3 -m pytest tests/test_inputProc.py -p no:warnings -vv -s -n 5
 
     - name: progress_bar Unit Tests
       run: |

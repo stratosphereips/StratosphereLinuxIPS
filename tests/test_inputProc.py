@@ -24,8 +24,17 @@ def test_handle_pcap_and_interface(input_type, input_information, mock_db):
     )
     input.zeek_pid = "False"
     input.is_zeek_tabs = False
-    with patch.object(input, "get_flows_number", return_value=500):
+    input.start_observer = Mock()
+    input.read_zeek_files = Mock()
+    input.zeek_thread = Mock()
+    with (
+        patch.object(input, "get_flows_number", return_value=500),
+        patch("time.sleep"),
+    ):
         assert input.handle_pcap_and_interface() is True
+    input.zeek_thread.start.assert_called_once()
+    input.read_zeek_files.assert_called_once()
+    input.start_observer.assert_called_once()
 
     # delete the zeek logs created
     shutil.rmtree(input.zeek_dir)
