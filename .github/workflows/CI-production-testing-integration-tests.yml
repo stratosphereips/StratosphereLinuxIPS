@@ -8,7 +8,7 @@ on:
 
 jobs:
 
-  unit_and_integration_tests:
+  tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 7200
 
