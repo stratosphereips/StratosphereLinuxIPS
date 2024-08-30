@@ -523,7 +523,8 @@ class Input(ICore):
         return True
 
     def handle_binetflow(self):
-        # the number of flows returned by get_flows_number contains the header, so subtract that
+        # the number of flows returned by get_flows_number contains the header
+        # , so subtract that
         self.total_flows = self.get_flows_number(self.given_path) - 1
         self.db.set_input_metadata({"total_flows": self.total_flows})
 

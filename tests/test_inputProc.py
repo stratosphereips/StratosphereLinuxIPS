@@ -1,6 +1,10 @@
 import pytest
 from tests.module_factory import ModuleFactory
-from unittest.mock import patch, MagicMock
+from unittest.mock import (
+    patch,
+    MagicMock,
+    Mock,
+)
 import shutil
 import os
 import json
@@ -13,7 +17,8 @@ import signal
     [("pcap", "dataset/test7-malicious.pcap")],
 )
 def test_handle_pcap_and_interface(input_type, input_information, mock_db):
-    # no need to test interfaces because in that case read_zeek_files runs in a loop and never returns
+    # no need to test interfaces because in that case read_zeek_files runs
+    # in a loop and never returns
     input = ModuleFactory().create_input_obj(
         input_information, input_type, mock_db
     )
@@ -33,12 +38,19 @@ def test_handle_pcap_and_interface(input_type, input_information, mock_db):
         ("dataset/test9-mixed-zeek-dir/", True),  # json
     ],
 )
-def test_is_growing_zeek_dir(zeek_dir: str, is_tabs: bool, mock_db):
+def test_read_zeek_folder(zeek_dir: str, is_tabs: bool, mock_db):
     input = ModuleFactory().create_input_obj(zeek_dir, "zeek_folder", mock_db)
+    input.given_path = zeek_dir
+    input.testing = True
+    input.is_zeek_tabs = is_tabs
     mock_db.get_all_zeek_files.return_value = [
         os.path.join(zeek_dir, "conn.log")
     ]
-
+    mock_db.is_growing_zeek_dir.return_value = False
+    input.is_done_processing = Mock()
+    input.is_done_processing.return_value = True
+    input.start_observer = Mock()
+    input.start_observer.return_value = True
     assert input.read_zeek_folder() is True
 
 
