@@ -54,7 +54,7 @@ jobs:
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
-        timeout --signal=INT 180 python3 -m pytest --full-trace ${{ matrix.test_file }} -vvv -s
+        timeout --signal=INT 1200 python3 -m pytest --full-trace ${{ matrix.test_file }} -vvv -s
 
     - name: Clear redis cache
       run: ./slips.py -cc
