@@ -5,7 +5,10 @@ on:
     branches:
       - 'master'
       - '!develop'
-
+  # temporarily!!!!!!!!!!!!!!!!!!!!!
+  push:
+    branches:
+      - "alya/fix-config-file-tests"
 jobs:
 
   tests:
@@ -51,7 +54,7 @@ jobs:
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
-        python3 -m pytest ${{ matrix.test_file }} -vvv -s --timeout=180
+        timeout --signal=INT 180 python3 -m pytest --full-trace ${{ matrix.test_file }} -vvv -s
 
     - name: Clear redis cache
       run: ./slips.py -cc
