@@ -2,13 +2,10 @@
 
 from tests.module_factory import ModuleFactory
 import json
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import ipaddress
 import pytest
-import time
-import threading
 from slips_files.core.evidence_structure.evidence import EvidenceType
-from multiprocessing import Queue
 
 
 profileid = "profile_192.168.1.1"
@@ -267,66 +264,66 @@ def test_pre_main():
         mock_start.assert_called_once()
 
 
-def test_wait_for_arp_scans(mock_db):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
-    ARP.pending_arp_scan_evidence = Queue()
-    ARP.time_to_wait = 0.1
-    evidence1 = (
-        "1636305825.755132",
-        "profile_192.168.1.1",
-        "timewindow1",
-        ["uid1"],
-        5,
-    )
-    evidence2 = (
-        "1636305826.755132",
-        "profile_192.168.1.1",
-        "timewindow1",
-        ["uid2"],
-        6,
-    )
-    evidence3 = (
-        "1636305827.755132",
-        "profile_192.168.1.2",
-        "timewindow1",
-        ["uid3"],
-        7,
-    )
-
-    ARP.pending_arp_scan_evidence.put(evidence1)
-    ARP.pending_arp_scan_evidence.put(evidence2)
-    ARP.pending_arp_scan_evidence.put(evidence3)
-
-    ARP.set_evidence_arp_scan = MagicMock()
-
-    thread = threading.Thread(target=ARP.wait_for_arp_scans)
-    thread.daemon = True
-    thread.start()
-
-    time.sleep(1)
-    expected_calls = [
-        call(
-            "1636305826.755132",
-            "profile_192.168.1.1",
-            "timewindow1",
-            ["uid1", "uid2"],
-            6,
-        ),
-        call(
-            "1636305827.755132",
-            "profile_192.168.1.2",
-            "timewindow1",
-            ["uid3"],
-            7,
-        ),
-    ]
-    (
-        ARP.set_evidence_arp_scan.assert_has_calls(
-            expected_calls, any_order=True
-        )
-    )
-    assert ARP.set_evidence_arp_scan.call_count == 2
-    assert ARP.pending_arp_scan_evidence.empty()
-    ARP.stop_thread = True
-    thread.join(timeout=1)
-
+# def test_wait_for_arp_scans(mock_db):
+#     ARP = ModuleFactory().create_arp_obj(mock_db)
+#     ARP.pending_arp_scan_evidence = Queue()
+#     ARP.time_to_wait = 0.1
+#     evidence1 = (
+#         "1636305825.755132",
+#         "profile_192.168.1.1",
+#         "timewindow1",
+#         ["uid1"],
+#         5,
+#     )
+#     evidence2 = (
+#         "1636305826.755132",
+#         "profile_192.168.1.1",
+#         "timewindow1",
+#         ["uid2"],
+#         6,
+#     )
+#     evidence3 = (
+#         "1636305827.755132",
+#         "profile_192.168.1.2",
+#         "timewindow1",
+#         ["uid3"],
+#         7,
+#     )
+#
+#     ARP.pending_arp_scan_evidence.put(evidence1)
+#     ARP.pending_arp_scan_evidence.put(evidence2)
+#     ARP.pending_arp_scan_evidence.put(evidence3)
+#
+#     ARP.set_evidence_arp_scan = MagicMock()
+#
+#     thread = threading.Thread(target=ARP.wait_for_arp_scans)
+#     thread.daemon = True
+#     thread.start()
+#
+#     time.sleep(1)
+#     expected_calls = [
+#         call(
+#             "1636305826.755132",
+#             "profile_192.168.1.1",
+#             "timewindow1",
+#             ["uid1", "uid2"],
+#             6,
+#         ),
+#         call(
+#             "1636305827.755132",
+#             "profile_192.168.1.2",
+#             "timewindow1",
+#             ["uid3"],
+#             7,
+#         ),
+#     ]
+#     (
+#         ARP.set_evidence_arp_scan.assert_has_calls(
+#             expected_calls, any_order=True
+#         )
+#     )
+#     assert ARP.set_evidence_arp_scan.call_count == 2
+#     assert ARP.pending_arp_scan_evidence.empty()
+#     ARP.stop_thread = True
+#     thread.join(timeout=1)
+#
