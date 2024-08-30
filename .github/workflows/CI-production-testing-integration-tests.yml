@@ -52,6 +52,13 @@ jobs:
     - name: Start redis server
       run: redis-server --daemonize yes
 
+
+    - name: Test Test
+      run: python -c 'import os;os.system("ls")'
+
+    - name: Test 2
+      run: ./slips.py -t  -e 1 -f dataset/test7-malicious.pcap -o output/integration_tests/test_configuration_file -c tests/integration_tests/test.yaml -P 6667
+
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
         timeout --signal=INT 1200 python3 -m pytest --full-trace ${{ matrix.test_file }} -vvv -s
