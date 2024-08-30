@@ -124,10 +124,12 @@ def has_errors(output_dir):
     error_files = ("slips_output.txt", "errors.log")
     error_files = [os.path.join(output_dir, file) for file in error_files]
 
-    # we can't redirect stderr to a file and check it because we catch all exceptions in slips
+    # we can't redirect stderr to a file and check it because we catch all
+    # exceptions in slips
     for file in error_files:
         with open(file, "r") as f:
             for line in f:
+                print(f" Checking erorrs in: {line}")
                 if has_ignored_errors(line):
                     continue
 
