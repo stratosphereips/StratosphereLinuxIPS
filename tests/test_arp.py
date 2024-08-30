@@ -154,7 +154,7 @@ def test_detect_MITM_ARP_attack_same_ip(mock_db):
     assert result is None
 
 
-def test_detect_MITM_ARP_attack_gateway_mac(mock_db):
+def test_detect_mitm_arp_attack_gateway_mac(mock_db):
     ARP = ModuleFactory().create_arp_obj(mock_db)
     twid = "timewindow1"
     uid = "1234"
@@ -244,11 +244,11 @@ def test_set_evidence_arp_scan(mock_db):
         ("reply", "00:11:22:33:44:55", False),
     ],
 )
-def test_check_if_gratutitous_ARP(mock_db, operation, dst_hw, expected_result):
+def test_check_if_gratutitous_arp(mock_db, operation, dst_hw, expected_result):
     """Tests check_if_gratutitous_ARP function"""
-    ARP = ModuleFactory().create_arp_obj(mock_db)
+    arp = ModuleFactory().create_arp_obj(mock_db)
 
-    result = ARP.check_if_gratutitous_ARP(dst_hw, operation)
+    result = arp.check_if_gratutitous_ARP(dst_hw, operation)
     assert result == expected_result
 
 

@@ -138,13 +138,15 @@ class ModuleFactory:
         # override the self.print function to avoid broken pipes
         virustotal.print = do_nothing
         virustotal.__read_configuration = read_configuration
-        virustotal.key_file = (
-            "/media/alya/W/SLIPPS/modules/virustotal/api_key_secret"
-        )
         return virustotal
 
     def create_arp_obj(self, mock_db):
-        with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
+        with (
+            patch.object(DBManager, "create_sqlite_db", return_value=Mock()),
+            patch(
+                "modules.arp.arp.ARP.wait_for_arp_scans", return_value=Mock()
+            ),
+        ):
             arp = ARP(
                 self.logger,
                 "dummy_output_dir",
@@ -152,7 +154,6 @@ class ModuleFactory:
                 self.dummy_termination_event,
             )
             arp.db.rdb = mock_db
-            arp.wait_for_arp_scans = Mock()
         # override the self.print function to avoid broken pipes
         arp.print = do_nothing
         return arp
@@ -199,8 +200,12 @@ class ModuleFactory:
 
     def create_ssl_analyzer_obj(self, mock_db):
         flowalerts = self.create_flowalerts_obj(mock_db)
-        ssl = SSL(flowalerts.db, flowalerts=flowalerts)
-        ssl.wait_for_ssl_flows_to_appear_in_connlog = Mock()
+        with patch(
+            "modules.flowalerts.ssl.SSL"
+            ".wait_for_ssl_flows_to_appear_in_connlog",
+            return_value=Mock(),
+        ):
+            ssl = SSL(flowalerts.db, flowalerts=flowalerts)
         return ssl
 
     def create_ssh_analyzer_obj(self, mock_db):
