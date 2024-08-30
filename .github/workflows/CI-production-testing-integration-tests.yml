@@ -1,4 +1,4 @@
-name: CI-production-testing-integration-tests
+name: CI-production-integration-tests
 
 on:
   pull_request:

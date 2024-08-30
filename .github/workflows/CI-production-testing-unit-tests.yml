@@ -1,4 +1,4 @@
-name: CI-production-testing-unit-tests
+name: CI-production-unit-tests
 
 on:
   pull_request:
@@ -15,7 +15,6 @@ jobs:
     strategy:
       matrix:
         test_file:
-          - tests/test_database.py
           - tests/test_inputProc.py
           - tests/test_main.py
           - tests/test_flowalerts.py
@@ -88,9 +87,14 @@ jobs:
     - name: Start redis server
       run: redis-server --daemonize yes
 
+    - name: Run Database Unit Tests
+      run: |
+        python3 -m pytest tests/test_database.py -p no:warnings -vv
+
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |
         python3 -m pytest ${{ matrix.test_file }} -p no:warnings -vv -s -n 5
+
 
     - name: Clear redis cache
       run: ./slips.py -cc
