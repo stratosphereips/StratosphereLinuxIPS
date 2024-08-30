@@ -112,7 +112,7 @@ jobs:
 
           - name: Upload Artifacts
             if: success() || failure()
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: ${{ matrix.test_name }}_integration_tests_output
               path: |
