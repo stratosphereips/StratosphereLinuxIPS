@@ -173,7 +173,7 @@ jobs:
 
     - name: markov chains Unit Tests
       run: |
-        python3 -m pytest tests/test_markov_chains.py -p no:warnings -vv
+        python3 -m pytest tests/test_markov_chain.py -p no:warnings -vv
 
     - name: Input Unit Tests
       run: |
