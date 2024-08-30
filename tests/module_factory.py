@@ -199,7 +199,8 @@ class ModuleFactory:
 
     def create_ssl_analyzer_obj(self, mock_db):
         flowalerts = self.create_flowalerts_obj(mock_db)
-        return SSL(flowalerts.db, flowalerts=flowalerts)
+        ssl = SSL(flowalerts.db, flowalerts=flowalerts)
+        ssl.wait_for_ssl_flows_to_appear_in_connlog = Mock()
 
     def create_ssh_analyzer_obj(self, mock_db):
         flowalerts = self.create_flowalerts_obj(mock_db)
