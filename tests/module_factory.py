@@ -201,6 +201,7 @@ class ModuleFactory:
         flowalerts = self.create_flowalerts_obj(mock_db)
         ssl = SSL(flowalerts.db, flowalerts=flowalerts)
         ssl.wait_for_ssl_flows_to_appear_in_connlog = Mock()
+        return ssl
 
     def create_ssh_analyzer_obj(self, mock_db):
         flowalerts = self.create_flowalerts_obj(mock_db)
