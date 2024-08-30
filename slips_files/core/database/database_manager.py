@@ -33,6 +33,7 @@ class DBManager(IObservable):
         self.rdb = RedisDB(
             self.logger, redis_port, start_redis_server, **kwargs
         )
+
         # in some rare cases we don't wanna start sqlite,
         # like when using -S
         # we just want to connect to redis to get the PIDs

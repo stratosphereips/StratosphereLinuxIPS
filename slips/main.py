@@ -608,8 +608,14 @@ class Main(IObservable):
             else:
                 # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
+            try:
+                self.db = DBManager(
+                    self.logger, self.args.output, self.redis_port
+                )
+            except RuntimeError as e:
+                self.print(e)
+                self.terminate_slips()
 
-            self.db = DBManager(self.logger, self.args.output, self.redis_port)
             self.db.set_input_metadata(
                 {
                     "output_dir": self.args.output,

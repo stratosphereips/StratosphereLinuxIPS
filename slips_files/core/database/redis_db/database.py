@@ -114,17 +114,18 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         if cls.redis_port not in cls._instances:
             cls._set_redis_options()
             cls._read_configuration()
-            if cls.start():
-                cls._instances[cls.redis_port] = super().__new__(cls)
-                # By default the slips internal time is
-                # 0 until we receive something
-                cls.set_slips_internal_time(0)
-                if not cls.get_slips_start_time():
-                    cls._set_slips_start_time()
-                # useful for debugging using 'CLIENT LIST' redis cmd
-                cls.r.client_setname("Slips-DB")
-            else:
-                return False
+            if not cls.start():
+                raise RuntimeError("Failed to start the redis server.")
+
+            cls._instances[cls.redis_port] = super().__new__(cls)
+            # By default the slips internal time is
+            # 0 until we receive something
+            cls.set_slips_internal_time(0)
+            if not cls.get_slips_start_time():
+                cls._set_slips_start_time()
+            # useful for debugging using 'CLIENT LIST' redis cmd
+            cls.r.client_setname("Slips-DB")
+
         return cls._instances[cls.redis_port]
 
     def __init__(
