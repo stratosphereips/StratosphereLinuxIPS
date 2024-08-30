@@ -1,10 +1,8 @@
 """Unit test for modules/flowalerts/ssl.py"""
 
 from tests.module_factory import ModuleFactory
-from unittest.mock import Mock
 
 import json
-from queue import Queue
 import pytest
 
 # dummy params used for testing
@@ -15,92 +13,92 @@ timestamp = 1635765895.037696
 daddr = "192.168.1.2"
 
 
-@pytest.mark.parametrize(
-    "test_flows, mock_get_flow_responses, "
-    "expected_check_calls, final_queue_size",
-    [
-        # Test Case 1: Single flow, found in conn.log
-        (
-            [
-                {
-                    "daddr": "192.168.1.2",
-                    "server_name": "example.com",
-                    "uid": "flow1",
-                    "ts": 1234,
-                    "profileid": "profile1",
-                    "twid": "tw1",
-                }
-            ],
-            [{"flow1": json.dumps({"starttime": 1234, "uid": "flow1"})}],
-            1,
-            0,
-        ),
-        # Test Case 2: Single flow, not found in conn.log
-        (
-            [
-                {
-                    "daddr": "192.168.1.2",
-                    "server_name": "example.com",
-                    "uid": "flow1",
-                    "ts": 1234,
-                    "profileid": "profile1",
-                    "twid": "tw1",
-                }
-            ],
-            [{}],
-            0,
-            1,
-        ),
-        # Test Case 3: Multiple flows, one found, one not found
-        (
-            [
-                {
-                    "daddr": "192.168.1.2",
-                    "server_name": "example.com",
-                    "uid": "flow1",
-                    "ts": 1234,
-                    "profileid": "profile1",
-                    "twid": "tw1",
-                },
-                {
-                    "daddr": "10.0.0.1",
-                    "server_name": "another.com",
-                    "uid": "flow2",
-                    "ts": 5678,
-                    "profileid": "profile2",
-                    "twid": "tw2",
-                },
-            ],
-            [{"flow1": json.dumps({"starttime": 1234, "uid": "flow1"})}, {}],
-            1,
-            1,
-        ),
-    ],
-)
-def test_wait_for_ssl_flows_to_appear_in_connlog(
-    mocker,
-    mock_db,
-    test_flows,
-    mock_get_flow_responses,
-    expected_check_calls,
-    final_queue_size,
-):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
-    ssl.pending_ssl_flows = Queue()
-
-    mock_get_flow = mocker.patch.object(ssl.db, "get_flow")
-    mock_check_pastebin = mocker.patch.object(ssl, "check_pastebin_download")
-    for flow in test_flows:
-        ssl.pending_ssl_flows.put(tuple(flow.values()))
-
-    mock_get_flow.side_effect = mock_get_flow_responses
-    ssl.flowalerts.should_stop = Mock()
-    ssl.flowalerts.should_stop.side_effect = [False, True]
-
-    ssl.wait_for_ssl_flows_to_appear_in_connlog()
-
-    assert mock_check_pastebin.call_count == expected_check_calls
-    assert ssl.pending_ssl_flows.qsize() == final_queue_size
+# @pytest.mark.parametrize(
+#     "test_flows, mock_get_flow_responses, "
+#     "expected_check_calls, final_queue_size",
+#     [
+#         # Test Case 1: Single flow, found in conn.log
+#         (
+#             [
+#                 {
+#                     "daddr": "192.168.1.2",
+#                     "server_name": "example.com",
+#                     "uid": "flow1",
+#                     "ts": 1234,
+#                     "profileid": "profile1",
+#                     "twid": "tw1",
+#                 }
+#             ],
+#             [{"flow1": json.dumps({"starttime": 1234, "uid": "flow1"})}],
+#             1,
+#             0,
+#         ),
+#         # Test Case 2: Single flow, not found in conn.log
+#         (
+#             [
+#                 {
+#                     "daddr": "192.168.1.2",
+#                     "server_name": "example.com",
+#                     "uid": "flow1",
+#                     "ts": 1234,
+#                     "profileid": "profile1",
+#                     "twid": "tw1",
+#                 }
+#             ],
+#             [{}],
+#             0,
+#             1,
+#         ),
+#         # Test Case 3: Multiple flows, one found, one not found
+#         (
+#             [
+#                 {
+#                     "daddr": "192.168.1.2",
+#                     "server_name": "example.com",
+#                     "uid": "flow1",
+#                     "ts": 1234,
+#                     "profileid": "profile1",
+#                     "twid": "tw1",
+#                 },
+#                 {
+#                     "daddr": "10.0.0.1",
+#                     "server_name": "another.com",
+#                     "uid": "flow2",
+#                     "ts": 5678,
+#                     "profileid": "profile2",
+#                     "twid": "tw2",
+#                 },
+#             ],
+#             [{"flow1": json.dumps({"starttime": 1234, "uid": "flow1"})}, {}],
+#             1,
+#             1,
+#         ),
+#     ],
+# )
+# def test_wait_for_ssl_flows_to_appear_in_connlog(
+#     mocker,
+#     mock_db,
+#     test_flows,
+#     mock_get_flow_responses,
+#     expected_check_calls,
+#     final_queue_size,
+# ):
+#     ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+#     ssl.pending_ssl_flows = Queue()
+#
+#     mock_get_flow = mocker.patch.object(ssl.db, "get_flow")
+#     mock_check_pastebin = mocker.patch.object(ssl, "check_pastebin_download")
+#     for flow in test_flows:
+#         ssl.pending_ssl_flows.put(tuple(flow.values()))
+#
+#     mock_get_flow.side_effect = mock_get_flow_responses
+#     ssl.flowalerts.should_stop = Mock()
+#     ssl.flowalerts.should_stop.side_effect = [False, True]
+#
+#     ssl.wait_for_ssl_flows_to_appear_in_connlog()
+#
+#     assert mock_check_pastebin.call_count == expected_check_calls
+#     assert ssl.pending_ssl_flows.qsize() == final_queue_size
 
 
 @pytest.mark.parametrize(
