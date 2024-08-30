@@ -71,8 +71,7 @@ class RedisManager:
 
     def load_db(self):
         self.input_type = "database"
-        # self.input_information = 'database'
-        self.main.db.start(6379)
+        self.main.db.init_redis_server()
 
         # this is where the db will be loaded
         redis_port = 32850
