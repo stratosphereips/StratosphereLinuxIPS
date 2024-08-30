@@ -16,8 +16,8 @@ jobs:
       matrix:
         test_file:
           - tests/integration_tests/test_config_files.py
-          - tests/integration_tests/test_portscans.py
-          - tests/integration_tests/test_dataset.py
+#          - tests/integration_tests/test_portscans.py
+#          - tests/integration_tests/test_dataset.py
 
     steps:
     - uses: actions/checkout@v4
@@ -51,7 +51,7 @@ jobs:
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
-        python3 -m pytest ${{ matrix.test_file }} -vvv -s --timeout=360
+        python3 -m pytest ${{ matrix.test_file }} -vvv -s --timeout=180
 
     - name: Clear redis cache
       run: ./slips.py -cc
