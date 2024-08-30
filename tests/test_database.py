@@ -1,5 +1,4 @@
 import redis
-import os
 import json
 import time
 import pytest
@@ -45,21 +44,10 @@ flow = Conn(
     "",
 )
 
-# this should always be the first unit test in this file
-# because we don't want another unit test adding the same flow before this one
-
-db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
-
-
-def add_flow():
-    db.add_flow(flow, "", profileid, twid, label="benign")
-
 
 def test_getProfileIdFromIP():
     """unit test for add_profile and getProfileIdFromIP"""
-
-    # clear the database before running this test
-    os.system("./slips.py -c slips.yaml -cc")
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
 
     # add a profile
     db.add_profile("profile_192.168.1.1", "00:00", "1")
@@ -70,6 +58,7 @@ def test_getProfileIdFromIP():
 def test_timewindows():
     """unit tests for addNewTW , getLastTWforProfile and
     getFirstTWforProfile"""
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     profileid = "profile_192.168.1.1"
     # add a profile
     db.add_profile(profileid, "00:00", "1")
@@ -81,12 +70,8 @@ def test_timewindows():
     assert db.get_last_twid_of_profile(profileid) == ("timewindow2", 3700.0)
 
 
-def getSlipsInternalTime():
-    """return a random time for testing"""
-    return 50.0
-
-
 def test_add_ips():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     # add a profile
     db.add_profile(profileid, "00:00", "1")
     # add a tw to that profile
@@ -99,6 +84,7 @@ def test_add_ips():
 
 
 def test_add_port():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     new_flow = flow
     new_flow.state = "Not Established"
     db.add_port(profileid, twid, flow, "Server", "Dst")
@@ -109,6 +95,7 @@ def test_add_port():
 
 
 def test_set_evidence():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     attacker: Attacker = Attacker(
         direction=Direction.SRC, attacker_type=IoCType.IP, value=test_ip
     )
@@ -141,6 +128,7 @@ def test_set_evidence():
 
 def test_setInfoForDomains():
     """tests setInfoForDomains, setNewDomain and getDomainData"""
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     domain = "www.google.com"
     domain_data = {"threatintelligence": "sample data"}
     db.set_info_for_domains(domain, domain_data)
@@ -151,6 +139,7 @@ def test_setInfoForDomains():
 
 
 def test_subscribe():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     # invalid channel
     assert db.subscribe("invalid_channel") is False
     # valid channel, shoud return a pubsub object
@@ -159,6 +148,7 @@ def test_subscribe():
 
 def test_profile_moddule_labels():
     """tests set and get_profile_module_label"""
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     module_label = "malicious"
     module_name = "test"
     db.set_profile_module_label(profileid, module_name, module_label)
@@ -168,6 +158,7 @@ def test_profile_moddule_labels():
 
 
 def test_add_mac_addr_to_profile():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     ipv4 = "192.168.1.5"
     profileid_ipv4 = f"profile_{ipv4}"
     mac_addr = "00:00:5e:00:53:af"
@@ -199,6 +190,7 @@ def test_add_mac_addr_to_profile():
 
 
 def test_get_the_other_ip_version():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     # profileid is ipv4
     ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
     db.set_ipv6_of_profile(profileid, ipv6)
@@ -226,6 +218,7 @@ def test_get_the_other_ip_version():
     ],
 )
 def test_add_tuple(tupleid: str, symbol, expected_direction, role, flow):
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
     assert symbol[0] in db.r.hget(
         f"profile_{flow.saddr}_{twid}", expected_direction
@@ -243,6 +236,7 @@ def test_add_tuple(tupleid: str, symbol, expected_direction, role, flow):
 def test_update_max_threat_level(
     max_threat_level, cur_threat_level, expected_max
 ):
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     db.set_max_threat_level(profileid, max_threat_level)
     assert (
         db.update_max_threat_level(profileid, cur_threat_level) == expected_max
