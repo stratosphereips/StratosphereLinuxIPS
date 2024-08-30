@@ -48,7 +48,7 @@ jobs:
 
     - name: Run database unit tests
       run: |
-        python3 -m pytest tests/test_database.py -p no:warnings -vv -s -n 5
+        python3 -m pytest tests/test_database.py -p no:warnings -vv -s
 
     - name: main unit tests
       run: |

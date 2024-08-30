@@ -78,9 +78,8 @@ def test_add_ips():
     db.add_new_tw(profileid, "timewindow1", 0.0)
     # make sure ip is added
     assert db.add_ips(profileid, twid, flow, "Server") is True
-    hash_id = f"{profileid}_{twid}"
-    stored_dstips = db.r.hget(hash_id, "SrcIPs")
-    assert stored_dstips == '{"192.168.1.1": 1}'
+    stored_src_ips = db.r.hget(f"{profileid}_{twid}", "SrcIPs")
+    assert stored_src_ips == '{"192.168.1.1": 1}'
 
 
 def test_add_port():
