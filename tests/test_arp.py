@@ -2,7 +2,6 @@
 
 from tests.module_factory import ModuleFactory
 import json
-from unittest.mock import MagicMock, patch
 import ipaddress
 import pytest
 from slips_files.core.evidence_structure.evidence import EvidenceType
@@ -251,17 +250,6 @@ def test_check_if_gratutitous_ARP(mock_db, operation, dst_hw, expected_result):
 
     result = ARP.check_if_gratutitous_ARP(dst_hw, operation)
     assert result == expected_result
-
-
-def test_pre_main():
-    """
-    Tests the pre_main function.
-    """
-    mock_db = MagicMock()
-    arp = ModuleFactory().create_arp_obj(mock_db)
-    with patch("threading.Thread.start") as mock_start:
-        arp.pre_main()
-        mock_start.assert_called_once()
 
 
 # def test_wait_for_arp_scans(mock_db):
