@@ -54,47 +54,51 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
+    print("running slips ...")
     # this function returns when slips is done
     os.system(command)
-
+    print("Slip is done, checking for errors in the output dir.")
     assert has_errors(output_dir) is False
-
+    print("Comparing profiles with expected profiles")
     database = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir
     )
     profiles = database.get_profiles_len()
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
-
+    print("Checking for a random evidence")
     log_file = os.path.join(output_dir, alerts_file)
 
     # testing disabled_detections param in the configuration file
     disabled_evidence = "a connection without DNS resolution"
     assert is_evidence_present(log_file, disabled_evidence) is False
-
+    print("Testing time_window_width param.")
     # testing time_window_width param in the configuration file
     assert check_for_text("in the last 115740 days", output_dir) is True
 
+    print("Make sure slips didn't delete zeek files.")
     # test delete_zeek_files param
     zeek_output_dir = database.get_zeek_output_dir()[2:]
     assert zeek_output_dir not in os.listdir()
-
+    print("Test storing a copy of zeek files.")
     # test store_a_copy_of_zeek_files
     assert "zeek_files" in os.listdir(output_dir)
-
+    print("Checking metadata directory")
     # test metadata_dir
     assert "metadata" in os.listdir(output_dir)
     metadata_path = os.path.join(output_dir, "metadata")
     for file in ("test.yaml", "whitelist.conf", "info.txt"):
+        print(f"checking if {file} in the metadata path {metadata_path}")
         assert file in os.listdir(metadata_path)
 
+    print("Checking malicious label count")
     # test label=malicious
     assert int(database.get_label_count("malicious")) > 370
-
     # test disable
     for module in ["template", "ensembling", "Flow ML Detection"]:
+        print(f"Checking if {module} is disabled")
         assert module in database.get_disabled_modules()
-
+    print("Deleting the output directory")
     shutil.rmtree(output_dir)
 
 
@@ -125,9 +129,9 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
-    # this function returns when slips is done
+    print("running slips ...")
     os.system(command)
-
+    print("Slip is done, checking for errors in the output dir.")
     assert has_errors(output_dir) is False
-
+    print("Deleting the output directory")
     shutil.rmtree(output_dir)
