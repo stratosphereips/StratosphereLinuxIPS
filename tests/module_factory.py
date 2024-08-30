@@ -152,6 +152,7 @@ class ModuleFactory:
                 self.dummy_termination_event,
             )
             arp.db.rdb = mock_db
+            arp.wait_for_arp_scans = Mock()
         # override the self.print function to avoid broken pipes
         arp.print = do_nothing
         return arp
