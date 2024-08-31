@@ -53,7 +53,7 @@ jobs:
       run: redis-server --daemonize yes
 
     - name: Test 1
-    - run: ./slips.py -h
+      run: ./slips.py -h
 
     - name: Test 2
       run: python3 slips.py -t  -e 1 -f dataset/test7-malicious.pcap -o output/integration_tests/test_configuration_file -c tests/integration_tests/test.yaml -m
