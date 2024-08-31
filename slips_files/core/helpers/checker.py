@@ -225,8 +225,9 @@ class Checker:
             if "1w" in line:
                 # stdout is redirected, get the file
                 current_stdout = line.split(" ")[-1]
+                print(f"@@@@@@@@@@@@@@@@ stdout is redirected! {line}")
                 break
-
+        print(f"@@@@@@@@@@@@@@@@ stdout not redirected? {current_stdout}")
         if self.main.mode == "daemonized":
             stderr = self.main.daemon.stderr
             slips_logfile = self.main.daemon.stdout

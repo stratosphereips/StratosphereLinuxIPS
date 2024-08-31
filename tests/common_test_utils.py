@@ -129,7 +129,6 @@ def has_errors(output_dir):
     for file in error_files:
         with open(file, "r") as f:
             for line in f:
-                print(f" Checking erorrs in: {line}")
                 if has_ignored_errors(line):
                     continue
 
