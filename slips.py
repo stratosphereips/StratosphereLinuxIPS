@@ -40,9 +40,9 @@ warnings.filterwarnings("ignore")
 if __name__ == "__main__":
     if sys.version_info[0] < 3:
         sys.exit("Slips can only run on python3+ .. Stopping.")
-
+    print("Starting main!")
     slips = Main()
-
+    print("Main just started!")
     if slips.args.stopdaemon:
         # -S is provided
         daemon_status: dict = Daemon(slips).stop()
@@ -59,6 +59,7 @@ if __name__ == "__main__":
         Daemon(slips).start()
     else:
         # interactive mode
+        print("calling main.start")
         slips.start()
 
     slips.cpu_profiler_release()
