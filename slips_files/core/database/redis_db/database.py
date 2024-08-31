@@ -292,10 +292,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        stderr = process.communicate()[1]
+        stdout, stderr = process.communicate()
         stderr = stderr.decode("utf-8")
-        if stderr:
-            raise RuntimeError(stderr)
+        stdout = stdout.decode("utf-8")
+
+        if stderr or "warning" in stdout.lower():
+            raise RuntimeError(
+                f"database._start_a_redis_server: {stderr}\n" f"{stdout}"
+            )
         return True
 
     @classmethod
@@ -305,7 +309,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         Returns a tuple of (bool, error message).
         """
         try:
-
             # db 0 changes everytime we run slips
             cls.r = cls._connect(cls.redis_port, 0)
             # port 6379 db 0 is cache, delete it using -cc flag
@@ -320,7 +323,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             cls.r.client_list()
             return True, ""
         except Exception as e:
-            return False, str(e)
+            return False, f"database.connect_to_redis_server: {e}"
 
     @classmethod
     def close_redis_server(cls, redis_port):

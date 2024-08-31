@@ -53,9 +53,6 @@ jobs:
       run: redis-server --daemonize yes
 
 
-    - name: Test Test
-      run: python -c 'import os;os.system("ls")'
-
     - name: Test 2
       run: python3 slips.py -t  -e 1 -f dataset/test7-malicious.pcap -o output/integration_tests/test_configuration_file -c tests/integration_tests/test.yaml -P 6667
 
