@@ -1,5 +1,4 @@
 import os
-import subprocess
 import sys
 
 import psutil
@@ -201,37 +200,4 @@ class Checker:
                 f"Stopping Slips."
             )
             return False
-
         return True
-
-    def check_stdout_redirection(self) -> str:
-        """
-        Determine if the stdout is redirected to a file
-         return the current_stdout
-         current_stdout will be '' if it's not redirected to a file
-        """
-        print("@@@@@@@@@@@@@@@@ check_output_redirection is called!")
-        # lsof will provide a list of all open fds belonging to slips
-        # -a: Combines the conditions.
-        # -d 1,2: Filters by file descriptors 1 (stdout) and 2 (stderr).
-        command = f"lsof -p {self.main.pid} -a -d 1"
-        result = subprocess.run(command.split(), capture_output=True)
-        # Get command output
-        output = result.stdout.decode("utf-8")
-        # if stdout is being redirected we'll find '1w' in one of the lines
-        # 1 means stdout, w means write mode
-        # by default, stdout is not redirected
-        current_stdout = ""
-        for line in output.splitlines():
-            # /dev/pts means we're running in a terminal, if redirection is
-            # used, the files name will be there instead
-            # Command is the header line
-            if "/dev/pts/" not in line and "COMMAND" not in line:
-                # stdout is redirected, get the file
-                current_stdout: str = line.split(" ")[-1]
-                break
-        print(
-            f"@@@@@@@@@@@@@@@@ check_stdout_redirection: current_stdout"
-            f" {current_stdout}"
-        )
-        return current_stdout

@@ -112,7 +112,6 @@ class ProcessManager:
 
     def start_output_process(self, current_stdout, stderr, slips_logfile):
         output_process = Output(
-            stdout=current_stdout,
             stderr=stderr,
             slips_logfile=slips_logfile,
             verbose=self.main.args.verbose or 0,

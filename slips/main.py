@@ -618,10 +618,8 @@ class Main(IObservable):
             self.print_version()
             print("https://stratosphereips.org")
             print("-" * 27)
-
             self.setup_print_levels()
-
-            self.stdout: str = self.checker.check_stdout_redirection()
+            self.stdout = ""
             stderr: str = self.get_slips_error_file()
             slips_logfile: str = self.get_slips_logfile()
             # if stdout is redirected to a file,
