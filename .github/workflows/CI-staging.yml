@@ -101,6 +101,9 @@ jobs:
 
       steps:
           - uses: actions/checkout@v4
+            with:
+              ref: 'alya/fix-config-file-tests'
+              fetch-depth: ''
 
           - name: Start redis server
             run: redis-server --daemonize yes
