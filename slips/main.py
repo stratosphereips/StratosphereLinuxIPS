@@ -31,7 +31,6 @@ from slips_files.core.helpers.checker import Checker
 class Main(IObservable):
     def __init__(self, testing=False):
         IObservable.__init__(self)
-        print("@@@@@@@@@@@@@@@@ Main.init is running")
         self.name = "Main"
         self.alerts_default_path = "output/"
         self.mode = "interactive"

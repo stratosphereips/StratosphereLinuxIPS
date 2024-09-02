@@ -5,12 +5,8 @@ on:
     branches:
       - 'master'
       - '!develop'
-  # temporarily!!!!!!!!!!!!!!!!!!!!!
-  push:
-    branches:
-      - "alya/fix-config-file-tests"
-jobs:
 
+jobs:
   tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 7200
@@ -20,7 +16,7 @@ jobs:
         test_file:
           - tests/integration_tests/test_config_files.py
           - tests/integration_tests/test_portscans.py
-#          - tests/integration_tests/test_dataset.py
+          - tests/integration_tests/test_dataset.py
 
     steps:
     - uses: actions/checkout@v4
@@ -52,19 +48,8 @@ jobs:
     - name: Start redis server
       run: redis-server --daemonize yes
 
-    - name: Test 1
-      run: ./slips.py -h
-
-    - name: Test 2
-      env:
-        PYTHONUNBUFFERED: 1  # Ensures real-time logging
-#      run: python3 -u slips.py -t -e 1 -f dataset/test7-malicious.pcap -o output/integration_tests/test_configuration_file -c tests/integration_tests/test.yaml -P 6667
-      run: ./slips.py -e 1 -f dataset/test9-mixed-zeek-dir -o alia
-
-
     - name: Run Integration Tests for ${{ matrix.test_file }}
-      run: |
-        timeout --signal=INT 1200 python3 -m pytest --full-trace ${{ matrix.test_file }} -vvv -s
+      run: python3 -m pytest --full-trace ${{ matrix.test_file }} -vvv -s
 
     - name: Clear redis cache
       run: ./slips.py -cc
