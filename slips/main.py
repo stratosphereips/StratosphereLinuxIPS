@@ -577,6 +577,41 @@ class Main(IObservable):
             or self.input_type in ("stdin", "pcap", "interface")
         )
 
+    def get_slips_logfile(self) -> str:
+        if self.mode == "daemonized":
+            return self.daemon.stdout
+        elif self.mode == "interactive":
+            return os.path.join(self.args.output, "slips.log")
+
+    def get_slips_error_file(self) -> str:
+        if self.mode == "daemonized":
+            return self.daemon.stderr
+        elif self.mode == "interactive":
+            return os.path.join(self.args.output, "errors.log")
+
+    def get_redis_port(self) -> int:
+        """
+        returns teh redis server port to use based on the given args -P,
+        -m or the default port
+        if all ports are unavailable, this function terminates slips
+        """
+        if self.args.port:
+            redis_port = int(self.args.port)
+            # close slips if port is in use
+            self.redis_man.check_if_port_is_in_use(self.redis_port)
+        elif self.args.multiinstance:
+            redis_port = self.redis_man.get_random_redis_port()
+            if not redis_port:
+                # all ports are unavailable
+                inp = input("Press Enter to close all ports.\n")
+                if inp == "":
+                    self.redis_man.close_all_ports()
+                self.terminate_slips()
+        else:
+            # even if this port is in use, it will be overwritten by slips
+            redis_port = 6379
+        return redis_port
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -586,36 +621,17 @@ class Main(IObservable):
 
             self.setup_print_levels()
 
+            self.stdout: str = self.checker.check_stdout_redirection()
+            stderr: str = self.get_slips_error_file()
+            slips_logfile: str = self.get_slips_logfile()
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
-            (
-                current_stdout,
-                stderr,
-                slips_logfile,
-            ) = self.checker.check_output_redirection()
-            self.stdout = current_stdout
             self.logger = self.proc_man.start_output_process(
-                current_stdout, stderr, slips_logfile
+                self.stdout, stderr, slips_logfile
             )
             self.add_observer(self.logger)
 
-            # get the port that is going to be used for this instance of slips
-            if self.args.port:
-                self.redis_port = int(self.args.port)
-                # close slips if port is in use
-                self.redis_man.check_if_port_is_in_use(self.redis_port)
-            elif self.args.multiinstance:
-                self.redis_port = self.redis_man.get_random_redis_port()
-                if not self.redis_port:
-                    # all ports are unavailable
-                    inp = input("Press Enter to close all ports.\n")
-                    if inp == "":
-                        self.redis_man.close_all_ports()
-                    self.terminate_slips()
-            else:
-                # even if this port is in use, it will be overwritten by slips
-                self.redis_port = 6379
-
+            self.redis_port: int = self.get_redis_port()
             try:
                 self.db = DBManager(
                     self.logger, self.args.output, self.redis_port

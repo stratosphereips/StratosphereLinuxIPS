@@ -16,7 +16,7 @@ def test_check_output_redirection_normal_mode():
 
     with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout=b"")):
         current_stdout, stderr, slips_logfile = (
-            checker.check_output_redirection()
+            checker.check_stdout_redirection()
         )
 
         assert current_stdout == ""
@@ -36,7 +36,7 @@ def test_check_output_redirection_daemonized_mode():
 
     with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout=b"")):
         current_stdout, stderr, slips_logfile = (
-            checker.check_output_redirection()
+            checker.check_stdout_redirection()
         )
 
         assert current_stdout == ""

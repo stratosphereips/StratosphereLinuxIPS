@@ -1,7 +1,6 @@
 import os
 import subprocess
 import sys
-from typing import Tuple
 
 import psutil
 
@@ -205,16 +204,17 @@ class Checker:
 
         return True
 
-    def check_output_redirection(self) -> Tuple[str, str, str]:
+    def check_stdout_redirection(self) -> str:
         """
-        Determine where slips will place stdout,
-         stderr and logfile based on slips mode
-         @return (current_stdout, stderr, slips_logfile)
+        Determine if the stdout is redirected to a file
+         return the current_stdout
          current_stdout will be '' if it's not redirected to a file
         """
         print("@@@@@@@@@@@@@@@@ check_output_redirection is called!")
         # lsof will provide a list of all open fds belonging to slips
-        command = f"lsof -p {self.main.pid}"
+        # -a: Combines the conditions.
+        # -d 1,2: Filters by file descriptors 1 (stdout) and 2 (stderr).
+        command = f"lsof -p {self.main.pid} -a -d 1"
         result = subprocess.run(command.split(), capture_output=True)
         # Get command output
         output = result.stdout.decode("utf-8")
@@ -223,16 +223,15 @@ class Checker:
         # by default, stdout is not redirected
         current_stdout = ""
         for line in output.splitlines():
-            if "1w" in line:
+            # /dev/pts means we're running in a terminal, if redirection is
+            # used, the files name will be there instead
+            # Command is the header line
+            if "/dev/pts/" not in line and "COMMAND" not in line:
                 # stdout is redirected, get the file
-                current_stdout = line.split(" ")[-1]
-                print(f"@@@@@@@@@@@@@@@@ stdout is redirected! {line}")
+                current_stdout: str = line.split(" ")[-1]
                 break
-        print(f"@@@@@@@@@@@@@@@@ stdout not redirected? {current_stdout}")
-        if self.main.mode == "daemonized":
-            stderr = self.main.daemon.stderr
-            slips_logfile = self.main.daemon.stdout
-        else:
-            stderr = os.path.join(self.main.args.output, "errors.log")
-            slips_logfile = os.path.join(self.main.args.output, "slips.log")
-        return current_stdout, stderr, slips_logfile
+        print(
+            f"@@@@@@@@@@@@@@@@ check_stdout_redirection: current_stdout"
+            f" {current_stdout}"
+        )
+        return current_stdout
