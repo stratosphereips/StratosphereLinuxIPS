@@ -21,7 +21,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: 'alya/fix-config-file-tests'
+        ref: 'develop'
         fetch-depth: ''
 
     - name: Install slips dependencies
