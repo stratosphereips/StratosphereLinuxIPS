@@ -58,7 +58,7 @@ jobs:
     - name: Test 2
       env:
         PYTHONUNBUFFERED: 1  # Ensures real-time logging
-      run: ./slips.py -t -e 1 -f dataset/test7-malicious.pcap -o output/integration_tests/test_configuration_file -c tests/integration_tests/test.yaml -P 6667
+      run: python3 -u slips.py -t -e 1 -f dataset/test7-malicious.pcap -o output/integration_tests/test_configuration_file -c tests/integration_tests/test.yaml -P 6667
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
