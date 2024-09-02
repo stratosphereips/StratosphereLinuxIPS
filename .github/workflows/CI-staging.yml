@@ -4,7 +4,8 @@ name: CI-staging
 on:
     push:
         branches:
-            # features will be added to this branch using PRs, no need to re-run the tests on push
+            # features will be added to this branch using PRs, no
+            # need to re-run the tests on push
             - '!develop'
             - '!master'
     pull_request:
@@ -74,6 +75,9 @@ jobs:
           - name: Start redis server
             run: redis-server --daemonize yes
 
+          - name: Enable memory overcommit (for redis)
+            run: sysctl vm.overcommit_memory=1
+
           - name: Run Unit Tests for ${{ matrix.test_name }}
             run: |
               coverage run --source=./ -m pytest tests/test_${{ matrix.test_name }}.py -p no:warnings -vv -s -n 5
@@ -103,6 +107,9 @@ jobs:
 
           - name: Start redis server
             run: redis-server --daemonize yes
+
+          - name: Enable memory overcommit (for redis)
+            run: sysctl vm.overcommit_memory=1
 
           - name: Run Integration Tests for ${{ matrix.test_name }}
             run: |
