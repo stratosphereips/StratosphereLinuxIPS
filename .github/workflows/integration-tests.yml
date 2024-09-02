@@ -1,10 +1,10 @@
-name: CI-production-integration-tests
+name: integration-tests
 
 on:
   pull_request:
     branches:
       - 'master'
-      - '!develop'
+      - 'develop'
 
 jobs:
   tests:
@@ -50,9 +50,6 @@ jobs:
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: python3 -m pytest --full-trace ${{ matrix.test_file }} -vvv -s
-
-    - name: Clear redis cache
-      run: ./slips.py -cc
 
     - name: Upload Artifacts
       if: success() || failure()

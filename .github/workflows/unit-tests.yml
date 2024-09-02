@@ -1,16 +1,15 @@
-name: CI-production-unit-tests
+name: unit-tests
 
 on:
   pull_request:
     branches:
       - 'master'
-      - '!develop'
+      - 'develop'
 
 jobs:
-
   tests:
     runs-on: ubuntu-22.04
-    timeout-minutes: 7200
+    timeout-minutes: 1800
 
     strategy:
       matrix:
@@ -64,6 +63,9 @@ jobs:
         ref: 'develop'
         fetch-depth: ''
 
+    - name: Enable memory overcommit (for redis)
+      run: sysctl vm.overcommit_memory=1
+
     - name: Install slips dependencies
       run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
 
@@ -94,10 +96,6 @@ jobs:
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |
         python3 -m pytest ${{ matrix.test_file }} -p no:warnings -vv -s -n 5
-
-
-    - name: Clear redis cache
-      run: ./slips.py -cc
 
     - name: Upload Artifacts
       if: success() || failure()
