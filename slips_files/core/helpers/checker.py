@@ -212,6 +212,7 @@ class Checker:
          @return (current_stdout, stderr, slips_logfile)
          current_stdout will be '' if it's not redirected to a file
         """
+        print("@@@@@@@@@@@@@@@@ check_output_redirection is called!")
         # lsof will provide a list of all open fds belonging to slips
         command = f"lsof -p {self.main.pid}"
         result = subprocess.run(command.split(), capture_output=True)
