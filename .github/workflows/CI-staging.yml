@@ -75,9 +75,6 @@ jobs:
           - name: Start redis server
             run: redis-server --daemonize yes
 
-          - name: Enable memory overcommit (for redis)
-            run: echo 1 > /proc/sys/vm/overcommit_memory
-
           - name: Run Unit Tests for ${{ matrix.test_name }}
             run: |
               coverage run --source=./ -m pytest tests/test_${{ matrix.test_name }}.py -p no:warnings -vv -s -n 5
@@ -107,9 +104,6 @@ jobs:
 
           - name: Start redis server
             run: redis-server --daemonize yes
-
-          - name: Enable memory overcommit (for redis)
-            run: echo 1 > /proc/sys/vm/overcommit_memory
 
           - name: Run Integration Tests for ${{ matrix.test_name }}
             run: |
