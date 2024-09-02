@@ -488,7 +488,6 @@ class Main(IObservable):
         """
         setup debug and verbose levels
         """
-        print("setup_print_levels is called")
         # Any verbosity passed as parameter overrides
         # the configuration. Only check its value
         if self.args.verbose is None:
@@ -503,10 +502,6 @@ class Main(IObservable):
 
         # Debug levels must be > 0
         self.args.debug = max(self.args.debug, 0)
-        print(
-            f"setup_print_levels finished set {self.args.debug} "
-            f"{self.args.verbose}"
-        )
 
     def print_version(self):
         slips_version = f"Slips. Version {green(self.version)}"
