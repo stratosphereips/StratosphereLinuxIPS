@@ -28,13 +28,8 @@ class ConfigParser(object):
         """
         reads slips configuration file, slips.conf/slips.yaml is the default file
         """
-        # try:
-        print("@@@@@@@@@@@@@@@@ read_config_file reading yaml!")
         with open(configfile) as source:
             return yaml.safe_load(source)
-        print("@@@@@@@@@@@@@@@@ read_config_file done readin yaml")
-        # except (IOError, TypeError, yaml.YAMLError):
-        #     pass
 
     def get_config_file(self):
         """
@@ -62,26 +57,13 @@ class ConfigParser(object):
          Other processes also access the configuration
         """
         try:
-            print("@@@@@@@@@@@@@@@@ read_configuration is running")
             section_data: dict = self.config.get(section, None)
             if section_data is None:
-                print(
-                    f"@@@@@@@@@@@@@@@@ read_configuration returning default"
-                    f" value of {name} {default_value}"
-                )
                 return default_value
-            print(
-                f"@@@@@@@@@@@@@@@@ for {name} , able to get section data!"
-                f" {section_data.get(name, default_value)}"
-            )
             return section_data.get(name, default_value)
         except (NameError, ValueError):
             # There is a conf, but there is no option,
             # or no section or no configuration file specified
-            print(
-                f"@@@@@@@@@@@@@@@@ read_configuration, exception occured, "
-                f"returning default_value: {default_value}"
-            )
             return default_value
 
     @property
