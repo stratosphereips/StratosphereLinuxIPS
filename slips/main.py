@@ -31,6 +31,7 @@ from slips_files.core.helpers.checker import Checker
 class Main(IObservable):
     def __init__(self, testing=False):
         IObservable.__init__(self)
+        print("@@@@@@@@@@@@@@@@ Main.init is running")
         self.name = "Main"
         self.alerts_default_path = "output/"
         self.mode = "interactive"
@@ -48,6 +49,7 @@ class Main(IObservable):
         self.input_type = False
         self.proc_man = ProcessManager(self)
         # in testing mode we manually set the following params
+        # TODO use mocks instead of this testing param
         if not testing:
             self.args = self.conf.get_args()
             self.pid = os.getpid()

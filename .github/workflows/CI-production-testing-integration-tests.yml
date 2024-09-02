@@ -19,7 +19,7 @@ jobs:
       matrix:
         test_file:
           - tests/integration_tests/test_config_files.py
-#          - tests/integration_tests/test_portscans.py
+          - tests/integration_tests/test_portscans.py
 #          - tests/integration_tests/test_dataset.py
 
     steps:
@@ -58,7 +58,7 @@ jobs:
     - name: Test 2
       env:
         PYTHONUNBUFFERED: 1  # Ensures real-time logging
-      run: ./slips.py -e 1 -f dataset/test7-malicious.pcap -o output/integration_tests/test_configuration_file -c tests/integration_tests/test.yaml -P 6667
+      run: ./slips.py -t -e 1 -f dataset/test7-malicious.pcap -o output/integration_tests/test_configuration_file -c tests/integration_tests/test.yaml -P 6667
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
