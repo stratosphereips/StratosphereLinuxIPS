@@ -211,11 +211,7 @@ class RedisManager:
             f"\nOr kill your open redis ports using: ./slips.py -k "
         )
 
-    def check_if_port_is_in_use(self, port: int) -> bool:
-        if port == 6379:
-            # even if it's already in use, slips should override it
-            return False
-
+    def close_slips_if_port_in_use(self, port: int) -> bool:
         if utils.is_port_in_use(port):
             self.print_port_in_use(port)
             self.main.terminate_slips()
@@ -334,6 +330,31 @@ class RedisManager:
 
         # pid wasn't found using the above cmd
         return False
+
+    def get_redis_port(self) -> int:
+        """
+        returns teh redis server port to use based on the given args -P,
+        -m or the default port
+        if all ports are unavailable, this function terminates slips
+        """
+        if self.main.args.port:
+            redis_port = int(self.main.args.port)
+            # if the default port is already in use, slips should override it
+            if redis_port != 6379:
+                # close slips if port is in use
+                self.close_slips_if_port_in_use(redis_port)
+        elif self.main.args.multiinstance:
+            redis_port = self.get_random_redis_port()
+            if not redis_port:
+                # all ports are unavailable
+                inp = input("Press Enter to close all ports.\n")
+                if inp == "":
+                    self.close_all_ports()
+                self.main.terminate_slips()
+        else:
+            # even if this port is in use, it will be overwritten by slips
+            redis_port = 6379
+        return redis_port
 
     def flush_redis_server(self, pid: int = None, port: int = None):
         """

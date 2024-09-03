@@ -583,29 +583,6 @@ class Main(IObservable):
         elif self.mode == "interactive":
             return os.path.join(self.args.output, "errors.log")
 
-    def get_redis_port(self) -> int:
-        """
-        returns teh redis server port to use based on the given args -P,
-        -m or the default port
-        if all ports are unavailable, this function terminates slips
-        """
-        if self.args.port:
-            redis_port = int(self.args.port)
-            # close slips if port is in use
-            self.redis_man.check_if_port_is_in_use(redis_port)
-        elif self.args.multiinstance:
-            redis_port = self.redis_man.get_random_redis_port()
-            if not redis_port:
-                # all ports are unavailable
-                inp = input("Press Enter to close all ports.\n")
-                if inp == "":
-                    self.redis_man.close_all_ports()
-                self.terminate_slips()
-        else:
-            # even if this port is in use, it will be overwritten by slips
-            redis_port = 6379
-        return redis_port
-
     def start(self):
         """Main Slips Function"""
         try:
@@ -622,10 +599,15 @@ class Main(IObservable):
             )
             self.add_observer(self.logger)
 
-            self.redis_port: int = self.get_redis_port()
+            self.redis_port: int = self.redis_man.get_redis_port()
+            # dont start the redis server if it's already started
+            start_redis_server = not utils.is_port_in_use(self.redis_port)
             try:
                 self.db = DBManager(
-                    self.logger, self.args.output, self.redis_port
+                    self.logger,
+                    self.args.output,
+                    self.redis_port,
+                    start_redis_server=start_redis_server,
                 )
             except RuntimeError as e:
                 self.print(str(e), 1, 1)

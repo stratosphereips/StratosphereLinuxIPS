@@ -284,7 +284,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     @classmethod
     def _start_a_redis_server(cls) -> bool:
-        cmd = f"redis-server {cls._conf_file} --port {cls.redis_port}"
+        cmd = (
+            f"redis-server {cls._conf_file} --port {cls.redis_port} "
+            f" --daemonize yes"
+        )
         process = subprocess.Popen(
             cmd,
             cwd=os.getcwd(),
@@ -296,10 +299,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         stderr = stderr.decode("utf-8")
         stdout = stdout.decode("utf-8")
 
-        if stderr or "warning" in stdout.lower():
+        # Check for a specific line indicating a successful start
+        if (
+            "Ready to accept connections" not in stdout.lower()
+            or process.returncode != 0
+        ):
+
             raise RuntimeError(
-                f"database._start_a_redis_server: {stderr}\n" f"{stdout}"
+                f"database._start_a_redis_server: "
+                f"Redis did not start properly.\n{stderr}\n{stdout}"
             )
+
         return True
 
     @classmethod
