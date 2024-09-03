@@ -316,7 +316,7 @@ class ModuleFactory:
         return RedisManager(main)
 
     def create_process_manager_obj(self):
-        return ProcessManager(self.create_main_obj(""))
+        return ProcessManager(self.create_main_obj())
 
     def create_utils_obj(self):
         return utils
