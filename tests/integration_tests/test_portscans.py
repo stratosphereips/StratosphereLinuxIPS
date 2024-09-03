@@ -34,12 +34,16 @@ def test_horizontal(path, output_dir, redis_port):
     expected_evidence = "Horizontal port scan to port  80/TCP. From 10.0.2.112"
 
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py -e 1 -t -f {path}  -o {output_dir} -P {redis_port} > {output_file} 2>&1"
+    command = (
+        f"./slips.py -e 1 -t -f {path} "
+        f" -o {output_dir} "
+        f"-P {redis_port} > {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
 
     database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
 
     assert assert_no_errors(output_dir) is False
@@ -71,12 +75,16 @@ def test_vertical(path, output_dir, redis_port):
     )
 
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py -e 1 -t -f {path}  -o {output_dir} -P {redis_port} > {output_file} 2>&1"
+    command = (
+        f"./slips.py -e 1 -t -f {path} "
+        f" -o {output_dir}"
+        f" -P {redis_port} > {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
 
     database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
 
     assert assert_no_errors(output_dir) is False
