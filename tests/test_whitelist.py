@@ -356,7 +356,6 @@ def test_is_whitelisted_domain_not_found():
     whitelist = ModuleFactory().create_whitelist_obj()
     whitelist.db.get_whitelist.return_value = {}
     whitelist.db.is_whitelisted_tranco_domain.return_value = False
-    whitelist = ModuleFactory().create_whitelist_obj()
     domain = "nonwhitelisteddomain.com"
     ignore_type = "flows"
     assert not whitelist.domain_analyzer.is_whitelisted(
