@@ -2,7 +2,7 @@ from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
     create_output_dir,
-    has_errors,
+    assert_no_errors,
 )
 from tests.module_factory import ModuleFactory
 import pytest
@@ -41,7 +41,7 @@ def test_pcap(
     command = f"./slips.py  -e 1 -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
-    assert has_errors(output_dir) is False
+    assert assert_no_errors(output_dir) is False
 
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir

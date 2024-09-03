@@ -93,14 +93,28 @@ class ModuleFactory:
         return self.create_db_manager_obj(6379)
 
     def create_db_manager_obj(
-        self, port, output_dir="output/", flush_db=False
+        self,
+        port,
+        output_dir="output/",
+        flush_db=False,
+        start_redis_server=True,
     ):
+        """
+        flush_db is False by default  because we use this funtion to check
+        the db after integration tests to make sure everything's going fine
+        """
         # to prevent config/redis.conf from being overwritten
         with patch(
             "slips_files.core.database.redis_db.database.RedisDB._set_redis_options",
             return_value=Mock(),
         ):
-            db = DBManager(self.logger, output_dir, port, flush_db=flush_db)
+            db = DBManager(
+                self.logger,
+                output_dir,
+                port,
+                flush_db=flush_db,
+                start_redis_server=start_redis_server,
+            )
         db.r = db.rdb.r
         db.print = Mock()
         assert db.get_used_redis_port() == port

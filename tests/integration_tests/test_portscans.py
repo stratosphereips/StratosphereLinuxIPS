@@ -1,5 +1,4 @@
 import pytest
-from ...slips import *
 import shutil
 import os
 
@@ -8,7 +7,7 @@ from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
     create_output_dir,
-    has_errors,
+    assert_no_errors,
 )
 from tests.module_factory import ModuleFactory
 
@@ -43,7 +42,7 @@ def test_horizontal(path, output_dir, redis_port):
         redis_port, output_dir=output_dir
     )
 
-    assert has_errors(output_dir) is False
+    assert assert_no_errors(output_dir) is False
 
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips
@@ -52,7 +51,7 @@ def test_horizontal(path, output_dir, redis_port):
     assert profiles > 0
 
     log_file = os.path.join(output_dir, alerts_file)
-    assert is_evidence_present(log_file, expected_evidence) == True
+    assert is_evidence_present(log_file, expected_evidence)
 
     shutil.rmtree(output_dir)
 
@@ -80,7 +79,7 @@ def test_vertical(path, output_dir, redis_port):
         redis_port, output_dir=output_dir
     )
 
-    assert has_errors(output_dir) is False
+    assert assert_no_errors(output_dir) is False
 
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips
@@ -89,6 +88,6 @@ def test_vertical(path, output_dir, redis_port):
     assert profiles > 0
 
     log_file = os.path.join(output_dir, alerts_file)
-    assert is_evidence_present(log_file, expected_evidence) == True
+    assert is_evidence_present(log_file, expected_evidence)
 
     shutil.rmtree(output_dir)

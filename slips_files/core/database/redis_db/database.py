@@ -300,11 +300,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         stdout = stdout.decode("utf-8")
 
         # Check for a specific line indicating a successful start
-        if (
-            "Ready to accept connections" not in stdout.lower()
-            or process.returncode != 0
-        ):
-
+        # if the redis server is already in use, the return code will be 0
+        # but we dont care because we checked it in main before starting
+        # the DBManager()
+        if process.returncode != 0:
             raise RuntimeError(
                 f"database._start_a_redis_server: "
                 f"Redis did not start properly.\n{stderr}\n{stdout}"

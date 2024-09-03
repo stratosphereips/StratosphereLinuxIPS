@@ -211,13 +211,10 @@ class RedisManager:
             f"\nOr kill your open redis ports using: ./slips.py -k "
         )
 
-    def close_slips_if_port_in_use(self, port: int) -> bool:
+    def close_slips_if_port_in_use(self, port: int):
         if utils.is_port_in_use(port):
             self.print_port_in_use(port)
             self.main.terminate_slips()
-            return True
-
-        return False
 
     def get_pid_of_redis_server(self, port: int) -> int:
         """
