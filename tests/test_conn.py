@@ -67,7 +67,6 @@ dst_profileid = f"profile_{daddr}"
     ],
 )
 def test_is_p2p(
-    mock_db,
     dport,
     proto,
     daddr,
@@ -75,7 +74,7 @@ def test_is_p2p(
     expected_result,
     expected_final_p2p_daddrs,
 ):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     conn.p2p_daddrs = initial_p2p_daddrs.copy()
     result = conn.is_p2p(dport, proto, daddr)
     assert result == expected_result
@@ -93,7 +92,6 @@ def test_is_p2p(
 )
 def test_check_unknown_port(
     mocker,
-    mock_db,
     dport,
     proto,
     expected_result,
@@ -101,9 +99,9 @@ def test_check_unknown_port(
     mock_is_ftp_port,
     mock_port_belongs_to_an_org,
 ):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
-    mock_db.get_port_info.return_value = mock_port_info
-    mock_db.is_ftp_port.return_value = mock_is_ftp_port
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_port_info.return_value = mock_port_info
+    conn.db.is_ftp_port.return_value = mock_is_ftp_port
     flowalerts_mock = mocker.patch(
         "modules.flowalerts.conn.Conn.port_belongs_to_an_org"
     )
@@ -117,12 +115,12 @@ def test_check_unknown_port(
     )
 
 
-def test_check_unknown_port_true_case(mocker, mock_db):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+def test_check_unknown_port_true_case(mocker):
+    conn = ModuleFactory().create_conn_analyzer_obj()
     dport = "12345"
     proto = "tcp"
-    mock_db.get_port_info.return_value = None
-    mock_db.is_ftp_port.return_value = False
+    conn.db.get_port_info.return_value = None
+    conn.db.is_ftp_port.return_value = False
     mocker.patch.object(conn, "port_belongs_to_an_org", return_value=False)
     mocker.patch.object(conn, "is_p2p", return_value=False)
     mock_set_evidence = mocker.patch.object(conn.set_evidence, "unknown_port")
@@ -167,18 +165,18 @@ def test_check_unknown_port_true_case(mocker, mock_db):
     ],
 )
 def test_check_multiple_reconnection_attempts(
-    mocker, mock_db, origstate, saddr, daddr, dport, uids, expected_calls
+    mocker, origstate, saddr, daddr, dport, uids, expected_calls
 ):
     """
     Tests the check_multiple_reconnection_attempts function
     with various scenarios.
     """
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
         "SetEvidnceHelper.multiple_reconnection_attempts"
     )
-    mock_db.get_reconnections_for_tw.return_value = {}
+    conn.db.get_reconnections_for_tw.return_value = {}
 
     for uid in uids:
         conn.check_multiple_reconnection_attempts(
@@ -202,8 +200,8 @@ def test_check_multiple_reconnection_attempts(
         ("8.8.8.8", False),
     ],
 )
-def test_is_ignored_ip_data_upload(mock_db, ip_address, expected_result):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+def test_is_ignored_ip_data_upload(ip_address, expected_result):
+    conn = ModuleFactory().create_conn_analyzer_obj()
     conn.gateway = "192.168.1.1"
 
     assert conn.is_ignored_ip_data_upload(ip_address) is expected_result
@@ -243,8 +241,8 @@ def test_is_ignored_ip_data_upload(mock_db, ip_address, expected_result):
         ),
     ],
 )
-def test_get_sent_bytes(mock_db, all_flows, expected_bytes_sent):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+def test_get_sent_bytes(all_flows, expected_bytes_sent):
+    conn = ModuleFactory().create_conn_analyzer_obj()
     bytes_sent = conn.get_sent_bytes(all_flows)
     assert bytes_sent == expected_bytes_sent
 
@@ -262,13 +260,13 @@ def test_get_sent_bytes(mock_db, all_flows, expected_bytes_sent):
     ],
 )
 def test_check_data_upload(
-    mocker, mock_db, sbytes, daddr, expected_result, expected_call_count
+    mocker, sbytes, daddr, expected_result, expected_call_count
 ):
     """
     Tests the check_data_upload function with
     various scenarios for data upload.
     """
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence." "SetEvidnceHelper.data_exfiltration"
     )
@@ -304,7 +302,6 @@ def test_check_data_upload(
 )
 def test_should_ignore_conn_without_dns(
     mocker,
-    mock_db,
     flow_type,
     appproto,
     daddr,
@@ -316,9 +313,9 @@ def test_should_ignore_conn_without_dns(
 ):
     """Tests the should_ignore_conn_without_dns
     function with various scenarios."""
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
-    mock_db.get_input_type.return_value = input_type
-    mock_db.is_doh_server.return_value = is_doh_server
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_input_type.return_value = input_type
+    conn.db.is_doh_server.return_value = is_doh_server
     conn.dns_analyzer = Mock()
     conn.dns_analyzer.is_dns_server = Mock(return_value=is_dns_server)
 
@@ -369,18 +366,17 @@ def test_should_ignore_conn_without_dns(
     ],
 )
 def test_check_if_resolution_was_made_by_different_version(
-    mock_db,
     profileid,
     daddr,
     mock_get_the_other_ip_version_return_value,
     mock_get_dns_resolution_return_value,
     expected_result,
 ):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
-    mock_db.get_the_other_ip_version.return_value = (
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_the_other_ip_version.return_value = (
         mock_get_the_other_ip_version_return_value
     )
-    mock_db.get_dns_resolution.return_value = (
+    conn.db.get_dns_resolution.return_value = (
         mock_get_dns_resolution_return_value
     )
 
@@ -430,12 +426,12 @@ def test_check_if_resolution_was_made_by_different_version(
     ],
 )
 def test_check_conn_to_port_0(
-    mocker, mock_db, sport, dport, proto, saddr, daddr, expected_calls
+    mocker, sport, dport, proto, saddr, daddr, expected_calls
 ):
     """
     Tests the check_conn_to_port_0 function with various scenarios.
     """
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
         "SetEvidnceHelper.for_port_0_connection"
@@ -508,7 +504,6 @@ def test_check_conn_to_port_0(
 )
 def test_check_non_http_port_80_conns(
     mocker,
-    mock_db,
     state,
     daddr,
     dport,
@@ -521,7 +516,7 @@ def test_check_non_http_port_80_conns(
     Tests the check_non_http_port_80_conns
     function with various scenarios.
     """
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
         "SetEvidnceHelper.non_http_port_80_conn"
@@ -590,9 +585,9 @@ def test_check_non_http_port_80_conns(
     ],
 )
 def test_check_long_connection(
-    mocker, mock_db, dur, daddr, saddr, expected_result, expected_evidence_call
+    mocker, dur, daddr, saddr, expected_result, expected_evidence_call
 ):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     conn.long_connection_threshold = 1500
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence." "SetEvidnceHelper.long_connection"
@@ -664,7 +659,6 @@ def test_check_long_connection(
 )
 def test_port_belongs_to_an_org(
     mocker,
-    mock_db,
     daddr,
     portproto,
     org_info,
@@ -673,10 +667,10 @@ def test_port_belongs_to_an_org(
     is_ip_in_org,
     expected_result,
 ):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
-    mock_db.get_organization_of_port.return_value = org_info
-    mock_db.get_mac_vendor_from_profile.return_value = mac_vendor
-    mock_db.get_ip_identification.return_value = ip_identification
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_organization_of_port.return_value = org_info
+    conn.db.get_mac_vendor_from_profile.return_value = mac_vendor
+    conn.db.get_ip_identification.return_value = ip_identification
     mocker.patch.object(
         conn.whitelist.org_analyzer, "is_ip_in_org", return_value=is_ip_in_org
     )
@@ -733,14 +727,14 @@ def test_port_belongs_to_an_org(
     ],
 )
 def test_check_device_changing_ips(
-    mocker, mock_db, flow_type, smac, old_ip_list, saddr, expected_calls
+    mocker, flow_type, smac, old_ip_list, saddr, expected_calls
 ):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch.object(
         conn.set_evidence, "device_changing_ips"
     )
-    mock_db.was_ip_seen_in_connlog_before.return_value = expected_calls == 0
-    mock_db.get_ip_of_mac.return_value = old_ip_list
+    conn.db.was_ip_seen_in_connlog_before.return_value = expected_calls == 0
+    conn.db.get_ip_of_mac.return_value = old_ip_list
 
     conn.check_device_changing_ips(
         flow_type, smac, f"profile_{saddr}", twid, uid, timestamp
@@ -807,7 +801,6 @@ def test_check_device_changing_ips(
 )
 def test_is_well_known_org(
     mocker,
-    mock_db,
     ip,
     ip_info,
     is_ip_asn_in_org_asn,
@@ -815,8 +808,8 @@ def test_is_well_known_org(
     is_ip_in_org,
     expected_result,
 ):
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
-    mock_db.get_ip_info.return_value = ip_info
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_ip_info.return_value = ip_info
     mock_is_ip_asn_in_org_asn = mocker.patch(
         "slips_files.core.helpers.whitelist.organization_whitelist."
         "OrgAnalyzer.is_ip_asn_in_org_asn"
@@ -877,18 +870,18 @@ def test_is_well_known_org(
     ],
 )
 def test_check_different_localnet_usage(
-    mocker, mock_db, saddr, daddr, dport, proto, what_to_check, expected_calls
+    mocker, saddr, daddr, dport, proto, what_to_check, expected_calls
 ):
     """
     Tests the check_different_localnet_usage function
     with various scenarios.
     """
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
         "SetEvidnceHelper.different_localnet_usage"
     )
-    mock_db.get_local_network.return_value = "192.168.1.0/24"
+    conn.db.get_local_network.return_value = "192.168.1.0/24"
 
     conn.check_different_localnet_usage(
         saddr,
@@ -933,19 +926,18 @@ def test_check_different_localnet_usage(
     ],
 )
 def test_check_connection_to_local_ip(
-    mocker, mock_db, daddr, dport, proto, saddr, expected_calls
+    mocker, daddr, dport, proto, saddr, expected_calls
 ):
     """
     Tests the check_connection_to_local_ip function with various scenarios.
     """
-    conn = ModuleFactory().create_conn_analyzer_obj(mock_db)
+    conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch.object(
         conn.set_evidence, "conn_to_private_ip"
     )
-    mock_db.get_gateway_ip.return_value = "192.168.1.1"
+    conn.db.get_gateway_ip.return_value = "192.168.1.1"
 
     conn.check_connection_to_local_ip(
         daddr, dport, proto, saddr, twid, uid, timestamp
     )
     assert mock_set_evidence.call_count == expected_calls
-

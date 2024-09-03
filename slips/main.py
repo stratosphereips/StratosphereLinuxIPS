@@ -613,13 +613,12 @@ class Main(IObservable):
             print("https://stratosphereips.org")
             print("-" * 27)
             self.setup_print_levels()
-            self.stdout = ""
             stderr: str = self.get_slips_error_file()
             slips_logfile: str = self.get_slips_logfile()
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
             self.logger = self.proc_man.start_output_process(
-                self.stdout, stderr, slips_logfile
+                stderr, slips_logfile
             )
             self.add_observer(self.logger)
 

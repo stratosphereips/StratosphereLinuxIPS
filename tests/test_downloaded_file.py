@@ -1,5 +1,7 @@
 """Unit test for modules/flowalerts/download_file.py"""
 
+from unittest.mock import Mock
+
 from tests.module_factory import ModuleFactory
 import json
 import pytest
@@ -46,19 +48,18 @@ import pytest
         ),
     ],
 )
-def test_check_malicious_ssl(
-    mocker, mock_db, ssl_info, db_result, expected_call_count
-):
-    downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj(mock_db)
-    mock_set_evidence = mocker.patch.object(
-        downloadfile.set_evidence, "malicious_ssl"
-    )
+def test_check_malicious_ssl(mocker, ssl_info, db_result, expected_call_count):
+    downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj()
+    downloadfile.set_evidence.malicious_ssl = Mock()
 
-    mock_db.get_ssl_info.return_value = db_result
+    downloadfile.db.get_ssl_info.return_value = db_result
     downloadfile.check_malicious_ssl(ssl_info)
 
-    assert mock_set_evidence.call_count == expected_call_count
-    mock_set_evidence.assert_has_calls(
+    assert (
+        downloadfile.set_evidence.malicious_ssl.call_count
+        == expected_call_count
+    )
+    downloadfile.set_evidence.malicious_ssl.assert_has_calls(
         [mocker.call(ssl_info, db_result)] * expected_call_count
     )
 
@@ -86,23 +87,21 @@ def test_check_malicious_ssl(
         ({"data": json.dumps({"type": "not_zeek", "flow": {}})}, 1),
     ],
 )
-def test_analyze_with_data(mocker, mock_db, msg, expected_call_count):
-    downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj(mock_db)
-    mock_check_malicious_ssl = mocker.patch.object(
-        downloadfile, "check_malicious_ssl"
-    )
+def test_analyze_with_data(msg, expected_call_count):
+    downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj()
+    downloadfile.check_malicious_ssl = Mock()
     msg.update({"channel": "new_downloaded_file"})
 
     downloadfile.analyze(msg)
 
-    assert mock_check_malicious_ssl.call_count == expected_call_count
-    mock_check_malicious_ssl.assert_called_with(json.loads(msg["data"]))
-
-
-def test_analyze_no_msg(mocker, mock_db):
-    downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj(mock_db)
-    mock_check_malicious_ssl = mocker.patch.object(
-        downloadfile, "check_malicious_ssl"
+    assert downloadfile.check_malicious_ssl.call_count == expected_call_count
+    downloadfile.check_malicious_ssl.assert_called_with(
+        json.loads(msg["data"])
     )
+
+
+def test_analyze_no_msg(mocker):
+    downloadfile = ModuleFactory().create_downloaded_file_analyzer_obj()
+    downloadfile.check_malicious_ssl = Mock()
     downloadfile.analyze({})
-    mock_check_malicious_ssl.assert_not_called()
+    downloadfile.check_malicious_ssl.assert_not_called()

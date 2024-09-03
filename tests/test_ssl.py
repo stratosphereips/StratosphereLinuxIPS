@@ -1,5 +1,7 @@
 """Unit test for modules/flowalerts/ssl.py"""
 
+from unittest.mock import Mock
+
 from tests.module_factory import ModuleFactory
 
 import json
@@ -77,13 +79,13 @@ daddr = "192.168.1.2"
 # )
 # def test_wait_for_ssl_flows_to_appear_in_connlog(
 #     mocker,
-#     mock_db,
+#
 #     test_flows,
 #     mock_get_flow_responses,
 #     expected_check_calls,
 #     final_queue_size,
 # ):
-#     ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+#     ssl = ModuleFactory().create_ssl_analyzer_obj()
 #     ssl.pending_ssl_flows = Queue()
 #
 #     mock_get_flow = mocker.patch.object(ssl.db, "get_flow")
@@ -132,8 +134,8 @@ daddr = "192.168.1.2"
         ),
     ],
 )
-def test_check_self_signed_certs(mocker, mock_db, test_input, expected):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_check_self_signed_certs(mocker, test_input, expected):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
         "SetEvidnceHelper.self_signed_certificates"
@@ -159,13 +161,12 @@ def test_check_self_signed_certs(mocker, mock_db, test_input, expected):
 )
 def test_detect_malicious_ja3(
     mocker,
-    mock_db,
     test_ja3,
     test_ja3s,
     expected_ja3_calls,
     expected_ja3s_calls,
 ):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_ja3 = mocker.patch(
         "modules.flowalerts.set_evidence.SetEvidnceHelper.malicious_ja3"
     )
@@ -175,7 +176,7 @@ def test_detect_malicious_ja3(
 
     saddr = "192.168.1.1"
 
-    mock_db.get_ja3_in_IoC.return_value = {
+    ssl.db.get_ja3_in_IoC.return_value = {
         "malicious_ja3": "Malicious JA3",
         "malicious_ja3s": "Malicious JA3S",
     }
@@ -198,17 +199,17 @@ def test_detect_malicious_ja3(
         (False, 0),
     ],
 )
-def test_detect_doh(mocker, mock_db, test_is_doh, expected_calls):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_detect_doh(mocker, test_is_doh, expected_calls):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_doh = mocker.patch(
         "modules.flowalerts.set_evidence.SetEvidnceHelper.doh"
     )
-    mock_db_set_ip_info = mocker.patch.object(ssl.db, "set_ip_info")
+    ssl.db.set_ip_info = Mock()
 
     ssl.detect_doh(test_is_doh, daddr, profileid, twid, timestamp, uid)
 
     assert mock_set_evidence_doh.call_count == expected_calls
-    assert mock_db_set_ip_info.call_count == expected_calls
+    assert ssl.db.set_ip_info.call_count == expected_calls
 
 
 @pytest.mark.parametrize(
@@ -226,12 +227,11 @@ def test_detect_doh(mocker, mock_db, test_is_doh, expected_calls):
 )
 def test_check_pastebin_download(
     mocker,
-    mock_db,
     test_server_name,
     test_downloaded_bytes,
     expected_call_count,
 ):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     ssl.pastebin_downloads_threshold = 12000
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence." "SetEvidnceHelper.pastebin_download"
@@ -263,18 +263,16 @@ def test_check_pastebin_download(
         ),
     ],
 )
-def test_detect_incompatible_cn(mocker, mock_db, issuer, expected_call_count):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_detect_incompatible_cn(mocker, issuer, expected_call_count):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence." "SetEvidnceHelper.incompatible_cn"
     )
 
-    (mock_db.whitelist.organization_whitelist.is_ip_in_org).return_value = (
+    (ssl.db.whitelist.organization_whitelist.is_ip_in_org).return_value = False
+    (ssl.db.whitelist.organization_whitelist.is_domain_in_org).return_value = (
         False
     )
-    (
-        mock_db.whitelist.organization_whitelist.is_domain_in_org
-    ).return_value = False
 
     ssl.detect_incompatible_cn(
         daddr, "example.com", issuer, profileid, twid, uid, timestamp
@@ -403,10 +401,8 @@ def test_detect_incompatible_cn(mocker, mock_db, issuer, expected_call_count):
         ),
     ],
 )
-def test_check_non_ssl_port_443_conns(
-    mocker, mock_db, test_input, expected_call_count
-):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_check_non_ssl_port_443_conns(mocker, test_input, expected_call_count):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
         "SetEvidnceHelper.non_ssl_port_443_conn"
@@ -440,8 +436,12 @@ def test_check_non_ssl_port_443_conns(
         ),
     ],
 )
-def test_analyze_new_ssl_msg(mocker, channel, msg_data, mock_db):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_analyze_new_ssl_msg(
+    mocker,
+    channel,
+    msg_data,
+):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_pending_ssl_flows_put = mocker.patch.object(
         ssl.pending_ssl_flows, "put"
     )
@@ -538,8 +538,8 @@ def test_analyze_new_ssl_msg(mocker, channel, msg_data, mock_db):
         )
     ],
 )
-def test_analyze_new_flow_msg(mocker, mock_db, channel, msg_data):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_analyze_new_flow_msg(mocker, channel, msg_data):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_check_non_ssl_port_443_conns = mocker.patch.object(
         ssl, "check_non_ssl_port_443_conns"
     )
@@ -556,8 +556,10 @@ def test_analyze_new_flow_msg(mocker, mock_db, channel, msg_data):
     assert "flow" in call_arg
 
 
-def test_analyze_no_messages(mocker, mock_db):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_analyze_no_messages(
+    mocker,
+):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
 
     mock_pending_ssl_flows_put = mocker.patch.object(
         ssl.pending_ssl_flows, "put"

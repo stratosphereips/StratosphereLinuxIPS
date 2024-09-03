@@ -4,7 +4,7 @@ from tests.module_factory import ModuleFactory
 
 
 @pytest.mark.parametrize(
-    "evidence_in_IDEA, expected_output",
+    "evidence_in_idea, expected_output",
     [
         # testcase1: Remove private IPv4
         (
@@ -31,14 +31,14 @@ from tests.module_factory import ModuleFactory
         ),
     ],
 )
-def test_remove_private_ips(evidence_in_IDEA, expected_output):
+def test_remove_private_ips(evidence_in_idea, expected_output):
     cesnet = ModuleFactory().create_cesnet_obj()
-    result = cesnet.remove_private_ips(evidence_in_IDEA)
+    result = cesnet.remove_private_ips(evidence_in_idea)
     assert result == expected_output
 
 
 @pytest.mark.parametrize(
-    "evidence_in_IDEA, expected_output",
+    "evidence_in_idea, expected_output",
     [
         # testcase1: Valid alert with Source
         ({"Source": [{"IP4": ["8.8.8.8"]}]}, True),
@@ -48,9 +48,9 @@ def test_remove_private_ips(evidence_in_IDEA, expected_output):
         ({}, False),
     ],
 )
-def test_is_valid_alert(evidence_in_IDEA, expected_output):
+def test_is_valid_alert(evidence_in_idea, expected_output):
     cesnet = ModuleFactory().create_cesnet_obj()
-    result = cesnet.is_valid_alert(evidence_in_IDEA)
+    result = cesnet.is_valid_alert(evidence_in_idea)
     assert result == expected_output
 
 

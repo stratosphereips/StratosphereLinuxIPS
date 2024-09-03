@@ -10,19 +10,22 @@ from slips_files.core.evidence_structure.evidence import (
 )
 
 
-def test_read_whitelist(mock_db):
+def test_read_whitelist():
     """
     make sure the content of whitelists is read and stored properly
     uses tests/test_whitelist.conf for testing
     """
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_whitelist.return_value = {}
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_whitelist.return_value = {}
     assert whitelist.parser.parse()
 
 
 @pytest.mark.parametrize("org,asn", [("google", "AS6432")])
-def test_load_org_asn(org, asn, mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+def test_load_org_asn(
+    org,
+    asn,
+):
+    whitelist = ModuleFactory().create_whitelist_obj()
     parsed_asn = whitelist.parser.load_org_asn(org)
     assert parsed_asn is not False
     assert asn in parsed_asn
@@ -32,11 +35,13 @@ def test_load_org_asn(org, asn, mock_db):
     "slips_files.core.helpers.whitelist."
     "whitelist_parser.WhitelistParser.load_org_ips"
 )
-def test_load_org_ips(mock_load_org_ips, mock_db):
+def test_load_org_ips(
+    mock_load_org_ips,
+):
     """
     Test load_org_IPs without modifying real files.
     """
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+    whitelist = ModuleFactory().create_whitelist_obj()
     mock_load_org_ips.return_value = {
         "34": ["34.64.0.0/10"],
         "216": ["216.58.192.0/19"],
@@ -60,15 +65,20 @@ def test_load_org_ips(mock_load_org_ips, mock_db):
         ("arp", True),
     ],
 )
-def test_is_ignored_flow_type(flow_type, expected_result, mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+def test_is_ignored_flow_type(
+    flow_type,
+    expected_result,
+):
+    whitelist = ModuleFactory().create_whitelist_obj()
     assert whitelist.match.is_ignored_flow_type(flow_type) == expected_result
 
 
-def test_get_src_domains_of_flow(mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_ip_info.return_value = {"SNI": [{"server_name": "sni.com"}]}
-    mock_db.get_dns_resolution.return_value = {
+def test_get_src_domains_of_flow():
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_ip_info.return_value = {
+        "SNI": [{"server_name": "sni.com"}]
+    }
+    whitelist.db.get_dns_resolution.return_value = {
         "domains": ["dns_resolution.com"]
     }
     flow = Mock()
@@ -87,8 +97,8 @@ def test_get_src_domains_of_flow(mock_db):
         ("dns", ["query.com"]),
     ],
 )
-def test_get_dst_domains_of_flow(mock_db, flow_type, expected_result):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+def test_get_dst_domains_of_flow(flow_type, expected_result):
+    whitelist = ModuleFactory().create_whitelist_obj()
     flow = Mock()
     flow.type_ = flow_type
     flow.server_name = "server_name"
@@ -110,9 +120,14 @@ def test_get_dst_domains_of_flow(mock_db, flow_type, expected_result):
         ("8.8.8.8", "google", {}, False),  # no org ip info
     ],
 )
-def test_is_ip_in_org(ip, org, org_ips, expected_result, mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_org_IPs.return_value = org_ips
+def test_is_ip_in_org(
+    ip,
+    org,
+    org_ips,
+    expected_result,
+):
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_org_IPs.return_value = org_ips
     result = whitelist.org_analyzer.is_ip_in_org(ip, org)
     assert result == expected_result
 
@@ -130,9 +145,14 @@ def test_is_ip_in_org(ip, org, org_ips, expected_result, mock_db):
         ),  # no org domain info
     ],
 )
-def test_is_domain_in_org(domain, org, org_domains, expected_result, mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_org_info.return_value = org_domains
+def test_is_domain_in_org(
+    domain,
+    org,
+    org_domains,
+    expected_result,
+):
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_org_info.return_value = org_domains
     result = whitelist.org_analyzer.is_domain_in_org(domain, org)
     assert result == expected_result
 
@@ -151,9 +171,9 @@ def test_is_domain_in_org(domain, org, org_domains, expected_result, mock_db):
     ],
 )
 def test_is_whitelisted_evidence(
-    is_whitelisted_victim, is_whitelisted_attacker, expected_result, mock_db
+    is_whitelisted_victim, is_whitelisted_attacker, expected_result
 ):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+    whitelist = ModuleFactory().create_whitelist_obj()
     whitelist.is_whitelisted_attacker = Mock()
     whitelist.is_whitelisted_attacker.return_value = is_whitelisted_attacker
 
@@ -190,11 +210,10 @@ def test_profile_has_whitelisted_mac(
     direction,
     expected_result,
     whitelisted_macs,
-    mock_db,
 ):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_mac_addr_from_profile.return_value = mac_address
-    mock_db.get_whitelist.return_value = whitelisted_macs
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_mac_addr_from_profile.return_value = mac_address
+    whitelist.db.get_whitelist.return_value = whitelisted_macs
     assert (
         whitelist.mac_analyzer.profile_has_whitelisted_mac(
             profile_ip, direction, "both"
@@ -213,10 +232,8 @@ def test_profile_has_whitelisted_mac(
         (Direction.DST, "dst", True),
     ],
 )
-def test_matching_direction(
-    direction, whitelist_direction, expected_result, mock_db
-):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+def test_matching_direction(direction, whitelist_direction, expected_result):
+    whitelist = ModuleFactory().create_whitelist_obj()
     result = whitelist.match.direction(direction, whitelist_direction)
     assert result == expected_result
 
@@ -250,14 +267,17 @@ def test_matching_direction(
         ),
     ],
 )
-def test_is_part_of_a_whitelisted_org(ioc_data, expected_result, mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_whitelist.return_value = {
+def test_is_part_of_a_whitelisted_org(
+    ioc_data,
+    expected_result,
+):
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_whitelist.return_value = {
         "google": {"from": "both", "what_to_ignore": "both"}
     }
-    mock_db.get_org_info.return_value = json.dumps(["1.2.3.4/32"])
-    mock_db.get_ip_info.return_value = {"asn": {"asnorg": "Google"}}
-    mock_db.get_org_info.return_value = json.dumps(["example.com"])
+    whitelist.db.get_org_info.return_value = json.dumps(["1.2.3.4/32"])
+    whitelist.db.get_ip_info.return_value = {"asn": {"asnorg": "Google"}}
+    whitelist.db.get_org_info.return_value = json.dumps(["example.com"])
 
     mock_ioc = MagicMock()
     mock_ioc.value = ioc_data["value"]
@@ -307,10 +327,9 @@ def test_check_if_whitelisted_domains_of_flow(
     src_domains,
     whitelisted_domains,
     expected_result,
-    mock_db,
 ):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_whitelist.return_value = whitelisted_domains
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_whitelist.return_value = whitelisted_domains
 
     whitelist.domain_analyzer.is_domain_in_tranco_list = Mock()
     whitelist.domain_analyzer.is_domain_in_tranco_list.return_value = False
@@ -330,13 +349,14 @@ def test_check_if_whitelisted_domains_of_flow(
     assert result == expected_result
 
 
-def test_is_whitelisted_domain_not_found(mock_db):
+def test_is_whitelisted_domain_not_found():
     """
     Test when the domain is not found in the whitelisted domains.
     """
-    mock_db.get_whitelist.return_value = {}
-    mock_db.is_whitelisted_tranco_domain.return_value = False
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_whitelist.return_value = {}
+    whitelist.db.is_whitelisted_tranco_domain.return_value = False
+    whitelist = ModuleFactory().create_whitelist_obj()
     domain = "nonwhitelisteddomain.com"
     ignore_type = "flows"
     assert not whitelist.domain_analyzer.is_whitelisted(
@@ -345,8 +365,10 @@ def test_is_whitelisted_domain_not_found(mock_db):
 
 
 @patch("slips_files.common.parsers.config_parser.ConfigParser.whitelist_path")
-def test_read_configuration(mock_config_parser, mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+def test_read_configuration(
+    mock_config_parser,
+):
+    whitelist = ModuleFactory().create_whitelist_obj()
     mock_config_parser.return_value = "config_whitelist_path"
     whitelist.parser.read_configuration()
     assert whitelist.parser.whitelist_path == "config_whitelist_path"
@@ -363,11 +385,9 @@ def test_read_configuration(mock_config_parser, mock_db):
         ("invalid_ip", "both", False),  # Invalid IP
     ],
 )
-def test_ip_analyzer_is_whitelisted(
-    ip, what_to_ignore, expected_result, mock_db
-):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_whitelist.return_value = {
+def test_ip_analyzer_is_whitelisted(ip, what_to_ignore, expected_result):
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_whitelist.return_value = {
         "1.2.3.4": {"from": "both", "what_to_ignore": "both"}
     }
     assert (
@@ -387,9 +407,9 @@ def test_ip_analyzer_is_whitelisted(
     ],
 )
 def test_is_whitelisted_attacker_domain(
-    is_whitelisted_domain, is_whitelisted_org, expected_result, mock_db
+    is_whitelisted_domain, is_whitelisted_org, expected_result
 ):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+    whitelist = ModuleFactory().create_whitelist_obj()
 
     whitelist.domain_analyzer.is_whitelisted = Mock()
     whitelist.domain_analyzer.is_whitelisted.return_value = (
@@ -401,7 +421,7 @@ def test_is_whitelisted_attacker_domain(
         is_whitelisted_org
     )
 
-    mock_db.is_whitelisted_tranco_domain.return_value = False
+    whitelist.db.is_whitelisted_tranco_domain.return_value = False
 
     evidence = Mock()
     evidence.attacker = Attacker(
@@ -429,9 +449,8 @@ def test_is_whitelisted_victim(
     is_whitelisted_mac,
     is_whitelisted_org,
     expected_result,
-    mock_db,
 ):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+    whitelist = ModuleFactory().create_whitelist_obj()
     whitelist.domain_analyzer.is_whitelisted = Mock()
     whitelist.domain_analyzer.is_whitelisted.return_value = (
         is_whitelisted_domain
@@ -448,7 +467,7 @@ def test_is_whitelisted_victim(
         is_whitelisted_org
     )
 
-    mock_db.is_whitelisted_tranco_domain.return_value = False
+    whitelist.db.is_whitelisted_tranco_domain.return_value = False
 
     evidence = Mock()
     evidence.attacker = Victim(
@@ -466,16 +485,19 @@ def test_is_whitelisted_victim(
         ("microsoft", ["microsoft.com", "microsoft.net"]),
     ],
 )
-def test_load_org_domains(org, expected_result, mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.set_org_info = MagicMock()
+def test_load_org_domains(
+    org,
+    expected_result,
+):
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.set_org_info = MagicMock()
 
     actual_result = whitelist.parser.load_org_domains(org)
     for domain in expected_result:
         assert domain in actual_result
 
     assert len(actual_result) >= len(expected_result)
-    mock_db.set_org_info.assert_called_with(
+    whitelist.db.set_org_info.assert_called_with(
         org, json.dumps(actual_result), "domains"
     )
 
@@ -488,12 +510,16 @@ def test_load_org_domains(org, expected_result, mock_db):
         ("malicious.com", Direction.SRC, False),
     ],
 )
-def test_is_domain_whitelisted(domain, direction, expected_result, mock_db):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_whitelist.return_value = {
+def test_is_domain_whitelisted(
+    domain,
+    direction,
+    expected_result,
+):
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_whitelist.return_value = {
         "example.com": {"from": "both", "what_to_ignore": "both"}
     }
-    mock_db.is_whitelisted_tranco_domain.return_value = False
+    whitelist.db.is_whitelisted_tranco_domain.return_value = False
     for type_ in ("alerts", "flows"):
         result = whitelist.domain_analyzer.is_whitelisted(
             domain, direction, type_
@@ -543,11 +569,11 @@ def test_is_domain_whitelisted(domain, direction, expected_result, mock_db):
     ],
 )
 def test_is_ip_asn_in_org_asn(
-    ip, org, org_asn_info, ip_asn_info, expected_result, mock_db
+    ip, org, org_asn_info, ip_asn_info, expected_result
 ):
-    whitelist = ModuleFactory().create_whitelist_obj(mock_db)
-    mock_db.get_org_info.return_value = org_asn_info
-    mock_db.get_ip_info.return_value = ip_asn_info
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.db.get_org_info.return_value = org_asn_info
+    whitelist.db.get_ip_info.return_value = ip_asn_info
     assert (
         whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org) == expected_result
     )
@@ -616,10 +642,10 @@ def test_is_ip_asn_in_org_asn(
 #         ),
 #     ],
 # )
-# def test_is_whitelisted_flow(mock_db, flow_data, whitelist_data, expected_result):
+# def test_is_whitelisted_flow( flow_data, whitelist_data, expected_result):
 #     """
 #     Test the is_whitelisted_flow method with various combinations of flow data and whitelist data.
 #     """
-#     mock_db.get_all_whitelist.return_value = whitelist_data
-#     whitelist = ModuleFactory().create_whitelist_obj(mock_db)
+#     whitelist.db.get_all_whitelist.return_value = whitelist_data
+#     whitelist = ModuleFactory().create_whitelist_obj()
 #     assert whitelist.is_whitelisted_flow(flow_data) == expected_result

@@ -52,12 +52,14 @@ class Output(IObserver):
         has_pbar: bool = False,
         pbar_finished: Event = None,
         stop_daemon: bool = None,
+        stdout="",
     ):
         super().__init__()
         # when running slips using -e , this var is set and we only
         # print all msgs with debug lvl less than it
         self.verbose = verbose
         self.debug = debug
+        self.stdout = stdout
         self.input_type = input_type
         self.has_pbar = has_pbar
         self.pbar_finished: Event = pbar_finished

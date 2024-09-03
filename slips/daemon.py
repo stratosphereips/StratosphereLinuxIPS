@@ -297,7 +297,7 @@ class Daemon:
                 self.logsfile = "slips.log"
                 self.prepare_std_streams(output_dir)
                 self.logger = self.slips.proc_man.start_output_process(
-                    self.stdout, self.stderr, self.logsfile
+                    self.stderr, self.logsfile, stdout=self.stdout
                 )
                 self.slips.add_observer(self.logger)
                 self.db = DBManager(
