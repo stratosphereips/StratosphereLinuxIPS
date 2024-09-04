@@ -1,8 +1,5 @@
 var NAVTREEINDEX6 =
 {
-"functions_y.html":[1,3,0,24],
-"functions_z.html":[1,3,0,25],
-"go__director_8py.html":[2,0,0,11,2,1],
 "gui_process_8py.html":[2,0,1,1,4],
 "hierarchy.html":[1,2],
 "http__analyzer_8py.html":[2,0,0,7,1],
@@ -249,5 +246,8 @@ var NAVTREEINDEX6 =
 "namespacernn__model__training.html#a7db43a2a990a526f07a19355b34c5f2a":[0,0,0,37],
 "namespacernn__model__training.html#a808cc52d226f0de604aab9138137c1e7":[0,0,0,18],
 "namespacernn__model__training.html#a8f1fbe762302c50e245d006c1645c9c5":[0,0,0,3],
-"namespacernn__model__training.html#a9a0382508924adaffb439961200baf57":[0,0,0,16]
+"namespacernn__model__training.html#a9a0382508924adaffb439961200baf57":[0,0,0,16],
+"namespacernn__model__training.html#a9b75a5f97cc932a098ac26eb3274bb46":[0,0,0,27],
+"namespacernn__model__training.html#aa844e31a1e26e4dd3704bc2e9d2e28d0":[0,0,0,31],
+"namespacernn__model__training.html#aab3ad8b6de6e2b2b414cc5dc4f0fb926":[0,0,0,26]
 };
