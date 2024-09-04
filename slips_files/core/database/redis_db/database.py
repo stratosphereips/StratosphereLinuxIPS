@@ -15,7 +15,12 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-from typing import List, Dict, Optional
+from typing import (
+    List,
+    Dict,
+    Optional,
+    Tuple,
+)
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -114,17 +119,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         if cls.redis_port not in cls._instances:
             cls._set_redis_options()
             cls._read_configuration()
-            if cls.start():
-                cls._instances[cls.redis_port] = super().__new__(cls)
-                # By default the slips internal time is
-                # 0 until we receive something
-                cls.set_slips_internal_time(0)
-                if not cls.get_slips_start_time():
-                    cls._set_slips_start_time()
-                # useful for debugging using 'CLIENT LIST' redis cmd
-                cls.r.client_setname("Slips-DB")
-            else:
-                return False
+            initialized, err = cls.init_redis_server()
+            if not initialized:
+                raise RuntimeError(
+                    f"Failed to connect to the redis server "
+                    f"on port {cls.redis_port}: {err}"
+                )
+
+            cls._instances[cls.redis_port] = super().__new__(cls)
+            # By default the slips internal time is
+            # 0 until we receive something
+            cls.set_slips_internal_time(0)
+            if not cls.get_slips_start_time():
+                cls._set_slips_start_time()
+            # useful for debugging using 'CLIENT LIST' redis cmd
+            cls.r.client_setname("Slips-DB")
+
         return cls._instances[cls.redis_port]
 
     def __init__(
@@ -200,11 +210,21 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             return start_time
 
     @classmethod
-    def start(cls) -> bool:
-        """Flushes and Starts the DB and"""
+    def init_redis_server(cls) -> Tuple[bool, str]:
+        """
+        starts the redis server, connects to the it, and andjusts redis
+        options.
+        Returns a tuple of (connection status, error message).
+        """
         try:
-            if not cls.connect_to_redis_server():
-                return False
+            if cls.start_server:
+                # starts the redis server using cli.
+                # we don't need that when using -k
+                cls._start_a_redis_server()
+
+            connected, err = cls.connect_to_redis_server()
+            if not connected:
+                return False, err
 
             if (
                 cls.deletePrevdb
@@ -230,15 +250,19 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # occurs without throwing errors in slips
             # Even if the DB is not deleted. We need to delete some temp data
             cls.r.delete("zeekfiles")
-            return True
+            return True, ""
+        except RuntimeError as err:
+            return False, str(err)
+
         except redis.exceptions.ConnectionError as ex:
-            print(
-                f"[DB] Can't connect to redis on port {cls.redis_port}: {ex}"
+            return False, (
+                f"Redis ConnectionError: "
+                f"Can't connect to redis on port "
+                f"{cls.redis_port}: {ex}"
             )
-            return False
 
     @staticmethod
-    def start_redis_instance(port: int, db: int) -> redis.StrictRedis:
+    def _connect(port: int, db: int) -> redis.StrictRedis:
         # set health_check_interval to avoid redis ConnectionReset errors:
         # if the connection is idle for more than health_check_interval seconds,
         # a round trip PING/PONG will be attempted before next redis cmd.
@@ -259,21 +283,45 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         )
 
     @classmethod
-    def connect_to_redis_server(cls) -> bool:
+    def _start_a_redis_server(cls) -> bool:
+        cmd = (
+            f"redis-server {cls._conf_file} --port {cls.redis_port} "
+            f" --daemonize yes"
+        )
+        process = subprocess.Popen(
+            cmd,
+            cwd=os.getcwd(),
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        stdout, stderr = process.communicate()
+        stderr = stderr.decode("utf-8")
+        stdout = stdout.decode("utf-8")
+
+        # Check for a specific line indicating a successful start
+        # if the redis server is already in use, the return code will be 0
+        # but we dont care because we checked it in main before starting
+        # the DBManager()
+        if process.returncode != 0:
+            raise RuntimeError(
+                f"database._start_a_redis_server: "
+                f"Redis did not start properly.\n{stderr}\n{stdout}"
+            )
+
+        return True
+
+    @classmethod
+    def connect_to_redis_server(cls) -> Tuple[bool, str]:
         """
         Connects to the given port and Sets r and rcache
+        Returns a tuple of (bool, error message).
         """
-        if cls.start_server:
-            #  starts the redis server using cli. we don't need that when using -k
-            os.system(
-                f"redis-server {cls._conf_file} --port {cls.redis_port}  > /dev/null 2>&1"
-            )
         try:
             # db 0 changes everytime we run slips
-            cls.r = cls.start_redis_instance(cls.redis_port, 0)
-
+            cls.r = cls._connect(cls.redis_port, 0)
             # port 6379 db 0 is cache, delete it using -cc flag
-            cls.rcache = cls.start_redis_instance(6379, 1)
+            cls.rcache = cls._connect(6379, 1)
 
             # fix  ConnectionRefused error by giving redis time to open
             time.sleep(1)
@@ -282,9 +330,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # when you try to execute a command on the server.
             # so make sure it's established first
             cls.r.client_list()
-            return True
-        except redis.exceptions.ConnectionError:
-            return False
+            return True, ""
+        except Exception as e:
+            return False, f"database.connect_to_redis_server: {e}"
 
     @classmethod
     def close_redis_server(cls, redis_port):
@@ -318,9 +366,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         cls.r.set("slips_start_time", now)
 
-    def publish(self, channel, data):
-        """Publish something"""
-        self.r.publish(channel, data)
+    def publish(self, channel, msg):
+        """Publish a msg in the given channel"""
+        # keeps track of how many msgs were published in the given channel
+        self.r.hincrby("msgs_published_at_runtime", channel, 1)
+        self.r.publish(channel, msg)
+
+    def get_msgs_published_in_channel(self, channel: str) -> int:
+        """returns the number of msgs published in a channel"""
+        return self.r.hget("msgs_published_at_runtime", channel)
 
     def subscribe(self, channel: str, ignore_subscribe_messages=True):
         """Subscribe to channel"""
@@ -499,7 +553,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """
         return self.r.zscore("labels", label)
 
-    def get_disabled_modules(self) -> dict:
+    def get_enabled_modules(self) -> List[str]:
+        """
+        Returns a list of the loaded/enabled modules
+        """
+        return self.r.hkeys("PIDs")
+
+    def get_disabled_modules(self) -> List[str]:
         if disabled_modules := self.r.hget("analysis", "disabled_modules"):
             return json.loads(disabled_modules)
         else:
@@ -1163,11 +1223,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         else:
             return self.rcache.hgetall("cached_asn")
 
-    def store_pid(self, process, pid):
+    def store_pid(self, process: str, pid: int):
         """
         Stores each started process or module with it's PID
         :param pid: int
-        :param process: str
+        :param process: module name, str
         """
         self.r.hset("PIDs", process, pid)
 
@@ -1415,3 +1475,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
     def get_stdfile(self, file_type):
         return self.r.get(file_type)
+
+    def incr_msgs_received_in_channel(self, module: str, channel: str):
+        """increments the number of msgs received by a module in the given
+        channel by 1"""
+        self.r.hincrby(f"{module}_msgs_received_at_runtime", channel, 1)
+
+    def get_msgs_received_at_runtime(self, module: str) -> Dict[str, int]:
+        """
+        returns a list of channels this module is subscribed to, and how
+        many msgs were received on each one
+        :returns: {channel_name: number_of_msgs, ...}
+        """
+        return self.r.hgetall(f"{module}_msgs_received_at_runtime")

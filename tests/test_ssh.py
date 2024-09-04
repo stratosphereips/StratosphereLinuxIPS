@@ -35,9 +35,9 @@ daddr = "192.168.1.2"
     ],
 )
 def test_check_successful_ssh(
-    mocker, mock_db, auth_success, expected_called_zeek, expected_called_slips
+    mocker, auth_success, expected_called_zeek, expected_called_slips
 ):
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
     mock_detect_zeek = mocker.patch(
         "modules.flowalerts.ssh.SSH.detect_successful_ssh_by_zeek"
     )
@@ -62,10 +62,8 @@ def test_check_successful_ssh(
         ("F", True),
     ],
 )
-def test_check_ssh_password_guessing(
-    mock_db, auth_success, expected_call_count
-):
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
+def test_check_ssh_password_guessing(auth_success, expected_call_count):
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
     mock_set_evidence = MagicMock()
     ssh.set_evidence.pw_guessing = mock_set_evidence
     for i in range(ssh.pw_guessing_threshold):
@@ -77,17 +75,19 @@ def test_check_ssh_password_guessing(
 
 
 @patch("slips_files.common.parsers.config_parser.ConfigParser")
-def test_read_configuration(mock_config_parser, mock_db):
+def test_read_configuration(
+    mock_config_parser,
+):
     """Test the read_configuration method."""
     mock_parser = mock_config_parser.return_value
     mock_parser.ssh_succesful_detection_threshold.return_value = 12345
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
     ssh.read_configuration()
     assert ssh.ssh_succesful_detection_threshold == 4290
 
 
-def test_detect_successful_ssh_by_slips(mock_db):
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
+def test_detect_successful_ssh_by_slips():
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
     ssh.ssh_succesful_detection_threshold = 1000
 
     mock_db_return = {
@@ -121,8 +121,8 @@ def test_detect_successful_ssh_by_slips(mock_db):
     assert "test_uid" not in ssh.connections_checked_in_ssh_timer_thread
 
 
-def test_detect_successful_ssh_by_zeek(mock_db):
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
+def test_detect_successful_ssh_by_zeek():
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
 
     uid = "test_uid"
     timestamp = "1234567890"
@@ -154,8 +154,8 @@ def test_detect_successful_ssh_by_zeek(mock_db):
     ssh.db.search_tws_for_flow.assert_called_once_with(profileid, twid, uid)
 
 
-def test_detect_successful_ssh_by_zeek_flow_exists_auth_success(mock_db):
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
+def test_detect_successful_ssh_by_zeek_flow_exists_auth_success():
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
 
     mock_flow = {
         "test_uid": json.dumps(
@@ -190,8 +190,8 @@ def test_detect_successful_ssh_by_zeek_flow_exists_auth_success(mock_db):
     assert "test_uid" not in ssh.connections_checked_in_ssh_timer_thread
 
 
-def test_detect_successful_ssh_by_zeek_flow_exists_auth_fail(mock_db):
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
+def test_detect_successful_ssh_by_zeek_flow_exists_auth_fail():
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
 
     mock_flow = {
         "test_uid": json.dumps(
@@ -226,23 +226,22 @@ def test_detect_successful_ssh_by_zeek_flow_exists_auth_fail(mock_db):
     assert "test_uid" not in ssh.connections_checked_in_ssh_timer_thread
 
 
-def test_analyze_no_message(mock_db):
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
+def test_analyze_no_message():
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
     ssh.flowalerts = MagicMock()
     ssh.flowalerts.get_msg.return_value = None
     ssh.check_successful_ssh = MagicMock()
     ssh.check_ssh_password_guessing = MagicMock()
 
-    ssh.analyze()
+    ssh.analyze({})
 
     ssh.check_successful_ssh.assert_not_called()
     ssh.check_ssh_password_guessing.assert_not_called()
 
 
 @pytest.mark.parametrize("auth_success", ["true", "false"])
-def test_analyze_with_message(mock_db, auth_success):
-    ssh = ModuleFactory().create_ssh_analyzer_obj(mock_db)
-    ssh.flowalerts = MagicMock()
+def test_analyze_with_message(auth_success):
+    ssh = ModuleFactory().create_ssh_analyzer_obj()
     ssh.check_successful_ssh = MagicMock()
     ssh.check_ssh_password_guessing = MagicMock()
 
@@ -257,9 +256,8 @@ def test_analyze_with_message(mock_db, auth_success):
         "twid": twid,
         "flow": json.dumps(flow_data),
     }
-    ssh.flowalerts.get_msg.return_value = {"data": json.dumps(msg_data)}
 
-    ssh.analyze()
+    ssh.analyze({"channel": "new_ssh", "data": json.dumps(msg_data)})
 
     ssh.check_successful_ssh.assert_called_once_with(
         uid, timestamp, profileid, twid, auth_success

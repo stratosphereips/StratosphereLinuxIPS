@@ -55,4 +55,4 @@ class StratoLettersExporter:
                 outtuple: str
                 info: List[str, List[float]]
                 letters = info[0]
-                writer.writerow([f"{saddr}-{outtuple}", letters])
+                writer.writerow([f"{saddr}-{outtuple}-{twid}", letters])

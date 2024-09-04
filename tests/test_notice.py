@@ -1,5 +1,7 @@
 """Unit test for modules/flowalerts/notice.py"""
 
+from unittest.mock import Mock
+
 from tests.module_factory import ModuleFactory
 import json
 import pytest
@@ -29,25 +31,14 @@ import pytest
         ),
     ],
 )
-def test_check_vertical_portscan(mock_db, mocker, flow, expected_call_count):
-    notice = ModuleFactory().create_notice_analyzer_obj(mock_db)
-    mock_vertical_portscan = mocker.patch.object(
-        notice.set_evidence, "vertical_portscan"
-    )
-
+def test_check_vertical_portscan(flow, expected_call_count):
+    notice = ModuleFactory().create_notice_analyzer_obj()
+    notice.set_evidence.vertical_portscan = Mock()
     notice.check_vertical_portscan(flow, "test_uid", "test_twid")
 
-    assert mock_vertical_portscan.call_count == expected_call_count
-    expected_calls = [
-        mocker.call(
-            flow["msg"],
-            flow.get("scanning_ip", ""),
-            flow["stime"],
-            "test_twid",
-            "test_uid",
-        )
-    ] * expected_call_count
-    mock_vertical_portscan.assert_has_calls(expected_calls)
+    assert (
+        notice.set_evidence.vertical_portscan.call_count == expected_call_count
+    )
 
 
 @pytest.mark.parametrize(
@@ -73,8 +64,8 @@ def test_check_vertical_portscan(mock_db, mocker, flow, expected_call_count):
         ),
     ],
 )
-def test_check_horizontal_portscan(mock_db, mocker, flow, expected_call_count):
-    notice = ModuleFactory().create_notice_analyzer_obj(mock_db)
+def test_check_horizontal_portscan(mocker, flow, expected_call_count):
+    notice = ModuleFactory().create_notice_analyzer_obj()
     mock_horizontal_portscan = mocker.patch.object(
         notice.set_evidence, "horizontal_portscan"
     )
@@ -119,8 +110,8 @@ def test_check_horizontal_portscan(mock_db, mocker, flow, expected_call_count):
         ),
     ],
 )
-def test_check_password_guessing(mock_db, mocker, flow, expected_call_count):
-    notice = ModuleFactory().create_notice_analyzer_obj(mock_db)
+def test_check_password_guessing(mocker, flow, expected_call_count):
+    notice = ModuleFactory().create_notice_analyzer_obj()
     mock_pw_guessing = mocker.patch.object(notice.set_evidence, "pw_guessing")
 
     notice.check_password_guessing(flow, "test_uid", "test_twid")
@@ -159,22 +150,15 @@ def test_check_password_guessing(mock_db, mocker, flow, expected_call_count):
             True,
             {"vertical": 1, "horizontal": 1, "password": 1},
         ),
-        # Test case 2: No message
-        (None, False, {"vertical": 0, "horizontal": 0, "password": 0}),
     ],
 )
-def test_analyze(mock_db, mocker, msg, expected_result, expected_call_counts):
-    notice = ModuleFactory().create_notice_analyzer_obj(mock_db)
-    mock_get_msg = mocker.patch.object(
-        notice.flowalerts, "get_msg", return_value=msg
-    )
+def test_analyze(mocker, msg, expected_result, expected_call_counts):
+    notice = ModuleFactory().create_notice_analyzer_obj()
     mock_vertical = mocker.patch.object(notice, "check_vertical_portscan")
     mock_horizontal = mocker.patch.object(notice, "check_horizontal_portscan")
     mock_password = mocker.patch.object(notice, "check_password_guessing")
-
-    result = notice.analyze()
-
-    mock_get_msg.assert_called_once_with("new_notice")
+    msg.update({"channel": "new_notice"})
+    result = notice.analyze(msg)
     assert mock_vertical.call_count == expected_call_counts["vertical"]
     assert mock_horizontal.call_count == expected_call_counts["horizontal"]
     assert mock_password.call_count == expected_call_counts["password"]

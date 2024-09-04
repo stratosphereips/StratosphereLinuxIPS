@@ -201,8 +201,7 @@ class Input(ICore):
         :param filepath: full path to a zeek log file
         """
         filename_without_ext = Path(filepath).stem
-        if filename_without_ext not in SUPPORTED_LOGFILES:
-            return True
+        return filename_without_ext not in SUPPORTED_LOGFILES
 
     def get_file_handle(self, filename):
         # Update which files we know about
@@ -221,11 +220,14 @@ class Input(ICore):
                 # delete the old .log file, that has a timestamp in its name.
             except FileNotFoundError:
                 # for example dns.log
-                # zeek changes the dns.log file name every 1d, it adds a timestamp to it
-                # it doesn't create the new dns.log until a new dns request occurs
-                # if slips tries to read from the old dns.log now it won't find it
-                # because it's been renamed and the new one isn't created yet
-                # simply continue until the new log file is created and added to the zeek_files list
+                # zeek changes the dns.log file name every 1d, it adds a
+                # timestamp to it it doesn't create the new dns.log until a
+                # new dns request
+                # occurs
+                # if slips tries to read from the old dns.log now it won't
+                # find it because it's been renamed and the new one isn't
+                # created yet simply continue until the new log file is
+                # created and added to the zeek_files list
                 return False
         return file_handler
 
@@ -337,7 +339,6 @@ class Input(ICore):
             # and there is still no files for us.
             # To cover this case, just refresh the list of files
             self.zeek_files = self.db.get_all_zeek_files()
-            # time.sleep(1)
             return False, False
 
         # to fix the problem of evidence being generated BEFORE their corresponding flows are added to our db
@@ -484,8 +485,8 @@ class Input(ICore):
 
     def print_lines_read(self):
         self.print(
-            f"We read everything. No more input. "
-            f"Stopping input process. Sent {self.lines} lines"
+            f"Done reading all flows. Stopping the input process. "
+            f"Sent {self.lines} lines for the profiler process."
         )
 
     def stdin(self):
@@ -522,7 +523,8 @@ class Input(ICore):
         return True
 
     def handle_binetflow(self):
-        # the number of flows returned by get_flows_number contains the header, so subtract that
+        # the number of flows returned by get_flows_number contains the header
+        # , so subtract that
         self.total_flows = self.get_flows_number(self.given_path) - 1
         self.db.set_input_metadata({"total_flows": self.total_flows})
 
@@ -686,7 +688,8 @@ class Input(ICore):
         connlog_path = os.path.join(self.zeek_dir, "conn.log")
 
         self.print(
-            f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}",
+            f"Number of zeek generated flows in conn.log: "
+            f"{self.get_flows_number(connlog_path)}",
             2,
             0,
         )
@@ -899,7 +902,6 @@ class Input(ICore):
                 self.give_profiler(line_info)
                 self.lines += 1
                 self.print("Done reading 1 CYST flow.\n ", 0, 3)
-                time.sleep(2)
 
         self.is_done_processing()
 

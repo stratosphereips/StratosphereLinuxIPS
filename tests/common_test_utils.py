@@ -4,6 +4,7 @@ import shutil
 import binascii
 import subprocess
 import base64
+from typing import Dict
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -62,6 +63,23 @@ def create_output_dir(dirname):
     return path
 
 
+def msgs_published_are_eq_msgs_received_by_each_module(db) -> bool:
+    """
+    This functions checks that all modules received all msgs that were
+    published for the channels they subscribed to
+    """
+    for module in db.get_enabled_modules():
+        # get channels subscribed to by this module
+        msg_tracker: Dict[str, int] = db.get_msgs_received_at_runtime(module)
+
+        for channel, msgs_received in msg_tracker.items():
+            msgs_received: int
+            channel: str
+            assert db.get_msgs_published_in_channel(channel) == msgs_received
+
+        return True
+
+
 def check_for_text(txt, output_dir):
     """function to parse slips_output file and check for a given string"""
     slips_output = os.path.join(output_dir, "slips_output.txt")
@@ -101,29 +119,16 @@ def has_ignored_errors(line):
             return True
 
 
-def has_errors(output_dir):
+def assert_no_errors(output_dir):
     """function to parse slips_output file and check for errors"""
     error_files = ("slips_output.txt", "errors.log")
     error_files = [os.path.join(output_dir, file) for file in error_files]
 
-    # we can't redirect stderr to a file and check it because we catch all exceptions in slips
+    # we can't redirect stderr to a file and check it because we catch all
+    # exceptions in slips
     for file in error_files:
         with open(file, "r") as f:
             for line in f:
                 if has_ignored_errors(line):
                     continue
-
-                if has_error_keywords(line):
-                    return True
-
-    return False
-
-
-alerts_file = "alerts.log"
-
-
-def run_slips(cmd):
-    """runs slips and waits for it to end"""
-    slips = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)
-    return_code = slips.wait()
-    return return_code
+                assert not has_error_keywords(line), line

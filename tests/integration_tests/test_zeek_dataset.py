@@ -2,7 +2,7 @@ from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
     create_output_dir,
-    has_errors,
+    assert_no_errors,
 )
 from tests.module_factory import ModuleFactory
 import pytest
@@ -83,7 +83,7 @@ def test_zeek_dir(
     command = f"./slips.py  -e 1 -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
     database = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir
@@ -107,7 +107,8 @@ def test_zeek_dir(
         (
             "dataset/test9-mixed-zeek-dir/conn.log",
             4,
-            "non-HTTP established connection",
+            "non-HTTP established connection",  # the flows with uid
+            # CAwUdr34dVnyOwbUuj should trigger this
             "test9-conn_log_only/",
             6659,
         ),
@@ -133,7 +134,7 @@ def test_zeek_conn_log(
     command = f"./slips.py  -e 1 -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
     database = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir

@@ -96,11 +96,6 @@ class ProcessManager:
         ):
             return False
 
-        if self.main.stdout != "":
-            # this means that stdout was redirected to a file,
-            # no need to print the progress bar
-            return False
-
         if (
             self.main.args.growing
             or self.main.args.input_module
@@ -110,9 +105,9 @@ class ProcessManager:
 
         return True
 
-    def start_output_process(self, current_stdout, stderr, slips_logfile):
+    def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
-            stdout=current_stdout,
+            stdout=stdout,
             stderr=stderr,
             slips_logfile=slips_logfile,
             verbose=self.main.args.verbose or 0,
@@ -132,7 +127,6 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
-            stdout=self.main.stdout,
             pipe=self.pbar_recv_pipe,
             slips_mode=self.main.mode,
             pbar_finished=self.pbar_finished,
@@ -717,6 +711,7 @@ class ProcessManager:
                 hitlist = self.get_hitlist_in_order()
                 to_kill_first: List[Process] = hitlist[0]
                 to_kill_last: List[Process] = hitlist[1]
+
                 self.termination_event.set()
 
                 # to make sure we only warn the user once about

@@ -87,15 +87,15 @@ valid_api_key = pytest.mark.skipif(
 @pytest.mark.dependency(name="sufficient_quota")
 @pytest.mark.parametrize("ip", ["8.8.8.8"])
 @valid_api_key
-def test_interpret_rsponse(ip, mock_db):
-    virustotal = ModuleFactory().create_virustotal_obj(mock_db)
+def test_interpret_rsponse(ip):
+    virustotal = ModuleFactory().create_virustotal_obj()
     response = virustotal.api_query_(ip)
     for ratio in virustotal.interpret_response(response):
-        assert type(ratio) == float
+        assert isinstance(ratio, float)
 
 
 @pytest.mark.dependency(depends=["sufficient_quota"])
 @valid_api_key
-def test_get_domain_vt_data(mock_db):
-    virustotal = ModuleFactory().create_virustotal_obj(mock_db)
+def test_get_domain_vt_data():
+    virustotal = ModuleFactory().create_virustotal_obj()
     assert virustotal.get_domain_vt_data("google.com") is not False

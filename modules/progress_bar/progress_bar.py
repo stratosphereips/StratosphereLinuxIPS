@@ -33,12 +33,10 @@ class PBar(IModule):
 
     def init(
         self,
-        stdout: str = None,
         pipe: Connection = None,
         slips_mode: str = None,
         pbar_finished: Event = None,
     ):
-        self.stdout: str = stdout
         self.slips_mode: str = slips_mode
         self.pipe = pipe
         self.done_reading_flows = False
@@ -62,7 +60,7 @@ class PBar(IModule):
             total=self.total_flows,
             leave=True,
             colour="green",
-            desc="Flows read",
+            desc="Flows Processed",
             mininterval=0,  # defines how long to wait between each refresh.
             unit=" flow",
             smoothing=1,

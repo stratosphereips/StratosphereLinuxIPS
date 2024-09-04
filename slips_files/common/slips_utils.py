@@ -110,6 +110,10 @@ class Utils(object):
 
         return sanitized_string
 
+    def is_valid_domain(self, domain: str) -> bool:
+        extracted = tldextract.extract(domain)
+        return bool(extracted.domain) and bool(extracted.suffix)
+
     def detect_data_type(self, data):
         """
         Detects the type of incoming data:
@@ -131,23 +135,11 @@ class Utils(object):
         if validators.md5(data):
             return "md5"
 
-        if validators.domain(data):
-            return "domain"
-
-        # some ti files have / at the end of domains, remove it
-        if data.endswith("/"):
-            data = data[:-1]
-
-        domain = data
-        if domain.startswith("http://"):
-            data = data[7:]
-        elif domain.startswith("https://"):
-            data = data[8:]
-
-        if validators.domain(data):
-            return "domain"
-        elif "/" in data:
+        if validators.url(data):
             return "url"
+
+        if self.is_valid_domain(data):
+            return "domain"
 
         if validators.sha256(data):
             return "sha256"

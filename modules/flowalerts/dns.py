@@ -86,7 +86,7 @@ class DNS(IFlowalertsAnalyzer):
         check if any ip of the given CNAMEs is contacted
         """
         for CNAME in answers:
-            if not validators.domain(CNAME):
+            if not utils.is_valid_domain(CNAME):
                 # it's an ip
                 continue
             ips = self.db.get_domain_resolution(CNAME)
@@ -444,9 +444,8 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_arpa_queries.pop(profileid)
         return True
 
-    def analyze(self):
-        msg = self.flowalerts.get_msg("new_dns")
-        if not msg:
+    def analyze(self, msg):
+        if not utils.is_msg_intended_for(msg, "new_dns"):
             return False
 
         data = json.loads(msg["data"])

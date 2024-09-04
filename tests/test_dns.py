@@ -26,10 +26,8 @@ dst_profileid = f"profile_{daddr}"
         ("example.com", "NXDOMAIN", False),
     ],
 )
-def test_should_detect_dns_without_conn(
-    mock_db, domain, rcode_name, expected_result
-):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_should_detect_dns_without_conn(domain, rcode_name, expected_result):
+    dns = ModuleFactory().create_dns_analyzer_obj()
     assert (
         dns.should_detect_dns_without_conn(domain, rcode_name)
         == expected_result
@@ -63,10 +61,10 @@ def test_should_detect_dns_without_conn(
     ],
 )
 def test_is_cname_contacted(
-    mock_db, answers, cname_resolution, contacted_ips, expected_result
+    answers, cname_resolution, contacted_ips, expected_result
 ):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
-    mock_db.get_domain_resolution.return_value = cname_resolution
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.db.get_domain_resolution.return_value = cname_resolution
 
     assert dns.is_cname_contacted(answers, contacted_ips) is expected_result
 
@@ -85,11 +83,11 @@ def test_is_cname_contacted(
     ],
 )
 def test_detect_young_domains(
-    mock_db, domain, answers, age, should_detect, expected_result
+    domain, answers, age, should_detect, expected_result
 ):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.should_detect_young_domain = Mock(return_value=should_detect)
-    mock_db.get_domain_data.return_value = {"Age": age}
+    dns.db.get_domain_data.return_value = {"Age": age}
 
     assert (
         dns.detect_young_domains(
@@ -109,11 +107,11 @@ def test_detect_young_domains(
     ],
 )
 def test_detect_young_domains_other_cases(
-    mock_db, domain, answers, domain_data, expected_result
+    domain, answers, domain_data, expected_result
 ):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.should_detect_young_domain = Mock(return_value=True)
-    mock_db.get_domain_data.return_value = domain_data
+    dns.db.get_domain_data.return_value = domain_data
 
     result = dns.detect_young_domains(
         domain, answers, timestamp, profileid, twid, uid
@@ -121,11 +119,11 @@ def test_detect_young_domains_other_cases(
 
     assert result is expected_result
     dns.should_detect_young_domain.assert_called_once_with(domain)
-    mock_db.get_domain_data.assert_called_once_with(domain)
+    dns.db.get_domain_data.assert_called_once_with(domain)
 
 
-def test_extract_ips_from_dns_answers(mock_db):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_extract_ips_from_dns_answers():
+    dns = ModuleFactory().create_dns_analyzer_obj()
     answers = [
         "192.168.1.1",
         "2001:db8::1",
@@ -149,17 +147,11 @@ def test_extract_ips_from_dns_answers(mock_db):
     ],
 )
 def test_is_connection_made_by_different_version(
-    mocker, mock_db, contacted_ips, other_ip, expected_result
+    mocker, contacted_ips, other_ip, expected_result
 ):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
-    mocker.patch.object(
-        dns.db,
-        "get_all_contacted_ips_in_profileid_twid",
-        return_value=contacted_ips,
-    )
-    mocker.patch.object(
-        dns.db, "get_the_other_ip_version", return_value=other_ip
-    )
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.db.get_all_contacted_ips_in_profileid_twid.return_value = contacted_ips
+    dns.db.get_the_other_ip_version.return_value = other_ip
 
     assert (
         dns.is_connection_made_by_different_version(profileid, twid, "8.8.8.8")
@@ -177,8 +169,8 @@ def test_is_connection_made_by_different_version(
         ("Hello world!", False),
     ],
 )
-def test_estimate_shannon_entropy(mock_db, string, expected_result):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_estimate_shannon_entropy(string, expected_result):
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.shannon_entropy_threshold = 4.0
 
     entropy = dns.estimate_shannon_entropy(string)
@@ -196,52 +188,43 @@ def test_estimate_shannon_entropy(mock_db, string, expected_result):
     ],
 )
 def test_check_invalid_dns_answers_call_counts(
-    mocker,
-    mock_db,
     domain,
     answers,
     expected_evidence_calls,
     expected_db_deletes,
 ):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
-
-    mock_set_evidence = mocker.patch.object(
-        dns.set_evidence, "invalid_dns_answer"
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    profileid, twid, timestamp, uid = (
+        "profileid_1.1.1.1",
+        "timewindow1",
+        1234567890,
+        "uid1",
     )
-    mock_delete_dns_resolution = mocker.patch.object(
-        mock_db, "delete_dns_resolution"
-    )
-
-    profileid, twid, timestamp, uid = ("profile1", "tw1", 1234567890, "uid1")
-
+    dns.set_evidence.invalid_dns_answer = Mock()
     dns.check_invalid_dns_answers(
         domain, answers, profileid, twid, timestamp, uid
     )
 
-    assert mock_set_evidence.call_count == expected_evidence_calls
-    assert mock_delete_dns_resolution.call_count == expected_db_deletes
-
-
-def test_check_invalid_dns_answers_with_invalid_answer(mocker, mock_db):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
-
-    mock_set_evidence = mocker.patch.object(
-        dns.set_evidence, "invalid_dns_answer"
+    assert (
+        dns.set_evidence.invalid_dns_answer.call_count
+        == expected_evidence_calls
     )
-    mock_delete_dns_resolution = mocker.patch.object(
-        mock_db, "delete_dns_resolution"
-    )
+    assert dns.db.delete_dns_resolution.call_count == expected_db_deletes
 
+
+def test_check_invalid_dns_answers_with_invalid_answer():
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.set_evidence.invalid_dns_answer = Mock()
+    dns.db.delete_dns_resolution = Mock()
     domain, answers = "example.com", ["127.0.0.1"]
-
     dns.check_invalid_dns_answers(
         domain, answers, profileid, twid, timestamp, uid
     )
 
-    mock_set_evidence.assert_called_once_with(
+    dns.set_evidence.invalid_dns_answer.assert_called_once_with(
         domain, answers[0], profileid, twid, timestamp, uid
     )
-    mock_delete_dns_resolution.assert_called_once_with(answers[0])
+    dns.db.delete_dns_resolution.assert_called_once_with(answers[0])
 
 
 @pytest.mark.parametrize(
@@ -267,8 +250,8 @@ def test_check_invalid_dns_answers_with_invalid_answer(mocker, mock_db):
         ),
     ],
 )
-def test_check_dns_arpa_scan(mock_db, domains, timestamps, expected_result):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_check_dns_arpa_scan(domains, timestamps, expected_result):
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.arpa_scan_threshold = 10
 
     for i, (domain, ts) in enumerate(zip(domains, timestamps)):
@@ -288,22 +271,21 @@ def test_check_dns_arpa_scan(mock_db, domains, timestamps, expected_result):
         ("192.168.1.100", Exception("DNS timeout error"), False),
     ],
 )
-def test_is_dns_server(
-    mock_db, test_ip, mock_query_side_effect, expected_result
-):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_is_dns_server(test_ip, mock_query_side_effect, expected_result):
+    dns = ModuleFactory().create_dns_analyzer_obj()
     with patch("dns.query.udp", side_effect=mock_query_side_effect):
         result = dns.is_dns_server(test_ip)
 
     assert result == expected_result
 
 
-def test_read_configuration(mock_db):
+def test_read_configuration():
     """Test if read_configuration correctly reads the entropy threshold."""
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+    dns = ModuleFactory().create_dns_analyzer_obj()
 
     with patch(
-        "slips_files.common.parsers.config_parser.ConfigParser.get_entropy_threshold",
+        "slips_files.common.parsers.config_parser.ConfigParser."
+        "get_entropy_threshold",
         return_value=3.5,
     ):
         dns.read_configuration()
@@ -311,28 +293,23 @@ def test_read_configuration(mock_db):
     assert dns.shannon_entropy_threshold == 3.5
 
 
-def test_check_high_entropy_dns_answers_with_call(mocker, mock_db):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_check_high_entropy_dns_answers_with_call():
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.shannon_entropy_threshold = 4.0
 
     domain = "example.com"
     answers = ["A 1.2.3.4", "TXT abcdefghijklmnopqrstuvwxyz1234567890"]
     expected_entropy = 4.5
+    dns.estimate_shannon_entropy = Mock()
+    dns.estimate_shannon_entropy.return_value = expected_entropy
 
-    mock_estimate_entropy = mocker.patch.object(
-        dns, "estimate_shannon_entropy", return_value=expected_entropy
-    )
-
-    mock_set_evidence = mocker.patch.object(
-        dns.set_evidence, "suspicious_dns_answer"
-    )
+    dns.set_evidence.suspicious_dns_answer = Mock()
 
     dns.check_high_entropy_dns_answers(
         domain, answers, daddr, profileid, twid, timestamp, uid
     )
 
-    assert mock_set_evidence.call_count == 1
-    mock_set_evidence.assert_called_once_with(
+    dns.set_evidence.suspicious_dns_answer.assert_called_once_with(
         domain,
         answers[1],
         expected_entropy,
@@ -342,7 +319,7 @@ def test_check_high_entropy_dns_answers_with_call(mocker, mock_db):
         timestamp,
         uid,
     )
-    assert mock_estimate_entropy.call_count == 1
+    assert dns.estimate_shannon_entropy.call_count == 1
 
 
 @pytest.mark.parametrize(
@@ -363,26 +340,21 @@ def test_check_high_entropy_dns_answers_with_call(mocker, mock_db):
     ],
 )
 def test_check_high_entropy_dns_answers_no_call(
-    mocker, mock_db, domain, answers, expected_entropy
+    domain, answers, expected_entropy
 ):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.shannon_entropy_threshold = 4.0
-
-    mock_estimate_entropy = mocker.patch.object(
-        dns, "estimate_shannon_entropy", return_value=expected_entropy
-    )
-
-    mock_set_evidence = mocker.patch.object(
-        dns.set_evidence, "suspicious_dns_answer"
-    )
+    dns.estimate_shannon_entropy = Mock()
+    dns.estimate_shannon_entropy.return_value = expected_entropy
+    dns.set_evidence.suspicious_dns_answer = Mock()
 
     dns.check_high_entropy_dns_answers(
         domain, answers, daddr, profileid, twid, timestamp, uid
     )
 
-    assert mock_set_evidence.call_count == 0
+    assert dns.set_evidence.suspicious_dns_answer.call_count == 0
     expected_estimate_calls = sum("TXT" in answer for answer in answers)
-    assert mock_estimate_entropy.call_count == expected_estimate_calls
+    assert dns.estimate_shannon_entropy.call_count == expected_estimate_calls
 
 
 @pytest.mark.parametrize(
@@ -441,54 +413,37 @@ def test_check_high_entropy_dns_answers_no_call(
         ),
     ],
 )
-def test_analyze(mocker, mock_db, test_case, expected_calls):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_analyze_new_flow_msg(mocker, test_case, expected_calls):
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.connections_checked_in_dns_conn_timer_thread = []
+    dns.check_dns_without_connection = Mock()
+    dns.check_high_entropy_dns_answers = Mock()
+    dns.check_invalid_dns_answers = Mock()
+    dns.detect_dga = Mock()
+    dns.detect_young_domains = Mock()
+    dns.check_dns_arpa_scan = Mock()
 
-    mock_check_dns_without_connection = mocker.patch.object(
-        dns, "check_dns_without_connection"
-    )
-    mock_check_high_entropy_dns_answers = mocker.patch.object(
-        dns, "check_high_entropy_dns_answers"
-    )
-    mock_check_invalid_dns_answers = mocker.patch.object(
-        dns, "check_invalid_dns_answers"
-    )
-    mock_detect_dga = mocker.patch.object(dns, "detect_dga")
-    mock_detect_young_domains = mocker.patch.object(
-        dns, "detect_young_domains"
-    )
-    mock_check_dns_arpa_scan = mocker.patch.object(dns, "check_dns_arpa_scan")
-
-    dns.flowalerts = Mock(
-        get_msg=Mock(
-            side_effect=[
-                {"data": test_case["data"]},
-                {"data": test_case.get("data2", False)},
-            ]
-        )
-    )
-
-    dns.analyze()
+    dns.analyze({"channel": "new_dns", "data": test_case["data"]})
 
     assert (
-        mock_check_dns_without_connection.call_count
+        dns.check_dns_without_connection.call_count
         == expected_calls["check_dns_without_connection"]
     )
     assert (
-        mock_check_high_entropy_dns_answers.call_count
+        dns.check_high_entropy_dns_answers.call_count
         == expected_calls["check_high_entropy_dns_answers"]
     )
     assert (
-        mock_check_invalid_dns_answers.call_count
+        dns.check_invalid_dns_answers.call_count
         == expected_calls["check_invalid_dns_answers"]
     )
-    assert mock_detect_dga.call_count == expected_calls["detect_dga"]
+    assert dns.detect_dga.call_count == expected_calls["detect_dga"]
     assert (
-        mock_detect_young_domains.call_count
+        dns.detect_young_domains.call_count
         == expected_calls["detect_young_domains"]
     )
     assert (
-        mock_check_dns_arpa_scan.call_count
+        dns.check_dns_arpa_scan.call_count
         == expected_calls["check_dns_arpa_scan"]
     )
 
@@ -547,34 +502,31 @@ def test_analyze(mocker, mock_db, test_case, expected_calls):
     ],
 )
 def test_detect_dga_no_alert(
-    mocker,
-    mock_db,
     rcode_name,
     query,
     initial_nxdomains,
     expected_nxdomains,
     expected_result,
 ):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.nxdomains = initial_nxdomains
     dns.nxdomains_threshold = 10
 
-    mocker.patch.object(
-        dns.flowalerts.whitelist.domain_analyzer,
-        "is_whitelisted",
-        return_value=False,
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock()
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = (
+        False
     )
-    mock_set_evidence = mocker.patch.object(dns.set_evidence, "dga")
+    dns.set_evidence.dga = Mock()
 
     result = dns.detect_dga(rcode_name, query, timestamp, profileid, twid, uid)
 
     assert result == expected_result
     assert dns.nxdomains == expected_nxdomains
-    mock_set_evidence.assert_not_called()
+    dns.set_evidence.dga.assert_not_called()
 
 
-def test_detect_dga_alert(mocker, mock_db):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_detect_dga_alert(mocker):
+    dns = ModuleFactory().create_dns_analyzer_obj()
 
     initial_nxdomains = {
         f"{profileid}_{twid}": (
@@ -595,12 +547,12 @@ def test_detect_dga_alert(mocker, mock_db):
     dns.nxdomains = initial_nxdomains
     dns.nxdomains_threshold = 10
 
-    mocker.patch.object(
-        dns.flowalerts.whitelist.domain_analyzer,
-        "is_whitelisted",
-        return_value=False,
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock()
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = (
+        False
     )
-    mock_set_evidence = mocker.patch.object(dns.set_evidence, "dga")
+
+    dns.set_evidence.dga = Mock()
 
     result = dns.detect_dga(
         "NXDOMAIN", "example10.com", timestamp, profileid, twid, uid
@@ -608,22 +560,20 @@ def test_detect_dga_alert(mocker, mock_db):
     expected_result = True
     assert result == expected_result
     assert dns.nxdomains == {f"{profileid}_{twid}": ([], [])}
-    mock_set_evidence.assert_called_once_with(
+    dns.set_evidence.dga.assert_called_once_with(
         10, timestamp, profileid, twid, [uid] * 10
     )
 
 
-def test_detect_dga_whitelisted(mocker, mock_db):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_detect_dga_whitelisted(mocker):
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.nxdomains = {}
     dns.nxdomains_threshold = 10
 
-    mocker.patch.object(
-        dns.flowalerts.whitelist.domain_analyzer,
-        "is_whitelisted",
-        return_value=True,
-    )
-    mock_set_evidence = mocker.patch.object(dns.set_evidence, "dga")
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock()
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = True
+
+    dns.set_evidence.dga = Mock()
 
     result = dns.detect_dga(
         "NXDOMAIN", "example.com", timestamp, profileid, twid, uid
@@ -632,7 +582,7 @@ def test_detect_dga_whitelisted(mocker, mock_db):
     expected_result = False
     assert result == expected_result
     assert dns.nxdomains == {}
-    mock_set_evidence.assert_not_called()
+    dns.set_evidence.dga.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -644,20 +594,20 @@ def test_detect_dga_whitelisted(mocker, mock_db):
     ],
     ids=["arpa_domain", "local_domain"],
 )
-def test_detect_dga_special_domains(mocker, mock_db, query, expected_result):
-    dns = ModuleFactory().create_dns_analyzer_obj(mock_db)
+def test_detect_dga_special_domains(mocker, query, expected_result):
+    dns = ModuleFactory().create_dns_analyzer_obj()
     dns.nxdomains = {}
     dns.nxdomains_threshold = 10
 
-    mocker.patch.object(
-        dns.flowalerts.whitelist.domain_analyzer,
-        "is_whitelisted",
-        return_value=False,
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock()
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = (
+        False
     )
-    mock_set_evidence = mocker.patch.object(dns.set_evidence, "dga")
+
+    dns.set_evidence.dga = Mock()
 
     result = dns.detect_dga("NXDOMAIN", query, timestamp, profileid, twid, uid)
 
     assert result == expected_result
     assert dns.nxdomains == {}
-    mock_set_evidence.assert_not_called()
+    dns.set_evidence.dga.assert_not_called()

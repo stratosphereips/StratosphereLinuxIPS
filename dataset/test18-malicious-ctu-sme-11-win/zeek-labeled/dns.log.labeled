@@ -1,0 +1,31 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	dns
+#open	2024-08-16-09-45-01
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	trans_id	rtt	query	qclass	qclass_name	qtype	qtype_name	rcode	rcode_name	AA	TC	RD	RA	Z	answers	TTLs	rejected	label	detailedlabel
+#types	time	string	addr	port	addr	port	enum	count	interval	string	count	string	count	string	count	string	bool	bool	bool	bool	count	vector[string]	vector[interval]	bool	string	string
+1677024250.148118	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148119	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148119	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148119	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148119	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148119	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148119	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148119	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148220	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148220	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.148220	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247383	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247384	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247624	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247624	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247624	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247624	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247624	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247624	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247624	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247625	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+1677024250.247701	CyYZ9pbydD79wo9we	192.168.1.107	56510	224.0.0.252	5355	udp	48298	-	nwin3	1	C_INTERNET	255	*	-	-	F	F	F	F	0	-	-	F	Benign	From_benign-To_benign-Multicast
+#close	2024-08-16-09-45-01

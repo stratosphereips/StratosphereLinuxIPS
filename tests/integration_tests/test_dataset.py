@@ -7,7 +7,8 @@ from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
     create_output_dir,
-    has_errors,
+    assert_no_errors,
+    msgs_published_are_eq_msgs_received_by_each_module,
 )
 from tests.module_factory import ModuleFactory
 import pytest
@@ -67,21 +68,27 @@ def test_binetflow(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py  -e 1 -t -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1"
+    command = (
+        f"./slips.py -e 1 -t "
+        f"-o {output_dir} "
+        f"-P {redis_port} "
+        f"-f {binetflow_path}  "
+        f">  {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
 
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
-    database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+    db = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
-    profiles = database.get_profiles_len()
+    profiles = db.get_profiles_len()
     assert profiles > expected_profiles
+    assert msgs_published_are_eq_msgs_received_by_each_module(db)
 
     log_file = os.path.join(output_dir, alerts_file)
     assert is_evidence_present(log_file, expected_evidence) is True
-
     shutil.rmtree(output_dir)
 
 
@@ -102,26 +109,27 @@ def test_binetflow(
 )
 def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
     output_dir = create_output_dir(output_dir)
-    # we have an established flow in suricata file to this port 8760/udp
-    # {"timestamp":"2021-06-06T15:57:37.272281+0200","flow_id":1630350322382106,"event_type":"flow",
-    # "src_ip":"192.168.1.129","src_port":36101,"dest_ip":"122.248.252.67","dest_port":8760,"proto":
-    # "UDP","app_proto":"failed","flow":{"pkts_toserver":2,"pkts_toclient":2,"bytes_toserver":256,
-    # "bytes_toclient":468,"start":"2021-06-07T04:26:27.668954+0200","end":"2021-06-07T04:26:27.838624+0200"
-    # ,"age":0,"state":"established","reason":"shutdown","alerted":false},"host":"stratosphere.org"}
-
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py  -e 1 -t -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
+    command = (
+        f"./slips.py -e 1 -t "
+        f"-f {suricata_path} "
+        f"-o {output_dir} "
+        f"-P {redis_port} "
+        f"> {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
 
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
-    database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+    db = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
-    profiles = database.get_profiles_len()
-    # todo the profiles should be way more than 10, maybe 76, but it varies each run, we need to sy why
+    profiles = db.get_profiles_len()
+    # todo the profiles should be way more than 10, maybe 76, but it varies
+    #  each run, we need to sy why
     assert profiles > 10
+    assert msgs_published_are_eq_msgs_received_by_each_module(db)
 
     log_file = os.path.join(output_dir, alerts_file)
     assert any(is_evidence_present(log_file, ev) for ev in expected_evidence)
@@ -145,19 +153,26 @@ def test_nfdump(nfdump_path, output_dir, redis_port):
     # expected_evidence = 'Connection to unknown destination port 902/TCP'
 
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py -e 1 -t -f {nfdump_path}  -o {output_dir} -P {redis_port} > {output_file} 2>&1"
+    command = (
+        f"./slips.py -e 1 -t "
+        f"-f {nfdump_path} "
+        f"-o {output_dir} "
+        f"-P {redis_port} "
+        f"> {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
 
-    database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+    db = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
-    profiles = database.get_profiles_len()
-    assert has_errors(output_dir) is False
+    profiles = db.get_profiles_len()
+    assert_no_errors(output_dir)
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips
     # doesn't generate a const number of profiles per file)
     assert profiles > 0
+    assert msgs_published_are_eq_msgs_received_by_each_module(db)
 
     # log_file = os.path.join(output_dir, alerts_file)
     # assert is_evidence_present(log_file, expected_evidence) == True

@@ -33,6 +33,7 @@ class DBManager(IObservable):
         self.rdb = RedisDB(
             self.logger, redis_port, start_redis_server, **kwargs
         )
+
         # in some rare cases we don't wanna start sqlite,
         # like when using -S
         # we just want to connect to redis to get the PIDs
@@ -550,6 +551,18 @@ class DBManager(IObservable):
 
     def get_intuples_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_intuples_from_profile_tw(*args, **kwargs)
+
+    def incr_msgs_received_in_channel(self, *args, **kwargs):
+        return self.rdb.incr_msgs_received_in_channel(*args, **kwargs)
+
+    def get_enabled_modules(self, *args, **kwargs):
+        return self.rdb.get_enabled_modules(*args, **kwargs)
+
+    def get_msgs_received_at_runtime(self, *args, **kwargs):
+        return self.rdb.get_msgs_received_at_runtime(*args, **kwargs)
+
+    def get_msgs_published_in_channel(self, *args, **kwargs):
+        return self.rdb.get_msgs_published_in_channel(*args, **kwargs)
 
     def get_dhcp_flows(self, *args, **kwargs):
         return self.rdb.get_dhcp_flows(*args, **kwargs)

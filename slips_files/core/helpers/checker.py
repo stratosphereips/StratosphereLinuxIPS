@@ -1,7 +1,5 @@
 import os
-import subprocess
 import sys
-from typing import Tuple
 
 import psutil
 
@@ -34,7 +32,8 @@ class Checker:
         if self.main.args.input_module:
             input_information = "input_module"
             input_type = self.main.args.input_module
-            # this is the default value of the type of flows slips reads from a module
+            # this is the default value of the type of flows slips reads from
+            # a module
             line_type = "zeek"
             return input_type, input_information, line_type
 
@@ -170,12 +169,16 @@ class Checker:
             child.kill()
 
     def clear_redis_cache(self):
+        redis_cache_default_server_port = 6379
+        redis_cache_server_pid = self.main.redis_man.get_pid_of_redis_server(
+            redis_cache_default_server_port
+        )
         print("Deleting Cache DB in Redis.")
         self.main.redis_man.clear_redis_cache_database()
         self.main.input_information = ""
         self.main.zeek_dir = ""
         self.main.redis_man.log_redis_server_pid(
-            6379, self.main.redis_man.get_pid_of_redis_server(6379)
+            redis_cache_default_server_port, redis_cache_server_pid
         )
         self.main.terminate_slips()
 
@@ -193,38 +196,8 @@ class Checker:
         # this function assumes that the module is created in module/name/name.py
         if f"{module}.py" not in os.listdir(f"modules/{module}/"):
             print(
-                f"{module} is not available in modules/{module}/{module}.py. Stopping slips"
+                f"{module} is not available in modules/{module}/{module}.py. "
+                f"Stopping Slips."
             )
             return False
-
         return True
-
-    def check_output_redirection(self) -> Tuple[str, str, str]:
-        """
-        Determine where slips will place stdout,
-         stderr and logfile based on slips mode
-         @return (current_stdout, stderr, slips_logfile)
-         current_stdout will be '' if it's not redirected to a file
-        """
-        # lsof will provide a list of all open fds belonging to slips
-        command = f"lsof -p {self.main.pid}"
-        result = subprocess.run(command.split(), capture_output=True)
-        # Get command output
-        output = result.stdout.decode("utf-8")
-        # if stdout is being redirected we'll find '1w' in one of the lines
-        # 1 means stdout, w means write mode
-        # by default, stdout is not redirected
-        current_stdout = ""
-        for line in output.splitlines():
-            if "1w" in line:
-                # stdout is redirected, get the file
-                current_stdout = line.split(" ")[-1]
-                break
-
-        if self.main.mode == "daemonized":
-            stderr = self.main.daemon.stderr
-            slips_logfile = self.main.daemon.stdout
-        else:
-            stderr = os.path.join(self.main.args.output, "errors.log")
-            slips_logfile = os.path.join(self.main.args.output, "slips.log")
-        return current_stdout, stderr, slips_logfile

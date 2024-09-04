@@ -117,6 +117,7 @@ class ASN:
             ipwhois.exceptions.HTTPLookupError,
             ipwhois.exceptions.ASNRegistryError,
             ipwhois.exceptions.ASNParseError,
+            ipwhois.exceptions.HTTPRateLimitError,
         ):
             # private ip or RDAP lookup failed. don't cache
             # or ASN lookup failed with no more methods to try

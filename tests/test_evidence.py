@@ -1,4 +1,3 @@
-from uuid import uuid4
 from tests.module_factory import ModuleFactory
 import pytest
 from slips_files.core.evidence_structure.evidence import validate_timestamp
@@ -18,7 +17,6 @@ from slips_files.core.evidence_structure.evidence import (
     Recon,
     Attempt,
     evidence_to_dict,
-    dict_to_evidence,
 )
 
 
@@ -42,7 +40,7 @@ from slips_files.core.evidence_structure.evidence import (
             "tcp",
             80,
             Tag.RECON,
-            str(uuid4()),
+            "d4afbe1a-1cb9-4db4-9fac-74f2da6f5f34",
             10,
             0.8,
         ),
@@ -61,7 +59,7 @@ from slips_files.core.evidence_structure.evidence import (
             "udp",
             53,
             Tag.RECON,
-            str(uuid4()),
+            "d243119b-2aae-4d7a-8ea1-edf3c6e72f4a",
             5,
             0.5,
         ),
@@ -73,11 +71,11 @@ def test_evidence_post_init(
     attacker_value,
     threat_level,
     category,
+    victim_value,
     profile_ip,
     timewindow_number,
     uid,
     timestamp,
-    victim_value,
     proto_value,
     port,
     source_target_tag,
@@ -97,22 +95,22 @@ def test_evidence_post_init(
     )
     proto = ModuleFactory().create_proto_obj()[proto_value.upper()]
     evidence = ModuleFactory().create_evidence_obj(
-        evidence_type=evidence_type,
-        description=description,
-        attacker=attacker,
-        threat_level=threat_level,
-        category=category,
-        victim=victim,
-        profile=profile,
-        timewindow=timewindow,
-        uid=uid,
-        timestamp=timestamp,
-        proto=proto,
-        port=port,
-        source_target_tag=source_target_tag,
-        id=id,
-        conn_count=conn_count,
-        confidence=confidence,
+        evidence_type,
+        description,
+        attacker,
+        threat_level,
+        category,
+        victim,
+        profile,
+        timewindow,
+        uid,
+        timestamp,
+        proto,
+        port,
+        source_target_tag,
+        id,
+        conn_count,
+        confidence,
     )
     assert evidence.evidence_type == evidence_type
     assert evidence.description == description
@@ -183,7 +181,7 @@ def test_evidence_post_init_invalid_uid():
             "tcp",
             80,
             Tag.RECON,
-            str(uuid4()),
+            "d243119b-2aae-4d7a-8ea1-edf3c6e72f4a",
             10,
             0.8,
         ),
@@ -202,7 +200,7 @@ def test_evidence_post_init_invalid_uid():
             "udp",
             53,
             Tag.RECON,
-            str(uuid4()),
+            "d243119b-2aae-4d7a-8ea1-e4f3c6e72f4a",
             5,
             0.5,
         ),
@@ -221,7 +219,7 @@ def test_evidence_post_init_invalid_uid():
             "icmp",
             0,
             Tag.MALWARE,
-            str(uuid4()),
+            "d243119b-2aae-4d7a-8ea1-eef3c6e72f4a",
             1000,
             1.0,
         ),

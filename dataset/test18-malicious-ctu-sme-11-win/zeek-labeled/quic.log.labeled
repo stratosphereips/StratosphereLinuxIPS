@@ -1,0 +1,11 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	quic
+#open	2024-08-16-09-45-01
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	version	client_initial_dcid	client_scid	server_scid	server_name	client_protocol	history	label	detailedlabel
+#types	time	string	addr	port	addr	port	string	string	string	string	string	string	string	string	string
+1677024203.323807	CTxPmyQW2fMBdp2ld	192.168.1.107	56508	162.159.136.232	443	1	bf9f35805f9c8e38	(empty)	0197e3a65ca1c4b5fd97fca626a1f94b9d117fba	discord.com	h3	ISIZZZZIIIIisiIIhh	Benign	From_benign-To_benign-Cloudflare
+1677024494.131672	C68Cut3WHGKMFF4JEa	192.168.1.107	51001	142.251.36.131	443	1	15d5e665e3a46b8f	(empty)	d5d5e665e3a46b8f	clientservices.googleapis.com	h3	ISIZZZZisiHH	Benign	From_benign-To_benign-1e100
+#close	2024-08-16-09-45-01

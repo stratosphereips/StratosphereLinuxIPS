@@ -50,7 +50,6 @@ from tests.module_factory import ModuleFactory
     ],
 )
 def test_young_domain(
-    mock_db,
     domain,
     age,
     stime,
@@ -61,8 +60,8 @@ def test_young_domain(
     expected_call_count,
 ):
     """Testing the young_domain method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.young_domain(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.young_domain(
         domain=domain,
         age=age,
         stime=stime,
@@ -72,7 +71,7 @@ def test_young_domain(
         answers=answers,
     )
 
-    assert mock_db.set_evidence.call_count == expected_call_count
+    assert set_ev.db.set_evidence.call_count == expected_call_count
 
 
 @pytest.mark.parametrize(
@@ -118,11 +117,12 @@ def test_young_domain(
     ],
 )
 def test_multiple_ssh_versions(
-    mock_db, cached_versions, current_versions, role, expected_description
+    cached_versions, current_versions, role, expected_description
 ):
-    """Test cases for multiple_ssh_versions with different versions, roles, and edge cases."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.multiple_ssh_versions(
+    """Test cases for multiple_ssh_versions with different versions,
+    roles, and edge cases."""
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.multiple_ssh_versions(
         srcip="192.168.0.1",
         cached_versions=cached_versions,
         current_versions=current_versions,
@@ -133,11 +133,11 @@ def test_multiple_ssh_versions(
     )
 
     if expected_description is None:
-        assert mock_db.set_evidence.call_count == 0
+        assert set_ev.db.set_evidence.call_count == 0
         return
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.MULTIPLE_SSH_VERSIONS
     assert evidence.attacker.value == "192.168.0.1"
@@ -195,7 +195,6 @@ def test_multiple_ssh_versions(
     ],
 )
 def test_different_localnet_usage(
-    mock_db,
     daddr,
     portproto,
     ip_outside_localnet,
@@ -209,11 +208,11 @@ def test_different_localnet_usage(
     - dst IP outside localnet using ARP
     - dst IP outside localnet using port
     """
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    mock_db.get_local_network.return_value = "192.168.0.0/16"
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.db.get_local_network.return_value = "192.168.0.0/16"
     start_time = datetime.datetime(2023, 5, 6, 12, 0, 0)
-    mock_db.get_slips_start_time.return_value = start_time.timestamp()
-    set_evidence_helper.different_localnet_usage(
+    set_ev.db.get_slips_start_time.return_value = start_time.timestamp()
+    set_ev.different_localnet_usage(
         daddr=daddr,
         portproto=portproto,
         profileid="profile_192.168.0.1",
@@ -223,8 +222,8 @@ def test_different_localnet_usage(
         ip_outside_localnet=ip_outside_localnet,
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.DIFFERENT_LOCALNET
     assert evidence.attacker.direction == expected_attacker_direction
@@ -237,10 +236,10 @@ def test_different_localnet_usage(
     assert evidence.description == expected_description
 
 
-def test_device_changing_ips(mock_db):
+def test_device_changing_ips():
     """Testing the device_changing_ips method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.device_changing_ips(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.device_changing_ips(
         smac="00:11:22:33:44:55",
         old_ip="10.0.0.1",
         profileid="profile_192.168.0.1",
@@ -249,8 +248,8 @@ def test_device_changing_ips(mock_db):
         timestamp="2023-05-06T12:00:00Z",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.DEVICE_CHANGING_IP
     assert evidence.attacker.value == "192.168.0.1"
@@ -261,10 +260,10 @@ def test_device_changing_ips(mock_db):
     assert evidence.uid == ["unique_id"]
 
 
-def test_non_ssl_port_443_conn(mock_db):
+def test_non_ssl_port_443_conn():
     """Testing the non_ssl_port_443_conn method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.non_ssl_port_443_conn(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.non_ssl_port_443_conn(
         daddr="10.0.0.1",
         profileid="profile_192.168.0.1",
         timestamp="2023-05-06T12:00:00Z",
@@ -272,8 +271,8 @@ def test_non_ssl_port_443_conn(mock_db):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.NON_SSL_PORT_443_CONNECTION
     assert evidence.attacker.value == "192.168.0.1"
@@ -311,11 +310,11 @@ def test_non_ssl_port_443_conn(mock_db):
         ),
     ],
 )
-def test_incompatible_cn(mock_db, org, daddr, expected_description):
+def test_incompatible_cn(org, daddr, expected_description):
     """Testing the incompatible_CN method."""
-    mock_db.get_ip_identification.return_value = "- Some Information -"
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.incompatible_cn(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.db.get_ip_identification.return_value = "- Some Information -"
+    set_ev.incompatible_cn(
         org=org,
         timestamp="2023-05-06T12:00:00Z",
         daddr=daddr,
@@ -324,8 +323,8 @@ def test_incompatible_cn(mock_db, org, daddr, expected_description):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.INCOMPATIBLE_CN
     assert evidence.attacker.value == "192.168.0.1"
@@ -351,10 +350,10 @@ def test_incompatible_cn(mock_db, org, daddr, expected_description):
         (300, 3.00),
     ],
 )
-def test_dga(mock_db, nxdomains, expected_confidence):
+def test_dga(nxdomains, expected_confidence):
     """Testing the DGA method with different nxdomains values."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.dga(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.dga(
         nxdomains=nxdomains,
         stime="2023-05-06T12:00:00Z",
         profileid="profile_192.168.0.1",
@@ -362,8 +361,8 @@ def test_dga(mock_db, nxdomains, expected_confidence):
         uid=["unique_id"],
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.DGA_NXDOMAINS
     assert evidence.attacker.value == "192.168.0.1"
@@ -388,12 +387,10 @@ def test_dga(mock_db, nxdomains, expected_confidence):
         (2.5 * 1024 * 1024, 2.62144),
     ],
 )
-def test_pastebin_download(
-    mock_db, bytes_downloaded, expected_response_body_len
-):
+def test_pastebin_download(bytes_downloaded, expected_response_body_len):
     """Testing the pastebin_download method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    result = set_evidence_helper.pastebin_download(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    result = set_ev.pastebin_download(
         bytes_downloaded=bytes_downloaded,
         timestamp="2023-05-06T12:00:00Z",
         profileid="profile_192.168.0.1",
@@ -402,8 +399,8 @@ def test_pastebin_download(
     )
     assert result is True
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.PASTEBIN_DOWNLOAD
     assert evidence.attacker.value == "192.168.0.1"
@@ -446,7 +443,6 @@ def test_pastebin_download(
     ],
 )
 def test_dns_without_conn(
-    mock_db,
     domain,
     timestamp,
     profileid,
@@ -456,8 +452,8 @@ def test_dns_without_conn(
     expected_victim,
 ):
     """Testing the dns_without_conn method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.dns_without_conn(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.dns_without_conn(
         domain=domain,
         timestamp=timestamp,
         profileid=profileid,
@@ -465,8 +461,8 @@ def test_dns_without_conn(
         uid=uid,
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.DNS_WITHOUT_CONNECTION
     assert evidence.attacker.value == expected_attacker
@@ -479,10 +475,10 @@ def test_dns_without_conn(
     assert evidence.confidence == 0.8
 
 
-def test_dns_arpa_scan(mock_db):
+def test_dns_arpa_scan():
     """Testing the dns_arpa_scan method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    result = set_evidence_helper.dns_arpa_scan(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    result = set_ev.dns_arpa_scan(
         arpa_scan_threshold=150,
         stime="2023-05-06T12:00:00Z",
         profileid="profile_192.168.0.1",
@@ -491,8 +487,8 @@ def test_dns_arpa_scan(mock_db):
     )
 
     assert result is True
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.DNS_ARPA_SCAN
     assert evidence.attacker.value == "192.168.0.1"
@@ -513,14 +509,14 @@ def test_dns_arpa_scan(mock_db):
         (6, 0.8),
     ],
 )
-def test_conn_without_dns(mock_db, time_difference_hours, expected_confidence):
+def test_conn_without_dns(time_difference_hours, expected_confidence):
     """Testing the conn_without_dns method, including time-based confidence adjustment."""
     start_time = datetime.datetime.now() - datetime.timedelta(
         hours=time_difference_hours
     )
-    mock_db.get_slips_start_time.return_value = start_time.timestamp()
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.conn_without_dns(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.db.get_slips_start_time.return_value = start_time.timestamp()
+    set_ev.conn_without_dns(
         daddr="10.0.0.1",
         timestamp=(start_time + datetime.timedelta(minutes=15)).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
@@ -530,8 +526,8 @@ def test_conn_without_dns(mock_db, time_difference_hours, expected_confidence):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.confidence == expected_confidence
 
@@ -565,11 +561,11 @@ def test_conn_without_dns(mock_db, time_difference_hours, expected_confidence):
         ),
     ],
 )
-def test_unknown_port(mock_db, daddr, dport, proto, expected_description):
+def test_unknown_port(daddr, dport, proto, expected_description):
     """Testing the unknown_port method."""
-    mock_db.get_ip_identification.return_value = ""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.unknown_port(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.db.get_ip_identification.return_value = ""
+    set_ev.unknown_port(
         daddr=daddr,
         dport=dport,
         proto=proto,
@@ -579,8 +575,8 @@ def test_unknown_port(mock_db, daddr, dport, proto, expected_description):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.UNKNOWN_PORT
     assert evidence.attacker.value == "192.168.0.1"
@@ -593,10 +589,10 @@ def test_unknown_port(mock_db, daddr, dport, proto, expected_description):
     assert evidence.description == expected_description
 
 
-def test_pw_guessing(mock_db):
+def test_pw_guessing():
     """Testing the pw_guessing method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.pw_guessing(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.pw_guessing(
         msg="192.168.0.1 appears to be guessing "
         "SSH passwords (seen in 30 connections)",
         timestamp="2023-05-06T12:00:00Z",
@@ -605,8 +601,8 @@ def test_pw_guessing(mock_db):
         by="detection_model",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.PASSWORD_GUESSING
     assert evidence.attacker.value == "192.168.0.1"
@@ -632,10 +628,10 @@ def test_pw_guessing(mock_db):
         ("Seen at least 1000 unique hosts scanned on 53/tcp", 1000),
     ],
 )
-def test_horizontal_portscan(mock_db, msg, expected_conn_count):
+def test_horizontal_portscan(msg, expected_conn_count):
     """Testing the horizontal_portscan method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.horizontal_portscan(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.horizontal_portscan(
         msg=msg,
         timestamp="2023-05-06T12:00:00Z",
         profileid="profile_192.168.0.1",
@@ -643,8 +639,8 @@ def test_horizontal_portscan(mock_db, msg, expected_conn_count):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.HORIZONTAL_PORT_SCAN
     assert evidence.attacker.value == "192.168.0.1"
@@ -690,12 +686,10 @@ def test_horizontal_portscan(mock_db, msg, expected_conn_count):
         ),
     ],
 )
-def test_conn_to_private_ip(
-    mock_db, proto, daddr, dport, expected_description
-):
+def test_conn_to_private_ip(proto, daddr, dport, expected_description):
     """Testing the conn_to_private_ip method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.conn_to_private_ip(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.conn_to_private_ip(
         proto=proto,
         daddr=daddr,
         dport=dport,
@@ -705,8 +699,8 @@ def test_conn_to_private_ip(
         timestamp="2023-05-06T12:00:00Z",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.CONNECTION_TO_PRIVATE_IP
     assert evidence.attacker.value == "192.168.0.1"
@@ -719,7 +713,7 @@ def test_conn_to_private_ip(
     assert evidence.description == expected_description
 
 
-def test_gre_tunnel(mock_db):
+def test_gre_tunnel():
     """Testing the GRE_tunnel method."""
     tunnel_info = {
         "profileid": "profile_192.168.0.1",
@@ -731,11 +725,11 @@ def test_gre_tunnel(mock_db):
             "uid": "unique_id",
         },
     }
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.GRE_tunnel(tunnel_info)
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.GRE_tunnel(tunnel_info)
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.GRE_TUNNEL
     assert evidence.attacker.value == "192.168.0.1"
@@ -793,12 +787,11 @@ def test_gre_tunnel(mock_db):
     ],
 )
 def test_ssh_successful(
-    mock_db, twid, saddr, daddr, size, uid, timestamp, by, expected_description
+    twid, saddr, daddr, size, uid, timestamp, by, expected_description
 ):
-    """Testing the ssh_successful method."""
-    mock_db.get_ip_identification.return_value = ""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.ssh_successful(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.db.get_ip_identification.return_value = ""
+    set_ev.ssh_successful(
         twid=twid,
         saddr=saddr,
         daddr=daddr,
@@ -808,8 +801,8 @@ def test_ssh_successful(
         by=by,
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.SSH_SUCCESSFUL
     assert evidence.attacker.value == saddr
@@ -823,10 +816,10 @@ def test_ssh_successful(
     assert evidence.description == expected_description
 
 
-def test_long_connection(mock_db):
+def test_long_connection():
     """Testing the long_connection method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.long_connection(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.long_connection(
         daddr="10.0.0.1",
         duration=7200,
         profileid="profile_192.168.0.1",
@@ -835,8 +828,8 @@ def test_long_connection(mock_db):
         timestamp="2023-05-06T12:00:00Z",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.LONG_CONNECTION
     assert evidence.attacker.value == "192.168.0.1"
@@ -894,7 +887,6 @@ def test_long_connection(mock_db):
     ],
 )
 def test_self_signed_certificates(
-    mock_db,
     profileid,
     daddr,
     uid,
@@ -906,8 +898,8 @@ def test_self_signed_certificates(
     expected_profile_ip_2,
 ):
     """Testing the self_signed_certificates method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.self_signed_certificates(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.self_signed_certificates(
         profileid=profileid,
         twid="timewindow1",
         daddr=daddr,
@@ -916,8 +908,8 @@ def test_self_signed_certificates(
         server_name=server_name,
     )
 
-    assert mock_db.set_evidence.call_count == 2
-    call_args, _ = mock_db.set_evidence.call_args_list[0]
+    assert set_ev.db.set_evidence.call_count == 2
+    call_args, _ = set_ev.db.set_evidence.call_args_list[0]
     evidence = call_args[0]
     assert evidence.evidence_type == EvidenceType.SELF_SIGNED_CERTIFICATE
     assert evidence.attacker.value == expected_attacker_ip_1
@@ -926,7 +918,7 @@ def test_self_signed_certificates(
     assert evidence.category == IDEACategory.ANOMALY_BEHAVIOUR
     assert evidence.profile.ip == expected_profile_ip_1
     assert evidence.timewindow.number == 1
-    call_args, _ = mock_db.set_evidence.call_args_list[1]
+    call_args, _ = set_ev.db.set_evidence.call_args_list[1]
     evidence = call_args[0]
     assert evidence.evidence_type == EvidenceType.SELF_SIGNED_CERTIFICATE
     assert evidence.attacker.value == expected_attacker_ip_2
@@ -937,10 +929,10 @@ def test_self_signed_certificates(
     assert evidence.timewindow.number == 1
 
 
-def test_multiple_reconnection_attempts(mock_db):
+def test_multiple_reconnection_attempts():
     """Testing the multiple_reconnection_attempts method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.multiple_reconnection_attempts(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.multiple_reconnection_attempts(
         profileid="profile_192.168.0.1",
         twid="timewindow2",
         daddr="10.0.0.1",
@@ -949,8 +941,8 @@ def test_multiple_reconnection_attempts(mock_db):
         reconnections=10,
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert (
         evidence.evidence_type == EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS
@@ -989,7 +981,6 @@ def test_multiple_reconnection_attempts(mock_db):
     ],
 )
 def test_connection_to_multiple_ports(
-    mock_db,
     profileid,
     attacker,
     victim,
@@ -999,8 +990,8 @@ def test_connection_to_multiple_ports(
     """Testing the connection_to_multiple_ports method with parametrization.
     This test verifies the correct direction and profile_ip based on the input parameters.
     """
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.connection_to_multiple_ports(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.connection_to_multiple_ports(
         profileid=profileid,
         twid="timewindow3",
         uid=["unique_id"],
@@ -1010,8 +1001,8 @@ def test_connection_to_multiple_ports(
         attacker=attacker,
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.CONNECTION_TO_MULTIPLE_PORTS
     assert evidence.attacker.direction == expected_attacker_direction
@@ -1052,11 +1043,11 @@ def test_connection_to_multiple_ports(
     ],
 )
 def test_suspicious_dns_answer(
-    mock_db, query, answer, entropy, daddr, profileid, twid, stime, uid
+    query, answer, entropy, daddr, profileid, twid, stime, uid
 ):
     """Testing the suspicious_dns_answer method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.suspicious_dns_answer(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.suspicious_dns_answer(
         query=query,
         answer=answer,
         entropy=entropy,
@@ -1067,8 +1058,8 @@ def test_suspicious_dns_answer(
         uid=uid,
     )
 
-    assert mock_db.set_evidence.call_count == 2
-    args, _ = mock_db.set_evidence.call_args_list[0]
+    assert set_ev.db.set_evidence.call_count == 2
+    args, _ = set_ev.db.set_evidence.call_args_list[0]
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.HIGH_ENTROPY_DNS_ANSWER
     assert evidence.attacker.value == daddr
@@ -1078,7 +1069,7 @@ def test_suspicious_dns_answer(
     assert evidence.profile.ip == daddr
     assert evidence.timewindow.number == int(twid.replace("timewindow", ""))
     assert evidence.uid == [uid]
-    args, _ = mock_db.set_evidence.call_args_list[1]
+    args, _ = set_ev.db.set_evidence.call_args_list[1]
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.HIGH_ENTROPY_DNS_ANSWER
     assert evidence.attacker.value == profileid.split("_")[-1]
@@ -1109,10 +1100,10 @@ def test_suspicious_dns_answer(
         ("test.com", "", "The DNS query test.com was resolved to "),
     ],
 )
-def test_invalid_dns_answer(mock_db, query, answer, expected_description):
+def test_invalid_dns_answer(query, answer, expected_description):
     """Testing the invalid_dns_answer method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.invalid_dns_answer(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.invalid_dns_answer(
         query=query,
         answer=answer,
         profileid="profile_192.168.0.1",
@@ -1121,8 +1112,8 @@ def test_invalid_dns_answer(mock_db, query, answer, expected_description):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.INVALID_DNS_RESOLUTION
     assert evidence.attacker.value == "192.168.0.1"
@@ -1158,7 +1149,6 @@ def test_invalid_dns_answer(mock_db, query, answer, expected_description):
     ],
 )
 def test_for_port_0_connection(
-    mock_db,
     profileid,
     attacker,
     victim,
@@ -1167,8 +1157,8 @@ def test_for_port_0_connection(
     victim_direction,
 ):
     """Testing the for_port_0_connection method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.for_port_0_connection(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.for_port_0_connection(
         saddr="192.168.0.1",
         daddr="10.0.0.1",
         sport=12345,
@@ -1181,8 +1171,8 @@ def test_for_port_0_connection(
         attacker=attacker,
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.PORT_0_CONNECTION
     assert evidence.attacker.value == attacker
@@ -1206,7 +1196,7 @@ def test_for_port_0_connection(
         ("192.168.0.1", ThreatLevel.LOW, "192.168.0.1"),
     ],
 )
-def test_malicious_ja3s(mock_db, attacker_ip, threat_level, profile_ip):
+def test_malicious_ja3s(attacker_ip, threat_level, profile_ip):
     """Testing the malicious_ja3s method."""
     malicious_ja3_dict = {
         "ja3_hash_1": '{"threat_level": "high", '
@@ -1214,8 +1204,8 @@ def test_malicious_ja3s(mock_db, attacker_ip, threat_level, profile_ip):
         "ja3_hash_2": '{"threat_level": "medium", '
         '"description": "Suspicious activity", "tags": "suspicious"}',
     }
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.malicious_ja3s(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.malicious_ja3s(
         malicious_ja3_dict=malicious_ja3_dict,
         twid="timewindow9",
         uid="unique_id",
@@ -1225,8 +1215,8 @@ def test_malicious_ja3s(mock_db, attacker_ip, threat_level, profile_ip):
         ja3="ja3_hash_1",
     )
 
-    assert mock_db.set_evidence.call_count == 2
-    call_args_list = mock_db.set_evidence.call_args_list
+    assert set_ev.db.set_evidence.call_count == 2
+    call_args_list = set_ev.db.set_evidence.call_args_list
     assert any(
         args[0].attacker.value == attacker_ip
         and args[0].threat_level == threat_level
@@ -1252,7 +1242,7 @@ def test_malicious_ja3s(mock_db, attacker_ip, threat_level, profile_ip):
         ),
     ],
 )
-def test_malicious_ja3(mock_db, attacker_ip, threat_level, description, tags):
+def test_malicious_ja3(attacker_ip, threat_level, description, tags):
     """Testing the malicious_ja3 method."""
     malicious_ja3_dict = {
         "ja3_hash_8": '{"threat_level": "high", '
@@ -1262,9 +1252,9 @@ def test_malicious_ja3(mock_db, attacker_ip, threat_level, description, tags):
         '"description": "Suspicious activity", '
         '"tags": ""}',
     }
-    mock_db.get_ip_identification.return_value = ""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.malicious_ja3(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.db.get_ip_identification.return_value = ""
+    set_ev.malicious_ja3(
         malicious_ja3_dict=malicious_ja3_dict,
         twid="timewindow10",
         uid="unique_id",
@@ -1274,8 +1264,8 @@ def test_malicious_ja3(mock_db, attacker_ip, threat_level, description, tags):
         ja3=f"ja3_hash_{int(threat_level.value * 10)}",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.MALICIOUS_JA3
     assert evidence.attacker.value == attacker_ip
@@ -1303,10 +1293,10 @@ def test_malicious_ja3(mock_db, attacker_ip, threat_level, description, tags):
         ("10.0.0.1", ThreatLevel.HIGH, "10.0.0.1"),
     ],
 )
-def test_data_exfiltration(mock_db, attacker_ip, threat_level, profile_ip):
+def test_data_exfiltration(attacker_ip, threat_level, profile_ip):
     """Testing the data_exfiltration method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.data_exfiltration(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.data_exfiltration(
         daddr="10.0.0.1",
         src_mbs=100.0,
         profileid="profile_192.168.0.1",
@@ -1315,14 +1305,14 @@ def test_data_exfiltration(mock_db, attacker_ip, threat_level, profile_ip):
         timestamp="2023-05-06T12:00:00Z",
     )
 
-    assert mock_db.set_evidence.call_count == 2
+    assert set_ev.db.set_evidence.call_count == 2
 
-    call_args_1, _ = mock_db.set_evidence.call_args_list[0]
+    call_args_1, _ = set_ev.db.set_evidence.call_args_list[0]
     evidence_1 = call_args_1[0]
     assert evidence_1.attacker.value == "192.168.0.1"
     assert evidence_1.threat_level == ThreatLevel.INFO
     assert evidence_1.profile.ip == "192.168.0.1"
-    call_args_2, _ = mock_db.set_evidence.call_args_list[1]
+    call_args_2, _ = set_ev.db.set_evidence.call_args_list[1]
     evidence_2 = call_args_2[0]
     assert evidence_2.attacker.value == "10.0.0.1"
     assert evidence_2.threat_level == ThreatLevel.HIGH
@@ -1350,10 +1340,10 @@ def test_data_exfiltration(mock_db, attacker_ip, threat_level, profile_ip):
         ),
     ],
 )
-def test_bad_smtp_login(mock_db, saddr, daddr, stime, twid, uid):
+def test_bad_smtp_login(saddr, daddr, stime, twid, uid):
     """Testing the bad_smtp_login method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.bad_smtp_login(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.bad_smtp_login(
         saddr=saddr,
         daddr=daddr,
         stime=stime,
@@ -1361,8 +1351,8 @@ def test_bad_smtp_login(mock_db, saddr, daddr, stime, twid, uid):
         uid=uid,
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.BAD_SMTP_LOGIN
     assert evidence.attacker.value == saddr
@@ -1401,17 +1391,17 @@ def test_bad_smtp_login(mock_db, saddr, daddr, stime, twid, uid):
         ),
     ],
 )
-def test_smtp_bruteforce(mock_db, flow, twid, uid, smtp_bruteforce_threshold):
+def test_smtp_bruteforce(flow, twid, uid, smtp_bruteforce_threshold):
     """Testing the smtp_bruteforce method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.smtp_bruteforce(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.smtp_bruteforce(
         flow=flow,
         twid=twid,
         uid=uid,
         smtp_bruteforce_threshold=smtp_bruteforce_threshold,
     )
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.SMTP_LOGIN_BRUTEFORCE
     assert evidence.attacker.value == flow["saddr"]
@@ -1469,7 +1459,6 @@ def test_smtp_bruteforce(mock_db, flow, twid, uid, smtp_bruteforce_threshold):
     ],
 )
 def test_malicious_ssl(
-    mock_db,
     ssl_info,
     ssl_info_from_db,
     expected_threat_levels,
@@ -1477,13 +1466,13 @@ def test_malicious_ssl(
 ):
     """Testing the malicious_ssl method with parametrization
     and mocking for get_ip_identification."""
-    mock_db.get_ip_identification.return_value = ""
 
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.malicious_ssl(ssl_info, ssl_info_from_db)
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.db.get_ip_identification.return_value = ""
+    set_ev.malicious_ssl(ssl_info, ssl_info_from_db)
 
-    assert mock_db.set_evidence.call_count == 2
-    for i, (args, _) in enumerate(mock_db.set_evidence.call_args_list):
+    assert set_ev.db.set_evidence.call_count == 2
+    for i, (args, _) in enumerate(set_ev.db.set_evidence.call_args_list):
         evidence = args[0]
         assert evidence.threat_level == expected_threat_levels[i]
         assert evidence.description == expected_descriptions[i]
@@ -1498,10 +1487,10 @@ def test_malicious_ssl(
         ("192.168.0.1", "8.8.8.8", "8.8.8.8"),
     ],
 )
-def test_doh(mock_db, attacker_ip, victim_ip, profile_ip):
+def test_doh(attacker_ip, victim_ip, profile_ip):
     """Testing the doh method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.doh(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.doh(
         daddr=attacker_ip,
         profileid=f"profile_{profile_ip}",
         twid="timewindow1",
@@ -1509,8 +1498,8 @@ def test_doh(mock_db, attacker_ip, victim_ip, profile_ip):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.DIFFERENT_LOCALNET
     assert evidence.attacker.value == attacker_ip
@@ -1522,10 +1511,10 @@ def test_doh(mock_db, attacker_ip, victim_ip, profile_ip):
     assert evidence.uid == ["unique_id"]
 
 
-def test_non_http_port_80_conn(mock_db):
+def test_non_http_port_80_conn():
     """Testing the non_http_port_80_conn method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.non_http_port_80_conn(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.non_http_port_80_conn(
         daddr="10.0.0.1",
         profileid="profile_192.168.0.1",
         timestamp="2023-05-06T12:00:00Z",
@@ -1533,8 +1522,8 @@ def test_non_http_port_80_conn(mock_db):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 2
-    args, _ = mock_db.set_evidence.call_args_list[0]
+    assert set_ev.db.set_evidence.call_count == 2
+    args, _ = set_ev.db.set_evidence.call_args_list[0]
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.NON_HTTP_PORT_80_CONNECTION
     assert evidence.attacker.value == "192.168.0.1"
@@ -1545,7 +1534,7 @@ def test_non_http_port_80_conn(mock_db):
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["unique_id"]
 
-    args, _ = mock_db.set_evidence.call_args_list[1]
+    args, _ = set_ev.db.set_evidence.call_args_list[1]
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.NON_HTTP_PORT_80_CONNECTION
     assert evidence.attacker.value == "10.0.0.1"
@@ -1557,10 +1546,10 @@ def test_non_http_port_80_conn(mock_db):
     assert evidence.uid == ["unique_id"]
 
 
-def test_vertical_portscan(mock_db):
+def test_vertical_portscan():
     """Testing the vertical_portscan method."""
-    set_evidence_helper = ModuleFactory().create_set_evidence_helper(mock_db)
-    set_evidence_helper.vertical_portscan(
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    set_ev.vertical_portscan(
         msg="192.168.0.1 has scanned at least 60 unique ports of host 192.168.0.2 in",
         scanning_ip="192.168.0.1",
         timestamp="2023-05-06T12:00:00Z",
@@ -1568,8 +1557,8 @@ def test_vertical_portscan(mock_db):
         uid="unique_id",
     )
 
-    assert mock_db.set_evidence.call_count == 1
-    args, _ = mock_db.set_evidence.call_args
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.VERTICAL_PORT_SCAN
     assert evidence.attacker.value == "192.168.0.1"

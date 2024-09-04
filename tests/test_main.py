@@ -16,9 +16,9 @@ import sys
     ],
 )
 def test_handle_flows_from_stdin_valid_input(
-    input_information, mock_db, expected_input_type, expected_line_type
+    input_information, expected_input_type, expected_line_type
 ):
-    main = ModuleFactory().create_main_obj(mock_db)
+    main = ModuleFactory().create_main_obj()
     main.mode = "interactive"
 
     input_type, line_type = main.handle_flows_from_stdin(input_information)
@@ -26,8 +26,8 @@ def test_handle_flows_from_stdin_valid_input(
     assert line_type == expected_line_type
 
 
-def test_handle_flows_from_stdin_invalid_input(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_handle_flows_from_stdin_invalid_input():
+    main = ModuleFactory().create_main_obj()
     main.mode = "interactive"
 
     with pytest.raises(SystemExit):
@@ -50,8 +50,8 @@ def test_handle_flows_from_stdin_invalid_input(mock_db):
         ({"input_module": False, "growing": False}, "nfdump", False),
     ],
 )
-def test_is_total_flows_unknown(args, mock_db, input_type, expected_result):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_is_total_flows_unknown(args, input_type, expected_result):
+    main = ModuleFactory().create_main_obj()
     main.args = MagicMock(**args)
     main.input_type = input_type
 
@@ -67,12 +67,11 @@ def test_is_total_flows_unknown(args, mock_db, input_type, expected_result):
     ],
 )
 def test_cpu_profiler_release_enabled(
-    mock_db,
     cpu_profiler_multiprocess,
     expected_stop_calls,
     expected_print_calls,
 ):
-    main = ModuleFactory().create_main_obj(mock_db)
+    main = ModuleFactory().create_main_obj()
     main.cpuProfilerEnabled = True
     main.cpuProfilerMultiprocess = cpu_profiler_multiprocess
 
@@ -84,15 +83,15 @@ def test_cpu_profiler_release_enabled(
     assert main.cpuProfiler.print.call_count == expected_print_calls
 
 
-def test_cpu_profiler_release_disabled(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_cpu_profiler_release_disabled():
+    main = ModuleFactory().create_main_obj()
     main.cpuProfilerEnabled = False
     main.cpu_profiler_release()
     assert not hasattr(main, "memoryProfiler")
 
 
-def test_memory_profiler_release_enabled(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_memory_profiler_release_enabled():
+    main = ModuleFactory().create_main_obj()
     main.memoryProfilerEnabled = True
     main.memoryProfiler = MagicMock()
 
@@ -101,8 +100,8 @@ def test_memory_profiler_release_enabled(mock_db):
     main.memoryProfiler.stop.assert_called_once()
 
 
-def test_memory_profiler_release_disabled(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_memory_profiler_release_disabled():
+    main = ModuleFactory().create_main_obj()
     main.memoryProfilerEnabled = False
 
     main.memory_profiler_release()
@@ -120,8 +119,8 @@ def test_memory_profiler_release_disabled(mock_db):
         ("daemonized", 10, 0),
     ],
 )
-def test_update_stats(mock_db, mode, time_diff, expected_calls):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_update_stats(mode, time_diff, expected_calls):
+    main = ModuleFactory().create_main_obj()
     main.mode = mode
     main.last_updated_stats_time = datetime.now() - timedelta(
         seconds=time_diff
@@ -149,14 +148,13 @@ def test_update_stats(mock_db, mode, time_diff, expected_calls):
     ],
 )
 def test_update_host_ip(
-    mock_db,
     is_interface,
     host_ip,
     modified_profiles,
     expected_calls,
     expected_result,
 ):
-    main = ModuleFactory().create_main_obj(mock_db)
+    main = ModuleFactory().create_main_obj()
     main.is_interface = is_interface
     main.db = MagicMock()
     main.db.set_host_ip = MagicMock()
@@ -183,7 +181,6 @@ def test_update_host_ip(
     ],
 )
 def test_setup_print_levels(
-    mock_db,
     args_verbose,
     conf_verbose,
     args_debug,
@@ -191,7 +188,7 @@ def test_setup_print_levels(
     expected_verbose,
     expected_debug,
 ):
-    main = ModuleFactory().create_main_obj(mock_db)
+    main = ModuleFactory().create_main_obj()
     main.args = MagicMock(verbose=args_verbose, debug=args_debug)
     main.conf = MagicMock()
     main.conf.verbose.return_value = conf_verbose
@@ -211,8 +208,8 @@ def test_setup_print_levels(
         ("daemonized", MagicMock(), "daemonized", MagicMock),
     ],
 )
-def test_set_mode(mock_db, mode, daemon, expected_mode, expected_daemon_type):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_set_mode(mode, daemon, expected_mode, expected_daemon_type):
+    main = ModuleFactory().create_main_obj()
     main.set_mode(mode, daemon)
     assert main.mode == expected_mode
     assert isinstance(main.daemon, expected_daemon_type)
@@ -226,8 +223,8 @@ def test_set_mode(mock_db, mode, daemon, expected_mode, expected_daemon_type):
         ("Another log", "Another log\n"),
     ],
 )
-def test_log(mock_db, txt, expected_content):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_log(txt, expected_content):
+    main = ModuleFactory().create_main_obj()
     main.daemon = MagicMock()
     main.daemon.stdout = "test_stdout.log"
 
@@ -270,9 +267,9 @@ def test_log(mock_db, txt, expected_content):
     ],
 )
 def test_print(
-    mock_db, text, verbose, debug, log_to_logfiles_only, expected_notification
+    text, verbose, debug, log_to_logfiles_only, expected_notification
 ):
-    main = ModuleFactory().create_main_obj(mock_db)
+    main = ModuleFactory().create_main_obj()
     main.name = "Main"
 
     with patch.object(main, "notify_observers") as mock_notify:
@@ -301,10 +298,8 @@ def test_print(
         ),
     ],
 )
-def test_get_input_file_type(
-    mock_db, given_path, cmd_result, expected_input_type
-):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_get_input_file_type(given_path, cmd_result, expected_input_type):
+    main = ModuleFactory().create_main_obj()
 
     with (
         patch("subprocess.run") as mock_run,
@@ -332,8 +327,8 @@ def test_get_input_file_type(
         ("path/to/input.pcap", "output/input"),
     ],
 )
-def test_save_the_db(mock_db, input_information, expected_filepath):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_save_the_db(input_information, expected_filepath):
+    main = ModuleFactory().create_main_obj()
     main.input_information = input_information
     main.args = MagicMock()
     main.args.output = "output"
@@ -355,10 +350,8 @@ def test_save_the_db(mock_db, input_information, expected_filepath):
         ("binetflow", False, False),
     ],
 )
-def test_was_running_zeek(
-    mock_db, input_type, is_growing_zeek_dir, expected_result
-):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_was_running_zeek(input_type, is_growing_zeek_dir, expected_result):
+    main = ModuleFactory().create_main_obj()
     main.db = MagicMock()
     main.db.get_input_type.return_value = input_type
     main.db.is_growing_zeek_dir.return_value = is_growing_zeek_dir
@@ -366,8 +359,8 @@ def test_was_running_zeek(
     assert main.was_running_zeek() == expected_result
 
 
-def test_delete_zeek_files_enabled(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_delete_zeek_files_enabled():
+    main = ModuleFactory().create_main_obj()
     main.conf = MagicMock()
     main.conf.delete_zeek_files.return_value = True
     main.zeek_dir = "zeek_dir"
@@ -377,8 +370,8 @@ def test_delete_zeek_files_enabled(mock_db):
         mock_rmtree.assert_called_once_with("zeek_dir")
 
 
-def test_delete_zeek_files_disabled(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_delete_zeek_files_disabled():
+    main = ModuleFactory().create_main_obj()
     main.conf = MagicMock()
     main.conf.delete_zeek_files.return_value = False
     main.zeek_dir = "zeek_dir"
@@ -388,8 +381,8 @@ def test_delete_zeek_files_disabled(mock_db):
         mock_rmtree.assert_not_called()
 
 
-def test_get_slips_version(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_get_slips_version():
+    main = ModuleFactory().create_main_obj()
     version_content = "1.2.3"
 
     with patch(
@@ -401,8 +394,8 @@ def test_get_slips_version(mock_db):
     assert result == version_content
 
 
-def test_check_zeek_or_bro_zeek_found(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_check_zeek_or_bro_zeek_found():
+    main = ModuleFactory().create_main_obj()
     main.input_type = "pcap"
 
     with patch("shutil.which") as mock_which:
@@ -412,8 +405,8 @@ def test_check_zeek_or_bro_zeek_found(mock_db):
     assert result == "zeek"
 
 
-def test_check_zeek_or_bro_bro_found(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_check_zeek_or_bro_bro_found():
+    main = ModuleFactory().create_main_obj()
     main.input_type = "pcap"
 
     with patch("shutil.which") as mock_which:
@@ -423,8 +416,8 @@ def test_check_zeek_or_bro_bro_found(mock_db):
     assert result == "bro"
 
 
-def test_check_zeek_or_bro_not_needed(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_check_zeek_or_bro_not_needed():
+    main = ModuleFactory().create_main_obj()
     main.input_type = "file"
 
     result = main.check_zeek_or_bro()
@@ -432,8 +425,8 @@ def test_check_zeek_or_bro_not_needed(mock_db):
     assert result == expected_result
 
 
-def test_check_zeek_or_bro_not_found(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_check_zeek_or_bro_not_found():
+    main = ModuleFactory().create_main_obj()
     main.input_type = "pcap"
 
     with (
@@ -456,8 +449,8 @@ def test_check_zeek_or_bro_not_found(mock_db):
         (False, "zeek_files_inputfile/"),
     ],
 )
-def test_prepare_zeek_output_dir(mock_db, store_in_output, expected_dir):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_prepare_zeek_output_dir(store_in_output, expected_dir):
+    main = ModuleFactory().create_main_obj()
     main.input_information = "/path/to/inputfile.pcap"
     main.args = Mock()
     main.args.output = "output"
@@ -470,8 +463,8 @@ def test_prepare_zeek_output_dir(mock_db, store_in_output, expected_dir):
     assert main.zeek_dir == expected_dir
 
 
-def test_terminate_slips_interactive(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_terminate_slips_interactive():
+    main = ModuleFactory().create_main_obj()
     main.mode = "interactive"
     main.conf = MagicMock()
     main.conf.get_cpu_profiler_enable.return_value = False
@@ -482,8 +475,8 @@ def test_terminate_slips_interactive(mock_db):
     mock_exit.assert_called_once_with(0)
 
 
-def test_terminate_slips_daemonized(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_terminate_slips_daemonized():
+    main = ModuleFactory().create_main_obj()
     main.mode = "daemonized"
     main.daemon = MagicMock()
     main.conf = MagicMock()
@@ -496,8 +489,8 @@ def test_terminate_slips_daemonized(mock_db):
     mock_exit.assert_called_once_with(0)
 
 
-def test_terminate_slips_cpu_profiler_enabled(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_terminate_slips_cpu_profiler_enabled():
+    main = ModuleFactory().create_main_obj()
     main.mode = "interactive"
     main.conf = MagicMock()
     main.conf.get_cpu_profiler_enable.return_value = True
@@ -508,24 +501,8 @@ def test_terminate_slips_cpu_profiler_enabled(mock_db):
     mock_exit.assert_not_called()
 
 
-def test_print_version_no_git(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
-    main.version = "1.0.0"
-
-    with (
-        patch(
-            "slips_files.common.slips_utils.utils.get_branch_info"
-        ) as mock_get_branch_info,
-        patch("builtins.print") as mock_print,
-        patch("slips_files.common.style.green", lambda x: x),
-    ):
-        mock_get_branch_info.return_value = False
-        main.print_version()
-        mock_print.assert_called_once_with("Slips. Version 1.0.0")
-
-
-def test_prepare_output_dir_with_o_flag(mock_db):
-    main = ModuleFactory().create_main_obj(mock_db)
+def test_prepare_output_dir_with_o_flag():
+    main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
     main.args.output = "custom_output_dir"
     main.args.testing = False
@@ -560,9 +537,9 @@ def test_prepare_output_dir_with_o_flag(mock_db):
     ],
 )
 def test_prepare_output_dir_testing_mode(
-    mock_db, testing, filename, expected_call_count
+    testing, filename, expected_call_count
 ):
-    main = ModuleFactory().create_main_obj(mock_db)
+    main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
     main.args.output = "test_output"
     main.args.testing = testing

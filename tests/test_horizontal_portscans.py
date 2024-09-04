@@ -22,12 +22,12 @@ def generate_random_ip():
     return ".".join(str(random.randint(0, 255)) for _ in range(4))
 
 
-def enough_dstips_to_reach_the_threshold(mock_db):
+def enough_dstips_to_reach_the_threshold():
     """
     returns conns to dport that are not enough
     to reach the minimum dports to trigger the first scan
     """
-    module = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    module = ModuleFactory().create_horizontal_portscan_obj()
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dstips: int = random.randint(
@@ -56,7 +56,7 @@ def enough_dstips_to_reach_the_threshold(mock_db):
     ],
 )
 def test_check_if_enough_dstips_to_trigger_an_evidence(
-    mock_db, prev_amount_of_dstips, cur_amount_of_dstips, expected_return_val
+    prev_amount_of_dstips, cur_amount_of_dstips, expected_return_val
 ):
     """
     slip sdetects can based on the number of current dports scanned to the
@@ -68,7 +68,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence(
     timewindow = "timewindow0"
     dport = 5555
 
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
 
     key: str = horizontal_ps.get_twid_identifier(profileid, timewindow, dport)
     horizontal_ps.cached_thresholds_per_tw[key] = prev_amount_of_dstips
@@ -79,12 +79,12 @@ def test_check_if_enough_dstips_to_trigger_an_evidence(
     assert enough == expected_return_val
 
 
-def test_check_if_enough_dstips_to_trigger_an_evidence_no_cache(mock_db):
+def test_check_if_enough_dstips_to_trigger_an_evidence_no_cache():
     """
     Test the check_if_enough_dstips_to_trigger_an_evidence
     method when there is no cached threshold.
     """
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     profileid = "profile_1.1.1.1"
     timewindow = "timewindow0"
     dport = 5555
@@ -98,10 +98,8 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_no_cache(mock_db):
     assert enough is True
 
 
-def test_check_if_enough_dstips_to_trigger_an_evidence_less_than_minimum(
-    mock_db,
-):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_check_if_enough_dstips_to_trigger_an_evidence_less_than_minimum():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     profileid = "profile_1.1.1.1"
     timewindow = "timewindow0"
     dport = 5555
@@ -115,12 +113,12 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_less_than_minimum(
     assert enough is False
 
 
-def not_enough_dstips_to_reach_the_threshold(mock_db):
+def not_enough_dstips_to_reach_the_threshold():
     """
     returns conns to dport that are not enough
     to reach the minimum dports to trigger the first scan
     """
-    module = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    module = ModuleFactory().create_horizontal_portscan_obj()
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
     amount_of_dstips: int = random.randint(
@@ -137,8 +135,8 @@ def not_enough_dstips_to_reach_the_threshold(mock_db):
     return res
 
 
-def test_check_if_enough_dstips_to_trigger_an_evidence_equal_min_dips(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_check_if_enough_dstips_to_trigger_an_evidence_equal_min_dips():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     profileid = "profile_1.1.1.1"
     timewindow = "timewindow0"
     dport = 80
@@ -158,19 +156,20 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_equal_min_dips(mock_db):
     ],
 )
 def test_check_if_enough_dstips_to_trigger_an_evidence_min_dstips_threshold(
-    get_test_conns, expected_return_val: bool, mock_db
+    get_test_conns,
+    expected_return_val: bool,
 ):
     """
     test by mocking the connections returned from the database
     """
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
 
     profileid = "profile_1.1.1.1"
     timewindow = "timewindow0"
     dport = 5555
 
-    dports: dict = get_test_conns(mock_db)
-    mock_db.get_data_from_profile_tw.return_value = dports
+    dports: dict = get_test_conns()
+    horizontal_ps.db.get_data_from_profile_tw.return_value = dports
 
     cache_key = horizontal_ps.get_twid_identifier(profileid, timewindow, dport)
     amount_of_dips = len(dports[dport]["dstips"])
@@ -183,8 +182,8 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_min_dstips_threshold(
     )
 
 
-def test_get_not_estab_dst_ports(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_get_not_estab_dst_ports():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     profileid = "profile_1.1.1.1"
     twid = "timewindow0"
     protocol = "TCP"
@@ -199,7 +198,7 @@ def test_get_not_estab_dst_ports(mock_db):
             }
         },
     }
-    mock_db.get_data_from_profile_tw.return_value = mock_dports
+    horizontal_ps.db.get_data_from_profile_tw.return_value = mock_dports
 
     dports = horizontal_ps.get_not_estab_dst_ports(
         protocol, state, profileid, twid
@@ -207,15 +206,15 @@ def test_get_not_estab_dst_ports(mock_db):
     assert dports == mock_dports
 
 
-def test_get_not_estab_dst_ports_missing_dstports(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_get_not_estab_dst_ports_missing_dstports():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     profileid = "profile_1.1.1.1"
     twid = "timewindow0"
     protocol = "TCP"
     state = "Not Established"
 
     mock_dports = {80: {"dstips": {"8.8.8.8": {}}}}
-    mock_db.get_data_from_profile_tw.return_value = mock_dports
+    horizontal_ps.db.get_data_from_profile_tw.return_value = mock_dports
 
     dports = horizontal_ps.get_not_estab_dst_ports(
         protocol, state, profileid, twid
@@ -223,18 +222,18 @@ def test_get_not_estab_dst_ports_missing_dstports(mock_db):
     assert dports == mock_dports
 
 
-def test_get_uids_empty_dstips(mock_db):
+def test_get_uids_empty_dstips():
     """
     Test the get_uids method with an empty dstips dictionary.
     """
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     dstips = {}
     uids = horizontal_ps.get_uids(dstips)
     assert uids == []
 
 
-def test_get_uids(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_get_uids():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     dstips = {
         "1.1.1.1": {"uid": ["uid1", "uid2"]},
         "2.2.2.2": {"uid": ["uid3", "uid4", "uid5"]},
@@ -244,12 +243,12 @@ def test_get_uids(mock_db):
     assert set(uids) == {"uid1", "uid2", "uid3", "uid4", "uid5"}
 
 
-def test_get_uids_duplicate(mock_db):
+def test_get_uids_duplicate():
     """
     Test the get_uids method with a dstips dictionary that has
     duplicate uids
     """
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     dstips = {
         "1.1.1.1": {"uid": ["uid1", "uid2", "uid1"]},
         "2.2.2.2": {"uid": ["uid3", "uid4", "uid5"]},
@@ -259,17 +258,17 @@ def test_get_uids_duplicate(mock_db):
     assert set(uids) == {"uid1", "uid2", "uid3", "uid4", "uid5"}
 
 
-def test_get_not_estab_dst_ports_no_data(mock_db):
+def test_get_not_estab_dst_ports_no_data():
     """
     Test the get_not_estab_dst_ports method when there is no data.
     """
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     profileid = "profile_1.1.1.1"
     twid = "timewindow0"
     protocol = "TCP"
     state = "Not Established"
 
-    mock_db.get_data_from_profile_tw.return_value = {}
+    horizontal_ps.db.get_data_from_profile_tw.return_value = {}
 
     dports = horizontal_ps.get_not_estab_dst_ports(
         protocol, state, profileid, twid
@@ -299,7 +298,7 @@ def test_get_packets_sent_empty_dstips():
     assert pkts_sent == 0
 
 
-def test_get_packets_sent_invalid_values(mock_db):
+def test_get_packets_sent_invalid_values():
     horizontal_ps = HorizontalPortscan(MagicMock())
     dstips = {
         "1.1.1.1": {"pkts": "invalid", "spkts": 50},
@@ -331,8 +330,8 @@ def test_get_cache_key_empty_dport():
     assert cache_key is False
 
 
-def test_get_cache_key_none_dport(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_get_cache_key_none_dport():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     profileid = "profile_1.1.1.1"
     twid = "timewindow0"
     dport = None
@@ -345,18 +344,18 @@ def test_get_cache_key_none_dport(mock_db):
     "modules.network_discovery.horizontal_portscan.HorizontalPortscan.get_not_estab_dst_ports"
 )
 def test_check_broadcast_or_multicast_address(
-    mock_get_not_estab_dst_ports, mock_db
+    mock_get_not_estab_dst_ports,
 ):
-    mock_db.get_field_separator.return_value = "_"
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
+    horizontal_ps.db.get_field_separator.return_value = "_"
     profileid = "profile_255.255.255.255"
     twid = "timewindow0"
     horizontal_ps.check(profileid, twid)
     mock_get_not_estab_dst_ports.assert_not_called()
 
 
-def test_set_evidence_horizontal_portscan_empty_port_info(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_set_evidence_horizontal_portscan_empty_port_info():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     evidence = {
         "protocol": "TCP",
         "profileid": "profile_1.1.1.1",
@@ -369,23 +368,23 @@ def test_set_evidence_horizontal_portscan_empty_port_info(mock_db):
         "amount_of_dips": 10,
     }
 
-    mock_db.get_port_info.return_value = ""
-    mock_db.set_evidence.return_value = None
+    horizontal_ps.db.get_port_info.return_value = ""
+    horizontal_ps.db.set_evidence.return_value = None
 
     horizontal_ps.set_evidence_horizontal_portscan(evidence)
 
-    mock_db.set_evidence.assert_called_once()
-    call_args = mock_db.set_evidence.call_args[0][0]
+    horizontal_ps.db.set_evidence.assert_called_once()
+    call_args = horizontal_ps.db.set_evidence.call_args[0][0]
     assert call_args.description.startswith(
         "Horizontal port scan to port  80/TCP."
     )
 
 
-def test_set_evidence_horizontal_portscan_no_uids(mock_db):
+def test_set_evidence_horizontal_portscan_no_uids():
     """
     Test the set_evidence_horizontal_portscan method when there are no uids.
     """
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     evidence = {
         "protocol": "TCP",
         "profileid": "profile_1.1.1.1",
@@ -398,18 +397,18 @@ def test_set_evidence_horizontal_portscan_no_uids(mock_db):
         "amount_of_dips": 10,
     }
 
-    mock_db.get_port_info.return_value = "HTTP"
-    mock_db.set_evidence.return_value = None
+    horizontal_ps.db.get_port_info.return_value = "HTTP"
+    horizontal_ps.db.set_evidence.return_value = None
 
     horizontal_ps.set_evidence_horizontal_portscan(evidence)
 
-    mock_db.set_evidence.assert_called_once()
-    call_args = mock_db.set_evidence.call_args[0][0]
+    horizontal_ps.db.set_evidence.assert_called_once()
+    call_args = horizontal_ps.db.set_evidence.call_args[0][0]
     assert call_args.uid == []
 
 
-def test_set_evidence_horizontal_portscan(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_set_evidence_horizontal_portscan():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     evidence = {
         "protocol": "TCP",
         "profileid": "profile_1.1.1.1",
@@ -422,13 +421,13 @@ def test_set_evidence_horizontal_portscan(mock_db):
         "amount_of_dips": 10,
     }
 
-    mock_db.get_port_info.return_value = "HTTP"
-    mock_db.set_evidence.return_value = None
+    horizontal_ps.db.get_port_info.return_value = "HTTP"
+    horizontal_ps.db.set_evidence.return_value = None
 
     horizontal_ps.set_evidence_horizontal_portscan(evidence)
 
-    mock_db.set_evidence.assert_called_once()
-    call_args = mock_db.set_evidence.call_args[0][0]
+    horizontal_ps.db.set_evidence.assert_called_once()
+    call_args = horizontal_ps.db.set_evidence.call_args[0][0]
     assert call_args.evidence_type == EvidenceType.HORIZONTAL_PORT_SCAN
     assert call_args.attacker.value == "1.1.1.1"
     assert call_args.confidence == 1
@@ -446,8 +445,8 @@ def test_set_evidence_horizontal_portscan(mock_db):
     assert call_args.port == 80
 
 
-def test_set_evidence_horizontal_portscan_empty_uids(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_set_evidence_horizontal_portscan_empty_uids():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     evidence = {
         "protocol": "TCP",
         "profileid": "profile_1.1.1.1",
@@ -459,11 +458,11 @@ def test_set_evidence_horizontal_portscan_empty_uids(mock_db):
         "state": "Not Established",
         "amount_of_dips": 10,
     }
-    mock_db.get_port_info.return_value = "HTTP"
-    mock_db.set_evidence.return_value = None
+    horizontal_ps.db.get_port_info.return_value = "HTTP"
+    horizontal_ps.db.set_evidence.return_value = None
     horizontal_ps.set_evidence_horizontal_portscan(evidence)
-    assert mock_db.set_evidence.call_count == 1
-    call_args = mock_db.set_evidence.call_args[0][0]
+    assert horizontal_ps.db.set_evidence.call_count == 1
+    call_args = horizontal_ps.db.set_evidence.call_args[0][0]
     assert call_args.uid == []
 
 
@@ -476,19 +475,19 @@ def test_set_evidence_horizontal_portscan_empty_uids(mock_db):
         ("1.1.1.1", True),
     ],
 )
-def test_is_valid_saddr(mock_db, ip, expected_val):
-    mock_db.get_field_separator.return_value = "_"
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_is_valid_saddr(ip, expected_val):
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
+    horizontal_ps.db.get_field_separator.return_value = "_"
 
     profileid = f"profile_{ip}"
     assert horizontal_ps.is_valid_saddr(profileid) == expected_val
 
 
-def test_get_resolved_ips(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_get_resolved_ips():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     dstips = ["1.1.1.1", "2.2.2.2", "3.3.3.3"]
 
-    mock_db.get_dns_resolution.side_effect = [
+    horizontal_ps.db.get_dns_resolution.side_effect = [
         {"domains": ["example.com"]},
         {"domains": []},
         {"domains": ["test.com", "another.com"]},
@@ -498,18 +497,18 @@ def test_get_resolved_ips(mock_db):
     assert sorted(resolved_ips) == ["1.1.1.1", "3.3.3.3"]
 
 
-def test_get_resolved_ips_empty_list(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_get_resolved_ips_empty_list():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     dstips = []
 
     resolved_ips = horizontal_ps.get_resolved_ips(dstips)
     assert resolved_ips == []
 
 
-def test_get_resolved_ips_invalid_ip(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_get_resolved_ips_invalid_ip():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     dstips = ["1.1.1.1", "256.256.256.256", "3.3.3.3"]
-    mock_db.get_dns_resolution.side_effect = [
+    horizontal_ps.db.get_dns_resolution.side_effect = [
         {"domains": ["example.com"]},
         {},
         {"domains": ["test.com"]},
@@ -519,10 +518,10 @@ def test_get_resolved_ips_invalid_ip(mock_db):
     assert sorted(resolved_ips) == ["1.1.1.1", "3.3.3.3"]
 
 
-def test_get_resolved_ips_mixed_list(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_get_resolved_ips_mixed_list():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     dstips = ["1.1.1.1", "2.2.2.2", "3.3.3.3"]
-    mock_db.get_dns_resolution.side_effect = [
+    horizontal_ps.db.get_dns_resolution.side_effect = [
         {"domains": ["example.com"]},
         {"domains": []},
         {"domains": ["test.com"]},
@@ -531,9 +530,9 @@ def test_get_resolved_ips_mixed_list(mock_db):
     assert sorted(resolved_ips) == ["1.1.1.1", "3.3.3.3"]
 
 
-def test_check_valid_ip(mock_db):
-    mock_db.get_field_separator.return_value = "_"
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_check_valid_ip():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
+    horizontal_ps.db.get_field_separator.return_value = "_"
 
     profileid = "profile_10.0.0.1"
     twid = "timewindow0"
@@ -542,15 +541,15 @@ def test_check_valid_ip(mock_db):
         horizontal_ps.check(profileid, twid)
 
 
-def test_check_invalid_profileid(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_check_invalid_profileid():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     profileid = None
     twid = "timewindow0"
     with pytest.raises(Exception):
         horizontal_ps.check(profileid, twid)
 
 
-def test_is_valid_twid(mock_db):
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj(mock_db)
+def test_is_valid_twid():
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     twid = ""
     assert not horizontal_ps.is_valid_twid(twid)
