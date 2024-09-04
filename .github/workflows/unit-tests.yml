@@ -59,7 +59,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: 'alya/fix-config-file-tests'
+        ref: ${{ github.ref }}
         fetch-depth: ''
 
     - name: Enable memory overcommit (for redis)
