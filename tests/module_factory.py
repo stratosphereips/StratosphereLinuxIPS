@@ -1,5 +1,10 @@
 import shutil
-from unittest.mock import patch, Mock, MagicMock
+from unittest.mock import (
+    patch,
+    Mock,
+    MagicMock,
+    mock_open,
+)
 import os
 
 from modules.flowalerts.conn import Conn
@@ -533,22 +538,22 @@ class ModuleFactory:
         return pbar
 
     @patch(DB_MANAGER, name="mock_db")
-    def create_daemon_object(self):
-        with patch("slips.daemon.Daemon.__init__", return_value=None):
-            daemon = Daemon(None)
-            daemon.stderr = "errors.log"
-            daemon.stdout = "slips.log"
-            daemon.stdin = "/dev/null"
-            daemon.logsfile = "slips.log"
-            daemon.pidfile_dir = "/tmp"
-            daemon.pidfile = os.path.join(
-                daemon.pidfile_dir, "slips_daemon.lock"
-            )
-            daemon.slips = MagicMock()
-            daemon.daemon_start_lock = "slips_daemon_start"
-            daemon.daemon_stop_lock = "slips_daemon_stop"
-            daemon.pid = None
-            return daemon
+    def create_daemon_object(self, mock_db):
+        with (
+            patch("slips.daemon.Daemon.read_pidfile", return_type=None),
+            patch("slips.daemon.Daemon.read_configuration"),
+            patch("builtins.open", mock_open(read_data=None)),
+        ):
+            daemon = Daemon(MagicMock())
+        daemon.stderr = "errors.log"
+        daemon.stdout = "slips.log"
+        daemon.stdin = "/dev/null"
+        daemon.logsfile = "slips.log"
+        daemon.pidfile_dir = "/tmp"
+        daemon.pidfile = os.path.join(daemon.pidfile_dir, "slips_daemon.lock")
+        daemon.daemon_start_lock = "slips_daemon_start"
+        daemon.daemon_stop_lock = "slips_daemon_stop"
+        return daemon
 
     @patch("sqlite3.connect", name="sqlite_mock")
     def create_trust_db_obj(self, sqlite_mock):

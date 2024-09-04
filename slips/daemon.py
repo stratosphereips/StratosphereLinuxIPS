@@ -28,12 +28,15 @@ class Daemon:
         self.read_configuration()
         if not self.slips.args.stopdaemon:
             self.prepare_output_dir()
+        self.pid = self.read_pidfile()
+
+    def read_pidfile(self) -> Optional[int]:
         # Get the pid from pidfile
         try:
-            with open(self.pidfile, "r") as pidfile:
-                self.pid = int(pidfile.read().strip())
+            with open(self.pidfile) as pidfile:
+                return int(pidfile.read().strip())
         except (IOError, FileNotFoundError):
-            self.pid = None
+            return None
 
     def print(self, text):
         """Prints output to logsfile specified in slips.yaml"""
@@ -45,7 +48,8 @@ class Daemon:
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
         for file in std_streams:
-            # we don't want to clear the stdout or the logsfile when we stop the daemon using -S
+            # we don't want to clear the stdout or the logsfile when we stop
+            # the daemon using -S
             if "-S" in sys.argv and file != self.stderr:
                 continue
             # create the file if it doesn't exist or clear it if it exists
