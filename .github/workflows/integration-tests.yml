@@ -49,7 +49,7 @@ jobs:
       run: redis-server --daemonize yes
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
-      run: python3 -m pytest --full-trace ${{ matrix.test_file }} -vvv -s
+      run: python3 -m pytest ${{ matrix.test_file }} -vvv -s
 
     - name: Upload Artifacts
       if: success() || failure()
