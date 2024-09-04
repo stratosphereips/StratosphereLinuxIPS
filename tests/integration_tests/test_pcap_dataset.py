@@ -41,7 +41,7 @@ def test_pcap(
     command = f"./slips.py  -e 1 -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
     # this function returns when slips is done
     run_slips(command)
-    assert assert_no_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir

@@ -78,7 +78,7 @@ def test_binetflow(
     # this function returns when slips is done
     run_slips(command)
 
-    assert assert_no_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir, start_redis_server=False
@@ -120,7 +120,7 @@ def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
     # this function returns when slips is done
     run_slips(command)
 
-    assert assert_no_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir, start_redis_server=False
@@ -167,7 +167,7 @@ def test_nfdump(nfdump_path, output_dir, redis_port):
         redis_port, output_dir=output_dir, start_redis_server=False
     )
     profiles = db.get_profiles_len()
-    assert assert_no_errors(output_dir) is False
+    assert_no_errors(output_dir)
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips
     # doesn't generate a const number of profiles per file)

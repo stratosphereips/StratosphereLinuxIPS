@@ -132,6 +132,6 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     print("running slips ...")
     os.system(command)
     print("Slip is done, checking for errors in the output dir.")
-    assert assert_no_errors(output_dir) is False
+    assert_no_errors(output_dir)
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
