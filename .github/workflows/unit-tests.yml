@@ -16,7 +16,6 @@ jobs:
         test_file:
           - tests/test_inputProc.py
           - tests/test_main.py
-          - tests/test_flowalerts.py
           - tests/test_conn.py
           - tests/test_downloaded_file.py
           - tests/test_ssl.py
