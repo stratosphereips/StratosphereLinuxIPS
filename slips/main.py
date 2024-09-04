@@ -48,6 +48,7 @@ class Main(IObservable):
         self.input_type = False
         self.proc_man = ProcessManager(self)
         # in testing mode we manually set the following params
+        # TODO use mocks instead of this testing param
         if not testing:
             self.args = self.conf.get_args()
             self.pid = os.getpid()
@@ -499,7 +500,7 @@ class Main(IObservable):
         if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
-        # Limit any debuggisity to > 0
+        # Debug levels must be > 0
         self.args.debug = max(self.args.debug, 0)
 
     def print_version(self):
@@ -570,46 +571,48 @@ class Main(IObservable):
             or self.input_type in ("stdin", "pcap", "interface")
         )
 
+    def get_slips_logfile(self) -> str:
+        if self.mode == "daemonized":
+            return self.daemon.stdout
+        elif self.mode == "interactive":
+            return os.path.join(self.args.output, "slips.log")
+
+    def get_slips_error_file(self) -> str:
+        if self.mode == "daemonized":
+            return self.daemon.stderr
+        elif self.mode == "interactive":
+            return os.path.join(self.args.output, "errors.log")
+
     def start(self):
         """Main Slips Function"""
         try:
             self.print_version()
             print("https://stratosphereips.org")
             print("-" * 27)
-
             self.setup_print_levels()
-
+            stderr: str = self.get_slips_error_file()
+            slips_logfile: str = self.get_slips_logfile()
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
-            (
-                current_stdout,
-                stderr,
-                slips_logfile,
-            ) = self.checker.check_output_redirection()
-            self.stdout = current_stdout
             self.logger = self.proc_man.start_output_process(
-                current_stdout, stderr, slips_logfile
+                stderr, slips_logfile
             )
             self.add_observer(self.logger)
 
-            # get the port that is going to be used for this instance of slips
-            if self.args.port:
-                self.redis_port = int(self.args.port)
-                # close slips if port is in use
-                self.redis_man.check_if_port_is_in_use(self.redis_port)
-            elif self.args.multiinstance:
-                self.redis_port = self.redis_man.get_random_redis_port()
-                if not self.redis_port:
-                    # all ports are unavailable
-                    inp = input("Press Enter to close all ports.\n")
-                    if inp == "":
-                        self.redis_man.close_all_ports()
-                    self.terminate_slips()
-            else:
-                # even if this port is in use, it will be overwritten by slips
-                self.redis_port = 6379
+            self.redis_port: int = self.redis_man.get_redis_port()
+            # dont start the redis server if it's already started
+            start_redis_server = not utils.is_port_in_use(self.redis_port)
+            try:
+                self.db = DBManager(
+                    self.logger,
+                    self.args.output,
+                    self.redis_port,
+                    start_redis_server=start_redis_server,
+                )
+            except RuntimeError as e:
+                self.print(str(e), 1, 1)
+                self.terminate_slips()
 
-            self.db = DBManager(self.logger, self.args.output, self.redis_port)
             self.db.set_input_metadata(
                 {
                     "output_dir": self.args.output,

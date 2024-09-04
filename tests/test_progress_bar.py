@@ -14,9 +14,9 @@ from tests.module_factory import ModuleFactory
     ],
 )
 def test_update_bar_normal(
-    initial_value, update_count, expected_final_value, total_flows, mock_db
+    initial_value, update_count, expected_final_value, total_flows
 ):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+    pbar = ModuleFactory().create_progress_bar_obj()
     pbar.slips_mode = "interactive"
     pbar.total_flows = total_flows
     pbar.pbar_finished = Event()
@@ -37,8 +37,8 @@ def test_update_bar_normal(
     assert mock_progress_bar.n == expected_final_value
 
 
-def test_update_bar_termination(mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_update_bar_termination():
+    pbar = ModuleFactory().create_progress_bar_obj()
     pbar.slips_mode = "normal"
     pbar.total_flows = 100
     pbar.pbar_finished = Event()
@@ -60,8 +60,8 @@ def test_update_bar_termination(mock_db):
         mock_terminate.assert_called_once()
 
 
-def test_update_bar_no_progress_bar(mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_update_bar_no_progress_bar():
+    pbar = ModuleFactory().create_progress_bar_obj()
     pbar.slips_mode = "normal"
 
     assert not hasattr(pbar, "progress_bar")
@@ -74,8 +74,8 @@ def test_update_bar_no_progress_bar(mock_db):
     assert not hasattr(pbar, "progress_bar")
 
 
-def test_update_bar_daemonized_mode(mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_update_bar_daemonized_mode():
+    pbar = ModuleFactory().create_progress_bar_obj()
     pbar.slips_mode = "daemonized"
     pbar.progress_bar = Mock()
 
@@ -98,8 +98,11 @@ def test_update_bar_daemonized_mode(mock_db):
         ),
     ],
 )
-def test_print_to_cli(msg, expected_output, mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_print_to_cli(
+    msg,
+    expected_output,
+):
+    pbar = ModuleFactory().create_progress_bar_obj()
 
     with patch("tqdm.auto.tqdm.write") as mock_write:
         pbar.print_to_cli(msg)
@@ -118,8 +121,11 @@ def test_print_to_cli(msg, expected_output, mock_db):
         ({"stats": "CPU: 80%\nRAM: 4GB"}, "CPU: 80%\nRAM: 4GB"),
     ],
 )
-def test_update_stats(msg, expected_stats, mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_update_stats(
+    msg,
+    expected_stats,
+):
+    pbar = ModuleFactory().create_progress_bar_obj()
     mock_progress_bar = Mock()
     pbar.progress_bar = mock_progress_bar
 
@@ -132,8 +138,8 @@ def test_update_stats(msg, expected_stats, mock_db):
     )
 
 
-def test_shutdown_gracefully_event_not_set(mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_shutdown_gracefully_event_not_set():
+    pbar = ModuleFactory().create_progress_bar_obj()
     pbar.pbar_finished = Event()
 
     pbar.shutdown_gracefully()
@@ -141,8 +147,8 @@ def test_shutdown_gracefully_event_not_set(mock_db):
     assert pbar.pbar_finished.is_set()
 
 
-def test_shutdown_gracefully_event_already_set(mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_shutdown_gracefully_event_already_set():
+    pbar = ModuleFactory().create_progress_bar_obj()
     pbar.pbar_finished = Event()
     pbar.pbar_finished.set()
 
@@ -151,8 +157,8 @@ def test_shutdown_gracefully_event_already_set(mock_db):
     assert pbar.pbar_finished.is_set()
 
 
-def test_remove_stats(mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_remove_stats():
+    pbar = ModuleFactory().create_progress_bar_obj()
     mock_progress_bar = Mock()
     pbar.progress_bar = mock_progress_bar
 
@@ -176,8 +182,11 @@ def test_remove_stats(mock_db):
         (1000000, 1000000),
     ],
 )
-def test_terminate(total_flows, current_n, mock_db):
-    pbar = ModuleFactory().create_progress_bar_obj(mock_db)
+def test_terminate(
+    total_flows,
+    current_n,
+):
+    pbar = ModuleFactory().create_progress_bar_obj()
     pbar.total_flows = total_flows
     pbar.pbar_finished = Event()
 

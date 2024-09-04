@@ -8,21 +8,21 @@ import time
 from unittest.mock import Mock, mock_open, patch
 
 
-def test_check_if_update_based_on_update_period(mock_db):
-    mock_db.get_TI_file_info.return_value = {"time": float("inf")}
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+def test_check_if_update_based_on_update_period():
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.db.get_TI_file_info.return_value = {"time": float("inf")}
     url = "abc.com/x"
     # update period hasn't passed
     assert update_manager.check_if_update(url, float("inf")) is False
 
 
-def test_check_if_update_based_on_e_tag(mocker, mock_db):
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+def test_check_if_update_based_on_e_tag(mocker):
+    update_manager = ModuleFactory().create_update_manager_obj()
 
     # period passed, etag same
     etag = "1234"
     url = "google.com/images"
-    mock_db.get_TI_file_info.return_value = {"e-tag": etag}
+    update_manager.db.get_TI_file_info.return_value = {"e-tag": etag}
 
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
@@ -33,7 +33,7 @@ def test_check_if_update_based_on_e_tag(mocker, mock_db):
     # period passed, etag different
     etag = "1111"
     url = "google.com/images"
-    mock_db.get_TI_file_info.return_value = {"e-tag": etag}
+    update_manager.db.get_TI_file_info.return_value = {"e-tag": etag}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {"ETag": "2222"}
@@ -41,13 +41,16 @@ def test_check_if_update_based_on_e_tag(mocker, mock_db):
     assert update_manager.check_if_update(url, float("-inf")) is True
 
 
-def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+def test_check_if_update_based_on_last_modified(
+    database,
+    mocker,
+):
+    update_manager = ModuleFactory().create_update_manager_obj()
 
     # period passed, no etag, last modified the same
     url = "google.com/photos"
 
-    mock_db.get_TI_file_info.return_value = {"Last-Modified": 10.0}
+    update_manager.db.get_TI_file_info.return_value = {"Last-Modified": 10.0}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {"Last-Modified": 10.0}
@@ -58,7 +61,7 @@ def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     # period passed, no etag, last modified changed
     url = "google.com/photos"
 
-    mock_db.get_TI_file_info.return_value = {"Last-Modified": 10}
+    update_manager.db.get_TI_file_info.return_value = {"Last-Modified": 10}
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {"Last-Modified": 11}
@@ -78,19 +81,19 @@ def test_check_if_update_based_on_last_modified(database, mocker, mock_db):
     ],
 )
 def test_check_if_update_local_file(
-    mocker, mock_db, new_hash, old_hash, expected_result
+    mocker, new_hash, old_hash, expected_result
 ):
     """
     Test if check_if_update_local_file() correctly detects
     if we should update a local file based on the file hash.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
 
     mocker.patch(
         "slips_files.common.slips_utils.Utils.get_sha256_hash",
         return_value=new_hash,
     )
-    mock_db.get_TI_file_info.return_value = {"hash": old_hash}
+    update_manager.db.get_TI_file_info.return_value = {"hash": old_hash}
 
     file_path = "path/to/my/file.txt"
     assert (
@@ -135,9 +138,9 @@ def test_check_if_update_local_file(
         ("", {}),
     ],
 )
-def test_get_feed_details(mocker, mock_db, mock_data, expected_feeds):
+def test_get_feed_details(mocker, mock_data, expected_feeds):
     """Test get_feed_details with different file contents."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     mock_feeds_file = mock_open(read_data=mock_data)
     mocker.patch("builtins.open", mock_feeds_file)
     feeds = update_manager.get_feed_details("path/to/feeds")
@@ -171,22 +174,24 @@ def test_get_feed_details(mocker, mock_db, mock_data, expected_feeds):
         ),
     ],
 )
-def test_log(mock_db, message, expected_call_args):
+def test_log(message, expected_call_args):
     """Test the log function with different message types."""
     mock_observer = Mock()
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.notify_observers = mock_observer
     update_manager.log(message)
     mock_observer.assert_called_once_with(expected_call_args)
 
 
-def test_download_file(mocker, mock_db):
+def test_download_file(
+    mocker,
+):
     """Test download_file with a successful request."""
     url = "https://example.com/file.txt"
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.text = "file content"
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     response = update_manager.download_file(url)
 
     mock_requests.assert_called_once_with(url, timeout=5)
@@ -226,13 +231,13 @@ TestOrg,192.168.1.2,443-445,udp""",
         ),
     ],
 )
-def test_read_ports_info(mocker, mock_db, tmp_path, test_data, expected_calls):
+def test_read_ports_info(mocker, tmp_path, test_data, expected_calls):
     """Test read_ports_info with different file contents."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     update_manager.read_ports_info(str(tmp_path / "ports_info.csv"))
     for call in expected_calls:
-        mock_db.set_organization_of_port.assert_any_call(*call)
+        update_manager.db.set_organization_of_port.assert_any_call(*call)
 
 
 @pytest.mark.parametrize(
@@ -256,23 +261,25 @@ def test_read_ports_info(mocker, mock_db, tmp_path, test_data, expected_calls):
     ],
 )
 def test_update_local_file(
-    mocker, mock_db, tmp_path, test_data, file_name, expected_db_call
+    mocker, tmp_path, test_data, file_name, expected_db_call
 ):
     """Test update_local_file with a valid file."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.new_hash = "test_hash"
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     result = update_manager.update_local_file(str(tmp_path / file_name))
-    mock_db.set_TI_file_info.assert_called_once_with(
+    update_manager.db.set_TI_file_info.assert_called_once_with(
         str(tmp_path / file_name), {"hash": "test_hash"}
     )
     assert result is True
 
 
-def test_check_if_update_online_whitelist_download_updated(mocker, mock_db):
+def test_check_if_update_online_whitelist_download_updated(
+    mocker,
+):
     """Update period passed, download succeeds."""
-    mock_db.get_TI_file_info.return_value = {"time": 0}
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.db.get_TI_file_info.return_value = {"time": 0}
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
 
     update_manager.download_file = Mock(return_value=Mock(status_code=200))
@@ -280,20 +287,20 @@ def test_check_if_update_online_whitelist_download_updated(mocker, mock_db):
     result = update_manager.check_if_update_online_whitelist()
 
     assert result is True
-    mock_db.set_TI_file_info.assert_called_once_with(
+    update_manager.db.set_TI_file_info.assert_called_once_with(
         "tranco_whitelist", {"time": mocker.ANY}
     )
     assert "tranco_whitelist" in update_manager.responses
 
 
-def test_check_if_update_online_whitelist_not_updated(mock_db):
+def test_check_if_update_online_whitelist_not_updated():
     """Update period hasn't passed - no update needed."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
-    mock_db.get_TI_file_info.return_value = {"time": time.time()}
+    update_manager.db.get_TI_file_info.return_value = {"time": time.time()}
     result = update_manager.check_if_update_online_whitelist()
     assert result is False
-    mock_db.set_TI_file_info.assert_not_called()
+    update_manager.db.set_TI_file_info.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -308,13 +315,13 @@ def test_check_if_update_online_whitelist_not_updated(mock_db):
         ({}, False),
     ],
 )
-def test_get_last_modified(mocker, mock_db, headers, expected_last_modified):
+def test_get_last_modified(mocker, headers, expected_last_modified):
     """
     Test get_last_modified() with different scenarios:
     """
     mock_response = mocker.Mock()
     mock_response.headers = headers
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     assert (
         update_manager.get_last_modified(mock_response)
         == expected_last_modified
@@ -333,21 +340,21 @@ def test_get_last_modified(mocker, mock_db, headers, expected_last_modified):
         ({}, False),
     ],
 )
-def test_get_e_tag(mocker, mock_db, headers, expected_etag):
+def test_get_e_tag(mocker, headers, expected_etag):
     """
     Test get_e_tag() with different scenarios:
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     mock_response = mocker.Mock()
     mock_response.headers = headers
     assert update_manager.get_e_tag(mock_response) == expected_etag
 
 
-def test_write_file_to_disk(mocker, mock_db, tmp_path):
+def test_write_file_to_disk(mocker, tmp_path):
     """
     Test write_file_to_disk() by writing content to a temporary file.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     mock_response = mocker.Mock()
     mock_response.text = "test content"
     file_path = tmp_path / "test_file.txt"
@@ -358,10 +365,10 @@ def test_write_file_to_disk(mocker, mock_db, tmp_path):
         assert f.read() == "test content"
 
 
-def test_delete_old_source_ips(mock_db):
+def test_delete_old_source_ips():
     """Test delete_old_source_IPs."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    mock_db.get_IPs_in_IoC.return_value = {
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.db.get_IPs_in_IoC.return_value = {
         "1.2.3.4": json.dumps(
             {"description": "old IP", "source": "old_file.txt"}
         ),
@@ -370,13 +377,17 @@ def test_delete_old_source_ips(mock_db):
         ),
     }
     update_manager.delete_old_source_IPs("old_file.txt")
-    (mock_db.delete_ips_from_IoC_ips.assert_called_once_with(["1.2.3.4"]))
+    (
+        update_manager.db.delete_ips_from_IoC_ips.assert_called_once_with(
+            ["1.2.3.4"]
+        )
+    )
 
 
-def test_delete_old_source_domains(mock_db):
+def test_delete_old_source_domains():
     """Test delete_old_source_Domains."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    mock_db.get_Domains_in_IoC.return_value = {
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.db.get_Domains_in_IoC.return_value = {
         "olddomain.com": json.dumps(
             {"description": "old domain", "source": "old_file.txt"}
         ),
@@ -387,12 +398,14 @@ def test_delete_old_source_domains(mock_db):
     update_manager.delete_old_source_Domains("old_file.txt")
 
 
-def test_update_riskiq_feed(mocker, mock_db):
+def test_update_riskiq_feed(
+    mocker,
+):
     """
     Test update_riskiq_feed with a
     successful request and valid data.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.riskiq_email = "test@example.com"
     update_manager.riskiq_key = "test_key"
     mock_response = mocker.Mock()
@@ -403,7 +416,7 @@ def test_update_riskiq_feed(mocker, mock_db):
     }
     mocker.patch("requests.get", return_value=mock_response)
     result = update_manager.update_riskiq_feed()
-    mock_db.add_domains_to_IoC.assert_called_once_with(
+    update_manager.db.add_domains_to_IoC.assert_called_once_with(
         {
             "malicious.com": json.dumps(
                 {
@@ -413,17 +426,19 @@ def test_update_riskiq_feed(mocker, mock_db):
             )
         }
     )
-    mock_db.set_TI_file_info.assert_called_once_with(
+    update_manager.db.set_TI_file_info.assert_called_once_with(
         "riskiq_domains", {"time": mocker.ANY}
     )
     assert result is True
 
 
-def test_update_riskiq_feed_invalid_api_key(mocker, mock_db):
+def test_update_riskiq_feed_invalid_api_key(
+    mocker,
+):
     """
     Test when RiskIQ API returns an error (e.g., invalid API key)
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.riskiq_email = "test@example.com"
     update_manager.riskiq_key = "invalid_key"
     mock_response = mocker.Mock()
@@ -432,13 +447,15 @@ def test_update_riskiq_feed_invalid_api_key(mocker, mock_db):
 
     result = update_manager.update_riskiq_feed()
     assert result is False
-    mock_db.add_domains_to_IoC.assert_not_called()
-    mock_db.set_TI_file_info.assert_not_called()
+    update_manager.db.add_domains_to_IoC.assert_not_called()
+    update_manager.db.set_TI_file_info.assert_not_called()
 
 
-def test_update_riskiq_feed_request_exception(mocker, mock_db):
+def test_update_riskiq_feed_request_exception(
+    mocker,
+):
     """Test when there's an error during the request to RiskIQ."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.riskiq_email = "test@example.com"
     update_manager.riskiq_key = "test_key"
     mocker.patch(
@@ -448,16 +465,16 @@ def test_update_riskiq_feed_request_exception(mocker, mock_db):
 
     result = update_manager.update_riskiq_feed()
     assert result is False
-    mock_db.add_domains_to_IoC.assert_not_called()
-    mock_db.set_TI_file_info.assert_not_called()
+    update_manager.db.add_domains_to_IoC.assert_not_called()
+    update_manager.db.set_TI_file_info.assert_not_called()
 
 
-def test_delete_old_source_data_from_database(mock_db):
+def test_delete_old_source_data_from_database():
     """
     Test delete_old_source_data_from_database for deleting old IPs and domains.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
-    mock_db.get_IPs_in_IoC.return_value = {
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.db.get_IPs_in_IoC.return_value = {
         "1.2.3.4": json.dumps(
             {"description": "old IP", "source": "old_file.txt"}
         ),
@@ -465,7 +482,7 @@ def test_delete_old_source_data_from_database(mock_db):
             {"description": "new IP", "source": "new_file.txt"}
         ),
     }
-    mock_db.get_Domains_in_IoC.return_value = {
+    update_manager.db.get_Domains_in_IoC.return_value = {
         "olddomain.com": json.dumps(
             {"description": "old domain", "source": "old_file.txt"}
         ),
@@ -474,8 +491,10 @@ def test_delete_old_source_data_from_database(mock_db):
         ),
     }
     update_manager.delete_old_source_data_from_database("old_file.txt")
-    mock_db.delete_ips_from_IoC_ips.assert_called_once_with(["1.2.3.4"])
-    mock_db.delete_domains_from_IoC_domains.assert_called_once_with(
+    update_manager.db.delete_ips_from_IoC_ips.assert_called_once_with(
+        ["1.2.3.4"]
+    )
+    update_manager.db.delete_domains_from_IoC_domains.assert_called_once_with(
         ["olddomain.com"]
     )
 
@@ -491,13 +510,11 @@ def test_delete_old_source_data_from_database(mock_db):
         ("#,ip,date", None),
     ],
 )
-def test_get_description_column_index(
-    mock_db, header, expected_description_column
-):
+def test_get_description_column_index(header, expected_description_column):
     """
     Test get_description_column() with different header formats.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     description_column = update_manager.get_description_column_index(header)
     assert description_column == expected_description_column
 
@@ -516,11 +533,11 @@ def test_get_description_column_index(
         ("1.2.3.4,Test description", None),
     ],
 )
-def test_is_ignored_line(mock_db, line, expected_result):
+def test_is_ignored_line(line, expected_result):
     """
     Test is_ignored_line() with different line types.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     assert update_manager.is_ignored_line(line) is expected_result
 
 
@@ -546,7 +563,7 @@ def test_parse_line(
     """
     Test parse_line() with different line formats.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(Mock())
+    update_manager = ModuleFactory().create_update_manager_obj()
     amount_of_columns, line_fields, sep = (
         update_manager.get_feed_fields_and_sep(line, "")
     )
@@ -565,11 +582,11 @@ def test_parse_line(
         (["invalid_data", "Test description"], "Error"),
     ],
 )
-def test_get_data_column(mock_db, line_fields, expected_data_column):
+def test_get_data_column(line_fields, expected_data_column):
     """
     Test get_data_column with different input scenarios:
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     amount_of_columns = 2
     file_path = "test_file.txt"
     data_column = update_manager.get_data_column(
@@ -616,7 +633,6 @@ def test_get_data_column(mock_db, line_fields, expected_data_column):
     ],
 )
 def test_extract_ioc_from_line(
-    mock_db,
     line,
     line_fields,
     separator,
@@ -629,7 +645,7 @@ def test_extract_ioc_from_line(
     """
     Test extract_ioc_from_line with different scenarios:
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     data, description = update_manager.extract_ioc_from_line(
         line,
         line_fields,
@@ -642,9 +658,9 @@ def test_extract_ioc_from_line(
     assert description == expected_description
 
 
-def test_add_to_ip_ctr_new_ip(mock_db):
+def test_add_to_ip_ctr_new_ip():
     """Test add_to_ip_ctr with a new IP address."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     ip = "1.2.3.4"
     blacklist = "test_blacklist.txt"
     update_manager.add_to_ip_ctr(ip, blacklist)
@@ -655,12 +671,14 @@ def test_add_to_ip_ctr_new_ip(mock_db):
 
 
 @patch("os.path.getsize", return_value=10)
-def test_parse_ti_feed_valid_data(mocker, mock_db):
+def test_parse_ti_feed_valid_data(
+    mocker,
+):
     """
     Test parse_ti_feed with valid data
     containing both IP and domain.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.url_feeds = {
         "https://example.com/test.txt": {
             "threat_level": "low",
@@ -674,7 +692,7 @@ def test_parse_ti_feed_valid_data(mocker, mock_db):
         result = update_manager.parse_ti_feed(
             "https://example.com/test.txt", "test.txt"
         )
-    mock_db.add_ips_to_IoC.assert_any_call(
+    update_manager.db.add_ips_to_IoC.assert_any_call(
         {
             "1.2.3.4": '{"description": "Test description", '
             '"source": "test.txt", '
@@ -682,7 +700,7 @@ def test_parse_ti_feed_valid_data(mocker, mock_db):
             '"tags": ["tag3"]}'
         }
     )
-    mock_db.add_domains_to_IoC.assert_any_call(
+    update_manager.db.add_domains_to_IoC.assert_any_call(
         {
             "example.com": '{"description": "Another description",'
             ' "source": "test.txt",'
@@ -693,9 +711,9 @@ def test_parse_ti_feed_valid_data(mocker, mock_db):
     assert result is True
 
 
-def test_parse_ti_feed_invalid_data(mocker, mock_db, tmp_path):
+def test_parse_ti_feed_invalid_data(mocker, tmp_path):
     """Test parse_ti_feed with invalid data."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.url_feeds = {
         "https://example.com/invalid.txt": {
             "threat_level": "low",
@@ -709,8 +727,8 @@ def test_parse_ti_feed_invalid_data(mocker, mock_db, tmp_path):
     result = update_manager.parse_ti_feed(
         "https://example.com/invalid.txt", str(tmp_path / "invalid.txt")
     )
-    mock_db.add_ips_to_IoC.assert_not_called()
-    mock_db.add_domains_to_IoC.assert_not_called()
+    update_manager.db.add_ips_to_IoC.assert_not_called()
+    update_manager.db.add_domains_to_IoC.assert_not_called()
     assert result is False
 
 
@@ -723,12 +741,12 @@ def test_parse_ti_feed_invalid_data(mocker, mock_db, tmp_path):
     ],
 )
 def test_check_if_update_org(
-    mocker, mock_db, file_content, cached_hash, expected_result
+    mocker, file_content, cached_hash, expected_result
 ):
     """Test check_if_update_org with different file and cache scenarios."""
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
 
-    mock_db.get_TI_file_info.return_value = {"hash": cached_hash}
+    update_manager.db.get_TI_file_info.return_value = {"hash": cached_hash}
     mocker.patch(
         "slips_files.common." "slips_utils.Utils.get_sha256_hash",
         return_value=hash(file_content.encode()),
@@ -747,13 +765,11 @@ def test_check_if_update_org(
         (500, False, 0),
     ],
 )
-def test_update_mac_db(
-    mocker, mock_db, status_code, expected_result, db_call_count
-):
+def test_update_mac_db(mocker, status_code, expected_result, db_call_count):
     """
     Test update_mac_db with different response status codes.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.mac_db_link = "https://example.com/mac_db.json"
 
     mock_response = mocker.Mock()
@@ -766,14 +782,16 @@ def test_update_mac_db(
     result = update_manager.update_mac_db()
 
     assert result is expected_result
-    assert mock_db.set_TI_file_info.call_count == db_call_count
+    assert update_manager.db.set_TI_file_info.call_count == db_call_count
 
 
-def test_shutdown_gracefully(mocker, mock_db):
+def test_shutdown_gracefully(
+    mocker,
+):
     """
     Test shutdown_gracefully to ensure timers are canceled.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.timer_manager = mocker.Mock()
     update_manager.mac_db_update_manager = mocker.Mock()
     update_manager.online_whitelist_update_timer = mocker.Mock()
@@ -813,11 +831,11 @@ def test_shutdown_gracefully(mocker, mock_db):
         ),
     ],
 )
-def test_print_duplicate_ip_summary(capsys, mock_db, ips_ctr, expected_output):
+def test_print_duplicate_ip_summary(capsys, ips_ctr, expected_output):
     """
     Test print_duplicate_ip_summary with different IP repetition scenarios.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.ips_ctr = ips_ctr
     update_manager.first_time_reading_files = True
     update_manager.print_duplicate_ip_summary()
@@ -825,11 +843,11 @@ def test_print_duplicate_ip_summary(capsys, mock_db, ips_ctr, expected_output):
     assert captured.out == expected_output
 
 
-def test_parse_ssl_feed_valid_data(mocker, mock_db, tmp_path):
+def test_parse_ssl_feed_valid_data(mocker, tmp_path):
     """
     Test parse_ssl_feed with valid data containing multiple SSL fingerprints.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.ssl_feeds = {
         "https://example.com/test_ssl_feed.csv": {
             "threat_level": "medium",
@@ -845,7 +863,7 @@ def test_parse_ssl_feed_valid_data(mocker, mock_db, tmp_path):
         str(tmp_path / "test_ssl_feed.csv"),
     )
 
-    mock_db.add_ssl_sha1_to_IoC.assert_called_once_with(
+    update_manager.db.add_ssl_sha1_to_IoC.assert_called_once_with(
         {
             "aaabbbcccdddeeeeffff00001111222233334444": json.dumps(
                 {
@@ -860,11 +878,11 @@ def test_parse_ssl_feed_valid_data(mocker, mock_db, tmp_path):
     assert result is True
 
 
-def test_parse_ssl_feed_no_valid_fingerprints(mocker, mock_db, tmp_path):
+def test_parse_ssl_feed_no_valid_fingerprints(mocker, tmp_path):
     """
     Test parse_ssl_feed with a file that doesn't contain any valid SSL fingerprints.
     """
-    update_manager = ModuleFactory().create_update_manager_obj(mock_db)
+    update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.ssl_feeds = {
         "https://example.com/test_ssl_feed.csv": {
             "threat_level": "medium",
@@ -880,5 +898,5 @@ def test_parse_ssl_feed_no_valid_fingerprints(mocker, mock_db, tmp_path):
         str(tmp_path / "test_ssl_feed.csv"),
     )
 
-    mock_db.add_ssl_sha1_to_IoC.assert_not_called()
+    update_manager.db.add_ssl_sha1_to_IoC.assert_not_called()
     assert result is False

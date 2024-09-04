@@ -48,8 +48,8 @@ import os
         ),
     ],
 )
-def test_handle_gopy_data(mock_db, data_dict, expected_method, expected_args):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_handle_gopy_data(data_dict, expected_method, expected_args):
+    go_director = ModuleFactory().create_go_director_obj()
 
     with patch.object(go_director, expected_method) as mock_method:
         go_director.handle_gopy_data(data_dict)
@@ -76,8 +76,8 @@ def test_handle_gopy_data(mock_db, data_dict, expected_method, expected_args):
         ),
     ],
 )
-def test_handle_gopy_data_error_cases(mock_db, data_dict, expected_print_args):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_handle_gopy_data_error_cases(data_dict, expected_print_args):
+    go_director = ModuleFactory().create_go_director_obj()
 
     go_director.handle_gopy_data(data_dict)
     go_director.print.assert_called_once_with(*expected_print_args)
@@ -132,8 +132,8 @@ def test_handle_gopy_data_error_cases(mock_db, data_dict, expected_print_args):
         ),
     ],
 )
-def test_process_go_data(mock_db, report, expected_method, expected_args):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_process_go_data(report, expected_method, expected_args):
+    go_director = ModuleFactory().create_go_director_obj()
 
     with patch.object(go_director, expected_method) as mock_method:
         go_director.process_go_data(report)
@@ -165,10 +165,8 @@ def test_process_go_data(mock_db, report, expected_method, expected_args):
         ("eyJrZXkiOiIxOTIuMTY4LjEuMSJ9", "", {}),
     ],
 )
-def test_validate_message(
-    message, expected_message_type, expected_data, mock_db
-):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_validate_message(message, expected_message_type, expected_data):
+    go_director = ModuleFactory().create_go_director_obj()
     message_type, data = go_director.validate_message(message)
     assert message_type == expected_message_type
     assert data == expected_data
@@ -217,8 +215,11 @@ def test_validate_message(
         ),
     ],
 )
-def test_validate_message_request(data, expected_result, mock_db):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_validate_message_request(
+    data,
+    expected_result,
+):
+    go_director = ModuleFactory().create_go_director_obj()
     result = go_director.validate_message_request(data)
     assert result == expected_result
 
@@ -253,7 +254,6 @@ def test_validate_message_request(data, expected_result, mock_db):
     ],
 )
 def test_set_evidence_p2p_report(
-    mock_db,
     ip,
     reporter,
     score,
@@ -263,26 +263,26 @@ def test_set_evidence_p2p_report(
     expected_description,
     expected_threat_level,
 ):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+    go_director = ModuleFactory().create_go_director_obj()
     go_director.trustdb.get_ip_of_peer.return_value = (timestamp, "")
 
     go_director.set_evidence_p2p_report(
         ip, reporter, score, confidence, timestamp, profileid_of_attacker
     )
 
-    mock_db.set_evidence.assert_called_once()
-    call_args = mock_db.set_evidence.call_args[0][0]
+    go_director.db.set_evidence.assert_called_once()
+    call_args = go_director.db.set_evidence.call_args[0][0]
     assert call_args.attacker.value == ip
     assert expected_description in call_args.description
     assert call_args.threat_level == expected_threat_level
 
 
-def test_read_configuration(mock_db):
+def test_read_configuration():
     with patch(
         "slips_files.common.parsers.config_parser.ConfigParser",
         return_value=3600.0,
     ):
-        go_director = ModuleFactory().create_go_director_obj(mock_db)
+        go_director = ModuleFactory().create_go_director_obj()
         go_director.read_configuration()
         assert go_director.width == 3600.0
 
@@ -295,8 +295,11 @@ def test_read_configuration(mock_db):
         ("Another test message", " - Another test message\n"),
     ],
 )
-def test_log(text, expected_log_content, mock_db):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_log(
+    text,
+    expected_log_content,
+):
+    go_director = ModuleFactory().create_go_director_obj()
 
     with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
         temp_filename = temp_file.name
@@ -310,9 +313,9 @@ def test_log(text, expected_log_content, mock_db):
     assert expected_log_content in log_content
 
 
-def test_process_message_request_valid_request(mock_db):
+def test_process_message_request_valid_request():
     """Test handling of valid requests when override_p2p is False."""
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+    go_director = ModuleFactory().create_go_director_obj()
     go_director.override_p2p = False
 
     data = {
@@ -374,19 +377,17 @@ def test_process_message_request_valid_request(mock_db):
         ),
     ],
 )
-def test_process_message_request_invalid_request(
-    mock_db, data, expected_print_args
-):
+def test_process_message_request_invalid_request(data, expected_print_args):
     """Test handling of invalid requests (regardless of override_p2p)."""
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+    go_director = ModuleFactory().create_go_director_obj()
 
     go_director.process_message_request("test_reporter", 1649445643, data)
     go_director.print.assert_called_once_with(*expected_print_args)
 
 
-def test_process_message_request_override_p2p(mock_db):
+def test_process_message_request_override_p2p():
     """Test behavior when override_p2p is True."""
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+    go_director = ModuleFactory().create_go_director_obj()
     go_director.override_p2p = True
     go_director.request_func = Mock()
     data = {
@@ -440,9 +441,9 @@ def test_process_message_request_override_p2p(mock_db):
     ],
 )
 def test_process_evaluation_score_confidence_invalid(
-    mock_db, reporter, report_time, key_type, key, evaluation, expected_error
+    reporter, report_time, key_type, key, evaluation, expected_error
 ):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+    go_director = ModuleFactory().create_go_director_obj()
 
     with patch.object(go_director, "print") as mock_print, patch.object(
         go_director.trustdb, "insert_new_go_report"
@@ -464,8 +465,8 @@ def test_process_evaluation_score_confidence_invalid(
         mock_set_evidence.assert_not_called()
 
 
-def test_process_evaluation_score_confidence_valid(mock_db):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_process_evaluation_score_confidence_valid():
+    go_director = ModuleFactory().create_go_director_obj()
 
     reporter = "test_reporter"
     report_time = 1649445643
@@ -528,8 +529,8 @@ def test_process_evaluation_score_confidence_valid(mock_db):
         ({"peerid": "test_peer", "ip": "invalid_ip"}, []),
     ],
 )
-def test_process_go_update(mock_db, data, expected_calls):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_process_go_update(data, expected_calls):
+    go_director = ModuleFactory().create_go_director_obj()
 
     with patch.object(
         go_director.trustdb, "insert_go_reliability"
@@ -548,8 +549,8 @@ def test_process_go_update(mock_db, data, expected_calls):
         assert actual_calls == expected_calls
 
 
-def test_respond_to_message_request_with_info(mock_db):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_respond_to_message_request_with_info():
+    go_director = ModuleFactory().create_go_director_obj()
     key = "192.168.1.1"
     reporter = "test_reporter"
     score = 0.5
@@ -583,8 +584,8 @@ def test_respond_to_message_request_with_info(mock_db):
             )
 
 
-def test_respond_to_message_request_without_info(mock_db):
-    go_director = ModuleFactory().create_go_director_obj(mock_db)
+def test_respond_to_message_request_without_info():
+    go_director = ModuleFactory().create_go_director_obj()
     key = "10.0.0.1"
     reporter = "another_reporter"
     score = None

@@ -27,8 +27,8 @@ import json
         ),
     ],
 )
-def test_get_asn_info_from_geolite(mock_db, ip_address, expected_asn_info):
-    asn_info = ModuleFactory().create_asn_obj(mock_db)
+def test_get_asn_info_from_geolite(ip_address, expected_asn_info):
+    asn_info = ModuleFactory().create_asn_obj()
     assert asn_info.get_asn_info_from_geolite(ip_address) == expected_asn_info
 
 
@@ -73,10 +73,8 @@ def test_get_asn_info_from_geolite(mock_db, ip_address, expected_asn_info):
         ),
     ],
 )
-def test_cache_ip_range(
-    mock_db, ip_address, expected_whois_info, expected_cached_data
-):
-    asn_info = ModuleFactory().create_asn_obj(mock_db)
+def test_cache_ip_range(ip_address, expected_whois_info, expected_cached_data):
+    asn_info = ModuleFactory().create_asn_obj()
 
     with patch("ipwhois.IPWhois.lookup_rdap") as mock_lookup_rdap:
         mock_lookup_rdap.return_value = expected_whois_info
@@ -128,18 +126,15 @@ def test_cache_ip_range(
         ),
     ],
 )
-def test_get_cached_asn(
-    mock_db, ip_address, first_octet, cached_data, expected_result
-):
-    asn_info = ModuleFactory().create_asn_obj(mock_db)
+def test_get_cached_asn(ip_address, first_octet, cached_data, expected_result):
+    asn_info = ModuleFactory().create_asn_obj()
 
     with patch(
         "slips_files.common.slips_utils.utils.get_first_octet"
     ) as mock_get_first_octet:
         mock_get_first_octet.return_value = first_octet
 
-        mock_db.get_asn_cache.return_value = cached_data
-
+        asn_info.db.get_asn_cache.return_value = cached_data
         result = asn_info.get_cached_asn(ip_address)
         assert result == expected_result
 
@@ -173,8 +168,8 @@ def test_get_cached_asn(
         ),
     ],
 )
-def test_update_asn(mock_db, cached_data, update_period, expected_result):
-    asn_info = ModuleFactory().create_asn_obj(mock_db)
+def test_update_asn(cached_data, update_period, expected_result):
+    asn_info = ModuleFactory().create_asn_obj()
     result = asn_info.update_asn(cached_data, update_period)
     assert result == expected_result
 
@@ -222,7 +217,6 @@ def test_update_asn(mock_db, cached_data, update_period, expected_result):
     ],
 )
 def test_get_asn_online(
-    mock_db,
     ip_address,
     is_ignored,
     api_status_code,
@@ -230,7 +224,7 @@ def test_get_asn_online(
     mock_get_side_effect,
     expected_result,
 ):
-    asn_info = ModuleFactory().create_asn_obj(mock_db)
+    asn_info = ModuleFactory().create_asn_obj()
 
     with patch(
         "slips_files.common.slips_utils.utils.is_ignored_ip"
@@ -293,13 +287,13 @@ def test_get_asn_online(
         ),
     ],
 )
-def test_update_ip_info(mock_db, ip, cached_ip_info, asn, expected_call):
-    asn_info = ModuleFactory().create_asn_obj(mock_db)
+def test_update_ip_info(ip, cached_ip_info, asn, expected_call):
+    asn_info = ModuleFactory().create_asn_obj()
 
     with patch("time.time", return_value=1625097600):
         asn_info.update_ip_info(ip, cached_ip_info, asn)
 
-        mock_db.set_ip_info.assert_called_once_with(*expected_call)
+        asn_info.db.set_ip_info.assert_called_once_with(*expected_call)
         expected_cached_ip_info = expected_call[1]
         assert cached_ip_info == expected_cached_ip_info
 
@@ -364,7 +358,6 @@ def test_update_ip_info(mock_db, ip, cached_ip_info, asn, expected_call):
     ],
 )
 def test_get_asn_with_result(
-    mock_db,
     ip,
     cached_ip_info,
     cached_asn,
@@ -374,7 +367,7 @@ def test_get_asn_with_result(
     expected_result,
     expected_calls,
 ):
-    asn_info = ModuleFactory().create_asn_obj(mock_db)
+    asn_info = ModuleFactory().create_asn_obj()
 
     with patch.object(
         asn_info, "get_cached_asn", return_value=cached_asn
@@ -402,7 +395,7 @@ def test_get_asn_with_result(
         )
 
 
-def test_get_asn_without_result(mock_db):
+def test_get_asn_without_result():
     """Testcase: ASN not found anywhere."""
     ip = "10.0.0.1"
     cached_ip_info = {}
@@ -413,7 +406,7 @@ def test_get_asn_without_result(mock_db):
         call.get_asn_online("10.0.0.1"),
     ]
 
-    asn_info = ModuleFactory().create_asn_obj(mock_db)
+    asn_info = ModuleFactory().create_asn_obj()
 
     with patch.object(
         asn_info, "get_cached_asn", return_value=None

@@ -6,44 +6,6 @@ from unittest.mock import patch
 from tests.module_factory import ModuleFactory
 
 
-def test_check_output_redirection_normal_mode():
-    """
-    Test the check_output_redirection function for normal mode
-    """
-    checker = ModuleFactory().create_checker_obj()
-    checker.main.mode = "normal"
-    checker.main.args.output = "test_output"
-
-    with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout=b"")):
-        current_stdout, stderr, slips_logfile = (
-            checker.check_output_redirection()
-        )
-
-        assert current_stdout == ""
-        assert stderr == "test_output/errors.log"
-        assert slips_logfile == "test_output/slips.log"
-
-
-def test_check_output_redirection_daemonized_mode():
-    """
-    Test the check_output_redirection function for daemonized mode
-    """
-    checker = ModuleFactory().create_checker_obj()
-    checker.main.mode = "daemonized"
-    checker.main.daemon = mock.MagicMock(
-        stderr="daemon_stderr", stdout="daemon_stdout"
-    )
-
-    with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout=b"")):
-        current_stdout, stderr, slips_logfile = (
-            checker.check_output_redirection()
-        )
-
-        assert current_stdout == ""
-        assert stderr == "daemon_stderr"
-        assert slips_logfile == "daemon_stdout"
-
-
 def test_clear_redis_cache():
     checker = ModuleFactory().create_checker_obj()
     checker.clear_redis_cache()

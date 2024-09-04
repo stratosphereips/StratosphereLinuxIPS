@@ -465,6 +465,7 @@ class Profiler(ICore):
                 # stop and no new fows are coming
                 if self.check_for_stop_msg(msg):
                     return 1
+
                 line: dict = msg["line"]
                 input_type: str = msg["input_type"]
                 total_flows: int = msg.get("total_flows", 0)

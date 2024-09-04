@@ -115,11 +115,9 @@ import pytest
         ),
     ],
 )
-def test_check_multiple_ssh_versions(
-    mock_db, cached_software, flow, expected_result
-):
-    software = ModuleFactory().create_software_analyzer_obj(mock_db)
-    mock_db.get_software_from_profile.return_value = cached_software
+def test_check_multiple_ssh_versions(cached_software, flow, expected_result):
+    software = ModuleFactory().create_software_analyzer_obj()
+    software.db.get_software_from_profile.return_value = cached_software
     assert (
         software.check_multiple_ssh_versions(flow, "timewindow1")
         is expected_result
@@ -165,8 +163,8 @@ def test_check_multiple_ssh_versions(
         ),
     ],
 )
-def test_analyze_version_change_detected(mock_db, msg_data):
-    software = ModuleFactory().create_software_analyzer_obj(mock_db)
+def test_analyze_version_change_detected(msg_data):
+    software = ModuleFactory().create_software_analyzer_obj()
     software.check_multiple_ssh_versions = MagicMock()
     msg = {"channel": "new_software", "data": json.dumps(msg_data)}
     software.analyze(msg)
@@ -174,8 +172,8 @@ def test_analyze_version_change_detected(mock_db, msg_data):
     assert software.check_multiple_ssh_versions.call_count == 2
 
 
-def test_analyze_no_version_change(mock_db):
-    software = ModuleFactory().create_software_analyzer_obj(mock_db)
+def test_analyze_no_version_change():
+    software = ModuleFactory().create_software_analyzer_obj()
     software.check_multiple_ssh_versions = MagicMock()
     software.analyze({})
     software.check_multiple_ssh_versions.assert_not_called()

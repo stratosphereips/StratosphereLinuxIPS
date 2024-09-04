@@ -119,19 +119,16 @@ def has_ignored_errors(line):
             return True
 
 
-def has_errors(output_dir):
+def assert_no_errors(output_dir):
     """function to parse slips_output file and check for errors"""
     error_files = ("slips_output.txt", "errors.log")
     error_files = [os.path.join(output_dir, file) for file in error_files]
 
-    # we can't redirect stderr to a file and check it because we catch all exceptions in slips
+    # we can't redirect stderr to a file and check it because we catch all
+    # exceptions in slips
     for file in error_files:
         with open(file, "r") as f:
             for line in f:
                 if has_ignored_errors(line):
                     continue
-
-                if has_error_keywords(line):
-                    return True
-
-    return False
+                assert not has_error_keywords(line), line

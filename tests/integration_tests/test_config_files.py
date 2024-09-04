@@ -7,7 +7,7 @@ from slips.main import Main
 from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
-    has_errors,
+    assert_no_errors,
     check_for_text,
 )
 from tests.module_factory import ModuleFactory
@@ -58,10 +58,10 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     # this function returns when slips is done
     os.system(command)
     print("Slip is done, checking for errors in the output dir.")
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
     print("Comparing profiles with expected profiles")
     database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
     profiles = database.get_profiles_len()
     # expected_profiles is more than 50 because we're using direction = all
@@ -132,6 +132,6 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     print("running slips ...")
     os.system(command)
     print("Slip is done, checking for errors in the output dir.")
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
     print("Deleting the output directory")
     shutil.rmtree(output_dir)

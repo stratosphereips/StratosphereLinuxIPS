@@ -27,9 +27,9 @@ daddr = "192.168.1.2"
         ([timestamp, timestamp + 6, timestamp + 11], 0),
     ],
 )
-def test_check_smtp_bruteforce(mock_db, timestamps, expected_call_count):
+def test_check_smtp_bruteforce(timestamps, expected_call_count):
     """Tests the check_smtp_bruteforce method of the SMTP class."""
-    smtp = ModuleFactory().create_smtp_analyzer_obj(mock_db)
+    smtp = ModuleFactory().create_smtp_analyzer_obj()
     mock_set_evidence = MagicMock()
     smtp.set_evidence.smtp_bruteforce = mock_set_evidence
 
@@ -80,18 +80,20 @@ def test_check_smtp_bruteforce(mock_db, timestamps, expected_call_count):
         ),
     ],
 )
-def test_analyze_with_valid_message(mock_db, msg_data, expected_check_args):
-    """Tests the analyze method of the SMTP class when a valid message is received."""
-    smtp = ModuleFactory().create_smtp_analyzer_obj(mock_db)
+def test_analyze_with_valid_message(msg_data, expected_check_args):
+    """Tests the analyze method of the SMTP class when
+    a valid message is received."""
+    smtp = ModuleFactory().create_smtp_analyzer_obj()
     smtp.check_smtp_bruteforce = MagicMock()
     msg = {"channel": "new_smtp", "data": json.dumps(msg_data)}
     smtp.analyze(msg)
     smtp.check_smtp_bruteforce.assert_called_once_with(*expected_check_args)
 
 
-def test_analyze_with_no_message(mock_db):
-    """Tests the analyze method of the SMTP class when no message is received."""
-    smtp = ModuleFactory().create_smtp_analyzer_obj(mock_db)
+def test_analyze_with_no_message():
+    """Tests the analyze method of the SMTP class when no message
+    is received."""
+    smtp = ModuleFactory().create_smtp_analyzer_obj()
     smtp.check_smtp_bruteforce = MagicMock()
     smtp.analyze({})
     smtp.check_smtp_bruteforce.assert_not_called()

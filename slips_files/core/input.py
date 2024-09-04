@@ -688,7 +688,8 @@ class Input(ICore):
         connlog_path = os.path.join(self.zeek_dir, "conn.log")
 
         self.print(
-            f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}",
+            f"Number of zeek generated flows in conn.log: "
+            f"{self.get_flows_number(connlog_path)}",
             2,
             0,
         )

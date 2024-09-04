@@ -25,14 +25,14 @@ def test_is_yara_installed(
     """Test that the is_yara_installed method correctly identifies if Yara is installed."""
 
     mock_os_system.return_value = return_code
-    leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
+    leak_detector = ModuleFactory().create_leak_detector_obj()
     assert leak_detector.is_yara_installed() == expected_result
 
 
 @patch("os.mkdir")
 @patch("shutil.rmtree")
 def test_delete_compiled_rules(mock_rmtree, mock_mkdir, mock_db):
-    leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
+    leak_detector = ModuleFactory().create_leak_detector_obj()
     leak_detector.delete_compiled_rules()
     mock_rmtree.assert_called_once_with(leak_detector.compiled_yara_rules_path)
     mock_mkdir.assert_called_once_with(leak_detector.compiled_yara_rules_path)
@@ -58,7 +58,7 @@ def test_pre_main(
     expected_find_matches_call,
 ):
     """Tests the pre_main method."""
-    leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
+    leak_detector = ModuleFactory().create_leak_detector_obj()
     leak_detector.bin_found = yara_installed
     leak_detector.compile_and_save_rules = MagicMock(
         return_value=compile_rules_success
@@ -70,7 +70,7 @@ def test_pre_main(
 
 
 def test_main(mock_db):
-    leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
+    leak_detector = ModuleFactory().create_leak_detector_obj()
     result = leak_detector.main()
     assert result == 1
 
@@ -114,7 +114,7 @@ def test_fix_json_packet(
         else lambda x: mock_json_loads_return
     )
 
-    leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
+    leak_detector = ModuleFactory().create_leak_detector_obj()
     result = leak_detector.fix_json_packet(input_json)
 
     assert result == expected_output
@@ -155,7 +155,7 @@ def test_find_matches(
 ):
     """Tests the find_matches method of LeakDetector."""
 
-    leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
+    leak_detector = ModuleFactory().create_leak_detector_obj()
 
     mock_listdir.return_value = listdir_return
     mock_popen.return_value.communicate.return_value = popen_communicate_return
@@ -220,7 +220,7 @@ def test_get_packet_info(
 ):
     """Tests the get_packet_info method of LeakDetector."""
 
-    leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
+    leak_detector = ModuleFactory().create_leak_detector_obj()
     leak_detector.fix_json_packet = MagicMock()
     with patch(
         "builtins.open", mock_open(read_data=pcap_data)
@@ -295,7 +295,7 @@ def test_set_evidence_yara_match(
     db_get_tw_of_ts_return,
     expected_call_count,
 ):
-    leak_detector = ModuleFactory().create_leak_detector_obj(mock_db)
+    leak_detector = ModuleFactory().create_leak_detector_obj()
     leak_detector.get_packet_info = MagicMock(
         return_value=get_packet_info_return
     )

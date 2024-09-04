@@ -20,14 +20,14 @@ import os
 import json
 import time
 from watchdog.events import RegexMatchingEventHandler
-from slips_files.common.imports import *
+from slips_files.common.slips_utils import utils
 
 
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$", r".*\.conf$"]
 
     def __init__(self, dir_to_monitor, input_type, db):
-        super().__init__(self.REGEX)
+        super().__init__(regexes=self.REGEX)
         self.dir_to_monitor = dir_to_monitor
         utils.drop_root_privs()
         self.db = db

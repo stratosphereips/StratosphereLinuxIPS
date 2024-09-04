@@ -1,5 +1,7 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import (
+    Mock,
+)
 from slips_files.core.evidence_structure.evidence import (
     Victim,
     EvidenceType,
@@ -45,8 +47,6 @@ from tests.module_factory import ModuleFactory
     ],
 )
 def test_check_icmp_sweep_valid_scans(
-    mocker,
-    mock_db,
     msg,
     note,
     profileid,
@@ -55,19 +55,16 @@ def test_check_icmp_sweep_valid_scans(
     timestamp,
     expected_evidence_type,
 ):
-    network_discovery = ModuleFactory().create_network_discovery_obj(mock_db)
-
-    mock_set_evidence = mocker.patch.object(
-        network_discovery.db, "set_evidence"
-    )
+    network_discovery = ModuleFactory().create_network_discovery_obj()
+    network_discovery.db.set_evidence = Mock()
 
     network_discovery.check_icmp_sweep(
         msg, note, profileid, uid, twid, timestamp
     )
 
-    assert mock_set_evidence.call_count == 1
+    assert network_discovery.db.set_evidence.call_count == 1
 
-    called_evidence = mock_set_evidence.call_args[0][0]
+    called_evidence = network_discovery.db.set_evidence.call_args[0][0]
     assert called_evidence.evidence_type == expected_evidence_type
     assert called_evidence.attacker.value == profileid.split("_")[1]
     assert called_evidence.profile.ip == profileid.split("_")[1]
@@ -78,12 +75,10 @@ def test_check_icmp_sweep_valid_scans(
     assert called_evidence.timestamp == timestamp
 
 
-def test_check_icmp_sweep_unsupported_scan(mocker, mock_db):
-    network_discovery = ModuleFactory().create_network_discovery_obj(mock_db)
+def test_check_icmp_sweep_unsupported_scan():
+    network_discovery = ModuleFactory().create_network_discovery_obj()
 
-    mock_set_evidence = mocker.patch.object(
-        network_discovery.db, "set_evidence"
-    )
+    network_discovery.db.set_evidence = Mock()
 
     network_discovery.check_icmp_sweep(
         msg="Some other scan detected on 20 hosts",
@@ -94,7 +89,7 @@ def test_check_icmp_sweep_unsupported_scan(mocker, mock_db):
         timestamp="2023-04-01 15:00:00",
     )
 
-    assert mock_set_evidence.call_count == 0
+    assert network_discovery.db.set_evidence.call_count == 0
 
 
 @pytest.mark.parametrize(
@@ -139,35 +134,31 @@ def test_check_icmp_sweep_unsupported_scan(mocker, mock_db):
     ],
 )
 def test_check_dhcp_scan_no_evidence(
-    mocker,
-    mock_db,
     flow_info,
     existing_dhcp_flows,
     expected_set_dhcp_flow_calls,
     expected_get_dhcp_flows_calls,
 ):
-    network_discovery = ModuleFactory().create_network_discovery_obj(mock_db)
+    network_discovery = ModuleFactory().create_network_discovery_obj()
     network_discovery.minimum_requested_addrs = 4
 
-    mock_get_dhcp_flows = mocker.patch.object(
-        network_discovery.db,
-        "get_dhcp_flows",
-        return_value=existing_dhcp_flows,
-    )
-    mock_set_dhcp_flow = mocker.patch.object(
-        network_discovery.db, "set_dhcp_flow"
-    )
-    mock_set_evidence = mocker.patch.object(
-        network_discovery.db, "set_evidence"
-    )
-
+    network_discovery.db.get_dhcp_flows = Mock()
+    network_discovery.db.get_dhcp_flows.return_value = existing_dhcp_flows
+    network_discovery.db.set_dhcp_flow = Mock()
+    network_discovery.db.set_evidence = Mock()
     network_discovery.check_dhcp_scan(flow_info)
 
-    assert mock_get_dhcp_flows.call_count == expected_get_dhcp_flows_calls
-    assert mock_set_dhcp_flow.call_count == expected_set_dhcp_flow_calls
-    assert mock_set_evidence.call_count == 0
+    assert (
+        network_discovery.db.get_dhcp_flows.call_count
+        == expected_get_dhcp_flows_calls
+    )
+    assert (
+        network_discovery.db.set_dhcp_flow.call_count
+        == expected_set_dhcp_flow_calls
+    )
+    assert network_discovery.db.set_evidence.call_count == 0
 
-    mock_set_dhcp_flow.assert_called_with(
+    network_discovery.db.set_dhcp_flow.assert_called_with(
         flow_info["profileid"],
         flow_info["twid"],
         flow_info["flow"]["requested_addr"],
@@ -175,7 +166,7 @@ def test_check_dhcp_scan_no_evidence(
     )
 
 
-def test_check_dhcp_scan_with_evidence(mocker, mock_db):
+def test_check_dhcp_scan_with_evidence():
     flow_info = {
         "flow": {
             "requested_addr": "192.168.1.104",
@@ -192,35 +183,27 @@ def test_check_dhcp_scan_with_evidence(mocker, mock_db):
         "192.168.1.103": ["uid7890"],
     }
 
-    network_discovery = ModuleFactory().create_network_discovery_obj(mock_db)
+    network_discovery = ModuleFactory().create_network_discovery_obj()
     network_discovery.minimum_requested_addrs = 4
 
-    mock_get_dhcp_flows = mocker.patch.object(
-        network_discovery.db,
-        "get_dhcp_flows",
-        return_value=existing_dhcp_flows,
-    )
-    mock_set_dhcp_flow = mocker.patch.object(
-        network_discovery.db, "set_dhcp_flow"
-    )
-    mock_set_evidence = mocker.patch.object(
-        network_discovery.db, "set_evidence"
-    )
-
+    network_discovery.db.get_dhcp_flows = Mock()
+    network_discovery.db.get_dhcp_flows.return_value = existing_dhcp_flows
+    network_discovery.db.set_dhcp_flow = Mock()
+    network_discovery.db.set_evidence = Mock()
     network_discovery.check_dhcp_scan(flow_info)
 
-    assert mock_get_dhcp_flows.call_count == 2
-    assert mock_set_dhcp_flow.call_count == 1
-    assert mock_set_evidence.call_count == 1
+    assert network_discovery.db.get_dhcp_flows.call_count == 2
+    assert network_discovery.db.set_dhcp_flow.call_count == 1
+    assert network_discovery.db.set_evidence.call_count == 1
 
-    mock_set_dhcp_flow.assert_called_with(
+    network_discovery.db.set_dhcp_flow.assert_called_with(
         flow_info["profileid"],
         flow_info["twid"],
         flow_info["flow"]["requested_addr"],
         flow_info["flow"]["uids"],
     )
 
-    called_evidence = mock_set_evidence.call_args[0][0]
+    called_evidence = network_discovery.db.set_evidence.call_args[0][0]
     assert called_evidence.evidence_type == EvidenceType.DHCP_SCAN
     assert (
         called_evidence.attacker.value == flow_info["profileid"].split("_")[-1]
@@ -299,8 +282,6 @@ def test_check_dhcp_scan_with_evidence(mocker, mock_db):
     ],
 )
 def test_set_evidence_icmpscan(
-    mocker,
-    mock_db,
     number_of_scanned_ips,
     timestamp,
     pkts_sent,
@@ -313,12 +294,8 @@ def test_set_evidence_icmpscan(
     expected_description,
     expected_victim,
 ):
-    network_discovery = ModuleFactory().create_network_discovery_obj(mock_db)
-
-    mock_set_evidence = mocker.patch.object(
-        network_discovery.db, "set_evidence"
-    )
-
+    network_discovery = ModuleFactory().create_network_discovery_obj()
+    network_discovery.db.set_evidence = Mock()
     network_discovery.set_evidence_icmpscan(
         number_of_scanned_ips,
         timestamp,
@@ -331,9 +308,9 @@ def test_set_evidence_icmpscan(
         scanned_ip,
     )
 
-    assert mock_set_evidence.call_count == 1
+    assert network_discovery.db.set_evidence.call_count == 1
 
-    called_evidence = mock_set_evidence.call_args[0][0]
+    called_evidence = network_discovery.db.set_evidence.call_args[0][0]
     assert called_evidence.evidence_type == attack
     assert called_evidence.attacker.value == profileid.split("_")[1]
     assert called_evidence.profile.ip == profileid.split("_")[1]
@@ -383,8 +360,6 @@ def test_set_evidence_icmpscan(
     ],
 )
 def test_set_evidence_dhcp_scan(
-    mocker,
-    mock_db,
     timestamp,
     profileid,
     twid,
@@ -392,19 +367,15 @@ def test_set_evidence_dhcp_scan(
     number_of_requested_addrs,
     expected_description,
 ):
-    network_discovery = ModuleFactory().create_network_discovery_obj(mock_db)
-
-    mock_set_evidence = mocker.patch.object(
-        network_discovery.db, "set_evidence"
-    )
-
+    network_discovery = ModuleFactory().create_network_discovery_obj()
+    network_discovery.db.set_evidence = Mock()
     network_discovery.set_evidence_dhcp_scan(
         timestamp, profileid, twid, uids, number_of_requested_addrs
     )
 
-    assert mock_set_evidence.call_count == 1
+    assert network_discovery.db.set_evidence.call_count == 1
 
-    called_evidence = mock_set_evidence.call_args[0][0]
+    called_evidence = network_discovery.db.set_evidence.call_args[0][0]
     assert called_evidence.evidence_type == EvidenceType.DHCP_SCAN
     assert called_evidence.attacker.value == profileid.split("_")[-1]
     assert called_evidence.profile.ip == profileid.split("_")[-1]
@@ -542,39 +513,29 @@ def test_set_evidence_dhcp_scan(
     ],
 )
 def test_check_icmp_scan(
-    mocker,
-    mock_db,
     profileid,
     twid,
     sports,
     expected_set_evidence_calls,
     expected_cache_det_thresholds,
 ):
-    with patch(
-        "modules.network_discovery.network_discovery."
-        "NetworkDiscovery.__init__",
-        return_value=None,
-    ):
-        network_discovery = ModuleFactory().create_network_discovery_obj(
-            mock_db
-        )
-        network_discovery.pingscan_minimum_flows = 5
-        network_discovery.pingscan_minimum_scanned_ips = 5
-        network_discovery.cache_det_thresholds = {}
-        mock_get_data_from_profile_tw = mocker.patch.object(
-            network_discovery.db,
-            "get_data_from_profile_tw",
-            return_value=sports,
-        )
-        mock_set_evidence = mocker.patch.object(
-            network_discovery.db, "set_evidence"
-        )
+    network_discovery = ModuleFactory().create_network_discovery_obj()
+    network_discovery.pingscan_minimum_flows = 5
+    network_discovery.pingscan_minimum_scanned_ips = 5
+    network_discovery.cache_det_thresholds = {}
 
-        network_discovery.check_icmp_scan(profileid, twid)
+    network_discovery.db.get_data_from_profile_tw = Mock()
+    network_discovery.db.get_data_from_profile_tw.return_value = sports
 
-        assert mock_get_data_from_profile_tw.call_count == 1
-        assert mock_set_evidence.call_count == expected_set_evidence_calls
-        assert (
-            network_discovery.cache_det_thresholds
-            == expected_cache_det_thresholds
-        )
+    network_discovery.db.set_evidence = Mock()
+
+    network_discovery.check_icmp_scan(profileid, twid)
+
+    assert network_discovery.db.get_data_from_profile_tw.call_count == 1
+    assert (
+        network_discovery.db.set_evidence.call_count
+        == expected_set_evidence_calls
+    )
+    assert (
+        network_discovery.cache_det_thresholds == expected_cache_det_thresholds
+    )

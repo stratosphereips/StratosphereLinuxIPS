@@ -8,15 +8,6 @@ import signal
 import sys
 
 
-def process_exists(pid):
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    else:
-        return True
-
-
 @pytest.mark.parametrize(
     "test_message, expected_log_content",
     [  # testcase1: Simple message
@@ -257,4 +248,3 @@ def test_is_running(pid, lock_side_effect, expected_result):
         result = daemon._is_running()
 
     assert result == expected_result
-
