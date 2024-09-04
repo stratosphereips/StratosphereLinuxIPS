@@ -572,7 +572,7 @@ class ModuleFactory:
         return notify
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_cesnet_obj(self):
+    def create_cesnet_obj(self, mock_db):
         output_dir = "dummy_output_dir"
         redis_port = 6379
         termination_event = MagicMock()
