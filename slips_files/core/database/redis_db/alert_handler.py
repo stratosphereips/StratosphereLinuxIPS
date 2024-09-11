@@ -166,8 +166,10 @@ class AlertHandler:
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
 
         evidence.attacker.TI = self.get_ti(evidence.attacker)
+        evidence.attacker.AS = self.get_asn_info(evidence.attacker.value)
         if hasattr(evidence, "victim") and evidence.victim:
             evidence.victim.TI = self.get_ti(evidence.victim)
+            evidence.victim.AS = self.get_asn_info(evidence.victim.value)
 
         evidence_to_send: dict = utils.to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)

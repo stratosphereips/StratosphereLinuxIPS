@@ -6,9 +6,18 @@ import ipaddress
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from uuid import uuid4
-from typing import List, Optional
+from typing import (
+    List,
+    Optional,
+    Dict,
+)
 
 from slips_files.common.slips_utils import utils
+
+
+# IMPORTANT: remember to update dict_to_evidence() function based on the
+# field you add to the evidence class, or any class used by the evidence
+# class.
 
 
 def validate_ip(ip):
@@ -137,6 +146,8 @@ class Victim:
     # if the victim is part of a TI feed that slips knows  about,
     # the feed name goes here
     TI: str = field(default=None)
+    # autonomous system
+    AS: Dict[str, str] = field(default=None)
 
     def __post_init__(self):
         if self.victim_type == IoCType.IP:
@@ -165,6 +176,8 @@ class Attacker:
     # if the victim is part of a TI feed that slips knows  about,
     # the feed name goes here
     TI: str = field(default=None)
+    # autonomous system
+    AS: Dict[str, str] = field(default=None)
 
     def __post_init__(self):
         if self.attacker_type == IoCType.IP:
