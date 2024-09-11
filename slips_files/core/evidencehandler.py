@@ -213,7 +213,7 @@ class EvidenceHandler(ICore):
                             "uids": evidence.uid,
                             "accumulated_threat_level": accumulated_threat_level,
                             "threat_level": str(evidence.threat_level),
-                            "timewindow": str(evidence.timewindow),
+                            "timewindow": evidence.timewindow.number,
                         }
                     )
                 }
