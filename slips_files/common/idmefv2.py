@@ -204,7 +204,7 @@ class IDMEFv2:
                     "CreateTime": now,
                     "Confidence": evidence.confidence,
                     "Description": evidence.description,
-                    "Source": [{attacker_type: attacker}],
+                    "Source": [{attacker_type: attacker, "Note": {}}],
                 }
             )
 
@@ -217,17 +217,26 @@ class IDMEFv2:
             if evidence.attacker.TI:
                 msg["Source"][0].update({"TI": [evidence.attacker.TI]})
 
+            if evidence.attacker.AS:
+                msg["Source"][0]["Note"].update({"AS": evidence.attacker.AS})
+
             if hasattr(evidence, "victim") and evidence.victim:
                 victim, victim_type = self.extract_role_type(
                     evidence, role="victim"
                 )
-                msg["Target"] = [{victim_type: victim}]
+                msg["Target"] = [
+                    {
+                        victim_type: victim,
+                        "Note": {},
+                    }
+                ]
                 if evidence.dst_port:
                     msg["Target"][0].update({"Port": [int(evidence.dst_port)]})
+
                 if evidence.victim.TI:
-                    msg["Target"][0].update(
-                        {"Note": json.dumps({"TI": [evidence.victim.TI]})}
-                    )
+                    msg["Target"][0]["Note"] = {"TI": evidence.victim.TI}
+                if evidence.victim.AS:
+                    msg["Target"][0]["Note"] = {"AS": evidence.victim.AS}
 
             # todo check that we added all the fields from the plan
             # todo add alerts too not just evidence
@@ -253,6 +262,11 @@ class IDMEFv2:
 
             if evidence.rel_id:
                 msg["RelID"] = evidence.rel_id
+
+            # notes in idmef format should be strings
+            msg["Source"][0]["Note"] = json.dumps(msg["Source"][0]["Note"])
+            if "Target" in msg:
+                msg["Target"][0]["Note"] = json.dumps(msg["Target"][0]["Note"])
 
             # PS: The "Note" field is added by the evidencehandler before
             # logging the evidence to alerts.json
