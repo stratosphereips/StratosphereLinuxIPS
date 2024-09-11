@@ -48,12 +48,11 @@ class Conn(IFlowalertsAnalyzer):
     def name(self) -> str:
         return "conn_analyzer"
 
-    def check_long_connection(self, profileid, twid, flow):
+    def check_long_connection(self, twid, flow):
         """
         Check if a duration of the connection is
         above the threshold (more than 25 minutes by default).
         """
-
         if (
             ipaddress.ip_address(flow.daddr).is_multicast
             or ipaddress.ip_address(flow.saddr).is_multicast
@@ -63,7 +62,7 @@ class Conn(IFlowalertsAnalyzer):
 
         # If duration is above threshold, we should set an evidence
         if float(flow.dur) > self.long_connection_threshold:
-            self.set_evidence.long_connection(profileid, twid, flow)
+            self.set_evidence.long_connection(twid, flow)
             return True
         return False
 
@@ -732,7 +731,7 @@ class Conn(IFlowalertsAnalyzer):
             flow.interpreted_state = self.db.get_final_state_from_flags(
                 flow.state, flow.pkts
             )
-            self.check_long_connection(profileid, twid, flow)
+            self.check_long_connection(twid, flow)
             self.check_unknown_port(profileid, twid, flow)
             self.check_multiple_reconnection_attempts(profileid, twid, flow)
             self.check_conn_to_port_0(profileid, twid, flow)
