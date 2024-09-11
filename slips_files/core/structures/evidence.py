@@ -5,6 +5,7 @@ Contains evidence dataclass that is used in slips
 import ipaddress
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from pprint import pformat
 from uuid import uuid4
 from typing import (
     List,
@@ -256,6 +257,27 @@ class Evidence:
         else:
             # remove duplicate uids
             self.uid = list(set(self.uid))
+
+    def __str__(self):
+        return (
+            f"Evidence(\n"
+            f"  Evidence Type: {self.evidence_type},\n"
+            f"  Description: {self.description},\n"
+            f"  Attacker: {pformat(self.attacker)},\n"
+            f"  Threat Level: {self.threat_level},\n"
+            f"  Profile: {pformat(self.profile)},\n"
+            f"  Timewindow: {self.timewindow},\n"
+            f"  UID: {self.uid},\n"
+            f"  Timestamp: {self.timestamp},\n"
+            f"  Victim: {pformat(self.victim)},\n"
+            f"  Protocol: {self.proto},\n"
+            f"  Destination Port: {self.dst_port},\n"
+            f"  Source Port: {self.src_port},\n"
+            f"  ID: {self.id},\n"
+            f"  Confidence: {self.confidence},\n"
+            f"  Related ID: {self.rel_id}\n"
+            f")"
+        )
 
 
 def dict_to_evidence(evidence: dict) -> Evidence:
