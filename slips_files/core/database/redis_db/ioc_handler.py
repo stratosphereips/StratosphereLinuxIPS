@@ -203,7 +203,6 @@ class IoCHandler:
         Store a group of ssl fingerprints in the db
         :param malicious_ssl_certs:  {sha1: {'source':..,'tags':..,
                                     'threat_level':... ,'description'}}
-
         """
         self.rcache.hmset(self.constants.IOC_SSL, malicious_ssl_certs)
 

@@ -56,5 +56,5 @@ class HostIPManager:
 
         if host_ip not in modified_profiles:
             if host_ip := self.get_host_ip():
-                self.db.set_host_ip(host_ip)
+                self.main.db.set_host_ip(host_ip)
         return host_ip
