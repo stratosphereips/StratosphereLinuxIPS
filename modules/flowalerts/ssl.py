@@ -2,6 +2,11 @@ import json
 import multiprocessing
 import threading
 import time
+from typing import (
+    Tuple,
+    Union,
+    Dict,
+)
 
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -9,6 +14,8 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.suricata import SuricataTLS
+from slips_files.core.flows.zeek import SSL
 
 
 class SSL(IFlowalertsAnalyzer):
@@ -36,7 +43,7 @@ class SSL(IFlowalertsAnalyzer):
     def wait_for_ssl_flows_to_appear_in_connlog(self):
         """
         thread that waits forever for ssl flows to appear in conn.log
-        whenever the conn.log of an ssl flow is found, thread calls
+        whenever the conn.log flow of an ssl flow is found, thread calls
         check_pastebin_download
         ssl flows to wait for are stored in pending_ssl_flows
         """
@@ -57,36 +64,36 @@ class SSL(IFlowalertsAnalyzer):
             # this is to ensure that re-added flows to the queue aren't checked twice
             for ssl_flow in range(size):
                 try:
-                    ssl_flow: dict = self.pending_ssl_flows.get(timeout=0.5)
+                    ssl_flow: Tuple[Union[SSL, SuricataTLS], str, str] = (
+                        self.pending_ssl_flows.get(timeout=0.5)
+                    )
                 except Exception:
                     continue
 
-                # unpack the flow
-                daddr, server_name, uid, ts, profileid, twid = ssl_flow
-
+                flow, profileid, twid = ssl_flow
                 # get the conn.log with the same uid,
                 # returns {uid: {actual flow..}}
                 # always returns a dict, never returns None
-                # flow: dict = self.db.get_flow(profileid, twid, uid)
-                conn_log_flow: str = self.db.get_flow(uid)
-                if conn_log_flow := conn_log_flow.get(uid):
+                conn_log_flow: Dict[str, str] = self.db.get_flow(flow.uid)
+                if conn_log_flow := conn_log_flow.get(flow.uid):
                     conn_log_flow: dict = json.loads(conn_log_flow)
                     if "starttime" in conn_log_flow:
                         # this means the flow is found in conn.log
-                        self.check_pastebin_download(
-                            ssl_flow, conn_log_flow, profileid, twid
-                        )
+                        self.check_pastebin_download(flow, conn_log_flow, twid)
                 else:
                     # flow not found in conn.log yet,
                     # re-add it to the queue to check it later
-                    self.pending_ssl_flows.put(ssl_flow)
+                    self.pending_ssl_flows.put((flow, profileid, twid))
 
             # give the ssl flows remaining in self.pending_ssl_flows
             # 2 more mins to appear
             time.sleep(wait_time)
 
     def check_pastebin_download(
-        self, ssl_flow, conn_log_flow, profileid, twid
+        self,
+        ssl_flow: Union[SSL, SuricataTLS],
+        conn_log_flow: Dict[str, str],
+        twid: str,
     ):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
@@ -95,7 +102,6 @@ class SSL(IFlowalertsAnalyzer):
         : param flow: this is the conn.log of the ssl flow
         we're currently checking
         """
-        ssl_flow = self.classifier.convert_to_flow_obj(ssl_flow)
         conn_log_flow = self.classifier.convert_to_flow_obj(conn_log_flow)
         if "pastebin" not in ssl_flow.server_name:
             return False
@@ -210,16 +216,7 @@ class SSL(IFlowalertsAnalyzer):
             # we'll be checking pastebin downloads of this ssl flow
             # later
             # todo: can i put ssl flow obj in the queue??
-            self.pending_ssl_flows.put(
-                (
-                    flow.daddr,
-                    flow.server_name,
-                    flow.uid,
-                    flow.starttime,
-                    profileid,
-                    twid,
-                )
-            )
+            self.pending_ssl_flows.put((flow, profileid, twid))
 
             self.check_self_signed_certs(profileid, twid, flow)
             self.detect_malicious_ja3(twid, flow)
