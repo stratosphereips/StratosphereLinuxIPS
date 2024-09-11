@@ -220,6 +220,11 @@ class IDMEFv2:
             if evidence.attacker.AS:
                 msg["Source"][0]["Note"].update({"AS": evidence.attacker.AS})
 
+            if evidence.attacker.rDNS:
+                msg["Source"][0]["Note"].update(
+                    {"rDNS": evidence.attacker.rDNS}
+                )
+
             if hasattr(evidence, "victim") and evidence.victim:
                 victim, victim_type = self.extract_role_type(
                     evidence, role="victim"
@@ -237,6 +242,8 @@ class IDMEFv2:
                     msg["Target"][0]["Note"] = {"TI": evidence.victim.TI}
                 if evidence.victim.AS:
                     msg["Target"][0]["Note"] = {"AS": evidence.victim.AS}
+                if evidence.victim.rDNS:
+                    msg["Target"][0]["Note"] = {"rDNS": evidence.victim.rDNS}
 
             # todo check that we added all the fields from the plan
             # todo add alerts too not just evidence
