@@ -391,13 +391,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def get_ip_info(self, ip: str) -> dict:
+    def get_ip_info(self, ip: str) -> Optional[dict]:
         """
         Return information about this IP from IPsInfo key
         :return: a dictionary or False if there is no IP in the database
         """
         data = self.rcache.hget(self.constants.IPS_INFO, ip)
-        return json.loads(data) if data else False
+        return json.loads(data) if data else None
 
     def set_new_ip(self, ip: str):
         """
@@ -933,6 +933,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """Did slips mark the given dir as growing?"""
         return "yes" in str(self.r.get("growing_zeek_dir"))
 
+    def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
+        """
+        returns asn info about the given IP
+        return a dict with "number" and "org" keys
+        """
+        if utils.is_ignored_ip(ip):
+            return None
+
+        ip_info = self.get_ip_info(ip)
+        if not ip_info:
+            return None
+
+        return ip_info.get("asn")
+
     def get_ip_identification(self, ip: str, get_ti_data=True) -> str:
         """
         Return the identification of this IP based
@@ -947,8 +961,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         if not ip_info:
             return id
 
-        asn = ip_info.get("asn", "")
-        if asn:
+        if asn := self.get_asn_info(ip):
             asn_org = asn.get("org", "")
             asn_number = asn.get("number", "")
             id += f" AS: {asn_org} {asn_number}"

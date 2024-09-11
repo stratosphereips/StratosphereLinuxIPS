@@ -110,6 +110,9 @@ class DBManager:
     def mark_profile_as_malicious(self, *args, **kwargs):
         return self.rdb.mark_profile_as_malicious(*args, **kwargs)
 
+    def get_asn_info(self, *args, **kwargs):
+        return self.rdb.get_asn_info(*args, **kwargs)
+
     def get_equivalent_tws(self, *args, **kwargs):
         return self.rdb.get_equivalent_tws(*args, **kwargs)
 

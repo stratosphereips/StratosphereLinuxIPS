@@ -403,7 +403,10 @@ class Utils(object):
         This function checks if an IP is a special list of IPs that
         should not be alerted for different reasons
         """
-        ip_obj = ipaddress.ip_address(ip)
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except (ipaddress.AddressValueError, ValueError):
+            return True
         # Is the IP multicast, private? (including localhost)
         # local_link or reserved?
         # The broadcast address 255.255.255.255 is reserved.
