@@ -239,11 +239,13 @@ class IDMEFv2:
                     msg["Target"][0].update({"Port": [int(evidence.dst_port)]})
 
                 if evidence.victim.TI:
-                    msg["Target"][0]["Note"] = {"TI": evidence.victim.TI}
+                    msg["Target"][0]["Note"].update({"TI": evidence.victim.TI})
                 if evidence.victim.AS:
-                    msg["Target"][0]["Note"] = {"AS": evidence.victim.AS}
+                    msg["Target"][0]["Note"].update({"AS": evidence.victim.AS})
                 if evidence.victim.rDNS:
-                    msg["Target"][0]["Note"] = {"rDNS": evidence.victim.rDNS}
+                    msg["Target"][0]["Note"].update(
+                        {"rDNS": evidence.victim.rDNS}
+                    )
 
             # todo check that we added all the fields from the plan
             # todo add alerts too not just evidence

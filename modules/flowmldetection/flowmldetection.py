@@ -20,6 +20,7 @@ from slips_files.core.structures.evidence import (
     EvidenceType,
     IoCType,
     Direction,
+    Victim,
 )
 
 # Only for debbuging
@@ -385,6 +386,11 @@ class FlowMLDetection(IModule):
                 direction=Direction.SRC,
                 attacker_type=IoCType.IP,
                 value=flow["saddr"],
+            ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow["daddr"],
             ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
