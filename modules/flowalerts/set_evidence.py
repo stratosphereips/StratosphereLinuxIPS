@@ -777,7 +777,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def long_connection(self, profileid, twid, flow) -> None:
+    def long_connection(self, twid, flow) -> None:
         """
         Set an evidence for a long connection.
         """
@@ -789,6 +789,8 @@ class SetEvidnceHelper:
         # Get the duration in minutes.
         if isinstance(flow.dur, str):
             dur = float(flow.dur)
+        else:
+            dur = flow.dur
         duration_minutes: int = int(dur / 60)
         ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
