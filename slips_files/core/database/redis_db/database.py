@@ -443,6 +443,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         data = self.rcache.hget(self.constants.IPS_INFO, ip)
         return json.loads(data) if data else None
 
+    def _get_from_ip_info(self, ip: str, info_to_get: str):
+        """
+        :param ip: the key to get from the ip info hash
+        :param info_to_get: the value to get from the ip info hash
+        """
+        if utils.is_ignored_ip(ip):
+            return
+
+        ip_info = self.get_ip_info(ip)
+        if not ip_info:
+            return
+
+        info = ip_info.get(info_to_get)
+        if not info:
+            return
+        return info
+
     def set_new_ip(self, ip: str):
         """
         1- Stores this new IP in the IPs hash
@@ -594,7 +611,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def set_ip_info(self, ip: str, to_store: dict):
         """
         Store information for this IP
-        We receive a dictionary, such as {'geocountry': 'rumania'} to
+        We receive a dictionary, such as {
+        'geocountry': 'rumania'} to
         store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
@@ -982,14 +1000,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         returns asn info about the given IP
         return a dict with "number" and "org" keys
         """
-        if utils.is_ignored_ip(ip):
-            return None
+        return self._get_from_ip_info(ip, "asn")
 
-        ip_info = self.get_ip_info(ip)
-        if not ip_info:
-            return None
-
-        return ip_info.get("asn")
+    def get_rdns_info(self, ip: str) -> Optional[str]:
+        """
+        returns asn info about the given IP
+        return a dict with "number" and "org" keys
+        """
+        return self._get_from_ip_info(ip, "reverse_dns")
 
     def get_ip_identification(self, ip: str, get_ti_data=True) -> str:
         """
@@ -1015,7 +1033,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             sni = sni[0] if isinstance(sni, list) else sni
             id += f' SNI: {sni["server_name"]}, '
 
-        rdns = ip_info.get("reverse_dns", "")
+        rdns: str = ip_info.get("reverse_dns", "")
         if rdns:
             id += f" rDNS: {rdns}, "
 

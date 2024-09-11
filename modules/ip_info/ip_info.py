@@ -247,7 +247,7 @@ class IPInfo(IModule):
         data = {}
         try:
             # works with both ipv4 and ipv6
-            reverse_dns = socket.gethostbyaddr(ip)[0]
+            reverse_dns: str = socket.gethostbyaddr(ip)[0]
             # if there's no reverse dns record for this ip, reverse_dns will be an ip.
             try:
                 # reverse_dns is an ip. there's no reverse dns. don't store
