@@ -516,10 +516,9 @@ class IPInfo(IModule):
         port_info = self.db.get_port_info(portproto) or ""
         port_info = f"({port_info.upper()})" if port_info else ""
 
-        dstip_id = self.db.get_ip_identification(dstip)
         description = (
             f"Malicious JARM hash detected for destination IP: {dstip}"
-            f" on port: {portproto} {port_info}. {dstip_id}"
+            f" on port: {portproto} {port_info}. "
         )
         twid_number = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
@@ -540,7 +539,8 @@ class IPInfo(IModule):
             uid=[flow["uid"]],
             timestamp=timestamp,
             proto=Proto(protocol.lower()),
-            port=dport,
+            dst_port=dport,
+            src_port=flow["sport"],
         )
 
         self.db.set_evidence(evidence)
@@ -560,7 +560,8 @@ class IPInfo(IModule):
             uid=[flow["uid"]],
             timestamp=timestamp,
             proto=Proto(protocol.lower()),
-            port=dport,
+            dst_port=dport,
+            src_port=flow["sport"],
         )
 
         self.db.set_evidence(evidence)

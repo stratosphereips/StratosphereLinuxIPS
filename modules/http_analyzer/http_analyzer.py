@@ -233,10 +233,9 @@ class HTTPAnalyzer(IModule):
         self.db.set_evidence(evidence)
 
     def set_evidence_executable_mime_type(self, twid, flow):
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"Download of an executable with MIME type: {flow.mime_type} "
-            f"by {flow.saddr} from {flow.daddr} {ip_identification}."
+            f"by {flow.saddr} from {flow.daddr}."
         )
         twid_number = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
@@ -615,10 +614,9 @@ class HTTPAnalyzer(IModule):
             direction=Direction.DST, victim_type=IoCType.IP, value=flow.daddr
         )
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f'Weird HTTP method "{flow.weird_method}" to IP: '
-            f"{flow.daddr} {ip_identification}. by Zeek."
+            f"{flow.daddr}. by Zeek."
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))

@@ -207,11 +207,9 @@ class LeakDetector(IModule):
         # wait a while before alerting.
         time.sleep(4)
 
-        ip_identification = self.db.get_ip_identification(dstip)
         description = (
             f"{rule} to destination address: {dstip} "
-            f"{ip_identification} port: {portproto} "
-            f"{port_info or ''}. "
+            f"port: {portproto} {port_info or ''}. "
             f"Leaked location: {strings_matched}"
         )
 

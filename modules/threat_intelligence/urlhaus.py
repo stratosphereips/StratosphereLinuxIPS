@@ -152,7 +152,6 @@ class URLhaus:
         flow: Dict[str, Any] = file_info["flow"]
 
         daddr: str = flow["daddr"]
-        ip_identification: str = self.db.get_ip_identification(daddr)
 
         # Add the following fields in the evidence
         # description but only if we're sure they exist
@@ -177,12 +176,8 @@ class URLhaus:
         # so we need a more detailed description
         description: str = (
             f"Malicious downloaded file: {flow['md5']}."
-            f"{size}"
-            f" from IP: {daddr} {ip_identification}."
-            f"{file_name}"
-            f"{file_type}"
-            f"{tags}"
-            f" by URLhaus."
+            f"{size}  from IP: {daddr}. {file_name} {file_type} {tags} by "
+            f"URLhaus."
         )
 
         threat_level: float = file_info.get("threat_level")

@@ -370,11 +370,10 @@ class FlowMLDetection(IModule):
 
     def set_evidence_malicious_flow(self, flow: dict, twid: str):
         confidence: float = 0.1
-        ip_identification = self.db.get_ip_identification(flow["daddr"])
         description = (
             f"Malicious flow by ML. Src IP"
             f" {flow['saddr']}:{flow['sport']} to "
-            f"{flow['daddr']}:{flow['dport']} {ip_identification}"
+            f"{flow['daddr']}:{flow['dport']}"
         )
 
         timestamp = utils.convert_format(

@@ -437,17 +437,14 @@ class Trust(IModule):
         threat_level = ThreatLevel[threat_level.upper()]
         twid_int = int(ip_info.get("twid").replace("timewindow", ""))
 
-        ip_identification = self.db.get_ip_identification(attacker_ip)
-
         if "src" in ip_info.get("ip_state"):
             description = (
                 f"Connection from blacklisted IP {attacker_ip} "
-                f"({ip_identification}) to {saddr} Source: Slips P2P network."
+                f"to {saddr} Source: Slips P2P network."
             )
         else:
             description = (
                 f"Connection to blacklisted IP {attacker_ip} "
-                f"({ip_identification}) "
                 f"from {saddr} Source: Slips P2P network."
             )
 

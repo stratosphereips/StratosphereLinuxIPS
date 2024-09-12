@@ -262,22 +262,20 @@ class ARP(IModule):
                 return False
 
         # to prevent arp alerts from one IP to itself
-        local_net = flow.saddr.split(".")[0]
-        if not flow.daddr.startswith(local_net):
+        first_octet = flow.saddr.split(".")[0]
+        if not flow.daddr.startswith(first_octet):
             # comes here if the IP isn't in any of the local networks
             confidence: float = 0.6
             threat_level: ThreatLevel = ThreatLevel.LOW
-            ip_identification: str = self.db.get_ip_identification(flow.daddr)
-            saddr: str = profileid.split("_")[1]
-
             description: str = (
-                f"{saddr} sending ARP packet to a destination "
+                f"{flow.saddr} sending ARP packet to a destination "
                 f"address outside of local network: {flow.daddr}. "
-                f"{ip_identification}"
             )
 
             attacker: Attacker = Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             )
             victim = Victim(
                 direction=Direction.DST,
@@ -291,7 +289,7 @@ class ARP(IModule):
                 threat_level=threat_level,
                 confidence=confidence,
                 description=description,
-                profile=ProfileID(ip=saddr),
+                profile=ProfileID(ip=flow.saddr),
                 timewindow=TimeWindow(
                     number=int(twid.replace("timewindow", ""))
                 ),

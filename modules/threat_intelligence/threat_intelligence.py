@@ -210,7 +210,6 @@ class ThreatIntel(IModule, URLhaus):
         threat_level: ThreatLevel = ThreatLevel(threat_level)
 
         tags = asn_info.get("tags", "")
-        identification: str = self.db.get_ip_identification(daddr)
         if is_dns_response:
             description: str = (
                 f"Connection to IP: {daddr} with blacklisted ASN: {asn} "
@@ -223,8 +222,7 @@ class ThreatIntel(IModule, URLhaus):
         description += (
             f'Description: {asn_info["description"]}, '
             f'Found in feed: {asn_info["source"]}, '
-            f"Confidence: {confidence}. "
-            f"Tags: {tags} {identification}"
+            f"Confidence: {confidence}. Tags: {tags} "
         )
         twid_int = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
@@ -315,14 +313,10 @@ class ThreatIntel(IModule, URLhaus):
         threat_level: ThreatLevel = ThreatLevel(threat_level)
         saddr = profileid.split("_")[-1]
 
-        ip_identification: str = self.db.get_ip_identification(
-            ip, get_ti_data=False
-        ).strip()
         description: str = (
             "DNS answer with a blacklisted "
             f"IP: {ip} for query: {dns_query} "
-            f"{ip_identification} Description: "
-            f"{ip_info['description']} "
+            f"Description: {ip_info['description']} "
             f"Source: {ip_info['source']}."
         )
 
@@ -432,12 +426,8 @@ class ThreatIntel(IModule, URLhaus):
             # ip_state is not specified?
             return
 
-        ip_identification: str = self.db.get_ip_identification(
-            ip, get_ti_data=False
-        ).strip()
         description += (
-            f"{ip_identification} Description: "
-            f"{ip_info['description']}. "
+            f"Description: {ip_info['description']}. "
             f"Source: {ip_info['source']}."
         )
 
@@ -1202,13 +1192,12 @@ class ThreatIntel(IModule, URLhaus):
         confidence: float = file_info["confidence"]
         daddr = file_info["flow"]["daddr"]
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = (
             f'Malicious downloaded file {file_info["flow"]["md5"]}. '
             f'size: {file_info["flow"]["size"]} '
             f"from IP: {daddr}. "
             f'Detected by: {file_info["blacklist"]}. '
-            f"Score: {confidence}. {ip_identification}"
+            f"Score: {confidence}. "
         )
         ts = utils.convert_format(
             file_info["flow"]["starttime"], utils.alerts_format

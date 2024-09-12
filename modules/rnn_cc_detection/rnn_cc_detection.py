@@ -66,11 +66,10 @@ class CCDetection(IModule):
         srcip = profileid.split("_")[-1]
         portproto: str = f"{port}/{proto}"
         port_info: str = self.db.get_port_info(portproto)
-        ip_identification: str = self.db.get_ip_identification(dstip)
         description: str = (
             f"C&C channel, client IP: {srcip} server IP: {dstip} "
             f'port: {port_info.upper() if port_info else ""} {portproto} '
-            f'score: {format(score, ".4f")}. {ip_identification}'
+            f'score: {format(score, ".4f")}.'
         )
 
         timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
