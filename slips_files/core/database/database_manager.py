@@ -116,6 +116,9 @@ class DBManager:
     def get_rdns_info(self, *args, **kwargs):
         return self.rdb.get_rdns_info(*args, **kwargs)
 
+    def get_sni_info(self, *args, **kwargs):
+        return self.rdb.get_sni_info(*args, **kwargs)
+
     def get_equivalent_tws(self, *args, **kwargs):
         return self.rdb.get_equivalent_tws(*args, **kwargs)
 

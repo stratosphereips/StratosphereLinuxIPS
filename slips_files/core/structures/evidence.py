@@ -150,6 +150,7 @@ class Victim:
     # autonomous system
     AS: Dict[str, str] = field(default=None)
     rDNS: str = field(default=None)
+    SNI: str = field(default=None)
 
     def __post_init__(self):
         if self.victim_type == IoCType.IP:
@@ -181,6 +182,7 @@ class Attacker:
     # autonomous system
     AS: Dict[str, str] = field(default=None)
     rDNS: str = field(default=None)
+    SNI: str = field(default=None)
 
     def __post_init__(self):
         if self.attacker_type == IoCType.IP:

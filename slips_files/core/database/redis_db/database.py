@@ -954,16 +954,27 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
         """
         returns asn info about the given IP
-        return a dict with "number" and "org" keys
+        returns a dict with "number" and "org" keys
         """
         return self._get_from_ip_info(ip, "asn")
 
     def get_rdns_info(self, ip: str) -> Optional[str]:
         """
-        returns asn info about the given IP
-        return a dict with "number" and "org" keys
+        returns rdns info about the given IP
+        returns a str with the rdns or none
         """
         return self._get_from_ip_info(ip, "reverse_dns")
+
+    def get_sni_info(self, ip: str) -> Optional[str]:
+        """
+        returns sni info about the given IP
+        returns the server name or none
+        """
+        sni = self._get_from_ip_info(ip, "SNI")
+        if not sni:
+            return
+        sni = sni[0] if isinstance(sni, list) else sni
+        return sni.get("server_name")
 
     def get_ip_identification(self, ip: str, get_ti_data=True) -> str:
         """
@@ -984,10 +995,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             asn_number = asn.get("number", "")
             id += f" AS: {asn_org} {asn_number}"
 
-        sni = ip_info.get("SNI", "")
+        sni = self.get_sni_info(ip)
         if sni:
-            sni = sni[0] if isinstance(sni, list) else sni
-            id += f' SNI: {sni["server_name"]}, '
+            id += f" SNI: {sni}, "
 
         rdns: str = ip_info.get("reverse_dns", "")
         if rdns:
