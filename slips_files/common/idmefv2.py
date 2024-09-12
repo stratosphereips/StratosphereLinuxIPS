@@ -224,6 +224,8 @@ class IDMEFv2:
                 msg["Source"][0]["Note"].update(
                     {"rDNS": evidence.attacker.rDNS}
                 )
+            if evidence.attacker.SNI:
+                msg["Source"][0]["Note"].update({"SNI": evidence.attacker.SNI})
 
             if hasattr(evidence, "victim") and evidence.victim:
                 victim, victim_type = self.extract_role_type(
@@ -237,7 +239,6 @@ class IDMEFv2:
                 ]
                 if evidence.dst_port:
                     msg["Target"][0].update({"Port": [int(evidence.dst_port)]})
-
                 if evidence.victim.TI:
                     msg["Target"][0]["Note"].update({"TI": evidence.victim.TI})
                 if evidence.victim.AS:
@@ -245,6 +246,10 @@ class IDMEFv2:
                 if evidence.victim.rDNS:
                     msg["Target"][0]["Note"].update(
                         {"rDNS": evidence.victim.rDNS}
+                    )
+                if evidence.victim.SNI:
+                    msg["Target"][0]["Note"].update(
+                        {"SNI": evidence.victim.SNI}
                     )
 
             # todo check that we added all the fields from the plan
