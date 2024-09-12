@@ -22,11 +22,7 @@ class SetEvidnceHelper:
 
     def doh(self, twid, flow):
         twid_number: int = int(twid.replace("timewindow", ""))
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
-        description: str = (
-            f"using DNS over HTTPs. DNS server: {flow.daddr} "
-            f"{ip_identification}"
-        )
+        description: str = f"using DNS over HTTPs. DNS server: {flow.daddr} "
         evidence = Evidence(
             evidence_type=EvidenceType.DIFFERENT_LOCALNET,
             attacker=Attacker(
@@ -244,10 +240,9 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
 
     def non_http_port_80_conn(self, twid, flow) -> None:
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"non-HTTP established connection to port 80. "
-            f"destination IP: {flow.daddr} {ip_identification}"
+            f"destination IP: {flow.daddr}"
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -309,10 +304,9 @@ class SetEvidnceHelper:
 
     def non_ssl_port_443_conn(self, twid, flow) -> None:
         confidence: float = 0.8
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"non-SSL established connection to port 443. "
-            f"destination IP: {flow.daddr} {ip_identification}"
+            f"destination IP: {flow.daddr}"
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -344,11 +338,9 @@ class SetEvidnceHelper:
 
     def incompatible_cn(self, twid, flow, org: str) -> None:
         confidence: float = 0.9
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"Incompatible certificate CN to IP: {flow.daddr} "
-            f"{ip_identification} claiming to "
-            f"belong {org.capitalize()}."
+            f"claiming to belong {org.capitalize()}."
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -487,10 +479,8 @@ class SetEvidnceHelper:
             if diff < 5:
                 confidence = 0.1
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"A connection without DNS resolution to IP: "
-            f"{flow.daddr} {ip_identification}"
+            f"A connection without DNS resolution to IP: " f"{flow.daddr}"
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -545,13 +535,9 @@ class SetEvidnceHelper:
     def unknown_port(self, profileid, twid, flow) -> None:
         confidence: float = 1.0
         twid_number: int = int(twid.replace("timewindow", ""))
-        flow.saddr = profileid.split("_")[-1]
-
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"Connection to unknown destination port {flow.dport}/"
-            f"{flow.proto.upper()} "
-            f"destination IP {flow.daddr}. {ip_identification}"
+            f"{flow.proto.upper()} destination IP {flow.daddr}."
         )
 
         evidence: Evidence = Evidence(
@@ -697,12 +683,9 @@ class SetEvidnceHelper:
         threat_level: ThreatLevel = ThreatLevel.INFO
         twid_number: int = int(twid.replace("timewindow", ""))
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
-
         description: str = (
             f"GRE tunnel from {flow.saddr} "
-            f"to {flow.daddr} {ip_identification} "
-            f"tunnel action: {flow.action}"
+            f"to {flow.daddr} tunnel action: {flow.action}"
         )
 
         evidence: Evidence = Evidence(
@@ -771,11 +754,10 @@ class SetEvidnceHelper:
         threat_level: ThreatLevel = ThreatLevel.INFO
         twid: int = int(twid.replace("timewindow", ""))
 
-        ip_identification: str = self.db.get_ip_identification(daddr)
         description: str = (
-            f"SSH successful to IP {daddr}. {ip_identification}. "
-            f"From IP {saddr}. Sent bytes: {str(size)}. Detection model {by}."
-            f" Confidence {confidence}"
+            f"SSH successful to IP {daddr}. "
+            f"From IP {saddr}. Sent bytes: {size}. Detection model {by}. "
+            f"Confidence {confidence}"
         )
 
         evidence: Evidence = Evidence(
@@ -816,11 +798,10 @@ class SetEvidnceHelper:
         else:
             dur = flow.dur
         duration_minutes: int = int(dur / 60)
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"Long Connection. Connection from {flow.saddr} "
             f"to destination address: {flow.daddr} "
-            f"{ip_identification} took {duration_minutes} mins"
+            f"took {duration_minutes} mins"
         )
 
         evidence: Evidence = Evidence(
@@ -860,11 +841,7 @@ class SetEvidnceHelper:
             direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
         )
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
-        description = (
-            f"Self-signed certificate. Destination IP: {flow.daddr}."
-            f" {ip_identification}"
-        )
+        description = f"Self-signed certificate. Destination IP: {flow.daddr}."
 
         if flow.server_name:
             description += f" SNI: {flow.server_name}."
@@ -921,11 +898,10 @@ class SetEvidnceHelper:
 
         twid: int = int(twid.replace("timewindow", ""))
 
-        ip_identification = self.db.get_ip_identification(flow.daddr)
         description = (
-            f"Multiple reconnection attempts to Destination IP:"
-            f" {flow.daddr} {ip_identification} "
-            f"from IP: {flow.saddr} reconnections: {reconnections}"
+            f"Multiple reconnection attempts to Destination IP: "
+            f"{flow.daddr} from IP: {flow.saddr} "
+            f"reconnections: {reconnections}"
         )
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS,
@@ -965,10 +941,8 @@ class SetEvidnceHelper:
         """
         confidence: float = 0.5
         twid: int = int(twid.replace("timewindow", ""))
-        ip_identification = self.db.get_ip_identification(attacker)
         description = (
-            f"Connection to multiple ports {dstports} of "
-            f"IP: {attacker}. {ip_identification}"
+            f"Connection to multiple ports {dstports} of " f"IP: {attacker}. "
         )
 
         if attacker in profileid:
@@ -1103,10 +1077,9 @@ class SetEvidnceHelper:
             victim_direction = Direction.SRC
             profile_ip = victim
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"Connection on port 0 from {flow.saddr}:{flow.sport} "
-            f"to {flow.daddr}:{flow.dport}. {ip_identification}."
+            f"to {flow.daddr}:{flow.dport}."
         )
 
         evidence: Evidence = Evidence(
@@ -1143,10 +1116,9 @@ class SetEvidnceHelper:
         tags: str = ja3_info.get("tags", "")
         ja3_description: str = ja3_info["description"]
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description = (
-            f"Malicious JA3s: (possible C&C server): {flow.ja3s} to server "
-            f"{flow.daddr} {ip_identification} "
+            f"Malicious JA3s: (possible C&C server): {flow.ja3s} "
+            f"to server {flow.daddr}"
         )
         if ja3_description != "None":
             description += f"description: {ja3_description} "
@@ -1208,10 +1180,8 @@ class SetEvidnceHelper:
         tags: str = ja3_info.get("tags", "")
         ja3_description: str = ja3_info["description"]
 
-        ip_identification: str = self.db.get_ip_identification(flow.saddr)
         description = (
-            f"Malicious JA3: {flow.ja3} from source address "
-            f"{flow.saddr} {ip_identification}"
+            f"Malicious JA3: {flow.ja3} from source address {flow.saddr}"
         )
         if ja3_description != "None":
             description += f" description: {ja3_description} "
@@ -1252,11 +1222,7 @@ class SetEvidnceHelper:
         timestamp,
     ) -> None:
         saddr: str = profileid.split("_")[-1]
-        ip_identification: str = self.db.get_ip_identification(daddr)
-        description: str = (
-            f"Large data upload. {src_mbs} MBs "
-            f"sent to {daddr} {ip_identification}"
-        )
+        description: str = f"Large data upload. {src_mbs} MBs sent to {daddr}"
         timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
         twid_number = int(twid.replace("timewindow", ""))
         # to add a correlation the 2 evidence in alerts.json
@@ -1302,10 +1268,7 @@ class SetEvidnceHelper:
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
-        description: str = (
-            f"doing bad SMTP login to {flow.daddr} " f"{ip_identification}"
-        )
+        description: str = f"doing bad SMTP login to {flow.daddr} "
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.BAD_SMTP_LOGIN,
@@ -1342,11 +1305,9 @@ class SetEvidnceHelper:
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"doing SMTP login bruteforce to {flow.daddr}. "
             f"{smtp_bruteforce_threshold} logins in 10 seconds. "
-            f"{ip_identification}"
         )
         attacker: Attacker = Attacker(
             direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
@@ -1381,11 +1342,9 @@ class SetEvidnceHelper:
         ]
         threat_level: ThreatLevel = ThreatLevel(threat_level)
 
-        ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
             f"Malicious SSL certificate to server {flow.daddr}."
-            f"{ip_identification} description: "
-            f"{cert_description} {tags}  "
+            f"description: {cert_description} {tags}"
         )
         # to add a correlation between the 2 evidence in alerts.json
         evidence_id_of_dstip_as_the_attacker = str(uuid4())
