@@ -19,6 +19,7 @@ from slips_files.core.structures.evidence import (
     Direction,
     Proto,
     Victim,
+    Method,
 )
 from modules.rnn_cc_detection.strato_letters_exporter import (
     StratoLettersExporter,
@@ -96,6 +97,7 @@ class CCDetection(IModule):
             timestamp=timestamp,
             dst_port=int(port),
             proto=Proto(proto.lower()) if proto else None,
+            method=Method.AI,
         )
         self.db.set_evidence(evidence)
 
@@ -118,6 +120,7 @@ class CCDetection(IModule):
             timestamp=timestamp,
             dst_port=int(port),
             proto=Proto(proto.lower()) if proto else None,
+            method=Method.AI,
         )
 
         self.db.set_evidence(evidence)

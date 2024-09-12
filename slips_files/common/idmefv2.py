@@ -207,6 +207,7 @@ class IDMEFv2:
                     "Source": [{attacker_type: attacker, "Note": {}}],
                 }
             )
+            msg["Analyzer"].update({"Method": [evidence.method.value]})
 
             if evidence.src_port:
                 msg["Source"][0].update({"Port": [int(evidence.src_port)]})
