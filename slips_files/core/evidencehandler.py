@@ -39,6 +39,7 @@ from slips_files.core.structures.evidence import (
     Evidence,
     Victim,
     EvidenceType,
+    IoCType,
 )
 from slips_files.core.structures.alerts import (
     Alert,
@@ -240,47 +241,6 @@ class EvidenceHandler(ICore):
         except Exception:
             self.print("Error in add_to_log_file()")
             self.print(traceback.format_exc(), 0, 1)
-
-    def get_domains_of_flow(self, flow: dict):
-        """
-        Returns the domains of each ip (src and dst) that a
-        ppeared in this flow
-        """
-        # These separate lists, hold the domains that we should only
-        # check if they are SRC or DST. Not both
-        try:
-            flow = json.loads(list(flow.values())[0])
-        except TypeError:
-            # sometimes this function is called before the flow is
-            # added to our database
-            return [], []
-        domains_to_check_src = []
-        domains_to_check_dst = []
-        try:
-            domains_to_check_src.append(
-                self.db.get_ip_info(flow["saddr"])
-                .get("SNI", [{}])[0]
-                .get("server_name")
-            )
-        except (KeyError, TypeError):
-            pass
-        try:
-            src_dns_domains = self.db.get_dns_resolution(flow["saddr"])
-            src_dns_domains = src_dns_domains.get("domains", [])
-
-            domains_to_check_src.extend(iter(src_dns_domains))
-        except (KeyError, TypeError):
-            pass
-        try:
-            domains_to_check_dst.append(
-                self.db.get_ip_info(flow["daddr"])
-                .get("SNI", [{}])[0]
-                .get("server_name")
-            )
-        except (KeyError, TypeError):
-            pass
-
-        return domains_to_check_dst, domains_to_check_src
 
     def get_alert_time_description(self, alert: Alert) -> str:
         """
@@ -565,39 +525,59 @@ class EvidenceHandler(ICore):
         self.db.publish("new_blocking", blocking_data)
         return True
 
-    def get_evidence_to_log(self, evidence: Evidence, flow_datetime) -> str:
+    def get_evidence_to_log(
+        self, evidence: Evidence, flow_datetime: str
+    ) -> str:
         """
-        returns the line of evidence that we log to alerts logfiles only.
-        not the cli
+        Returns the line of evidence that we log to alerts logfiles only.
+        Not to the CLI.
         """
-        timewindow_number: int = evidence.timewindow.number
+        timewindow_number = evidence.timewindow.number
+        extra_info: str = self.get_attacker_and_victim_info(evidence)
+        profile_info = self.get_profile_info(evidence)
 
-        # to keep the alignment of alerts.json ip + hostname
-        # combined should take no more than 26 chars
         evidence_str = (
-            f"{flow_datetime} (TW {timewindow_number}): Src "
-            f"IP {evidence.profile.ip:26}. Detected"
-            f" {evidence.description} "
+            f"{flow_datetime} (TW {timewindow_number}): "
+            f"Src IP {profile_info}. "
+            f"Detected {evidence.description} {extra_info}"
         )
 
-        # sometimes slips tries to get the hostname of a
-        # profile before ip_info stores it in the db
-        # there's nothing we can do about it
-        hostname: Optional[str] = self.db.get_hostname_from_profile(
-            str(evidence.profile)
-        )
-        if not hostname:
-            return evidence_str
-
-        padding_len = 26 - len(evidence.profile.ip) - len(hostname) - 3
-        # fill the rest of the 26 characters with spaces to keep the alignment
-        evidence_str = (
-            f"{flow_datetime} (TW {timewindow_number}): Src IP"
-            f" {evidence.profile.ip} ({hostname})"
-            f' {" "*padding_len}. '
-            f"Detected {evidence.description} "
-        )
         return evidence_str
+
+    def get_attacker_and_victim_info(self, evidence: Evidence) -> str:
+        """
+        Processes the evidence to retrieve both attacker and victim
+        information.
+        """
+        res = ""
+
+        if evidence.attacker.attacker_type == IoCType.IP.name:
+            info = self.db.get_ip_identification(evidence.attacker.value)
+            if info:
+                res += f"IP {evidence.attacker.value} {info}\n"
+
+        if evidence.victim and evidence.victim.victim_type == IoCType.IP.name:
+            info = self.db.get_ip_identification(evidence.victim.value)
+            if info:
+                res += f"IP {evidence.victim.value} {info}"
+
+        return res
+
+    def get_profile_info(self, evidence: Evidence) -> str:
+        """
+        Formats profile information including IP and
+        optional hostname, ensuring alignment.
+        """
+        ip = evidence.profile.ip
+        hostname = self.db.get_hostname_from_profile(str(evidence.profile))
+
+        if not hostname:
+            return f"{ip:26}"
+
+        # Adjust alignment to ensure total length of 26
+        # characters (IP + hostname)
+        padding_len = 26 - len(ip) - len(hostname) - 3
+        return f"{ip} ({hostname}){' ' * padding_len}"
 
     def increment_attack_counter(
         self,

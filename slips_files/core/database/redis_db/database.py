@@ -982,7 +982,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         on the AS, rDNS, and SNI of the IP.
 
         :param ip: The IP address to retrieve information for.
-        :param get_ti_data: do we want to get info about this IP from out TI lists?
+        :param get_ti_data: do we want to get info about this IP from out
+        TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
         ip_info = self.get_ip_info(ip)
@@ -995,17 +996,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             asn_number = asn.get("number", "")
             id += f" AS: {asn_org} {asn_number}"
 
-        sni = self.get_sni_info(ip)
-        if sni:
+        if sni := self.get_sni_info(ip):
             id += f" SNI: {sni}, "
 
-        rdns: str = ip_info.get("reverse_dns", "")
-        if rdns:
+        if rdns := self.get_rdns_info(ip):
             id += f" rDNS: {rdns}, "
 
         threat_intel = ip_info.get("threatintelligence", "")
         if threat_intel and get_ti_data:
-            id += f" IP seen in blacklist: {threat_intel['source']}."
+            id += f" appears in blacklist: {threat_intel['source']}."
 
         id = id.rstrip(", ")
         return id

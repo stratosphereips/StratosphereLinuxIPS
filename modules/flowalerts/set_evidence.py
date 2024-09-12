@@ -421,8 +421,6 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=0.8,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
