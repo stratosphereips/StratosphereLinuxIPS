@@ -117,6 +117,8 @@ class HTTPAnalyzer(IModule):
                 ),
                 uid=[flow.uid],
                 timestamp=flow.starttime,
+                src_port=flow.sport,
+                dst_port=flow.dport,
             )
 
             self.db.set_evidence(evidence)
@@ -185,6 +187,8 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid_number)),
             uid=uids,
             timestamp=flow.timestamp,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -222,6 +226,8 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -252,6 +258,8 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -272,6 +280,8 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -507,6 +517,8 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -538,6 +550,8 @@ class HTTPAnalyzer(IModule):
                 victim_type=IoCType.IP,
                 value=flow.daddr,
             ),
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -580,6 +594,8 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -618,6 +634,8 @@ class HTTPAnalyzer(IModule):
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)

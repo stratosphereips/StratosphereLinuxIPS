@@ -481,7 +481,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             self.publish("new_ip", ip)
 
     def ask_for_ip_info(
-        self, ip, profileid, twid, proto, starttime, uid, ip_state, daddr=False
+        self, ip, profileid, twid, flow, ip_state, daddr=False
     ):
         """
         is the ip param src or dst
@@ -492,10 +492,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             profileid,
             twid,
             ip_state,
-            starttime,
-            uid,
+            flow.starttime,
+            flow.uid,
             daddr,
-            proto=proto,
+            proto=flow.proto.upper(),
             lookup=ip,
         )
 

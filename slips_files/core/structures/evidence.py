@@ -215,6 +215,30 @@ class TimeWindow:
         return f"timewindow{self.number}"
 
 
+class Method(Enum):
+    """
+    Describes how was the evidence generated. these values are IDMEFv2
+    https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#section-5.3-4.20.1
+    """
+
+    BIOMETRIC = "Biometric"
+    SIGNATURE = "Signature"
+    MONITOR = "Monitor"
+    POLICY = "Policy"
+    STATISTICAL = "Statistical"
+    AI = "AI"
+    HEAT = "Heat"
+    MOVEMENT = "Movement"
+    BLACKHOLE = "Blackhole"
+    HEURISTIC = "Heuristic"
+    INTEGRITY = "Integrity"
+    HONEYPOT = "Honeypot"
+    TARPIT = "Tarpit"
+    RECON = "Recon"
+    CORRELATION = "Correlation"
+    THRESHOLD = "Threshold"
+
+
 @dataclass
 class Evidence:
     evidence_type: EvidenceType
@@ -233,6 +257,7 @@ class Evidence:
     proto: Optional[Proto] = field(default=False)
     dst_port: int = field(default=None)
     src_port: int = field(default=None)
+    method: Method = field(default=Method.HEURISTIC)
     # every evidence should have an ID according to the IDMEF format
     id: str = field(default_factory=lambda: str(uuid4()))
     # the confidence of this evidence on a scale from 0 to 1.
@@ -316,6 +341,7 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         "id": evidence["id"],
         "rel_id": evidence["rel_id"],
         "confidence": evidence["confidence"],
+        "method": Method[evidence["method"].upper()],
     }
 
     return Evidence(**evidence_attributes)

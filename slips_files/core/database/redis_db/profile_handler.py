@@ -626,9 +626,7 @@ class ProfileHandler:
                 flow.saddr,
                 profileid,
                 twid,
-                flow.proto.upper(),
-                flow.starttime,
-                flow.uid,
+                flow,
                 "srcip",
                 daddr=flow.daddr,
             )
@@ -636,9 +634,7 @@ class ProfileHandler:
                 flow.daddr,
                 profileid,
                 twid,
-                flow.proto.upper(),
-                flow.starttime,
-                flow.uid,
+                flow,
                 "dstip",
             )
 
