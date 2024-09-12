@@ -167,7 +167,7 @@ class LeakDetector(IModule):
                         except KeyError:
                             return
 
-                        return (srcip, dstip, proto, sport, dport, ts)
+                        return srcip, dstip, proto, sport, dport, ts
 
         return False
 
@@ -242,7 +242,7 @@ class LeakDetector(IModule):
             uid=[uid],
             timestamp=ts,
             proto=Proto(proto.lower()),
-            port=int(dport),
+            dst_port=int(dport),
         )
 
         self.db.set_evidence(evidence)
@@ -262,7 +262,7 @@ class LeakDetector(IModule):
             uid=[uid],
             timestamp=ts,
             proto=Proto(proto.lower()),
-            port=dport,
+            dst_port=int(dport),
         )
 
         self.db.set_evidence(evidence)

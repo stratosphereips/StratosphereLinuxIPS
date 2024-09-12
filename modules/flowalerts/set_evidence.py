@@ -24,7 +24,8 @@ class SetEvidnceHelper:
         twid_number: int = int(twid.replace("timewindow", ""))
         ip_identification: str = self.db.get_ip_identification(flow.daddr)
         description: str = (
-            f"using DNS over HTTPs. DNS server: {flow.daddr} {ip_identification}"
+            f"using DNS over HTTPs. DNS server: {flow.daddr} "
+            f"{ip_identification}"
         )
         evidence = Evidence(
             evidence_type=EvidenceType.DIFFERENT_LOCALNET,
@@ -45,6 +46,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=0.9,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
         self.db.set_evidence(evidence)
 
@@ -100,6 +103,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=1.0,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
         self.db.set_evidence(evidence)
 
@@ -204,6 +209,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
         self.db.set_evidence(evidence)
 
@@ -268,6 +275,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=0.8,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
         self.db.set_evidence(evidence)
 
@@ -292,6 +301,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=0.8,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -325,6 +336,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -358,6 +371,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -414,6 +429,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=0.8,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -444,6 +461,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -485,6 +504,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -552,6 +573,8 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -663,12 +686,13 @@ class SetEvidnceHelper:
                 victim_type=IoCType.IP,
                 value=flow.daddr,
             ),
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
 
     def gre_tunnel(self, twid, flow) -> None:
-
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.INFO
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -818,6 +842,8 @@ class SetEvidnceHelper:
                 victim_type=IoCType.IP,
                 value=flow.daddr,
             ),
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -859,6 +885,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
         self.db.set_evidence(evidence)
 
@@ -877,6 +905,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
         self.db.set_evidence(evidence)
 
@@ -1003,6 +1033,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1023,6 +1055,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
         self.db.set_evidence(evidence)
 
@@ -1031,7 +1065,7 @@ class SetEvidnceHelper:
         twid: int = int(twid.replace("timewindow", ""))
 
         description: str = (
-            f"The DNS query {flow.query} was " f"resolved to {invalid_answer}"
+            f"The DNS query {flow.query} was resolved to {invalid_answer}"
         )
 
         evidence: Evidence = Evidence(
@@ -1048,6 +1082,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1092,6 +1128,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1134,6 +1172,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1153,6 +1193,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1194,6 +1236,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1282,6 +1326,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1360,6 +1406,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1380,6 +1428,8 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
