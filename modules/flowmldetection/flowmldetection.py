@@ -21,6 +21,7 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
     Victim,
+    Method,
 )
 
 # Only for debbuging
@@ -399,6 +400,9 @@ class FlowMLDetection(IModule):
             timewindow=TimeWindow(twid_number),
             uid=[flow["uid"]],
             timestamp=timestamp,
+            method=Method.AI,
+            src_port=flow.sport,
+            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
