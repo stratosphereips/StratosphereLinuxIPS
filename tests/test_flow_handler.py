@@ -26,7 +26,7 @@ def test_is_supported_flow_without_ts(
 ):
     # just change the flow_type
     flow.type_ = flow_type
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow, mock_db)
+    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
     assert flow_handler.is_supported_flow_type() == expected_val
 
 

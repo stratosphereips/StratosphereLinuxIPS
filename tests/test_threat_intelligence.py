@@ -1086,7 +1086,7 @@ def test_is_malicious_cname(
     """
     Test `is_malicious_cname` for various CNAME scenarios.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db = mocker.patch.object(threatintel, "db")
     threatintel.db.is_blacklisted_domain.return_value = (
         is_domain_malicious_return,
