@@ -3,7 +3,7 @@ import random
 from unittest.mock import MagicMock, patch
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from tests.module_factory import ModuleFactory
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Proto,
     EvidenceType,
 )

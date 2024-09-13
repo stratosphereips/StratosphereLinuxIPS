@@ -8,7 +8,7 @@ import json
 import requests
 import socket
 import subprocess
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     ThreatLevel,
     Evidence,
     Proto,

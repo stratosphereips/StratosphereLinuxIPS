@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import (
     Mock,
 )
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Victim,
     EvidenceType,
     IoCType,

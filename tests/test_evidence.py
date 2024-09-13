@@ -1,8 +1,8 @@
 from tests.module_factory import ModuleFactory
 import pytest
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import validate_timestamp
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import validate_timestamp
+from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
     Evidence,

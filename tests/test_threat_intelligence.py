@@ -6,7 +6,7 @@ import pytest
 import json
 from unittest.mock import MagicMock, patch
 import ipaddress
-from slips_files.core.evidence_structure.evidence import ThreatLevel
+from slips_files.core.structures.evidence import ThreatLevel
 
 
 def test_parse_local_ti_file():

@@ -55,7 +55,7 @@ from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
 from slips_files.common.markov_chains import Matrix
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
     Evidence,

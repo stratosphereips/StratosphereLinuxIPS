@@ -4,7 +4,7 @@ from tests.module_factory import ModuleFactory
 import json
 import ipaddress
 import pytest
-from slips_files.core.evidence_structure.evidence import EvidenceType
+from slips_files.core.structures.evidence import EvidenceType
 
 
 profileid = "profile_192.168.1.1"
