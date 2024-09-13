@@ -278,10 +278,21 @@ class IDMEFv2:
             if evidence.rel_id:
                 msg["RelID"] = evidence.rel_id
 
-            # notes in idmef format should be strings
-            msg["Source"][0]["Note"] = json.dumps(msg["Source"][0]["Note"])
+            if msg["Source"][0]["Note"]:
+                # notes in idmef format should be strings
+                msg["Source"][0]["Note"] = json.dumps(msg["Source"][0]["Note"])
+            else:
+                # remove the note field since its empty
+                del msg["Source"][0]["Note"]
+
             if "Target" in msg:
-                msg["Target"][0]["Note"] = json.dumps(msg["Target"][0]["Note"])
+                if msg["Target"][0]["Note"]:
+                    msg["Target"][0]["Note"] = json.dumps(
+                        msg["Target"][0]["Note"]
+                    )
+                else:
+                    # remove the note field since its empty
+                    del msg["Target"][0]["Note"]
 
             # PS: The "Note" field is added by the evidencehandler before
             # logging the evidence to alerts.json
