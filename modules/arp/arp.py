@@ -242,7 +242,7 @@ class ARP(IModule):
             # ignore it
             pass
 
-    def check_dstip_outside_localnet(self, profileid, twid, flow):
+    def check_dstip_outside_localnet(self, twid, flow):
         """Function to setEvidence when daddr is outside the local network"""
 
         if "0.0.0.0" in flow.saddr or "0.0.0.0" in flow.daddr:
@@ -302,7 +302,7 @@ class ARP(IModule):
 
         return False
 
-    def detect_unsolicited_arp(self, profileid: str, twid: str, flow):
+    def detect_unsolicited_arp(self, twid: str, flow):
         """
         Unsolicited arp is used to update the neighbours'
         arp caches but can also be used in arp spoofing
@@ -319,9 +319,10 @@ class ARP(IModule):
             threat_level: ThreatLevel = ThreatLevel.LOW
             description: str = "broadcasting unsolicited ARP"
 
-            saddr: str = profileid.split("_")[-1]
             attacker = Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
             )
 
             evidence: Evidence = Evidence(
@@ -330,7 +331,7 @@ class ARP(IModule):
                 threat_level=threat_level,
                 confidence=confidence,
                 description=description,
-                profile=ProfileID(ip=saddr),
+                profile=ProfileID(ip=flow.saddr),
                 timewindow=TimeWindow(
                     number=int(twid.replace("timewindow", ""))
                 ),
@@ -509,10 +510,10 @@ class ARP(IModule):
                 self.check_arp_scan(profileid, twid, flow)
 
             if "request" in flow.operation:
-                self.check_dstip_outside_localnet(profileid, twid, flow)
+                self.check_dstip_outside_localnet(twid, flow)
             elif "reply" in flow.operation:
                 # Unsolicited ARPs should be of type reply only, not request
-                self.detect_unsolicited_arp(profileid, twid, flow)
+                self.detect_unsolicited_arp(twid, flow)
 
         # if the tw is closed, remove all its entries from the cache dict
         if msg := self.get_msg("tw_closed"):
