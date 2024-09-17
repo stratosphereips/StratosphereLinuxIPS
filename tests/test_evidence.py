@@ -12,9 +12,6 @@ from slips_files.core.structures.evidence import (
     Proto,
     ThreatLevel,
     TimeWindow,
-    Anomaly,
-    Recon,
-    Attempt,
 )
 
 
@@ -62,7 +59,6 @@ def test_evidence_post_init(
     description,
     attacker_value,
     threat_level,
-    category,
     victim_value,
     profile_ip,
     timewindow_number,
@@ -95,7 +91,7 @@ def test_evidence_post_init(
         uid=uid,
         timestamp=timestamp,
         proto=proto,
-        port=port,
+        dst_port=port,
         id=id,
         confidence=confidence,
     )
@@ -109,7 +105,7 @@ def test_evidence_post_init(
     assert set(evidence.uid) == set(uid)
     assert evidence.timestamp == timestamp
     assert evidence.proto == proto
-    assert evidence.port == port
+    assert evidence.dst_port == port
     assert evidence.id == id
     assert evidence.confidence == confidence
 
@@ -135,7 +131,7 @@ def test_evidence_post_init_invalid_uid():
                 value="192.168.1.3",
             ),
             proto=Proto.TCP,
-            port=80,
+            dst_port=80,
             id=232,
             confidence=0.8,
         )
@@ -235,7 +231,7 @@ def test_evidence_to_dict(
         uid=uid,
         timestamp=timestamp,
         proto=proto,
-        port=port,
+        dst_port=port,
         id=id,
         confidence=confidence,
     )
@@ -257,7 +253,7 @@ def test_evidence_to_dict(
     assert set(evidence_dict["uid"]) == set(uid)
     assert evidence_dict["timestamp"] == timestamp
     assert evidence_dict["proto"] == proto.name
-    assert evidence_dict["port"] == port
+    assert evidence_dict["dst_port"] == port
     assert evidence_dict["id"] == id
     assert evidence_dict["confidence"] == confidence
 
@@ -324,34 +320,6 @@ def test_timewindow_repr():
 def test_threat_level(threat_level, expected_value, expected_str):
     assert threat_level.value == expected_value
     assert str(threat_level) == expected_str
-
-
-@pytest.mark.parametrize(
-    "anomaly_type, expected_value",
-    [
-        (Anomaly.TRAFFIC, "Anomaly.Traffic"),
-        (Anomaly.FILE, "Anomaly.File"),
-        (Anomaly.CONNECTION, "Anomaly.Connection"),
-        (Anomaly.BEHAVIOUR, "Anomaly.Behaviour"),
-    ],
-)
-def test_anomaly(anomaly_type, expected_value):
-    assert anomaly_type.value == expected_value
-
-
-@pytest.mark.parametrize(
-    "recon_type, expected_value",
-    [
-        (Recon.RECON, "Recon"),
-        (Recon.SCANNING, "Recon.Scanning"),
-    ],
-)
-def test_recon(recon_type, expected_value):
-    assert recon_type.value == expected_value
-
-
-def test_attempt():
-    assert Attempt.LOGIN.value == "Attempt.Login"
 
 
 @pytest.mark.parametrize(
