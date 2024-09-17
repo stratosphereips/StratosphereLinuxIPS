@@ -115,10 +115,6 @@ class SuricataHTTP:
 
     def __post_init__(self):
         self.uid = str(self.uid)
-        # suricata flows dont have a contacted host field like zeek, instead
-        # they have a host that is either an ip or a domain, we're setting
-        # this here for the flow to be like zeek flows
-        self.contacted_host = self.host
 
 
 @dataclass

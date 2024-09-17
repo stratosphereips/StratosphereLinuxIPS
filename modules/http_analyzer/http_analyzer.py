@@ -66,7 +66,7 @@ class HTTPAnalyzer(IModule):
             conf.get_pastebin_download_threshold()
         )
 
-    def detect_executable_mime_types(self, profileid, twid, flow) -> bool:
+    def detect_executable_mime_types(self, twid, flow) -> bool:
         """
         detects the type of file in the http response,
         returns true if it's an executable
@@ -117,17 +117,13 @@ class HTTPAnalyzer(IModule):
                 ),
                 uid=[flow.uid],
                 timestamp=flow.starttime,
-                src_port=flow.sport,
-                dst_port=flow.dport,
             )
 
             self.db.set_evidence(evidence)
             return True
         return False
 
-    def check_multiple_empty_connections(
-        self, profileid: str, twid: str, flow
-    ):
+    def check_multiple_empty_connections(self, twid: str, flow):
         """
         Detects more than 4 empty connections to
             google, bing, yandex and yahoo on port 80
@@ -141,13 +137,13 @@ class HTTPAnalyzer(IModule):
             # bing.com/something seems benign
             return False
 
-        if not utils.is_valid_domain(flow.contacted_host):
+        if not utils.is_valid_domain(flow.host):
             # may be an ip
             return False
 
         for host in self.empty_connection_hosts:
             if (
-                flow.contacted_host in [host, f"www.{host}"]
+                flow.host in [host, f"www.{host}"]
                 and flow.request_body_len == 0
             ):
                 try:
@@ -186,9 +182,7 @@ class HTTPAnalyzer(IModule):
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=int(twid_number)),
             uid=uids,
-            timestamp=flow.timestamp,
-            src_port=flow.sport,
-            dst_port=flow.dport,
+            timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
@@ -226,15 +220,13 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
 
     def set_evidence_executable_mime_type(self, twid, flow):
         description: str = (
-            f"Download of an executable with MIME type: {flow.mime_type} "
+            f"Download of an executable with MIME type: {flow.resp_mime_types} "
             f"by {flow.saddr} from {flow.daddr}."
         )
         twid_number = int(twid.replace("timewindow", ""))
@@ -257,8 +249,6 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -279,8 +269,6 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -516,15 +504,13 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
 
         return True
 
-    def set_evidence_http_traffic(self, profileid, twid, flow):
+    def set_evidence_http_traffic(self, twid, flow):
         confidence: float = 1
         description = (
             f"Unencrypted HTTP traffic from {flow.saddr} to" f" {flow.daddr}."
@@ -549,15 +535,13 @@ class HTTPAnalyzer(IModule):
                 victim_type=IoCType.IP,
                 value=flow.daddr,
             ),
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
 
         return True
 
-    def check_pastebin_downloads(self, profileid, twid, flow):
+    def check_pastebin_downloads(self, twid, flow):
         try:
             response_body_len = int(flow.response_body_len)
         except ValueError:
@@ -593,16 +577,12 @@ class HTTPAnalyzer(IModule):
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
         return True
 
-    def set_evidence_weird_http_method(
-        self, profileid: str, twid: str, flow: dict
-    ) -> None:
+    def set_evidence_weird_http_method(self, twid: str, flow) -> None:
         confidence = 0.9
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
 
@@ -615,7 +595,7 @@ class HTTPAnalyzer(IModule):
         )
 
         description: str = (
-            f'Weird HTTP method "{flow.weird_method}" to IP: '
+            f'Weird HTTP method "{flow.addl}" to IP: '
             f"{flow.daddr}. by Zeek."
         )
 
@@ -632,8 +612,6 @@ class HTTPAnalyzer(IModule):
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -642,17 +620,13 @@ class HTTPAnalyzer(IModule):
         """
         detect weird http methods in zeek's weird.log
         """
-        flow = msg["flow"]
-        profileid = msg["profileid"]
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
         twid = msg["twid"]
-
         # what's the weird.log about
-        name = flow["name"]
-
-        if "unknown_HTTP_method" not in name:
+        if "unknown_HTTP_method" not in flow.name:
             return False
 
-        self.set_evidence_weird_http_method(profileid, twid, flow)
+        self.set_evidence_weird_http_method(twid, flow)
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -664,7 +638,7 @@ class HTTPAnalyzer(IModule):
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             self.check_suspicious_user_agents(profileid, twid, flow)
-            self.check_multiple_empty_connections(profileid, twid, flow)
+            self.check_multiple_empty_connections(twid, flow)
             # find the UA of this profileid if we don't have it
             # get the last used ua of this profile
             cached_ua = self.db.get_user_agent_from_profile(profileid)
@@ -685,10 +659,10 @@ class HTTPAnalyzer(IModule):
                 self.get_user_agent_info(flow.user_agent, profileid)
 
             self.extract_info_from_ua(flow.user_agent, profileid)
-            self.detect_executable_mime_types(profileid, twid, flow)
+            self.detect_executable_mime_types(twid, flow)
             self.check_incompatible_user_agent(profileid, twid, flow)
-            self.check_pastebin_downloads(profileid, twid, flow)
-            self.set_evidence_http_traffic(profileid, twid, flow)
+            self.check_pastebin_downloads(twid, flow)
+            self.set_evidence_http_traffic(twid, flow)
 
         if msg := self.get_msg("new_weird"):
             msg = json.loads(msg["data"])
