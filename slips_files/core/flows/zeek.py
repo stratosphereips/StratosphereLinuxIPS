@@ -63,7 +63,7 @@ class DNS:
     qtype_name: str
     rcode_name: str
 
-    answers: str
+    answers: List[str]
     TTLs: str
 
     type_: str = "dns"

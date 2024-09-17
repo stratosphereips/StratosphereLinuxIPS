@@ -110,7 +110,7 @@ class DNS(IFlowalertsAnalyzer):
             and not domain.endswith(".arpa")
         )
 
-    def detect_young_domains(self, profileid, twid, flow):
+    def detect_young_domains(self, twid, flow):
         """
         Detect domains that are too young.
         The threshold is 60 days
@@ -314,11 +314,11 @@ class DNS(IFlowalertsAnalyzer):
         for answer in flow.answers:
             if answer in invalid_answers and flow.query != "localhost":
                 # blocked answer found
-                self.set_evidence.invalid_dns_answer(twid, flow)
+                self.set_evidence.invalid_dns_answer(twid, flow, answer)
                 # delete answer from redis cache to prevent
                 # associating this dns answer with this domain/query and
                 # avoid FP "DNS without connection" evidence
-                self.db.delete_dns_resolution(flow.answer)
+                self.db.delete_dns_resolution(answer)
 
     def detect_dga(self, profileid, twid, flow):
         """
@@ -435,5 +435,5 @@ class DNS(IFlowalertsAnalyzer):
         self.detect_dga(profileid, twid, flow)
         # TODO: not sure how to make sure IP_info is
         #  done adding domain age to the db or not
-        self.detect_young_domains(profileid, twid, flow)
+        self.detect_young_domains(twid, flow)
         self.check_dns_arpa_scan(profileid, twid, flow)
