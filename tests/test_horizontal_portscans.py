@@ -437,7 +437,7 @@ def test_set_evidence_horizontal_portscan():
     assert set(call_args.uid) == {"uid2", "uid1"}
     assert call_args.timestamp == "1234.56"
     assert call_args.proto == Proto("tcp")
-    assert call_args.port == 80
+    assert call_args.dst_port == 80
 
 
 def test_set_evidence_horizontal_portscan_empty_uids():
