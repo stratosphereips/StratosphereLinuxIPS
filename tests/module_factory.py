@@ -83,7 +83,7 @@ def check_zeek_or_bro():
 
 
 MODULE_DB_MANAGER = "slips_files.common.abstracts.module.DBManager"
-CORE_DB_MANAGER = "slips_files.common.abstracts.core.DBManager"
+# CORE_DB_MANAGER = "slips_files.common.abstracts.core.DBManager"
 DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
@@ -248,7 +248,7 @@ class ModuleFactory:
         flowalerts = self.create_flowalerts_obj()
         return Software(flowalerts.db, flowalerts=flowalerts)
 
-    @patch(CORE_DB_MANAGER, name="mock_db")
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_input_obj(
         self, input_information, input_type, mock_db, line_type=False
     ):
@@ -268,6 +268,7 @@ class ModuleFactory:
             is_profiler_done_event=Mock(),
             termination_event=Mock(),
         )
+        input.db = mock_db
         input.is_done_processing = do_nothing
         input.bro_timeout = 1
         # override the print function to avoid broken pipes
@@ -314,7 +315,7 @@ class ModuleFactory:
         leak_detector.pcap = test_pcap
         return leak_detector
 
-    @patch(CORE_DB_MANAGER, name="mock_db")
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_profiler_obj(self, mock_db):
         profiler = Profiler(
             self.logger,

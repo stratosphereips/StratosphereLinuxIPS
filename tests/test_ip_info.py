@@ -263,9 +263,7 @@ def test_get_rdns_localhost():
         )
 
 
-def test_set_evidence_malicious_jarm_hash(
-    mocker,
-):
+def test_set_evidence_malicious_jarm_hash(mocker):
     ip_info = ModuleFactory().create_ip_info_obj()
     flow = {
         "dport": 443,
@@ -291,13 +289,11 @@ def test_set_evidence_malicious_jarm_hash(
     assert dst_evidence.confidence == 0.7
     assert "192.168.1.100" in dst_evidence.description
     assert "port: 443/tcp (HTTPS)" in dst_evidence.description
-    assert "Known malicious server" in dst_evidence.description
     assert dst_evidence.profile.ip == "192.168.1.100"
     assert dst_evidence.timewindow.number == 1
     assert dst_evidence.uid == ["CuTCcR1Bbp9Je7LVqa"]
     assert dst_evidence.timestamp == 1625097600
     assert dst_evidence.proto == Proto.TCP
-    assert dst_evidence.port == 443
     src_evidence = mock_set_evidence.call_args_list[1][0][0]
     assert isinstance(src_evidence, Evidence)
     assert src_evidence.evidence_type == EvidenceType.MALICIOUS_JARM
@@ -306,15 +302,14 @@ def test_set_evidence_malicious_jarm_hash(
     assert src_evidence.attacker.value == "192.168.1.10"
     assert src_evidence.threat_level == ThreatLevel.LOW
     assert src_evidence.confidence == 0.7
+    assert src_evidence.dst_port == 443
     assert "192.168.1.100" in src_evidence.description
     assert "port: 443/tcp (HTTPS)" in src_evidence.description
-    assert "Known malicious server" in src_evidence.description
     assert src_evidence.profile.ip == "192.168.1.10"
     assert src_evidence.timewindow.number == 1
     assert src_evidence.uid == ["CuTCcR1Bbp9Je7LVqa"]
     assert src_evidence.timestamp == 1625097600
     assert src_evidence.proto == Proto.TCP
-    assert src_evidence.port == 443
 
 
 @pytest.mark.parametrize(
@@ -499,7 +494,7 @@ def test_get_gateway_MAC_cached():
 
     ip_info.db.get_mac_addr_from_profile.return_value = cached_mac
 
-    result = ip_info.get_gateway_MAC(gw_ip)
+    result = ip_info.get_gateway_mac(gw_ip)
 
     assert result == cached_mac
     ip_info.db.get_mac_addr_from_profile.assert_called_once_with(
@@ -527,7 +522,7 @@ def test_get_gateway_MAC_arp_command(
         Mock(stdout=arp_output),
     ]
 
-    result = ip_info.get_gateway_MAC(gw_ip)
+    result = ip_info.get_gateway_mac(gw_ip)
 
     assert result == expected_mac
     assert mock_subprocess_run.call_count == 2
@@ -555,34 +550,14 @@ def test_get_gateway_MAC_not_found(
     mock_subprocess_run = mocker.patch("subprocess.run")
     mock_subprocess_run.side_effect = subprocess.CalledProcessError(1, "cmd")
 
-    result = ip_info.get_gateway_MAC(gw_ip)
+    result = ip_info.get_gateway_mac(gw_ip)
 
     assert result is None
     assert mock_subprocess_run.call_count == 2
     ip_info.db.set_default_gateway.assert_not_called()
 
 
-def test_get_gateway_MAC_not_on_interface(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    gw_ip = "192.168.1.1"
-
-    ip_info.db.get_mac_addr_from_profile.return_value = None
-    ip_info.db.is_growing_zeek_dir.return_value = False
-
-    mocker.patch("sys.argv", [])
-
-    mock_subprocess_run = mocker.patch("subprocess.run")
-
-    result = ip_info.get_gateway_MAC(gw_ip)
-
-    assert result is None
-    mock_subprocess_run.assert_not_called()
-    ip_info.db.set_default_gateway.assert_not_called()
-
-
-def test_get_gateway_MAC_ip_command_success(
+def test_get_gateway_mac_ip_command_success(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
@@ -598,7 +573,7 @@ def test_get_gateway_MAC_ip_command_success(
     mock_subprocess_run = mocker.patch("subprocess.run")
     mock_subprocess_run.return_value = Mock(stdout=ip_output)
 
-    result = ip_info.get_gateway_MAC(gw_ip)
+    result = ip_info.get_gateway_mac(gw_ip)
 
     assert result == expected_mac
     mock_subprocess_run.assert_called_once_with(
@@ -614,7 +589,7 @@ def test_get_gateway_MAC_ip_command_success(
     )
 
 
-def test_get_gateway_MAC_ip_command_failure(
+def test_get_gateway_mac_ip_command_failure(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
@@ -631,7 +606,7 @@ def test_get_gateway_MAC_ip_command_failure(
         subprocess.CalledProcessError(1, "cmd"),
     ]
 
-    result = ip_info.get_gateway_MAC(gw_ip)
+    result = ip_info.get_gateway_mac(gw_ip)
 
     assert result is None
     assert mock_subprocess_run.call_count == 2

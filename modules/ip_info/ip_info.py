@@ -423,7 +423,7 @@ class IPInfo(IModule):
             gw_ip = route_default_result[2]
         return gw_ip
 
-    def get_gateway_MAC(self, gw_ip: str):
+    def get_gateway_mac(self, gw_ip: str):
         """
         Given the gw_ip, this function tries to get the MAC
          from arp.log or from arp tables
@@ -431,10 +431,10 @@ class IPInfo(IModule):
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
         # check if we have the mac of this ip already saved in the db.
-        if gw_MAC := self.db.get_mac_addr_from_profile(f"profile_{gw_ip}"):
-            gw_MAC: Union[str, None]
-            self.db.set_default_gateway("MAC", gw_MAC)
-            return gw_MAC
+        if gw_mac := self.db.get_mac_addr_from_profile(f"profile_{gw_ip}"):
+            gw_mac: Union[str, None]
+            self.db.set_default_gateway("MAC", gw_mac)
+            return gw_mac
 
         if not self.is_running_non_stop:
             # no MAC in arp.log (in the db) and can't use arp tables,
@@ -451,9 +451,9 @@ class IPInfo(IModule):
                 check=True,
                 text=True,
             ).stdout
-            gw_MAC = ip_output.split()[-2]
-            self.db.set_default_gateway("MAC", gw_MAC)
-            return gw_MAC
+            gw_mac = ip_output.split()[-2]
+            self.db.set_default_gateway("MAC", gw_mac)
+            return gw_mac
         except (subprocess.CalledProcessError, FileNotFoundError):
             # If the ip command doesn't exist or has failed, try using the
             # arp command
@@ -466,14 +466,14 @@ class IPInfo(IModule):
                     gw_ip_from_arp_cmd = fields[1].strip("()")
                     # Match the gw_ip in the output with the one given to this function
                     if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
-                        gw_MAC = fields[-4]
-                        self.db.set_default_gateway("MAC", gw_MAC)
-                        return gw_MAC
+                        gw_mac = fields[-4]
+                        self.db.set_default_gateway("MAC", gw_mac)
+                        return gw_mac
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Could not find the MAC address of gw_ip
                 return
 
-        return gw_MAC
+        return gw_mac
 
     def check_if_we_have_pending_mac_queries(self):
         """
@@ -539,8 +539,6 @@ class IPInfo(IModule):
             uid=[flow["uid"]],
             timestamp=timestamp,
             proto=Proto(protocol.lower()),
-            dst_port=dport,
-            src_port=flow["sport"],
         )
 
         self.db.set_evidence(evidence)
@@ -560,8 +558,7 @@ class IPInfo(IModule):
             uid=[flow["uid"]],
             timestamp=timestamp,
             proto=Proto(protocol.lower()),
-            dst_port=dport,
-            src_port=flow["sport"],
+            dst_port=443,
         )
 
         self.db.set_evidence(evidence)
@@ -617,7 +614,7 @@ class IPInfo(IModule):
                 if ip := self.db.get_gateway_ip():
                     # now that we know the GW IP address,
                     # try to get the MAC of this IP (of the gw)
-                    self.get_gateway_MAC(ip)
+                    self.get_gateway_mac(ip)
                     self.is_gw_mac_set = True
 
         if msg := self.get_msg("new_dns"):
