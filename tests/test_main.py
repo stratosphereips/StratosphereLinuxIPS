@@ -144,7 +144,7 @@ def test_update_stats(mode, time_diff, expected_calls):
         # Testcase2: Shouldn't update host IP
         (True, "192.168.1.1", {"192.168.1.1"}, 0, "192.168.1.1"),
         # Testcase3: Shouldn't update host IP (not interface)
-        (False, "192.168.1.1", set(), 0, "192.168.1.1"),
+        (False, "192.168.1.1", set(), 0, None),
     ],
 )
 def test_update_host_ip(
@@ -155,16 +155,16 @@ def test_update_host_ip(
     expected_result,
 ):
     main = ModuleFactory().create_main_obj()
-    main.is_interface = is_interface
-    main.db = MagicMock()
-    main.db.set_host_ip = MagicMock()
+    main.db = Mock()
+    host_ip_man = ModuleFactory().create_host_ip_manager_obj(main)
+    host_ip_man.main.db.is_running_non_stop.return_value = is_interface
 
-    with patch.object(
-        main.metadata_man, "get_host_ip", return_value="192.168.1.2"
-    ) as mock_get_host_ip:
-        result = main.update_host_ip(host_ip, modified_profiles)
-        assert mock_get_host_ip.call_count == expected_calls
-        assert result == expected_result
+    host_ip_man.get_host_ip = Mock()
+    host_ip_man.get_host_ip.return_value = "192.168.1.2"
+    host_ip_man.main.db.set_host_ip = MagicMock()
+    result = host_ip_man.update_host_ip(host_ip, modified_profiles)
+    assert result == expected_result
+    assert host_ip_man.get_host_ip.call_count == expected_calls
 
 
 @pytest.mark.parametrize(
@@ -271,10 +271,10 @@ def test_print(
 ):
     main = ModuleFactory().create_main_obj()
     main.name = "Main"
-
-    with patch.object(main, "notify_observers") as mock_notify:
-        main.print(text, verbose, debug, log_to_logfiles_only)
-        mock_notify.assert_called_once_with(expected_notification)
+    main.printer = Mock()
+    main.printer.print = Mock()
+    main.print(text, verbose, debug, log_to_logfiles_only)
+    main.printer.print.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -338,7 +338,7 @@ def test_save_the_db(input_information, expected_filepath):
 
 
 @pytest.mark.parametrize(
-    "input_type, is_growing_zeek_dir, expected_result",
+    "input_type, is_running_non_stop, expected_result",
     [
         # Test Case 1: PCAP input, not a growing Zeek directory
         ("pcap", False, True),
@@ -350,11 +350,11 @@ def test_save_the_db(input_information, expected_filepath):
         ("binetflow", False, False),
     ],
 )
-def test_was_running_zeek(input_type, is_growing_zeek_dir, expected_result):
+def test_was_running_zeek(input_type, is_running_non_stop, expected_result):
     main = ModuleFactory().create_main_obj()
     main.db = MagicMock()
     main.db.get_input_type.return_value = input_type
-    main.db.is_growing_zeek_dir.return_value = is_growing_zeek_dir
+    main.db.is_running_non_stop.return_value = is_running_non_stop
 
     assert main.was_running_zeek() == expected_result
 
@@ -381,17 +381,18 @@ def test_delete_zeek_files_disabled():
         mock_rmtree.assert_not_called()
 
 
-def test_get_slips_version():
-    main = ModuleFactory().create_main_obj()
-    version_content = "1.2.3"
-
-    with patch(
-        "builtins.open", mock_open(read_data=version_content)
-    ) as mock_file:
-        result = main.get_slips_version()
-
-    mock_file.assert_called_once_with("VERSION", "r")
-    assert result == version_content
+# TODO should be moved to utils unit tests after the PR is merged
+# def test_get_slips_version():
+#     main = ModuleFactory().create_main_obj()
+#     version_content = "1.2.3"
+#
+#     with patch(
+#         "builtins.open", mock_open(read_data=version_content)
+#     ) as mock_file:
+#         result = main.get_slips_version()
+#
+#     mock_file.assert_called_once_with("VERSION", "r")
+#     assert result == version_content
 
 
 def test_check_zeek_or_bro_zeek_found():

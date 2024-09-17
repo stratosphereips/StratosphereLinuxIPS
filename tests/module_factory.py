@@ -7,6 +7,7 @@ from unittest.mock import (
 )
 import os
 
+from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
 from slips_files.core.database.database_manager import DBManager
 
@@ -334,6 +335,9 @@ class ModuleFactory:
 
     def create_redis_manager_obj(self, main):
         return RedisManager(main)
+
+    def create_host_ip_manager_obj(self, main):
+        return HostIPManager(main)
 
     def create_process_manager_obj(self):
         return ProcessManager(self.create_main_obj())

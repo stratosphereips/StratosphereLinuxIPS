@@ -54,7 +54,11 @@ class HostIPManager:
         if not self.main.db.is_running_non_stop():
             return
 
-        if host_ip not in modified_profiles:
-            if host_ip := self.get_host_ip():
-                self.main.db.set_host_ip(host_ip)
-        return host_ip
+        if host_ip in modified_profiles:
+            return host_ip
+
+        if latest_host_ip := self.get_host_ip():
+            self.main.db.set_host_ip(latest_host_ip)
+            return latest_host_ip
+
+        return latest_host_ip

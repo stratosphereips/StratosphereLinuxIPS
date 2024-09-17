@@ -259,8 +259,9 @@ class Main:
 
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
-        return (
-            self.db.is_running_non_stop() or self.db.get_input_type() == "pcap"
+        return self.db.is_running_non_stop() or self.db.get_input_type() in (
+            "pcap",
+            "interface",
         )
 
     def store_zeek_dir_copy(self):

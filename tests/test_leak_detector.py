@@ -22,7 +22,8 @@ from unittest.mock import MagicMock
 def test_is_yara_installed(
     mock_os_system, mock_db, return_code, expected_result
 ):
-    """Test that the is_yara_installed method correctly identifies if Yara is installed."""
+    """Test that the is_yara_installed method correctly identifies
+    if Yara is installed."""
 
     mock_os_system.return_value = return_code
     leak_detector = ModuleFactory().create_leak_detector_obj()
