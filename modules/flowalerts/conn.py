@@ -53,6 +53,11 @@ class Conn(IFlowalertsAnalyzer):
         Check if a duration of the connection is
         above the threshold (more than 25 minutes by default).
         """
+        try:
+            flow.dur = float(flow.dur)
+        except TypeError:
+            return
+
         if (
             ipaddress.ip_address(flow.daddr).is_multicast
             or ipaddress.ip_address(flow.saddr).is_multicast
@@ -61,7 +66,7 @@ class Conn(IFlowalertsAnalyzer):
             return
 
         # If duration is above threshold, we should set an evidence
-        if float(flow.dur) > self.long_connection_threshold:
+        if flow.dur > self.long_connection_threshold:
             self.set_evidence.long_connection(twid, flow)
             return True
         return False
@@ -297,7 +302,7 @@ class Conn(IFlowalertsAnalyzer):
                 ip, mbs_uploaded, profileid, twid, uids, ts
             )
 
-    def check_device_changing_ips(self, profileid, twid, flow):
+    def check_device_changing_ips(self, twid, flow):
         """
         Every time we have a flow for a new ip
             (an ip that we're seeing for the first time)
@@ -393,7 +398,8 @@ class Conn(IFlowalertsAnalyzer):
         self, profileid, daddr
     ):
         """
-        Sometimes the same computer makes dns requests using its ipv4 and ipv6 address, check if this is the case
+        Sometimes the same computer makes dns requests using its ipv4 and
+        ipv6 address, check if this is the case
         """
         # get the other ip version of this computer
         other_ip = self.db.get_the_other_ip_version(profileid)
@@ -406,7 +412,8 @@ class Conn(IFlowalertsAnalyzer):
             if other_ip and other_ip in dns_resolution.get("resolved-by", []):
                 return True
         except AttributeError:
-            # It can be that the dns_resolution sometimes gives back a list and gets this error
+            # It can be that the dns_resolution sometimes gives back a
+            # list and gets this error
             pass
         return False
 
@@ -498,6 +505,11 @@ class Conn(IFlowalertsAnalyzer):
         igmp, icmp
         """
         if flow.proto.lower() in ("igmp", "icmp", "ipv6-icmp", "arp"):
+            return
+        try:
+            flow.sport = int(flow.sport)
+            flow.dport = int(flow.dport)
+        except ValueError:
             return
 
         if flow.sport != 0 and flow.dport != 0:
@@ -657,7 +669,6 @@ class Conn(IFlowalertsAnalyzer):
 
     def check_different_localnet_usage(
         self,
-        profileid,
         twid,
         flow,
         what_to_check="",
@@ -735,7 +746,7 @@ class Conn(IFlowalertsAnalyzer):
             self.check_unknown_port(profileid, twid, flow)
             self.check_multiple_reconnection_attempts(profileid, twid, flow)
             self.check_conn_to_port_0(profileid, twid, flow)
-            self.check_different_localnet_usage(profileid, twid, flow)
+            self.check_different_localnet_usage(twid, flow)
             self.check_different_localnet_usage(
                 profileid, twid, flow, what_to_check="dstip"
             )
@@ -744,7 +755,7 @@ class Conn(IFlowalertsAnalyzer):
             self.check_data_upload(profileid, twid, flow)
             self.check_non_http_port_80_conns(twid, flow)
             self.check_connection_to_local_ip(twid, flow)
-            self.check_device_changing_ips(profileid, twid, flow)
+            self.check_device_changing_ips(twid, flow)
 
         elif utils.is_msg_intended_for(msg, "tw_closed"):
             profileid_tw = msg["data"].split("_")

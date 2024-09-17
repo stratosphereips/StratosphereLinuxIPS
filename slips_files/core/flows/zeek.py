@@ -41,7 +41,7 @@ class Conn:
     dir_: str = "->"
 
     def __post_init__(self) -> None:
-        endtime = str(self.starttime) + str(timedelta(seconds=self.dur))
+        endtime = str(self.starttime) + str(timedelta(seconds=float(self.dur)))
         self.endtime: str = endtime
         self.pkts: int = self.spkts + self.dpkts
         self.bytes: int = self.sbytes + self.dbytes
