@@ -1367,8 +1367,6 @@ class ProfileHandler:
          hashmap of profile data
         Profiles are stored in two structures. A list of profiles (index)
          and individual hashmaps for each profile (like a table)
-        Duration is only needed for registration purposes in the profile.
-        Nothing operational
         """
         try:
             if self.r.sismember("profiles", profileid):
