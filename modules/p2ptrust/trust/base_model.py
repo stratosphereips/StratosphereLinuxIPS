@@ -18,7 +18,6 @@ class BaseModel:
     def __init__(self, logger: Output, trustdb):
         self.trustdb = trustdb
         self.printer = Printer(logger, self.name)
-        self.add_observer(self.logger)
         self.reliability_weight = 0.7
 
     def print(self, *args, **kwargs):
