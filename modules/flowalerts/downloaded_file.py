@@ -15,7 +15,7 @@ class DownloadedFile(IFlowalertsAnalyzer):
         return "downloaded_files_analyzer"
 
     def check_malicious_ssl(self, twid, flow):
-        if flow.type_ != "zeek":
+        if flow.type_ != "files":
             # this detection only supports zeek files.log flows
             return False
 
