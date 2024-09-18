@@ -57,7 +57,7 @@ class NetworkDiscovery(IModule):
         self.minimum_requested_addrs = 4
         self.classifier = FlowClassifier()
 
-    def check_icmp_sweep(self, profileid, twid, flow):
+    def check_icmp_sweep(self, twid, flow):
         """
         Use our own Zeek scripts to detect ICMP scans.
         Threshold is on the scripts and it is 25 ICMP flows
@@ -185,7 +185,7 @@ class NetworkDiscovery(IModule):
                         self.cache_det_thresholds[cache_key] = number_of_flows
                         pkts_sent = scan_info["spkts"]
                         timestamp = scan_info["stime"]
-                        self.set_evidence_icmpscan(
+                        self.set_evidence_icmp_scan(
                             amount_of_scanned_ips,
                             timestamp,
                             pkts_sent,
@@ -217,7 +217,7 @@ class NetworkDiscovery(IModule):
                         uids.extend(scan_info["uid"])
                         timestamp = scan_info["stime"]
 
-                    self.set_evidence_icmpscan(
+                    self.set_evidence_icmp_scan(
                         amount_of_scanned_ips,
                         timestamp,
                         pkts_sent,
@@ -231,7 +231,7 @@ class NetworkDiscovery(IModule):
                         amount_of_scanned_ips
                     )
 
-    def set_evidence_icmpscan(
+    def set_evidence_icmp_scan(
         self,
         number_of_scanned_ips: int,
         timestamp: str,
@@ -410,10 +410,9 @@ class NetworkDiscovery(IModule):
 
         if msg := self.get_msg("new_notice"):
             data = json.loads(msg["data"])
-            profileid = data["profileid"]
             twid = data["twid"]
             flow = self.classifier.convert_to_flow_obj(data["flow"])
-            self.check_icmp_sweep(profileid, twid, flow)
+            self.check_icmp_sweep(twid, flow)
 
         if msg := self.get_msg("new_dhcp"):
             msg = json.loads(msg["data"])

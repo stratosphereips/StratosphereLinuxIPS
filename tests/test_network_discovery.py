@@ -2,6 +2,11 @@ import pytest
 from unittest.mock import (
     Mock,
 )
+
+from slips_files.core.flows.zeek import (
+    Notice,
+    DHCP,
+)
 from slips_files.core.structures.evidence import (
     Victim,
     EvidenceType,
@@ -12,13 +17,13 @@ from tests.module_factory import ModuleFactory
 
 
 @pytest.mark.parametrize(
-    "msg, note, profileid, uid, " "twid, timestamp, expected_evidence_type",
+    "msg, note, saddr, uid, " "twid, timestamp, expected_evidence_type",
     [
         # testcase1: ICMP Timestamp Scan
         (
             "ICMP TimestampScan detected on 30 hosts",
             "TimestampScan",
-            "profile_192.168.1.100",
+            "192.168.1.100",
             "uid1234",
             "timewindow5",
             "2023-04-01 12:00:00",
@@ -28,7 +33,7 @@ from tests.module_factory import ModuleFactory
         (
             "ICMP AddressScan detected on 50 hosts",
             "ICMPAddressScan",
-            "profile_10.0.0.1",
+            "10.0.0.1",
             "uid5678",
             "timewindow10",
             "2023-04-01 13:00:00",
@@ -38,7 +43,7 @@ from tests.module_factory import ModuleFactory
         (
             "ICMP AddressMaskScan detected on 40 hosts",
             "AddressMaskScan",
-            "profile_172.16.0.1",
+            "172.16.0.1",
             "uid9012",
             "timewindow15",
             "2023-04-01 14:00:00",
@@ -49,7 +54,7 @@ from tests.module_factory import ModuleFactory
 def test_check_icmp_sweep_valid_scans(
     msg,
     note,
-    profileid,
+    saddr,
     uid,
     twid,
     timestamp,
@@ -57,17 +62,25 @@ def test_check_icmp_sweep_valid_scans(
 ):
     network_discovery = ModuleFactory().create_network_discovery_obj()
     network_discovery.db.set_evidence = Mock()
-
-    network_discovery.check_icmp_sweep(
-        msg, note, profileid, uid, twid, timestamp
+    flow = Notice(
+        starttime=timestamp,
+        saddr=saddr,
+        daddr="",
+        sport="",
+        dport="",
+        note=note,
+        msg=msg,
+        scanned_port="",
+        dst="",
+        scanning_ip="",
+        uid=uid,
     )
-
+    network_discovery.check_icmp_sweep(twid, flow)
     assert network_discovery.db.set_evidence.call_count == 1
-
     called_evidence = network_discovery.db.set_evidence.call_args[0][0]
     assert called_evidence.evidence_type == expected_evidence_type
-    assert called_evidence.attacker.value == profileid.split("_")[1]
-    assert called_evidence.profile.ip == profileid.split("_")[1]
+    assert called_evidence.attacker.value == saddr
+    assert called_evidence.profile.ip == saddr
     assert called_evidence.timewindow.number == int(
         twid.replace("timewindow", "")
     )
@@ -77,17 +90,20 @@ def test_check_icmp_sweep_valid_scans(
 
 def test_check_icmp_sweep_unsupported_scan():
     network_discovery = ModuleFactory().create_network_discovery_obj()
-
     network_discovery.db.set_evidence = Mock()
-
-    network_discovery.check_icmp_sweep(
-        msg="Some other scan detected on 20 hosts",
+    flow = Notice(
+        starttime="1726667146.6951945",
+        saddr="192.168.1.50",
+        daddr="1.1.1.1",
+        sport=0,
+        dport=0,
         note="OtherScan",
-        profileid="profile_192.168.0.1",
-        uid="uid3456",
-        twid="timewindow20",
-        timestamp="2023-04-01 15:00:00",
+        msg="Some other scan detected on 20 hosts",
+        scanned_port="",
+        dst="",
+        scanning_ip="",
     )
+    network_discovery.check_icmp_sweep("timewindow1", flow)
 
     assert network_discovery.db.set_evidence.call_count == 0
 
@@ -100,12 +116,17 @@ def test_check_icmp_sweep_unsupported_scan():
         # Testcase 1: First DHCP request in timewindow
         (
             {
-                "flow": {
-                    "requested_addr": "192.168.1.100",
-                    "uids": ["uid1234"],
-                    "starttime": "2023-04-01 12:00:00",
-                },
-                "profileid": "profile_192.168.1.2",
+                "flow": DHCP(
+                    starttime="1726676568.14378",
+                    uids=["1234"],
+                    saddr="",
+                    daddr="",
+                    client_addr="",
+                    server_addr="",
+                    host_name="",
+                    smac="",
+                    requested_addr="192.168.1.100",
+                ),
                 "twid": "timewindow5",
             },
             {},
@@ -116,12 +137,17 @@ def test_check_icmp_sweep_unsupported_scan():
         # but not enough to trigger evidence
         (
             {
-                "flow": {
-                    "requested_addr": "192.168.1.101",
-                    "uids": ["uid5678"],
-                    "starttime": "2023-04-01 12:01:00",
-                },
-                "profileid": "profile_192.168.1.2",
+                "flow": DHCP(
+                    starttime="1726676568.14378",
+                    uids=["1234"],
+                    saddr="192.168.1.2",
+                    daddr="",
+                    client_addr="",
+                    server_addr="",
+                    host_name="",
+                    smac="",
+                    requested_addr="192.168.1.101",
+                ),
                 "twid": "timewindow5",
             },
             {
@@ -146,7 +172,10 @@ def test_check_dhcp_scan_no_evidence(
     network_discovery.db.get_dhcp_flows.return_value = existing_dhcp_flows
     network_discovery.db.set_dhcp_flow = Mock()
     network_discovery.db.set_evidence = Mock()
-    network_discovery.check_dhcp_scan(flow_info)
+    profileid = flow_info["flow"].saddr
+    network_discovery.check_dhcp_scan(
+        profileid, flow_info["twid"], flow_info["flow"]
+    )
 
     assert (
         network_discovery.db.get_dhcp_flows.call_count
@@ -159,23 +188,27 @@ def test_check_dhcp_scan_no_evidence(
     assert network_discovery.db.set_evidence.call_count == 0
 
     network_discovery.db.set_dhcp_flow.assert_called_with(
-        flow_info["profileid"],
+        profileid,
         flow_info["twid"],
-        flow_info["flow"]["requested_addr"],
-        flow_info["flow"]["uids"],
+        flow_info["flow"].requested_addr,
+        flow_info["flow"].uids,
     )
 
 
 def test_check_dhcp_scan_with_evidence():
-    flow_info = {
-        "flow": {
-            "requested_addr": "192.168.1.104",
-            "uids": ["uid9012"],
-            "starttime": "2023-04-01 12:02:00",
-        },
-        "profileid": "profile_192.168.1.2",
-        "twid": "timewindow5",
-    }
+    flow = DHCP(
+        starttime="1726676568.14378",
+        uids=["1234"],
+        saddr="192.168.1.2",
+        daddr="",
+        client_addr="",
+        server_addr="",
+        host_name="",
+        smac="",
+        requested_addr="192.168.1.104",
+    )
+    twid = "timewindow5"
+
     existing_dhcp_flows = {
         "192.168.1.100": ["uid1234"],
         "192.168.1.101": ["uid5678"],
@@ -190,33 +223,30 @@ def test_check_dhcp_scan_with_evidence():
     network_discovery.db.get_dhcp_flows.return_value = existing_dhcp_flows
     network_discovery.db.set_dhcp_flow = Mock()
     network_discovery.db.set_evidence = Mock()
-    network_discovery.check_dhcp_scan(flow_info)
+    profileid = f"profile_{flow.saddr}"
+    network_discovery.check_dhcp_scan(profileid, twid, flow)
 
     assert network_discovery.db.get_dhcp_flows.call_count == 2
     assert network_discovery.db.set_dhcp_flow.call_count == 1
     assert network_discovery.db.set_evidence.call_count == 1
-
     network_discovery.db.set_dhcp_flow.assert_called_with(
-        flow_info["profileid"],
-        flow_info["twid"],
-        flow_info["flow"]["requested_addr"],
-        flow_info["flow"]["uids"],
+        profileid,
+        twid,
+        flow.requested_addr,
+        flow.uids,
     )
 
     called_evidence = network_discovery.db.set_evidence.call_args[0][0]
     assert called_evidence.evidence_type == EvidenceType.DHCP_SCAN
-    assert (
-        called_evidence.attacker.value == flow_info["profileid"].split("_")[-1]
-    )
-    assert called_evidence.profile.ip == flow_info["profileid"].split("_")[-1]
+    assert called_evidence.attacker.value == flow.saddr
+    assert called_evidence.profile.ip == flow.saddr
     assert called_evidence.timewindow.number == int(
-        flow_info["twid"].replace("timewindow", "")
+        twid.replace("timewindow", "")
     )
     assert set(called_evidence.uid) == set(
-        sum((v for v in existing_dhcp_flows.values()), [])
-        + flow_info["flow"]["uids"]
+        sum((v for v in existing_dhcp_flows.values()), []) + flow.uids
     )
-    assert called_evidence.timestamp == flow_info["flow"]["starttime"]
+    assert called_evidence.timestamp == flow.starttime
 
 
 @pytest.mark.parametrize(
@@ -280,7 +310,7 @@ def test_check_dhcp_scan_with_evidence():
         ),
     ],
 )
-def test_set_evidence_icmpscan(
+def test_set_evidence_icmp_scan(
     number_of_scanned_ips,
     timestamp,
     pkts_sent,
@@ -295,7 +325,7 @@ def test_set_evidence_icmpscan(
 ):
     network_discovery = ModuleFactory().create_network_discovery_obj()
     network_discovery.db.set_evidence = Mock()
-    network_discovery.set_evidence_icmpscan(
+    network_discovery.set_evidence_icmp_scan(
         number_of_scanned_ips,
         timestamp,
         pkts_sent,
@@ -368,8 +398,21 @@ def test_set_evidence_dhcp_scan(
 ):
     network_discovery = ModuleFactory().create_network_discovery_obj()
     network_discovery.db.set_evidence = Mock()
+    saddr = profileid.split("_")[-1]
+    flow = DHCP(
+        starttime=timestamp,
+        uids=uids,
+        saddr=saddr,
+        daddr="",
+        client_addr="",
+        server_addr="",
+        host_name="",
+        smac="",
+        requested_addr="",
+    )
+
     network_discovery.set_evidence_dhcp_scan(
-        timestamp, profileid, twid, uids, number_of_requested_addrs
+        profileid, twid, flow, number_of_requested_addrs
     )
 
     assert network_discovery.db.set_evidence.call_count == 1
