@@ -715,7 +715,7 @@ def test_is_ignored_domain(domain, expected):
             (
                 "Malicious downloaded file 1234567890abcdef1234567890abcdef. "
                 "size: 1024 from IP: 192.168.1.1. "
-                "Detected by: VirusTotal. Score: 0.9.  (Organization: Example Org)"
+                "Detected by: VirusTotal. Score: 0.9."
             ),
             ThreatLevel.HIGH,
             0.9,
@@ -740,7 +740,7 @@ def test_is_ignored_domain(domain, expected):
             (
                 "Malicious downloaded file abcdef0123456789abcdef0123456789. "
                 "size: 512 from IP: 192.168.1.2. "
-                "Detected by: Example Blacklist. Score: 0.5.  (Organization: Example Org)"
+                "Detected by: Example Blacklist. Score: 0.5."
             ),
             ThreatLevel.LOW,
             0.5,
@@ -820,13 +820,14 @@ def test_search_online_for_hash(
         (
             "192.168.1.1",
             '{"description": "Malicious IP"}',
-            {"description": "Malicious IP"},
+            json.dumps({"description": "Malicious IP"}),
         ),
-        ("10.0.0.1", None, False),
+        ("10.0.0.1", None, None),
     ],
 )
 def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
-    """Test `search_offline_for_ip` for querying local threat intelligence data."""
+    """Test `search_offline_for_ip` for querying local
+    threat intelligence data."""
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.is_blacklisted_ip.return_value = mock_return_value
     result = threatintel.search_offline_for_ip(ip_address)
@@ -1723,7 +1724,8 @@ def test_set_evidence_malicious_domain(
 
 
 @pytest.mark.parametrize(
-    "ip, uid, timestamp, ip_info, dns_query, profileid, twid, expected_description, expected_threat_level",
+    "ip, uid, timestamp, ip_info, dns_query, profileid, "
+    "twid, expected_description, expected_threat_level",
     [
         # TestCase 1: Medium threat level in DNS response
         (
@@ -1740,8 +1742,7 @@ def test_set_evidence_malicious_domain(
             "timewindow1",
             (
                 "DNS answer with a blacklisted IP: 192.168.1.1 for query: "
-                "example.com "
-                "(Organization: Example Org) Description: Malicious IP Source: TI Feed."
+                "example.com Description: Malicious IP Source: TI Feed."
             ),
             ThreatLevel.MEDIUM,
         ),
@@ -1760,8 +1761,8 @@ def test_set_evidence_malicious_domain(
             "timewindow2",
             (
                 "DNS answer with a blacklisted IP: 192.168.1.2 for query: "
-                "test.com (Organization: Example Org) Description: Another"
-                " Malicious IP Source: Different Feed."
+                "test.com "
+                "Description: Another Malicious IP Source: Different Feed."
             ),
             ThreatLevel.HIGH,
         ),
@@ -1781,8 +1782,7 @@ def test_set_evidence_malicious_domain(
             (
                 "DNS answer with a blacklisted IP: 192.168.1.3 for query: "
                 "domain.com "
-                "(Organization: Example Org) Description: Yet Another "
-                "Malicious IP Source: Another Feed."
+                "Description: Yet Another Malicious IP Source: Another Feed."
             ),
             ThreatLevel.LOW,
         ),

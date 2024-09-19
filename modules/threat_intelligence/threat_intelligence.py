@@ -62,7 +62,7 @@ class ThreatIntel(IModule, URLhaus):
             "new_downloaded_file": self.c2,
         }
         self.__read_configuration()
-        self.get_malicious_ip_ranges()
+        self.get_all_blacklisted_ip_ranges()
         self.create_circl_lu_session()
         self.circllu_queue = multiprocessing.Queue()
         self.circllu_calls_thread = threading.Thread(
@@ -111,10 +111,11 @@ class ThreatIntel(IModule, URLhaus):
         self.circl_session.verify = True
         self.circl_session.headers = {"accept": "application/json"}
 
-    def get_malicious_ip_ranges(self):
-        """Retrieves and caches the malicious IP ranges from the database, separating
-        them into IPv4 and IPv6 ranges. These ranges are stored in dictionaries indexed
-        by the first octet (or hextet for IPv6) of the range, to optimize lookup times.
+    def get_all_blacklisted_ip_ranges(self):
+        """Retrieves and caches the malicious IP ranges from the database,
+        separating them into IPv4 and IPv6 ranges. These ranges are stored in
+        dictionaries indexed by the first octet (or hextet for IPv6) of
+        the range, to optimize lookup times.
 
         Side Effects:
             - Populates `cached_ipv4_ranges` and `cached_ipv6_ranges`
