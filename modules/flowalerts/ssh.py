@@ -151,11 +151,10 @@ class SSH(IFlowalertsAnalyzer):
         if not utils.is_msg_intended_for(msg, "new_ssh"):
             return
 
-        data = msg["data"]
-        data = json.loads(data)
-        profileid = data["profileid"]
-        twid = data["twid"]
-        flow = self.classifier.convert_to_flow_obj(data["flow"])
+        msg = json.loads(msg["data"])
+        profileid = msg["profileid"]
+        twid = msg["twid"]
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
 
         self.check_successful_ssh(profileid, twid, flow)
         self.check_ssh_password_guessing(profileid, twid, flow)
