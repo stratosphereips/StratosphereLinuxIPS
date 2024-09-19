@@ -102,12 +102,11 @@ class SSL(IFlowalertsAnalyzer):
         : param flow: this is the conn.log of the ssl flow
         we're currently checking
         """
-        conn_log_flow = self.classifier.convert_to_flow_obj(conn_log_flow)
         if "pastebin" not in ssl_flow.server_name:
             return False
 
         # orig_bytes is number of payload bytes downloaded
-        downloaded_bytes = conn_log_flow.resp_bytes
+        downloaded_bytes = conn_log_flow["resp_bytes"]
         if downloaded_bytes >= self.pastebin_downloads_threshold:
             self.set_evidence.pastebin_download(
                 twid, ssl_flow, downloaded_bytes
@@ -119,7 +118,7 @@ class SSL(IFlowalertsAnalyzer):
         # maybe an empty file is downloaded
         return False
 
-    def check_self_signed_certs(self, profileid, twid, flow):
+    def check_self_signed_certs(self, twid, flow):
         """
         checks the validation status of every a zeek ssl flow for self
         signed certs
@@ -218,7 +217,7 @@ class SSL(IFlowalertsAnalyzer):
             # todo: can i put ssl flow obj in the queue??
             self.pending_ssl_flows.put((flow, profileid, twid))
 
-            self.check_self_signed_certs(profileid, twid, flow)
+            self.check_self_signed_certs(twid, flow)
             self.detect_malicious_ja3(twid, flow)
             self.detect_incompatible_cn(profileid, twid, flow)
             self.detect_doh(twid, flow)
