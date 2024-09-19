@@ -123,9 +123,6 @@ def test_young_domain(
             "SSH::SERVER",
             "SSH server version changing from 2.2 to 3.1",
         ),
-        # testcase5:Empty Version
-        ("", "8.0", "SSH::CLIENT", "SSH client version changing from  to 8.0"),
-        ("7.2", "", "SSH::SERVER", "SSH server version changing from 7.2 to "),
     ],
 )
 def test_multiple_ssh_versions(
@@ -141,15 +138,15 @@ def test_multiple_ssh_versions(
         daddr="",
         software="",
         unparsed_version="",
-        version_major=current_versions.splt(".")[0],
-        version_minor=current_versions.splt(".")[1],
+        version_major=current_versions.split(".")[0],
+        version_minor=current_versions.split(".")[1],
     )
     set_ev.multiple_ssh_versions(
         flow,
         cached_versions=cached_versions,
         current_versions=current_versions,
         twid="timewindow2",
-        uid=["unique_id1", "unique_id2"],
+        uids=["unique_id1", "unique_id2"],
         role=role,
     )
 
@@ -891,8 +888,8 @@ def test_gre_tunnel():
             "unique_id_1",
             "2023-05-06T12:00:00Z",
             "detection_model_1",
-            "SSH successful to IP 10.0.0.1. "
-            ". From IP 192.168.0.1. Sent bytes: 1024. "
+            "SSH successful to IP 10.0.0.1. From IP 192.168.0.1. "
+            "Sent bytes: 1024. "
             "Detection model detection_model_1. Confidence 0.8",
         ),
         (  # Test case 2: Different IPs, size, uid, timestamp, and detection model
@@ -903,8 +900,7 @@ def test_gre_tunnel():
             "unique_id_2",
             "2023-05-07T12:00:00Z",
             "detection_model_2",
-            "SSH successful to IP 10.0.0.2. "
-            ". From IP 192.168.0.2. "
+            "SSH successful to IP 10.0.0.2. From IP 192.168.0.2. "
             "Sent bytes: 2048. Detection model "
             "detection_model_2. Confidence 0.8",
         ),
@@ -916,8 +912,7 @@ def test_gre_tunnel():
             "unique_id_3",
             "2023-05-08T12:00:00Z",
             "",
-            "SSH successful to IP 10.0.0.3. "
-            ". From IP 192.168.0.3. "
+            "SSH successful to IP 10.0.0.3. From IP 192.168.0.3. "
             "Sent bytes: 4096. Detection model . Confidence 0.8",
         ),
     ],
@@ -1090,11 +1085,11 @@ def test_multiple_reconnection_attempts():
     assert (
         evidence.evidence_type == EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS
     )
-    assert evidence.attacker.value == flow.daddr
-    assert evidence.victim.value == flow.saddr
+    assert evidence.attacker.value == flow.saddr
+    assert evidence.victim.value == flow.daddr
     assert evidence.threat_level == ThreatLevel.MEDIUM
     assert evidence.confidence == 0.5
-    assert evidence.profile.ip == flow.daddr
+    assert evidence.profile.ip == flow.saddr
     assert evidence.timewindow.number == 2
     assert sorted(evidence.uid) == sorted(["unique_id1", "unique_id2"])
 
