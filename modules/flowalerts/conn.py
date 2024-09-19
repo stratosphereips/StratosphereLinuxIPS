@@ -191,7 +191,7 @@ class Conn(IFlowalertsAnalyzer):
             and not self.db.is_ftp_port(flow.dport)
         ):
             # we don't have info about this port
-            self.set_evidence.unknown_port(profileid, twid, flow)
+            self.set_evidence.unknown_port(twid, flow)
             return True
 
     def check_multiple_reconnection_attempts(self, profileid, twid, flow):
@@ -222,7 +222,7 @@ class Conn(IFlowalertsAnalyzer):
             return
 
         self.set_evidence.multiple_reconnection_attempts(
-            profileid, twid, flow, reconnections
+            twid, flow, reconnections
         )
         # reset the reconnection attempts of this src->dst
         current_reconnections[key] = (0, [])

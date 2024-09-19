@@ -186,7 +186,7 @@ class SetEvidnceHelper:
             description += (
                 "using ARP"
                 if "arp" in proto
-                else f"on port: {flow.proto.lower()}"
+                else f"on destination port: {flow.dport}/{flow.proto.upper()}"
             )
 
         confidence = 1.0
@@ -213,7 +213,7 @@ class SetEvidnceHelper:
         threat_level = ThreatLevel.MEDIUM
         description = (
             f"A device changing IPs. IP {flow.saddr} was found "
-            f"with MAC address {flow.smar} but the MAC belongs "
+            f"with MAC address {flow.smac} but the MAC belongs "
             f"originally to IP: {old_ip}. "
         )
         twid_number = int(twid.replace("timewindow", ""))
@@ -426,7 +426,6 @@ class SetEvidnceHelper:
     def pastebin_download(
         self, twid, flow: dict, bytes_downloaded: int
     ) -> bool:
-        flow = self.classifier.convert_to_flow_obj(flow)
         confidence: float = 1.0
         response_body_len: float = utils.convert_to_mb(bytes_downloaded)
         description: str = (
@@ -528,7 +527,7 @@ class SetEvidnceHelper:
 
         return True
 
-    def unknown_port(self, profileid, twid, flow) -> None:
+    def unknown_port(self, twid, flow) -> None:
         confidence: float = 1.0
         twid_number: int = int(twid.replace("timewindow", ""))
         description: str = (
@@ -825,14 +824,12 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def self_signed_certificates(self, profileid, twid, flow) -> None:
+    def self_signed_certificates(self, twid, flow) -> None:
         """
         Set evidence for self-signed certificates.
         """
         confidence: float = 0.5
-
         twid: int = int(twid.replace("timewindow", ""))
-
         attacker: Attacker = Attacker(
             direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
         )
@@ -884,7 +881,7 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
 
     def multiple_reconnection_attempts(
-        self, profileid, twid, flow, reconnections, uids: List[str]
+        self, twid, flow, reconnections, uids: List[str]
     ) -> None:
         """
         Set evidence for Reconnection Attempts.
@@ -1003,8 +1000,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1025,8 +1020,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
         self.db.set_evidence(evidence)
 
@@ -1052,8 +1045,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=twid),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1285,8 +1276,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1339,7 +1328,7 @@ class SetEvidnceHelper:
         threat_level: ThreatLevel = ThreatLevel(threat_level)
 
         description: str = (
-            f"Malicious SSL certificate to server {flow.daddr}."
+            f"Malicious SSL certificate to server {flow.daddr}. "
             f"description: {cert_description} {tags}"
         )
         # to add a correlation between the 2 evidence in alerts.json

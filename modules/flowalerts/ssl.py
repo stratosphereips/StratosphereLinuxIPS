@@ -127,7 +127,7 @@ class SSL(IFlowalertsAnalyzer):
         if "self signed" not in flow.validation_status:
             return
 
-        self.set_evidence.self_signed_certificates(profileid, twid, flow)
+        self.set_evidence.self_signed_certificates(twid, flow)
 
     def detect_malicious_ja3(self, twid, flow):
         if not (flow.ja3 or flow.ja3s):
