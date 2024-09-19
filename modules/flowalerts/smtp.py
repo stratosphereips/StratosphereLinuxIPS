@@ -36,7 +36,7 @@ class SMTP(IFlowalertsAnalyzer):
                 {profileid: ([flow.starttime], [flow.uid])}
             )
 
-        self.set_evidence.bad_smtp_login(flow, twid)
+        self.set_evidence.bad_smtp_login(twid, flow)
 
         timestamps = self.smtp_bruteforce_cache[profileid][0]
         uids = self.smtp_bruteforce_cache[profileid][1]
@@ -67,7 +67,7 @@ class SMTP(IFlowalertsAnalyzer):
         if not utils.is_msg_intended_for(msg, "new_smtp"):
             return
 
-        smtp_info = json.loads(msg["data"])
+        smtp_info: dict = json.loads(msg["data"])
         profileid = smtp_info["profileid"]
         twid = smtp_info["twid"]
         flow = self.classifier.convert_to_flow_obj(smtp_info["flow"])
