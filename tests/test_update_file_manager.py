@@ -10,7 +10,7 @@ from unittest.mock import Mock, mock_open, patch
 
 def test_check_if_update_based_on_update_period():
     update_manager = ModuleFactory().create_update_manager_obj()
-    update_manager.db.get_TI_file_info.return_value = {"time": float("inf")}
+    update_manager.db.get_ti_feed_info.return_value = {"time": float("inf")}
     url = "abc.com/x"
     # update period hasn't passed
     assert update_manager.check_if_update(url, float("inf")) is False
@@ -148,39 +148,22 @@ def test_get_feed_details(mocker, mock_data, expected_feeds):
 
 
 @pytest.mark.parametrize(
-    "message, expected_call_args",
+    "message",
     [
         # Testcase1: Log a simple message.
-        (
-            "Test message",
-            {
-                "from": "Update Manager",
-                "log_to_logfiles_only": True,
-                "txt": "Test message",
-                "verbose": 0,
-                "debug": 1,
-            },
-        ),
+        ("Test message"),
         # Testcase2: Log an empty message.
-        (
-            "",
-            {
-                "from": "Update Manager",
-                "log_to_logfiles_only": True,
-                "txt": "",
-                "verbose": 0,
-                "debug": 1,
-            },
-        ),
+        (""),
     ],
 )
-def test_log(message, expected_call_args):
+def test_log(message):
     """Test the log function with different message types."""
-    mock_observer = Mock()
     update_manager = ModuleFactory().create_update_manager_obj()
-    update_manager.notify_observers = mock_observer
+    update_manager.print = Mock()
     update_manager.log(message)
-    mock_observer.assert_called_once_with(expected_call_args)
+    update_manager.print.assert_called_once_with(
+        message, verbose=0, debug=1, log_to_logfiles_only=True
+    )
 
 
 def test_download_file(
@@ -279,7 +262,7 @@ def test_check_if_update_online_whitelist_download_updated(
 ):
     """Update period passed, download succeeds."""
     update_manager = ModuleFactory().create_update_manager_obj()
-    update_manager.db.get_TI_file_info.return_value = {"time": 0}
+    update_manager.db.get_ti_feed_info.return_value = {"time": 0}
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
 
     update_manager.download_file = Mock(return_value=Mock(status_code=200))
@@ -297,7 +280,7 @@ def test_check_if_update_online_whitelist_not_updated():
     """Update period hasn't passed - no update needed."""
     update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
-    update_manager.db.set_ti_feed_info.return_value = {"time": time.time()}
+    update_manager.db.get_ti_feed_info.return_value = {"time": time.time()}
     result = update_manager.check_if_update_online_whitelist()
     assert result is False
     update_manager.db.set_ti_feed_info.assert_not_called()
@@ -363,39 +346,6 @@ def test_write_file_to_disk(mocker, tmp_path):
 
     with open(file_path, "r") as f:
         assert f.read() == "test content"
-
-
-def test_delete_old_source_ips():
-    """Test delete_old_source_IPs."""
-    update_manager = ModuleFactory().create_update_manager_obj()
-    update_manager.db.get_all_blacklisted_ips.return_value = {
-        "1.2.3.4": json.dumps(
-            {"description": "old IP", "source": "old_file.txt"}
-        ),
-        "5.6.7.8": json.dumps(
-            {"description": "new IP", "source": "new_file.txt"}
-        ),
-    }
-    update_manager.delete_old_source_IPs("old_file.txt")
-    (
-        update_manager.db.delete_ips_from_IoC_ips.assert_called_once_with(
-            ["1.2.3.4"]
-        )
-    )
-
-
-def test_delete_old_source_domains():
-    """Test delete_old_source_Domains."""
-    update_manager = ModuleFactory().create_update_manager_obj()
-    update_manager.db.get_all_blacklisted_domains.return_value = {
-        "olddomain.com": json.dumps(
-            {"description": "old domain", "source": "old_file.txt"}
-        ),
-        "newdomain.com": json.dumps(
-            {"description": "new domain", "source": "new_file.txt"}
-        ),
-    }
-    update_manager.delete_old_source_Domains("old_file.txt")
 
 
 def test_update_riskiq_feed(
@@ -467,36 +417,6 @@ def test_update_riskiq_feed_request_exception(
     assert result is False
     update_manager.db.add_domains_to_IoC.assert_not_called()
     update_manager.db.set_ti_feed_info.assert_not_called()
-
-
-def test_delete_old_source_data_from_database():
-    """
-    Test delete_old_source_data_from_database for deleting old IPs and domains.
-    """
-    update_manager = ModuleFactory().create_update_manager_obj()
-    update_manager.db.get_all_blacklisted_ips.return_value = {
-        "1.2.3.4": json.dumps(
-            {"description": "old IP", "source": "old_file.txt"}
-        ),
-        "5.6.7.8": json.dumps(
-            {"description": "new IP", "source": "new_file.txt"}
-        ),
-    }
-    update_manager.db.get_all_blacklisted_domains.return_value = {
-        "olddomain.com": json.dumps(
-            {"description": "old domain", "source": "old_file.txt"}
-        ),
-        "newdomain.com": json.dumps(
-            {"description": "new domain", "source": "new_file.txt"}
-        ),
-    }
-    update_manager.delete_old_source_data_from_database("old_file.txt")
-    update_manager.db.delete_ips_from_IoC_ips.assert_called_once_with(
-        ["1.2.3.4"]
-    )
-    update_manager.db.delete_domains_from_IoC_domains.assert_called_once_with(
-        ["olddomain.com"]
-    )
 
 
 @pytest.mark.parametrize(
