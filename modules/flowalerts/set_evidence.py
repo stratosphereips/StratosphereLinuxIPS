@@ -3,6 +3,7 @@ from typing import List
 from uuid import uuid4
 from datetime import datetime
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import SMTP
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -1251,7 +1252,7 @@ class SetEvidnceHelper:
 
         self.db.set_evidence(evidence)
 
-    def bad_smtp_login(self, twid, flow) -> None:
+    def bad_smtp_login(self, twid, flow: SMTP) -> None:
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.HIGH
 
