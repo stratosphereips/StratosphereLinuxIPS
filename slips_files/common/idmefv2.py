@@ -169,6 +169,10 @@ class IDMEFv2:
             print(f"Error in convert(): {e}")
             print(traceback.format_exc())
 
+    def is_icmp_code(self, code) -> bool:
+        """checks if the given string is an icmp error code"""
+        return str(code).startswith("0x")
+
     def convert_to_idmef_event(self, evidence: Evidence) -> Message:
         """
         Function to convert Slips evidence to
@@ -209,7 +213,9 @@ class IDMEFv2:
             )
             msg["Analyzer"].update({"Method": [evidence.method.value]})
 
-            if evidence.src_port:
+            # netflow icmp flows "ports" start with 0x, they're not really
+            # ports they're error codes, so ignore them
+            if evidence.src_port and not self.is_icmp_code(evidence.src_port):
                 msg["Source"][0].update({"Port": [int(evidence.src_port)]})
 
             if evidence.proto:
@@ -238,8 +244,12 @@ class IDMEFv2:
                         "Note": {},
                     }
                 ]
-                if evidence.dst_port:
+
+                if evidence.dst_port and not self.is_icmp_code(
+                    evidence.dst_port
+                ):
                     msg["Target"][0].update({"Port": [int(evidence.dst_port)]})
+
                 if evidence.victim.TI:
                     msg["Target"][0]["Note"].update({"TI": evidence.victim.TI})
                 if evidence.victim.AS:
@@ -253,8 +263,6 @@ class IDMEFv2:
                         {"SNI": evidence.victim.SNI}
                     )
 
-            # todo check that we added all the fields from the plan
-            # todo add alerts too not just evidence
             if (
                 evidence.evidence_type
                 == EvidenceType.MALICIOUS_DOWNLOADED_FILE
@@ -304,5 +312,5 @@ class IDMEFv2:
             print(f"IDMEFv2 Validation failure: {e.message}")
 
         except Exception as e:
-            print(f"Error in convert(): {e}")
+            print(f"Error in convert_to_idmef_event(): {e}")
             print(traceback.format_exc())
