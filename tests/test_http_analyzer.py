@@ -325,22 +325,13 @@ def test_set_evidence_weird_http_method(mocker):
         "Some IP identification"
     )
     mocker.spy(http_analyzer.db, "set_evidence")
-    flow = HTTP(
+    flow = Weird(
         starttime="1726593782.8840969",
-        uid=uid,
+        uid="123",
         saddr="192.168.1.5",
-        daddr="147.32.80.7",
-        method="WEIRD_METHOD",
-        host="google.com",
-        uri="/",
-        version=0,
-        user_agent="",
-        request_body_len=0,
-        response_body_len=10,
-        status_code="",
-        status_msg="",
-        resp_mime_types="",
-        resp_fuids="",
+        daddr="1.1.1.1",
+        name="",
+        addl="weird_method_here",
     )
     http_analyzer.set_evidence_weird_http_method(twid, flow)
     http_analyzer.db.set_evidence.assert_called_once()
