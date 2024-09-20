@@ -217,7 +217,7 @@ class Output(IObserver):
 
         # if debug level is 3 make it red
         if debug == 3:
-            msg = red(msg)
+            txt = red(txt)
 
         if "analyzed IPs" in txt:
             self.handle_printing_stats(txt)
