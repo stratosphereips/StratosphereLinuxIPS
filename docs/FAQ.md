@@ -22,3 +22,8 @@ You can add your local /etc/localtime as volume in Slips Docker container by usi
 ```
 docker run -it --rm --net=host --cap-add=NET_ADMIN -v /etc/localtime:/etc/localtime:ro --name slips stratosphereips/slips:latest
 ```
+
+## Redis WARNING Memory overcommit must be enabled! in docker
+
+This is a redis known issue, you can find the fix here
+https://redis.io/docs/latest/operate/oss_and_stack/management/admin/#:~:text=Redis%20setup%20tips-,Linux,-Deploy%20Redis%20using
