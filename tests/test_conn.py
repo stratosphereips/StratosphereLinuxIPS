@@ -179,7 +179,7 @@ def test_check_unknown_port_true_case(mocker):
     mock_set_evidence = mocker.patch.object(conn.set_evidence, "unknown_port")
 
     assert conn.check_unknown_port(profileid, twid, flow)
-    mock_set_evidence.assert_called_once_with(profileid, twid, flow)
+    mock_set_evidence.assert_called_once_with(twid, flow)
 
 
 @pytest.mark.parametrize(
