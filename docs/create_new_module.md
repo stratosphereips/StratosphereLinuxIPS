@@ -12,25 +12,32 @@ This blog creates an example module to detect when any private IP address commun
 
 ### High-level View of how a Module Works
 
-The Module consists of the init() function for initializations, subscribing to channels, reading API files etc.
 
-The main function of each module is the ```main()```, 
-this function is run in a while loop that keeps looping as long as
+All modules implement the ```IModule``` interface located at ```slips_files/common/abstracts/module.py```
+Abstract methods in this interface must be implemented in every new slips module, the rest are optional.
+
+Below is a detailed desciption of each abstract method.
+
+The Module consists of the ```init()``` function for initializations, like subscribing to channels, reading API files, etc.
+
+The main function of each module is the ```main()```,
+this function is run in a loop that keeps looping as long as
 Slips is running so that the module doesn't terminate.
 
 In case of errors in the module, the ```main()``` function should return 1 which will cause
 the module to immediately terminate.
 
-any initializations that should be run only once should be placed in the init() function 
-OR the ```pre_main()```. the ```pre_main()``` is a function that acts as a hook for the main function. it runs only 
+any initializations that should be run only once should be placed in the ```init()``` function
+OR the ```pre_main()```. the ```pre_main()``` is a function that acts as a hook for the main function. it runs only
 once and then the main starts running in a loop.
-the pre-main is the place for initialization logic that cannot be done in the init, for example
-dropping the root privileges from a module. we'll discuss this in more detail later.
+the ```pre_main()``` is the place for initialization logic that cannot be done in the init, for example
+dropping the root privileges from a module. we'll discuss this in detail later.
 
-Each module has a common ```print()``` method that handles text printing 
-and logging by passing everything to the 
-```OutputProcess.py``` for processing. the print function is implemented in the abstract module 
-```slips_files/common/abstracts.py ``` and used by all modules.
+Printing in all modules is handled by a common ```print()``` method, the one implemented in the ```IModule``` interface.
+All this common print() does is acts as a proxy between the module responsible for printing, ```output.py```, and all slips modules.
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_printing_works.jpg"
+
 
 Each Module has its own ```shutdown_gracefully()``` function
 that handles cleaning up after the module is done processing.
@@ -41,21 +48,21 @@ It handles for example:
 etc.
 
 
-## Developing a Module
-When Slips runs, it automatically loads all the modules inside the ```modules/``` directory. Therefore, 
+## Creating a Module
+When Slips runs, it automatically loads all the modules inside the ```modules/``` directory. Therefore,
 our new module should be placed there.
 
 Slips has a template module directory that we are going to copy and then modify for our purposes.
 
 ```bash
 cp -a modules/template modules/local_connection_detector
-```    
+```
 
 ### Changing the Name of the Module
 
 Each module in Slips should have a name, author and description.
 
-We should change the name inside the py file by finding the lines with the name and description in the class 'Module'
+We should change the name inside the python file by finding the lines with the name and description in the class 'Module'
 and changing them:
 
 ```python
@@ -65,6 +72,13 @@ description = (
     )
 authors = ['Your name']
 ```
+
+Also change the name of the class to something like this
+```
+class LocalConnectionDetector(IModule):
+    ...
+```
+
 
 At the end you should have a structure like this:
 ```
@@ -83,19 +97,23 @@ Remember to delete the __pycache__ dir if it's copied to the new module using:
 
 ### Redis Pub/Sub
 
-First, we need to subscribe to the channel ```new_flow``` 
+First, some initialization in the ```init()```:
+1. we need to subscribe to the channel ```new_flow```
+2. to be able to convert the flows received in the above channel from dict format to objects, we'll need a classifier
+
 
 ```python
 self.c1 = self.db.subscribe('new_flow')
-```
-and add this to the module's list of channels
-```python
+
+# add this channel to the module's list of channels
+# this list will be used to get msgs from the channel later
 self.channels = {
     'new_flow': self.c1,
 }
-```
-this list is used to get msgs from the channel later.
 
+# to be able to convert flows from dict format to objects
+self.classifier = FlowClassifier()
+```
 
 So now everytime slips sees a new flow, you can access it from your module using the
 following line
@@ -103,24 +121,26 @@ following line
 ```python
 msg = self.get_msg('new_flow')
 ```
-the implementation of the get_msg is placed in the abstract module in ```slips_files/common/abstracts.py```
+the implementation of the ```get_msg()``` is placed in the abstract module in ```slips_files/common/abstracts/module.py```
 and is inherited by all modules.
 
-The above line checks if a message was received from the channel you subscribed to.
+The above line checks if a message was received from the ```new_flow``` channel that you subscribed to.
 
 Now, you can access the content of the flow using
 ```python
 flow = msg['data']
 ```
 
-Thus far, we have the following code that gets a msg everytime slips reads a new flow
+Thus far, we have the following code to prep the module for receiving new flows
 
 ```python
 def init(self):
-    self.c1 = self.db.subscribe('new_ip')
+    self.c1 = self.db.subscribe('new_flow')
     self.channels = {
-        'new_ip': self.c1,
+        'new_flow': self.c1,
     }
+    # to be able to convert flows from dict format to objects
+    self.classifier = FlowClassifier()
 ```
 
 ```python
@@ -153,15 +173,15 @@ Now that we have the flow, we need to:
 Extracting IPs is done by the following:
 
 ```python
-msg = msg['data']
-msg = json.loads(msg)
-flow = json.loads(msg['flow'])
-uid = next(iter(flow))
-flow = json.loads(flow[uid])
-saddr = flow['saddr']
-daddr = flow['daddr']
-timestamp = flow['ts']
+msg = json.loads(msg['data'])
+# convert the given dict flow to a flow object
+flow = self.classifier.convert_to_flow_obj(msg["flow"])
+saddr = flow.saddr
+daddr = flow.daddr
+timestamp = flow.starttime
 ```
+
+The above snippet should be in the main() function, since we wanna repeat it in a loop everytime we get a new flow
 
 Now we need to check if both of them are private.
 
@@ -179,11 +199,10 @@ Now that we're sure both IPs are private, we need to generate an alert.
 
 Slips requires certain info about the evidence to be able to deal with them.
 
-first, since we are creating a new evidence, other than the ones defined in the EvidenceType Enum in
-```StratosphereLinuxIPS/slips_files/core/evidence_structure/evidence.py```
-then, we need to add it 
+First, since we are creating a new type of evidence that is not defined in the ```EvidenceType``` Enum in
+```slips_files/core/structure/evidence.py```, we need to add a new type there.
 
-so the EvidenceType Enum in ```slips_files/core/evidence_structure/evidence.py``` would look something like this
+so the ```EvidenceType``` Enum in ```slips_files/core/structures/evidence.py``` would look something like this
 
 ```python
 class EvidenceType(Enum):
@@ -192,12 +211,13 @@ class EvidenceType(Enum):
     """
     ...
     CONNECTION_TO_LOCAL_DEVICE = auto()
+    ...
 ```
 
-now we have our evidence type supported. it's time to set the evidence!
+Now we have our evidence type supported. it's time to set the evidence!
 
 Now we need to use the Evidence structure of slips, to do that,
-first import the necessary dataclasses
+First import the necessary dataclasses
 
 ```python
 from slips_files.core.evidence_structure.evidence import \
@@ -211,7 +231,6 @@ from slips_files.core.evidence_structure.evidence import \
         EvidenceType,
         IoCType,
         Direction,
-        IDEACategory,
     )
 ```
 
@@ -226,28 +245,26 @@ threat_level = ThreatLevel.HIGH
 # the name of your evidence, you can put any descriptive string here
 # this is the type we just created
 evidence_type = EvidenceType.CONNECTION_TO_LOCAL_DEVICE
-# what is this evidence category according to IDEA categories 
-category = IDEACategory.ANOMALY_CONNECTION
-# which ip is the attacker here? 
+# which ip is the attacker here?
 attacker = Attacker(
-            direction=Direction.SRC, # who's the attacker the src or the dst?
-            attacker_type=IoCType.IP, # is it an IP? is it a domain? etc.
-            value=saddr # the actual ip/domain/url of the attacker, in our case, this is the IP
+        direction=Direction.SRC, # who's the attacker the src or the dst?
+        attacker_type=IoCType.IP, # is it an IP? is it a domain? etc.
+        value=saddr # the actual ip/domain/url of the attacker, in our case, this is the IP
         )
 victim = Victim(
-            direction=Direction.SRC,
-            victim_type=IoCType.IP,
-            value=daddr,
+        direction=Direction.SRC,
+        victim_type=IoCType.IP,
+        value=daddr,
         )
 # describe the evidence
 description = f'A connection to a local device {daddr}'
-# the current profile is the source ip, 
+# the current profile is the source ip,
 # this comes in the msg received in the channel
 # the profile this evidence should be in, should be the profile of the attacker
 # because this is evidence that this profile is attacker others right?
 profile = ProfileID(ip=saddr)
-# Profiles are split into timewindows, each timewindow is 1h, 
-# this if of the timewindwo comes in the msg received in the channel 
+# Profiles are split into timewindows, each timewindow is 1h,
+# this if of the timewindwo comes in the msg received in the channel
 twid_number = int(
     msg['twid'].replace("timewindow",'')
     )
@@ -256,13 +273,12 @@ timewindow = TimeWindow(number=twid_number)
 # in the case of scans, it can be way more than 1
 conn_count = 1
 # list of uids of the flows that are part of this evidence
-uid_list = [uid]
+uid_list = [flow.uid]
 # no use the above info to create the evidence obj
 evidence = Evidence(
                 evidence_type=evidence_type,
                 attacker=attacker,
                 threat_level=threat_level,
-                category=category,
                 description=description,
                 victim=victim,
                 profile=profile,
@@ -281,8 +297,8 @@ self.db.set_evidence(evidence)
 
 
 ### Testing the Module
-The module is now ready to be used. 
-You can copy/paste the complete code that is 
+The module is now ready to be used.
+You can copy/paste the complete code that is
 [here](https://stratospherelinuxips.readthedocs.io/en/develop/create_new_module.html#complete-code)
 
 
@@ -304,7 +320,7 @@ ping 192.168.1.18
 And you should see your alerts in ./local_conn_detector/alerts.log by using
 
 ```
-cat local_conn_detector/alerts.log 
+cat local_conn_detector/alerts.log
 ```
 
 ```
@@ -315,7 +331,7 @@ Using develop - 9f5f9412a3c941b3146d92c8cb2f1f12aab3699e - 2022-06-02 16:51:43.9
 ```
 
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/module.gif" 
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/module.gif"
 title="Testing The Module">
 
 
@@ -323,7 +339,7 @@ title="Testing The Module">
 ### Conclusion
 
 Due to the high modularity of slips, adding a new slips module is as easy as modifying a few lines in our
-template module, and slips handles running 
+template module, and slips handles running
 your module and integrating it for you.
 
 This is the [list of the modules](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detection-modules)
@@ -347,7 +363,8 @@ Here is the whole local_connection_detector.py code for copy/paste.
 import ipaddress
 import json
 
-from slips_files.core.evidence_structure.evidence import \
+from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.core.structures.evidence import \
     (
         Evidence,
         ProfileID,
@@ -358,57 +375,45 @@ from slips_files.core.evidence_structure.evidence import \
         EvidenceType,
         IoCType,
         Direction,
-        IDEACategory,
     )
-from slips_files.common.imports import *
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.module import IModule
 
-class Module(IModule, multiprocessing.Process):
+class LocalConnectionDetector(IModule):
     # Name: short name of the module. Do not use spaces
     name = 'local_connection_detector'
     description = 'detects connections to other devices in your local network'
     authors = ['Template Author']
 
     def init(self):
-        # To which channels do you wnat to subscribe? When a message
-        # arrives on the channel the module will wakeup
-        # The options change, so the last list is on the
-        # slips/core/redis_database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
-        # Remember to subscribe to this channel in redis_db/database.py
+        # To which channels do you want to subscribe? When a message
+        # arrives on the channel the module will receive a msg
+
+        # You can find the full list of channels at
+        # slips_files/core/database/redis_db/database.py
         self.c1 = self.db.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1,
             }
+        # to be able to convert flows from dict format to objects
+        self.classifier = FlowClassifier()
 
-    def shutdown_gracefully(
-            self
-            ):
-        # Confirm that the module is done processing
-        self.db.publish('finished_modules', self.name)
-
-    def pre_main(
-            self
-            ):
+    def pre_main(self):
         """
         Initializations that run only once before the main() function runs in a loop
         """
         utils.drop_root_privs()
 
-    def main(
-            self
-            ):
+    def main(self):
         """Main loop function"""
         if msg := self.get_msg('new_flow'):
-            msg = msg['data']
-            msg = json.loads(msg)
-            flow = json.loads(msg['flow'])
-            uid = next(iter(flow))
-            flow = json.loads(flow[uid])
-            saddr = flow['saddr']
-            daddr = flow['daddr']
-            timestamp = flow['ts']
+            msg = json.loads(msg['data'])
+            # convert the given dict flow to a flow object
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
+            saddr = flow.saddr
+            daddr = flow.daddr
+            timestamp = flow.starttime
             srcip_obj = ipaddress.ip_address(saddr)
             dstip_obj = ipaddress.ip_address(daddr)
             if srcip_obj.is_private and dstip_obj.is_private:
@@ -416,13 +421,11 @@ class Module(IModule, multiprocessing.Process):
                 confidence = 0.8
                 # how dangerous is this evidence? info, low, medium, high, critical?
                 threat_level = ThreatLevel.HIGH
-                
+
                 # the name of your evidence, you can put any descriptive string here
                 # this is the type we just created
                 evidence_type = EvidenceType.CONNECTION_TO_LOCAL_DEVICE
-                # what is this evidence category according to IDEA categories 
-                category = IDEACategory.ANOMALY_CONNECTION
-                # which ip is the attacker here? 
+                # which ip is the attacker here?
                 attacker = Attacker(
                             direction=Direction.SRC, # who's the attacker the src or the dst?
                             attacker_type=IoCType.IP, # is it an IP? is it a domain? etc.
@@ -435,28 +438,24 @@ class Module(IModule, multiprocessing.Process):
                         )
                 # describe the evidence
                 description = f'A connection to a local device {daddr}'
-                # the current profile is the source ip, 
+                # the current profile is the source ip,
                 # this comes in the msg received in the channel
                 # the profile this evidence should be in, should be the profile of the attacker
                 # because this is evidence that this profile is attacker others right?
                 profile = ProfileID(ip=saddr)
-                # Profiles are split into timewindows, each timewindow is 1h, 
-                # this if of the timewindwo comes in the msg received in the channel 
+                # Profiles are split into timewindows, each timewindow is 1h,
+                # this if of the timewindwo comes in the msg received in the channel
                 twid_number = int(
                     msg['twid'].replace("timewindow",'')
                     )
                 timewindow = TimeWindow(number=twid_number)
-                # how many flows formed this evidence?
-                # in the case of scans, it can be way more than 1
-                conn_count = 1
                 # list of uids of the flows that are part of this evidence
-                uid_list = [uid]
+                uid_list = [flow.uid]
                 # no use the above info to create the evidence obj
                 evidence = Evidence(
                                 evidence_type=evidence_type,
                                 attacker=attacker,
                                 threat_level=threat_level,
-                                category=category,
                                 description=description,
                                 victim=victim,
                                 profile=profile,
@@ -466,11 +465,13 @@ class Module(IModule, multiprocessing.Process):
                                 # flow's ts detected by zeek
                                 # this comes in the msg received in the channel
                                 timestamp=timestamp,
-                                conn_count=conn_count,
                                 confidence=confidence
                             )
                 self.db.set_evidence(evidence)
+                self.print("Done setting evidence!!!")
 ```
+
+All good, you can find your evidence now in alerts.json and alerts.log of the output directory.
 
 
 ## Line by Line Explanation of the Module
@@ -478,23 +479,16 @@ class Module(IModule, multiprocessing.Process):
 
 This section is for more detailed explanation of what each line of the module does.
 
-```python
-from slips_files.common.imports import *
-```
-This line imports all the common modules that need to be imported by all Slips modules in order for them to work
-you can check the import here slips_files/common/imports.py
----
-
 
 In order to print in your module, you simply use the following line
 
     self.print("some text", 1, 0)
 
-and the text will be sent to the output queue to process, log, and print to the terminal.
+and the text will be sent to the output process for logging and printing to the terminal.
 
 ---
 
-Now here's the pre_main() function, all initializations like dropping root privs, checking for API keys, etc
+Now here's the ```pre_main()``` function, all initializations like dropping root privs, checking for API keys, etc
 should be done here
 
 ```python
@@ -505,18 +499,15 @@ so if slips starts with sudo and the module doesn't need the root permissions, w
 
 ---
 
-Now here's the main() function, this is the main function of each module,
-it's the one that gets executed when the module starts.
+Now here's the ```main()``` function, this is the main function of each module,
+it's the one that gets executed in a loop when the module starts.
 
-All the code in this function is run in a loop as long as the module is online.
+All the code in this function is run in a loop as long as the module is up.
 
 in case of an error, the module's main should return non-zero and
 the module will finish execution and terminate.
 if there's no errors, the module will keep looping until it runs out of msgs in the redis channels
-and will call shutdown_gracefully() and terminate.
-
-
----
+and will call ```shutdown_gracefully()``` and terminate.
 
 
 ```python
@@ -525,14 +516,14 @@ if msg := self.get_msg('new_flow'):
 
 The above line listens on the channel called ```new_flow``` that we subscribed to earlier.
 
-The messages received in the channel are flows the slips read by the the input process.
+The messages received in the channel are flows the slips read by the input process.
 
 
-## Reading Input flows from an external module
+## Reading Input flows from an external module (Advanced)
 
 Slips relies on input process for reading flows, either from an interface, a pcap, or zeek files, etc.
 
-If you want to add your own module that reads flows from somehwere else, 
+If you want to add your own module that reads flows from somehwere else,
 for example from a simulation framework like the CYST module,
 you can easily do that using the ```--input-module <module_name>``` parameter
 
@@ -544,64 +535,45 @@ For now, this feature only supports reading flows in zeek json format, but feel 
 
 ### How to shutdown_gracefully()
 
-The ```stop_message ``` is sent from the main slips.py to the ```control_module``` channel
-to tell all modules
-that slips is stopping and the modules should finish all the processing it's
-doing and shutdown.
 
-So, for example if you're training a ML model in your module, 
-and you want to save it before the module stops, 
+So, for example if you're training a ML model in your module,
+and you want to save it before the module stops,
 
-You should place your save_model() function in the shutdown_gracefully() function, right before the module
-announces its name as finished in the ```finished_modules``` channel
+You should place your ```save_model()``` function in the ```shutdown_gracefully()``` function.
 
-Inside shutdown_gracefully() we have the following line, This is the module, 
-responding to the stop_message, telling slips.py that it successfully finished processing and
-is ready to be killed.
-
-```python
-self.db.publish('finished_modules', self.name)
-
-```
 
 ### Troubleshooting
-Most errors occur when running the module inside SLIPS. 
-These errors are hard to resolve, because warnings and debug messages may be hidden 
-under extensive outputs from other modules.
 
-If the module does not start at all, make sure it is not disabled in the 
-config/slips.conf file. If that is not the case, check that 
-the \_\_init\_\_.py file is present in module directory, and read 
-the output files (errors.log and slips.log) - if there were any errors 
-(eg. import errors), they would prevent the module from starting. 
+- If the module does not start at all, make sure it is not disabled in the
+```config/slips.yaml``` file.
+- Check that the \_\_init\_\_.py file is present in module directory
+- Read the output files (errors.log and slips.log) - if there were any errors
+(eg. import errors), they would prevent the module from starting.
 
 
-In case that the module is started, but does not receive any messages from
+- If the module started, but did not receive any messages from
 the channel, make sure that:
 
-	-The channel is properly subscribed to in the module
+	- The channel is properly subscribed to in the module
 
-	-Messages are being sent in this channel
+	- Messages are being sent in this channel
 
-	-Other modules subscribed to the channel get the message
+	- Other modules subscribed to the channel get the message
 
-    - the channel name is present in the supported_channels list in redis_db/database.py
+    - The channel name is present in the supported_channels list in ```slips_files/core/database/redis_db/database.py```
 
 ### Testing
 
 
 Slips has 2 kinds of tests, unit tests and integration tests.
 
-integration tests are done by testing all files in our ```dataset/``` dir and 
-are done by the test files in ```tests/integration_tests/```
+integration tests are in ```tests/integration_tests/```, In there we test all files in our ```dataset/``` dir.
 
 Before pushing, run the unit tests and integration tests by:
 
+1- Make sure you're in slips main dir
 
-1- Make sure you're in slips main dir (the one with kalipso.sh)
-
-
-2- Run all tests ```./tests/run_all_tests.sh``` 
+2- Run all tests ```./tests/run_all_tests.sh```
 
 Slips supports the -P flag to run redis on your port of choice. this flag is
 used so that slips can keep track of the ports it opened while testing and close them later.
@@ -631,4 +603,4 @@ PRs and Issues are welcomed in our repo.
 
 Adding a new feature to SLIPS is an easy task. The template is ready for everyone to use and there is not much to learn about Slips to be able to write a module.
 
-If you wish to add a new module to the Slips repository, issue a pull request and wait for a review. 
+If you wish to add a new module to the Slips repository, issue a pull request and wait for a review.
