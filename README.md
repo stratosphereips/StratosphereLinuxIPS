@@ -212,7 +212,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
 
 
 # Configuration
-Slips has a [config/slips.conf](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/config/slips.conf) that contains user configurations for different modules and general execution.
+Slips has a [config/slips.yaml](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/config/slips.yaml) that contains user configurations for different modules and general execution.
 
 * You can change the timewindow width by modifying the ```time_window_width``` parameter
 * You can change the analysis direction to ```all```  if you want to see the attacks from and to your computer

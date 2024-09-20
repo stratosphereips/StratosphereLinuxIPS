@@ -163,12 +163,12 @@ If you happen to get the error `Illegal instruction (core dumped)` it means that
 If you were running slips directly from the docker without cloning the repo, you can do this modification in two ways:
 1. Modify the container
 	1. Run the docker in background using the same command as above but with `-d`
-	2. Get into the docker with `docker exec -it slips /bin/bash`, and then modifying the configuration file in `config/slips.conf` to add the disabled modules
+	2. Get into the docker with `docker exec -it slips /bin/bash`, and then modifying the configuration file in `config/slips.yaml` to add the disabled modules
 	3. Run Slips from inside the docker
 			`./slips.py -i enp7s0`
 1. You can
 	1. Clone the Slips repo (clone the same version as the docker you are downloading),
-	2. Modify your local `config/slips.conf`
+	2. Modify your local `config/slips.yaml`
 	3. Run the docker command above but by mounting the volume of the config.
 		`docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/config:/StratosphereLinuxIPS/config/ -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
 
@@ -254,7 +254,7 @@ If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker i
 	cd ~/StratosphereLinuxIPS
 	docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
 	docker run -it --rm --net=host slips
-	./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
+	./slips.py -c config/slips.yaml -f dataset/test3-mixed.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
 

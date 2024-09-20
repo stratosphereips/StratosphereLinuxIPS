@@ -21,7 +21,7 @@ Either you are [running Slips in docker](https://stratospherelinuxips.readthedoc
 
 ## Reading the input
 
-The table below shows the commands Slips uses for different inputs. The first part of the command **./slips.py -c config/slips.conf** is same, the second part changes depending on the input type. Also, the user can execute **./slips.py --help** to find correct argument to run Slips on each type of the file.
+The table below shows the commands Slips uses for different inputs. The first part of the command **./slips.py -c config/slips.yaml** is same, the second part changes depending on the input type. Also, the user can execute **./slips.py --help** to find correct argument to run Slips on each type of the file.
 
 <style>
 table {
@@ -89,8 +89,8 @@ tr:nth-child(even) {
 
 (*) To find the interface in Linux, you can use the command ```ifconfig```.
 
-There is also a configuration file **config/slips.conf** where the user can set up parameters for Slips execution and models
-separately. Configuration of the **config/slips.conf** is described [here](#modifying-the-configuration-file).
+There is also a configuration file **config/slips.yaml** where the user can set up parameters for Slips execution and models
+separately. Configuration of the **config/slips.yaml** is described [here](#modifying-the-configuration-file).
 
 ## Daemonized vs interactive mode
 
@@ -99,7 +99,7 @@ Slips has 2 modes, interactive and daemonized.
 **Daemonized** : means , output, logs and alerts are written in files.
 
 In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and
-```logsfile``` files specified in ```config/slips.conf```
+```logsfile``` files specified in ```config/slips.yaml```
 
 by default, these are the paths used
 
@@ -113,7 +113,7 @@ creat /var/log/slips as root and slips will use it by default.
 If slips can't write there, slips will store the logs in the ```Slips/output/``` dir by default.
 
 NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
- instead of the otput_dir specified in config/slips.conf
+ instead of the otput_dir specified in config/slips.yaml
 
 
 
@@ -424,7 +424,7 @@ whitelists all evidence and alerts from and to these domains. Slips still shows 
 
 
 The tranco list is updated daily by default in Slips, but you can change how often to update it using the
-```online_whitelist_update_period``` key in config/slips.conf.
+```online_whitelist_update_period``` key in config/slips.yaml.
 
 
 
@@ -487,7 +487,7 @@ Comments starting with `#` will cause Slips to attempt to remove that entry from
 
 Slips Support displaying popup notifications whenever there's an alert.
 
-This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.conf```
+This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.yaml```
 
 This feature is supported in Linux and it requires root privileges.
 
@@ -514,13 +514,13 @@ Even when Slips is run using sudo, it drops root privileges  in modules that don
 
 ## Modifying the configuration file
 
-Slips has a ```config/slips.conf``` the contains user configurations for different modules and general execution. Below are some of Slips features that can be modifie with respect to the user preferences.
+Slips has a ```config/slips.yaml``` the contains user configurations for different modules and general execution. Below are some of Slips features that can be modifie with respect to the user preferences.
 
 ### Generic configuration
 
 **Time window width.**
 
-Each IP address that appears in the network traffic of the input is represented as a profile in Slips. Each profile is divided into time windows. Each time window is 1 hour long by default, and it gathers the network traffic and its behaviour for the period of 1 hour. The duration of the timewindow can be changed in the the config/slips.conf using
+Each IP address that appears in the network traffic of the input is represented as a profile in Slips. Each profile is divided into time windows. Each time window is 1 hour long by default, and it gathers the network traffic and its behaviour for the period of 1 hour. The duration of the timewindow can be changed in the the config/slips.yaml using
 
 ```time_window_width```
 
@@ -609,7 +609,7 @@ DISCLAIMER: zeek generates log files that grow every second until they reach GBs
 Slips deletes all zeek log files after 1 day when running on an
 interface. this is called zeek rotation and is enabled by default.
 
-You can disable rotation by setting ```rotation``` to ```no``` in ```config/slips.conf```
+You can disable rotation by setting ```rotation``` to ```no``` in ```config/slips.yaml```
 
 Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#rotation) for more info
 
@@ -632,7 +632,7 @@ Rotation is done in zeek files to avoid growing zeek log files and save disk spa
 
 Rotating is only enabled when running on an interface.
 
-By default, Slips rotates zeek files every 1 day. this can be changed in ```config/slips.conf```
+By default, Slips rotates zeek files every 1 day. this can be changed in ```config/slips.yaml```
 by changing the value of ```rotation_period```
 
 ```rotation_period``` value can be written as a numeric constant followed by a time unit where
@@ -662,7 +662,7 @@ To change them, We use ```-v``` for verbosity and ```-e``` for debugging
 
 For example:
 
-```./slips.py -c config/slips.conf -v 2 -e 1 -f zeek_dir ```
+```./slips.py -c config/slips.yaml -v 2 -e 1 -f zeek_dir ```
 
 Verbosity is about less or more information on the normal work of slips.
 
@@ -757,14 +757,14 @@ Zeek output is suppressed by default, so if your script has errors, Slips will f
 ## Exporting strato letters
 
 Exporting the strato letters can be done by enabling the `export_strato_letters` option in
-`config/slips.conf` . once enabled, Slips will export the strato letters to `strato_letters.tsv` in the output directory.
+`config/slips.yaml` . once enabled, Slips will export the strato letters to `strato_letters.tsv` in the output directory.
 this file can be used for training Slips RNN module.
 
 
 
 ## Slips parameters
 
-- ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.conf
+- ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.yaml
 - ```-v``` or  ```--verbose``` Verbosity level. This logs more info about Slips.
 - ```-e``` or  ```--debug``` Debugging level. This shows more detailed errors.
 - ```-f``` or  ```--filepath``` Read and automatically recognize a Zeek dir, a Zeek conn.log file, a Suricata JSON file, Argus, PCAP.
