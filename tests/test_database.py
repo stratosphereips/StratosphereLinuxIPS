@@ -6,12 +6,11 @@ import pytest
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     Direction,
     IoCType,
     EvidenceType,
-    IDEACategory,
     Attacker,
     Victim,
     ThreatLevel,
@@ -50,7 +49,7 @@ def test_getProfileIdFromIP():
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
 
     # add a profile
-    db.add_profile("profile_192.168.1.1", "00:00", "1")
+    db.add_profile("profile_192.168.1.1", "00:00")
     # try to retrieve it
     assert db.get_profileid_from_ip(test_ip) is not False
 
@@ -61,7 +60,7 @@ def test_timewindows():
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     profileid = "profile_192.168.1.1"
     # add a profile
-    db.add_profile(profileid, "00:00", "1")
+    db.add_profile(profileid, "00:00")
     # add a tw to that profile (first tw)
     db.add_new_tw(profileid, "timewindow1", 0.0)
     # add  a new tw (last tw)
@@ -73,7 +72,7 @@ def test_timewindows():
 def test_add_ips():
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     # add a profile
-    db.add_profile(profileid, "00:00", "1")
+    db.add_profile(profileid, "00:00")
     # add a tw to that profile
     db.add_new_tw(profileid, "timewindow1", 0.0)
     # make sure ip is added
@@ -117,7 +116,6 @@ def test_set_evidence():
         timewindow=TimeWindow(number=1),
         uid=uid,
         timestamp=timestamp,
-        category=IDEACategory.INFO,
     )
 
     db.set_evidence(evidence)

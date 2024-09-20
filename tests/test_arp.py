@@ -1,11 +1,11 @@
-"""Unit test for ../arp.py"""
+"""Unit test for modules/arp.py"""
 
 from tests.module_factory import ModuleFactory
 import json
 import ipaddress
 import pytest
-from slips_files.core.evidence_structure.evidence import EvidenceType
-
+from slips_files.core.structures.evidence import EvidenceType
+from slips_files.core.flows.zeek import ARP
 
 profileid = "profile_192.168.1.1"
 twid = "timewindow1"
@@ -31,17 +31,23 @@ twid = "timewindow1"
     ],
 )
 def test_check_dstip_outside_localnet(daddr, saddr, expected_result):
-    ARP = ModuleFactory().create_arp_obj()
-    profileid = f"profile_{saddr}"
-    twid = "timewindow1"
-    uid = "1234"
-    ts = "1632214645.783595"
-
-    ARP.home_network = [ipaddress.IPv4Network("192.168.0.0/16")]
-
-    result = ARP.check_dstip_outside_localnet(
-        profileid, twid, daddr, uid, saddr, ts
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr=saddr,
+        daddr=daddr,
+        smac="",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
     )
+    twid = "timewindow1"
+
+    arp.home_network = [ipaddress.IPv4Network("192.168.0.0/16")]
+
+    result = arp.check_dstip_outside_localnet(twid, flow)
     assert result == expected_result
 
 
@@ -104,109 +110,151 @@ def test_check_dstip_outside_localnet(daddr, saddr, expected_result):
 def test_detect_unsolicited_arp(
     dst_mac, dst_hw, src_mac, src_hw, expected_result
 ):
-    ARP = ModuleFactory().create_arp_obj()
-    profileid = "profile_192.168.1.1"
-    twid = "timewindow1"
-    uid = "1234"
-    ts = "1632214645.783595"
-
-    result = ARP.detect_unsolicited_arp(
-        profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="1.1.1.1",
+        smac=src_mac,
+        dmac=dst_mac,
+        src_hw=src_hw,
+        dst_hw=dst_hw,
+        operation="",
     )
+    twid = "timewindow1"
+
+    result = arp.detect_unsolicited_arp(twid, flow)
     assert result == expected_result
 
 
-def test_detect_MITM_ARP_attack_with_original_ip():
-    ARP = ModuleFactory().create_arp_obj()
+def test_detect_mitm_arp_attack_with_original_ip():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
+
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.3"
     original_ip = "192.168.1.1"
     gateway_ip = "192.168.1.254"
     gateway_mac = "aa:bb:cc:dd:ee:ff"
-    src_mac = "44:11:44:11:44:11"
 
-    ARP.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    ARP.db.get_gateway_ip.return_value = gateway_ip
-    ARP.db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is True
 
 
-def test_detect_MITM_ARP_attack_same_ip():
-    ARP = ModuleFactory().create_arp_obj()
+def test_detect_mitm_arp_attack_same_ip():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.1"
     original_ip = "192.168.1.1"
     gateway_ip = "192.168.1.254"
     gateway_mac = "aa:bb:cc:dd:ee:ff"
-    src_mac = "44:11:44:11:44:11"
 
-    ARP.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    ARP.db.get_gateway_ip.return_value = gateway_ip
-    ARP.db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is None
 
 
 def test_detect_mitm_arp_attack_gateway_mac():
-    ARP = ModuleFactory().create_arp_obj()
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.3"
     original_ip = "192.168.1.1"
     gateway_ip = "192.168.1.254"
     gateway_mac = "44:11:44:11:44:11"
-    src_mac = "44:11:44:11:44:11"
 
-    ARP.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    ARP.db.get_gateway_ip.return_value = gateway_ip
-    ARP.db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is True
 
 
-def test_detect_MITM_ARP_attack_gateway_ip_as_victim():
-    ARP = ModuleFactory().create_arp_obj()
+def test_detect_mitm_arp_attack_gateway_ip_as_victim():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.3"
     original_ip = "192.168.1.254"
     gateway_ip = "192.168.1.254"
     gateway_mac = "aa:bb:cc:dd:ee:ff"
-    src_mac = "44:11:44:11:44:11"
 
-    ARP.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    ARP.db.get_gateway_ip.return_value = gateway_ip
-    ARP.db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is True
 
 
-def test_detect_MITM_ARP_attack_no_original_ip():
-    ARP = ModuleFactory().create_arp_obj()
+def test_detect_mitm_arp_attack_no_original_ip():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.3"
     gateway_ip = "192.168.1.254"
     gateway_mac = "aa:bb:cc:dd:ee:ff"
-    src_mac = "44:11:44:11:44:11"
 
-    ARP.db.get_ip_of_mac.return_value = None
-    ARP.db.get_gateway_ip.return_value = gateway_ip
-    ARP.db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = None
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is None
 
 
@@ -216,16 +264,14 @@ def test_set_evidence_arp_scan():
     ARP = ModuleFactory().create_arp_obj()
     ts = "1632214645.783595"
     uids = ["5678", "1234"]
-    conn_count = 5
 
-    ARP.set_evidence_arp_scan(ts, profileid, twid, uids, conn_count)
+    ARP.set_evidence_arp_scan(ts, profileid, twid, uids)
 
     ARP.db.set_evidence.assert_called_once()
     call_args = ARP.db.set_evidence.call_args[0]
     evidence = call_args[0]
     assert evidence.evidence_type == EvidenceType.ARP_SCAN
     assert evidence.attacker.value == "192.168.1.1"
-    assert evidence.conn_count == conn_count
     assert set(evidence.uid) == set(uids)
 
 
@@ -245,9 +291,19 @@ def test_set_evidence_arp_scan():
     ],
 )
 def test_check_if_gratutitous_arp(operation, dst_hw, expected_result):
-    """Tests check_if_gratutitous_ARP function"""
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw=dst_hw,
+        operation=operation,
+    )
     arp = ModuleFactory().create_arp_obj()
-    result = arp.check_if_gratutitous_ARP(dst_hw, operation)
+    result = arp.check_if_gratutitous_arp(flow)
     assert result == expected_result
 
 

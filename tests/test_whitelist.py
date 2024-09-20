@@ -2,7 +2,7 @@ from tests.module_factory import ModuleFactory
 import pytest
 import json
 from unittest.mock import MagicMock, patch, Mock
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Direction,
     IoCType,
     Attacker,

@@ -1,12 +1,14 @@
 import warnings
 import json
 from typing import Dict
+from uuid import uuid4
+
 import numpy as np
 from tensorflow.keras.models import load_model
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
     TimeWindow,
@@ -15,10 +17,9 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
     Proto,
-    Tag,
     Victim,
+    Method,
 )
 from modules.rnn_cc_detection.strato_letters_exporter import (
     StratoLettersExporter,
@@ -65,16 +66,20 @@ class CCDetection(IModule):
         srcip = profileid.split("_")[-1]
         portproto: str = f"{port}/{proto}"
         port_info: str = self.db.get_port_info(portproto)
-        ip_identification: str = self.db.get_ip_identification(dstip)
         description: str = (
             f"C&C channel, client IP: {srcip} server IP: {dstip} "
             f'port: {port_info.upper() if port_info else ""} {portproto} '
-            f'score: {format(score, ".4f")}. {ip_identification}'
+            f'score: {format(score, ".4f")}.'
         )
 
         timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
         twid_int = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence: Evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
@@ -89,14 +94,15 @@ class CCDetection(IModule):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.BOTNET,
-            port=int(port),
+            dst_port=int(port),
             proto=Proto(proto.lower()) if proto else None,
+            method=Method.AI,
         )
         self.db.set_evidence(evidence)
 
         evidence: Evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=dstip
@@ -111,10 +117,9 @@ class CCDetection(IModule):
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
             timestamp=timestamp,
-            category=IDEACategory.INTRUSION_BOTNET,
-            source_target_tag=Tag.CC,
-            port=int(port),
+            dst_port=int(port),
             proto=Proto(proto.lower()) if proto else None,
+            method=Method.AI,
         )
 
         self.db.set_evidence(evidence)
@@ -226,7 +231,7 @@ class CCDetection(IModule):
                 twid,
             )
             to_send = {
-                "attacker_type": utils.detect_data_type(flow["daddr"]),
+                "attacker_type": utils.detect_ioc_type(flow["daddr"]),
                 "profileid": profileid,
                 "twid": twid,
                 "flow": flow,

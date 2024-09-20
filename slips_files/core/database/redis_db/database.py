@@ -1,9 +1,13 @@
+from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.core.database.redis_db.constants import (
+    Constants,
+    Channels,
+)
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
-from slips_files.common.abstracts.observer import IObservable
 
 import os
 import signal
@@ -25,11 +29,13 @@ from typing import (
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
-class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
+class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
     _obj = None
     _port = None
+    constants = Constants()
+    channels = Channels()
     # Stores instances per port
     _instances = {}
     supported_channels = {
@@ -76,8 +82,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         "new_module_flow" "cpu_profile",
         "memory_profile",
     }
-    # The name is used to print in the outputprocess
-    name = "DB"
     separator = "_"
     normal_label = "benign"
     malicious_label = "malicious"
@@ -115,6 +119,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         cls.flush_db = flush_db
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
+        cls.printer = Printer(logger, cls.name)
 
         if cls.redis_port not in cls._instances:
             cls._set_redis_options()
@@ -137,13 +142,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
         return cls._instances[cls.redis_port]
 
-    def __init__(
-        self, logger, redis_port, start_redis_server=True, flush_db=True
-    ):
-        # the main purpose of this init is to call the parent's __init__
-        IObservable.__init__(self)
-        self.add_observer(logger)
-        self.observer_added = True
+    def __init__(self, *args, **kwargs):
+        pass
 
     @classmethod
     def _set_redis_options(cls):
@@ -203,8 +203,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         cls.r.set("slips_internal_time", timestamp)
 
     @classmethod
-    def get_slips_start_time(cls):
-        """get the time slips started (datetime obj)"""
+    def get_slips_start_time(cls) -> str:
+        """get the time slips started"""
         if start_time := cls.r.get("slips_start_time"):
             start_time = utils.convert_format(start_time, utils.alerts_format)
             return start_time
@@ -432,39 +432,33 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
                 self.connection_retry += 1
                 self.get_message(channel, timeout)
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
-
-    def get_ip_info(self, ip: str) -> dict:
+    def get_ip_info(self, ip: str) -> Optional[dict]:
         """
         Return information about this IP from IPsInfo key
         :return: a dictionary or False if there is no IP in the database
         """
-        data = self.rcache.hget("IPsInfo", ip)
-        return json.loads(data) if data else False
+        data = self.rcache.hget(self.constants.IPS_INFO, ip)
+        return json.loads(data) if data else None
+
+    def _get_from_ip_info(self, ip: str, info_to_get: str):
+        """
+        :param ip: the key to get from the ip info hash
+        :param info_to_get: the value to get from the ip info hash
+        """
+        if utils.is_ignored_ip(ip):
+            return
+
+        ip_info = self.get_ip_info(ip)
+        if not ip_info:
+            return
+
+        info = ip_info.get(info_to_get)
+        if not info:
+            return
+        return info
 
     def set_new_ip(self, ip: str):
         """
@@ -482,12 +476,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # Its VERY important that the data of the first time we see an IP
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an IP exists or not
-            self.rcache.hset("IPsInfo", ip, "{}")
+            self.rcache.hset(self.constants.IPS_INFO, ip, "{}")
             # Publish that there is a new IP ready in the channel
             self.publish("new_ip", ip)
 
     def ask_for_ip_info(
-        self, ip, profileid, twid, proto, starttime, uid, ip_state, daddr=False
+        self, ip, profileid, twid, flow, ip_state, daddr=False
     ):
         """
         is the ip param src or dst
@@ -498,10 +492,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             profileid,
             twid,
             ip_state,
-            starttime,
-            uid,
+            flow.starttime,
+            flow.uid,
             daddr,
-            proto=proto,
+            proto=flow.proto.upper(),
             lookup=ip,
         )
 
@@ -617,7 +611,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
     def set_ip_info(self, ip: str, to_store: dict):
         """
         Store information for this IP
-        We receive a dictionary, such as {'geocountry': 'rumania'} to
+        We receive a dictionary, such as {
+        'geocountry': 'rumania'} to
         store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
@@ -637,7 +632,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
 
             cached_ip_info[info_type] = info_val
 
-        self.rcache.hset("IPsInfo", ip, json.dumps(cached_ip_info))
+        self.rcache.hset(
+            self.constants.IPS_INFO, ip, json.dumps(cached_ip_info)
+        )
         if is_new_info:
             self.r.publish("ip_info_change", ip)
 
@@ -840,9 +837,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
             # these ips will be associated with the query in our db
             ips_to_add.append(answer)
 
-            #  For each CNAME in the answer
-            # store it in DomainsInfo in the cache db (used for kalipso)
-            # and in CNAMEsInfo in the maion db  (used for detecting dns without resolution)
+        # For each CNAME in the answer
+        # store it in DomainsInfo in the cache db (used for kalipso)
+        # and in CNAMEsInfo in the main db  (used for detecting dns
+        # without resolution)
         if ips_to_add:
             domaindata = {"IPs": ips_to_add}
             # if an ip came in the DNS answer along with the last seen CNAME
@@ -997,13 +995,39 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         """Did slips mark the given dir as growing?"""
         return "yes" in str(self.r.get("growing_zeek_dir"))
 
+    def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
+        """
+        returns asn info about the given IP
+        returns a dict with "number" and "org" keys
+        """
+        return self._get_from_ip_info(ip, "asn")
+
+    def get_rdns_info(self, ip: str) -> Optional[str]:
+        """
+        returns rdns info about the given IP
+        returns a str with the rdns or none
+        """
+        return self._get_from_ip_info(ip, "reverse_dns")
+
+    def get_sni_info(self, ip: str) -> Optional[str]:
+        """
+        returns sni info about the given IP
+        returns the server name or none
+        """
+        sni = self._get_from_ip_info(ip, "SNI")
+        if not sni:
+            return
+        sni = sni[0] if isinstance(sni, list) else sni
+        return sni.get("server_name")
+
     def get_ip_identification(self, ip: str, get_ti_data=True) -> str:
         """
         Return the identification of this IP based
         on the AS, rDNS, and SNI of the IP.
 
         :param ip: The IP address to retrieve information for.
-        :param get_ti_data: do we want to get info about this IP from out TI lists?
+        :param get_ti_data: do we want to get info about this IP from out
+        TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
         ip_info = self.get_ip_info(ip)
@@ -1011,24 +1035,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         if not ip_info:
             return id
 
-        asn = ip_info.get("asn", "")
-        if asn:
+        if asn := self.get_asn_info(ip):
             asn_org = asn.get("org", "")
             asn_number = asn.get("number", "")
             id += f" AS: {asn_org} {asn_number}"
 
-        sni = ip_info.get("SNI", "")
-        if sni:
-            sni = sni[0] if isinstance(sni, list) else sni
-            id += f' SNI: {sni["server_name"]}, '
+        if sni := self.get_sni_info(ip):
+            id += f" SNI: {sni}, "
 
-        rdns = ip_info.get("reverse_dns", "")
-        if rdns:
+        if rdns := self.get_rdns_info(ip):
             id += f" rDNS: {rdns}, "
 
         threat_intel = ip_info.get("threatintelligence", "")
         if threat_intel and get_ti_data:
-            id += f" IP seen in blacklist: {threat_intel['source']}."
+            id += f" appears in blacklist: {threat_intel['source']}."
 
         id = id.rstrip(", ")
         return id
@@ -1141,6 +1161,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         dns_resolutions = self.r.hgetall("DNSresolution")
         return dns_resolutions or []
 
+    def is_running_non_stop(self) -> bool:
+        """
+        Slips runs non-stop in case of an interface or a growing zeek dir,
+        in these 2 cases, it only stops on ctrl+c
+        """
+        return (
+            self.get_input_type() == "interface" or self.is_growing_zeek_dir()
+        )
+
     def set_passive_dns(self, ip, data):
         """
         Save in DB passive DNS from virus total
@@ -1169,13 +1198,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, IObservable):
         data = json.dumps(data)
         self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
 
-    def get_host_ip(self):
-        """Get the IP addresses of the host from a db. There can be more than one"""
-        return self.r.smembers("hostIP")
+    def get_host_ip(self) -> Optional[str]:
+        """Greturns the latest added host ip"""
+        host_ip: List[str] = self.r.zrevrange(
+            "host_ip", 0, 0, withscores=False
+        )
+        return host_ip[0] if host_ip else None
 
     def set_host_ip(self, ip):
-        """Store the IP address of the host in a db. There can be more than one"""
-        self.r.sadd("hostIP", ip)
+        """Store the IP address of the host in a db.
+        There can be more than one"""
+        # stored them in a sorted set to be able to retrieve the latest one
+        # of them as the host ip
+        host_ips_added = self.r.zcard("host_ip")
+        self.r.zadd("host_ip", {ip: host_ips_added + 1})
 
     def set_asn_cache(self, org: str, asn_range: str, asn_number: str) -> None:
         """

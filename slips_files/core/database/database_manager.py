@@ -1,13 +1,18 @@
-from typing import List
+from typing import (
+    List,
+    Dict,
+)
 
+from slips_files.common.printer import Printer
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.observer import IObservable
+from slips_files.core.structures.evidence import Evidence
+from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
 
 
-class DBManager(IObservable):
+class DBManager:
     """
     This class will be calling methods from the appropriate db.
     each method added to any of the dbs should have a
@@ -28,8 +33,7 @@ class DBManager(IObservable):
         self.output_dir = output_dir
         self.redis_port = redis_port
         self.logger = logger
-        IObservable.__init__(self)
-        self.add_observer(self.logger)
+        self.printer = Printer(self.logger, self.name)
         self.rdb = RedisDB(
             self.logger, redis_port, start_redis_server, **kwargs
         )
@@ -40,6 +44,9 @@ class DBManager(IObservable):
         self.sqlite = None
         if start_sqlite:
             self.sqlite = self.create_sqlite_db(output_dir)
+
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def create_sqlite_db(self, output_dir):
         return SQLiteDB(self.logger, output_dir)
@@ -70,8 +77,8 @@ class DBManager(IObservable):
     def get_message(self, *args, **kwargs):
         return self.rdb.get_message(*args, **kwargs)
 
-    def print(self, *args, **kwargs):
-        return self.rdb.print(*args, **kwargs)
+    def is_running_non_stop(self, *args, **kwargs):
+        return self.rdb.is_running_non_stop(*args, **kwargs)
 
     def get_ip_info(self, *args, **kwargs):
         return self.rdb.get_ip_info(*args, **kwargs)
@@ -103,6 +110,15 @@ class DBManager(IObservable):
 
     def mark_profile_as_malicious(self, *args, **kwargs):
         return self.rdb.mark_profile_as_malicious(*args, **kwargs)
+
+    def get_asn_info(self, *args, **kwargs):
+        return self.rdb.get_asn_info(*args, **kwargs)
+
+    def get_rdns_info(self, *args, **kwargs):
+        return self.rdb.get_rdns_info(*args, **kwargs)
+
+    def get_sni_info(self, *args, **kwargs):
+        return self.rdb.get_sni_info(*args, **kwargs)
 
     def get_equivalent_tws(self, *args, **kwargs):
         return self.rdb.get_equivalent_tws(*args, **kwargs)
@@ -384,6 +400,21 @@ class DBManager(IObservable):
     def set_evidence(self, *args, **kwargs):
         return self.rdb.set_evidence(*args, **kwargs)
 
+    def set_alert(
+        self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
+    ):
+        """
+        Sets the alert in the rdb and sqlite databases and labels each flow
+        that was responsible for this alert as "malicious"
+        """
+        self.rdb.set_alert(alert)
+        self.sqlite.add_alert(alert)
+
+        for evidence_id in evidence_causing_the_alert.keys():
+            uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
+            self.set_flow_label(uids, "malicious")
+        return
+
     def get_user_agents_count(self, *args, **kwargs):
         return self.rdb.get_user_agents_count(*args, **kwargs)
 
@@ -423,8 +454,8 @@ class DBManager(IObservable):
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
 
-    def get_loaded_ti_files(self, *args, **kwargs):
-        return self.rdb.get_loaded_ti_files(*args, **kwargs)
+    def get_loaded_ti_feeds(self, *args, **kwargs):
+        return self.rdb.get_loaded_ti_feeds(*args, **kwargs)
 
     def mark_as_analyzed_by_ti_module(self, *args, **kwargs):
         return self.rdb.mark_as_analyzed_by_ti_module(*args, **kwargs)
@@ -471,77 +502,59 @@ class DBManager(IObservable):
     def add_ssl_sha1_to_IoC(self, *args, **kwargs):
         return self.rdb.add_ssl_sha1_to_IoC(*args, **kwargs)
 
-    def get_malicious_ip_ranges(self, *args, **kwargs):
-        return self.rdb.get_malicious_ip_ranges(*args, **kwargs)
+    def get_all_blacklisted_ip_ranges(self, *args, **kwargs):
+        return self.rdb.get_all_blacklisted_ip_ranges(*args, **kwargs)
 
-    def get_IPs_in_IoC(self, *args, **kwargs):
-        return self.rdb.get_IPs_in_IoC(*args, **kwargs)
+    def get_all_blacklisted_ips(self, *args, **kwargs):
+        return self.rdb.get_all_blacklisted_ips(*args, **kwargs)
 
-    def get_Domains_in_IoC(self, *args, **kwargs):
-        return self.rdb.get_Domains_in_IoC(*args, **kwargs)
+    def get_all_blacklisted_domains(self, *args, **kwargs):
+        return self.rdb.get_all_blacklisted_domains(*args, **kwargs)
 
-    def get_ja3_in_IoC(self, *args, **kwargs):
-        return self.rdb.get_ja3_in_IoC(*args, **kwargs)
+    def get_all_blacklisted_ja3(self, *args, **kwargs):
+        return self.rdb.get_all_blacklisted_ja3(*args, **kwargs)
 
-    def is_malicious_jarm(self, *args, **kwargs):
-        return self.rdb.is_malicious_jarm(*args, **kwargs)
+    def is_blacklisted_jarm(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_jarm(*args, **kwargs)
 
-    def search_IP_in_IoC(self, *args, **kwargs):
-        return self.rdb.search_IP_in_IoC(*args, **kwargs)
+    def is_blacklisted_ip(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_ip(*args, **kwargs)
 
-    def set_malicious_ip(self, *args, **kwargs):
-        return self.rdb.set_malicious_ip(*args, **kwargs)
+    def is_blacklisted_ssl(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_ssl(*args, **kwargs)
 
-    def set_malicious_domain(self, *args, **kwargs):
-        return self.rdb.set_malicious_domain(*args, **kwargs)
+    def is_blacklisted_domain(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_domain(*args, **kwargs)
 
-    def get_malicious_ip(self, *args, **kwargs):
-        return self.rdb.get_malicious_ip(*args, **kwargs)
-
-    def get_malicious_domain(self, *args, **kwargs):
-        return self.rdb.get_malicious_domain(*args, **kwargs)
-
-    def get_ssl_info(self, *args, **kwargs):
-        return self.rdb.get_ssl_info(*args, **kwargs)
-
-    def is_domain_malicious(self, *args, **kwargs):
-        return self.rdb.is_domain_malicious(*args, **kwargs)
-
-    def delete_feed(self, *args, **kwargs):
-        return self.rdb.delete_feed(*args, **kwargs)
+    def delete_feed_entries(self, *args, **kwargs):
+        return self.rdb.delete_feed_entries(*args, **kwargs)
 
     def is_profile_malicious(self, *args, **kwargs):
         return self.rdb.is_profile_malicious(*args, **kwargs)
 
-    def set_TI_file_info(self, *args, **kwargs):
-        return self.rdb.set_TI_file_info(*args, **kwargs)
+    def set_ti_feed_info(self, *args, **kwargs):
+        return self.rdb.set_ti_feed_info(*args, **kwargs)
 
-    def set_last_update_time(self, *args, **kwargs):
-        return self.rdb.set_last_update_time(*args, **kwargs)
+    def set_feed_last_update_time(self, *args, **kwargs):
+        return self.rdb.set_feed_last_update_time(*args, **kwargs)
 
-    def get_TI_file_info(self, *args, **kwargs):
-        return self.rdb.get_TI_file_info(*args, **kwargs)
+    def get_ti_feed_info(self, *args, **kwargs):
+        return self.rdb.get_ti_feed_info(*args, **kwargs)
 
-    def delete_file_info(self, *args, **kwargs):
-        return self.rdb.delete_file_info(*args, **kwargs)
+    def delete_ti_feed(self, *args, **kwargs):
+        return self.rdb.delete_ti_feed(*args, **kwargs)
 
-    def getURLData(self, *args, **kwargs):
-        return self.rdb.getURLData(*args, **kwargs)
-
-    def setNewURL(self, *args, **kwargs):
-        return self.rdb.setNewURL(*args, **kwargs)
+    def is_cached_url_by_vt(self, *args, **kwargs):
+        return self.rdb.is_cached_url_by_vt(*args, **kwargs)
 
     def get_domain_data(self, *args, **kwargs):
         return self.rdb.get_domain_data(*args, **kwargs)
 
-    def set_new_domain(self, *args, **kwargs):
-        return self.rdb.set_new_domain(*args, **kwargs)
-
     def set_info_for_domains(self, *args, **kwargs):
         return self.rdb.set_info_for_domains(*args, **kwargs)
 
-    def set_info_for_urls(self, *args, **kwargs):
-        return self.rdb.set_info_for_urls(*args, **kwargs)
+    def cache_url_info_by_virustotal(self, *args, **kwargs):
+        return self.rdb.cache_url_info_by_virustotal(*args, **kwargs)
 
     def get_data_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_data_from_profile_tw(*args, **kwargs)
@@ -608,8 +621,8 @@ class DBManager(IObservable):
             *args, **kwargs
         )
 
-    def markProfileTWAsBlocked(self, *args, **kwargs):
-        return self.rdb.markProfileTWAsBlocked(*args, **kwargs)
+    def mark_profile_and_timewindow_as_blocked(self, *args, **kwargs):
+        return self.rdb.mark_profile_and_timewindow_as_blocked(*args, **kwargs)
 
     def getBlockedProfTW(self, *args, **kwargs):
         return self.rdb.getBlockedProfTW(*args, **kwargs)
@@ -784,11 +797,9 @@ class DBManager(IObservable):
 
     def label_flows_causing_alert(self, evidence_ids: List[str]):
         """
+        Uses sqlite and rdb
         :param evidence_ids: list of ids of evidence causing an alert
         """
-        for evidence_id in evidence_ids:
-            uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
-            self.set_flow_label(uids, "malicious")
 
     def set_mac_vendor_to_profile(self, *args, **kwargs):
         return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
@@ -901,13 +912,8 @@ class DBManager(IObservable):
     def get_branch(self, *args, **kwargs):
         return self.rdb.get_branch(*args, **kwargs)
 
-    def add_alert(self, alert: dict):
-        twid_starttime: float = self.rdb.get_tw_start_time(
-            alert["profileid"], alert["twid"]
-        )
-        twid_endtime: float = twid_starttime + RedisDB.width
-        alert.update({"tw_start": twid_starttime, "tw_end": twid_endtime})
-        return self.sqlite.add_alert(alert)
+    def get_tw_limits(self, *args, **kwargs):
+        return self.rdb.get_tw_limits(*args, **kwargs)
 
     def close(self, *args, **kwargs):
         self.rdb.r.close()

@@ -1,7 +1,6 @@
 from typing import Optional, Dict, List
 
-
-from slips_files.common.abstracts.observer import IObservable
+from slips_files.common.printer import Printer
 from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 from slips_files.core.helpers.whitelist.mac_whitelist import MACAnalyzer
@@ -11,18 +10,18 @@ from slips_files.core.helpers.whitelist.organization_whitelist import (
 )
 from slips_files.core.helpers.whitelist.whitelist_parser import WhitelistParser
 from slips_files.core.output import Output
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     Direction,
     Attacker,
 )
 
 
-class Whitelist(IObservable):
+class Whitelist:
+    name = "Whitelist"
+
     def __init__(self, logger: Output, db):
-        IObservable.__init__(self)
-        self.logger = logger
-        self.add_observer(self.logger)
+        self.printer = Printer(logger, self.name)
         self.name = "whitelist"
         self.db = db
         self.match = WhitelistMatcher()
@@ -42,34 +41,6 @@ class Whitelist(IObservable):
         self.db.set_whitelist("domains", self.parser.whitelisted_domains)
         self.db.set_whitelist("organizations", self.parser.whitelisted_orgs)
         self.db.set_whitelist("macs", self.parser.whitelisted_mac)
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        # the only observer we have for now in the output.
-        # used for logging the msgs too cli and slips log files
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
 
     def _check_if_whitelisted_domains_of_flow(self, flow) -> bool:
         dst_domains_to_check: List[str] = (

@@ -318,12 +318,20 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 
 	sudo pip3 install -r install/requirements.txt
 
-_Note: for those using a different base image, you need to also install tensorflow==2.16.1 via pip3._
+_Note: for those using a different base image, you need to also install tensorflow==2.16.1r via pip3._
+
+Install IDMEFv2 python library, required for logging slips evidence.
+
+    git clone https://github.com/IDMEFv2/python-idmefv2  \
+      && cd python-idmefv2 \
+      && git submodule update --init --recursive \
+      && python3 setup.py install && cd ..
+
 
 As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs v19. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
 
     curl -fsSL https://deb.nodesource.com/setup_21.x |  sudo -E bash - && sudo apt install -y --no-install-recommends nodejs
-    cd modules/kalipso &&  npm install
+    cd modules/kalipso && npm install
 
 ####  Installing Zeek
 

@@ -7,6 +7,7 @@ from unittest.mock import (
 )
 import os
 
+from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
 from slips_files.core.database.database_manager import DBManager
 
@@ -55,7 +56,7 @@ from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
 from slips_files.common.markov_chains import Matrix
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
     Evidence,
@@ -83,7 +84,7 @@ def check_zeek_or_bro():
 
 
 MODULE_DB_MANAGER = "slips_files.common.abstracts.module.DBManager"
-CORE_DB_MANAGER = "slips_files.common.abstracts.core.DBManager"
+# CORE_DB_MANAGER = "slips_files.common.abstracts.core.DBManager"
 DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
@@ -248,7 +249,7 @@ class ModuleFactory:
         flowalerts = self.create_flowalerts_obj()
         return Software(flowalerts.db, flowalerts=flowalerts)
 
-    @patch(CORE_DB_MANAGER, name="mock_db")
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_input_obj(
         self, input_information, input_type, mock_db, line_type=False
     ):
@@ -268,6 +269,7 @@ class ModuleFactory:
             is_profiler_done_event=Mock(),
             termination_event=Mock(),
         )
+        input.db = mock_db
         input.is_done_processing = do_nothing
         input.bro_timeout = 1
         # override the print function to avoid broken pipes
@@ -314,7 +316,7 @@ class ModuleFactory:
         leak_detector.pcap = test_pcap
         return leak_detector
 
-    @patch(CORE_DB_MANAGER, name="mock_db")
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_profiler_obj(self, mock_db):
         profiler = Profiler(
             self.logger,
@@ -333,6 +335,9 @@ class ModuleFactory:
 
     def create_redis_manager_obj(self, main):
         return RedisManager(main)
+
+    def create_host_ip_manager_obj(self, main):
+        return HostIPManager(main)
 
     def create_process_manager_obj(self):
         return ProcessManager(self.create_main_obj())
@@ -441,17 +446,14 @@ class ModuleFactory:
         description,
         attacker,
         threat_level,
-        category,
         victim,
         profile,
         timewindow,
         uid,
         timestamp,
         proto,
-        port,
-        source_target_tag,
+        dst_port,
         id,
-        conn_count,
         confidence,
     ):
         return Evidence(
@@ -459,17 +461,14 @@ class ModuleFactory:
             description=description,
             attacker=attacker,
             threat_level=threat_level,
-            category=category,
             victim=victim,
             profile=profile,
             timewindow=timewindow,
             uid=uid,
             timestamp=timestamp,
             proto=proto,
-            port=port,
-            source_target_tag=source_target_tag,
+            dst_port=dst_port,
             id=id,
-            conn_count=conn_count,
             confidence=confidence,
         )
 

@@ -10,10 +10,11 @@ from typing import (
     Dict,
     List,
 )
+from uuid import uuid4
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
     TimeWindow,
@@ -23,8 +24,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -168,7 +167,7 @@ class LeakDetector(IModule):
                         except KeyError:
                             return
 
-                        return (srcip, dstip, proto, sport, dport, ts)
+                        return srcip, dstip, proto, sport, dport, ts
 
         return False
 
@@ -208,11 +207,9 @@ class LeakDetector(IModule):
         # wait a while before alerting.
         time.sleep(4)
 
-        ip_identification = self.db.get_ip_identification(dstip)
         description = (
             f"{rule} to destination address: {dstip} "
-            f"{ip_identification} port: {portproto} "
-            f"{port_info or ''}. "
+            f"port: {portproto} {port_info or ''}. "
             f"Leaked location: {strings_matched}"
         )
 
@@ -225,7 +222,12 @@ class LeakDetector(IModule):
             return
 
         twid_number = int(twid[0].replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
@@ -238,14 +240,14 @@ class LeakDetector(IModule):
             uid=[uid],
             timestamp=ts,
             proto=Proto(proto.lower()),
-            port=dport,
-            source_target_tag=Tag.CC,
-            category=IDEACategory.MALWARE,
+            dst_port=int(dport),
         )
 
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=dstip
@@ -258,9 +260,7 @@ class LeakDetector(IModule):
             uid=[uid],
             timestamp=ts,
             proto=Proto(proto.lower()),
-            port=dport,
-            source_target_tag=Tag.CC,
-            category=IDEACategory.MALWARE,
+            dst_port=int(dport),
         )
 
         self.db.set_evidence(evidence)

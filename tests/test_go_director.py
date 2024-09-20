@@ -237,7 +237,7 @@ def test_validate_message_request(
             0.8,
             1649445643,
             "profile_192.168.1.1",
-            "attacking another peer:  " "(test_reporter). confidence: 0.8 ",
+            "attacking another peer:  (test_reporter).",
             "medium",
         ),
         # Test case 2: Test with a different score and confidence
@@ -248,7 +248,7 @@ def test_validate_message_request(
             0.6,
             1649445644,
             "profile_10.0.0.1",
-            "attacking another peer:  " "(another_reporter). confidence: 0.6 ",
+            "attacking another peer:  (another_reporter).",
             "critical",
         ),
     ],

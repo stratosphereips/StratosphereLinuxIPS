@@ -6,7 +6,7 @@ import pytest
 import json
 from unittest.mock import MagicMock, patch
 import ipaddress
-from slips_files.core.evidence_structure.evidence import ThreatLevel
+from slips_files.core.structures.evidence import ThreatLevel
 
 
 def test_parse_local_ti_file():
@@ -92,7 +92,7 @@ def test_check_local_ti_files_for_update(
 
     mock_hash.return_value = current_hash
 
-    threatintel.db.get_TI_file_info.return_value = {"hash": old_hash}
+    threatintel.db.get_ti_feed_info.return_value = {"hash": old_hash}
 
     # the test asserts return value of should_update_local_tii_file
     # matches expected_return
@@ -169,8 +169,8 @@ def test_get_malicious_ip_ranges(
     This test covers both IPv4 and IPv6 range scenarios.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
-    threatintel.db.get_malicious_ip_ranges.return_value = mock_ip_ranges
-    threatintel.get_malicious_ip_ranges()
+    threatintel.db.get_all_blacklisted_ip_ranges.return_value = mock_ip_ranges
+    threatintel.get_all_blacklisted_ip_ranges()
 
     assert threatintel.cached_ipv4_ranges == expected_ipv4_ranges
     assert threatintel.cached_ipv6_ranges == expected_ipv6_ranges
@@ -419,7 +419,7 @@ def test_delete_old_source_ips_with_deletions(
     Test `__delete_old_source_ips` when there are IPs to delete.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
-    threatintel.db.get_IPs_in_IoC.return_value = mock_ioc_data
+    threatintel.db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
     threatintel.db.delete_ips_from_IoC_ips.assert_called_once_with(
         expected_deleted_ips
@@ -445,7 +445,7 @@ def test_delete_old_source_ips_no_deletions(mock_ioc_data, file_to_delete):
     Test `__delete_old_source_ips` when there are no IPs to delete.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
-    threatintel.db.get_IPs_in_IoC.return_value = mock_ioc_data
+    threatintel.db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
     threatintel.db.delete_ips_from_IoC_ips.assert_not_called()
 
@@ -491,7 +491,7 @@ def test_delete_old_source_domains(
     for removing outdated domain IoCs.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
-    threatintel.db.get_Domains_in_IoC.return_value = domains_in_ioc
+    threatintel.db.get_all_blacklisted_domains.return_value = domains_in_ioc
     threatintel._ThreatIntel__delete_old_source_domains(file_to_delete)
     assert (
         threatintel.db.delete_domains_from_IoC_domains.call_count
@@ -568,8 +568,8 @@ def test_delete_old_source_data_from_database(
     """
     threatintel = ModuleFactory().create_threatintel_obj()
 
-    threatintel.db.get_IPs_in_IoC.return_value = mock_ips_ioc
-    threatintel.db.get_Domains_in_IoC.return_value = mock_domains_ioc
+    threatintel.db.get_all_blacklisted_ips.return_value = mock_ips_ioc
+    threatintel.db.get_all_blacklisted_domains.return_value = mock_domains_ioc
 
     threatintel._ThreatIntel__delete_old_source_data_from_database(data_file)
 
@@ -609,7 +609,7 @@ def test_should_update_local_ti_file(
         "slips_files.common.slips_utils.Utils.get_sha256_hash"
     )
     mock_hash.return_value = current_hash
-    threatintel.db.get_TI_file_info.return_value = {"hash": old_hash}
+    threatintel.db.get_ti_feed_info.return_value = {"hash": old_hash}
 
     assert (
         threatintel.should_update_local_ti_file(own_malicious_iocs)
@@ -715,7 +715,7 @@ def test_is_ignored_domain(domain, expected):
             (
                 "Malicious downloaded file 1234567890abcdef1234567890abcdef. "
                 "size: 1024 from IP: 192.168.1.1. "
-                "Detected by: VirusTotal. Score: 0.9.  (Organization: Example Org)"
+                "Detected by: VirusTotal. Score: 0.9."
             ),
             ThreatLevel.HIGH,
             0.9,
@@ -740,7 +740,7 @@ def test_is_ignored_domain(domain, expected):
             (
                 "Malicious downloaded file abcdef0123456789abcdef0123456789. "
                 "size: 512 from IP: 192.168.1.2. "
-                "Detected by: Example Blacklist. Score: 0.5.  (Organization: Example Org)"
+                "Detected by: Example Blacklist. Score: 0.5."
             ),
             ThreatLevel.LOW,
             0.5,
@@ -820,15 +820,16 @@ def test_search_online_for_hash(
         (
             "192.168.1.1",
             '{"description": "Malicious IP"}',
-            {"description": "Malicious IP"},
+            json.dumps({"description": "Malicious IP"}),
         ),
-        ("10.0.0.1", None, False),
+        ("10.0.0.1", None, None),
     ],
 )
 def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
-    """Test `search_offline_for_ip` for querying local threat intelligence data."""
+    """Test `search_offline_for_ip` for querying local
+    threat intelligence data."""
     threatintel = ModuleFactory().create_threatintel_obj()
-    threatintel.db.search_IP_in_IoC.return_value = mock_return_value
+    threatintel.db.is_blacklisted_ip.return_value = mock_return_value
     result = threatintel.search_offline_for_ip(ip_address)
     assert result == expected_result
 
@@ -891,7 +892,7 @@ def test_ip_belongs_to_blacklisted_range(
     threatintel.cached_ipv6_ranges = (
         {first_octet: [range_value]} if ip_type == "ipv6" else {}
     )
-    threatintel.db.get_malicious_ip_ranges.return_value = (
+    threatintel.db.get_all_blacklisted_ip_ranges.return_value = (
         {
             range_value: '{"description": "Bad range", "source": "Example Source", "threat_level": "high"}'
         }
@@ -953,7 +954,8 @@ def test_search_offline_for_domain(
     """Test `search_offline_for_domain` for checking domain blacklisting."""
     threatintel = ModuleFactory().create_threatintel_obj()
 
-    threatintel.db.is_domain_malicious.return_value = mock_return_value
+    threatintel.db = mocker.patch.object(threatintel, "db")
+    threatintel.db.is_blacklisted_domain.return_value = mock_return_value
     result = threatintel.search_offline_for_domain(domain)
     assert result == expected_result
 
@@ -1086,8 +1088,8 @@ def test_is_malicious_cname(
     Test `is_malicious_cname` for various CNAME scenarios.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
-
-    threatintel.db.is_domain_malicious.return_value = (
+    threatintel.db = mocker.patch.object(threatintel, "db")
+    threatintel.db.is_blacklisted_domain.return_value = (
         is_domain_malicious_return,
         False,
     )
@@ -1722,7 +1724,8 @@ def test_set_evidence_malicious_domain(
 
 
 @pytest.mark.parametrize(
-    "ip, uid, timestamp, ip_info, dns_query, profileid, twid, expected_description, expected_threat_level",
+    "ip, uid, timestamp, ip_info, dns_query, profileid, "
+    "twid, expected_description, expected_threat_level",
     [
         # TestCase 1: Medium threat level in DNS response
         (
@@ -1739,8 +1742,7 @@ def test_set_evidence_malicious_domain(
             "timewindow1",
             (
                 "DNS answer with a blacklisted IP: 192.168.1.1 for query: "
-                "example.com "
-                "(Organization: Example Org) Description: Malicious IP Source: TI Feed."
+                "example.com Description: Malicious IP Source: TI Feed."
             ),
             ThreatLevel.MEDIUM,
         ),
@@ -1759,8 +1761,8 @@ def test_set_evidence_malicious_domain(
             "timewindow2",
             (
                 "DNS answer with a blacklisted IP: 192.168.1.2 for query: "
-                "test.com (Organization: Example Org) Description: Another"
-                " Malicious IP Source: Different Feed."
+                "test.com "
+                "Description: Another Malicious IP Source: Different Feed."
             ),
             ThreatLevel.HIGH,
         ),
@@ -1780,8 +1782,7 @@ def test_set_evidence_malicious_domain(
             (
                 "DNS answer with a blacklisted IP: 192.168.1.3 for query: "
                 "domain.com "
-                "(Organization: Example Org) Description: Yet Another "
-                "Malicious IP Source: Another Feed."
+                "Description: Yet Another Malicious IP Source: Another Feed."
             ),
             ThreatLevel.LOW,
         ),
@@ -1822,7 +1823,6 @@ def test_set_evidence_malicious_ip_in_dns_response(
         assert evidence.threat_level == expected_threat_level
 
     assert threatintel.db.set_ip_info.call_count == 1
-    assert threatintel.db.set_malicious_ip.call_count == 1
 
 
 def test_read_configuration(mocker):
