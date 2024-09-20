@@ -45,3 +45,4 @@ ruff==0.6.2
 pre-commit==3.8.0
 coverage==7.6.1
 pyyaml
+git+https://github.com/SECEF/python-idmefv2.git
