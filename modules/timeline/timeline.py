@@ -103,6 +103,7 @@ class Timeline(IModule):
             "resumed": resumed,
             "version": alt_flow["version"],
             "dns_resolution": alt_flow["server_name"],
+            "critical warning": "",
         }
         return {"info": ssl_activity}
 
@@ -248,6 +249,7 @@ class Timeline(IModule):
             "saddr": flow.saddr,
             "size": flow.sbytes + flow.dbytes,
             "duration": flow.dur,
+            "critical warning": "",
         }
 
     def interpret_dport(self, flow) -> str:
