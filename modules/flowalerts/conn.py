@@ -746,9 +746,11 @@ class Conn(IFlowalertsAnalyzer):
             self.check_unknown_port(profileid, twid, flow)
             self.check_multiple_reconnection_attempts(profileid, twid, flow)
             self.check_conn_to_port_0(profileid, twid, flow)
-            self.check_different_localnet_usage(twid, flow)
             self.check_different_localnet_usage(
-                profileid, twid, flow, what_to_check="dstip"
+                twid, flow, what_to_check="dstip"
+            )
+            self.check_different_localnet_usage(
+                twid, flow, what_to_check="srcip"
             )
             self.check_connection_without_dns_resolution(profileid, twid, flow)
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
