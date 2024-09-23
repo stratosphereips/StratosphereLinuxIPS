@@ -1,3 +1,13 @@
+- 1.1.1 (September 4th, 2024)
+- Better unit tests. thanks to @Sekhar-Kumar-Dash.
+- Fix Zeek warning caused by one of the loaded zeek scripts.
+- Fix Slips installation scripts at install/install.sh
+- Improve how Slips validates domains taken from TI feeds.
+- Improve whitelists.
+- Fix the issue of flowalerts module not analyzing all given conn.log flows.
+- Update python dependencies.
+- Better handling of problems connecting to Redis database.
+
 - 1.1 (July 2024)
 - Update Python version to 3.10.12 and all python libraries used by Slips.
 - Update nodejs and zeek.

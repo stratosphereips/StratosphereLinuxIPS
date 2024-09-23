@@ -1,7 +1,6 @@
 """Unit test for ../slips.py"""
 
 from tests.module_factory import ModuleFactory
-from ..slips import *
 
 
 def test_load_modules():
@@ -47,6 +46,6 @@ def test_load_modules():
 
 
 def test_clear_redis_cache_database():
-    main = ModuleFactory().create_main_obj("test.pcap")
+    main = ModuleFactory().create_main_obj()
     redis_manager = ModuleFactory().create_redis_manager_obj(main)
-    assert redis_manager.clear_redis_cache_database() == True
+    assert redis_manager.clear_redis_cache_database()

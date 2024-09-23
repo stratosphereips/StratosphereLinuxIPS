@@ -1,15 +1,11 @@
-"""Unit test for ../arp.py"""
+"""Unit test for modules/arp.py"""
 
 from tests.module_factory import ModuleFactory
 import json
-from unittest.mock import MagicMock, patch, call
 import ipaddress
 import pytest
-import time
-import threading
-from slips_files.core.evidence_structure.evidence import EvidenceType
-from multiprocessing import Queue
-
+from slips_files.core.structures.evidence import EvidenceType
+from slips_files.core.flows.zeek import ARP
 
 profileid = "profile_192.168.1.1"
 twid = "timewindow1"
@@ -34,18 +30,24 @@ twid = "timewindow1"
         ("0.0.0.0", "192.168.1.1", False),
     ],
 )
-def test_check_dstip_outside_localnet(mock_db, daddr, saddr, expected_result):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
-    profileid = f"profile_{saddr}"
-    twid = "timewindow1"
-    uid = "1234"
-    ts = "1632214645.783595"
-
-    ARP.home_network = [ipaddress.IPv4Network("192.168.0.0/16")]
-
-    result = ARP.check_dstip_outside_localnet(
-        profileid, twid, daddr, uid, saddr, ts
+def test_check_dstip_outside_localnet(daddr, saddr, expected_result):
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr=saddr,
+        daddr=daddr,
+        smac="",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
     )
+    twid = "timewindow1"
+
+    arp.home_network = [ipaddress.IPv4Network("192.168.0.0/16")]
+
+    result = arp.check_dstip_outside_localnet(twid, flow)
     assert result == expected_result
 
 
@@ -106,130 +108,170 @@ def test_check_dstip_outside_localnet(mock_db, daddr, saddr, expected_result):
     ],
 )
 def test_detect_unsolicited_arp(
-    mock_db, dst_mac, dst_hw, src_mac, src_hw, expected_result
+    dst_mac, dst_hw, src_mac, src_hw, expected_result
 ):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
-    profileid = "profile_192.168.1.1"
-    twid = "timewindow1"
-    uid = "1234"
-    ts = "1632214645.783595"
-
-    result = ARP.detect_unsolicited_arp(
-        profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="1.1.1.1",
+        smac=src_mac,
+        dmac=dst_mac,
+        src_hw=src_hw,
+        dst_hw=dst_hw,
+        operation="",
     )
+    twid = "timewindow1"
+
+    result = arp.detect_unsolicited_arp(twid, flow)
     assert result == expected_result
 
 
-def test_detect_MITM_ARP_attack_with_original_ip(mock_db):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
+def test_detect_mitm_arp_attack_with_original_ip():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
+
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.3"
     original_ip = "192.168.1.1"
     gateway_ip = "192.168.1.254"
     gateway_mac = "aa:bb:cc:dd:ee:ff"
-    src_mac = "44:11:44:11:44:11"
 
-    mock_db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    mock_db.get_gateway_ip.return_value = gateway_ip
-    mock_db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is True
 
 
-def test_detect_MITM_ARP_attack_same_ip(mock_db):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
+def test_detect_mitm_arp_attack_same_ip():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.1"
     original_ip = "192.168.1.1"
     gateway_ip = "192.168.1.254"
     gateway_mac = "aa:bb:cc:dd:ee:ff"
-    src_mac = "44:11:44:11:44:11"
 
-    mock_db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    mock_db.get_gateway_ip.return_value = gateway_ip
-    mock_db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is None
 
 
-def test_detect_MITM_ARP_attack_gateway_mac(mock_db):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
+def test_detect_mitm_arp_attack_gateway_mac():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.3"
     original_ip = "192.168.1.1"
     gateway_ip = "192.168.1.254"
     gateway_mac = "44:11:44:11:44:11"
-    src_mac = "44:11:44:11:44:11"
 
-    mock_db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    mock_db.get_gateway_ip.return_value = gateway_ip
-    mock_db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is True
 
 
-def test_detect_MITM_ARP_attack_gateway_ip_as_victim(mock_db):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
+def test_detect_mitm_arp_attack_gateway_ip_as_victim():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.3"
     original_ip = "192.168.1.254"
     gateway_ip = "192.168.1.254"
     gateway_mac = "aa:bb:cc:dd:ee:ff"
-    src_mac = "44:11:44:11:44:11"
 
-    mock_db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    mock_db.get_gateway_ip.return_value = gateway_ip
-    mock_db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is True
 
 
-def test_detect_MITM_ARP_attack_no_original_ip(mock_db):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
+def test_detect_mitm_arp_attack_no_original_ip():
+    arp = ModuleFactory().create_arp_obj()
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw="",
+        operation="",
+    )
     twid = "timewindow1"
-    uid = "1234"
-    ts = "1636305825.755132"
-    saddr = "192.168.1.3"
     gateway_ip = "192.168.1.254"
     gateway_mac = "aa:bb:cc:dd:ee:ff"
-    src_mac = "44:11:44:11:44:11"
 
-    mock_db.get_ip_of_mac.return_value = None
-    mock_db.get_gateway_ip.return_value = gateway_ip
-    mock_db.get_gateway_mac.return_value = gateway_mac
+    arp.db.get_ip_of_mac.return_value = None
+    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_mac.return_value = gateway_mac
 
-    result = ARP.detect_MITM_ARP_attack(twid, uid, saddr, ts, src_mac)
+    result = arp.detect_mitm_arp_attack(twid, flow)
     assert result is None
 
 
-def test_set_evidence_arp_scan(mock_db):
+def test_set_evidence_arp_scan():
     """Tests set_evidence_arp_scan function"""
 
-    ARP = ModuleFactory().create_arp_obj(mock_db)
+    ARP = ModuleFactory().create_arp_obj()
     ts = "1632214645.783595"
     uids = ["5678", "1234"]
-    conn_count = 5
 
-    ARP.set_evidence_arp_scan(ts, profileid, twid, uids, conn_count)
+    ARP.set_evidence_arp_scan(ts, profileid, twid, uids)
 
-    mock_db.set_evidence.assert_called_once()
-    call_args = mock_db.set_evidence.call_args[0]
+    ARP.db.set_evidence.assert_called_once()
+    call_args = ARP.db.set_evidence.call_args[0]
     evidence = call_args[0]
     assert evidence.evidence_type == EvidenceType.ARP_SCAN
     assert evidence.attacker.value == "192.168.1.1"
-    assert evidence.conn_count == conn_count
     assert set(evidence.uid) == set(uids)
 
 
@@ -248,85 +290,83 @@ def test_set_evidence_arp_scan(mock_db):
         ("reply", "00:11:22:33:44:55", False),
     ],
 )
-def test_check_if_gratutitous_ARP(mock_db, operation, dst_hw, expected_result):
-    """Tests check_if_gratutitous_ARP function"""
-    ARP = ModuleFactory().create_arp_obj(mock_db)
-
-    result = ARP.check_if_gratutitous_ARP(dst_hw, operation)
+def test_check_if_gratutitous_arp(operation, dst_hw, expected_result):
+    flow = ARP(
+        starttime="1726238443.1344972",
+        uid="123",
+        saddr="192.168.1.3",
+        daddr="1.1.1.1",
+        smac="44:11:44:11:44:11",
+        dmac="",
+        src_hw="",
+        dst_hw=dst_hw,
+        operation=operation,
+    )
+    arp = ModuleFactory().create_arp_obj()
+    result = arp.check_if_gratutitous_arp(flow)
     assert result == expected_result
 
 
-def test_pre_main():
-    """
-    Tests the pre_main function.
-    """
-    mock_db = MagicMock()
-    arp = ModuleFactory().create_arp_obj(mock_db)
-    with patch("threading.Thread.start") as mock_start:
-        arp.pre_main()
-        mock_start.assert_called_once()
-
-
-def test_wait_for_arp_scans(mock_db):
-    ARP = ModuleFactory().create_arp_obj(mock_db)
-    ARP.pending_arp_scan_evidence = Queue()
-    ARP.time_to_wait = 0.1
-    evidence1 = (
-        "1636305825.755132",
-        "profile_192.168.1.1",
-        "timewindow1",
-        ["uid1"],
-        5,
-    )
-    evidence2 = (
-        "1636305826.755132",
-        "profile_192.168.1.1",
-        "timewindow1",
-        ["uid2"],
-        6,
-    )
-    evidence3 = (
-        "1636305827.755132",
-        "profile_192.168.1.2",
-        "timewindow1",
-        ["uid3"],
-        7,
-    )
-
-    ARP.pending_arp_scan_evidence.put(evidence1)
-    ARP.pending_arp_scan_evidence.put(evidence2)
-    ARP.pending_arp_scan_evidence.put(evidence3)
-
-    ARP.set_evidence_arp_scan = MagicMock()
-
-    thread = threading.Thread(target=ARP.wait_for_arp_scans)
-    thread.daemon = True
-    thread.start()
-
-    time.sleep(1)
-    expected_calls = [
-        call(
-            "1636305826.755132",
-            "profile_192.168.1.1",
-            "timewindow1",
-            ["uid1", "uid2"],
-            6,
-        ),
-        call(
-            "1636305827.755132",
-            "profile_192.168.1.2",
-            "timewindow1",
-            ["uid3"],
-            7,
-        ),
-    ]
-    (
-        ARP.set_evidence_arp_scan.assert_has_calls(
-            expected_calls, any_order=True
-        )
-    )
-    assert ARP.set_evidence_arp_scan.call_count == 2
-    assert ARP.pending_arp_scan_evidence.empty()
-    ARP.stop_thread = True
-    thread.join(timeout=1)
-
+# def test_wait_for_arp_scans():
+#     ARP = ModuleFactory().create_arp_obj()
+#     ARP.pending_arp_scan_evidence = Queue()
+#     ARP.time_to_wait = 0.1
+#     evidence1 = (
+#         "1636305825.755132",
+#         "profile_192.168.1.1",
+#         "timewindow1",
+#         ["uid1"],
+#         5,
+#     )
+#     evidence2 = (
+#         "1636305826.755132",
+#         "profile_192.168.1.1",
+#         "timewindow1",
+#         ["uid2"],
+#         6,
+#     )
+#     evidence3 = (
+#         "1636305827.755132",
+#         "profile_192.168.1.2",
+#         "timewindow1",
+#         ["uid3"],
+#         7,
+#     )
+#
+#     ARP.pending_arp_scan_evidence.put(evidence1)
+#     ARP.pending_arp_scan_evidence.put(evidence2)
+#     ARP.pending_arp_scan_evidence.put(evidence3)
+#
+#     ARP.set_evidence_arp_scan = MagicMock()
+#
+#     thread = threading.Thread(target=ARP.wait_for_arp_scans)
+#     thread.daemon = True
+#     thread.start()
+#
+#     time.sleep(1)
+#     expected_calls = [
+#         call(
+#             "1636305826.755132",
+#             "profile_192.168.1.1",
+#             "timewindow1",
+#             ["uid1", "uid2"],
+#             6,
+#         ),
+#         call(
+#             "1636305827.755132",
+#             "profile_192.168.1.2",
+#             "timewindow1",
+#             ["uid3"],
+#             7,
+#         ),
+#     ]
+#     (
+#         ARP.set_evidence_arp_scan.assert_has_calls(
+#             expected_calls, any_order=True
+#         )
+#     )
+#     assert ARP.set_evidence_arp_scan.call_count == 2
+#     assert ARP.pending_arp_scan_evidence.empty()
+#     ARP.stop_thread = True
+#     thread.join(timeout=1)
+#

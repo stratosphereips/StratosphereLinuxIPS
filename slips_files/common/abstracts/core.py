@@ -1,10 +1,7 @@
 import traceback
-from multiprocessing import Process, Event
+from multiprocessing import Process
 
 from slips_files.common.abstracts.module import IModule
-from slips_files.core.database.database_manager import DBManager
-from slips_files.common.abstracts.observer import IObservable
-from slips_files.core.output import Output
 
 
 class ICore(IModule, Process):
@@ -16,31 +13,15 @@ class ICore(IModule, Process):
     description = "Short description of the core class purpose"
     authors = ["Name of the author creating the class"]
 
-    def __init__(
-        self,
-        logger: Output,
-        output_dir,
-        redis_port,
-        termination_event,
-        **kwargs,
-    ):
+    def __init__(self, *args, **kwargs):
         """
         contains common initializations in all core files in
          slips_files/core/
         the goal of this is to have one common __init__()
-        for all core file, which is the one in this file
+        for all core file and module, which is the one in the IModule
+        interface
         """
-        Process.__init__(self)
-        self.output_dir = output_dir
-        self.logger = logger
-        # used to tell all slips.py children to stop
-        self.termination_event: Event = termination_event
-        self.redis_port = redis_port
-        self.db = DBManager(self.logger, output_dir, redis_port)
-        IObservable.__init__(self)
-        self.add_observer(self.logger)
-        self.init(**kwargs)
-        self.channel_tracker = self.init_channel_tracker()
+        IModule.__init__(self, *args, **kwargs)
 
     def run(self):
         """

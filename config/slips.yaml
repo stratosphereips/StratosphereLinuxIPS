@@ -125,7 +125,9 @@ parameters:
    keep_rotated_files_for : 1 day
 
    # how many minutes to wait for all modules to finish before killing them
-   wait_for_modules_to_finish : 15 mins
+   #wait_for_modules_to_finish : 15 mins
+   # 1 week
+   wait_for_modules_to_finish : 10080 mins
 
    # flows are labeled to normal/malicious and added to the sqlite db in the output dir by default
    export_labeled_flows : False

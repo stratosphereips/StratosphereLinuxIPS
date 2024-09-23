@@ -1,43 +1,19 @@
 from datetime import timedelta
 from ipaddress import ip_address
 import traceback
-from slips_files.common.abstracts.observer import IObservable
+from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 
 
-class SymbolHandler(IObservable):
+class SymbolHandler:
     name = "SymbolHandler"
 
     def __init__(self, logger: Output, db):
-        IObservable.__init__(self)
+        self.printer = Printer(logger, self.name)
         self.db = db
-        self.logger = logger
-        self.add_observer(self.logger)
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like f'Test {here}'
-        """
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def compute_periodicity(
         self,
@@ -49,7 +25,7 @@ class SymbolHandler(IObservable):
         tt2: float,
         tt3: float,
         profileid: str,
-        tupleid: str
+        tupleid: str,
     ):
         zeros = ""
         if last_last_ts is False or last_ts is False:
@@ -86,7 +62,7 @@ class SymbolHandler(IObservable):
             0,
         )
         return TD, zeros, T2
-    
+
     def compute_duration(
         self, current_duration: float, td1: float, td2: float
     ):
@@ -145,25 +121,29 @@ class SymbolHandler(IObservable):
         }
         return periodicity_map[str(periodicity)][str(size)][str(duration)]
 
-    def compute_timechar(self, T2):
-        """Function to compute the timechar"""
-        # self.print(f'Compute timechar. Profileid: {profileid} T2:
-        # {T2}', 0, 5)
-        if not isinstance(T2, bool):
-            if T2 <= timedelta(seconds=5).total_seconds():
-                return "."
-            elif T2 <= timedelta(seconds=60).total_seconds():
-                return ","
-            elif T2 <= timedelta(seconds=300).total_seconds():
-                return "+"
-            elif T2 <= timedelta(seconds=3600).total_seconds():
-                return "*"
-            else:
-                return ""
-        else:
-            return ""
+    def compute_timechar(self, t2):
+        if t2 and not isinstance(t2, bool):
+            time_thresholds = [(5, "."), (60, ","), (300, "+"), (3600, "*")]
+
+            # Loop through thresholds and return the corresponding time character
+            for threshold, char in time_thresholds:
+                if t2 <= timedelta(seconds=threshold).total_seconds():
+                    return char
+
+        # Return empty string if no conditions are met
+        return ""
 
     def compute(self, flow, twid: str, tuple_key: str):
+        """
+        This function computes the new symbol for the tuple according to the
+        original stratosphere IPS model of letters
+        Here we do not apply any detection model, we just create the letters
+        as one more feature twid is the starttime of the flow
+        :param tuple_key: can be 'InTuples' or 'OutTuples'
+        return the following tuple (symbol_to_add, (previous_two_timestamps))
+        previous_two_timestamps is a tuple with the ts of the last flow,
+        and the ts of the flow before the last flow
+        """
         daddr_as_obj = ip_address(flow.daddr)
         profileid = f"profile_{flow.saddr}"
         tupleid = f"{daddr_as_obj}-{flow.dport}-{flow.proto}"
@@ -190,7 +170,15 @@ class SymbolHandler(IObservable):
             )
 
             periodicity, zeros, T2 = self.compute_periodicity(
-                now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3, profileid, tupleid
+                now_ts,
+                last_ts,
+                last_last_ts,
+                tto,
+                tt1,
+                tt2,
+                tt3,
+                profileid,
+                tupleid,
             )
             duration = self.compute_duration(current_duration, td1, td2)
             size = self.compute_size(current_size, ts1, ts2)

@@ -1,9 +1,11 @@
 from typing import Dict, Any
 import json
+from uuid import uuid4
+
 import requests
 
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
     TimeWindow,
@@ -12,7 +14,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
 )
 
 
@@ -151,7 +152,6 @@ class URLhaus:
         flow: Dict[str, Any] = file_info["flow"]
 
         daddr: str = flow["daddr"]
-        ip_identification: str = self.db.get_ip_identification(daddr)
 
         # Add the following fields in the evidence
         # description but only if we're sure they exist
@@ -176,12 +176,8 @@ class URLhaus:
         # so we need a more detailed description
         description: str = (
             f"Malicious downloaded file: {flow['md5']}."
-            f"{size}"
-            f" from IP: {daddr} {ip_identification}."
-            f"{file_name}"
-            f"{file_type}"
-            f"{tags}"
-            f" by URLhaus."
+            f"{size}  from IP: {daddr}. {file_name} {file_type} {tags} by "
+            f"URLhaus."
         )
 
         threat_level: float = file_info.get("threat_level")
@@ -200,7 +196,12 @@ class URLhaus:
 
         timestamp: str = flow["starttime"]
         twid_int = int(file_info["twid"].replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -209,7 +210,6 @@ class URLhaus:
             confidence=confidence,
             description=description,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[flow["uid"]],
@@ -218,6 +218,8 @@ class URLhaus:
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
@@ -226,7 +228,6 @@ class URLhaus:
             confidence=confidence,
             description=description,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
             profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[flow["uid"]],
@@ -264,7 +265,12 @@ class URLhaus:
         description: str = url_info.get("description", "")
         saddr: str = profileid.split("_")[-1]
         twid_int = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -273,7 +279,6 @@ class URLhaus:
             confidence=0.7,
             description=description,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
@@ -281,6 +286,8 @@ class URLhaus:
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
@@ -289,7 +296,6 @@ class URLhaus:
             confidence=0.7,
             description=description,
             timestamp=timestamp,
-            category=IDEACategory.MALWARE,
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],

@@ -1,7 +1,6 @@
-from modules.ip_info.jarm import JARM
 import platform
-import sys
 from typing import Union
+from uuid import uuid4
 import datetime
 import maxminddb
 import ipaddress
@@ -16,10 +15,12 @@ import time
 import asyncio
 import multiprocessing
 
+from modules.ip_info.jarm import JARM
+from slips_files.common.flow_classifier import FlowClassifier
 from .asn_info import ASN
 from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
     TimeWindow,
@@ -29,8 +30,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
-    Tag,
 )
 
 
@@ -45,6 +44,7 @@ class IPInfo(IModule):
         self.pending_mac_queries = multiprocessing.Queue()
         self.asn = ASN(self.db)
         self.JARM = JARM()
+        self.classifier = FlowClassifier()
         # Set the output queue of our database instance
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = self.db.subscribe("new_ip")
@@ -163,9 +163,11 @@ class IPInfo(IModule):
             ".xyz",
             ".za",
         ]
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     async def open_dbs(self):
-        """Function to open the different offline databases used in this module. ASN, Country etc.."""
+        """Function to open the different offline databases used in this
+        module. ASN, Country etc.."""
         # Open the maxminddb ASN offline db
         try:
             self.asn_db = maxminddb.open_database(
@@ -245,7 +247,7 @@ class IPInfo(IModule):
         data = {}
         try:
             # works with both ipv4 and ipv6
-            reverse_dns = socket.gethostbyaddr(ip)[0]
+            reverse_dns: str = socket.gethostbyaddr(ip)[0]
             # if there's no reverse dns record for this ip, reverse_dns will be an ip.
             try:
                 # reverse_dns is an ip. there's no reverse dns. don't store
@@ -396,7 +398,7 @@ class IPInfo(IModule):
         this method tries to get the default gateway IP address using ip route
         only works when running on an interface
         """
-        if not ("-i" in sys.argv or self.db.is_growing_zeek_dir()):
+        if not self.is_running_non_stop:
             # only works if running on an interface
             return False
 
@@ -421,7 +423,7 @@ class IPInfo(IModule):
             gw_ip = route_default_result[2]
         return gw_ip
 
-    def get_gateway_MAC(self, gw_ip: str):
+    def get_gateway_mac(self, gw_ip: str):
         """
         Given the gw_ip, this function tries to get the MAC
          from arp.log or from arp tables
@@ -429,16 +431,12 @@ class IPInfo(IModule):
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
         # check if we have the mac of this ip already saved in the db.
-        if gw_MAC := self.db.get_mac_addr_from_profile(f"profile_{gw_ip}"):
-            gw_MAC: Union[str, None]
-            self.db.set_default_gateway("MAC", gw_MAC)
-            return gw_MAC
+        if gw_mac := self.db.get_mac_addr_from_profile(f"profile_{gw_ip}"):
+            gw_mac: Union[str, None]
+            self.db.set_default_gateway("MAC", gw_mac)
+            return gw_mac
 
-        # we don't have it in arp.log(in the db)
-        running_on_interface = (
-            "-i" in sys.argv or self.db.is_growing_zeek_dir()
-        )
-        if not running_on_interface:
+        if not self.is_running_non_stop:
             # no MAC in arp.log (in the db) and can't use arp tables,
             # so it's up to the db.is_gw_mac() function to determine the gw mac
             # if it's seen associated with a public IP
@@ -453,11 +451,12 @@ class IPInfo(IModule):
                 check=True,
                 text=True,
             ).stdout
-            gw_MAC = ip_output.split()[-2]
-            self.db.set_default_gateway("MAC", gw_MAC)
-            return gw_MAC
+            gw_mac = ip_output.split()[-2]
+            self.db.set_default_gateway("MAC", gw_mac)
+            return gw_mac
         except (subprocess.CalledProcessError, FileNotFoundError):
-            # If the ip command doesn't exist or has failed, try using the arp command
+            # If the ip command doesn't exist or has failed, try using the
+            # arp command
             try:
                 arp_output = subprocess.run(
                     ["arp", "-an"], capture_output=True, check=True, text=True
@@ -467,14 +466,14 @@ class IPInfo(IModule):
                     gw_ip_from_arp_cmd = fields[1].strip("()")
                     # Match the gw_ip in the output with the one given to this function
                     if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
-                        gw_MAC = fields[-4]
-                        self.db.set_default_gateway("MAC", gw_MAC)
-                        return gw_MAC
+                        gw_mac = fields[-4]
+                        self.db.set_default_gateway("MAC", gw_mac)
+                        return gw_mac
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Could not find the MAC address of gw_ip
                 return
 
-        return gw_MAC
+        return gw_mac
 
     def check_if_we_have_pending_mac_queries(self):
         """
@@ -517,14 +516,17 @@ class IPInfo(IModule):
         port_info = self.db.get_port_info(portproto) or ""
         port_info = f"({port_info.upper()})" if port_info else ""
 
-        dstip_id = self.db.get_ip_identification(dstip)
         description = (
             f"Malicious JARM hash detected for destination IP: {dstip}"
-            f" on port: {portproto} {port_info}. {dstip_id}"
+            f" on port: {portproto} {port_info}. "
         )
         twid_number = int(twid.replace("timewindow", ""))
-
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
         evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_JARM,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=dstip
@@ -536,15 +538,14 @@ class IPInfo(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[flow["uid"]],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             proto=Proto(protocol.lower()),
-            port=dport,
-            source_target_tag=Tag.MALWARE,
         )
 
         self.db.set_evidence(evidence)
 
         evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_JARM,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
@@ -556,10 +557,8 @@ class IPInfo(IModule):
             timewindow=TimeWindow(number=twid_number),
             uid=[flow["uid"]],
             timestamp=timestamp,
-            category=IDEACategory.ANOMALY_TRAFFIC,
             proto=Proto(protocol.lower()),
-            port=dport,
-            source_target_tag=Tag.MALWARE,
+            dst_port=443,
         )
 
         self.db.set_evidence(evidence)
@@ -615,23 +614,16 @@ class IPInfo(IModule):
                 if ip := self.db.get_gateway_ip():
                     # now that we know the GW IP address,
                     # try to get the MAC of this IP (of the gw)
-                    self.get_gateway_MAC(ip)
+                    self.get_gateway_mac(ip)
                     self.is_gw_mac_set = True
 
         if msg := self.get_msg("new_dns"):
-            data = msg["data"]
-            data = json.loads(data)
-            # profileid = data['profileid']
-            # twid = data['twid']
-            # uid = data['uid']
-            flow_data = json.loads(
-                data["flow"]
-            )  # this is a dict {'uid':json flow data}
-            if domain := flow_data.get("query", False):
+            msg = json.loads(msg["data"])
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
+            if domain := flow.query:
                 self.get_age(domain)
 
         if msg := self.get_msg("new_ip"):
-            # Get the IP from the message
             ip = msg["data"]
             self.handle_new_ip(ip)
 
@@ -655,5 +647,5 @@ class IPInfo(IModule):
                     flow["daddr"], flow["dport"]
                 )
 
-                if self.db.is_malicious_jarm(jarm_hash):
+                if self.db.is_blacklisted_jarm(jarm_hash):
                     self.set_evidence_malicious_jarm_hash(flow, msg["twid"])

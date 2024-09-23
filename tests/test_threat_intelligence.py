@@ -6,58 +6,47 @@ import pytest
 import json
 from unittest.mock import MagicMock, patch
 import ipaddress
-from slips_files.core.evidence_structure.evidence import ThreatLevel
+from slips_files.core.structures.evidence import ThreatLevel
 
 
-def test_parse_local_ti_file(mock_db):
+def test_parse_local_ti_file():
     """
     Test parsing of a local threat intelligence file.
 
     Ensures that the `parse_local_ti_file` method successfully parses known threat
     intelligence entries from "own_malicious_iocs.csv" and properly integrates
     them into the system.
-
-    Args:
-        mock_db: A fixture or mock representing the database to prevent actual
-                 database modifications during testing.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     local_ti_files_dir = threatintel.path_to_local_ti_files
     local_ti_file = os.path.join(local_ti_files_dir, "own_malicious_iocs.csv")
     assert threatintel.parse_local_ti_file(local_ti_file) is True
 
 
-def test_parse_ja3_file(mock_db):
+def test_parse_ja3_file():
     """
     Test parsing of a JA3 hash file.
 
     Validates that the `parse_ja3_file` method can accurately process and store
     entries from "own_malicious_JA3.csv" containing JA3 hashes and associated
     threat levels and descriptions.
-
-    Args:
-        mock_db: A mock database object to intercept database calls for isolation.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     local_ja3_file_dir = threatintel.path_to_local_ti_files
     local_ja3_file = os.path.join(local_ja3_file_dir, "own_malicious_JA3.csv")
 
     assert threatintel.parse_ja3_file(local_ja3_file) is True
 
 
-def test_parse_jarm_file(mock_db):
+def test_parse_jarm_file():
     """
     Test parsing of a JARM hash file.
 
     Confirms that the `parse_jarm_file` method is capable of interpreting and storing
     data from "own_malicious_JARM.csv", which includes JARM hashes along with their
     threat assessments and descriptions.
-
-    Args:
-        mock_db: A mock database object used to verify interactions without affecting
-                 real data.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     local_jarm_file_dir = threatintel.path_to_local_ti_files
     local_jarm_file = os.path.join(
         local_jarm_file_dir, "own_malicious_JARM.csv"
@@ -75,7 +64,7 @@ def test_parse_jarm_file(mock_db):
     ],
 )
 def test_check_local_ti_files_for_update(
-    current_hash, old_hash, expected_return, mocker, mock_db
+    current_hash, old_hash, expected_return, mocker
 ):
     """
     Test the logic for updating local threat intelligence files based on hash comparison.
@@ -90,10 +79,9 @@ def test_check_local_ti_files_for_update(
         old_hash: The previously stored hash value for comparison.
         expected_return: The expected outcome of the comparison (new hash or False).
         mocker: The pytest-mock mocker object for patching dependencies.
-        mock_db: A mock database object for simulating database interactions.
     """
     # since this is a clear db, then we should update the local ti file
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     own_malicious_iocs = os.path.join(
         threatintel.path_to_local_ti_files, "own_malicious_iocs.csv"
     )
@@ -104,21 +92,23 @@ def test_check_local_ti_files_for_update(
 
     mock_hash.return_value = current_hash
 
-    mock_db.get_TI_file_info.return_value = {"hash": old_hash}
+    threatintel.db.get_ti_feed_info.return_value = {"hash": old_hash}
 
-    # the test asserts return value of should_update_local_tii_file matches expected_return
-    # for each scenario. This method should return new hash if an update is needed or False if not
+    # the test asserts return value of should_update_local_tii_file
+    # matches expected_return
+    # for each scenario. This method should return new hash if an
+    # update is needed or False if not
     assert (
         threatintel.should_update_local_ti_file(own_malicious_iocs)
         == expected_return
     )
 
 
-def test_create_circl_lu_session(mock_db):
+def test_create_circl_lu_session():
     """
     Test the creation of a session for Circl.lu API requests.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.create_circl_lu_session()
     assert threatintel.circl_session.verify is True
     assert threatintel.circl_session.headers == {"accept": "application/json"}
@@ -130,9 +120,14 @@ def test_create_circl_lu_session(mock_db):
         # Test case 1:  Both IPv4 and IPv6 ranges
         (
             {
-                "192.168.1.0/24": '{"description": "Example range", "source": "local_file", "threat_level": "high"}',
-                "10.0.0.0/16": '{"description": "Another range", "source": "remote_feed", "threat_level": "medium"}',
-                "2001:db8::/64": '{"description": "IPv6 range", "source": "custom", "threat_level": "low"}',
+                "192.168.1.0/24": '{"description": "Example range",'
+                ' "source": "local_file", '
+                '"threat_level": "high"}',
+                "10.0.0.0/16": '{"description": "Another range", '
+                '"source": "remote_feed",'
+                ' "threat_level": "medium"}',
+                "2001:db8::/64": '{"description": "IPv6 range", '
+                '"source": "custom", "threat_level": "low"}',
             },
             {"192": ["192.168.1.0/24"], "10": ["10.0.0.0/16"]},
             {"2001": ["2001:db8::/64"]},
@@ -140,8 +135,10 @@ def test_create_circl_lu_session(mock_db):
         # Test case 2: Only IPv4 ranges
         (
             {
-                "172.17.0.0/16": '{"description": "Example range", "source": "local_file", "threat_level": "high"}',
-                "10.0.0.0/8": '{"description": "Another range", "source": "remote_feed", "threat_level": "medium"}',
+                "172.17.0.0/16": '{"description": "Example range", "source":'
+                ' "local_file", "threat_level": "high"}',
+                "10.0.0.0/8": '{"description": "Another range", "source": '
+                '"remote_feed", "threat_level": "medium"}',
             },
             {"172": ["172.17.0.0/16"], "10": ["10.0.0.0/8"]},
             {},
@@ -149,8 +146,12 @@ def test_create_circl_lu_session(mock_db):
         # Test case 3: Only IPv6 ranges
         (
             {
-                "2001:0db8:0:0:0:0:0:0/32": '{"description": "Example range", "source": "local_file", "threat_level": "high"}',
-                "2002:c0a8:0:1::/64": '{"description": "Another range", "source": "remote_feed", "threat_level": "medium"}',
+                "2001:0db8:0:0:0:0:0:0/32": '{"description": "Example range",'
+                ' "source": "local_file",'
+                ' "threat_level": "high"}',
+                "2002:c0a8:0:1::/64": '{"description": "Another range", '
+                '"source": "remote_feed",'
+                ' "threat_level": "medium"}',
             },
             {},
             {
@@ -161,15 +162,15 @@ def test_create_circl_lu_session(mock_db):
     ],
 )
 def test_get_malicious_ip_ranges(
-    mock_db, mock_ip_ranges, expected_ipv4_ranges, expected_ipv6_ranges
+    mock_ip_ranges, expected_ipv4_ranges, expected_ipv6_ranges
 ):
     """
     Test the retrieval and caching of malicious IP ranges from the database.
     This test covers both IPv4 and IPv6 range scenarios.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_malicious_ip_ranges.return_value = mock_ip_ranges
-    threatintel.get_malicious_ip_ranges()
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_all_blacklisted_ip_ranges.return_value = mock_ip_ranges
+    threatintel.get_all_blacklisted_ip_ranges()
 
     assert threatintel.cached_ipv4_ranges == expected_ipv4_ranges
     assert threatintel.cached_ipv6_ranges == expected_ipv6_ranges
@@ -242,7 +243,6 @@ def test_get_malicious_ip_ranges(
     ],
 )
 def test_set_evidence_malicious_asn(
-    mock_db,
     daddr,
     uid,
     timestamp,
@@ -255,8 +255,10 @@ def test_set_evidence_malicious_asn(
     """
     Test `set_evidence_malicious_asn` for setting evidence of malicious ASN interactions.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_ip_identification.return_value = " (Organization: Example Org)"
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_ip_identification.return_value = (
+        " (Organization: Example Org)"
+    )
     threatintel.set_evidence_malicious_asn(
         daddr=daddr,
         uid=uid,
@@ -267,7 +269,7 @@ def test_set_evidence_malicious_asn(
         asn_info=asn_info,
         is_dns_response=is_dns_response,
     )
-    mock_db.set_evidence.assert_called()
+    threatintel.db.set_evidence.assert_called()
 
 
 @pytest.mark.parametrize(
@@ -324,7 +326,6 @@ def test_set_evidence_malicious_asn(
     ],
 )
 def test_set_evidence_malicious_ip(
-    mock_db,
     ip,
     uid,
     daddr,
@@ -338,8 +339,10 @@ def test_set_evidence_malicious_ip(
     """
     Test `set_evidence_malicious_ip` for recording evidence of traffic with malicious IPs.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_ip_identification.return_value = " (Organization: Example Org)"
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_ip_identification.return_value = (
+        " (Organization: Example Org)"
+    )
     threatintel.set_evidence_malicious_ip(
         ip=ip,
         uid=uid,
@@ -350,7 +353,7 @@ def test_set_evidence_malicious_ip(
         twid=twid,
         ip_state=ip_state,
     )
-    assert mock_db.set_evidence.call_count == expected_call_count
+    assert threatintel.db.set_evidence.call_count == expected_call_count
 
 
 @pytest.mark.parametrize(
@@ -363,9 +366,9 @@ def test_set_evidence_malicious_ip(
         ("invalid", False),
     ],
 )
-def test_is_valid_threat_level(threat_level, expected, mock_db):
+def test_is_valid_threat_level(threat_level, expected):
     """Test `is_valid_threat_level` for recognizing valid threat levels."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     assert threatintel.is_valid_threat_level(threat_level) is expected
 
 
@@ -377,9 +380,9 @@ def test_is_valid_threat_level(threat_level, expected, mock_db):
         ("ICMP", "srcip", False),
     ],
 )
-def test_is_outgoing_icmp_packet(protocol, ip_address, expected, mock_db):
+def test_is_outgoing_icmp_packet(protocol, ip_address, expected):
     """Test `is_outgoing_icmp_packet` for identifying outbound ICMP packets."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     assert (
         threatintel.is_outgoing_icmp_packet(protocol, ip_address) is expected
     )
@@ -410,15 +413,15 @@ def test_is_outgoing_icmp_packet(protocol, ip_address, expected, mock_db):
     ],
 )
 def test_delete_old_source_ips_with_deletions(
-    mock_db, mock_ioc_data, file_to_delete, expected_deleted_ips
+    mock_ioc_data, file_to_delete, expected_deleted_ips
 ):
     """
     Test `__delete_old_source_ips` when there are IPs to delete.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_IPs_in_IoC.return_value = mock_ioc_data
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
-    mock_db.delete_ips_from_IoC_ips.assert_called_once_with(
+    threatintel.db.delete_ips_from_IoC_ips.assert_called_once_with(
         expected_deleted_ips
     )
 
@@ -437,16 +440,14 @@ def test_delete_old_source_ips_with_deletions(
         ({}, "old_file.txt"),
     ],
 )
-def test_delete_old_source_ips_no_deletions(
-    mock_db, mock_ioc_data, file_to_delete
-):
+def test_delete_old_source_ips_no_deletions(mock_ioc_data, file_to_delete):
     """
     Test `__delete_old_source_ips` when there are no IPs to delete.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_IPs_in_IoC.return_value = mock_ioc_data
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
-    mock_db.delete_ips_from_IoC_ips.assert_not_called()
+    threatintel.db.delete_ips_from_IoC_ips.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -483,16 +484,19 @@ def test_delete_old_source_ips_no_deletions(
     ],
 )
 def test_delete_old_source_domains(
-    mock_db, domains_in_ioc, file_to_delete, expected_calls
+    domains_in_ioc, file_to_delete, expected_calls
 ):
     """
     Test the `__delete_old_source_domains` method
     for removing outdated domain IoCs.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_Domains_in_IoC.return_value = domains_in_ioc
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_all_blacklisted_domains.return_value = domains_in_ioc
     threatintel._ThreatIntel__delete_old_source_domains(file_to_delete)
-    assert mock_db.delete_domains_from_IoC_domains.call_count == expected_calls
+    assert (
+        threatintel.db.delete_domains_from_IoC_domains.call_count
+        == expected_calls
+    )
 
 
 @pytest.mark.parametrize(
@@ -551,7 +555,6 @@ def test_delete_old_source_domains(
     ],
 )
 def test_delete_old_source_data_from_database(
-    mock_db,
     data_file,
     mock_ips_ioc,
     mock_domains_ioc,
@@ -563,18 +566,19 @@ def test_delete_old_source_data_from_database(
     method for removing both
     outdated IP and domain IoCs.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
 
-    mock_db.get_IPs_in_IoC.return_value = mock_ips_ioc
-    mock_db.get_Domains_in_IoC.return_value = mock_domains_ioc
+    threatintel.db.get_all_blacklisted_ips.return_value = mock_ips_ioc
+    threatintel.db.get_all_blacklisted_domains.return_value = mock_domains_ioc
 
     threatintel._ThreatIntel__delete_old_source_data_from_database(data_file)
 
     assert (
-        mock_db.delete_ips_from_IoC_ips.call_count == expected_delete_ips_calls
+        threatintel.db.delete_ips_from_IoC_ips.call_count
+        == expected_delete_ips_calls
     )
     assert (
-        mock_db.delete_domains_from_IoC_domains.call_count
+        threatintel.db.delete_domains_from_IoC_domains.call_count
         == expected_delete_domains_calls
     )
 
@@ -592,13 +596,12 @@ def test_should_update_local_ti_file(
     old_hash,
     expected_return,
     mocker,
-    mock_db,
 ):
     """
     Test the logic for updating local threat
     intelligence files based on hash comparison.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     own_malicious_iocs = os.path.join(
         threatintel.path_to_local_ti_files, "own_malicious_iocs.csv"
     )
@@ -606,7 +609,7 @@ def test_should_update_local_ti_file(
         "slips_files.common.slips_utils.Utils.get_sha256_hash"
     )
     mock_hash.return_value = current_hash
-    mock_db.get_TI_file_info.return_value = {"hash": old_hash}
+    threatintel.db.get_ti_feed_info.return_value = {"hash": old_hash}
 
     assert (
         threatintel.should_update_local_ti_file(own_malicious_iocs)
@@ -652,23 +655,23 @@ def test_should_update_local_ti_file(
     ],
 )
 def test_spamhaus_success(
-    mocker, mock_db, ip_address, mock_resolver_return, expected_result
+    mocker, ip_address, mock_resolver_return, expected_result
 ):
     """
     Test the `spamhaus` method for successful Spamhaus DNSBL queries.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_resolver = mocker.patch("dns.resolver.resolve")
     mock_resolver.return_value = mock_resolver_return
     result = threatintel.spamhaus(ip_address)
     assert result == expected_result
 
 
-def test_spamhaus_dns_error(mocker, mock_db):
+def test_spamhaus_dns_error(mocker):
     """
     Test the `spamhaus` method's handling of DNS resolution errors.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_resolver = mocker.patch("dns.resolver.resolve")
     mock_resolver.side_effect = Exception("DNS resolution error")
     result = threatintel.spamhaus("13.14.15.16")
@@ -683,9 +686,9 @@ def test_spamhaus_dns_error(mocker, mock_db):
         ("malicious.com", None),
     ],
 )
-def test_is_ignored_domain(domain, expected, mock_db):
+def test_is_ignored_domain(domain, expected):
     """Test `is_ignored_domain` for filtering out irrelevant domains."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     assert threatintel.is_ignored_domain(domain) is expected
 
 
@@ -712,7 +715,7 @@ def test_is_ignored_domain(domain, expected, mock_db):
             (
                 "Malicious downloaded file 1234567890abcdef1234567890abcdef. "
                 "size: 1024 from IP: 192.168.1.1. "
-                "Detected by: VirusTotal. Score: 0.9.  (Organization: Example Org)"
+                "Detected by: VirusTotal. Score: 0.9."
             ),
             ThreatLevel.HIGH,
             0.9,
@@ -737,7 +740,7 @@ def test_is_ignored_domain(domain, expected, mock_db):
             (
                 "Malicious downloaded file abcdef0123456789abcdef0123456789. "
                 "size: 512 from IP: 192.168.1.2. "
-                "Detected by: Example Blacklist. Score: 0.5.  (Organization: Example Org)"
+                "Detected by: Example Blacklist. Score: 0.5."
             ),
             ThreatLevel.LOW,
             0.5,
@@ -745,7 +748,6 @@ def test_is_ignored_domain(domain, expected, mock_db):
     ],
 )
 def test_set_evidence_malicious_hash(
-    mock_db,
     file_info,
     expected_description,
     expected_threat_level,
@@ -756,10 +758,12 @@ def test_set_evidence_malicious_hash(
     covering different threat levels,
     confidence scores, and blacklist sources.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_ip_identification.return_value = " (Organization: Example Org)"
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_ip_identification.return_value = (
+        " (Organization: Example Org)"
+    )
     threatintel.set_evidence_malicious_hash(file_info)
-    call_args = mock_db.set_evidence.call_args_list
+    call_args = threatintel.db.set_evidence.call_args_list
     for call in call_args:
         evidence = call[0][0]
         assert expected_description in evidence.description
@@ -786,13 +790,13 @@ def test_set_evidence_malicious_hash(
     ],
 )
 def test_search_online_for_hash(
-    mocker, mock_db, circl_lu_return, urlhaus_lookup_return, expected_result
+    mocker, circl_lu_return, urlhaus_lookup_return, expected_result
 ):
     """
     Test `search_online_for_hash` for querying
     online threat intelligence sources.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_circl_lu = mocker.patch.object(threatintel, "circl_lu")
     mock_urlhaus_lookup = mocker.patch.object(
         threatintel.urlhaus, "urlhaus_lookup"
@@ -816,17 +820,16 @@ def test_search_online_for_hash(
         (
             "192.168.1.1",
             '{"description": "Malicious IP"}',
-            {"description": "Malicious IP"},
+            json.dumps({"description": "Malicious IP"}),
         ),
-        ("10.0.0.1", None, False),
+        ("10.0.0.1", None, None),
     ],
 )
-def test_search_offline_for_ip(
-    mock_db, ip_address, mock_return_value, expected_result
-):
-    """Test `search_offline_for_ip` for querying local threat intelligence data."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.search_IP_in_IoC.return_value = mock_return_value
+def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
+    """Test `search_offline_for_ip` for querying local
+    threat intelligence data."""
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.is_blacklisted_ip.return_value = mock_return_value
     result = threatintel.search_offline_for_ip(ip_address)
     assert result == expected_result
 
@@ -840,11 +843,11 @@ def test_search_offline_for_ip(
 )
 @patch("modules.threat_intelligence.threat_intelligence.ThreatIntel.spamhaus")
 def test_search_online_for_ip(
-    mock_spamhaus, ip_address, mock_return_value, expected_result, mock_db
+    mock_spamhaus, ip_address, mock_return_value, expected_result
 ):
     """Test `search_online_for_ip` for querying online threat intelligence sources."""
     mock_spamhaus.return_value = mock_return_value
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     result = threatintel.search_online_for_ip(ip_address)
     assert result == expected_result
 
@@ -867,12 +870,11 @@ def test_search_online_for_ip(
     ],
 )
 def test_ip_belongs_to_blacklisted_range(
-    mocker, mock_db, ip, ip_type, in_blacklist, expected_result
+    mocker, ip, ip_type, in_blacklist, expected_result
 ):
     """Test `ip_belongs_to_blacklisted_range`
     for checking malicious IP ranges."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db = mocker.patch.object(threatintel, "db")
+    threatintel = ModuleFactory().create_threatintel_obj()
     first_octet = str(
         ipaddress.ip_address(ip).exploded.split("/")[0].split(".")[0]
         if ip_type == "ipv4"
@@ -890,7 +892,7 @@ def test_ip_belongs_to_blacklisted_range(
     threatintel.cached_ipv6_ranges = (
         {first_octet: [range_value]} if ip_type == "ipv6" else {}
     )
-    mock_db.get_malicious_ip_ranges.return_value = (
+    threatintel.db.get_all_blacklisted_ip_ranges.return_value = (
         {
             range_value: '{"description": "Bad range", "source": "Example Source", "threat_level": "high"}'
         }
@@ -922,11 +924,11 @@ def test_ip_belongs_to_blacklisted_range(
     ],
 )
 def test_search_online_for_url(
-    mocker, mock_db, url, mock_return_value, expected_result
+    mocker, url, mock_return_value, expected_result
 ):
     """Test `search_online_for_url` for
     querying online threat intelligence sources."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_urlhaus_lookup = mocker.patch.object(
         threatintel.urlhaus, "urlhaus_lookup"
     )
@@ -947,18 +949,20 @@ def test_search_online_for_url(
     ],
 )
 def test_search_offline_for_domain(
-    mocker, mock_db, domain, mock_return_value, expected_result
+    mocker, domain, mock_return_value, expected_result
 ):
     """Test `search_offline_for_domain` for checking domain blacklisting."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db = mocker.patch.object(threatintel, "db")
-    mock_db.is_domain_malicious.return_value = mock_return_value
+    threatintel = ModuleFactory().create_threatintel_obj()
+
+    threatintel.db = mocker.patch.object(threatintel, "db")
+    threatintel.db.is_blacklisted_domain.return_value = mock_return_value
     result = threatintel.search_offline_for_domain(domain)
     assert result == expected_result
 
 
 @pytest.mark.parametrize(
-    "cname, dns_query, is_subdomain, cname_info, expected_call_count, expected_confidence, expected_description",
+    "cname, dns_query, is_subdomain, cname_info, "
+    "expected_call_count, expected_confidence, expected_description",
     [
         # Test Case 1: Malicious CNAME, not a subdomain
         (
@@ -997,7 +1001,6 @@ def test_search_offline_for_domain(
     ],
 )
 def test_set_evidence_malicious_cname_in_dns_response(
-    mock_db,
     cname,
     dns_query,
     is_subdomain,
@@ -1008,7 +1011,7 @@ def test_set_evidence_malicious_cname_in_dns_response(
 ):
     """Test `set_evidence_malicious_cname_in_dns_response`
     for recording evidence of malicious CNAMEs."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
 
     threatintel.set_evidence_malicious_cname_in_dns_response(
         cname=cname,
@@ -1021,17 +1024,17 @@ def test_set_evidence_malicious_cname_in_dns_response(
         twid="timewindow1",
     )
 
-    assert mock_db.set_evidence.call_count == expected_call_count
+    assert threatintel.db.set_evidence.call_count == expected_call_count
 
     if expected_call_count > 0:
-        call_args = mock_db.set_evidence.call_args[0][0]
+        call_args = threatintel.db.set_evidence.call_args[0][0]
         assert call_args.description == expected_description
         assert call_args.confidence == expected_confidence
 
 
-def test_pre_main(mocker, mock_db):
+def test_pre_main(mocker):
     """Test `pre_main` for initializing the module."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mocker.patch.object(threatintel, "update_local_file")
     threatintel.pre_main()
     assert threatintel.update_local_file.call_count == 3
@@ -1056,11 +1059,11 @@ def test_pre_main(mocker, mock_db):
         ("192.168.1.1", "ICMP", "srcip", True),
     ],
 )
-def test_should_lookup(ip, protocol, ip_state, expected_result, mock_db):
+def test_should_lookup(ip, protocol, ip_state, expected_result):
     """
     Test `should_lookup` for various IP addresses, protocols, and states.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     assert threatintel.should_lookup(ip, protocol, ip_state) == expected_result
 
 
@@ -1079,14 +1082,14 @@ def test_should_lookup(ip, protocol, ip_state, expected_result, mock_db):
     ],
 )
 def test_is_malicious_cname(
-    mocker, mock_db, cname, is_domain_malicious_return, expected_result
+    mocker, cname, is_domain_malicious_return, expected_result
 ):
     """
     Test `is_malicious_cname` for various CNAME scenarios.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db = mocker.patch.object(threatintel, "db")
-    mock_db.is_domain_malicious.return_value = (
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db = mocker.patch.object(threatintel, "db")
+    threatintel.db.is_blacklisted_domain.return_value = (
         is_domain_malicious_return,
         False,
     )
@@ -1109,11 +1112,11 @@ def test_is_malicious_cname(
         "another_ignored.com",
     ],
 )
-def test_is_malicious_cname_ignored_cname(mocker, mock_db, cname):
+def test_is_malicious_cname_ignored_cname(mocker, cname):
     """
     Test `is_malicious_cname` for ignored CNAME scenarios.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mocker.patch.object(threatintel, "is_ignored_domain", return_value=True)
 
     result = threatintel.is_malicious_cname(
@@ -1145,11 +1148,9 @@ def test_is_malicious_cname_ignored_cname(mocker, mock_db, cname):
         (None, None, False),
     ],
 )
-def test_is_malicious_ip(
-    offline_result, online_result, expected_result, mock_db
-):
+def test_is_malicious_ip(offline_result, online_result, expected_result):
     """Test `is_malicious_ip` for checking IP blacklisting."""
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     with patch(
         "modules.threat_intelligence.threat_intelligence.ThreatIntel.search_offline_for_ip",
         return_value=offline_result,
@@ -1176,12 +1177,12 @@ def test_is_malicious_ip(
         ("safe.com", None, False),
     ],
 )
-def test_is_malicious_domain(domain, result, is_malicious, mocker, mock_db):
+def test_is_malicious_domain(domain, result, is_malicious, mocker):
     """
     Test `is_malicious_domain` for identifying
     and recording evidence of malicious domains.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_search_offline_for_domain = mocker.patch.object(
         threatintel, "search_offline_for_domain"
     )
@@ -1221,14 +1222,14 @@ def test_is_malicious_domain(domain, result, is_malicious, mocker, mock_db):
     ],
 )
 def test_is_malicious_hash(
-    mocker, mock_db, search_online_result, expected_set_evidence_call
+    mocker, search_online_result, expected_set_evidence_call
 ):
     """
     Test `is_malicious_hash` for identifying and
     recording evidence of malicious file hashes.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db = mocker.patch.object(threatintel, "db")
+    threatintel = ModuleFactory().create_threatintel_obj()
+
     mock_search_online_for_hash = mocker.patch.object(
         threatintel, "search_online_for_hash"
     )
@@ -1249,7 +1250,7 @@ def test_is_malicious_hash(
     mock_search_online_for_hash.return_value = search_online_result
     threatintel.is_malicious_hash(flow_info)
 
-    assert mock_db.set_evidence.called == expected_set_evidence_call
+    assert threatintel.db.set_evidence.called == expected_set_evidence_call
 
 
 @pytest.mark.parametrize(
@@ -1259,12 +1260,12 @@ def test_is_malicious_hash(
         ("http://safe.com", None, False),
     ],
 )
-def test_is_malicious_url(url, result, is_malicious, mocker, mock_db):
+def test_is_malicious_url(url, result, is_malicious, mocker):
     """
     Test `is_malicious_url` for correctly handling
     both malicious and non-malicious URLs.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_search_online_for_url = mocker.patch.object(
         threatintel, "search_online_for_url"
     )
@@ -1323,12 +1324,12 @@ def test_is_malicious_url(url, result, is_malicious, mocker, mock_db):
         ),
     ],
 )
-def test_main_domain_lookup(mocker, mock_db, msg_data, expected_call):
+def test_main_domain_lookup(mocker, msg_data, expected_call):
     """
     Test the `main` function's handling of domain name lookups,
     covering scenarios with DNS responses and direct domain queries.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_call = mocker.patch.object(threatintel, expected_call)
     mock_get_msg = mocker.patch.object(threatintel, "get_msg")
     mock_get_msg.return_value = {"data": json.dumps(msg_data)}
@@ -1338,22 +1339,22 @@ def test_main_domain_lookup(mocker, mock_db, msg_data, expected_call):
     mock_call.assert_called_once()
 
 
-def test_main_empty_message(mocker, mock_db):
+def test_main_empty_message(mocker):
     """
     Test the `main` function's behavior when receiving an empty message,
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_get_msg = mocker.patch.object(threatintel, "get_msg")
     mock_get_msg.return_value = None
     threatintel.main()
 
 
-def test_main_file_hash_lookup(mocker, mock_db):
+def test_main_file_hash_lookup(mocker):
     """
     Test the `main` function's handling of file hash lookups,
     verifying it calls the appropriate malicious hash checks.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
 
     mock_is_malicious_hash = mocker.patch.object(
         threatintel, "is_malicious_hash"
@@ -1411,13 +1412,11 @@ def test_main_file_hash_lookup(mocker, mock_db):
         ),
     ],
 )
-def test_circl_lu(
-    mocker, mock_db, status_code, response_text, expected_result
-):
+def test_circl_lu(mocker, status_code, response_text, expected_result):
     """
     Test the `circl_lu` method for various Circl.lu API responses.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_session = mocker.patch.object(threatintel, "circl_session")
     flow_info = {"flow": {"md5": "1234567890abcdef1234567890abcdef"}}
     mock_response = MagicMock()
@@ -1441,12 +1440,12 @@ def test_circl_lu(
         ("25", 0.75),
     ],
 )
-def test_calculate_threat_level(circl_trust, expected_threat_level, mock_db):
+def test_calculate_threat_level(circl_trust, expected_threat_level):
     """
     Test `calculate_threat_level` for accurately converting
     Circl.lu trust scores to threat levels.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     assert (
         threatintel.calculate_threat_level(circl_trust)
         == expected_threat_level
@@ -1463,12 +1462,12 @@ def test_calculate_threat_level(circl_trust, expected_threat_level, mock_db):
         ("blacklist1 blacklist2 blacklist3", 1),
     ],
 )
-def test_calculate_confidence(blacklists, expected_confidence, mock_db):
+def test_calculate_confidence(blacklists, expected_confidence):
     """
     Test `calculate_confidence` to ensure it properly assigns confidence
     scores based on the number of blacklists flagging a file.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     assert threatintel.calculate_confidence(blacklists) == expected_confidence
 
 
@@ -1511,7 +1510,6 @@ def test_calculate_confidence(blacklists, expected_confidence, mock_db):
 )
 def test_main_ip_lookup(
     mocker,
-    mock_db,
     ip_address,
     is_malicious,
     should_lookup_return,
@@ -1520,7 +1518,7 @@ def test_main_ip_lookup(
     """
     Test the main function's handling of IP address lookups.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mock_is_malicious_ip = mocker.patch.object(
         threatintel, "is_malicious_ip", return_value=is_malicious
     )
@@ -1574,13 +1572,13 @@ def test_main_ip_lookup(
     ],
 )
 def test_update_local_file_parse_function(
-    filename, expected_parse_function, mocker, mock_db
+    filename, expected_parse_function, mocker
 ):
     """
     Test `update_local_file` to ensure the correct parsing function
     is called based on the filename.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     mocker.patch.object(
         threatintel, "should_update_local_ti_file", return_value="new_hash"
     )
@@ -1614,23 +1612,23 @@ def test_update_local_file_parse_function(
     ],
 )
 def test_ip_has_blacklisted_asn(
-    mock_db, ip_address, asn, asn_info, expected_call_count
+    ip_address, asn, asn_info, expected_call_count
 ):
     """
     Test `ip_has_blacklisted_asn` for both blacklisted and
     non-blacklisted ASNs.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     uid = "test_uid"
     timestamp = "2023-10-26 10:00:00"
     profileid = "profile_127.0.0.1"
     twid = "timewindow1"
-    mock_db.get_ip_info.return_value = {"asn": {"number": asn}}
-    mock_db.is_blacklisted_ASN.return_value = asn_info
+    threatintel.db.get_ip_info.return_value = {"asn": {"number": asn}}
+    threatintel.db.is_blacklisted_ASN.return_value = asn_info
     threatintel.ip_has_blacklisted_asn(
         ip_address, uid, timestamp, profileid, twid
     )
-    assert mock_db.set_evidence.call_count == expected_call_count
+    assert threatintel.db.set_evidence.call_count == expected_call_count
 
 
 @pytest.mark.parametrize(
@@ -1695,7 +1693,6 @@ def test_ip_has_blacklisted_asn(
     ],
 )
 def test_set_evidence_malicious_domain(
-    mock_db,
     domain,
     uid,
     timestamp,
@@ -1708,8 +1705,8 @@ def test_set_evidence_malicious_domain(
     """
     Test `set_evidence_malicious_domain` with various scenarios.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_domain_resolution.return_value = (
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_domain_resolution.return_value = (
         ["192.168.1.1"] if domain != "noresolve.com" else []
     )
 
@@ -1723,11 +1720,12 @@ def test_set_evidence_malicious_domain(
         twid=twid,
     )
 
-    assert mock_db.set_evidence.call_count == expected_evidence_count
+    assert threatintel.db.set_evidence.call_count == expected_evidence_count
 
 
 @pytest.mark.parametrize(
-    "ip, uid, timestamp, ip_info, dns_query, profileid, twid, expected_description, expected_threat_level",
+    "ip, uid, timestamp, ip_info, dns_query, profileid, "
+    "twid, expected_description, expected_threat_level",
     [
         # TestCase 1: Medium threat level in DNS response
         (
@@ -1744,8 +1742,7 @@ def test_set_evidence_malicious_domain(
             "timewindow1",
             (
                 "DNS answer with a blacklisted IP: 192.168.1.1 for query: "
-                "example.com "
-                "(Organization: Example Org) Description: Malicious IP Source: TI Feed."
+                "example.com Description: Malicious IP Source: TI Feed."
             ),
             ThreatLevel.MEDIUM,
         ),
@@ -1764,8 +1761,8 @@ def test_set_evidence_malicious_domain(
             "timewindow2",
             (
                 "DNS answer with a blacklisted IP: 192.168.1.2 for query: "
-                "test.com (Organization: Example Org) Description: Another"
-                " Malicious IP Source: Different Feed."
+                "test.com "
+                "Description: Another Malicious IP Source: Different Feed."
             ),
             ThreatLevel.HIGH,
         ),
@@ -1785,15 +1782,13 @@ def test_set_evidence_malicious_domain(
             (
                 "DNS answer with a blacklisted IP: 192.168.1.3 for query: "
                 "domain.com "
-                "(Organization: Example Org) Description: Yet Another "
-                "Malicious IP Source: Another Feed."
+                "Description: Yet Another Malicious IP Source: Another Feed."
             ),
             ThreatLevel.LOW,
         ),
     ],
 )
 def test_set_evidence_malicious_ip_in_dns_response(
-    mock_db,
     ip,
     uid,
     timestamp,
@@ -1808,8 +1803,10 @@ def test_set_evidence_malicious_ip_in_dns_response(
     Test `set_evidence_malicious_ip_in_dns_response` for recording evidence of
     malicious IPs received in DNS responses.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
-    mock_db.get_ip_identification.return_value = " (Organization: Example Org)"
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_ip_identification.return_value = (
+        " (Organization: Example Org)"
+    )
     threatintel.set_evidence_malicious_ip_in_dns_response(
         ip=ip,
         uid=uid,
@@ -1819,22 +1816,21 @@ def test_set_evidence_malicious_ip_in_dns_response(
         profileid=profileid,
         twid=twid,
     )
-    call_args_list = mock_db.set_evidence.call_args_list
+    call_args_list = threatintel.db.set_evidence.call_args_list
     for call_args in call_args_list:
         evidence = call_args[0][0]
         assert expected_description in evidence.description
         assert evidence.threat_level == expected_threat_level
 
-    assert mock_db.set_ip_info.call_count == 1
-    assert mock_db.set_malicious_ip.call_count == 1
+    assert threatintel.db.set_ip_info.call_count == 1
 
 
-def test_read_configuration(mocker, mock_db):
+def test_read_configuration(mocker):
     """
     Test `__read_configuration` to verify it correctly
     reads configuration settings.
     """
-    threatintel = ModuleFactory().create_threatintel_obj(mock_db)
+    threatintel = ModuleFactory().create_threatintel_obj()
     with patch(
         "modules.threat_intelligence.threat_intelligence.ConfigParser"
     ) as MockConfigParser:

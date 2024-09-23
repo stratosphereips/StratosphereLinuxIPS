@@ -1,13 +1,13 @@
-import socket
 import psutil
 import sys
-import redis
-import time
 import os
 import shutil
 import json
 from datetime import datetime
-from typing import Tuple, Set
+from typing import (
+    Tuple,
+    Set,
+)
 
 from slips_files.common.slips_utils import utils
 
@@ -15,20 +15,6 @@ from slips_files.common.slips_utils import utils
 class MetadataManager:
     def __init__(self, main):
         self.main = main
-
-    def get_host_ip(self):
-        """
-        Recognize the IP address of the machine
-        """
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("1.1.1.1", 80))
-            ipaddr_check = s.getsockname()[0]
-            s.close()
-        except socket.error:
-            # not connected to the internet
-            return None
-        return ipaddr_check
 
     def get_pid_using_port(self, port):
         """
@@ -40,29 +26,6 @@ class MetadataManager:
             if conn.laddr.port == port:
                 return psutil.Process(conn.pid).pid  # .name()
         return None
-
-    def store_host_ip(self):
-        """
-        Store the host IP address if input type is interface
-        """
-        running_on_interface = (
-            "-i" in sys.argv or self.main.db.is_growing_zeek_dir()
-        )
-        if not running_on_interface:
-            return
-
-        hostIP = self.get_host_ip()
-        while True:
-            try:
-                self.main.db.set_host_ip(hostIP)
-                break
-            except redis.exceptions.DataError:
-                self.main.print(
-                    "Not Connected to the internet. Reconnecting in 10s."
-                )
-                time.sleep(10)
-                hostIP = self.get_host_ip()
-        return hostIP
 
     def add_metadata(self):
         """

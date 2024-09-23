@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from slips_files.common.slips_utils import utils
 
 
 @dataclass
@@ -23,11 +24,11 @@ class NfdumpConn:
 
     sbytes: int
     dbytes: int
-    # required to be able to add_flow
+    uid: str = field(default_factory=utils.generate_uid)
+    # required to be able to call self.db.add_flow() in profiler
     smac = False
     dmac = False
     appproto = False
-    uid = False
     type_: str = "nfdump"
 
     def __post_init__(self):

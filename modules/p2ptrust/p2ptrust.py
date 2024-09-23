@@ -17,7 +17,7 @@ import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.trust.trustdb as trustdb
 import modules.p2ptrust.utils.utils as p2p_utils
 from modules.p2ptrust.utils.go_director import GoDirector
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
     ProfileID,
@@ -27,7 +27,6 @@ from slips_files.core.evidence_structure.evidence import (
     EvidenceType,
     IoCType,
     Direction,
-    IDEACategory,
 )
 
 
@@ -438,20 +437,14 @@ class Trust(IModule):
         threat_level = ThreatLevel[threat_level.upper()]
         twid_int = int(ip_info.get("twid").replace("timewindow", ""))
 
-        # add this ip to our MaliciousIPs hash in the database
-        self.db.set_malicious_ip(attacker_ip, profileid, ip_info.get("twid"))
-
-        ip_identification = self.db.get_ip_identification(attacker_ip)
-
         if "src" in ip_info.get("ip_state"):
             description = (
                 f"Connection from blacklisted IP {attacker_ip} "
-                f"({ip_identification}) to {saddr} Source: Slips P2P network."
+                f"to {saddr} Source: Slips P2P network."
             )
         else:
             description = (
                 f"Connection to blacklisted IP {attacker_ip} "
-                f"({ip_identification}) "
                 f"from {saddr} Source: Slips P2P network."
             )
 
@@ -468,7 +461,6 @@ class Trust(IModule):
                 timewindow=TimeWindow(number=twid_int),
                 uid=[ip_info.get("uid")],
                 timestamp=str(ip_info.get("stime")),
-                category=IDEACategory.ANOMALY_TRAFFIC,
             )
 
             self.db.set_evidence(evidence)

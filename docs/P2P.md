@@ -77,7 +77,7 @@ source ~/.bashrc
 
 The P2P module is disabled by default in Slips.
 
-To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```config/slips.conf```
+To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```config/slips.yaml```
 
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
 
@@ -159,7 +159,7 @@ Slips contains a minimal log file for reports received by other peers and peer u
 ```output/p2p_reports.log```
 
 For a more detailed p2p logs, for example (peer ping pongs, peer lists, errors, etc.)
-you can enable p2p.log in slips.conf by setting ```create_p2p_logfile``` to ```yes```
+you can enable p2p.log in slips.yaml by setting ```create_p2p_logfile``` to ```yes```
 and a ```p2p.log``` will be available in the output dir
 
 Slips rotates the p2p.log every 1 day by default, and keeps the logs of 1 past day only.

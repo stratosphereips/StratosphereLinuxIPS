@@ -54,26 +54,23 @@ class FlowAlerts(IModule):
     def pre_main(self):
         utils.drop_root_privs()
         self.analyzers_map = {
-            "new_downloaded_file": self.downloaded_file.analyze,
-            "new_notice": self.notice.analyze,
-            "new_smtp": self.smtp.analyze,
+            "new_downloaded_file": [self.downloaded_file.analyze],
+            "new_notice": [self.notice.analyze],
+            "new_smtp": [self.smtp.analyze],
             "new_flow": [self.conn.analyze, self.ssl.analyze],
-            "new_dns": self.dns.analyze,
-            "tw_closed": self.conn.analyze,
-            "new_ssh": self.ssh.analyze,
-            "new_software": self.software.analyze,
-            "new_tunnel": self.tunnel.analyze,
-            "new_ssl": self.ssl.analyze,
+            "new_dns": [self.dns.analyze],
+            "tw_closed": [self.conn.analyze],
+            "new_ssh": [self.ssh.analyze],
+            "new_software": [self.software.analyze],
+            "new_tunnel": [self.tunnel.analyze],
+            "new_ssl": [self.ssl.analyze],
         }
 
     def main(self):
         for channel, analyzers in self.analyzers_map.items():
-            msg = self.get_msg(channel)
+            msg: dict = self.get_msg(channel)
             if not msg:
                 continue
 
-            if isinstance(analyzers, list):
-                for analyzer in analyzers:
-                    analyzer(msg)
-            else:
-                analyzers(msg)
+            for analyzer in analyzers:
+                analyzer(msg)

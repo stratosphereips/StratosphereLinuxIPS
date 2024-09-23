@@ -1,6 +1,6 @@
 maxminddb==2.6.2
-numpy==2.0.1
-watchdog==4.0.1
+numpy==1.26.4
+watchdog==5.0.0
 redis==5.0.8
 urllib3==2.2.2
 pandas==2.2.2
@@ -25,7 +25,7 @@ pytest-xdist==3.6.1
 scipy==1.14.0
 scikit-learn==1.5.1
 GitPython==3.1.43
-protobuf==5.27.3
+protobuf==4.25.3
 exclusiveprocess==0.9.4
 setuptools
 pytest-dependency==0.6.0
@@ -38,10 +38,11 @@ termcolor==2.4.0
 viztracer==0.16.3
 yappi==1.6.0
 pytest-sugar==1.0.0
-memray==1.13.3
+memray==1.13.4
 aid_hash
 black==24.8.0
-ruff==0.5.7
+ruff==0.6.2
 pre-commit==3.8.0
 coverage==7.6.1
 pyyaml
+git+https://github.com/SECEF/python-idmefv2.git

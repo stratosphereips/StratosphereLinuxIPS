@@ -1,5 +1,10 @@
 import pytest
-from unittest.mock import patch, call, MagicMock
+from unittest.mock import (
+    patch,
+    call,
+    MagicMock,
+    Mock,
+)
 from tests.module_factory import ModuleFactory
 import datetime
 import time
@@ -24,12 +29,14 @@ import time
         ([]),
     ],
 )
-def test_delete_tables(mock_db, existing_tables):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
-    mock_db.execute.side_effect = lambda query: (
+def test_delete_tables(existing_tables):
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute = Mock()
+    trust_db.conn.execute.side_effect = lambda query: (
         None if query.startswith("DROP TABLE") else ["table"]
     )
-    mock_db.fetchall.return_value = existing_tables
+    trust_db.conn.fetchall = Mock()
+    trust_db.conn.fetchall.return_value = existing_tables
 
     expected_calls = [
         call("DROP TABLE IF EXISTS opinion_cache;"),
@@ -39,9 +46,8 @@ def test_delete_tables(mock_db, existing_tables):
         call("DROP TABLE IF EXISTS reports;"),
     ]
 
-    with patch.object(mock_db, "execute") as mock_execute:
-        trust_db.delete_tables()
-        assert mock_execute.call_args_list == expected_calls
+    trust_db.delete_tables()
+    assert trust_db.conn.execute.call_args_list == expected_calls
 
 
 @pytest.mark.parametrize(
@@ -64,14 +70,14 @@ def test_delete_tables(mock_db, existing_tables):
     ],
 )
 def test_get_cached_network_opinion(
-    mock_db,
     key_type,
     reported_key,
     fetchone_result,
     expected_result,
 ):
-    mock_db.execute.return_value.fetchone.return_value = fetchone_result
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute = Mock()
+    trust_db.conn.execute.return_value.fetchone.return_value = fetchone_result
     result = trust_db.get_cached_network_opinion(key_type, reported_key)
     assert result == expected_result
 
@@ -106,7 +112,6 @@ def test_get_cached_network_opinion(
     ],
 )
 def test_update_cached_network_opinion(
-    mock_db,
     key_type,
     reported_key,
     score,
@@ -115,17 +120,16 @@ def test_update_cached_network_opinion(
     expected_query,
     expected_params,
 ):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
-    with patch.object(mock_db, "execute") as mock_execute:
-        with patch.object(mock_db, "commit") as mock_commit:
-            trust_db.update_cached_network_opinion(
-                key_type, reported_key, score, confidence, network_score
-            )
-
-            mock_execute.assert_called_once_with(
-                expected_query, expected_params
-            )
-            mock_commit.assert_called_once()
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute = Mock()
+    trust_db.conn.commit = Mock()
+    trust_db.update_cached_network_opinion(
+        key_type, reported_key, score, confidence, network_score
+    )
+    trust_db.conn.execute.assert_called_once_with(
+        expected_query, expected_params
+    )
+    trust_db.conn.commit.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -211,13 +215,12 @@ def test_update_cached_network_opinion(
         ),
     ],
 )
-def test_insert_new_go_data(mock_db, reports, expected_calls):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
-    with patch.object(mock_db, "executemany") as mock_executemany:
-        trust_db.insert_new_go_data(reports)
-
-    mock_executemany.assert_has_calls(expected_calls)
-    assert mock_executemany.call_count == len(expected_calls)
+def test_insert_new_go_data(reports, expected_calls):
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.executemany = Mock()
+    trust_db.insert_new_go_data(reports)
+    trust_db.conn.executemany.assert_has_calls(expected_calls)
+    assert trust_db.conn.executemany.call_count == len(expected_calls)
 
 
 @pytest.mark.parametrize(
@@ -242,18 +245,17 @@ def test_insert_new_go_data(mock_db, reports, expected_calls):
         ),
     ],
 )
-def test_insert_go_ip_pairing(mock_db, peerid, ip, timestamp, expected_params):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
-
-    with patch.object(mock_db, "execute") as mock_execute:
-        with patch.object(mock_db, "commit") as mock_commit:
-            trust_db.insert_go_ip_pairing(peerid, ip, timestamp)
-            mock_execute.assert_called_once_with(
-                "INSERT INTO peer_ips (ipaddress, peerid, "
-                "update_time) VALUES (?, ?, ?);",
-                expected_params,
-            )
-            mock_commit.assert_called_once()
+def test_insert_go_ip_pairing(peerid, ip, timestamp, expected_params):
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute = Mock()
+    trust_db.conn.commit = Mock()
+    trust_db.insert_go_ip_pairing(peerid, ip, timestamp)
+    trust_db.conn.execute.assert_called_once_with(
+        "INSERT INTO peer_ips (ipaddress, peerid, "
+        "update_time) VALUES (?, ?, ?);",
+        expected_params,
+    )
+    trust_db.conn.commit.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -262,17 +264,15 @@ def test_insert_go_ip_pairing(mock_db, peerid, ip, timestamp, expected_params):
         # Testcase 1: Using provided timestamp
         ("192.168.1.10", 0.85, 0.95, 1678886400, 1678886400),
         # Testcase 2: Using current time as timestamp
-        ("10.0.0.1", 0.6, 0.7, None, time.time()),
+        ("10.0.0.1", 0.6, 0.7, None, 1234),
     ],
 )
 def test_insert_slips_score(
-    mock_db, ip, score, confidence, timestamp, expected_timestamp
+    ip, score, confidence, timestamp, expected_timestamp
 ):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
-
+    trust_db = ModuleFactory().create_trust_db_obj()
     with patch.object(time, "time", return_value=time.time()) as mock_time:
         trust_db.insert_slips_score(ip, score, confidence, timestamp)
-
         expected_params = (
             ip,
             score,
@@ -280,12 +280,12 @@ def test_insert_slips_score(
             timestamp or mock_time.return_value,
         )
 
-        mock_db.execute.assert_called_once_with(
+        trust_db.conn.execute.assert_called_once_with(
             "INSERT INTO slips_reputation (ipaddress, score, confidence, "
             "update_time) VALUES (?, ?, ?, ?);",
             expected_params,
         )
-        mock_db.commit.assert_called_once()
+        trust_db.conn.commit.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -298,10 +298,9 @@ def test_insert_slips_score(
     ],
 )
 def test_insert_go_reliability(
-    mock_db, peerid, reliability, timestamp, expected_timestamp
+    peerid, reliability, timestamp, expected_timestamp
 ):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
-
+    trust_db = ModuleFactory().create_trust_db_obj()
     with patch.object(
         datetime, "datetime", wraps=datetime.datetime
     ) as mock_datetime:
@@ -314,12 +313,12 @@ def test_insert_go_reliability(
             timestamp or expected_timestamp,
         )
 
-        mock_db.execute.assert_called_once_with(
+        trust_db.conn.execute.assert_called_once_with(
             "INSERT INTO go_reliability (peerid, reliability, "
             "update_time) VALUES (?, ?, ?);",
             expected_params,
         )
-        mock_db.commit.assert_called_once()
+        trust_db.conn.commit.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -335,15 +334,16 @@ def test_insert_go_reliability(
         ("unknown_peer", None, (False, False)),
     ],
 )
-def test_get_ip_of_peer(mock_db, peerid, fetchone_result, expected_result):
-    mock_db.execute.return_value.fetchone.return_value = fetchone_result
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+def test_get_ip_of_peer(peerid, fetchone_result, expected_result):
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute = Mock()
+    trust_db.conn.execute.return_value.fetchone.return_value = fetchone_result
     result = trust_db.get_ip_of_peer(peerid)
     assert result == expected_result
 
 
-def test_create_tables(mock_db):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+def test_create_tables():
+    trust_db = ModuleFactory().create_trust_db_obj()
 
     expected_calls = [
         call(
@@ -388,10 +388,9 @@ def test_create_tables(mock_db):
             "update_time DATE NOT NULL);"
         ),
     ]
-
-    with patch.object(mock_db, "execute") as mock_execute:
-        trust_db.create_tables()
-        mock_execute.assert_has_calls(expected_calls, any_order=True)
+    trust_db.conn.execute = Mock()
+    trust_db.create_tables()
+    trust_db.conn.execute.assert_has_calls(expected_calls, any_order=True)
 
 
 @pytest.mark.parametrize(
@@ -425,7 +424,6 @@ def test_create_tables(mock_db):
     ],
 )
 def test_insert_new_go_report(
-    mock_db,
     reporter_peerid,
     key_type,
     reported_key,
@@ -435,26 +433,25 @@ def test_insert_new_go_report(
     expected_query,
     expected_params,
 ):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
-
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute = Mock()
+    trust_db.conn.commit = Mock()
     with patch("time.time", return_value=1678887000.0):
-        with patch.object(mock_db, "execute") as mock_execute:
-            with patch.object(mock_db, "commit") as mock_commit:
-                trust_db.insert_new_go_report(
-                    reporter_peerid,
-                    key_type,
-                    reported_key,
-                    score,
-                    confidence,
-                    timestamp,
-                )
-                mock_execute.assert_called_once()
-                actual_query, actual_params = mock_execute.call_args[0]
-                assert actual_query == expected_query
-                assert actual_params[:-1] == expected_params[:-1]
-                assert isinstance(actual_params[-1], (float, int))
-                assert abs(actual_params[-1] - expected_params[-1]) < 0.001
-                mock_commit.assert_called_once()
+        trust_db.insert_new_go_report(
+            reporter_peerid,
+            key_type,
+            reported_key,
+            score,
+            confidence,
+            timestamp,
+        )
+        trust_db.conn.execute.assert_called_once()
+        actual_query, actual_params = trust_db.conn.execute.call_args[0]
+        assert actual_query == expected_query
+        assert actual_params[:-1] == expected_params[:-1]
+        assert isinstance(actual_params[-1], (float, int))
+        assert abs(actual_params[-1] - expected_params[-1]) < 0.001
+        trust_db.conn.commit.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -497,9 +494,10 @@ def test_insert_new_go_report(
         ),
     ],
 )
-def test_get_reports_for_ip(mock_db, ipaddress, expected_reports):
-    mock_db.execute.return_value.fetchall.return_value = expected_reports
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+def test_get_reports_for_ip(ipaddress, expected_reports):
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute = Mock()
+    trust_db.conn.execute.return_value.fetchall.return_value = expected_reports
     reports = trust_db.get_reports_for_ip(ipaddress)
     assert reports == expected_reports
 
@@ -513,13 +511,11 @@ def test_get_reports_for_ip(mock_db, ipaddress, expected_reports):
         ("unknown_reporter", None),
     ],
 )
-def test_get_reporter_reliability(
-    mock_db, reporter_peerid, expected_reliability
-):
-    mock_db.execute.return_value.fetchone.return_value = (
+def test_get_reporter_reliability(reporter_peerid, expected_reliability):
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute.return_value.fetchone.return_value = (
         expected_reliability,
     )
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
     reliability = trust_db.get_reporter_reliability(reporter_peerid)
     assert reliability == expected_reliability
 
@@ -534,13 +530,13 @@ def test_get_reporter_reliability(
     ],
 )
 def test_get_reporter_reputation(
-    mock_db, reporter_ipaddress, expected_score, expected_confidence
+    reporter_ipaddress, expected_score, expected_confidence
 ):
-    mock_db.execute.return_value.fetchone.return_value = (
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute.return_value.fetchone.return_value = (
         expected_score,
         expected_confidence,
     )
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
     score, confidence = trust_db.get_reporter_reputation(reporter_ipaddress)
     assert score == expected_score
     assert confidence == expected_confidence
@@ -556,10 +552,11 @@ def test_get_reporter_reputation(
     ],
 )
 def test_get_reporter_ip(
-    mock_db, reporter_peerid, report_timestamp, fetchone_result, expected_ip
+    reporter_peerid, report_timestamp, fetchone_result, expected_ip
 ):
-    mock_db.execute.return_value.fetchone.return_value = fetchone_result
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn.execute = Mock()
+    trust_db.conn.execute.return_value.fetchone.return_value = fetchone_result
     ip = trust_db.get_reporter_ip(reporter_peerid, report_timestamp)
     assert ip == expected_ip
 
@@ -586,8 +583,8 @@ def test_get_reporter_ip(
         ),
     ],
 )
-def test_get_opinion_on_ip(mock_db, ipaddress, reports, expected_result):
-    trust_db = ModuleFactory().create_trust_db_obj(mock_db)
+def test_get_opinion_on_ip(ipaddress, reports, expected_result):
+    trust_db = ModuleFactory().create_trust_db_obj()
 
     trust_db.get_reports_for_ip = MagicMock(return_value=reports)
     trust_db.get_reporter_ip = MagicMock(

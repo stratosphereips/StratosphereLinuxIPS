@@ -1,9 +1,13 @@
 """Unit test for modules/http_analyzer/http_analyzer.py"""
 
 import json
+from dataclasses import asdict
 
+from slips_files.core.flows.zeek import (
+    HTTP,
+    Weird,
+)
 from tests.module_factory import ModuleFactory
-import random
 from unittest.mock import patch, MagicMock
 from modules.http_analyzer.http_analyzer import utils
 import pytest
@@ -21,33 +25,34 @@ SAFARI_UA = (
 )
 
 
-def get_random_MAC():
-    return "02:00:00:%02x:%02x:%02x" % (
-        random.randint(0, 255),
-        random.randint(0, 255),
-        random.randint(0, 255),
+def test_check_suspicious_user_agents():
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    flow = HTTP(
+        starttime="1726593782.8840969",
+        uid=uid,
+        saddr="192.168.1.5",
+        daddr="147.32.80.7",
+        method="",
+        host="147.32.80.7",
+        uri="/wpad.dat",
+        version=0,
+        user_agent="CHM_MSDN",
+        request_body_len=10,
+        response_body_len=10,
+        status_code="",
+        status_msg="",
+        resp_mime_types="",
+        resp_fuids="",
     )
-
-
-def test_check_suspicious_user_agents(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
     # create a flow with suspicious user agent
     assert (
-        http_analyzer.check_suspicious_user_agents(
-            uid,
-            "147.32.80.7",
-            "/wpad.dat",
-            timestamp,
-            "CHM_MSDN",
-            profileid,
-            twid,
-        )
+        http_analyzer.check_suspicious_user_agents(profileid, twid, flow)
         is True
     )
 
 
-def test_check_multiple_google_connections(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_check_multiple_google_connections():
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     # {"ts":1635765765.435485,"uid":"C7mv0u4M1zqJBHydgj",
     # "id.orig_h":"192.168.1.28","id.orig_p":52102,"id.resp_h":"216.58.198.78",
     # "id.resp_p":80,"trans_depth":1,"method":"GET","host":"google.com","uri":"/",
@@ -56,26 +61,40 @@ def test_check_multiple_google_connections(mock_db):
     # "status_code":301,"status_msg":"Moved Permanently","tags":[],
     # "resp_fuids":["FGhwTU1OdvlfLrzBKc"],
     # "resp_mime_types":["text/html"]}
-    host = "google.com"
-    uri = "/"
-    request_body_len = 0
     for _ in range(4):
+        flow = HTTP(
+            starttime="1726593782.8840969",
+            uid=uid,
+            saddr="192.168.1.5",
+            daddr="147.32.80.7",
+            method="",
+            host="google.com",
+            uri="/",
+            version=0,
+            user_agent="CHM_MSDN",
+            request_body_len=0,
+            response_body_len=10,
+            status_code="",
+            status_msg="",
+            resp_mime_types="",
+            resp_fuids="",
+        )
         found_detection = http_analyzer.check_multiple_empty_connections(
-            uid, host, uri, timestamp, request_body_len, profileid, twid
+            "timewindow1", flow
         )
     assert found_detection is True
 
 
-def test_parsing_online_ua_info(mock_db, mocker):
+def test_parsing_online_ua_info(mocker):
     """
     tests the parsing and processing the ua found by the online query
     """
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     # use a different profile for this unit test to make
     # sure we don't already have info about it in the db
     profileid = "profile_192.168.99.99"
 
-    mock_db.get_user_agent_from_profile.return_value = None
+    http_analyzer.db.get_user_agent_from_profile.return_value = None
     # mock the function that gets info about the given ua from an online db
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
@@ -91,8 +110,8 @@ def test_parsing_online_ua_info(mock_db, mocker):
     assert ua_info["browser"] == "Safari"
 
 
-def test_get_user_agent_info(mock_db, mocker):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_get_user_agent_info(mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     # mock the function that gets info about the
     # given ua from an online db: get_ua_info_online()
     mock_requests = mocker.patch("requests.get")
@@ -103,8 +122,8 @@ def test_get_user_agent_info(mock_db, mocker):
         "os_name":"OS X"
     }"""
 
-    mock_db.add_all_user_agent_to_profile.return_value = True
-    mock_db.get_user_agent_from_profile.return_value = None
+    http_analyzer.db.add_all_user_agent_to_profile.return_value = True
+    http_analyzer.db.get_user_agent_from_profile.return_value = None
 
     expected_ret_value = {
         "browser": "Safari",
@@ -131,27 +150,42 @@ def test_get_user_agent_info(mock_db, mocker):
     ],
 )
 def test_check_incompatible_user_agent(
-    mock_db, mac_vendor, user_agent, expected_result
+    mac_vendor, user_agent, expected_result
 ):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     # Use a different profile for this unit test
     profileid = "profile_192.168.77.254"
 
-    mock_db.get_mac_vendor_from_profile.return_value = mac_vendor
-    mock_db.get_user_agent_from_profile.return_value = user_agent
-
-    result = http_analyzer.check_incompatible_user_agent(
-        "google.com", "/images", timestamp, profileid, twid, uid
+    http_analyzer.db.get_mac_vendor_from_profile.return_value = mac_vendor
+    http_analyzer.db.get_user_agent_from_profile.return_value = user_agent
+    flow = HTTP(
+        starttime="1726593782.8840969",
+        uid=uid,
+        saddr="192.168.1.5",
+        daddr="147.32.80.7",
+        method="",
+        host="google.com",
+        uri="/",
+        version=0,
+        user_agent="CHM_MSDN",
+        request_body_len=0,
+        response_body_len=10,
+        status_code="",
+        status_msg="",
+        resp_mime_types="",
+        resp_fuids="",
     )
+
+    result = http_analyzer.check_incompatible_user_agent(profileid, twid, flow)
 
     assert result is expected_result
 
 
-def test_extract_info_from_ua(mock_db):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_extract_info_from_ua():
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     # use another profile, because the default
     # one already has a ua in the db
-    mock_db.get_user_agent_from_profile.return_value = None
+    http_analyzer.db.get_user_agent_from_profile.return_value = None
     profileid = "profile_192.168.1.2"
     server_bag_ua = "server-bag[macOS,11.5.1,20G80,MacBookAir10,1]"
     expected_output = {
@@ -197,17 +231,34 @@ def test_extract_info_from_ua(mock_db):
     ],
 )
 def test_check_multiple_user_agents_in_a_row(
-    mock_db, cached_ua, new_ua, expected_result
+    cached_ua, new_ua, expected_result
 ):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    flow = HTTP(
+        starttime="1726593782.8840969",
+        uid=uid,
+        saddr="192.168.1.5",
+        daddr="147.32.80.7",
+        method="",
+        host="google.com",
+        uri="/",
+        version=0,
+        user_agent=new_ua,
+        request_body_len=0,
+        response_body_len=10,
+        status_code="",
+        status_msg="",
+        resp_mime_types="",
+        resp_fuids="",
+    )
     result = http_analyzer.check_multiple_user_agents_in_a_row(
-        cached_ua, new_ua, timestamp, profileid, twid, uid
+        flow, twid, cached_ua
     )
     assert result is expected_result
 
 
 @pytest.mark.parametrize(
-    "mime_types,expected",
+    "mime_types, expected",
     [
         ([], False),  # Empty list
         (["text/html"], False),  # Non-executable MIME type
@@ -221,66 +272,99 @@ def test_check_multiple_user_agents_in_a_row(
         # Mixed executable and non-executable MIME types
     ],
 )
-def test_detect_executable_mime_types(mock_db, mime_types, expected):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    assert http_analyzer.detect_executable_mime_types(mime_types) is expected
-
-
-def test_set_evidence_http_traffic(mock_db, mocker):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mocker.spy(http_analyzer.db, "set_evidence")
-
-    http_analyzer.set_evidence_http_traffic(
-        "8.8.8.8", profileid, twid, uid, timestamp
+def test_detect_executable_mime_types(mime_types, expected):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    flow = HTTP(
+        starttime="1726593782.8840969",
+        uid=uid,
+        saddr="192.168.1.5",
+        daddr="147.32.80.7",
+        method="",
+        host="google.com",
+        uri="/",
+        version=0,
+        user_agent="",
+        request_body_len=0,
+        response_body_len=10,
+        status_code="",
+        status_msg="",
+        resp_mime_types=mime_types,
+        resp_fuids="",
     )
+    assert http_analyzer.detect_executable_mime_types(twid, flow) is expected
+
+
+def test_set_evidence_http_traffic(mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    mocker.spy(http_analyzer.db, "set_evidence")
+    flow = HTTP(
+        starttime="1726593782.8840969",
+        uid=uid,
+        saddr="192.168.1.5",
+        daddr="147.32.80.7",
+        method="",
+        host="google.com",
+        uri="/",
+        version=0,
+        user_agent="",
+        request_body_len=0,
+        response_body_len=10,
+        status_code="",
+        status_msg="",
+        resp_mime_types="",
+        resp_fuids="",
+    )
+    http_analyzer.set_evidence_http_traffic(twid, flow)
 
     http_analyzer.db.set_evidence.assert_called_once()
 
 
-def test_set_evidence_weird_http_method(mock_db, mocker):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mock_db.get_ip_identification.return_value = "Some IP identification"
+def test_set_evidence_weird_http_method(mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    http_analyzer.db.get_ip_identification.return_value = (
+        "Some IP identification"
+    )
     mocker.spy(http_analyzer.db, "set_evidence")
-
-    flow = {
-        "daddr": "8.8.8.8",
-        "addl": "WEIRD_METHOD",
-        "uid": uid,
-        "starttime": timestamp,
-    }
-
-    http_analyzer.set_evidence_weird_http_method(profileid, twid, flow)
-
+    flow = Weird(
+        starttime="1726593782.8840969",
+        uid="123",
+        saddr="192.168.1.5",
+        daddr="1.1.1.1",
+        name="",
+        addl="weird_method_here",
+    )
+    http_analyzer.set_evidence_weird_http_method(twid, flow)
     http_analyzer.db.set_evidence.assert_called_once()
 
 
-def test_set_evidence_executable_mime_type(mock_db, mocker):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mock_db.get_ip_identification.return_value = "Some IP identification"
-    mocker.spy(http_analyzer.db, "set_evidence")
-    http_analyzer.set_evidence_executable_mime_type(
-        "application/x-msdownload", profileid, twid, uid, timestamp, "8.8.8.8"
+def test_set_evidence_executable_mime_type(mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    flow = HTTP(
+        starttime="1726593782.8840969",
+        uid=uid,
+        saddr="192.168.1.5",
+        daddr="147.32.80.7",
+        method="WEIRD_METHOD",
+        host="google.com",
+        uri="/",
+        version=0,
+        user_agent="",
+        request_body_len=0,
+        response_body_len=10,
+        status_code="",
+        status_msg="",
+        resp_mime_types="application/x-msdownload",
+        resp_fuids="",
     )
-
-    assert http_analyzer.db.set_evidence.call_count == 2
-
-
-def test_set_evidence_executable_mime_type_source_dest(mock_db, mocker):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-    mock_db.get_ip_identification.return_value = "Some IP identification"
-
     mocker.spy(http_analyzer.db, "set_evidence")
-
-    http_analyzer.set_evidence_executable_mime_type(
-        "application/x-msdownload", profileid, twid, uid, timestamp, "8.8.8.8"
-    )
+    http_analyzer.set_evidence_executable_mime_type(twid, flow)
 
     assert http_analyzer.db.set_evidence.call_count == 2
 
 
 @pytest.mark.parametrize("config_value", [700])
-def test_read_configuration_valid(mock_db, mocker, config_value):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_read_configuration_valid(mocker, config_value):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     mock_conf = mocker.patch(
         "slips_files.common.parsers.config_parser.ConfigParser"
     )
@@ -306,21 +390,21 @@ def test_read_configuration_valid(mock_db, mocker, config_value):
         ),
     ],
 )
-def test_check_weird_http_method(
-    mock_db, mocker, flow_name, evidence_expected
-):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_check_weird_http_method(mocker, flow_name, evidence_expected):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     mocker.spy(http_analyzer, "set_evidence_weird_http_method")
 
     msg = {
-        "flow": {
-            "name": flow_name,
-            "daddr": "8.8.8.8",
-            "addl": "WEIRD_METHOD",
-            "uid": uid,
-            "starttime": timestamp,
-        },
-        "profileid": profileid,
+        "flow": asdict(
+            Weird(
+                starttime="1726593782.8840969",
+                uid="123",
+                saddr="192.168.1.5",
+                daddr="1.1.1.1",
+                name=flow_name,
+                addl="weird_method_here",
+            )
+        ),
         "twid": twid,
     }
 
@@ -332,12 +416,10 @@ def test_check_weird_http_method(
         http_analyzer.set_evidence_weird_http_method.assert_not_called()
 
 
-def test_pre_main(mock_db, mocker):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_pre_main(mocker):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     mocker.patch("slips_files.common.slips_utils.Utils.drop_root_privs")
-
     http_analyzer.pre_main()
-
     utils.drop_root_privs.assert_called_once()
 
 
@@ -350,52 +432,93 @@ def test_pre_main(mock_db, mocker):
     ],
 )
 def test_check_multiple_empty_connections(
-    mock_db, uri, request_body_len, expected_result
+    uri, request_body_len, expected_result
 ):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     host = "google.com"
-    result = http_analyzer.check_multiple_empty_connections(
-        uid, host, uri, timestamp, request_body_len, profileid, twid
+    flow = HTTP(
+        starttime="1726593782.8840969",
+        uid=str("uid_55"),
+        saddr="192.168.1.5",
+        daddr="147.32.80.7",
+        method="WEIRD_METHOD",
+        host="google.com",
+        uri=uri,
+        version=0,
+        user_agent="",
+        request_body_len=request_body_len,
+        response_body_len=10,
+        status_code="",
+        status_msg="",
+        resp_mime_types="",
+        resp_fuids="",
     )
+    result = http_analyzer.check_multiple_empty_connections(twid, flow)
     assert result is expected_result
 
     if uri == "/" and request_body_len == 0 and expected_result is False:
-        for _ in range(http_analyzer.empty_connections_threshold):
-            http_analyzer.check_multiple_empty_connections(
-                uid, host, uri, timestamp, request_body_len, profileid, twid
+        for i in range(http_analyzer.empty_connections_threshold):
+            flow = HTTP(
+                starttime="1726593782.8840969",
+                uid=str(f"uid_{i}"),
+                saddr="192.168.1.5",
+                daddr="147.32.80.7",
+                method="WEIRD_METHOD",
+                host="google.com",
+                uri=uri,
+                version=0,
+                user_agent="",
+                request_body_len=request_body_len,
+                response_body_len=10,
+                status_code="",
+                status_msg="",
+                resp_mime_types="",
+                resp_fuids="",
             )
+            http_analyzer.check_multiple_empty_connections(twid, flow)
         assert http_analyzer.connections_counter[host] == ([], 0)
 
 
 @pytest.mark.parametrize(
-    "url, response_body_len, method, expected_result",
+    "host, response_body_len, method, expected_result",
     [
         ("pastebin.com", "invalid_length", "GET", False),
-        ("8.8.8.8", "1024", "GET", None),
-        ("pastebin.com", "512", "GET", None),
-        ("pastebin.com", "2048", "POST", None),
+        ("8.8.8.8", "1024", "GET", False),
+        ("pastebin.com", "512", "GET", False),
+        ("pastebin.com", "2048", "POST", False),
         ("pastebin.com", "2048", "GET", True),  # Large download from Pastebin
     ],
 )
 def test_check_pastebin_downloads(
-    mock_db, url, response_body_len, method, expected_result
+    host, response_body_len, method, expected_result
 ):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
-
-    if url != "pastebin.com":
-        mock_db.get_ip_identification.return_value = "Not a Pastebin domain"
-    else:
-        mock_db.get_ip_identification.return_value = "pastebin.com"
-        http_analyzer.pastebin_downloads_threshold = 1024
-
-    result = http_analyzer.check_pastebin_downloads(
-        url, response_body_len, method, profileid, twid, timestamp, uid
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    flow = HTTP(
+        starttime="1726593782.8840969",
+        uid=str("uid_1"),
+        saddr="192.168.1.5",
+        daddr="147.32.80.7",
+        method=method,
+        host="google.com",
+        uri=host,
+        version=0,
+        user_agent="",
+        request_body_len=5,
+        response_body_len=response_body_len,
+        status_code="",
+        status_msg="",
+        resp_mime_types="",
+        resp_fuids="",
     )
-
-    if expected_result is not None:
-        assert result == expected_result
+    if host != "pastebin.com":
+        http_analyzer.db.get_ip_identification.return_value = (
+            "Not a Pastebin domain"
+        )
     else:
-        pass
+        http_analyzer.db.get_ip_identification.return_value = "pastebin.com"
+        http_analyzer.pastebin_downloads_threshold = 1024
+    result = http_analyzer.check_pastebin_downloads(twid, flow)
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(
@@ -407,7 +530,7 @@ def test_check_pastebin_downloads(
         MagicMock(side_effect=requests.exceptions.ReadTimeout),
     ],
 )
-def test_get_ua_info_online_error_cases(mock_db, mock_response):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj(mock_db)
+def test_get_ua_info_online_error_cases(mock_response):
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
     with patch("requests.get", return_value=mock_response):
         assert http_analyzer.get_ua_info_online(SAFARI_UA) is False

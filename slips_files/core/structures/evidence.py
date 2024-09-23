@@ -3,12 +3,22 @@ Contains evidence dataclass that is used in slips
 """
 
 import ipaddress
-from dataclasses import dataclass, field, asdict, is_dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
+from pprint import pformat
 from uuid import uuid4
-from typing import List, Optional
+from typing import (
+    List,
+    Optional,
+    Dict,
+)
 
 from slips_files.common.slips_utils import utils
+
+
+# IMPORTANT: remember to update dict_to_evidence() function based on the
+# field you add to the evidence class, or any class used by the evidence
+# class.
 
 
 def validate_ip(ip):
@@ -123,53 +133,6 @@ class ThreatLevel(Enum):
         return self.name.lower()
 
 
-class Anomaly(Enum):
-    """
-    https://idea.cesnet.cz/en/classifications
-    """
-
-    TRAFFIC = "Anomaly.Traffic"
-    FILE = "Anomaly.File"
-    CONNECTION = "Anomaly.Connection"
-    BEHAVIOUR = "Anomaly.Behaviour"
-
-
-class Recon(Enum):
-    RECON = "Recon"
-    SCANNING = "Recon.Scanning"
-
-
-class Attempt(Enum):
-    LOGIN = "Attempt.Login"
-
-
-class Tag(Enum):
-    """
-    this is the IDEA category of the source and dst ip used in the evidence
-    if the Attacker.Direction is srcip this describes the source ip,
-    if the Attacker.Direction is dstip this describes the dst ip.
-    supported source and dst types are in the SourceTargetTag
-    section https://idea.cesnet.cz/en/classifications
-    this is optional in an evidence because it shouldn't
-    be used with dports and sports Attacker.Direction
-    """
-
-    SUSPICIOUS_USER_AGENT = "SuspiciousUserAgent"
-    INCOMPATIBLE_USER_AGENT = "IncompatibleUserAgent"
-    EXECUTABLE_MIME_TYPE = "ExecutableMIMEType"
-    MULTIPLE_USER_AGENT = "MultipleUserAgent"
-    SENDING_UNENCRYPTED_DATA = "SendingUnencryptedData"
-    MALWARE = "Malware"
-    RECON = "Recon"
-    MITM = "MITM"
-    ORIGIN_MALWARE = "OriginMalware"
-    CC = "CC"
-    BOTNET = "Botnet"
-    BLACKLISTED_ASN = "BlacklistedASN"
-    BLACKLISTED_IP = "BlacklistedIP"
-    BLACKLISTED_DOMAIN = "BlacklistedDomain"
-
-
 class Proto(Enum):
     TCP = "tcp"
     UDP = "udp"
@@ -181,28 +144,17 @@ class Victim:
     direction: Direction
     victim_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
+    # if the victim is part of a TI feed that slips knows  about,
+    # the feed name goes here
+    TI: str = field(default=None)
+    # autonomous system
+    AS: Dict[str, str] = field(default=None)
+    rDNS: str = field(default=None)
+    SNI: str = field(default=None)
 
     def __post_init__(self):
         if self.victim_type == IoCType.IP:
             validate_ip(self.value)
-
-
-class IDEACategory(Enum):
-    """
-    The evidence category according to IDEA categories
-    https://idea.cesnet.cz/en/classifications
-    """
-
-    ANOMALY_TRAFFIC = "Anomaly.Traffic"
-    ANOMALY_FILE = "Anomaly.File"
-    ANOMALY_CONNECTION = "Anomaly.Connection"
-    ANOMALY_BEHAVIOUR = "Anomaly.Behaviour"
-    INFO = "Information"
-    MALWARE = "Malware"
-    RECON_SCANNING = "Recon.Scanning"
-    ATTEMPT_LOGIN = "Attempt.Login"
-    RECON = "Recon"
-    INTRUSION_BOTNET = "Intrusion.Botnet"
 
 
 @dataclass
@@ -224,6 +176,13 @@ class Attacker:
     attacker_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
     profile: ProfileID = ""
+    # if the victim is part of a TI feed that slips knows  about,
+    # the feed name goes here
+    TI: str = field(default=None)
+    # autonomous system
+    AS: Dict[str, str] = field(default=None)
+    rDNS: str = field(default=None)
+    SNI: str = field(default=None)
 
     def __post_init__(self):
         if self.attacker_type == IoCType.IP:
@@ -236,16 +195,48 @@ class Attacker:
 @dataclass
 class TimeWindow:
     number: int
+    start_time: Optional[str] = field(default="")
+    end_time: Optional[str] = field(default="")
 
     def __post_init__(self):
+        for timestamp in [self.start_time, self.end_time]:
+            if timestamp and not utils.is_iso_format(timestamp):
+                raise ValueError(
+                    f"Invalid ISO format for start_time: " f"{timestamp}"
+                )
+
         if not isinstance(self.number, int):
             raise ValueError(
                 f"timewindow number must be an int. "
-                f"{self.number} is invalid!"
+                f"{self.number} is invalid."
             )
 
     def __repr__(self):
         return f"timewindow{self.number}"
+
+
+class Method(Enum):
+    """
+    Describes how was the evidence generated. these values are IDMEFv2
+    https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#section-5.3-4.20.1
+    """
+
+    BIOMETRIC = "Biometric"
+    SIGNATURE = "Signature"
+    MONITOR = "Monitor"
+    POLICY = "Policy"
+    STATISTICAL = "Statistical"
+    AI = "AI"
+    HEAT = "Heat"
+    MOVEMENT = "Movement"
+    BLACKHOLE = "Blackhole"
+    HEURISTIC = "Heuristic"
+    INTEGRITY = "Integrity"
+    HONEYPOT = "Honeypot"
+    TARPIT = "Tarpit"
+    RECON = "Recon"
+    CORRELATION = "Correlation"
+    THRESHOLD = "Threshold"
 
 
 @dataclass
@@ -254,7 +245,6 @@ class Evidence:
     description: str
     attacker: Attacker
     threat_level: ThreatLevel
-    category: IDEACategory
     # profile of the srcip detected this evidence
     profile: ProfileID
     timewindow: TimeWindow
@@ -265,18 +255,25 @@ class Evidence:
     )
     victim: Optional[Victim] = field(default=False)
     proto: Optional[Proto] = field(default=False)
-    port: int = field(default=None)
-    source_target_tag: Tag = field(default=False)
-    # every evidence should have an ID according to the IDEA format
+    dst_port: int = field(default=None)
+    src_port: int = field(default=None)
+    method: Method = field(default=Method.HEURISTIC)
+    # every evidence should have an ID according to the IDMEF format
     id: str = field(default_factory=lambda: str(uuid4()))
-    # the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
-    conn_count: int = field(
-        default=1, metadata={"validate": lambda x: isinstance(x, int)}
-    )
     # the confidence of this evidence on a scale from 0 to 1.
     # How sure you are that this evidence is what you say it is?
     confidence: float = field(
         default=0.0, metadata={"validate": lambda x: 0 <= x <= 1}
+    )
+    # uuid4 of a related evidence, for example CC client and server
+    # evidence are related.
+    rel_id: List[str] = field(
+        default=None,
+        metadata={
+            "validate": lambda x: (
+                all(utils.is_valid_uuid4(uuid_) for uuid_ in x) if x else True
+            )
+        },
     )
 
     def __post_init__(self):
@@ -288,32 +285,32 @@ class Evidence:
             # remove duplicate uids
             self.uid = list(set(self.uid))
 
+    def __str__(self):
+        return (
+            f"Evidence(\n"
+            f"  Evidence Type: {self.evidence_type},\n"
+            f"  Description: {self.description},\n"
+            f"  Attacker: {pformat(self.attacker)},\n"
+            f"  Threat Level: {self.threat_level},\n"
+            f"  Profile: {pformat(self.profile)},\n"
+            f"  Timewindow: {self.timewindow},\n"
+            f"  UID: {self.uid},\n"
+            f"  Timestamp: {self.timestamp},\n"
+            f"  Victim: {pformat(self.victim)},\n"
+            f"  Protocol: {self.proto},\n"
+            f"  Destination Port: {self.dst_port},\n"
+            f"  Source Port: {self.src_port},\n"
+            f"  ID: {self.id},\n"
+            f"  Confidence: {self.confidence},\n"
+            f"  Related ID: {self.rel_id}\n"
+            f")"
+        )
 
-def evidence_to_dict(obj):
-    """
-    Converts an Evidence object to a dictionary (aka json serializable)
-    :param obj: object of any type.
-    """
-    if is_dataclass(obj):
-        # run this function on each value of the given dataclass
-        return {k: evidence_to_dict(v) for k, v in asdict(obj).items()}
 
-    if isinstance(obj, Enum):
-        return obj.name
-
-    if isinstance(obj, list):
-        return [evidence_to_dict(item) for item in obj]
-
-    if isinstance(obj, dict):
-        return {k: evidence_to_dict(v) for k, v in obj.items()}
-
-    return obj
-
-
-def dict_to_evidence(evidence: dict):
+def dict_to_evidence(evidence: dict) -> Evidence:
     """
     Convert a dictionary to an Evidence object.
-    :param evidence (dict): Dictionary with evidence details.
+    :param evidence: Dictionary with evidence details.
     returns an instance of the Evidence class.
     """
     evidence_attributes = {
@@ -321,7 +318,6 @@ def dict_to_evidence(evidence: dict):
         "description": evidence["description"],
         "attacker": Attacker(**evidence["attacker"]),
         "threat_level": ThreatLevel[evidence["threat_level"].upper()],
-        "category": IDEACategory[evidence["category"]],
         "victim": (
             Victim(**evidence["victim"])
             if "victim" in evidence and evidence["victim"]
@@ -340,16 +336,12 @@ def dict_to_evidence(evidence: dict):
             if "proto" in evidence and evidence["proto"]
             else None
         ),
-        "port": evidence["port"],
-        "source_target_tag": (
-            Tag[evidence["source_target_tag"]]
-            if "source_target_tag" in evidence
-            and evidence["source_target_tag"]
-            else None
-        ),
+        "dst_port": evidence["dst_port"] if "dst_port" in evidence else None,
+        "src_port": evidence["src_port"] if "src_port" in evidence else None,
         "id": evidence["id"],
-        "conn_count": evidence["conn_count"],
+        "rel_id": evidence["rel_id"],
         "confidence": evidence["confidence"],
+        "method": Method[evidence["method"].upper()],
     }
 
     return Evidence(**evidence_attributes)

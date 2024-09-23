@@ -82,7 +82,7 @@ class UIManager:
                 # set false as the return value of this thread
                 self.webinterface_return_value.put(False)
 
-                self.main.print("Web interface error:")
+                self.main.print("Web interface error:", verbose=1, debug=3)
                 for line in error.strip().decode().splitlines():
                     self.main.print(f"{line}")
 
@@ -92,7 +92,9 @@ class UIManager:
             )
             self.main.print(
                 f"Failed to start web interface. "
-                f"Port {self.web_interface_port} is used by PID {pid}"
+                f"Port {self.web_interface_port} is used by PID {pid}",
+                verbose=1,
+                debug=3,
             )
             return
 
