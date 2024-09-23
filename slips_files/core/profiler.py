@@ -20,7 +20,6 @@ import queue
 import ipaddress
 import pprint
 import multiprocessing
-from datetime import datetime
 from typing import List
 
 import validators
@@ -81,7 +80,6 @@ class Profiler(ICore, IObservable):
         self.profiler_queue = profiler_queue
         self.timeformat = None
         self.input_type = False
-        self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
         self.is_localnet_set = False
         self.has_pbar = has_pbar
@@ -175,8 +173,6 @@ class Profiler(ICore, IObservable):
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(self.flow):
-            if "conn" in self.flow.type_:
-                self.whitelisted_flows_ctr += 1
             return True
 
         # 5th. Store the data according to the paremeters
@@ -333,7 +329,7 @@ class Profiler(ICore, IObservable):
             if isinstance(actual_line, dict):
                 return "zeek"
             return "zeek-tabs"
-        elif input_type in ("stdin"):
+        elif input_type == "stdin":
             # ok we're reading flows from stdin, but what type of flows?
             return line["line_type"]
         else:
@@ -347,14 +343,9 @@ class Profiler(ICore, IObservable):
             f"Stopping. Total lines read: {self.rec_lines}",
             log_to_logfiles_only=True,
         )
-        # By default if a process(profiler) is not the creator of
-        # the queue(profiler_queue) then on
-        # exit it will attempt to join the queue’s background thread.
-        # this causes a deadlock
-        # to avoid this behaviour we should call cancel_join_thread
-        # self.profiler_queue.cancel_join_thread()
+        self.mark_process_as_done_processing()
 
-    def is_done_processing(self):
+    def mark_process_as_done_processing(self):
         """
         is called to mark this process as done processing so
         slips.py would know when to terminate
@@ -371,32 +362,12 @@ class Profiler(ICore, IObservable):
             log_to_logfiles_only=True,
         )
 
-    def check_for_stop_msg(self, msg: str) -> bool:
+    def is_stop_msg(self, msg: str) -> bool:
         """
         this 'stop' msg is the last msg ever sent by the input process
         to indicate that no more flows are coming
         """
-
-        if msg != "stop":
-            return False
-
-        self.print(
-            f"Stopping profiler process. Number of whitelisted "
-            f"conn flows: "
-            f"{self.whitelisted_flows_ctr}",
-            2,
-            0,
-        )
-
-        self.shutdown_gracefully()
-        self.print(
-            f"Stopping Profiler Process. Received {self.rec_lines} lines "
-            f"({utils.convert_format(datetime.now(), utils.alerts_format)})",
-            2,
-            0,
-        )
-        self.is_done_processing()
-        return True
+        return msg == "stop"
 
     def init_pbar(self, total_flows: int):
         """
@@ -465,9 +436,10 @@ class Profiler(ICore, IObservable):
                 # that this module should stop
                 msg = self.profiler_queue.get(timeout=1, block=False)
                 # ALYA, DO NOT REMOVE THIS CHECK
-                # without it, there's no way thi module will know it's time to
-                # stop and no new fows are coming
-                if self.check_for_stop_msg(msg):
+                # without it, there's no way this module will know it's
+                # time to stop and no new flows are coming
+                if self.is_stop_msg(msg):
+                    # 1 indicates an error and calls shutdown gracefully
                     return 1
 
                 line: dict = msg["line"]

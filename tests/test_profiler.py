@@ -394,11 +394,11 @@ def test_check_for_stop_msg(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     monkeypatch.setattr(profiler, "shutdown_gracefully", Mock())
     monkeypatch.setattr(profiler, "is_done_processing", Mock())
-    assert profiler.check_for_stop_msg("stop") is True
+    assert profiler.is_stop_msg("stop") is True
     profiler.shutdown_gracefully.assert_called_once()
-    profiler.is_done_processing.assert_called_once()
+    profiler.mark_process_as_done_processing.assert_called_once()
 
-    assert profiler.check_for_stop_msg("not_stop") is False
+    assert profiler.is_stop_msg("not_stop") is False
 
 
 def test_pre_main(monkeypatch):
@@ -438,7 +438,7 @@ def test_is_done_processing(monkeypatch):
 
     monkeypatch.setattr(profiler, "print", mock_print)
 
-    profiler.is_done_processing()
+    profiler.mark_process_as_done_processing()
 
     profiler.done_processing.release.assert_called_once()
     profiler.is_profiler_done_event.set.assert_called_once()
