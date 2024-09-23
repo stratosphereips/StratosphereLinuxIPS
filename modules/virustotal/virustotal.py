@@ -8,6 +8,7 @@ import ipaddress
 import threading
 import validators
 
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
@@ -32,7 +33,6 @@ class VT(IModule):
             "new_dns": self.c2,
             "new_url": self.c3,
         }
-
         # Read the conf file
         self.__read_configuration()
         # query counter for debugging purposes
@@ -47,11 +47,12 @@ class VT(IModule):
         )
         # create the queue thread
         self.api_calls_thread = threading.Thread(
-            target=self.API_calls_thread, daemon=True
+            target=self.api_calls_thread, daemon=True
         )
         # this will be true when there's a problem with the
         # API key, then the module will exit
         self.incorrect_API_key = False
+        self.classifier = FlowClassifier()
 
     def read_api_key(self):
         self.key = None
@@ -163,9 +164,9 @@ class VT(IModule):
         # Score of this url didn't change
         vtdata = {"URL": score, "timestamp": time.time()}
         data = {"VirusTotal": vtdata}
-        self.db.set_info_for_urls(url, data)
+        self.db.cache_url_info_by_virustotal(url, data)
 
-    def set_domain_data_in_DomainInfo(self, domain, cached_data):
+    def update_domain_info_cache(self, domain, cached_data):
         """
         Function to set VirusTotal data of the domain in the DomainInfo.
         It also sets asn data if it is unknown or does not exist.
@@ -186,7 +187,7 @@ class VT(IModule):
             data["asn"] = {"number": f"AS{as_owner}"}
         self.db.set_info_for_domains(domain, data)
 
-    def API_calls_thread(self):
+    def api_calls_thread(self):
         """
         This thread starts if there's an API calls queue,
         it operates every minute, and executes 4 api calls
@@ -224,10 +225,10 @@ class VT(IModule):
                 elif ioc_type == "domain":
                     cached_data = self.db.get_domain_data(ioc)
                     if not cached_data or "VirusTotal" not in cached_data:
-                        self.set_domain_data_in_DomainInfo(ioc, cached_data)
+                        self.update_domain_info_cache(ioc, cached_data)
 
                 elif ioc_type == "url":
-                    cached_data = self.db.getURLData(ioc)
+                    cached_data = self.db.is_cached_url_by_vt(ioc)
                     # If VT data of this domain is not in the
                     # DomainInfo, ask VT
                     # If 'Virustotal' key is not in the DomainInfo
@@ -279,7 +280,9 @@ class VT(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Problem in the get_ip_vt_data() line {exception_line}", 0, 1
+                f"Problem in the get_ip_vt_data() " f"line {exception_line}",
+                0,
+                1,
             )
             self.print(traceback.format_exc(), 0, 1)
 
@@ -316,7 +319,7 @@ class VT(IModule):
     def get_ioc_type(self, ioc):
         """Check the type of ioc, returns url, ip, domain or hash type"""
         # don't move this to utils, this is the only module that supports urls
-        return "url" if validators.url(ioc) else utils.detect_data_type(ioc)
+        return "url" if validators.url(ioc) else utils.detect_ioc_type(ioc)
 
     def api_query_(self, ioc, save_data=False):
         """
@@ -550,18 +553,9 @@ class VT(IModule):
             return 1
 
         if msg := self.get_msg("new_flow"):
-            data = msg["data"]
-            data = json.loads(data)
-            # profileid = data['profileid']
-            # twid = data['twid']
-            # stime = data['stime']
-            flow = json.loads(
-                data["flow"]
-            )  # this is a dict {'uid':json flow data}
-            # there is only one pair key-value in the dictionary
-            for key, value in flow.items():
-                flow_data = json.loads(value)
-            ip = flow_data["daddr"]
+            data = json.loads(msg["data"])
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            ip = flow.daddr
             cached_data = self.db.get_ip_info(ip)
             if not cached_data:
                 cached_data = {}
@@ -590,37 +584,28 @@ class VT(IModule):
                     self.set_vt_data_in_IPInfo(ip, cached_data)
 
         if msg := self.get_msg("new_dns"):
-            data = msg["data"]
-            data = json.loads(data)
-            # profileid = data['profileid']
-            # twid = data['twid']
-            # uid = data['uid']
-            flow_data = json.loads(
-                data["flow"]
-            )  # this is a dict {'uid':json flow data}
-            domain = flow_data.get("query", False)
-
-            cached_data = self.db.get_domain_data(domain)
+            data = json.loads(msg["data"])
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            cached_data = self.db.get_domain_data(flow.query)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
-            if domain and (not cached_data or "VirusTotal" not in cached_data):
-                self.set_domain_data_in_DomainInfo(domain, cached_data)
-            elif domain and cached_data and "VirusTotal" in cached_data:
+            if flow.query and (
+                not cached_data or "VirusTotal" not in cached_data
+            ):
+                self.update_domain_info_cache(flow.query, cached_data)
+            elif flow.query and cached_data and "VirusTotal" in cached_data:
                 # If VT is in data, check timestamp. Take time difference,
                 # if not valid, update vt scores.
                 if (
                     time.time() - cached_data["VirusTotal"]["timestamp"]
                 ) > self.update_period:
-                    self.set_domain_data_in_DomainInfo(domain, cached_data)
+                    self.update_domain_info_cache(flow.query, cached_data)
 
         if msg := self.get_msg("new_url"):
-            data = msg["data"]
-            data = json.loads(data)
-            # profileid = data['profileid']
-            # twid = data['twid']
-            flow_data = json.loads(data["flow"])
-            url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
-            cached_data = self.db.getURLData(url)
+            data = json.loads(msg["data"])
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            url = f"http://{flow.host}{flow.uri}"
+            cached_data = self.db.is_cached_url_by_vt(url)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
             if not cached_data or "VirusTotal" not in cached_data:

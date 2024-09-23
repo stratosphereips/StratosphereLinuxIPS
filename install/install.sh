@@ -136,6 +136,15 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | sudo 
 
 exit_on_cmd_failure
 
+
+print_green "Installing IDMEFv2 python library"
+git clone https://github.com/IDMEFv2/python-idmefv2  \
+  && cd python-idmefv2 \
+  && git submodule update --init --recursive \
+  && python3 setup.py install && cd ..
+
+exit_on_cmd_failure
+
 print_green "Installing p2p4slips"
 # build the pigeon and Add pigeon to path
 git submodule init && git submodule update && cd p2p4slips && go build && export PATH=$PATH:$(pwd) >> ~/.bashrc && cd ..

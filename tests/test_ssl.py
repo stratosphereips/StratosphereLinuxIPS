@@ -1,10 +1,15 @@
 """Unit test for modules/flowalerts/ssl.py"""
 
-from tests.module_factory import ModuleFactory
+from dataclasses import asdict
 from unittest.mock import Mock
 
+from slips_files.core.flows.zeek import (
+    SSL,
+    Conn,
+)
+from tests.module_factory import ModuleFactory
+
 import json
-from queue import Queue
 import pytest
 
 # dummy params used for testing
@@ -15,135 +20,56 @@ timestamp = 1635765895.037696
 daddr = "192.168.1.2"
 
 
+def is_present_in_calls(mock_object, search_term):
+    return any(
+        search_term in arg
+        for args, _ in mock_object.call_args_list
+        for arg in args
+    )
+
+
 @pytest.mark.parametrize(
-    "test_flows, mock_get_flow_responses, "
-    "expected_check_calls, final_queue_size",
+    "validation_status, expected_set_ev_call_count",
     [
-        # Test Case 1: Single flow, found in conn.log
-        (
-            [
-                {
-                    "daddr": "192.168.1.2",
-                    "server_name": "example.com",
-                    "uid": "flow1",
-                    "ts": 1234,
-                    "profileid": "profile1",
-                    "twid": "tw1",
-                }
-            ],
-            [{"flow1": json.dumps({"starttime": 1234, "uid": "flow1"})}],
-            1,
-            0,
-        ),
-        # Test Case 2: Single flow, not found in conn.log
-        (
-            [
-                {
-                    "daddr": "192.168.1.2",
-                    "server_name": "example.com",
-                    "uid": "flow1",
-                    "ts": 1234,
-                    "profileid": "profile1",
-                    "twid": "tw1",
-                }
-            ],
-            [{}],
-            0,
-            1,
-        ),
-        # Test Case 3: Multiple flows, one found, one not found
-        (
-            [
-                {
-                    "daddr": "192.168.1.2",
-                    "server_name": "example.com",
-                    "uid": "flow1",
-                    "ts": 1234,
-                    "profileid": "profile1",
-                    "twid": "tw1",
-                },
-                {
-                    "daddr": "10.0.0.1",
-                    "server_name": "another.com",
-                    "uid": "flow2",
-                    "ts": 5678,
-                    "profileid": "profile2",
-                    "twid": "tw2",
-                },
-            ],
-            [{"flow1": json.dumps({"starttime": 1234, "uid": "flow1"})}, {}],
-            1,
-            1,
-        ),
+        # testcase1: checks if the validation status is "self signed",
+        ("self signed", 1),
+        #  testcase2: checks if the validation status is  not "self signed",
+        ("valid", 0),
     ],
 )
-def test_wait_for_ssl_flows_to_appear_in_connlog(
-    mocker,
-    mock_db,
-    test_flows,
-    mock_get_flow_responses,
-    expected_check_calls,
-    final_queue_size,
+def test_check_self_signed_certs(
+    mocker, validation_status, expected_set_ev_call_count
 ):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
-    ssl.pending_ssl_flows = Queue()
-
-    mock_get_flow = mocker.patch.object(ssl.db, "get_flow")
-    mock_check_pastebin = mocker.patch.object(ssl, "check_pastebin_download")
-    for flow in test_flows:
-        ssl.pending_ssl_flows.put(tuple(flow.values()))
-
-    mock_get_flow.side_effect = mock_get_flow_responses
-    ssl.flowalerts.should_stop = Mock()
-    ssl.flowalerts.should_stop.side_effect = [False, True]
-
-    ssl.wait_for_ssl_flows_to_appear_in_connlog()
-
-    assert mock_check_pastebin.call_count == expected_check_calls
-    assert ssl.pending_ssl_flows.qsize() == final_queue_size
-
-
-@pytest.mark.parametrize(
-    "test_input,expected",
-    [
-        (
-            # testcase1: checks if the validation status is "self signed",
-            (
-                "self signed",
-                "192.168.1.2",
-                "example.com",
-                "profile_192.168.1.1",
-                "timewindow1",
-                1635765895.037696,
-                "CAeDWs37BipkfP21u8",
-            ),
-            1,
-        ),
-        (
-            # testcase2: checks if the validation status is  not "self signed",
-            (
-                "valid",
-                "192.168.1.2",
-                "example.com",
-                "profile_192.168.1.1",
-                "timewindow1",
-                1635765895.037696,
-                "CAeDWs37BipkfP21u8",
-            ),
-            0,
-        ),
-    ],
-)
-def test_check_self_signed_certs(mocker, mock_db, test_input, expected):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
         "SetEvidnceHelper.self_signed_certificates"
     )
+    flow = SSL(
+        starttime="1726593782.8840969",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="192.168.1.2",
+        version="",
+        sport="",
+        dport="",
+        cipher="",
+        resumed="",
+        established="",
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        subject="",
+        issuer="",
+        validation_status=validation_status,
+        curve="",
+        server_name="",
+        ja3="",
+        ja3s="",
+        is_DoH="",
+    )
+    ssl.check_self_signed_certs(twid, flow)
 
-    ssl.check_self_signed_certs(*test_input)
-
-    assert mock_set_evidence.call_count == expected
+    assert mock_set_evidence.call_count == expected_set_ev_call_count
 
 
 @pytest.mark.parametrize(
@@ -161,13 +87,12 @@ def test_check_self_signed_certs(mocker, mock_db, test_input, expected):
 )
 def test_detect_malicious_ja3(
     mocker,
-    mock_db,
     test_ja3,
     test_ja3s,
     expected_ja3_calls,
     expected_ja3s_calls,
 ):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_ja3 = mocker.patch(
         "modules.flowalerts.set_evidence.SetEvidnceHelper.malicious_ja3"
     )
@@ -175,22 +100,39 @@ def test_detect_malicious_ja3(
         "modules.flowalerts.set_evidence.SetEvidnceHelper.malicious_ja3s"
     )
 
-    saddr = "192.168.1.1"
-
-    mock_db.get_ja3_in_IoC.return_value = {
+    ssl.db.get_all_blacklisted_ja3.return_value = {
         "malicious_ja3": "Malicious JA3",
         "malicious_ja3s": "Malicious JA3S",
     }
-
-    ssl.detect_malicious_ja3(
-        saddr, daddr, test_ja3, test_ja3s, twid, uid, timestamp
+    flow = SSL(
+        starttime="1726593782.8840969",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="192.168.1.2",
+        version="",
+        sport="",
+        dport="",
+        cipher="",
+        resumed="",
+        established="",
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        subject="",
+        issuer="",
+        validation_status="",
+        curve="",
+        server_name="",
+        ja3=test_ja3,
+        ja3s=test_ja3s,
+        is_DoH="",
     )
+    ssl.detect_malicious_ja3(twid, flow)
     assert mock_set_evidence_ja3.call_count == expected_ja3_calls
     assert mock_set_evidence_ja3s.call_count == expected_ja3s_calls
 
 
 @pytest.mark.parametrize(
-    "test_is_doh, expected_calls",
+    "is_doh, expected_calls",
     [
         # Testcase 1: is_doh is True,
         # should call set_evidence.doh and db.set_ip_info
@@ -200,21 +142,42 @@ def test_detect_malicious_ja3(
         (False, 0),
     ],
 )
-def test_detect_doh(mocker, mock_db, test_is_doh, expected_calls):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_detect_doh(mocker, is_doh, expected_calls):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_doh = mocker.patch(
         "modules.flowalerts.set_evidence.SetEvidnceHelper.doh"
     )
-    mock_db_set_ip_info = mocker.patch.object(ssl.db, "set_ip_info")
-
-    ssl.detect_doh(test_is_doh, daddr, profileid, twid, timestamp, uid)
+    ssl.db.set_ip_info = Mock()
+    flow = SSL(
+        starttime="1726593782.8840969",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="192.168.1.2",
+        version="",
+        sport="",
+        dport="",
+        cipher="",
+        resumed="",
+        established="",
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        subject="",
+        issuer="",
+        validation_status="",
+        curve="",
+        server_name="",
+        ja3="",
+        ja3s="",
+        is_DoH=is_doh,
+    )
+    ssl.detect_doh(twid, flow)
 
     assert mock_set_evidence_doh.call_count == expected_calls
-    assert mock_db_set_ip_info.call_count == expected_calls
+    assert ssl.db.set_ip_info.call_count == expected_calls
 
 
 @pytest.mark.parametrize(
-    "test_server_name, test_downloaded_bytes, expected_call_count",
+    "server_name, downloaded_bytes, expected_call_count",
     [
         # Testcase 1: Server name is pastebin.com,
         # downloaded bytes exceed threshold
@@ -228,22 +191,40 @@ def test_detect_doh(mocker, mock_db, test_is_doh, expected_calls):
 )
 def test_check_pastebin_download(
     mocker,
-    mock_db,
-    test_server_name,
-    test_downloaded_bytes,
+    server_name,
+    downloaded_bytes,
     expected_call_count,
 ):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     ssl.pastebin_downloads_threshold = 12000
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence." "SetEvidnceHelper.pastebin_download"
+        "modules.flowalerts.set_evidence.SetEvidnceHelper.pastebin_download"
     )
 
-    flow = {"resp_bytes": test_downloaded_bytes}
-
-    ssl.check_pastebin_download(
-        daddr, test_server_name, uid, timestamp, profileid, twid, flow
+    conn_log_flow = {"resp_bytes": downloaded_bytes}
+    flow = SSL(
+        starttime="1726593782.8840969",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="192.168.1.2",
+        version="",
+        sport="",
+        dport="",
+        cipher="",
+        resumed="",
+        established="",
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        subject="",
+        issuer="",
+        validation_status="",
+        curve="",
+        server_name=server_name,
+        ja3="",
+        ja3s="",
+        is_DoH="",
     )
+    ssl.check_pastebin_download(flow, conn_log_flow, twid)
 
     assert mock_set_evidence.call_count == expected_call_count
 
@@ -265,185 +246,115 @@ def test_check_pastebin_download(
         ),
     ],
 )
-def test_detect_incompatible_cn(mocker, mock_db, issuer, expected_call_count):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_detect_incompatible_cn(mocker, issuer, expected_call_count):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence." "SetEvidnceHelper.incompatible_cn"
     )
 
-    (mock_db.whitelist.organization_whitelist.is_ip_in_org).return_value = (
+    ssl.db.whitelist.organization_whitelist.is_ip_in_org.return_value = False
+    ssl.db.whitelist.organization_whitelist.is_domain_in_org.return_value = (
         False
     )
-    (
-        mock_db.whitelist.organization_whitelist.is_domain_in_org
-    ).return_value = False
-
-    ssl.detect_incompatible_cn(
-        daddr, "example.com", issuer, profileid, twid, uid, timestamp
+    flow = SSL(
+        starttime="1726593782.8840969",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="192.168.1.2",
+        version="",
+        sport="",
+        dport="",
+        cipher="",
+        resumed="",
+        established="",
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        subject="",
+        issuer=issuer,
+        validation_status="",
+        curve="",
+        server_name="",
+        ja3="",
+        ja3s="",
+        is_DoH="",
     )
-
+    ssl.detect_incompatible_cn(profileid, twid, flow)
     assert mock_set_evidence.call_count == expected_call_count
 
 
 @pytest.mark.parametrize(
-    "test_input, expected_call_count",
+    "state, dport, proto, dbytes, approto, expected_call_count",
     [
+        # Testcase 1: Non-SSL connection on port 443
+        ("Established", 443, "tcp", 1024, "http", 1),
+        # Testcase 2: SSL connection on port 443
         (
-            # Testcase 1: Non-SSL connection on port 443
-            {
-                "profileid": "profile_192.168.1.1",
-                "twid": "timewindow1",
-                "stime": 1635765895.037696,
-                "flow": json.dumps(
-                    {
-                        "CAeDWs37BipkfP21u8": json.dumps(
-                            {
-                                "daddr": "192.168.1.2",
-                                "state": "Established",
-                                "dport": 443,
-                                "proto": "tcp",
-                                "allbytes": 1024,
-                                "appproto": "http",
-                            }
-                        )
-                    }
-                ),
-            },
-            1,
-        ),
-        (
-            # Testcase 2: SSL connection on port 443
-            {
-                "profileid": "profile_192.168.1.1",
-                "twid": "timewindow1",
-                "stime": 1635765895.037696,
-                "flow": json.dumps(
-                    {
-                        "CAeDWs37BipkfP21u8": json.dumps(
-                            {
-                                "daddr": "192.168.1.2",
-                                "state": "Established",
-                                "dport": 443,
-                                "proto": "tcp",
-                                "allbytes": 1024,
-                                "appproto": "ssl",
-                            }
-                        )
-                    }
-                ),
-            },
+            "Established",
+            443,
+            "tcp",
+            1024,
+            "ssl",
             0,
         ),
+        # Testcase 3: Connection on port 443 but not Established state
+        ("SF", 443, "tcp", 1024, "http", 0),
+        # Testcase 4: Connection on a port other than 443
         (
-            # Testcase 3: Connection on port 443 but not Established state
-            {
-                "profileid": "profile_192.168.1.1",
-                "twid": "timewindow1",
-                "stime": 1635765895.037696,
-                "flow": json.dumps(
-                    {
-                        "CAeDWs37BipkfP21u8": json.dumps(
-                            {
-                                "daddr": "192.168.1.2",
-                                "state": "SF",
-                                "dport": 443,
-                                "proto": "tcp",
-                                "allbytes": 1024,
-                                "appproto": "http",
-                            }
-                        )
-                    }
-                ),
-            },
+            "Established",
+            80,
+            "tcp",
+            1024,
+            "http",
             0,
         ),
+        # Testcase 5: Connection on port 443 with zero bytes
         (
-            # Testcase 4: Connection on a port other than 443
-            {
-                "profileid": "profile_192.168.1.1",
-                "twid": "timewindow1",
-                "stime": 1635765895.037696,
-                "flow": json.dumps(
-                    {
-                        "CAeDWs37BipkfP21u8": json.dumps(
-                            {
-                                "daddr": "192.168.1.2",
-                                "state": "Established",
-                                "dport": 80,
-                                "proto": "tcp",
-                                "allbytes": 1024,
-                                "appproto": "http",
-                            }
-                        )
-                    }
-                ),
-            },
+            "Established",
+            443,
+            "tcp",
             0,
-        ),
-        (
-            # Testcase 5: Connection on port 443 with zero bytes
-            {
-                "profileid": "profile_192.168.1.1",
-                "twid": "timewindow1",
-                "stime": 1635765895.037696,
-                "flow": json.dumps(
-                    {
-                        "CAeDWs37BipkfP21u8": json.dumps(
-                            {
-                                "daddr": "192.168.1.2",
-                                "state": "Established",
-                                "dport": 443,
-                                "proto": "tcp",
-                                "allbytes": 0,
-                                "appproto": "http",
-                            }
-                        )
-                    }
-                ),
-            },
+            "http",
             0,
         ),
     ],
 )
 def test_check_non_ssl_port_443_conns(
-    mocker, mock_db, test_input, expected_call_count
+    mocker, state, dport, proto, dbytes, approto, expected_call_count
 ):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
         "SetEvidnceHelper.non_ssl_port_443_conn"
     )
-    ssl.check_non_ssl_port_443_conns(test_input)
+    mocker.patch.object(
+        ssl.db, "get_final_state_from_flags", return_value=state
+    )
+
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid=uid,
+        saddr="192.168.1.87",
+        daddr="1.1.1.1",
+        dur=1,
+        proto=proto,
+        appproto=approto,
+        sport="0",
+        dport=str(dport),
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=dbytes,
+        smac="",
+        dmac="",
+        state="",
+        history="",
+    )
+    ssl.check_non_ssl_port_443_conns(twid, flow)
     assert mock_set_evidence.call_count == expected_call_count
 
 
-@pytest.mark.parametrize(
-    "channel, msg_data",
-    [
-        (
-            "new_ssl",
-            {
-                "flow": json.dumps(
-                    {
-                        "uid": "test_uid",
-                        "stime": 1635765895.037696,
-                        "ja3": "test_ja3",
-                        "ja3s": "test_ja3s",
-                        "issuer": "test_issuer",
-                        "daddr": "192.168.1.2",
-                        "server_name": "example.com",
-                        "validation_status": "test_status",
-                        "is_DoH": True,
-                    }
-                ),
-                "profileid": "profile_192.168.1.1",
-                "twid": "timewindow1",
-            },
-        ),
-    ],
-)
-def test_analyze_new_ssl_msg(mocker, channel, msg_data, mock_db):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_analyze_new_ssl_msg(mocker):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_pending_ssl_flows_put = mocker.patch.object(
         ssl.pending_ssl_flows, "put"
     )
@@ -458,108 +369,108 @@ def test_analyze_new_ssl_msg(mocker, channel, msg_data, mock_db):
     )
     mock_detect_doh = mocker.patch.object(ssl, "detect_doh")
 
-    msg = {"channel": channel, "data": json.dumps(msg_data)}
+    flow = SSL(
+        starttime="1726593782.8840969",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="192.168.1.2",
+        version="",
+        sport="",
+        dport="",
+        cipher="",
+        resumed="",
+        established="",
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        subject="",
+        issuer="",
+        validation_status="",
+        curve="",
+        server_name="",
+        ja3="",
+        ja3s="",
+        is_DoH=True,
+    )
+
+    msg = {
+        "channel": "new_ssl",
+        "data": json.dumps(
+            {
+                "profileid": "profile_192.168.1.1",
+                "twid": "timewindow1",
+                "flow": asdict(flow),
+            }
+        ),
+    }
 
     ssl.analyze(msg)
 
     mock_pending_ssl_flows_put.assert_called_once_with(
         (
-            "192.168.1.2",
-            "example.com",
-            "test_uid",
-            1635765895.037696,
+            flow,
             "profile_192.168.1.1",
             "timewindow1",
         )
     )
 
-    mock_check_self_signed_certs.assert_called_once_with(
-        "test_status",
-        "192.168.1.2",
-        "example.com",
-        "profile_192.168.1.1",
-        "timewindow1",
-        1635765895.037696,
-        "test_uid",
-    )
+    mock_check_self_signed_certs.assert_called_once_with("timewindow1", flow)
 
-    mock_detect_malicious_ja3.assert_called_once_with(
-        "192.168.1.1",
-        "192.168.1.2",
-        "test_ja3",
-        "test_ja3s",
-        "timewindow1",
-        "test_uid",
-        1635765895.037696,
-    )
+    mock_detect_malicious_ja3.assert_called_once_with("timewindow1", flow)
 
     mock_detect_incompatible_cn.assert_called_once_with(
-        "192.168.1.2",
-        "example.com",
-        "test_issuer",
-        "profile_192.168.1.1",
-        "timewindow1",
-        "test_uid",
-        1635765895.037696,
+        "profile_192.168.1.1", "timewindow1", flow
     )
 
-    mock_detect_doh.assert_called_once_with(
-        True,
-        "192.168.1.2",
-        "profile_192.168.1.1",
-        "timewindow1",
-        1635765895.037696,
-        "test_uid",
-    )
+    mock_detect_doh.assert_called_once_with("timewindow1", flow)
 
 
-@pytest.mark.parametrize(
-    "channel, msg_data",
-    [
-        (
-            "new_flow",
-            {
-                "profileid": "profile_192.168.1.1",
-                "twid": "timewindow1",
-                "stime": 1635765895.037696,
-                "flow": json.dumps(
-                    {
-                        "test_uid": json.dumps(
-                            {
-                                "daddr": "192.168.1.2",
-                                "state": "Established",
-                                "dport": 443,
-                                "proto": "tcp",
-                                "allbytes": 1024,
-                                "appproto": "http",
-                            }
-                        )
-                    }
-                ),
-            },
-        )
-    ],
-)
-def test_analyze_new_flow_msg(mocker, mock_db, channel, msg_data):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_analyze_new_flow_msg(mocker):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_check_non_ssl_port_443_conns = mocker.patch.object(
         ssl, "check_non_ssl_port_443_conns"
     )
-    msg = {"channel": channel, "data": json.dumps(msg_data)}
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid=uid,
+        saddr="192.168.1.87",
+        daddr="1.1.1.1",
+        dur=1,
+        proto="",
+        appproto="",
+        sport="0",
+        dport="",
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="",
+        history="",
+    )
+
+    msg = {
+        "channel": "new_flow",
+        "data": json.dumps(
+            {
+                "profileid": "profile_192.168.1.1",
+                "twid": "timewindow1",
+                "flow": asdict(flow),
+            }
+        ),
+    }
 
     ssl.analyze(msg)
 
-    mock_check_non_ssl_port_443_conns.assert_called_once()
-    call_arg = mock_check_non_ssl_port_443_conns.call_args[0][0]
-    assert isinstance(call_arg, dict)
-    assert call_arg["profileid"] == "profile_192.168.1.1"
-    assert call_arg["twid"] == "timewindow1"
-    assert call_arg["stime"] == 1635765895.037696
-    assert "flow" in call_arg
+    mock_check_non_ssl_port_443_conns.assert_called_once_with(
+        "timewindow1", flow
+    )
 
 
-def test_analyze_no_messages(mocker, mock_db):
-    ssl = ModuleFactory().create_ssl_analyzer_obj(mock_db)
+def test_analyze_no_messages(
+    mocker,
+):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
 
     mock_pending_ssl_flows_put = mocker.patch.object(
         ssl.pending_ssl_flows, "put"

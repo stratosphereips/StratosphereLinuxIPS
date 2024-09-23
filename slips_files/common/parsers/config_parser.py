@@ -28,11 +28,8 @@ class ConfigParser(object):
         """
         reads slips configuration file, slips.conf/slips.yaml is the default file
         """
-        # try:
         with open(configfile) as source:
             return yaml.safe_load(source)
-        # except (IOError, TypeError, yaml.YAMLError):
-        #     pass
 
     def get_config_file(self):
         """

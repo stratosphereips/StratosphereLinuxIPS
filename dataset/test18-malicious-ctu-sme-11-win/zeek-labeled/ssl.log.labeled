@@ -1,0 +1,11 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	ssl
+#open	2024-08-16-09-45-01
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	version	cipher	curve	server_name	resumed	last_alert	next_protocol	established	ssl_history	cert_chain_fps	client_cert_chain_fps	sni_matches_cert	validation_status	label	detailedlabel
+#types	time	string	addr	port	addr	port	string	string	string	string	bool	string	string	bool	string	vector[string]	vector[string]	bool	string	string	string
+1677024203.323807	CTxPmyQW2fMBdp2ld	192.168.1.107	56508	162.159.136.232	443	TLSv13	TLS_AES_128_GCM_SHA256	x25519	discord.com	T	-	-	F	Cs	-	-	-	-	Benign	From_benign-To_benign-Cloudflare
+1677024494.131672	C68Cut3WHGKMFF4JEa	192.168.1.107	51001	142.251.36.131	443	TLSv13	TLS_AES_128_GCM_SHA256	x25519	clientservices.googleapis.com	T	-	-	F	Cs	-	-	-	-	Benign	From_benign-To_benign-1e100
+#close	2024-08-16-09-45-01

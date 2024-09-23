@@ -17,7 +17,6 @@ from threading import Lock
 from multiprocessing.connection import Connection
 from multiprocessing import Event
 import sys
-import io
 from pathlib import Path
 from datetime import datetime
 import os
@@ -30,11 +29,9 @@ from slips_files.common.style import red
 
 class Output(IObserver):
     """
-    A class to process the output of everything Slips need.
-    Manages all the output
-    If any Slips module or process needs to output anything to screen,
-     or logs, it should use always this process.
-     Then this output class will handle how to deal with it
+    A class to process and output all text to cli and to slips log files.
+    If any Slips module or process needs to print or log anything to screen,
+     or logs, it should use The printer that uses this process.
     """
 
     name = "Output"
@@ -46,7 +43,6 @@ class Output(IObserver):
         self,
         verbose=1,
         debug=0,
-        stdout="",
         stderr="output/errors.log",
         slips_logfile="output/slips.log",
         input_type=False,
@@ -54,12 +50,14 @@ class Output(IObserver):
         has_pbar: bool = False,
         pbar_finished: Event = None,
         stop_daemon: bool = None,
+        stdout="",
     ):
         super().__init__()
         # when running slips using -e , this var is set and we only
         # print all msgs with debug lvl less than it
         self.verbose = verbose
         self.debug = debug
+        self.stdout = stdout
         self.input_type = input_type
         self.has_pbar = has_pbar
         self.pbar_finished: Event = pbar_finished
@@ -85,10 +83,6 @@ class Output(IObserver):
             utils.change_logfiles_ownership(
                 self.slips_logfile, self.UID, self.GID
             )
-            self.stdout = stdout
-            if stdout != "":
-                self.change_stdout()
-
             if self.verbose > 2:
                 print(f"Verbosity: {self.verbose}. Debugging: {self.debug}")
 
@@ -148,23 +142,6 @@ class Output(IObserver):
         with open(self.slips_logfile, "a") as slips_logfile:
             slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
         self.slips_logfile_lock.release()
-
-    def change_stdout(self):
-        """
-        to be able to print the stats to the output file
-        """
-        # io.TextIOWrapper creates a file object of this file
-        # Pass 0 to open() to switch output buffering off
-        # (only allowed in binary mode)
-        # write_through= True, to flush the buffer to disk, from there the
-        # file can read it.
-        # without it, the file writer keeps the information in a local buffer
-        # that's not accessible to the file.
-        stdout = io.TextIOWrapper(
-            open(self.stdout, "wb", 0), write_through=True
-        )
-        sys.stdout = stdout
-        return stdout
 
     def print(self, sender: str, txt: str, end="\n"):
         """
@@ -240,7 +217,7 @@ class Output(IObserver):
 
         # if debug level is 3 make it red
         if debug == 3:
-            msg = red(msg)
+            txt = red(txt)
 
         if "analyzed IPs" in txt:
             self.handle_printing_stats(txt)

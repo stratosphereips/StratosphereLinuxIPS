@@ -4,7 +4,10 @@ import shutil
 import binascii
 import subprocess
 import base64
-from typing import Dict
+from typing import (
+    Dict,
+    Optional,
+)
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -119,19 +122,44 @@ def has_ignored_errors(line):
             return True
 
 
-def has_errors(output_dir):
+def read_file_if_small(file_path) -> Optional[str]:
+    """
+    returns all contents of a  given file if the file size is < 3MBs
+    """
+    if not os.path.isfile(file_path):
+        print(f"File {file_path} does not exist.")
+        return None
+
+    # in bytes
+    file_size = os.path.getsize(file_path)
+
+    # Check if the file size is less than 3MB (3 * 1024 * 1024 bytes)
+    if file_size < 3 * 1024 * 1024:
+        with open(file_path, "r") as file:
+            contents = file.read()
+        return contents
+    else:
+        print(f"File {file_path} size exceeds 3MB.")
+        return None
+
+
+def assert_no_errors(output_dir):
     """function to parse slips_output file and check for errors"""
     error_files = ("slips_output.txt", "errors.log")
     error_files = [os.path.join(output_dir, file) for file in error_files]
 
-    # we can't redirect stderr to a file and check it because we catch all exceptions in slips
+    # we can't redirect stderr to a file and check it because we catch all
+    # exceptions in slips
     for file in error_files:
         with open(file, "r") as f:
             for line in f:
                 if has_ignored_errors(line):
                     continue
-
-                if has_error_keywords(line):
-                    return True
-
-    return False
+                # prints the content of errors.log if one line was found to
+                # have an error. (only if the file is < 3MB) to avoid
+                # reading large files
+                # the goal of this is to be able to view the error from CI
+                # without having to download the artifacts
+                assert not has_error_keywords(line), (
+                    read_file_if_small(file) or line
+                )

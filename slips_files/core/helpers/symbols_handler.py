@@ -1,44 +1,19 @@
 from datetime import timedelta
 from ipaddress import ip_address
 import traceback
-from slips_files.common.abstracts.observer import IObservable
+from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 
 
-class SymbolHandler(IObservable):
+class SymbolHandler:
     name = "SymbolHandler"
 
     def __init__(self, logger: Output, db):
-        IObservable.__init__(self)
+        self.printer = Printer(logger, self.name)
         self.db = db
-        self.logger = logger
-        self.add_observer(self.logger)
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like f'Test {here}'
-        """
-
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def compute(
         self,
@@ -53,9 +28,8 @@ class SymbolHandler(IObservable):
         as one more feature twid is the starttime of the flow
         :param tuple_key: can be 'InTuples' or 'OutTuples'
         return the following tuple (symbol_to_add, (previous_two_timestamps))
-        previous_two_timestamps is a tuple with the ts of the last flow, and th ets
-        of the flow before the last flow
-
+        previous_two_timestamps is a tuple with the ts of the last flow,
+        and the ts of the flow before the last flow
         """
         daddr_as_obj = ip_address(flow.daddr)
         profileid = f"profile_{flow.saddr}"
@@ -83,7 +57,7 @@ class SymbolHandler(IObservable):
             )
             # Variables for computing the symbol of each tuple
             T2 = False
-            TD = False
+            # TD = False
             # Thresholds learnt from Stratosphere ips first version
             # Timeout time, after 1hs
             tto = timedelta(seconds=3600)
@@ -100,7 +74,8 @@ class SymbolHandler(IObservable):
             (last_last_ts, last_ts) = self.db.get_t2_for_profile_tw(
                 profileid, twid, tupleid, tuple_key
             )
-            # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
+            # self.print(f'Profileid: {profileid}. Data extracted from DB.
+            # last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
             def compute_periodicity(
                 now_ts: float, last_ts: float, last_last_ts: float

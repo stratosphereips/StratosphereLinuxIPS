@@ -1,11 +1,11 @@
 import sqlite3
 import datetime
 import time
-from slips_files.common.abstracts.observer import IObservable
+from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 
 
-class TrustDB(IObservable):
+class TrustDB:
     name = "P2P Trust DB"
 
     def __init__(
@@ -15,10 +15,7 @@ class TrustDB(IObservable):
         drop_tables_on_startup: bool = False,
     ):
         """create a database connection to a SQLite database"""
-        self.logger = logger
-        IObservable.__init__(self)
-        self.add_observer(self.logger)
-
+        self.printer = Printer(logger, self.name)
         self.conn = sqlite3.connect(db_file)
         if drop_tables_on_startup:
             self.print("Dropping tables")
@@ -31,31 +28,8 @@ class TrustDB(IObservable):
     def __del__(self):
         self.conn.close()
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def create_tables(self):
         self.conn.execute(
@@ -116,7 +90,6 @@ class TrustDB(IObservable):
     ):
         if timestamp is None:
             timestamp = time.time()
-        print("###################3Slips score timeout: ", timestamp)
         parameters = (ip, score, confidence, timestamp)
         self.conn.execute(
             "INSERT INTO slips_reputation (ipaddress, score, confidence, update_time) "

@@ -1,13 +1,21 @@
 import time
 import json
-from typing import List, Tuple, Optional, Dict
-
+from typing import (
+    List,
+    Tuple,
+    Optional,
+    Dict,
+    Union,
+)
 from slips_files.common.slips_utils import utils
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.alerts import Alert
+from slips_files.core.structures.evidence import (
     Evidence,
     EvidenceType,
     Victim,
-    evidence_to_dict,
+    ProfileID,
+    IoCType,
+    Attacker,
 )
 
 
@@ -34,38 +42,38 @@ class AlertHandler:
             f"{attacker}_evidence_summary", f"{victim}_{evidence_type}", 1
         )
 
-    def mark_profile_as_malicious(self, profileid: str):
+    def mark_profile_as_malicious(self, profileid: ProfileID):
         """keeps track of profiles that generated an alert"""
-        self.r.sadd("malicious_profiles", profileid)
+        self.r.sadd("malicious_profiles", str(profileid))
 
-    def set_evidence_causing_alert(
-        self, profileid, twid, alert_ID, evidence_IDs: list
-    ):
+    def set_evidence_causing_alert(self, alert: Alert):
         """
         When we have a bunch of evidence causing an alert,
         we associate all evidence IDs with the alert ID in our database
         this function stores evidence in 'alerts_profile_twid' key only
-        :param alert ID: the profileid_twid_ID of the last evidence
-            causing this alert
-        :param evidence_IDs: all IDs of the evidence causing this alert
         """
         old_profileid_twid_alerts: Dict[str, List[str]]
+
         old_profileid_twid_alerts = self.get_profileid_twid_alerts(
-            profileid, twid
+            str(alert.profile), str(alert.timewindow)
         )
 
-        alert = {alert_ID: json.dumps(evidence_IDs)}
+        alert_dict = {alert.id: json.dumps(alert.correl_id)}
 
         if old_profileid_twid_alerts:
             # update previous alerts for this profileid twid
             # add the alert we have to the old alerts of this profileid_twid
-            old_profileid_twid_alerts.update(alert)
+            old_profileid_twid_alerts.update(alert_dict)
             profileid_twid_alerts = json.dumps(old_profileid_twid_alerts)
         else:
             # no previous alerts for this profileid twid
-            profileid_twid_alerts = json.dumps(alert)
+            profileid_twid_alerts = json.dumps(alert_dict)
 
-        self.r.hset(f"{profileid}_{twid}", "alerts", profileid_twid_alerts)
+        self.r.hset(
+            f"{alert.profile}_{alert.timewindow}",
+            "alerts",
+            profileid_twid_alerts,
+        )
         self.r.incr("number_of_alerts", 1)
 
     def get_evidence_causing_alert(
@@ -116,16 +124,40 @@ class AlertHandler:
         # the victim is the whole network
         return ""
 
+    def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
+        """returns the timewindow start and endtime"""
+        twid_start_time: float = self.get_tw_start_time(profileid, twid)
+        twid_end_time: float = twid_start_time + self.width
+        return twid_start_time, twid_end_time
+
+    def get_ti(self, to_lookup: Union[Victim, Attacker]) -> Optional[str]:
+        """
+        if the victim/attacker's ip/domain was part of a ti feed,
+        this function returns the name of the feed
+        """
+        if type(to_lookup) == Victim:
+            ioc_type = to_lookup.victim_type.name
+        else:
+            ioc_type = to_lookup.attacker_type.name
+
+        cases = {
+            IoCType.IP.name: self.is_blacklisted_ip,
+            IoCType.DOMAIN.name: self.is_blacklisted_domain,
+        }
+        try:
+            return cases[ioc_type](to_lookup.value)["source"]
+        except (KeyError, TypeError):
+            return
+
     def set_evidence(self, evidence: Evidence):
         """
         Set the evidence for this Profile and Timewindow.
         :param evidence: an Evidence obj (defined in
-        slips_files/core/evidence_structure/evidence.py) with all the
+        slips_files/core/structures/evidence.py) with all the
         evidence details,
         """
-
         # create the profile if it doesn't exist
-        self.add_profile(str(evidence.profile), evidence.timestamp, self.width)
+        self.add_profile(str(evidence.profile), evidence.timestamp)
 
         # Ignore evidence if it's disabled in the configuration file
         if self.is_detection_disabled(evidence.evidence_type):
@@ -133,40 +165,65 @@ class AlertHandler:
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
 
-        evidence_to_send: dict = evidence_to_dict(evidence)
+        evidence.attacker.TI = self.get_ti(evidence.attacker)
+        evidence.attacker.AS = self.get_asn_info(evidence.attacker.value)
+        evidence.attacker.rDNS = self.get_rdns_info(evidence.attacker.value)
+        evidence.attacker.SNI = self.get_sni_info(evidence.attacker.value)
+        if hasattr(evidence, "victim") and evidence.victim:
+            evidence.victim.TI = self.get_ti(evidence.victim)
+            evidence.victim.AS = self.get_asn_info(evidence.victim.value)
+            evidence.victim.rDNS = self.get_rdns_info(evidence.victim.value)
+            evidence.victim.SNI = self.get_sni_info(evidence.victim.value)
+
+        evidence_to_send: dict = utils.to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)
 
-        # Check if we have the current evidence stored in the DB for
-        # this profileid in this twid
-
+        evidence_hash = f"{evidence.profile}_{evidence.timewindow}_evidence"
         # This is done to ignore repetition of the same evidence sent.
         evidence_exists: Optional[dict] = self.r.hget(
-            f"{evidence.profile}_{evidence.timewindow}_evidence", evidence.id
+            evidence_hash, evidence.id
         )
 
         # note that publishing HAS TO be done after adding the evidence
         # to the db
         if not evidence_exists:
-            self.r.hset(
-                f"{evidence.profile}_{evidence.timewindow}_evidence",
-                evidence.id,
-                evidence_to_send,
-            )
+            self.r.hset(evidence_hash, evidence.id, evidence_to_send)
             self.r.incr("number_of_evidence", 1)
             self.publish("evidence_added", evidence_to_send)
 
-        # an evidence is generated for this profile
-        # update the threat level of this profile
-        self.update_threat_level(
-            str(evidence.attacker.profile),
-            str(evidence.threat_level),
-            evidence.confidence,
-        )
+            # an evidence is generated for this profile
+            # update the threat level of this profile
+            self.update_threat_level(
+                str(evidence.attacker.profile),
+                str(evidence.threat_level),
+                evidence.confidence,
+            )
 
-        return True
+            return True
+
+        return False
+
+    def set_alert(self, alert: Alert):
+        self.set_evidence_causing_alert(alert)
+        # when an alert is generated , we should set the threat level of the
+        # attacker's profile to 1(critical) and confidence 1
+        # so that it gets reported to other peers with these numbers
+        self.update_threat_level(str(alert.profile), "critical", 1)
+
+        # reset the accumulated threat level now that an alert is generated
+        self.set_accumulated_threat_level(alert, 0)
+        self.mark_profile_as_malicious(alert.profile)
+
+        alert_details = {
+            "alert_ID": alert.id,
+            "profileid": str(alert.profile),
+            "twid": str(alert.timewindow),
+        }
+        self.publish("new_alert", json.dumps(alert_details))
 
     def init_evidence_number(self):
-        """used when the db starts to initialize number of evidence generated by slips"""
+        """used when the db starts to initialize number of
+        evidence generated by slips"""
         self.r.set("number_of_evidence", 0)
 
     def get_evidence_number(self):
@@ -274,13 +331,13 @@ class AlertHandler:
 
     def set_accumulated_threat_level(
         self,
-        profileid: str,
-        twid: str,
+        alert: Alert,
         accumulated_threat_lvl: float,
     ):
+        profile_twid = f"{alert.profile}_{alert.timewindow}"
         self.r.zadd(
             "accumulated_threat_levels",
-            {f"{profileid}_{twid}": accumulated_threat_lvl},
+            {profile_twid: accumulated_threat_lvl},
         )
 
     def update_max_threat_level(

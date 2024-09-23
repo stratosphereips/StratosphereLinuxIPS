@@ -56,8 +56,15 @@ RUN apt update && apt install -y --no-install-recommends \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
  && apt clean \
  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-# Upgrade pip3 and install slips requirements
+
+
+
 RUN pip3 install --no-cache-dir --upgrade pip
+RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
+    && cd python-idmefv2 \
+    && git submodule update --init --recursive \
+    && python3 setup.py install \
+    && cd ..
 
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}

@@ -5,6 +5,7 @@ from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
+from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 
@@ -18,6 +19,7 @@ class SSH(IFlowalertsAnalyzer):
         self.pw_guessing_threshold = 20
         self.read_configuration()
         self.password_guessing_cache = {}
+        self.classifier = FlowClassifier()
 
     def name(self) -> str:
         return "ssh_analyzer"
@@ -28,15 +30,13 @@ class SSH(IFlowalertsAnalyzer):
             conf.ssh_succesful_detection_threshold()
         )
 
-    def detect_successful_ssh_by_slips(
-        self, uid, timestamp, profileid, twid, auth_success
-    ):
+    def detect_successful_ssh_by_slips(self, profileid, twid, flow):
         """
         Try Slips method to detect if SSH was successful by
         comparing all bytes sent and received to our threshold
         """
         # this is the ssh flow read from conn.log not ssh.log
-        original_ssh_flow = self.db.get_flow(uid)
+        original_ssh_flow = self.db.get_flow(flow.uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
             ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
@@ -52,31 +52,35 @@ class SSH(IFlowalertsAnalyzer):
                     saddr,
                     daddr,
                     size,
-                    uid,
-                    timestamp,
+                    flow.uid,
+                    flow.starttime,
                     by="Slips",
                 )
                 with contextlib.suppress(ValueError):
-                    self.connections_checked_in_ssh_timer_thread.remove(uid)
+                    self.connections_checked_in_ssh_timer_thread.remove(
+                        flow.uid
+                    )
                 return True
 
-        elif uid not in self.connections_checked_in_ssh_timer_thread:
+        elif flow.uid not in self.connections_checked_in_ssh_timer_thread:
             # It can happen that the original SSH flow is not in the DB yet
             # comes here if we haven't started the timer
             # thread for this connection before
             # mark this connection as checked
             # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
             # time {datetime.datetime.now()}')
-            self.connections_checked_in_ssh_timer_thread.append(uid)
-            params = [uid, timestamp, profileid, twid, auth_success]
+            self.connections_checked_in_ssh_timer_thread.append(flow.uid)
+            params = [profileid, twid, flow]
             timer = TimerThread(15, self.check_successful_ssh, params)
             timer.start()
 
-    def detect_successful_ssh_by_zeek(self, uid, timestamp, profileid, twid):
+    def detect_successful_ssh_by_zeek(self, profileid, twid, flow):
         """
         Check for auth_success: true in the given zeek flow
         """
-        original_ssh_flow = self.db.search_tws_for_flow(profileid, twid, uid)
+        original_ssh_flow = self.db.search_tws_for_flow(
+            profileid, twid, flow.uid
+        )
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
             ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
@@ -88,68 +92,58 @@ class SSH(IFlowalertsAnalyzer):
                 saddr,
                 daddr,
                 size,
-                uid,
-                timestamp,
+                flow.uid,
+                flow.starttime,
                 by="Zeek",
             )
             with contextlib.suppress(ValueError):
-                self.connections_checked_in_ssh_timer_thread.remove(uid)
+                self.connections_checked_in_ssh_timer_thread.remove(flow.uid)
             return True
 
-        elif uid not in self.connections_checked_in_ssh_timer_thread:
+        elif flow.uid not in self.connections_checked_in_ssh_timer_thread:
             # It can happen that the original SSH flow is not in the DB yet
             # comes here if we haven't started the timer thread
             # for this connection before
             # mark this connection as checked
             # self.print(f'Starting the timer to check on {flow_dict},
             # uid {uid}. time {datetime.datetime.now()}')
-            self.connections_checked_in_ssh_timer_thread.append(uid)
-            params = [uid, timestamp, profileid, twid]
+            self.connections_checked_in_ssh_timer_thread.append(flow.uid)
+            params = [flow.uid, flow.starttime, profileid, twid]
             timer = TimerThread(15, self.detect_successful_ssh_by_zeek, params)
             timer.start()
 
-    def check_successful_ssh(
-        self, uid, timestamp, profileid, twid, auth_success
-    ):
+    def check_successful_ssh(self, profileid, twid, flow):
         """
         Function to check if an SSH connection logged in successfully
         """
         # it's true in zeek json files, T in zeke tab files
-        if auth_success in ["true", "T"]:
-            self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid)
-
+        if flow.auth_success in ["true", "T"]:
+            self.detect_successful_ssh_by_zeek(profileid, twid, flow)
         else:
-            self.detect_successful_ssh_by_slips(
-                uid, timestamp, profileid, twid, auth_success
-            )
+            self.detect_successful_ssh_by_slips(profileid, twid, flow)
 
-    def check_ssh_password_guessing(
-        self, daddr, uid, timestamp, profileid, twid, auth_success
-    ):
+    def check_ssh_password_guessing(self, profileid, twid, flow):
         """
         This detection is only done when there's a failed ssh attempt
         alerts ssh pw bruteforce when there's more than
         20 failed attempts by the same ip to the same IP
         """
-        if auth_success in ("true", "T"):
+        if flow.auth_success in ("true", "T"):
             return False
 
-        cache_key = f"{profileid}-{twid}-{daddr}"
+        cache_key = f"{profileid}-{twid}-{flow.daddr}"
         # update the number of times this ip performed a failed ssh login
         if cache_key in self.password_guessing_cache:
-            self.password_guessing_cache[cache_key].append(uid)
+            self.password_guessing_cache[cache_key].append(flow.uid)
         else:
-            self.password_guessing_cache = {cache_key: [uid]}
+            self.password_guessing_cache = {cache_key: [flow.uid]}
 
         conn_count = len(self.password_guessing_cache[cache_key])
 
         if conn_count >= self.pw_guessing_threshold:
-            description = f"SSH password guessing to IP {daddr}"
-            uids = self.password_guessing_cache[cache_key]
-            self.set_evidence.pw_guessing(
-                description, timestamp, twid, uids, by="Slips"
-            )
 
+            uids = self.password_guessing_cache[cache_key]
+            self.set_evidence.pw_guessing(flow, twid, uids)
             # reset the counter
             del self.password_guessing_cache[cache_key]
 
@@ -157,21 +151,10 @@ class SSH(IFlowalertsAnalyzer):
         if not utils.is_msg_intended_for(msg, "new_ssh"):
             return
 
-        data = msg["data"]
-        data = json.loads(data)
-        profileid = data["profileid"]
-        twid = data["twid"]
-        flow = data["flow"]
-        flow = json.loads(flow)
-        timestamp = flow["stime"]
-        uid = flow["uid"]
-        daddr = flow["daddr"]
-        auth_success = flow["auth_success"]
+        msg = json.loads(msg["data"])
+        profileid = msg["profileid"]
+        twid = msg["twid"]
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
 
-        self.check_successful_ssh(
-            uid, timestamp, profileid, twid, auth_success
-        )
-
-        self.check_ssh_password_guessing(
-            daddr, uid, timestamp, profileid, twid, auth_success
-        )
+        self.check_successful_ssh(profileid, twid, flow)
+        self.check_ssh_password_guessing(profileid, twid, flow)

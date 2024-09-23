@@ -55,9 +55,13 @@ RUN apt update && apt install -y --no-install-recommends \
     && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  \
     && nvm install 22
 
-
-# Upgrade pip3 and install slips requirements
 RUN pip3 install --no-cache-dir --upgrade pip
+
+RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
+    && cd python-idmefv2 \
+    && git submodule update --init --recursive \
+    && python3 setup.py install \
+    && cd ..
 
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}

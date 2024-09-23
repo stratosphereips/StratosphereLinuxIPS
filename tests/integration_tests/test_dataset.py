@@ -7,7 +7,7 @@ from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
     create_output_dir,
-    has_errors,
+    assert_no_errors,
     msgs_published_are_eq_msgs_received_by_each_module,
 )
 from tests.module_factory import ModuleFactory
@@ -78,10 +78,10 @@ def test_binetflow(
     # this function returns when slips is done
     run_slips(command)
 
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
     db = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
     profiles = db.get_profiles_len()
     assert profiles > expected_profiles
@@ -120,13 +120,14 @@ def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
     # this function returns when slips is done
     run_slips(command)
 
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
 
     db = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
     profiles = db.get_profiles_len()
-    # todo the profiles should be way more than 10, maybe 76, but it varies each run, we need to sy why
+    # todo the profiles should be way more than 10, maybe 76, but it varies
+    #  each run, we need to sy why
     assert profiles > 10
     assert msgs_published_are_eq_msgs_received_by_each_module(db)
 
@@ -163,10 +164,10 @@ def test_nfdump(nfdump_path, output_dir, redis_port):
     run_slips(command)
 
     db = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
+        redis_port, output_dir=output_dir, start_redis_server=False
     )
     profiles = db.get_profiles_len()
-    assert has_errors(output_dir) is False
+    assert_no_errors(output_dir)
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips
     # doesn't generate a const number of profiles per file)

@@ -192,7 +192,8 @@ class Module(IModule):
 
         if msg := self.get_msg("new_alert"):
             self.print(
-                "Cyst module received a new blocking request . sending to CYST ... "
+                "Cyst module received a new blocking request . "
+                "sending to CYST ... "
             )
             alert_info: dict = json.loads(msg["data"])
             profileid = alert_info["profileid"]

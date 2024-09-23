@@ -1,7 +1,5 @@
 import os
-import subprocess
 import sys
-from typing import Tuple
 
 import psutil
 
@@ -202,35 +200,4 @@ class Checker:
                 f"Stopping Slips."
             )
             return False
-
         return True
-
-    def check_output_redirection(self) -> Tuple[str, str, str]:
-        """
-        Determine where slips will place stdout,
-         stderr and logfile based on slips mode
-         @return (current_stdout, stderr, slips_logfile)
-         current_stdout will be '' if it's not redirected to a file
-        """
-        # lsof will provide a list of all open fds belonging to slips
-        command = f"lsof -p {self.main.pid}"
-        result = subprocess.run(command.split(), capture_output=True)
-        # Get command output
-        output = result.stdout.decode("utf-8")
-        # if stdout is being redirected we'll find '1w' in one of the lines
-        # 1 means stdout, w means write mode
-        # by default, stdout is not redirected
-        current_stdout = ""
-        for line in output.splitlines():
-            if "1w" in line:
-                # stdout is redirected, get the file
-                current_stdout = line.split(" ")[-1]
-                break
-
-        if self.main.mode == "daemonized":
-            stderr = self.main.daemon.stderr
-            slips_logfile = self.main.daemon.stdout
-        else:
-            stderr = os.path.join(self.main.args.output, "errors.log")
-            slips_logfile = os.path.join(self.main.args.output, "slips.log")
-        return current_stdout, stderr, slips_logfile

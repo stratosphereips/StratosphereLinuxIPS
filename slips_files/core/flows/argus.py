@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from slips_files.common.slips_utils import utils
 
 
 @dataclass
@@ -21,7 +23,7 @@ class ArgusConn:
     sbytes: int
     dbytes: int
     # required to be able to add_flow
+    uid: str = field(default_factory=utils.generate_uid)
     smac: str = ""
     dmac: str = ""
-    uid = False
     type_: str = "argus"

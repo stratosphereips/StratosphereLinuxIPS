@@ -1,7 +1,10 @@
+import base64
+import binascii
 import hashlib
 from datetime import datetime, timedelta
 from re import findall
 
+from uuid import UUID
 import tldextract
 import validators
 from git import Repo
@@ -64,10 +67,24 @@ class Utils(object):
             "%Y/%m/%d-%H:%M:%S",
             "%Y-%m-%dT%H:%M:%S",
         )
-        # this format will be used accross all modules and logfiles of slips
+        # this format will be used across all modules and logfiles of slips
+        # its timezone aware
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
+
+    def generate_uid(self):
+        """Generates a UID similar to what Zeek uses."""
+        return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
+            "utf-8"
+        )
+
+    def is_iso_format(self, date_time: str) -> bool:
+        try:
+            datetime.fromisoformat(date_time)
+            return True
+        except ValueError:
+            return False
 
     def extract_hostname(self, url: str) -> str:
         """
@@ -110,11 +127,43 @@ class Utils(object):
 
         return sanitized_string
 
+    def to_dict(self, obj):
+        """
+        Converts an Evidence object to a dictionary (aka json serializable)
+        :param obj: object of any type.
+        """
+        if is_dataclass(obj):
+            # run this function on each value of the given dataclass
+            return {k: self.to_dict(v) for k, v in asdict(obj).items()}
+
+        if isinstance(obj, Enum):
+            return obj.name
+
+        if isinstance(obj, list):
+            return [self.to_dict(item) for item in obj]
+
+        if isinstance(obj, dict):
+            return {k: self.to_dict(v) for k, v in obj.items()}
+
+        return obj
+
+    def is_valid_uuid4(self, uuid_string: str) -> bool:
+        """Validate that the given str in UUID4"""
+        try:
+            UUID(uuid_string, version=4)
+            return True
+        except ValueError:
+            return False
+
+    def extract_domain_from_url(self, url: str) -> str:
+        extracted = tldextract.extract(url)
+        return f"{extracted.domain}.{extracted.suffix}"
+
     def is_valid_domain(self, domain: str) -> bool:
         extracted = tldextract.extract(domain)
         return bool(extracted.domain) and bool(extracted.suffix)
 
-    def detect_data_type(self, data):
+    def detect_ioc_type(self, data) -> str:
         """
         Detects the type of incoming data:
         ipv4, ipv6, domain, ip range, asn, md5, etc
@@ -194,7 +243,9 @@ class Utils(object):
     def convert_format(self, ts, required_format: str):
         """
         Detects and converts the given ts to the given format
-        :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
+        PS: it sets iso format datetime in the local timezone
+        :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f'
+        or 'unixtimestamp', 'iso'
         """
         given_format = self.get_time_format(ts)
         if given_format == required_format:
@@ -352,7 +403,10 @@ class Utils(object):
         This function checks if an IP is a special list of IPs that
         should not be alerted for different reasons
         """
-        ip_obj = ipaddress.ip_address(ip)
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except (ipaddress.AddressValueError, ValueError):
+            return True
         # Is the IP multicast, private? (including localhost)
         # local_link or reserved?
         # The broadcast address 255.255.255.255 is reserved.
@@ -389,12 +443,17 @@ class Utils(object):
             1. If the given message is intended for this channel
             2. The msg has valid data
         """
-
         return (
             message
             and isinstance(message["data"], str)
             and message["channel"] == channel
         )
+
+    def get_slips_version(self) -> str:
+        version_file = "VERSION"
+        with open(version_file, "r") as f:
+            version = f.read()
+        return version
 
     def change_logfiles_ownership(self, file: str, UID, GID):
         """
@@ -450,7 +509,8 @@ class Utils(object):
         end_time = self.convert_to_datetime(end_time)
 
         diff = str(end_time - start_time)
-        # if there are days diff between the flows, diff will be something like 1 day, 17:25:57.458395
+        # if there are days diff between the flows, diff will be something
+        # like 1 day, 17:25:57.458395
         try:
             # calculate the days difference
             diff_in_days = float(diff.split(", ")[0].split(" ")[0])

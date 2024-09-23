@@ -25,6 +25,7 @@ from typing import List
 
 import validators
 
+from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.core import ICore
@@ -55,7 +56,7 @@ SEPARATORS = {
 }
 
 
-class Profiler(ICore):
+class Profiler(ICore, IObservable):
     """A class to create the profiles for IPs"""
 
     name = "Profiler"
@@ -67,6 +68,10 @@ class Profiler(ICore):
         is_profiler_done_event: multiprocessing.Event = None,
         has_pbar: bool = False,
     ):
+        # we made it an observable to be able to pass msgs to Output.py
+        # to init the pbar.
+        IObservable.__init__(self)
+        self.add_observer(self.logger)
         # when profiler is done processing, it releases this semaphore,
         # that's how the process_manager knows it's done
         # when both the input and the profiler are done,
@@ -129,7 +134,7 @@ class Profiler(ICore):
         if not rev_profileid:
             # the profileid is not present in the db, create it
             rev_profileid = f"profile_{self.flow.daddr}"
-            self.db.add_profile(rev_profileid, self.flow.starttime, self.width)
+            self.db.add_profile(rev_profileid, self.flow.starttime)
 
         # in the database, Find and register the id of the tw where the flow
         # belongs.
@@ -144,7 +149,7 @@ class Profiler(ICore):
         and does all the magic to convert it into a working data in our
         system.
         It includes checking if the profile exists and how to put
-        the flow correctly. It interprets each column
+        the flow correctly.
         """
         # try:
         if not hasattr(self, "flow"):
@@ -153,10 +158,9 @@ class Profiler(ICore):
 
         self.flow_parser = FlowHandler(self.db, self.symbol, self.flow)
 
-        if not self.flow_parser.is_supported_flow():
+        if not self.flow_parser.is_supported_flow_type():
             return False
 
-        self.flow_parser.make_sure_theres_a_uid()
         self.profileid = f"profile_{self.flow.saddr}"
         self.flow_parser.profileid = self.profileid
 
@@ -169,7 +173,7 @@ class Profiler(ICore):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
 
-        # Check if the flow is whitelisted and we should not process
+        # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(self.flow):
             if "conn" in self.flow.type_:
                 self.whitelisted_flows_ctr += 1
@@ -186,7 +190,7 @@ class Profiler(ICore):
         self.flow_parser.twid = self.twid
 
         # Create profiles for all ips we see
-        self.db.add_profile(self.profileid, self.flow.starttime, self.width)
+        self.db.add_profile(self.profileid, self.flow.starttime)
         self.store_features_going_out()
         if self.analysis_direction == "all":
             self.handle_in_flows()
@@ -225,9 +229,9 @@ class Profiler(ICore):
             # call the function that handles this flow
             cases[self.flow.type_]()
         except KeyError:
-            for flow in cases:
-                if flow in self.flow.type_:
-                    cases[flow]()
+            for supported_type in cases:
+                if supported_type in self.flow.type_:
+                    cases[supported_type]()
             return False
 
         # if the flow type matched any of the ifs above,
@@ -465,6 +469,7 @@ class Profiler(ICore):
                 # stop and no new fows are coming
                 if self.check_for_stop_msg(msg):
                     return 1
+
                 line: dict = msg["line"]
                 input_type: str = msg["input_type"]
                 total_flows: int = msg.get("total_flows", 0)

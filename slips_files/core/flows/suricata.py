@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from typing import Union
+
 from slips_files.common.slips_utils import utils
 
 #     suricata available event_type values:
@@ -9,6 +11,21 @@ from slips_files.common.slips_utils import utils
 #     -alert
 #     -fileinfo
 #     -stats (only one line - it is conclusion of entire capture)
+
+
+def get_dur(flow):
+    return (
+        utils.convert_to_datetime(flow.endtime)
+        - utils.convert_to_datetime(flow.starttime)
+    ).total_seconds() or 0
+
+
+def get_total_bytes(flow):
+    return flow.dbytes + flow.sbytes
+
+
+def get_total_pkts(flow):
+    return flow.dpkts + flow.spkts
 
 
 @dataclass
@@ -25,7 +42,7 @@ class SuricataFlow:
     dport: str
 
     proto: str
-    appproto: str
+    appproto: Union[str, bool]
 
     starttime: str
     endtime: str
@@ -42,12 +59,15 @@ class SuricataFlow:
     For each of these states Suricata can employ different timeouts.
     """
     state: str
-
+    dur: Union[str, bool] = False
+    pkts: Union[str, bool] = False
+    bytes: Union[str, bool] = False
     # required to be able to add_flow
     smac: str = ""
     dmac: str = ""
     dir_: str = "->"
     type_: str = "conn"
+    flow_source: str = "suricata"
 
     def __post_init__(self):
         self.dur = (
@@ -74,6 +94,8 @@ class SuricataHTTP:
     appproto: str
 
     method: str
+    # this is the hostname field ina suricata http "flow" not the "host" field
+    # in the suricata logged flow
     host: str
     uri: str
 
@@ -89,6 +111,7 @@ class SuricataHTTP:
     resp_mime_types: str = ""
     resp_fuids: str = ""
     type_: str = "http"
+    flow_source: str = "suricata"
 
     def __post_init__(self):
         self.uid = str(self.uid)
@@ -117,6 +140,7 @@ class SuricataDNS:
     qclass_name: str = ""
     rcode_name: str = ""
     type_: str = "dns"
+    flow_source: str = "suricata"
 
     def __post_init__(self):
         self.uid = str(self.uid)
@@ -146,6 +170,7 @@ class SuricataTLS:
     notafter: str
 
     type_: str = "ssl"
+    flow_source: str = "suricata"
 
     def __post_init__(self):
         self.uid = str(self.uid)
@@ -167,6 +192,7 @@ class SuricataFile:
 
     size: int
     type_: str = "files"
+    flow_source: str = "suricata"
     # required to match zeek files.log
     md5: str = ""
     sha1: str = ""
@@ -208,6 +234,7 @@ class SuricataSSH:
     host_key: str = ""
 
     type_: str = "ssh"
+    flow_source: str = "suricata"
 
     def __post_init__(self):
         self.uid = str(self.uid)

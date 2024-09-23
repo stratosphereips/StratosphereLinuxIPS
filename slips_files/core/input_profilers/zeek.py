@@ -189,19 +189,17 @@ class ZeekJSON(IInputType):
 
         elif "notice" in file_type:
             self.flow: Notice = Notice(
-                starttime,
-                line.get("uid", ""),
-                line.get("id.orig_h", ""),
-                line.get("id.resp_h", ""),
-                line.get("id.orig_p", ""),
-                line.get("id.resp_p", ""),
-                line.get("note", ""),
-                line.get(
-                    "msg", ""
-                ),  # we,'re looking for self signed certs in this field
-                line.get("p", ""),
-                line.get("src", ""),  # this is the scanning_ip
-                line.get("dst", ""),
+                starttime=starttime,
+                uid=line.get("uid", ""),
+                saddr=line.get("id.orig_h", ""),
+                daddr=line.get("id.resp_h", ""),
+                sport=line.get("id.orig_p", ""),
+                dport=line.get("id.resp_p", ""),
+                note=line.get("note", ""),
+                msg=line.get("msg", ""),
+                scanned_port=line.get("p", ""),
+                scanning_ip=line.get("src", ""),
+                dst=line.get("dst", ""),
             )
 
         elif "files.log" in file_type:
@@ -458,6 +456,7 @@ class ZeekTabs(IInputType):
                 get_value_at(15),  # scanned_port
                 get_value_at(13, "-"),  # scanning_ip
                 get_value_at(14),  # dst
+                type_="notice",
             )
         elif "files.log" in new_line["type"]:
             self.flow: Files = Files(

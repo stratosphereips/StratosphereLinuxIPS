@@ -2,7 +2,6 @@ from stix2 import Indicator, Bundle
 from cabby import create_client
 import time
 import threading
-import sys
 import os
 
 from slips_files.common.abstracts.exporter import IExporter
@@ -13,9 +12,7 @@ from slips_files.common.slips_utils import utils
 class StixExporter(IExporter):
     def init(self):
         self.port = None
-        self.is_running_on_interface = (
-            "-i" in sys.argv or self.db.is_growing_zeek_dir()
-        )
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.stix_filename = "STIX_data.json"
         self.configs_read: bool = self.read_configuration()
         if self.should_export():
@@ -133,7 +130,7 @@ class StixExporter(IExporter):
 
     def should_export(self) -> bool:
         """Determines whether to export or not"""
-        return self.is_running_on_interface and "stix" in self.export_to
+        return self.is_running_non_stop and "stix" in self.export_to
 
     def read_configuration(self) -> bool:
         """Reads configuration"""
@@ -192,7 +189,7 @@ class StixExporter(IExporter):
         )
         # Get the right description to use in stix
         name = evidence_type
-        ioc_type = utils.detect_data_type(attacker)
+        ioc_type = utils.detect_ioc_type(attacker)
         pattern: str = self.get_ioc_pattern(ioc_type, attacker)
         # Required Indicator Properties: type, spec_version, id, created,
         # modified , all are set automatically
