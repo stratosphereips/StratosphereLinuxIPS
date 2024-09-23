@@ -55,6 +55,7 @@ from modules.arp.arp import ARP
 from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
+from modules.riskiq.riskiq import RiskIQ
 from slips_files.common.markov_chains import Matrix
 from slips_files.core.structures.evidence import (
     Attacker,
@@ -596,3 +597,15 @@ class ModuleFactory:
         mock_logger = Mock()
         mock_db.get_t2_for_profile_tw.return_value = (1000.0, 2000.0)
         return SymbolHandler(mock_logger, mock_db)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_riskiq_obj(self, mock_db):
+        termination_event = MagicMock()
+        riskiq = RiskIQ(
+            self.logger,
+            "dummy_output_dir",
+            6379,
+            termination_event,
+        )
+        return riskiq
+
