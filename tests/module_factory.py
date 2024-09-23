@@ -590,3 +590,9 @@ class ModuleFactory:
 
         cesnet.print = MagicMock()
         return cesnet
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_symbol_handler_obj(self, mock_db):
+        mock_logger = Mock()
+        mock_db.get_t2_for_profile_tw.return_value = (1000.0, 2000.0)
+        return SymbolHandler(mock_logger, mock_db)

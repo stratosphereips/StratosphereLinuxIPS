@@ -64,9 +64,9 @@ from tests.module_factory import ModuleFactory
     ],
 )
 def test_compute_periodicity(
-    mock_db, now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3, expected_result
+    now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3, expected_result
 ):
-    symbol_handler = ModuleFactory().create_symbol_handler(mock_db)
+    symbol_handler = ModuleFactory().create_symbol_handler_obj()
 
     profileid = "test_profile"
     tupleid = "test_tuple"
@@ -89,10 +89,8 @@ def test_compute_periodicity(
         (15.0, 0.1, 10.0, 3),
     ],
 )
-def test_compute_duration(
-    mock_db, current_duration, td1, td2, expected_result
-):
-    symbol_handler = ModuleFactory().create_symbol_handler(mock_db)
+def test_compute_duration(current_duration, td1, td2, expected_result):
+    symbol_handler = ModuleFactory().create_symbol_handler_obj()
     result = symbol_handler.compute_duration(current_duration, td1, td2)
     assert result == expected_result
 
@@ -108,8 +106,8 @@ def test_compute_duration(
         (1500, 250.0, 1100.0, 3),
     ],
 )
-def test_compute_size(mock_db, current_size, ts1, ts2, expected_result):
-    symbol_handler = ModuleFactory().create_symbol_handler(mock_db)
+def test_compute_size(current_size, ts1, ts2, expected_result):
+    symbol_handler = ModuleFactory().create_symbol_handler_obj()
     result = symbol_handler.compute_size(current_size, ts1, ts2)
     assert result == expected_result
 
@@ -133,8 +131,8 @@ def test_compute_size(mock_db, current_size, ts1, ts2, expected_result):
         (4, 3, 3, "Z"),
     ],
 )
-def test_compute_letter(mock_db, periodicity, size, duration, expected_result):
-    symbol_handler = ModuleFactory().create_symbol_handler(mock_db)
+def test_compute_letter(periodicity, size, duration, expected_result):
+    symbol_handler = ModuleFactory().create_symbol_handler_obj()
     result = symbol_handler.compute_letter(periodicity, size, duration)
     assert result == expected_result
 
@@ -154,8 +152,8 @@ def test_compute_letter(mock_db, periodicity, size, duration, expected_result):
         (5000, ""),
     ],
 )
-def test_compute_timechar(mock_db, T2, expected_result):
-    symbol_handler = ModuleFactory().create_symbol_handler(mock_db)
+def test_compute_timechar(T2, expected_result):
+    symbol_handler = ModuleFactory().create_symbol_handler_obj()
     result = symbol_handler.compute_timechar(T2)
     assert result == expected_result
 
@@ -210,8 +208,8 @@ def test_compute_timechar(mock_db, T2, expected_result):
         ),
     ],
 )
-def test_compute(mock_db, mocker, flow_data, twid, tuple_key, expected_symbol):
+def test_compute(mocker, flow_data, twid, tuple_key, expected_symbol):
     mock_flow = mocker.Mock(**flow_data)
-    symbol_handler = ModuleFactory().create_symbol_handler(mock_db)
+    symbol_handler = ModuleFactory().create_symbol_handler_obj()
     result, _ = symbol_handler.compute(mock_flow, twid, tuple_key)
     assert result == expected_symbol
