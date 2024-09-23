@@ -149,18 +149,19 @@ class Output(IObserver):
         """
         self.cli_lock.acquire()
         try:
-            # when the pbar reaches 100% aka we're done_reading_flows
-            # we print alerts at the very botttom of the screen using print
-            # instead of printing alerts at the top of the pbar using tqdm
             if sender:
                 to_print = f"[{sender}] {txt}"
             else:
                 to_print = txt
 
+            # when the pbar reaches 100% aka we're is_pbar_finished() == True
+            # we print alerts at the very bottom of the screen using print
+            # instead of printing alerts at the top of the pbar using tqdm
             if self.has_pbar and not self.is_pbar_finished():
                 self.tell_pbar({"event": "print", "txt": to_print})
             else:
                 print(to_print, end=end)
+
         except Exception as e:
             print(f"Problem printing {txt}. {e}")
 
@@ -246,13 +247,20 @@ class Output(IObserver):
         self.pbar_sender_pipe.send(msg)
 
     def is_pbar_finished(self) -> bool:
+        """checks the pbar_finished event set by the pbar module"""
         return self.pbar_finished.is_set()
 
-    def forward_progress_bar_msgs(self, msg: dict):
+    def forward_progress_bar_msgs(self, msg: dict) -> bool:
         """
-        passes init and update msgs to pbar module
+        forwards 'init' and 'update' msgs to pbar module
+        pbar "print" msgs don't reach this function
+        returns true if the msg was sucessfuly forwarded to pbar process
         """
-        pbar_event: str = msg["bar"]
+        try:
+            pbar_event: str = msg["bar"]
+        except KeyError:
+            return False
+
         if pbar_event == "init":
             self.tell_pbar(
                 {
@@ -260,7 +268,7 @@ class Output(IObserver):
                     "total_flows": msg["bar_info"]["total_flows"],
                 }
             )
-            return
+            return True
 
         if pbar_event == "update" and not self.is_pbar_finished():
             self.tell_pbar(
@@ -268,11 +276,14 @@ class Output(IObserver):
                     "event": "update_bar",
                 }
             )
+            return True
+        return False
 
     def update(self, msg: dict):
         """
-        gets called whenever any module need to print something
-        each msg shhould be in the following format
+        is called whenever any module need to print something using the
+        Printer.notify_observers()
+        each msg should be in the following format
         {
             bar: 'update' or 'init'
             log_to_logfiles_only: bool that indicates wheteher we
@@ -286,9 +297,8 @@ class Output(IObserver):
                 total_flows: int,
         }
         """
-        # if pbar wasn't supported, inputproc won't send update msgs
-
-        # try:
+        # if pbar wasn't supported, profiler.py won't send update msgs
+        # the only process that sends msgs here is profiler.py
         if "bar" in msg:
             self.forward_progress_bar_msgs(msg)
             return
@@ -299,8 +309,3 @@ class Output(IObserver):
         else:
             # output to terminal
             self.output_line(msg)
-
-
-#         except Exception as e:
-#             print(f"Error in output.py: {e} {type(e)}")
-#             traceback.print_stack()
