@@ -15,6 +15,7 @@ from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
+from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.progress_bar.progress_bar import PBar
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
@@ -46,7 +47,6 @@ from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event
 from slips_files.core.helpers.flow_handler import FlowHandler
-from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
@@ -576,14 +576,27 @@ class ModuleFactory:
         output_dir = "dummy_output_dir"
         redis_port = 6379
         termination_event = MagicMock()
-        cesnet = CESNET(self.logger, output_dir, redis_port, termination_event)
-        cesnet.wclient = MagicMock()
-        cesnet.node_info = [
-            {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
-        ]
 
-        cesnet.print = Mock()
+        with patch.object(
+            DBManager, "create_sqlite_db", return_value=MagicMock()
+        ):
+            cesnet = CESNET(
+                self.logger, output_dir, redis_port, termination_event
+            )
+            cesnet.db = MagicMock()
+            cesnet.wclient = MagicMock()
+            cesnet.node_info = [
+                {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
+            ]
+
+        cesnet.print = MagicMock()
         return cesnet
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_symbol_handler_obj(self, mock_db):
+        mock_logger = Mock()
+        mock_db.get_t2_for_profile_tw.return_value = (1000.0, 2000.0)
+        return SymbolHandler(mock_logger, mock_db)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_riskiq_obj(self, mock_db):
@@ -595,3 +608,4 @@ class ModuleFactory:
             termination_event,
         )
         return riskiq
+

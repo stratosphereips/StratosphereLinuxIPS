@@ -15,12 +15,125 @@ class SymbolHandler:
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def compute(
+    def compute_periodicity(
         self,
-        flow,
-        twid: str,
-        tuple_key: str,
+        now_ts: float,
+        last_ts: float,
+        last_last_ts: float,
+        tto: timedelta,
+        tt1: float,
+        tt2: float,
+        tt3: float,
+        profileid: str,
+        tupleid: str,
     ):
+        zeros = ""
+        if last_last_ts is False or last_ts is False:
+            TD = -1
+            T1 = None
+            T2 = None
+        else:
+            T1 = last_ts - last_last_ts
+            T2 = now_ts - last_ts
+
+            if T2 >= tto.total_seconds():
+                t2_in_hours = T2 / tto.total_seconds()
+                for i in range(int(t2_in_hours)):
+                    zeros += "0"
+
+            try:
+                TD = T2 / T1 if T2 >= T1 else T1 / T2
+            except ZeroDivisionError:
+                TD = 1
+
+            if TD <= tt1:
+                TD = 1
+            elif TD <= tt2:
+                TD = 2
+            elif TD <= tt3:
+                TD = 3
+            elif TD > tt3:
+                TD = 4
+
+        self.print(
+            f"Compute Periodicity: Profileid: {profileid}, Tuple: {tupleid}, T1={T1}, "
+            f"T2={T2}, TD={TD}",
+            3,
+            0,
+        )
+        return TD, zeros, T2
+
+    def compute_duration(
+        self, current_duration: float, td1: float, td2: float
+    ):
+        """Function to compute letter of the duration"""
+        if current_duration <= td1:
+            return 1
+        elif td1 < current_duration <= td2:
+            return 2
+        else:
+            return 3
+
+    def compute_size(self, current_size: int, ts1: float, ts2: float):
+        """Function to compute letter of the size"""
+        if current_size <= ts1:
+            return 1
+        elif ts1 < current_size <= ts2:
+            return 2
+        else:
+            return 3
+
+    def compute_letter(self, periodicity: int, size: int, duration: int):
+        """
+        Function to compute letter based on the periodicity, size, and duration of the flow
+        """
+        # format of this map is as follows
+        # {periodicity: {'size' : {duration: letter, duration: letter, etc.}}
+        periodicity_map = {
+            # every key in this dict represents a periodicity
+            "-1": {
+                # every key in this dict is a size 1,2,3
+                # 'size' : {duration: letter, diration: letter, etc.}
+                "1": {"1": "1", "2": "2", "3": "3"},
+                "2": {"1": "4", "2": "5", "3": "6"},
+                "3": {"1": "7", "2": "8", "3": "9"},
+            },
+            "1": {
+                "1": {"1": "a", "2": "b", "3": "c"},
+                "2": {"1": "d", "2": "e", "3": "f"},
+                "3": {"1": "g", "2": "h", "3": "i"},
+            },
+            "2": {
+                "1": {"1": "A", "2": "B", "3": "C"},
+                "2": {"1": "D", "2": "E", "3": "F"},
+                "3": {"1": "G", "2": "H", "3": "I"},
+            },
+            "3": {
+                "1": {"1": "r", "2": "s", "3": "t"},
+                "2": {"1": "u", "2": "v", "3": "w"},
+                "3": {"1": "x", "2": "y", "3": "z"},
+            },
+            "4": {
+                "1": {"1": "R", "2": "S", "3": "T"},
+                "2": {"1": "U", "2": "V", "3": "W"},
+                "3": {"1": "X", "2": "Y", "3": "Z"},
+            },
+        }
+        return periodicity_map[str(periodicity)][str(size)][str(duration)]
+
+    def compute_timechar(self, t2):
+        if t2 and not isinstance(t2, bool):
+            time_thresholds = [(5, "."), (60, ","), (300, "+"), (3600, "*")]
+
+            # Loop through thresholds and return the corresponding time character
+            for threshold, char in time_thresholds:
+                if t2 <= timedelta(seconds=threshold).total_seconds():
+                    return char
+
+        # Return empty string if no conditions are met
+        return ""
+
+    def compute(self, flow, twid: str, tuple_key: str):
         """
         This function computes the new symbol for the tuple according to the
         original stratosphere IPS model of letters
@@ -35,234 +148,53 @@ class SymbolHandler:
         profileid = f"profile_{flow.saddr}"
         tupleid = f"{daddr_as_obj}-{flow.dport}-{flow.proto}"
 
-        current_duration = flow.dur
-        current_size = flow.bytes
+        current_duration = float(flow.dur)
+        current_size = int(flow.bytes)
+        now_ts = float(flow.starttime)
 
         try:
-            current_duration = float(current_duration)
-            current_size = int(current_size)
-            now_ts = float(flow.starttime)
             self.print(
-                "Starting compute symbol. Profileid: {}, "
-                "Tupleid {}, time:{} ({}), dur:{}, size:{}".format(
-                    profileid,
-                    tupleid,
-                    twid,
-                    type(twid),
-                    current_duration,
-                    current_size,
-                ),
+                f"Starting compute symbol. Profileid: {profileid}, "
+                f"Tupleid {tupleid}, time:{twid} ({type(twid)}), dur:{current_duration}, size:{current_size}",
                 3,
                 0,
             )
-            # Variables for computing the symbol of each tuple
-            T2 = False
-            # TD = False
-            # Thresholds learnt from Stratosphere ips first version
-            # Timeout time, after 1hs
-            tto = timedelta(seconds=3600)
-            tt1 = 1.05
-            tt2 = 1.3
-            tt3 = float(5)
-            td1 = 0.1
-            td2 = float(10)
-            ts1 = float(250)
-            ts2 = float(1100)
 
-            # Get the time of the last flow in this tuple, and the last last
-            # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
+            tto = timedelta(seconds=3600)
+            tt1, tt2, tt3 = 1.05, 1.3, 5.0
+            td1, td2 = 0.1, 10.0
+            ts1, ts2 = 250.0, 1100.0
+
             (last_last_ts, last_ts) = self.db.get_t2_for_profile_tw(
                 profileid, twid, tupleid, tuple_key
             )
-            # self.print(f'Profileid: {profileid}. Data extracted from DB.
-            # last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
-            def compute_periodicity(
-                now_ts: float, last_ts: float, last_last_ts: float
-            ):
-                """Function to compute the periodicity"""
-                zeros = ""
-                if last_last_ts is False or last_ts is False:
-                    TD = -1
-                    T1 = None
-                    T2 = None
-                else:
-                    # Time diff between the past flow and the past-past flow.
-                    T1 = last_ts - last_last_ts
-                    # Time diff between the current flow and the past flow.
-                    # We already computed this before, but we can do it here
-                    # again just in case
-                    T2 = now_ts - last_ts
-
-                    # We have a time out of 1hs. After that, put 1 number 0
-                    # for each hs
-                    # It should not happen that we also check T1... right?
-                    if T2 >= tto.total_seconds():
-                        t2_in_hours = T2 / tto.total_seconds()
-                        # Shoud round it. Because we need the time to pass to
-                        # really count it
-                        # For example:
-                        # 7100 / 3600 =~ 1.972  ->  int(1.972) = 1
-                        for i in range(int(t2_in_hours)):
-                            # Add the zeros to the symbol object
-                            zeros += "0"
-
-                    # Compute TD
-                    try:
-                        TD = T2 / T1 if T2 >= T1 else T1 / T2
-                    except ZeroDivisionError:
-                        TD = 1
-
-                    # Decide the periodic based on TD and the thresholds
-                    if TD <= tt1:
-                        # Strongly periodicity
-                        TD = 1
-                    elif TD <= tt2:
-                        # Weakly periodicity
-                        TD = 2
-                    elif TD <= tt3:
-                        # Weakly not periodicity
-                        TD = 3
-                    elif TD > tt3:
-                        # Strongly not periodicity
-                        TD = 4
-                self.print(
-                    "Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, "
-                    "T2={}, TD={}".format(profileid, tupleid, T1, T2, TD),
-                    3,
-                    0,
-                )
-                return TD, zeros
-
-            def compute_duration():
-                """Function to compute letter of the duration"""
-                if current_duration <= td1:
-                    return 1
-                elif current_duration > td1 and current_duration <= td2:
-                    return 2
-                elif current_duration > td2:
-                    return 3
-
-            def compute_size():
-                """Function to compute letter of the size"""
-                if current_size <= ts1:
-                    return 1
-                elif current_size > ts1 and current_size <= ts2:
-                    return 2
-                elif current_size > ts2:
-                    return 3
-
-            def compute_letter():
-                """
-                Function to compute letter
-                based on the periodicity, size, and dur of the flow
-                """
-                # format of this map is as follows
-                # {periodicity: {'size' : {duration: letter, duration: letter, etc.}}
-                periodicity_map = {
-                    # every key in this dict represents a periodicity
-                    "-1": {
-                        # every key in this dict is a size 1,2,3
-                        # 'size' : {duration: letter, diration: letter, etc.}
-                        "1": {"1": "1", "2": "2", "3": "3"},
-                        "2": {"1": "4", "2": "5", "3": "6"},
-                        "3": {"1": "7", "2": "8", "3": "9"},
-                    },
-                    "1": {
-                        "1": {"1": "a", "2": "b", "3": "c"},
-                        "2": {"1": "d", "2": "e", "3": "f"},
-                        "3": {"1": "g", "2": "h", "3": "i"},
-                    },
-                    "2": {
-                        "1": {"1": "A", "2": "B", "3": "C"},
-                        "2": {"1": "D", "2": "E", "3": "F"},
-                        "3": {"1": "G", "2": "H", "3": "I"},
-                    },
-                    "3": {
-                        "1": {"1": "r", "2": "s", "3": "t"},
-                        "2": {"1": "u", "2": "v", "3": "w"},
-                        "3": {"1": "x", "2": "y", "3": "z"},
-                    },
-                    "4": {
-                        "1": {"1": "R", "2": "S", "3": "T"},
-                        "2": {"1": "U", "2": "V", "3": "W"},
-                        "3": {"1": "X", "2": "Y", "3": "Z"},
-                    },
-                }
-                return periodicity_map[str(periodicity)][str(size)][
-                    str(duration)
-                ]
-
-            def compute_timechar():
-                """Function to compute the timechar"""
-                # self.print(f'Compute timechar. Profileid: {profileid} T2:
-                # {T2}', 0, 5)
-                if not isinstance(T2, bool):
-                    if T2 <= timedelta(seconds=5).total_seconds():
-                        return "."
-                    elif T2 <= timedelta(seconds=60).total_seconds():
-                        return ","
-                    elif T2 <= timedelta(seconds=300).total_seconds():
-                        return "+"
-                    elif T2 <= timedelta(seconds=3600).total_seconds():
-                        return "*"
-                    else:
-                        # Changed from 0 to ''
-                        return ""
-                else:
-                    return ""
-
-            # Here begins the function's code
-            try:
-                # Update value of T2
-                T2 = now_ts - last_ts if now_ts and last_ts else False
-                # Are flows sorted?
-                if T2 < 0:
-                    # Flows are not sorted!
-                    # What is going on here when the flows are not
-                    # ordered?? Are we losing flows?
-                    # Put a warning
-                    self.print(
-                        "Warning: Coming flows are not sorted -> "
-                        "Some time diff are less than zero.",
-                        0,
-                        2,
-                    )
-            except TypeError:
-                T2 = False
-            # self.print("T2:{}".format(T2), 0, 1)
-            # p = self.db.start_profiling()
-            # Compute the rest
-            periodicity, zeros = compute_periodicity(
-                now_ts, last_ts, last_last_ts
+            periodicity, zeros, T2 = self.compute_periodicity(
+                now_ts,
+                last_ts,
+                last_last_ts,
+                tto,
+                tt1,
+                tt2,
+                tt3,
+                profileid,
+                tupleid,
             )
-            duration = compute_duration()
-            # self.print("Duration: {}".format(duration), 0, 1)
-            size = compute_size()
-            # self.print("Size: {}".format(size), 0, 1)
-            letter = compute_letter()
-            # self.print("Letter: {}".format(letter), 0, 1)
-            timechar = compute_timechar()
-            # self.print("TimeChar: {}".format(timechar), 0, 1)
+            duration = self.compute_duration(current_duration, td1, td2)
+            size = self.compute_size(current_size, ts1, ts2)
+            letter = self.compute_letter(periodicity, size, duration)
+            timechar = self.compute_timechar(T2)
+
             self.print(
-                "Profileid: {}, Tuple: {}, Periodicity: {}, "
-                "Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(
-                    profileid,
-                    tupleid,
-                    periodicity,
-                    duration,
-                    size,
-                    letter,
-                    timechar,
-                ),
+                f"Profileid: {profileid}, Tuple: {tupleid}, Periodicity: {periodicity}, "
+                f"Duration: {duration}, Size: {size}, Letter: {letter}. TimeChar: {timechar}",
                 3,
                 0,
             )
-            # p = self.db.end_profiling(p)
+
             symbol = zeros + letter + timechar
-            # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
+
         except Exception:
-            # For some reason we can not use the output queue here.. check
             self.print("Error in compute_symbol in Profiler Process.", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
