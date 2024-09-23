@@ -585,15 +585,13 @@ class ModuleFactory:
         cesnet.print = Mock()
         return cesnet
 
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_riskiq_obj(self, mock_db):
-        with patch.object(DBManager, "create_sqlite_db", return_value=Mock()):
-            riskiq = RiskIQ(
-                self.logger,
-                "dummy_output_dir",
-                6379,
-                self.dummy_termination_event,
-            )
-            riskiq.db.rdb = mock_db
-
-        riskiq.print = do_nothing
+        termination_event = MagicMock()
+        riskiq = RiskIQ(
+            self.logger,
+            "dummy_output_dir",
+            6379,
+            termination_event,
+        )
         return riskiq

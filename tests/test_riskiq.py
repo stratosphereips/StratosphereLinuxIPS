@@ -29,12 +29,12 @@ from requests.auth import HTTPBasicAuth
     ],
 )
 @patch("requests.get")
-def test_get_passive_dns(mock_get, ip, api_response, mock_db, expected_result):
+def test_get_passive_dns(mock_get, ip, api_response, expected_result):
     mock_response = mock_get.return_value
     mock_response.status_code = 200
     mock_response.text = json.dumps(api_response)
 
-    riskiq = ModuleFactory().create_riskiq_obj(mock_db)
+    riskiq = ModuleFactory().create_riskiq_obj()
     riskiq.riskiq_email = "test@example.com"
     riskiq.riskiq_key = "testkey"
 
@@ -64,7 +64,7 @@ def test_get_passive_dns(mock_get, ip, api_response, mock_db, expected_result):
 )
 def test_pre_main(email, key, expected_result, mock_db):
     with patch("slips_files.common.slips_utils.utils.drop_root_privs"):
-        riskiq = ModuleFactory().create_riskiq_obj(mock_db)
+        riskiq = ModuleFactory().create_riskiq_obj()
         riskiq.riskiq_email = email
         riskiq.riskiq_key = key
         assert riskiq.pre_main() == expected_result
