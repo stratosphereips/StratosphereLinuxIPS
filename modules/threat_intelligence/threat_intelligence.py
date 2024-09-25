@@ -1540,15 +1540,8 @@ class ThreatIntel(IModule, URLhaus):
         the provided domain name and determines if it is considered malicious.
         """
         # Search for this domain in our database of IoC
-        (
-            domain_info,
-            is_subdomain,
-        ) = self.db.is_blacklisted_domain(domain)
-        if (
-            domain_info is not False
-        ):  # Dont change this condition. This is the only way it works
-            # If the domain is in the blacklist of IoC. Set an evidence
-            domain_info = json.loads(domain_info)
+        domain_info, is_subdomain = self.db.is_blacklisted_domain(domain)
+        if domain_info:
             return domain_info, is_subdomain
         return False, False
 
