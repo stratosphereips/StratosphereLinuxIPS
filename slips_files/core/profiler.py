@@ -479,15 +479,23 @@ class Profiler(ICore, IObservable):
                 self.input = SUPPORTED_INPUT_TYPES[self.input_type]()
 
             # get the correct input type class and process the line based on it
-            self.flow = self.input.process_line(line)
-            if self.flow:
-                self.add_flow_to_profile()
-                self.handle_setting_local_net()
+            try:
+                self.flow = self.input.process_line(line)
+                if self.flow:
+                    self.add_flow_to_profile()
+                    self.handle_setting_local_net()
 
-            # now that one flow is processed tell output.py
-            # to update the bar
-            if self.has_pbar:
-                self.notify_observers({"bar": "update"})
+                # now that one flow is processed tell output.py
+                # to update the bar
+                if self.has_pbar:
+                    self.notify_observers({"bar": "update"})
+            except Exception as e:
+                self.print(
+                    f"Problem processing line {line}. " f"Line discarded. {e}",
+                    0,
+                    1,
+                )
+                self.flow = False
 
             # listen on this channel in case whitelist.conf is changed,
             # we need to process the new changes
