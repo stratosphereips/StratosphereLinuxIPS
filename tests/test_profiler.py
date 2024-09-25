@@ -392,12 +392,7 @@ def test_should_set_localnet_already_set():
 
 def test_check_for_stop_msg(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
-    monkeypatch.setattr(profiler, "shutdown_gracefully", Mock())
-    monkeypatch.setattr(profiler, "is_done_processing", Mock())
     assert profiler.is_stop_msg("stop") is True
-    profiler.shutdown_gracefully.assert_called_once()
-    profiler.mark_process_as_done_processing.assert_called_once()
-
     assert profiler.is_stop_msg("not_stop") is False
 
 
@@ -431,7 +426,7 @@ def mock_print(*args, **kwargs):
     pass
 
 
-def test_is_done_processing(monkeypatch):
+def test_mark_process_as_done_processing(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.done_processing = Mock()
     profiler.is_profiler_done_event = Mock()
@@ -558,12 +553,16 @@ def test_handle_in_flows_valid_daddr():
 
 def test_shutdown_gracefully(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
+    profiler.print = Mock()
+    profiler.mark_process_as_done_processing = Mock()
     profiler.rec_lines = 100
-    monkeypatch.setattr(profiler, "print", Mock())
+
+    # monkeypatch.setattr(profiler, "print", Mock())
     profiler.shutdown_gracefully()
     profiler.print.assert_called_with(
         "Stopping. Total lines read: 100", log_to_logfiles_only=True
     )
+    profiler.mark_process_as_done_processing.assert_called_once()
 
 
 def test_init_pbar():
