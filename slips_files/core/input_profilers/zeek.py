@@ -456,7 +456,6 @@ class ZeekTabs(IInputType):
                 get_value_at(15),  # scanned_port
                 get_value_at(13, "-"),  # scanning_ip
                 get_value_at(14),  # dst
-                type_="notice",
             )
         elif "files.log" in new_line["type"]:
             self.flow: Files = Files(
