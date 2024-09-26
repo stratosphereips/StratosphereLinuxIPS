@@ -750,7 +750,7 @@ class DBManager:
     def add_tuple(self, *args, **kwargs):
         return self.rdb.add_tuple(*args, **kwargs)
 
-    def search_tws_for_flow(self, profileid, twid, uid, go_back=False):
+    def search_tws_for_flow(self, twid, uid, go_back=False):
         """
         Search for the given uid in the given twid, or the tws before
         :param go_back: how many hours back to search?
