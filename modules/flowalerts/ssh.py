@@ -1,7 +1,7 @@
-import contextlib
+import asyncio
 import json
+from typing import Optional
 
-from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -30,97 +30,75 @@ class SSH(IFlowalertsAnalyzer):
             conf.ssh_succesful_detection_threshold()
         )
 
-    def detect_successful_ssh_by_slips(self, profileid, twid, flow):
+    def detect_successful_ssh_by_slips(
+        self, twid, conn_log_flow: dict, ssh_flow
+    ):
         """
         Try Slips method to detect if SSH was successful by
         comparing all bytes sent and received to our threshold
         """
-        # this is the ssh flow read from conn.log not ssh.log
+        size = conn_log_flow["sbytes"] + conn_log_flow["dbytes"]
+        if size <= self.ssh_succesful_detection_threshold:
+            return
+
+        daddr = conn_log_flow["daddr"]
+        saddr = conn_log_flow["saddr"]
+        # Set the evidence because there is no
+        # easier way to show how Slips detected
+        # the successful ssh and not Zeek
+        self.set_evidence.ssh_successful(
+            twid,
+            saddr,
+            daddr,
+            size,
+            ssh_flow.uid,
+            ssh_flow.starttime,
+            by="Slips",
+        )
+        return True
+
+    def get_original_ssh_flow(self, flow) -> Optional[dict]:
+        """original ssh flows are the ones from conn.log"""
         original_ssh_flow = self.db.get_flow(flow.uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
-            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-            size = ssh_flow_dict["sbytes"] + ssh_flow_dict["dbytes"]
-            if size > self.ssh_succesful_detection_threshold:
-                daddr = ssh_flow_dict["daddr"]
-                saddr = ssh_flow_dict["saddr"]
-                # Set the evidence because there is no
-                # easier way to show how Slips detected
-                # the successful ssh and not Zeek
-                self.set_evidence.ssh_successful(
-                    twid,
-                    saddr,
-                    daddr,
-                    size,
-                    flow.uid,
-                    flow.starttime,
-                    by="Slips",
-                )
-                with contextlib.suppress(ValueError):
-                    self.connections_checked_in_ssh_timer_thread.remove(
-                        flow.uid
-                    )
-                return True
+            return json.loads(original_ssh_flow[original_flow_uid])
 
-        elif flow.uid not in self.connections_checked_in_ssh_timer_thread:
-            # It can happen that the original SSH flow is not in the DB yet
-            # comes here if we haven't started the timer
-            # thread for this connection before
-            # mark this connection as checked
-            # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
-            # time {datetime.datetime.now()}')
-            self.connections_checked_in_ssh_timer_thread.append(flow.uid)
-            params = [profileid, twid, flow]
-            timer = TimerThread(15, self.check_successful_ssh, params)
-            timer.start()
-
-    def detect_successful_ssh_by_zeek(self, profileid, twid, flow):
-        """
-        Check for auth_success: true in the given zeek flow
-        """
-        original_ssh_flow = self.db.search_tws_for_flow(
-            profileid, twid, flow.uid
+    def set_evidence_ssh_successful_by_zeek(
+        self, twid, conn_log_flow, ssh_flow
+    ):
+        daddr = conn_log_flow["daddr"]
+        saddr = conn_log_flow["saddr"]
+        size = conn_log_flow["sbytes"] + conn_log_flow["dbytes"]
+        self.set_evidence.ssh_successful(
+            twid,
+            saddr,
+            daddr,
+            size,
+            ssh_flow.uid,
+            ssh_flow.starttime,
+            by="Zeek",
         )
-        original_flow_uid = next(iter(original_ssh_flow))
-        if original_ssh_flow[original_flow_uid]:
-            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-            daddr = ssh_flow_dict["daddr"]
-            saddr = ssh_flow_dict["saddr"]
-            size = ssh_flow_dict["sbytes"] + ssh_flow_dict["dbytes"]
-            self.set_evidence.ssh_successful(
-                twid,
-                saddr,
-                daddr,
-                size,
-                flow.uid,
-                flow.starttime,
-                by="Zeek",
-            )
-            with contextlib.suppress(ValueError):
-                self.connections_checked_in_ssh_timer_thread.remove(flow.uid)
-            return True
+        return True
 
-        elif flow.uid not in self.connections_checked_in_ssh_timer_thread:
-            # It can happen that the original SSH flow is not in the DB yet
-            # comes here if we haven't started the timer thread
-            # for this connection before
-            # mark this connection as checked
-            # self.print(f'Starting the timer to check on {flow_dict},
-            # uid {uid}. time {datetime.datetime.now()}')
-            self.connections_checked_in_ssh_timer_thread.append(flow.uid)
-            params = [flow.uid, flow.starttime, profileid, twid]
-            timer = TimerThread(15, self.detect_successful_ssh_by_zeek, params)
-            timer.start()
-
-    def check_successful_ssh(self, profileid, twid, flow):
+    async def check_successful_ssh(self, twid, flow):
         """
         Function to check if an SSH connection logged in successfully
         """
+        # this is the ssh flow read from conn.log not ssh.log
+        conn_log_flow = self.get_original_ssh_flow(flow)
+
+        if not conn_log_flow:
+            await asyncio.sleep(15)
+            conn_log_flow = self.get_original_ssh_flow(flow)
+            if not conn_log_flow:
+                return
+
         # it's true in zeek json files, T in zeke tab files
         if flow.auth_success in ["true", "T"]:
-            self.detect_successful_ssh_by_zeek(profileid, twid, flow)
+            self.set_evidence_ssh_successful_by_zeek(twid, conn_log_flow, flow)
         else:
-            self.detect_successful_ssh_by_slips(profileid, twid, flow)
+            self.detect_successful_ssh_by_slips(twid, conn_log_flow, flow)
 
     def check_ssh_password_guessing(self, profileid, twid, flow):
         """
@@ -156,5 +134,5 @@ class SSH(IFlowalertsAnalyzer):
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
 
-        self.check_successful_ssh(profileid, twid, flow)
+        self.check_successful_ssh(twid, flow)
         self.check_ssh_password_guessing(profileid, twid, flow)
