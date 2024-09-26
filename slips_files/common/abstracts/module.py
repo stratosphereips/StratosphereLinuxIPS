@@ -156,7 +156,7 @@ class IModule(ABC, Process):
         self.print(f"Problem in pre_main() line {exception_line}", 0, 1)
         self.print(traceback.format_exc(), 0, 1)
 
-    def run(self) -> bool:
+    def run(self):
         """
         This is the loop function, it runs non-stop as long as
         the module is running
@@ -165,37 +165,38 @@ class IModule(ABC, Process):
             error: bool = self.pre_main()
             if error or self.should_stop():
                 self.shutdown_gracefully()
-                return True
+                return
         except KeyboardInterrupt:
             self.shutdown_gracefully()
-            return True
+            return
         except Exception:
             self.print_traceback()
-            return True
+            return
 
         keyboard_int_ctr = 0
         while True:
             try:
                 if self.should_stop():
                     self.shutdown_gracefully()
-                    return True
+                    return
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
                 error: bool = self.main()
                 if error:
                     self.shutdown_gracefully()
+                    return
 
             except KeyboardInterrupt:
                 keyboard_int_ctr += 1
 
                 if keyboard_int_ctr >= 2:
                     # on the second ctrl+c Slips immediately stop
-                    return True
+                    return
 
-                # on the first ctrl + C keep looping until the should_stop
+                # on the first ctrl + C keep looping until the should_stop()
                 # returns true
                 continue
             except Exception:
                 self.print_traceback()
-                return False
+                return
