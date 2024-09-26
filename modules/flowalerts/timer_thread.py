@@ -17,7 +17,7 @@ class TimerThread(threading.Thread):
 
     def run(self):
         try:
-            if self._finished.isSet():
+            if self._finished.is_set():
                 return True
 
             # sleep for interval or until shutdown

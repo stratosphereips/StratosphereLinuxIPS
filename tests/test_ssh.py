@@ -198,7 +198,7 @@ def test_detect_successful_ssh_by_zeek():
     ssh.db.search_tws_for_flow = MagicMock(return_value=mock_flow)
     ssh.set_evidence = MagicMock()
     ssh.connections_checked_in_ssh_timer_thread = []
-    assert ssh.detect_successful_ssh_by_zeek(profileid, twid, flow)
+    assert ssh.set_evidence_ssh_successful_by_zeek(twid, flow)
     ssh.set_evidence.ssh_successful.assert_called_once_with(
         twid,
         flow_data["saddr"],
@@ -248,7 +248,7 @@ def test_detect_successful_ssh_by_zeek_flow_exists_auth_success():
         host_key_alg="",
         host_key="",
     )
-    result = ssh.detect_successful_ssh_by_zeek("profileid", "twid", flow)
+    result = ssh.set_evidence_ssh_successful_by_zeek("twid", flow)
 
     expected_result = True
     assert result == expected_result
@@ -298,7 +298,7 @@ def test_detect_successful_ssh_by_zeek_flow_exists_auth_fail():
         host_key_alg="",
         host_key="",
     )
-    result = ssh.detect_successful_ssh_by_zeek("profileid", "twid", flow)
+    result = ssh.set_evidence_ssh_successful_by_zeek("twid", flow)
 
     expected_result = True
     assert result == expected_result
