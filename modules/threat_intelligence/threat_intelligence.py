@@ -1540,6 +1540,8 @@ class ThreatIntel(IModule, URLhaus):
         the provided domain name and determines if it is considered malicious.
         """
         # Search for this domain in our database of IoC
+        domain_info: Dict[str, str]
+        is_subdomain: bool
         domain_info, is_subdomain = self.db.is_blacklisted_domain(domain)
         if domain_info:
             return domain_info, is_subdomain
