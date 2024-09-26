@@ -3,9 +3,6 @@ import contextlib
 import json
 import math
 from typing import List
-import dns.resolver
-import dns.query
-import dns.message
 import validators
 
 from modules.flowalerts.timer_thread import TimerThread
@@ -42,17 +39,6 @@ class DNS(IFlowalertsAnalyzer):
     def read_configuration(self):
         conf = ConfigParser()
         self.shannon_entropy_threshold = conf.get_entropy_threshold()
-
-    def is_dns_server(self, ip: str) -> bool:
-        """checks if the given IP is a DNS server by making a query and
-        waiting for a response"""
-        try:
-            query = dns.message.make_query("google.com", dns.rdatatype.A)
-            dns.query.udp(query, ip, timeout=2)
-            return True
-        except Exception:
-            # If there's any error, the IP is probably not a DNS server
-            return False
 
     @staticmethod
     def should_detect_dns_without_conn(flow) -> bool:
