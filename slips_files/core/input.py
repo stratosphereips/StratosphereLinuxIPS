@@ -774,9 +774,10 @@ class Input(ICore):
             self.close_all_handles()
 
         if hasattr(self, "zeek_pid"):
-            # kill zeek manually if it started bc it's detached from this process and will never recv the sigint
-            # also withoutt this, inputproc will never shutdown and will always remain in memory causing 1000 bugs in
-            # proc_man:shutdown_gracefully()
+            # kill zeek manually if it started bc it's detached from this
+            # process and will never recv the sigint also withoutt this,
+            # inputproc will never shutdown and will always remain in memory
+            # causing 1000 bugs in proc_man:shutdown_gracefully()
             try:
                 os.kill(self.zeek_pid, signal.SIGKILL)
             except Exception:

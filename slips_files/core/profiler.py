@@ -20,7 +20,9 @@ import queue
 import ipaddress
 import pprint
 import multiprocessing
-from typing import List
+from typing import (
+    List,
+)
 
 import validators
 
@@ -426,30 +428,49 @@ class Profiler(ICore, IObservable):
         local_net: str = self.get_local_net()
         self.db.set_local_network(local_net)
 
+    def should_stop(self):
+        """
+        overrides Imodule's should_stop()
+        the common Imodule's should_stop() stop when there's no msg in
+        each channel and the termination event is set
+        since this module has no channels, that common should_stop()
+        returns true here as soon as the termination event is set!
+        the purpose of this is to not shutdown profiler as soon as the
+        termination event is set by the process_manager.py
+        """
+        return False
+
+    def get_msg_from_input_proc(self):
+        # ALYA, DO NOT REMOVE THIS CHECK
+        # without it, there's no way this module will know it's
+        # time to stop and no new flows are coming
+        try:
+            # this msg can be a str only when it's a 'stop' msg indicating
+            # that this module should stop
+            return self.profiler_queue.get(timeout=1, block=False)
+        except queue.Empty:
+            return
+        except Exception as e:
+            # ValueError is raised when the queue is closed
+            print(f"@@@@@@@@@@@@@@@@ {e}")
+            return
+
     def pre_main(self):
         utils.drop_root_privs()
 
     def main(self):
-        while not self.should_stop():
-            try:
-                # this msg can be a str only when it's a 'stop' msg indicating
-                # that this module should stop
-                msg = self.profiler_queue.get(timeout=1, block=False)
-                # ALYA, DO NOT REMOVE THIS CHECK
-                # without it, there's no way this module will know it's
-                # time to stop and no new flows are coming
-                if self.is_stop_msg(msg):
-                    # 1 indicates an error and calls shutdown gracefully
-                    return 1
+        while True:
+            msg = self.get_msg_from_input_proc()
+            if self.is_stop_msg(msg):
+                # 1 indicates an error then shutdown gracefully is called
+                return 1
+            if not msg:
+                # wait for msgs
+                continue
 
-                line: dict = msg["line"]
-                input_type: str = msg["input_type"]
-                total_flows: int = msg.get("total_flows", 0)
-            except queue.Empty:
-                continue
-            except Exception:
-                # ValueError is raised when the queue is closed
-                continue
+            line: dict = msg["line"]
+            input_type: str = msg["input_type"]
+            total_flows: int = msg.get("total_flows", 0)
 
             # TODO who is putting this True here?
             if line is True:
@@ -491,7 +512,7 @@ class Profiler(ICore, IObservable):
                     self.notify_observers({"bar": "update"})
             except Exception as e:
                 self.print(
-                    f"Problem processing line {line}. " f"Line discarded. {e}",
+                    f"Problem processing line {line}. Line discarded. {e}",
                     0,
                     1,
                 )
@@ -506,4 +527,5 @@ class Profiler(ICore, IObservable):
                 # otherwise this channel will get a msg only when
                 # whitelist.conf is modified and saved to disk
                 self.whitelist.update()
+
         return 1

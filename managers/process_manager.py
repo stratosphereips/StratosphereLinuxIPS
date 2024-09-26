@@ -96,11 +96,7 @@ class ProcessManager:
         ):
             return False
 
-        if (
-            self.main.args.growing
-            or self.main.args.input_module
-            or self.main.args.testing
-        ):
+        if self.main.args.growing or self.main.args.input_module:
             return False
 
         return True
@@ -307,7 +303,6 @@ class ProcessManager:
                 )
                 print(traceback.format_exc())
                 failed_to_load_modules += 1
-
                 continue
 
             # Walk through all members of currently imported modules.
