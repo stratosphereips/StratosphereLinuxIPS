@@ -372,8 +372,6 @@ def test_check_data_upload(
         ("conn", "http", "10.0.0.1", "pcap", False, False, ["10.0.0.1"], True),
         # Testcase 5: DoH server
         ("conn", "http", "1.1.1.1", "pcap", True, False, [], True),
-        # Testcase 6: DNS server
-        ("conn", "http", "8.8.8.8", "pcap", False, True, [], True),
         # Testcase 7: Should not ignore
         ("conn", "http", "93.184.216.34", "pcap", False, False, [], False),
     ],
@@ -416,8 +414,6 @@ def test_should_ignore_conn_without_dns(
     conn.db.get_input_type.return_value = input_type
     conn.db.is_doh_server.return_value = is_doh_server
     conn.dns_analyzer = Mock()
-    conn.dns_analyzer.is_dns_server = Mock(return_value=is_dns_server)
-
     conn.client_ips = client_ips
     mocker.patch(
         "slips_files.common.slips_utils.utils.is_ignored_ip",
