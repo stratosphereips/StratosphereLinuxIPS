@@ -42,7 +42,8 @@ class SSL(IFlowalertsAnalyzer):
 
     def wait_for_ssl_flows_to_appear_in_connlog(self):
         """
-        thread that waits forever for ssl flows to appear in conn.log
+        thread that waits forever(as long as flowalerts is receiving new
+        msgs) for ssl flows to appear in conn.log
         whenever the conn.log flow of an ssl flow is found, thread calls
         check_pastebin_download
         ssl flows to wait for are stored in pending_ssl_flows
