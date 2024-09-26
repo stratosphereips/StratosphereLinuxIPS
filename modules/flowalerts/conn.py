@@ -418,7 +418,7 @@ class Conn(IFlowalertsAnalyzer):
 
     async def check_connection_without_dns_resolution(
         self, profileid, twid, flow
-    ):
+    ) -> bool:
         """
         Checks if there's a flow to a dstip that has no cached DNS answer
         """
@@ -427,7 +427,7 @@ class Conn(IFlowalertsAnalyzer):
         # 2- Ignore some IPs like private IPs, multicast, and broadcast
 
         if self.should_ignore_conn_without_dns(flow):
-            return
+            return False
 
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to
@@ -486,10 +486,7 @@ class Conn(IFlowalertsAnalyzer):
             return False
 
         self.set_evidence.conn_without_dns(twid, flow)
-        # This UID will never appear again, so we can remove it and
-        # free some memory
-        with contextlib.suppress(ValueError):
-            self.connections_checked_in_conn_dns_timer_thread.remove(flow.uid)
+        return True
 
     def check_conn_to_port_0(self, profileid, twid, flow):
         """
