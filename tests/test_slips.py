@@ -8,7 +8,6 @@ def test_load_modules():
     proc_manager.modules_to_ignore = [
         "template",
         "mldetection-1",
-        "ensembling",
     ]
     failed_to_load_modules = proc_manager.get_modules()[1]
     assert failed_to_load_modules == 0
