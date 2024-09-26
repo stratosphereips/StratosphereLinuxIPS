@@ -415,7 +415,7 @@ def test_main_stop_msg_received():
     profiler.should_stop = Mock(side_effect=[False, True])
 
     profiler.profiler_queue = Mock(spec=queue.Queue)
-    profiler.profiler_queue.get.return_value = ["stop"]
+    profiler.profiler_queue.get.return_value = "stop"
 
     stopped = profiler.main()
     assert stopped
