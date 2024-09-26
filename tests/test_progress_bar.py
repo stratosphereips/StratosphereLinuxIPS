@@ -42,7 +42,6 @@ def test_update_bar_termination():
     pbar.slips_mode = "normal"
     pbar.total_flows = 100
     pbar.pbar_finished = Event()
-
     mock_progress_bar = Mock()
     mock_progress_bar.n = 99
     pbar.progress_bar = mock_progress_bar
@@ -52,12 +51,10 @@ def test_update_bar_termination():
 
     mock_progress_bar.update.side_effect = update_side_effect
 
-    with patch.object(pbar, "terminate") as mock_terminate:
-        pbar.update_bar()
+    pbar.update_bar()
 
-        assert mock_progress_bar.update.call_count == 1
-        assert mock_progress_bar.n == 100
-        mock_terminate.assert_called_once()
+    assert mock_progress_bar.update.call_count == 1
+    assert mock_progress_bar.n == 100
 
 
 def test_update_bar_no_progress_bar():
@@ -140,20 +137,18 @@ def test_update_stats(
 
 def test_shutdown_gracefully_event_not_set():
     pbar = ModuleFactory().create_progress_bar_obj()
+    pbar.progress_bar = Mock()
     pbar.pbar_finished = Event()
-
     pbar.shutdown_gracefully()
-
     assert pbar.pbar_finished.is_set()
 
 
 def test_shutdown_gracefully_event_already_set():
     pbar = ModuleFactory().create_progress_bar_obj()
+    pbar.progress_bar = Mock()
     pbar.pbar_finished = Event()
     pbar.pbar_finished.set()
-
     pbar.shutdown_gracefully()
-
     assert pbar.pbar_finished.is_set()
 
 
@@ -182,7 +177,7 @@ def test_remove_stats():
         (1000000, 1000000),
     ],
 )
-def test_terminate(
+def test_shutdown_gracefully(
     total_flows,
     current_n,
 ):
@@ -197,7 +192,7 @@ def test_terminate(
     with patch.object(pbar, "remove_stats") as mock_remove_stats, patch(
         "tqdm.auto.tqdm.write"
     ) as mock_write:
-        pbar.terminate()
+        pbar.shutdown_gracefully()
 
         mock_remove_stats.assert_called_once()
         mock_write.assert_called_once_with(

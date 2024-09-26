@@ -20,8 +20,9 @@ import queue
 import ipaddress
 import pprint
 import multiprocessing
-from datetime import datetime
-from typing import List
+from typing import (
+    List,
+)
 
 import validators
 
@@ -81,7 +82,6 @@ class Profiler(ICore, IObservable):
         self.profiler_queue = profiler_queue
         self.timeformat = None
         self.input_type = False
-        self.whitelisted_flows_ctr = 0
         self.rec_lines = 0
         self.is_localnet_set = False
         self.has_pbar = has_pbar
@@ -175,8 +175,6 @@ class Profiler(ICore, IObservable):
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(self.flow):
-            if "conn" in self.flow.type_:
-                self.whitelisted_flows_ctr += 1
             return True
 
         # 5th. Store the data according to the paremeters
@@ -333,7 +331,7 @@ class Profiler(ICore, IObservable):
             if isinstance(actual_line, dict):
                 return "zeek"
             return "zeek-tabs"
-        elif input_type in ("stdin"):
+        elif input_type == "stdin":
             # ok we're reading flows from stdin, but what type of flows?
             return line["line_type"]
         else:
@@ -347,14 +345,9 @@ class Profiler(ICore, IObservable):
             f"Stopping. Total lines read: {self.rec_lines}",
             log_to_logfiles_only=True,
         )
-        # By default if a process(profiler) is not the creator of
-        # the queue(profiler_queue) then on
-        # exit it will attempt to join the queue’s background thread.
-        # this causes a deadlock
-        # to avoid this behaviour we should call cancel_join_thread
-        # self.profiler_queue.cancel_join_thread()
+        self.mark_process_as_done_processing()
 
-    def is_done_processing(self):
+    def mark_process_as_done_processing(self):
         """
         is called to mark this process as done processing so
         slips.py would know when to terminate
@@ -371,32 +364,12 @@ class Profiler(ICore, IObservable):
             log_to_logfiles_only=True,
         )
 
-    def check_for_stop_msg(self, msg: str) -> bool:
+    def is_stop_msg(self, msg: str) -> bool:
         """
         this 'stop' msg is the last msg ever sent by the input process
         to indicate that no more flows are coming
         """
-
-        if msg != "stop":
-            return False
-
-        self.print(
-            f"Stopping profiler process. Number of whitelisted "
-            f"conn flows: "
-            f"{self.whitelisted_flows_ctr}",
-            2,
-            0,
-        )
-
-        self.shutdown_gracefully()
-        self.print(
-            f"Stopping Profiler Process. Received {self.rec_lines} lines "
-            f"({utils.convert_format(datetime.now(), utils.alerts_format)})",
-            2,
-            0,
-        )
-        self.is_done_processing()
-        return True
+        return msg == "stop"
 
     def init_pbar(self, total_flows: int):
         """
@@ -455,29 +428,49 @@ class Profiler(ICore, IObservable):
         local_net: str = self.get_local_net()
         self.db.set_local_network(local_net)
 
+    def should_stop(self):
+        """
+        overrides Imodule's should_stop()
+        the common Imodule's should_stop() stop when there's no msg in
+        each channel and the termination event is set
+        since this module has no channels, that common should_stop()
+        returns true here as soon as the termination event is set!
+        the purpose of this is to not shutdown profiler as soon as the
+        termination event is set by the process_manager.py
+        """
+        return False
+
+    def get_msg_from_input_proc(self):
+        # ALYA, DO NOT REMOVE THIS CHECK
+        # without it, there's no way this module will know it's
+        # time to stop and no new flows are coming
+        try:
+            # this msg can be a str only when it's a 'stop' msg indicating
+            # that this module should stop
+            return self.profiler_queue.get(timeout=1, block=False)
+        except queue.Empty:
+            return
+        except Exception as e:
+            # ValueError is raised when the queue is closed
+            print(f"@@@@@@@@@@@@@@@@ {e}")
+            return
+
     def pre_main(self):
         utils.drop_root_privs()
 
     def main(self):
-        while not self.should_stop():
-            try:
-                # this msg can be a str only when it's a 'stop' msg indicating
-                # that this module should stop
-                msg = self.profiler_queue.get(timeout=1, block=False)
-                # ALYA, DO NOT REMOVE THIS CHECK
-                # without it, there's no way thi module will know it's time to
-                # stop and no new fows are coming
-                if self.check_for_stop_msg(msg):
-                    return 1
+        while True:
+            msg = self.get_msg_from_input_proc()
+            if self.is_stop_msg(msg):
+                # 1 indicates an error then shutdown gracefully is called
+                return 1
+            if not msg:
+                # wait for msgs
+                continue
 
-                line: dict = msg["line"]
-                input_type: str = msg["input_type"]
-                total_flows: int = msg.get("total_flows", 0)
-            except queue.Empty:
-                continue
-            except Exception:
-                # ValueError is raised when the queue is closed
-                continue
+            line: dict = msg["line"]
+            input_type: str = msg["input_type"]
+            total_flows: int = msg.get("total_flows", 0)
 
             # TODO who is putting this True here?
             if line is True:
@@ -507,15 +500,23 @@ class Profiler(ICore, IObservable):
                 self.input = SUPPORTED_INPUT_TYPES[self.input_type]()
 
             # get the correct input type class and process the line based on it
-            self.flow = self.input.process_line(line)
-            if self.flow:
-                self.add_flow_to_profile()
-                self.handle_setting_local_net()
+            try:
+                self.flow = self.input.process_line(line)
+                if self.flow:
+                    self.add_flow_to_profile()
+                    self.handle_setting_local_net()
 
-            # now that one flow is processed tell output.py
-            # to update the bar
-            if self.has_pbar:
-                self.notify_observers({"bar": "update"})
+                # now that one flow is processed tell output.py
+                # to update the bar
+                if self.has_pbar:
+                    self.notify_observers({"bar": "update"})
+            except Exception as e:
+                self.print(
+                    f"Problem processing line {line}. Line discarded. {e}",
+                    0,
+                    1,
+                )
+                self.flow = False
 
             # listen on this channel in case whitelist.conf is changed,
             # we need to process the new changes
@@ -526,4 +527,5 @@ class Profiler(ICore, IObservable):
                 # otherwise this channel will get a msg only when
                 # whitelist.conf is modified and saved to disk
                 self.whitelist.update()
+
         return 1

@@ -942,10 +942,10 @@ def test_search_online_for_url(
     [
         (
             "example.com",
-            ('{"description": "Malicious domain"}', False),
+            ({"description": "Malicious domain"}, False),
             ({"description": "Malicious domain"}, False),
         ),
-        ("safe.com", ("{}", False), ({}, False)),
+        ("safe.com", ({}, False), (False, False)),
     ],
 )
 def test_search_offline_for_domain(
@@ -1072,13 +1072,11 @@ def test_should_lookup(ip, protocol, ip_state, expected_result):
     [
         (
             "evil.com",
-            json.dumps(
-                {"description": "Malicious domain", "source": "test_source"}
-            ),
+            {"description": "Malicious domain", "source": "test_source"},
             None,
         ),
-        ("safe.com", json.dumps({}), False),
-        ("safe.com", "false", False),
+        ("safe.com", {}, False),
+        ("safe.com", False, False),
     ],
 )
 def test_is_malicious_cname(
