@@ -313,23 +313,6 @@ def test_check_dns_arpa_scan(domains, timestamps, expected_result):
     assert is_arpa_scan == expected_result
 
 
-@pytest.mark.parametrize(
-    "test_ip, mock_query_side_effect, expected_result",
-    [
-        # Testcase 1: Successful DNS query, server found
-        ("8.8.8.8", None, True),
-        # Testcase 2: DNS query raises exception, not a server
-        ("192.168.1.100", Exception("DNS timeout error"), False),
-    ],
-)
-def test_is_dns_server(test_ip, mock_query_side_effect, expected_result):
-    dns = ModuleFactory().create_dns_analyzer_obj()
-    with patch("dns.query.udp", side_effect=mock_query_side_effect):
-        result = dns.is_dns_server(test_ip)
-
-    assert result == expected_result
-
-
 def test_read_configuration():
     """Test if read_configuration correctly reads the entropy threshold."""
     dns = ModuleFactory().create_dns_analyzer_obj()

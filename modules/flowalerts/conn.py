@@ -391,7 +391,6 @@ class Conn(IFlowalertsAnalyzer):
             # because there's no dns.log to know if the dns was made
             or self.db.get_input_type() == "zeek_log_file"
             or self.db.is_doh_server(flow.daddr)
-            or self.dns_analyzer.is_dns_server(flow.daddr)
         )
 
     def check_if_resolution_was_made_by_different_version(
