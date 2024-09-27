@@ -394,14 +394,20 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_arpa_queries.pop(profileid)
         return True
 
-    def analyze(self, msg):
+    async def analyze(self, msg):
         if not utils.is_msg_intended_for(msg, "new_dns"):
             return False
         msg = json.loads(msg["data"])
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        self.check_dns_without_connection(profileid, twid, flow)
+        task = asyncio.create_task(
+            self.check_dns_without_connection(profileid, twid, flow)
+        )
+        # Allow the event loop to run the scheduled task
+        await asyncio.sleep(0)
+        # to wait for these functions before flowalerts shuts down
+        self.flowalerts.tasks.append(task)
         self.check_high_entropy_dns_answers(twid, flow)
         self.check_invalid_dns_answers(twid, flow)
         self.detect_dga(profileid, twid, flow)
