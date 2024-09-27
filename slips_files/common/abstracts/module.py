@@ -1,16 +1,20 @@
+import asyncio
+import inspect
 import sys
 import traceback
+import warnings
 from abc import ABC, abstractmethod
 from multiprocessing import Process, Event
 from typing import (
     Dict,
     Optional,
 )
-
 from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class IModule(ABC, Process):
@@ -47,27 +51,13 @@ class IModule(ABC, Process):
         # set its own channels
         # tracks whether or not in the last iteration there was a msg
         # received in that channel
-        self.channel_tracker: Dict[str, dict] = self.init_channel_tracker()
+        self.channel_tracker: Dict[str, Dict[str, bool]]
+        self.channel_tracker = self.init_channel_tracker()
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    @property
-    @abstractmethod
-    def name(self):
-        pass
-
-    @property
-    @abstractmethod
-    def description(self):
-        pass
-
-    @property
-    @abstractmethod
-    def authors(self):
-        pass
-
-    def init_channel_tracker(self) -> Dict[str, bool]:
+    def init_channel_tracker(self) -> Dict[str, Dict[str, bool]]:
         """
         tracks if in the last loop, a msg was received in any of the
         subscribed channels or not
@@ -137,7 +127,7 @@ class IModule(ABC, Process):
         here will be executed in a loop
         """
 
-    def pre_main(self):
+    def pre_main(self) -> bool:
         """
         This function is for initializations that are
         executed once before the main loop
@@ -157,6 +147,34 @@ class IModule(ABC, Process):
         self.print(f"Problem in pre_main() line {exception_line}", 0, 1)
         self.print(traceback.format_exc(), 0, 1)
 
+    def run_shutdown_gracefully(self):
+        """
+        some modules use async functions like flowalerts,
+        the goals of this function is to make sure that async and normal
+        shutdown_gracefully() functions run until completion
+        """
+        if inspect.iscoroutinefunction(self.shutdown_gracefully):
+            loop = asyncio.get_event_loop()
+            # Ensure shutdown is completed
+            loop.run_until_complete(self.shutdown_gracefully())
+            return
+        else:
+            self.shutdown_gracefully()
+            return
+
+    def run_main(self):
+        """
+        some modules use async functions like flowalerts,
+        the goals of this function is to make sure that async and normal
+        shutdown_gracefully() functions run until completion
+        """
+        if inspect.iscoroutinefunction(self.shutdown_gracefully):
+            loop = asyncio.get_event_loop()
+            # Ensure shutdown is completed
+            return loop.run_until_complete(self.main())
+        else:
+            return self.main()
+
     def run(self):
         """
         This is the loop function, it runs non-stop as long as
@@ -165,10 +183,10 @@ class IModule(ABC, Process):
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():
-                self.shutdown_gracefully()
+                self.run_shutdown_gracefully()
                 return
         except KeyboardInterrupt:
-            self.shutdown_gracefully()
+            self.run_shutdown_gracefully()
             return
         except Exception:
             self.print_traceback()
@@ -177,15 +195,14 @@ class IModule(ABC, Process):
         while True:
             try:
                 if self.should_stop():
-                    self.shutdown_gracefully()
+                    self.run_shutdown_gracefully()
                     return
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
-                error: bool = self.main()
+                error: bool = self.run_main()
                 if error:
-                    self.shutdown_gracefully()
-                    return
+                    self.run_shutdown_gracefully()
 
             except KeyboardInterrupt:
                 self.keyboard_int_ctr += 1
