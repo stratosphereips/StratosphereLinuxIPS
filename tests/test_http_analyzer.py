@@ -6,6 +6,7 @@ from dataclasses import asdict
 from slips_files.core.flows.zeek import (
     HTTP,
     Weird,
+    Conn,
 )
 from tests.module_factory import ModuleFactory
 from unittest.mock import patch, MagicMock
@@ -325,7 +326,7 @@ def test_set_evidence_weird_http_method(mocker):
         "Some IP identification"
     )
     mocker.spy(http_analyzer.db, "set_evidence")
-    flow = Weird(
+    weird_flow = Weird(
         starttime="1726593782.8840969",
         uid="123",
         saddr="192.168.1.5",
@@ -333,7 +334,28 @@ def test_set_evidence_weird_http_method(mocker):
         name="",
         addl="weird_method_here",
     )
-    http_analyzer.set_evidence_weird_http_method(twid, flow)
+    conn_flow = Conn(
+        starttime="1726249372.312124",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="1.1.1.1",
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="0",
+        dport="12345",
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
+    )
+    http_analyzer.set_evidence_weird_http_method(
+        twid, weird_flow, asdict(conn_flow)
+    )
     http_analyzer.db.set_evidence.assert_called_once()
 
 

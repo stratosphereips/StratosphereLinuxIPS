@@ -14,6 +14,7 @@ from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
+from slips_files.core.flows.zeek import Weird
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -588,7 +589,7 @@ class HTTPAnalyzer(IModule):
         return True
 
     def set_evidence_weird_http_method(
-        self, twid: str, weird_method, flow: dict
+        self, twid: str, weird_flow: Weird, flow: dict
     ) -> None:
         confidence = 0.9
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
@@ -605,7 +606,7 @@ class HTTPAnalyzer(IModule):
         )
 
         description: str = (
-            f"Weird HTTP method {weird_method} to IP: "
+            f"Weird HTTP method {weird_flow.addl} to IP: "
             f'{flow["daddr"]}. by Zeek.'
         )
 
@@ -617,10 +618,10 @@ class HTTPAnalyzer(IModule):
             victim=victim,
             threat_level=threat_level,
             description=description,
-            profile=ProfileID(ip=flow.saddr),
+            profile=ProfileID(ip=flow["saddr"]),
             timewindow=TimeWindow(number=twid_number),
-            uid=[flow.uid],
-            timestamp=flow.starttime,
+            uid=[flow["uid"]],
+            timestamp=weird_flow.starttime,
             confidence=confidence,
         )
 
@@ -644,7 +645,7 @@ class HTTPAnalyzer(IModule):
             if not conn_log_flow:
                 return
 
-        self.set_evidence_weird_http_method(twid, flow.addl, conn_log_flow)
+        self.set_evidence_weird_http_method(twid, flow, conn_log_flow)
 
     def pre_main(self):
         utils.drop_root_privs()
