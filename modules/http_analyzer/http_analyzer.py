@@ -1,9 +1,14 @@
+import asyncio
 import json
 import urllib
 from uuid import uuid4
 
 import requests
-from typing import Union, Dict
+from typing import (
+    Union,
+    Dict,
+    Optional,
+)
 
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -582,21 +587,26 @@ class HTTPAnalyzer(IModule):
         self.db.set_evidence(evidence)
         return True
 
-    def set_evidence_weird_http_method(self, twid: str, flow) -> None:
+    def set_evidence_weird_http_method(
+        self, twid: str, weird_method, flow: dict
+    ) -> None:
         confidence = 0.9
         threat_level: ThreatLevel = ThreatLevel.MEDIUM
-
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value=flow["saddr"],
         )
 
         victim: Victim = Victim(
-            direction=Direction.DST, victim_type=IoCType.IP, value=flow.daddr
+            direction=Direction.DST,
+            victim_type=IoCType.IP,
+            value=flow["daddr"],
         )
 
         description: str = (
-            f'Weird HTTP method "{flow.addl}" to IP: '
-            f"{flow.daddr}. by Zeek."
+            f"Weird HTTP method {weird_method} to IP: "
+            f'{flow["daddr"]}. by Zeek.'
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
@@ -616,7 +626,7 @@ class HTTPAnalyzer(IModule):
 
         self.db.set_evidence(evidence)
 
-    def check_weird_http_method(self, msg: Dict[str, str]):
+    async def check_weird_http_method(self, msg: Dict[str, str]):
         """
         detect weird http methods in zeek's weird.log
         """
@@ -626,7 +636,15 @@ class HTTPAnalyzer(IModule):
         if "unknown_HTTP_method" not in flow.name:
             return False
 
-        self.set_evidence_weird_http_method(twid, flow)
+        conn_log_flow: Optional[dict]
+        conn_log_flow = self.utils.get_original_conn_flow(flow, self.db)
+        if not conn_log_flow:
+            await asyncio.sleep(15)
+            conn_log_flow = self.utils.get_original_conn_flow(flow, self.db)
+            if not conn_log_flow:
+                return
+
+        self.set_evidence_weird_http_method(twid, flow.addl, conn_log_flow)
 
     def pre_main(self):
         utils.drop_root_privs()
