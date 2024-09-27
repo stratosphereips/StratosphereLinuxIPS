@@ -1,4 +1,3 @@
-import asyncio
 import sys
 import traceback
 import warnings
@@ -7,7 +6,6 @@ from multiprocessing import Process, Event
 from typing import (
     Dict,
     Optional,
-    Callable,
 )
 from slips_files.common.printer import Printer
 from slips_files.core.output import Output
@@ -173,8 +171,8 @@ class IModule(ABC, Process):
                 if error:
                     self.shutdown_gracefully()
             except KeyboardInterrupt:
-                keyboard_int_ctr += 1
-                if keyboard_int_ctr >= 2:
+                self.keyboard_int_ctr += 1
+                if self.keyboard_int_ctr >= 2:
                     return
                 continue
             except Exception:
@@ -220,7 +218,6 @@ class AsyncModule(IModule, ABC, Process):
             self.print_traceback()
             return
 
-        keyboard_int_ctr = 0
         while True:
             try:
                 if self.should_stop():
@@ -236,11 +233,9 @@ class AsyncModule(IModule, ABC, Process):
 
             except KeyboardInterrupt:
                 self.keyboard_int_ctr += 1
-
                 if self.keyboard_int_ctr >= 2:
-                    # on the second ctrl+c the module immediately stops
+                    # on the second ctrl+c Slips immediately stop
                     return True
-
                 # on the first ctrl + C keep looping until the should_stop()
                 # returns true
                 continue
