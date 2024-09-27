@@ -114,6 +114,13 @@ class Utils(object):
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels
 
+    def get_original_conn_flow(self, altflow, db) -> Optional[dict]:
+        """Returns the original conn.log of the given altflow"""
+        original_conn_flow = db.get_flow(altflow.uid)
+        original_flow_uid = next(iter(original_conn_flow))
+        if original_conn_flow[original_flow_uid]:
+            return json.loads(original_conn_flow[original_flow_uid])
+
     def sanitize(self, input_string):
         """
         Sanitize strings taken from the user
