@@ -162,7 +162,7 @@ class ZeekJSON(IInputType):
         elif "ftp" in file_type:
             self.flow: FTP = FTP(
                 starttime,
-                line.get("uids", []),
+                line.get("uid", []),
                 line.get("id.orig_h", ""),
                 line.get("id.resp_h", ""),
                 line.get("data_channel.resp_p", False),
