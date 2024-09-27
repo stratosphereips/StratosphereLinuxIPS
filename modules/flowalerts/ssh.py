@@ -1,6 +1,5 @@
 import asyncio
 import json
-from typing import Optional
 
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -57,13 +56,6 @@ class SSH(IFlowalertsAnalyzer):
         )
         return True
 
-    def get_original_ssh_flow(self, flow) -> Optional[dict]:
-        """original ssh flows are the ones from conn.log"""
-        original_ssh_flow = self.db.get_flow(flow.uid)
-        original_flow_uid = next(iter(original_ssh_flow))
-        if original_ssh_flow[original_flow_uid]:
-            return json.loads(original_ssh_flow[original_flow_uid])
-
     def set_evidence_ssh_successful_by_zeek(
         self, twid, conn_log_flow, ssh_flow
     ):
@@ -86,11 +78,11 @@ class SSH(IFlowalertsAnalyzer):
         Function to check if an SSH connection logged in successfully
         """
         # this is the ssh flow read from conn.log not ssh.log
-        conn_log_flow = self.get_original_ssh_flow(flow)
+        conn_log_flow = self.utils.get_original_conn_flow(flow, self.db)
 
         if not conn_log_flow:
             await asyncio.sleep(15)
-            conn_log_flow = self.get_original_ssh_flow(flow)
+            conn_log_flow = self.utils.get_original_conn_flow(flow, self.db)
             if not conn_log_flow:
                 return
 
@@ -133,6 +125,7 @@ class SSH(IFlowalertsAnalyzer):
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-
-        self.check_successful_ssh(twid, flow)
+        task = asyncio.create_task(self.check_successful_ssh(twid, flow))
+        # to wait for these functions before flowalerts shuts down
+        self.flowalerts.tasks.append(task)
         self.check_ssh_password_guessing(profileid, twid, flow)
