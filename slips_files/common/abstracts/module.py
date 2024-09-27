@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import sys
 import traceback
 import warnings
@@ -8,6 +7,7 @@ from multiprocessing import Process, Event
 from typing import (
     Dict,
     Optional,
+    Callable,
 )
 from slips_files.common.printer import Printer
 from slips_files.core.output import Output
@@ -71,9 +71,7 @@ class IModule(ABC, Process):
         """
         tracker = {}
         for channel_name in self.channels:
-            tracker[channel_name] = {
-                "msg_received": False,
-            }
+            tracker[channel_name] = {"msg_received": False}
         return tracker
 
     @abstractmethod
@@ -146,46 +144,19 @@ class IModule(ABC, Process):
         self.print(f"Problem in pre_main() line {exception_line}", 0, 1)
         self.print(traceback.format_exc(), 0, 1)
 
-    def run_shutdown_gracefully(self):
-        """
-        some modules use async functions like flowalerts,
-        the goals of this function is to make sure that async and normal
-        shutdown_gracefully() functions run until completion
-        """
-        if inspect.iscoroutinefunction(self.shutdown_gracefully):
-            loop = asyncio.get_event_loop()
-            # Ensure shutdown is completed
-            loop.run_until_complete(self.shutdown_gracefully())
-            return
-        else:
-            self.shutdown_gracefully()
-            return
-
-    def run_main(self):
-        """
-        some modules use async functions like flowalerts,
-        the goals of this function is to make sure that async and normal
-        shutdown_gracefully() functions run until completion
-        """
-        if inspect.iscoroutinefunction(self.shutdown_gracefully):
-            loop = asyncio.get_event_loop()
-            # Ensure shutdown is completed
-            return loop.run_until_complete(self.main())
-        else:
-            return self.main()
-
     def run(self):
         """
-        This is the loop function, it runs non-stop as long as
-        the module is running
+        some modules use async functions like flowalerts,
+        the goals of this function is to make sure that async and normal
+        shutdown_gracefully() functions run until completion
         """
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():
-                self.run_shutdown_gracefully()
+                self.shutdown_gracefully()
                 return
         except KeyboardInterrupt:
-            self.run_shutdown_gracefully()
+            self.shutdown_gracefully()
             return
         except Exception:
             self.print_traceback()
@@ -195,14 +166,73 @@ class IModule(ABC, Process):
         while True:
             try:
                 if self.should_stop():
-                    self.run_shutdown_gracefully()
+                    self.shutdown_gracefully()
+                    return
+
+                error: bool = self.main()
+                if error:
+                    self.shutdown_gracefully()
+            except KeyboardInterrupt:
+                keyboard_int_ctr += 1
+                if keyboard_int_ctr >= 2:
+                    return
+                continue
+            except Exception:
+                self.print_traceback()
+                return
+
+
+class AsyncModule(IModule, ABC, Process):
+    """
+    An abstract class for asynchronous slips modules
+    """
+
+    name = "abstract class"
+
+    def __init__(self, *args, **kwargs):
+        IModule.__init__(self, *args, **kwargs)
+
+    def init(self, **kwargs): ...
+
+    async def main(self): ...
+
+    async def shutdown_gracefully(self):
+        """Implement the async shutdown logic here"""
+        pass
+
+    async def run_main(self):
+        return await self.main()
+
+    def run_async_function(self, func: Callable):
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(func())
+
+    def run(self):
+        try:
+            error: bool = self.pre_main()
+            if error or self.should_stop():
+                self.run_async_function(self.shutdown_gracefully)
+                return
+        except KeyboardInterrupt:
+            self.run_async_function(self.shutdown_gracefully)
+            return
+        except Exception:
+            self.print_traceback()
+            return
+
+        keyboard_int_ctr = 0
+        while True:
+            try:
+                if self.should_stop():
+                    self.run_async_function(self.shutdown_gracefully)
                     return
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
-                error: bool = self.run_main()
+                error: bool = self.run_async_function(self.run_main)
                 if error:
-                    self.run_shutdown_gracefully()
+                    self.run_async_function(self.shutdown_gracefully)
+                    return
 
             except KeyboardInterrupt:
                 keyboard_int_ctr += 1
