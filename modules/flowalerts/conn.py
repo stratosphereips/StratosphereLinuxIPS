@@ -425,7 +425,6 @@ class Conn(IFlowalertsAnalyzer):
         # The exceptions are:
         # 1- Do not check for DNS requests
         # 2- Ignore some IPs like private IPs, multicast, and broadcast
-
         if self.should_ignore_conn_without_dns(flow):
             return False
 
@@ -722,7 +721,7 @@ class Conn(IFlowalertsAnalyzer):
 
         self.set_evidence.conn_to_private_ip(twid, flow)
 
-    def analyze(self, msg):
+    async def analyze(self, msg):
         if utils.is_msg_intended_for(msg, "new_flow"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
@@ -741,7 +740,13 @@ class Conn(IFlowalertsAnalyzer):
             self.check_different_localnet_usage(
                 twid, flow, what_to_check="srcip"
             )
-            self.check_connection_without_dns_resolution(profileid, twid, flow)
+            task = asyncio.create_task(
+                self.check_connection_without_dns_resolution(
+                    profileid, twid, flow
+                )
+            )
+            # to wait for these functions before flowalerts shuts down
+            self.flowalerts.tasks.append(task)
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
             self.check_non_http_port_80_conns(twid, flow)
