@@ -160,14 +160,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
 
 * [Docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker)
   * Dockerhub (recommended)
-    * On a linux host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux)
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux)
-    * On MacOS M1 host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
-    * On MacOS Intel processor
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors)
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
+    * [Linux, MacOS and windows hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#Running-Slips-from-DockerHub)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
 * Native

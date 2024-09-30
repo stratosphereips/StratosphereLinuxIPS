@@ -39,7 +39,6 @@ Master or Develop?
  - Python version [e.g. 3.10]
  - Are you running slips in docker or locally? [yes/no]
  - Docker version (if running slips in docker) [e.g. 20.10.22]
- - Slips docker image used (if running slips in docker) [e.g. macosm1-image, macosm1-P2P-image, ubuntu-image, dependency-image]
  - Commit hash: ( `git rev-parse --short HEAD` )
 
 **Additional context**
