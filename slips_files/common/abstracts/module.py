@@ -41,6 +41,7 @@ class IModule(ABC, Process):
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.db = DBManager(self.logger, self.output_dir, self.redis_port)
+        self.keyboard_int_ctr = 0
         self.init(**kwargs)
         # should after the module's init() so the module has a chance to
         # set its own channels
@@ -173,7 +174,6 @@ class IModule(ABC, Process):
             self.print_traceback()
             return True
 
-        keyboard_int_ctr = 0
         while True:
             try:
                 if self.should_stop():
@@ -187,10 +187,10 @@ class IModule(ABC, Process):
                     self.shutdown_gracefully()
 
             except KeyboardInterrupt:
-                keyboard_int_ctr += 1
+                self.keyboard_int_ctr += 1
 
-                if keyboard_int_ctr >= 2:
-                    # on the second ctrl+c Slips immediately stop
+                if self.keyboard_int_ctr >= 2:
+                    # on the second ctrl+c the module immediately stops
                     return True
 
                 # on the first ctrl + C keep looping until the should_stop

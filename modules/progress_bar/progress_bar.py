@@ -103,18 +103,23 @@ class PBar(IModule):
         overrides IModule.should_stop()
         Returns true if the pbar reached 100%
         """
+        if self.keyboard_int_ctr > 0:
+            return True
+
         if hasattr(self, "progress_bar"):
             return self.progress_bar.n == self.total_flows
+
         return False
 
     def shutdown_gracefully(self):
         # remove it from the bar because output.py will be handling it from
         # now on
         self.remove_stats()
-        tqdm.write(
-            "Profiler is done reading all flows. "
-            "Slips is now processing them."
-        )
+        if self.keyboard_int_ctr > 0:
+            tqdm.write(
+                "Profiler is done reading all flows. "
+                "Slips is now processing them."
+            )
         # the purpose of this pbar_finished Event is to tell output.py to no
         # longer forward msgs to print here
         self.pbar_finished.set()

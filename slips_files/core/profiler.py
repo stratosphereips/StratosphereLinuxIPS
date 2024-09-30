@@ -450,9 +450,8 @@ class Profiler(ICore, IObservable):
             return self.profiler_queue.get(timeout=1, block=False)
         except queue.Empty:
             return
-        except Exception as e:
+        except Exception:
             # ValueError is raised when the queue is closed
-            print(f"@@@@@@@@@@@@@@@@ {e}")
             return
 
     def pre_main(self):
