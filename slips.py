@@ -52,7 +52,7 @@ if __name__ == "__main__":
         if daemon_status["stopped"]:
             print("Daemon stopped.")
         else:
-            slips.print(daemon_status["error"])
+            print(daemon_status["error"])
 
     elif slips.args.daemon:
         print("Slips daemon starting..")

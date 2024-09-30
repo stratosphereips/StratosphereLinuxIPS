@@ -8,11 +8,13 @@ from exclusiveprocess import (
 )
 
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.printer import Printer
 from slips_files.core.database.database_manager import DBManager
 
 
 class Daemon:
     description = "This module runs when slips is in daemonized mode"
+    name = "Daemon"
 
     def __init__(self, slips):
         # to use read_configurations defined in Main
@@ -303,7 +305,6 @@ class Daemon:
                 self.logger = self.slips.proc_man.start_output_process(
                     self.stderr, self.logsfile, stdout=self.stdout
                 )
-                self.slips.add_observer(self.logger)
                 self.db = DBManager(
                     self.logger,
                     output_dir,
@@ -311,6 +312,7 @@ class Daemon:
                     start_sqlite=False,
                     flush_db=False,
                 )
+                self.slips.printer = Printer(self.logger, self.name)
                 self.db.set_slips_mode("daemonized")
                 self.slips.set_mode("daemonized", daemon=self)
                 # used in shutdown gracefully to print the name of the
