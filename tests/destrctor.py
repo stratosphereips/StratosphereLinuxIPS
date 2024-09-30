@@ -46,7 +46,7 @@ def flush_redis_server(port: str = ""):
         r.flushdb()
         r.script_flush()
         return True
-    except redis.exceptions.ConnectionError:
+    except (redis.exceptions.ConnectionError, RuntimeError):
         # server already killed!
         return False
 

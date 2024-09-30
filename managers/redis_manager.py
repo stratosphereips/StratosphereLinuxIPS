@@ -393,7 +393,7 @@ class RedisManager:
                 db.rdb.r.flushdb()
                 db.rdb.r.script_flush()
                 return True
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError, RuntimeError):
             # server already killed!
             return False
 
