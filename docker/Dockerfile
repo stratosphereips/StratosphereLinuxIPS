@@ -77,7 +77,7 @@ RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
     && cd modules/kalipso \
-    && npm install \
+    && npm install
 
 
 # build the pigeon and add pigeon to path
