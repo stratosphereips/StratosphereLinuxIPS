@@ -1,4 +1,4 @@
-name: CI-production-publishing-p2p-image
+name: CI-production-publishing-slips-image
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     - '!develop'
 
 jobs:
-  publish_P2P_docker_image:
+  publish_slips_docker_image:
     # runs the tests in a docker(built by this job) on stop of a GH VM
     runs-on: ubuntu-20.04
     # 2 hours timeout
@@ -40,14 +40,14 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build and push p2p image using dockerfile
-      id: docker_build_p2p_for_slips
+    - name: Build and push Slips image using dockerfile
+      id: docker_build_slips
       uses: docker/build-push-action@v6
       with:
         allow: network.host
         context: ./
-        file: ./docker/P2P-image/Dockerfile
+        file: ./docker/Dockerfile
         tags: |
-          stratosphereips/slips_p2p:latest
-          stratosphereips/slips_p2p:${{ env.SLIPS_VERSION }}
+          stratosphereips/slips:latest
+          stratosphereips/slips:${{ env.SLIPS_VERSION }}
         push: true
