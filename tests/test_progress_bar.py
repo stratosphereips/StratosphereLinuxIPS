@@ -42,7 +42,6 @@ def test_update_bar_termination():
     pbar.slips_mode = "normal"
     pbar.total_flows = 100
     pbar.pbar_finished = Event()
-
     mock_progress_bar = Mock()
     mock_progress_bar.n = 99
     pbar.progress_bar = mock_progress_bar
@@ -52,12 +51,10 @@ def test_update_bar_termination():
 
     mock_progress_bar.update.side_effect = update_side_effect
 
-    with patch.object(pbar, "terminate") as mock_terminate:
-        pbar.update_bar()
+    pbar.update_bar()
 
-        assert mock_progress_bar.update.call_count == 1
-        assert mock_progress_bar.n == 100
-        mock_terminate.assert_called_once()
+    assert mock_progress_bar.update.call_count == 1
+    assert mock_progress_bar.n == 100
 
 
 def test_update_bar_no_progress_bar():
@@ -140,20 +137,18 @@ def test_update_stats(
 
 def test_shutdown_gracefully_event_not_set():
     pbar = ModuleFactory().create_progress_bar_obj()
+    pbar.progress_bar = Mock()
     pbar.pbar_finished = Event()
-
     pbar.shutdown_gracefully()
-
     assert pbar.pbar_finished.is_set()
 
 
 def test_shutdown_gracefully_event_already_set():
     pbar = ModuleFactory().create_progress_bar_obj()
+    pbar.progress_bar = Mock()
     pbar.pbar_finished = Event()
     pbar.pbar_finished.set()
-
     pbar.shutdown_gracefully()
-
     assert pbar.pbar_finished.is_set()
 
 
@@ -172,21 +167,19 @@ def test_remove_stats():
 
 
 @pytest.mark.parametrize(
-    "total_flows, current_n",
+    "total_flows, current_n, keyboard_int",
     [
         # testcase1: Normal case
-        (100, 100),
+        (100, 100, 0),
         # testcase2: Edge case - zero flows
-        (0, 0),
+        (0, 0, 1),
         # testcase3: Large number of flows
-        (1000000, 1000000),
+        (1000000, 1000000, 0),
     ],
 )
-def test_terminate(
-    total_flows,
-    current_n,
-):
+def test_shutdown_gracefully(total_flows, current_n, keyboard_int):
     pbar = ModuleFactory().create_progress_bar_obj()
+    pbar.keyboard_int_ctr = keyboard_int
     pbar.total_flows = total_flows
     pbar.pbar_finished = Event()
 
@@ -197,11 +190,14 @@ def test_terminate(
     with patch.object(pbar, "remove_stats") as mock_remove_stats, patch(
         "tqdm.auto.tqdm.write"
     ) as mock_write:
-        pbar.terminate()
-
+        pbar.shutdown_gracefully()
         mock_remove_stats.assert_called_once()
-        mock_write.assert_called_once_with(
-            "Profiler is done reading all flows. "
-            "Slips is now processing them."
-        )
+
+        if not keyboard_int:
+            mock_write.assert_not_called()
+        else:
+            mock_write.assert_called_once_with(
+                "Profiler is done reading all flows. "
+                "Slips is now processing them."
+            )
         assert pbar.pbar_finished.is_set()

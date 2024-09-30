@@ -5,6 +5,7 @@ from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.slips_utils import utils
+from slips_files.common.flow_classifier import FlowClassifier
 
 
 class SMTP(IFlowalertsAnalyzer):
@@ -12,6 +13,7 @@ class SMTP(IFlowalertsAnalyzer):
         # when the ctr reaches the threshold in 10 seconds,
         # we detect an smtp bruteforce
         self.smtp_bruteforce_threshold = 3
+        self.classifier = FlowClassifier()
         # dict to keep track of bad smtp logins to check for bruteforce later
         # format {profileid: [ts,ts,...]}
         self.smtp_bruteforce_cache = {}
@@ -20,25 +22,21 @@ class SMTP(IFlowalertsAnalyzer):
         return "smtp_analyzer"
 
     def check_smtp_bruteforce(self, profileid, twid, flow):
-        uid = flow["uid"]
-        daddr = flow["daddr"]
-        saddr = flow["saddr"]
-        stime = flow.get("starttime", False)
-        last_reply = flow.get("last_reply", False)
-
-        if "bad smtp-auth user" not in last_reply:
+        if "bad smtp-auth user" not in flow.last_reply:
             return False
 
         try:
             timestamps, uids = self.smtp_bruteforce_cache[profileid]
-            timestamps.append(stime)
-            uids.append(uid)
+            timestamps.append(flow.starttime)
+            uids.append(flow.uid)
             self.smtp_bruteforce_cache[profileid] = (timestamps, uids)
         except KeyError:
             # first time for this profileid to make bad smtp login
-            self.smtp_bruteforce_cache.update({profileid: ([stime], [uid])})
+            self.smtp_bruteforce_cache.update(
+                {profileid: ([flow.starttime], [flow.uid])}
+            )
 
-        self.set_evidence.bad_smtp_login(saddr, daddr, stime, twid, uid)
+        self.set_evidence.bad_smtp_login(twid, flow)
 
         timestamps = self.smtp_bruteforce_cache[profileid][0]
         uids = self.smtp_bruteforce_cache[profileid][1]
@@ -59,10 +57,7 @@ class SMTP(IFlowalertsAnalyzer):
             return
 
         self.set_evidence.smtp_bruteforce(
-            flow,
-            twid,
-            uids,
-            self.smtp_bruteforce_threshold,
+            flow, twid, self.smtp_bruteforce_threshold, uids
         )
 
         # remove all 3 logins that caused this alert
@@ -72,9 +67,9 @@ class SMTP(IFlowalertsAnalyzer):
         if not utils.is_msg_intended_for(msg, "new_smtp"):
             return
 
-        smtp_info = json.loads(msg["data"])
+        smtp_info: dict = json.loads(msg["data"])
         profileid = smtp_info["profileid"]
         twid = smtp_info["twid"]
-        flow: dict = smtp_info["flow"]
+        flow = self.classifier.convert_to_flow_obj(smtp_info["flow"])
 
         self.check_smtp_bruteforce(profileid, twid, flow)

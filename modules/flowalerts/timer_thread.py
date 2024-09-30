@@ -30,5 +30,6 @@ class TimerThread(threading.Thread):
             return True
 
     def task(self):
-        # print(f'Executing the function with {self.parameters} on {datetime.datetime.now()}')
+        # print(f'Executing the function with {self.parameters} on
+        # {datetime.datetime.now()}')
         self.function(*self.parameters)

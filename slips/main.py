@@ -12,25 +12,27 @@ from datetime import datetime
 from distutils.dir_util import copy_tree
 from typing import Set
 
+from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
 from managers.ui_manager import UIManager
-from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
 from slips_files.common.performance_profilers.memory_profiler import (
     MemoryProfiler,
 )
+from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
 
+DAEMONIZED_MODE = "daemonized"
 
-class Main(IObservable):
+
+class Main:
     def __init__(self, testing=False):
-        IObservable.__init__(self)
         self.name = "Main"
         self.alerts_default_path = "output/"
         self.mode = "interactive"
@@ -40,7 +42,8 @@ class Main(IObservable):
         self.metadata_man = MetadataManager(self)
         self.conf = ConfigParser()
         self.ui_man = UIManager(self)
-        self.version = self.get_slips_version()
+
+        self.version = utils.get_slips_version()
         # will be filled later
         self.commit = "None"
         self.branch = "None"
@@ -67,6 +70,8 @@ class Main(IObservable):
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
+                # should be initialised after self.input_type is set
+                self.host_ip_man = HostIPManager(self)
 
     def cpu_profiler_init(self):
         self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable()
@@ -185,12 +190,6 @@ class Main(IObservable):
         self.db.publish("memory_profile", processes[0].pid)
         input()
 
-    def get_slips_version(self):
-        version_file = "VERSION"
-        with open(version_file, "r") as f:
-            version = f.read()
-        return version
-
     def check_zeek_or_bro(self):
         """
         Check if we have zeek or bro
@@ -224,7 +223,7 @@ class Main(IObservable):
         Shutdown slips, is called when stopping slips before
         starting all modules. for example using -cb
         """
-        if self.mode == "daemonized":
+        if self.mode == DAEMONIZED_MODE:
             self.daemon.stop()
         if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)
@@ -260,9 +259,9 @@ class Main(IObservable):
 
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
-        return (
-            self.db.get_input_type() in ("pcap", "interface")
-            or self.db.is_growing_zeek_dir()
+        return self.db.is_running_non_stop() or self.db.get_input_type() in (
+            "pcap",
+            "interface",
         )
 
     def store_zeek_dir_copy(self):
@@ -342,32 +341,8 @@ class Main(IObservable):
         with open(self.daemon.stdout, "a") as f:
             f.write(f"{txt}\n")
 
-    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by
-        taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like f'Test {here}'
-        """
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-                "log_to_logfiles_only": log_to_logfiles_only,
-            }
-        )
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def handle_flows_from_stdin(self, input_information):
         """
@@ -382,7 +357,7 @@ class Main(IObservable):
             print(f"[Main] Invalid file path {input_information}. Stopping.")
             sys.exit(-1)
 
-        if self.mode == "daemonized":
+        if self.mode == DAEMONIZED_MODE:
             print(
                 "Can't read input from stdin in daemonized mode. " "Stopping"
             )
@@ -547,17 +522,6 @@ class Main(IObservable):
         )
         self.print(msg)
 
-    def update_host_ip(self, host_ip: str, modified_profiles: Set[str]) -> str:
-        """
-        when running on an interface we keep track of the host IP.
-        If there was no  modified TWs in the host IP, we check if the
-        network was changed.
-        """
-        if self.is_interface and host_ip not in modified_profiles:
-            if host_ip := self.metadata_man.get_host_ip():
-                self.db.set_host_ip(host_ip)
-        return host_ip
-
     def is_total_flows_unknown(self) -> bool:
         """
         Determines if slips knows the total flows it's gonna be
@@ -597,7 +561,7 @@ class Main(IObservable):
             self.logger = self.proc_man.start_output_process(
                 stderr, slips_logfile
             )
-            self.add_observer(self.logger)
+            self.printer = Printer(self.logger, self.name)
 
             self.redis_port: int = self.redis_man.get_redis_port()
             # dont start the redis server if it's already started
@@ -618,8 +582,17 @@ class Main(IObservable):
                     "output_dir": self.args.output,
                     "commit": self.commit,
                     "branch": self.branch,
+                    # we need to set this in the db because some modules use
+                    # it as soon as they start
+                    "input_type": self.input_type,
                 }
             )
+            # this line should happen as soon as we start the db
+            # to be able to use the host IP as analyzer IP in alerts.json
+            # should be after setting the input metadata with "input_type"
+            # TLDR; dont change the order of this line
+            host_ip = self.host_ip_man.store_host_ip()
+
             self.print(
                 f"Using redis server on "
                 f"port: "
@@ -661,7 +634,7 @@ class Main(IObservable):
 
             self.db.set_slips_mode(self.mode)
 
-            if self.mode == "daemonized":
+            if self.mode == DAEMONIZED_MODE:
                 std_files = {
                     "stderr": self.daemon.stderr,
                     "stdout": self.daemon.stdout,
@@ -740,13 +713,9 @@ class Main(IObservable):
                 "of traffic by querying TI sites."
             )
 
-            host_ip = self.metadata_man.store_host_ip()
-
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
-            self.is_interface: bool = (
-                self.args.interface or self.db.is_growing_zeek_dir()
-            )
+            self.is_interface: bool = self.db.is_running_non_stop()
 
             while not self.proc_man.stop_slips():
                 # Sleep some time to do routine checks and give time for
@@ -767,7 +736,7 @@ class Main(IObservable):
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
-                self.update_host_ip(host_ip, modified_profiles)
+                self.host_ip_man.update_host_ip(host_ip, modified_profiles)
 
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while

@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.1.1
+Slips v1.1.2
 </h1>
 
 
@@ -160,14 +160,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
 
 * [Docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker)
   * Dockerhub (recommended)
-    * On a linux host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux)
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux)
-    * On MacOS M1 host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
-    * On MacOS Intel processor
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors)
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
+    * [Linux, MacOS and windows hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#Running-Slips-from-DockerHub)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
 * Native
@@ -212,7 +205,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
 
 
 # Configuration
-Slips has a [config/slips.conf](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/config/slips.conf) that contains user configurations for different modules and general execution.
+Slips has a [config/slips.yaml](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/config/slips.yaml) that contains user configurations for different modules and general execution.
 
 * You can change the timewindow width by modifying the ```time_window_width``` parameter
 * You can change the analysis direction to ```all```  if you want to see the attacks from and to your computer

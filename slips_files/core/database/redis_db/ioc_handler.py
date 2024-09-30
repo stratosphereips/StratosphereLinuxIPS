@@ -1,11 +1,17 @@
 import json
-import ast
+from typing import (
+    Dict,
+    List,
+    Tuple,
+    Union,
+)
 
 
 class IoCHandler:
     """
     Helper class for the Redis class in database.py
-    Contains all the logic related to setting and retrieving evidence and alerts in the db
+    Contains all the logic related to setting and retrieving evidence and
+    alerts in the db
     """
 
     name = "DB"
@@ -14,13 +20,67 @@ class IoCHandler:
         """
         Stores the number of successfully loaded TI files
         """
-        self.r.set("loaded TI files", number_of_loaded_files)
+        self.r.set(self.constants.LOADED_TI_FILES, number_of_loaded_files)
 
-    def get_loaded_ti_files(self):
+    def get_loaded_ti_feeds(self):
         """
         returns the number of successfully loaded TI files. or 0 if none is loaded
         """
-        return self.r.get("loaded TI files") or 0
+        return self.r.get(self.constants.LOADED_TI_FILES) or 0
+
+    def delete_feed_entries(self, url: str):
+        """
+        Delete all entries in
+         IoC_domains and IoC_ips that contain the given feed as source
+        """
+        # get the feed name from the given url
+        feed_to_delete = url.split("/")[-1]
+        # get all domains that are read from TI files in our db
+        ioc_domains = self.rcache.hgetall(self.constants.IOC_DOMAINS)
+        for domain, domain_description in ioc_domains.items():
+            domain_description = json.loads(domain_description)
+            if feed_to_delete in domain_description["source"]:
+                # this entry has the given feed as source, delete it
+                self.rcache.hdel(self.constants.IOC_DOMAINS, domain)
+
+        # get all IPs that are read from TI files in our db
+        ioc_ips = self.rcache.hgetall(self.constants.IOC_IPS)
+        for ip, ip_description in ioc_ips.items():
+            ip_description = json.loads(ip_description)
+            if feed_to_delete in ip_description["source"]:
+                # this entry has the given feed as source, delete it
+                self.rcache.hdel(self.constants.IOC_IPS, ip)
+
+    def delete_ti_feed(self, file):
+        self.rcache.hdel(self.constants.TI_FILES_INFO, file)
+
+    def set_feed_last_update_time(self, file: str, time: float):
+        """
+        sets the 'time' of last update of the given file
+        :param file: ti file
+        """
+        if file_info := self.rcache.hget(self.constants.TI_FILES_INFO, file):
+            # update an existin time
+            file_info = json.loads(file_info)
+            file_info.update({"time": time})
+            self.rcache.hset(
+                self.constants.TI_FILES_INFO, file, json.dumps(file_info)
+            )
+            return
+
+        # no cached info about this file
+        self.rcache.hset(
+            self.constants.TI_FILES_INFO, file, json.dumps({"time": time})
+        )
+
+    def get_ti_feed_info(self, file):
+        """
+        Get TI file info
+        :param file: a valid filename not a feed url
+        """
+        data = self.rcache.hget(self.constants.TI_FILES_INFO, file)
+        data = json.loads(data) if data else {}
+        return data
 
     def give_threat_intelligence(
         self,
@@ -45,26 +105,36 @@ class IoCHandler:
             "daddr": daddr,
         }
         if extra_info:
-            # sometimes we want to send teh dns query/answer to check it for blacklisted ips/domains
+            # sometimes we want to send teh dns query/answer to check it for
+            # blacklisted ips/domains
             data_to_send.update(extra_info)
 
-        self.publish("give_threat_intelligence", json.dumps(data_to_send))
+        self.publish(self.constants.GIVE_TI, json.dumps(data_to_send))
 
         return data_to_send
 
-    def delete_ips_from_IoC_ips(self, ips):
+    def set_ti_feed_info(self, file, data):
         """
-        Delete old IPs from IoC
+        Set/update time and/or e-tag for TI file
+        :param file: a valid filename not a feed url
+        :param data: dict containing info about TI file
         """
-        self.rcache.hdel("IoC_ips", *ips)
+        data = json.dumps(data)
+        self.rcache.hset(self.constants.TI_FILES_INFO, file, data)
 
-    def delete_domains_from_IoC_domains(self, domains):
+    def delete_ips_from_IoC_ips(self, ips: List[str]):
+        """
+        Delete the given IPs from IoC
+        """
+        self.rcache.hdel(self.constants.IOC_IPS, *ips)
+
+    def delete_domains_from_IoC_domains(self, domains: List[str]):
         """
         Delete old domains from IoC
         """
-        self.rcache.hdel("IoC_domains", *domains)
+        self.rcache.hdel(self.constants.IOC_DOMAINS, *domains)
 
-    def add_ips_to_IoC(self, ips_and_description: dict) -> None:
+    def add_ips_to_IoC(self, ips_and_description: Dict[str, str]) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
         :param ips_and_description: is {ip: json.dumps{'source':..,
@@ -74,38 +144,42 @@ class IoCHandler:
 
         """
         if ips_and_description:
-            self.rcache.hmset("IoC_ips", ips_and_description)
+            self.rcache.hmset(self.constants.IOC_IPS, ips_and_description)
 
     def add_domains_to_IoC(self, domains_and_description: dict) -> None:
         """
         Store a group of domains in the db as they were obtained from
         an IoC source
-        :param domains_and_description: is {domain: json.dumps{'source':..,'tags':..,
-                                                            'threat_level':... ,'description'}}
+        :param domains_and_description: is
+        {domain: json.dumps{'source':..,'tags':..,
+            'threat_level':... ,'description'}}
         """
         if domains_and_description:
-            self.rcache.hmset("IoC_domains", domains_and_description)
+            self.rcache.hmset(
+                self.constants.IOC_DOMAINS, domains_and_description
+            )
 
     def add_ip_range_to_IoC(self, malicious_ip_ranges: dict) -> None:
         """
         Store a group of IP ranges in the db as they were obtained from an IoC source
-        :param malicious_ip_ranges: is {range: json.dumps{'source':..,'tags':..,
-                                                            'threat_level':... ,'description'}}
+        :param malicious_ip_ranges: is
+        {range: json.dumps{'source':..,'tags':..,
+         'threat_level':... ,'description'}}
         """
         if malicious_ip_ranges:
-            self.rcache.hmset("IoC_ip_ranges", malicious_ip_ranges)
+            self.rcache.hmset(
+                self.constants.IOC_IP_RANGES, malicious_ip_ranges
+            )
 
     def add_asn_to_IoC(self, blacklisted_ASNs: dict):
         """
         Store a group of ASN in the db as they were obtained from an IoC source
-        :param blacklisted_ASNs: is {asn: json.dumps{'source':..,'tags':..,
-                                                     'threat_level':... ,'description'}}
+        :param blacklisted_ASNs: is
+        {asn: json.dumps{'source':..,'tags':..,
+            'threat_level':... ,'description'}}
         """
         if blacklisted_ASNs:
-            self.rcache.hmset("IoC_ASNs", blacklisted_ASNs)
-
-    def is_blacklisted_ASN(self, ASN) -> bool:
-        return self.rcache.hget("IoC_ASNs", ASN)
+            self.rcache.hmset(self.constants.IOC_ASN, blacklisted_ASNs)
 
     def add_ja3_to_IoC(self, ja3: dict) -> None:
         """
@@ -114,7 +188,7 @@ class IoCHandler:
                             'threat_level':... ,'description'}}
 
         """
-        self.rcache.hmset("IoC_JA3", ja3)
+        self.rcache.hmset(self.constants.IOC_JA3, ja3)
 
     def add_jarm_to_IoC(self, jarm: dict) -> None:
         """
@@ -122,212 +196,115 @@ class IoCHandler:
         :param jarm:  {jarm: {'source':..,'tags':..,
                             'threat_level':... ,'description'}}
         """
-        self.rcache.hmset("IoC_JARM", jarm)
+        self.rcache.hmset(self.constants.IOC_JARM, jarm)
 
     def add_ssl_sha1_to_IoC(self, malicious_ssl_certs):
         """
         Store a group of ssl fingerprints in the db
         :param malicious_ssl_certs:  {sha1: {'source':..,'tags':..,
                                     'threat_level':... ,'description'}}
+        """
+        self.rcache.hmset(self.constants.IOC_SSL, malicious_ssl_certs)
 
-        """
-        self.rcache.hmset("IoC_SSL", malicious_ssl_certs)
+    def is_blacklisted_ASN(self, asn) -> bool:
+        return self.rcache.hget(self.constants.IOC_ASN, asn)
 
-    def get_malicious_ip_ranges(self) -> dict:
-        """
-        Returns all the malicious ip ranges we have from different feeds
-        return format is {range: json.dumps{'source':..,'tags':..,
-                                            'threat_level':... ,'description'}}
-        """
-        return self.rcache.hgetall("IoC_ip_ranges")
-
-    def get_IPs_in_IoC(self):
-        """
-        Get all IPs and their description from IoC_ips
-        """
-        return self.rcache.hgetall("IoC_ips")
-
-    def get_Domains_in_IoC(self):
-        """
-        Get all Domains and their description from IoC_domains
-        """
-        return self.rcache.hgetall("IoC_domains")
-
-    def get_ja3_in_IoC(self):
-        """
-        Get all ja3 and their description from IoC_JA3
-        """
-        return self.rcache.hgetall("IoC_JA3")
-
-    def is_malicious_jarm(self, jarm_hash: str):
+    def is_blacklisted_jarm(self, jarm_hash: str):
         """
         search for the given hash in the malicious hashes stored in the db
         """
-        return self.rcache.hget("IoC_JARM", jarm_hash)
+        return self.rcache.hget(self.constants.IOC_JARM, jarm_hash)
 
-    def search_IP_in_IoC(self, ip: str) -> str:
+    def is_blacklisted_ip(self, ip: str) -> Union[Dict[str, str], bool]:
         """
         Search in the dB of malicious IPs and return a
         description if we found a match
-        """
-        ip_description = self.rcache.hget("IoC_ips", ip)
-        return False if ip_description is None else ip_description
+        returns a dict like this
+            {"description": "1.4858919389330276e-05",
+            "source": "AIP_attackers.csv",
+            "threat_level": "medium",
+            "tags": ["phishing honeypot"]}
 
-    def set_malicious_ip(self, ip, profileid, twid):
         """
-        Save in DB malicious IP found in the traffic
-        with its profileid and twid
-        """
-        # Retrieve all profiles and twis, where this malicios IP was met.
-        ip_profileid_twid = self.get_malicious_ip(ip)
-        try:
-            profile_tws = ip_profileid_twid[
-                profileid
-            ]  # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)  # set(tw1, tw2)
-            profile_tws.add(twid)
-            ip_profileid_twid[profileid] = str(profile_tws)
-        except KeyError:
-            ip_profileid_twid[profileid] = str(
-                {twid}
-            )  # add key-pair to the dict if does not exist
-        data = json.dumps(ip_profileid_twid)
+        ip_info: str = self.rcache.hget(self.constants.IOC_IPS, ip)
+        return False if ip_info is None else json.loads(ip_info)
 
-        self.r.hset("MaliciousIPs", ip, data)
-
-    def set_malicious_domain(self, domain, profileid, twid):
-        """
-        Save in DB a malicious domain found in the traffic
-        with its profileid and twid
-        """
-        # get all profiles and twis where this IP was met
-        domain_profiled_twid = self.get_malicious_domain(domain)
-        try:
-            profile_tws = domain_profiled_twid[
-                profileid
-            ]  # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)  # set(tw1, tw2)
-            profile_tws.add(twid)
-            domain_profiled_twid[profileid] = str(profile_tws)
-        except KeyError:
-            domain_profiled_twid[profileid] = str(
-                {twid}
-            )  # add key-pair to the dict if does not exist
-        data = json.dumps(domain_profiled_twid)
-
-        self.r.hset("MaliciousDomains", domain, data)
-
-    def get_malicious_ip(self, ip):
-        """
-        Return malicious IP and its list of presence in
-        the traffic (profileid, twid)
-        """
-        data = self.r.hget("MaliciousIPs", ip)
-        data = json.loads(data) if data else {}
-        return data
-
-    def get_malicious_domain(self, domain):
-        """
-        Return malicious domain and its list of presence in
-        the traffic (profileid, twid)
-        """
-        data = self.r.hget("MaliciousDomains", domain)
-        data = json.loads(data) if data else {}
-        return data
-
-    def get_ssl_info(self, sha1):
-        info = self.rcache.hmget("IoC_SSL", sha1)[0]
+    def is_blacklisted_ssl(self, sha1):
+        info = self.rcache.hmget(self.constants.IOC_SSL, sha1)[0]
         return False if info is None else info
 
-    def is_domain_malicious(self, domain: str) -> tuple:
+    def is_blacklisted_domain(
+        self, domain: str
+    ) -> Tuple[Dict[str, str], bool]:
         """
         Search in the dB of malicious domains and return a
         description if we found a match
         returns a tuple (description, is_subdomain)
         description: description of the subdomain if found
-        bool: True if we found a match for exactly the given domain False if we matched a subdomain
+        bool: True if we found a match for exactly the given
+        domain False if we matched a subdomain
         """
-        domain_description = self.rcache.hget("IoC_domains", domain)
-        if domain_description is None:
-            # try to match subdomain
-            ioc_domains = self.rcache.hgetall("IoC_domains")
-            for malicious_domain, description in ioc_domains.items():
-                #  if the we contacted images.google.com and we have google.com in our blacklists, we find a match
-                if malicious_domain in domain:
-                    return description, True
-            return False, False
-        else:
-            return domain_description, False
+        domain_description = self.rcache.hget(
+            self.constants.IOC_DOMAINS, domain
+        )
+        is_subdomain = False
+        if domain_description:
+            return json.loads(domain_description), is_subdomain
 
-    def delete_feed(self, url: str):
-        """
-        Delete all entries in IoC_domains and IoC_ips that contain the given feed as source
-        """
-        # get the feed name from the given url
-        feed_to_delete = url.split("/")[-1]
-        # get all domains that are read from TI files in our db
-        IoC_domains = self.rcache.hgetall("IoC_domains")
-        for domain, domain_description in IoC_domains.items():
-            domain_description = json.loads(domain_description)
-            if feed_to_delete in domain_description["source"]:
-                # this entry has the given feed as source, delete it
-                self.rcache.hdel("IoC_domains", domain)
+        # try to match subdomain
+        ioc_domains: Dict[str, Dict[str, str]] = self.rcache.hgetall(
+            self.constants.IOC_DOMAINS
+        )
+        for malicious_domain, domain_info in ioc_domains.items():
+            malicious_domain: str
+            domain_info: str
+            # something like this
+            # {"description": "['hack''malware''phishing']",
+            # "source": "OCD-Datalake-russia-ukraine_IOCs-ALL.csv",
+            # "threat_level": "medium",
+            # "tags": ["Russia-UkraineIoCs"]}
+            domain_info: Dict[str, str] = json.loads(domain_info)
+            #  if the we contacted images.google.com and we have
+            #  google.com in our blacklists, we find a match
+            if malicious_domain in domain:
+                is_subdomain = True
+                return domain_info, is_subdomain
+        return False, is_subdomain
 
-        # get all IPs that are read from TI files in our db
-        IoC_ips = self.rcache.hgetall("IoC_ips")
-        for ip, ip_description in IoC_ips.items():
-            ip_description = json.loads(ip_description)
-            if feed_to_delete in ip_description["source"]:
-                # this entry has the given feed as source, delete it
-                self.rcache.hdel("IoC_ips", ip)
+    def get_all_blacklisted_ip_ranges(self) -> dict:
+        """
+        Returns all the malicious ip ranges we have from different feeds
+        return format is {range: json.dumps{'source':..,'tags':..,
+                                            'threat_level':... ,'description'}}
+        """
+        return self.rcache.hgetall(self.constants.IOC_IP_RANGES)
+
+    def get_all_blacklisted_ips(self):
+        """
+        Get all IPs and their description from IoC_ips
+        """
+        return self.rcache.hgetall(self.constants.IOC_IPS)
+
+    def get_all_blacklisted_domains(self):
+        """
+        Get all Domains and their description from IoC_domains
+        """
+        return self.rcache.hgetall(self.constants.IOC_DOMAINS)
+
+    def get_all_blacklisted_ja3(self):
+        """
+        Get all ja3 and their description from IoC_JA3
+        """
+        return self.rcache.hgetall(self.constants.IOC_JA3)
 
     def is_profile_malicious(self, profileid: str) -> str:
         return (
-            self.r.hget(profileid, "labeled_as_malicious")
+            self.r.hget(profileid, self.constants.LABELED_AS_MALICIOUS)
             if profileid
             else False
         )
 
-    def set_TI_file_info(self, file, data):
-        """
-        Set/update time and/or e-tag for TI file
-        :param file: a valid filename not a feed url
-        :param data: dict containing info about TI file
-        """
-        # data = self.get_malicious_file_info(file)
-        # for key in file_data:
-        # data[key] = file_data[key]
-        data = json.dumps(data)
-        self.rcache.hset("TI_files_info", file, data)
-
-    def set_last_update_time(self, file: str, time: float):
-        """
-        sets the 'time' of last update of the given file
-        :param file: ti file
-        """
-        if file_info := self.rcache.hget("TI_files_info", file):
-            # update an existin time
-            file_info = json.loads(file_info)
-            file_info.update({"time": time})
-            self.rcache.hset("TI_files_info", file, json.dumps(file_info))
-            return
-
-        # no cached info about this file
-        self.rcache.hset("TI_files_info", file, json.dumps({"time": time}))
-
-    def get_TI_file_info(self, file):
-        """
-        Get TI file info
-        :param file: a valid filename not a feed url
-        """
-        data = self.rcache.hget("TI_files_info", file)
-        data = json.loads(data) if data else {}
-        return data
-
-    def delete_file_info(self, file):
-        self.rcache.hdel("TI_files_info", file)
-
-    def getURLData(self, url):
+    def is_cached_url_by_vt(self, url):
         """
         Return information about this URL
         Returns a dictionary or False if there is no IP in the database
@@ -335,25 +312,26 @@ class IoCHandler:
         1- IP is in the DB without data. Return empty dict.
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
+        this is used to cache url info by the virustotal module only
         """
-        data = self.rcache.hget("URLsInfo", url)
+        data = self.rcache.hget(self.constants.VT_CACHED_URL_INFO, url)
         data = json.loads(data) if data else False
         return data
 
-    def setNewURL(self, url: str):
+    def _store_new_url(self, url: str):
         """
         1- Stores this new URL in the URLs hash
         2- Publishes in the channels that there is a new URL, and that we want
             data from the Threat Intelligence modules
         """
-        data = self.getURLData(url)
+        data = self.is_cached_url_by_vt(url)
         if data is False:
             # If there is no data about this URL
-            # Set this URL for the first time in the URLsInfo
+            # Set this URL for the first time in the virustotal_cached_url_info
             # Its VERY important that the data of the first time we see a URL
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an URL exists or not
-            self.rcache.hset("URLsInfo", url, "{}")
+            self.rcache.hset(self.constants.VT_CACHED_URL_INFO, url, "{}")
 
     def get_domain_data(self, domain):
         """
@@ -364,11 +342,11 @@ class IoCHandler:
         2- Domain is in the DB with data. Return dict.
         3- Domain is not in the DB. Return False
         """
-        data = self.rcache.hget("DomainsInfo", domain)
+        data = self.rcache.hget(self.constants.DOMAINS_INFO, domain)
         data = json.loads(data) if data or data == {} else False
         return data
 
-    def set_new_domain(self, domain: str):
+    def _set_new_domain(self, domain: str):
         """
         1- Stores this new domain in the Domains hash
         2- Publishes in the channels that there is a new domain, and that we want
@@ -381,15 +359,15 @@ class IoCHandler:
             # Its VERY important that the data of the first time we see a domain
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
-            self.rcache.hset("DomainsInfo", domain, "{}")
+            self.rcache.hset(self.constants.DOMAINS_INFO, domain, "{}")
 
     def set_info_for_domains(
         self, domain: str, info_to_set: dict, mode="leave"
     ):
         """
         Store information for this domain
-        :param info_to_set: a dictionary, such as {'geocountry': 'rumania'} that we are
-        going to store for this domain
+        :param info_to_set: a dictionary, such as
+        {'geocountry': 'rumania'} that we are going to store for this domain
         :param mode: defines how to deal with the new data
         - to 'overwrite' the data with the new data
         - to 'add' the data to the new data
@@ -400,7 +378,7 @@ class IoCHandler:
         domain_data = self.get_domain_data(domain)
         if not domain_data:
             # This domain is not in the dictionary, add it first:
-            self.set_new_domain(domain)
+            self._set_new_domain(domain)
             # Now get the data, which should be empty, but just in case
             domain_data = self.get_domain_data(domain)
 
@@ -410,7 +388,7 @@ class IoCHandler:
             # info_to_set can be {'VirusTotal': [1,2,3,4]}
 
             # I think we dont need this anymore of the conversion
-            if type(domain_data) == str:
+            if isinstance(domain_data, str):
                 # Convert the str to a dict
                 domain_data = json.loads(domain_data)
 
@@ -423,7 +401,7 @@ class IoCHandler:
                 _ = domain_data[key]
 
                 # convert incoming data to list
-                if type(data_to_store) != list:
+                if not isinstance(data_to_store, list):
                     # data_to_store and prev_info Should both be lists, so we can extend
                     data_to_store = [data_to_store]
 
@@ -432,11 +410,11 @@ class IoCHandler:
                 elif mode == "add":
                     prev_info = domain_data[key]
 
-                    if type(prev_info) == list:
+                    if isinstance(prev_info, list):
                         # for example, list of IPs
                         prev_info.extend(data_to_store)
                         domain_data[key] = list(set(prev_info))
-                    elif type(prev_info) == str:
+                    elif isinstance(prev_info, str):
                         # previous info about this domain is a str, we should make it a list and extend
                         prev_info = [prev_info]
                         # add the new data_to_store to our prev_info
@@ -450,28 +428,28 @@ class IoCHandler:
 
             except KeyError:
                 # There is no data for the key so far. Add it
-                if type(data_to_store) == list:
+                if isinstance(data_to_store, list):
                     domain_data[key] = list(set(data_to_store))
                 else:
                     domain_data[key] = data_to_store
             # Store
             domain_data = json.dumps(domain_data)
-            self.rcache.hset("DomainsInfo", domain, domain_data)
-            # Publish the changes
-            self.r.publish("dns_info_change", domain)
+            self.rcache.hset(self.constants.DOMAINS_INFO, domain, domain_data)
+            self.r.publish(self.channels.DNS_INFO_CHANGE, domain)
 
-    def set_info_for_urls(self, url: str, urldata: dict):
+    def cache_url_info_by_virustotal(self, url: str, urldata: dict):
         """
         Store information for this URL
         We receive a dictionary, such as {'VirusTotal': {'URL':score}} that we are
         going to store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
+        this is used to cache url info by the virustotal module only
         """
-        data = self.getURLData(url)
+        data = self.is_cached_url_by_vt(url)
         if data is False:
             # This URL is not in the dictionary, add it first:
-            self.setNewURL(url)
+            self._store_new_url(url)
             # Now get the data, which should be empty, but just in case
             data = self.get_ip_info(url)
         # empty dicts evaluate to False
@@ -492,8 +470,10 @@ class IoCHandler:
                     # self.r.publish('url_info_change', url)
                 data[key] = data_to_store
                 newdata_str = json.dumps(data)
-                self.rcache.hset("URLsInfo", url, newdata_str)
+                self.rcache.hset(
+                    self.constants.VT_CACHED_URL_INFO, url, newdata_str
+                )
         else:
             # URL found in the database but has no keys , set the keys now
             urldata = json.dumps(urldata)
-            self.rcache.hset("URLsInfo", url, urldata)
+            self.rcache.hset(self.constants.VT_CACHED_URL_INFO, url, urldata)

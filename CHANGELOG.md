@@ -1,4 +1,17 @@
-- 1.1.1 (September 4th, 2024)
+- 1.1.2 (September 30th, 2024)
+- Add a relation between related evidence in alerts.json
+- Better unit tests. Thanks to @Sekhar-Kumar-Dash
+- Discontinued MacOS m1 docker images, P2p images, and slips dependencies image.
+- Fix the problem of the progress bar stopping before analysis is done, causing Slips to freeze when analyzing large PCAPs.
+- Improve how Slips recognizes the current host IP.
+- Increase the speed of the Flowalerts module by changing how Slips checks for DNS servers.
+- Major code improvements.
+- Remove redundant keys from the Redis database.
+- Remove unused keys from the Redis database.
+- Use IDMEFv2 format in alerts.json instead of IDEA0.
+- Wait for modules to finish 1 week by default.
+
+1.1.1 (September 4th, 2024)
 - Better unit tests. thanks to @Sekhar-Kumar-Dash.
 - Fix Zeek warning caused by one of the loaded zeek scripts.
 - Fix Slips installation scripts at install/install.sh

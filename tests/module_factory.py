@@ -7,6 +7,7 @@ from unittest.mock import (
 )
 import os
 
+from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
 from slips_files.core.database.database_manager import DBManager
 
@@ -14,6 +15,7 @@ from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
+from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.progress_bar.progress_bar import PBar
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
@@ -45,7 +47,6 @@ from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
 from multiprocessing import Queue, Event
 from slips_files.core.helpers.flow_handler import FlowHandler
-from slips_files.core.helpers.symbols_handler import SymbolHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
@@ -54,8 +55,9 @@ from modules.arp.arp import ARP
 from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
+from modules.riskiq.riskiq import RiskIQ
 from slips_files.common.markov_chains import Matrix
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
     Evidence,
@@ -83,7 +85,7 @@ def check_zeek_or_bro():
 
 
 MODULE_DB_MANAGER = "slips_files.common.abstracts.module.DBManager"
-CORE_DB_MANAGER = "slips_files.common.abstracts.core.DBManager"
+# CORE_DB_MANAGER = "slips_files.common.abstracts.core.DBManager"
 DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
@@ -248,7 +250,7 @@ class ModuleFactory:
         flowalerts = self.create_flowalerts_obj()
         return Software(flowalerts.db, flowalerts=flowalerts)
 
-    @patch(CORE_DB_MANAGER, name="mock_db")
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_input_obj(
         self, input_information, input_type, mock_db, line_type=False
     ):
@@ -268,6 +270,7 @@ class ModuleFactory:
             is_profiler_done_event=Mock(),
             termination_event=Mock(),
         )
+        input.db = mock_db
         input.is_done_processing = do_nothing
         input.bro_timeout = 1
         # override the print function to avoid broken pipes
@@ -314,7 +317,7 @@ class ModuleFactory:
         leak_detector.pcap = test_pcap
         return leak_detector
 
-    @patch(CORE_DB_MANAGER, name="mock_db")
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_profiler_obj(self, mock_db):
         profiler = Profiler(
             self.logger,
@@ -333,6 +336,9 @@ class ModuleFactory:
 
     def create_redis_manager_obj(self, main):
         return RedisManager(main)
+
+    def create_host_ip_manager_obj(self, main):
+        return HostIPManager(main)
 
     def create_process_manager_obj(self):
         return ProcessManager(self.create_main_obj())
@@ -441,17 +447,14 @@ class ModuleFactory:
         description,
         attacker,
         threat_level,
-        category,
         victim,
         profile,
         timewindow,
         uid,
         timestamp,
         proto,
-        port,
-        source_target_tag,
+        dst_port,
         id,
-        conn_count,
         confidence,
     ):
         return Evidence(
@@ -459,17 +462,14 @@ class ModuleFactory:
             description=description,
             attacker=attacker,
             threat_level=threat_level,
-            category=category,
             victim=victim,
             profile=profile,
             timewindow=timewindow,
             uid=uid,
             timestamp=timestamp,
             proto=proto,
-            port=port,
-            source_target_tag=source_target_tag,
+            dst_port=dst_port,
             id=id,
-            conn_count=conn_count,
             confidence=confidence,
         )
 
@@ -576,11 +576,36 @@ class ModuleFactory:
         output_dir = "dummy_output_dir"
         redis_port = 6379
         termination_event = MagicMock()
-        cesnet = CESNET(self.logger, output_dir, redis_port, termination_event)
-        cesnet.wclient = MagicMock()
-        cesnet.node_info = [
-            {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
-        ]
 
-        cesnet.print = Mock()
+        with patch.object(
+            DBManager, "create_sqlite_db", return_value=MagicMock()
+        ):
+            cesnet = CESNET(
+                self.logger, output_dir, redis_port, termination_event
+            )
+            cesnet.db = MagicMock()
+            cesnet.wclient = MagicMock()
+            cesnet.node_info = [
+                {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
+            ]
+
+        cesnet.print = MagicMock()
         return cesnet
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_symbol_handler_obj(self, mock_db):
+        mock_logger = Mock()
+        mock_db.get_t2_for_profile_tw.return_value = (1000.0, 2000.0)
+        return SymbolHandler(mock_logger, mock_db)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_riskiq_obj(self, mock_db):
+        termination_event = MagicMock()
+        riskiq = RiskIQ(
+            self.logger,
+            "dummy_output_dir",
+            6379,
+            termination_event,
+        )
+        return riskiq
+

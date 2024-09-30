@@ -1,4 +1,4 @@
-from slips_files.core.evidence_structure.evidence import Direction
+from slips_files.core.structures.evidence import Direction
 
 
 class WhitelistMatcher:

@@ -73,35 +73,6 @@ def test_compute_peer_trust(reliability, score, confidence, expected_trust):
 
 
 @pytest.mark.parametrize(
-    "text, verbose, debug",
-    [
-        # testcase1: Print a test message with normal verbosity
-        ("Test message", 1, 0),
-        # testcase2: Print a debug message
-        ("Debug message", 0, 1),
-        # testcase3: Print a verbose message
-        ("Verbose message", 2, 0),
-        # testcase4: Print an error message
-        ("Error message", 0, 3),
-    ],
-)
-def test_print(text, verbose, debug):
-    base_model = ModuleFactory().create_base_model_obj()
-    base_model.notify_observers = Mock()
-
-    base_model.print(text, verbose, debug)
-
-    base_model.notify_observers.assert_called_once_with(
-        {
-            "from": base_model.name,
-            "txt": text,
-            "verbose": verbose,
-            "debug": debug,
-        }
-    )
-
-
-@pytest.mark.parametrize(
     "data, expected_score, expected_confidence",
     [
         # testcase1: assemble opinion with one report

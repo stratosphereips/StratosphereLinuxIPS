@@ -38,6 +38,7 @@ class PBar(IModule):
         pbar_finished: Event = None,
     ):
         self.slips_mode: str = slips_mode
+        # the sender end of this pipe is at output.py
         self.pipe = pipe
         self.done_reading_flows = False
         self.pbar_finished: Event = pbar_finished
@@ -86,18 +87,6 @@ class PBar(IModule):
             return
 
         self.progress_bar.update(1)
-        if self.progress_bar.n == self.total_flows:
-            self.terminate()
-
-    def terminate(self):
-        # remove it from the bar because we'll be
-        # prining it in a new line
-        self.remove_stats()
-        tqdm.write(
-            "Profiler is done reading all flows. "
-            "Slips is now processing them."
-        )
-        self.pbar_finished.set()
 
     def print_to_cli(self, msg: dict):
         """
@@ -109,8 +98,30 @@ class PBar(IModule):
         """writes the stats sent in the msg as a pbar postfix"""
         self.progress_bar.set_postfix_str(msg["stats"], refresh=True)
 
+    def should_stop(self) -> bool:
+        """
+        overrides IModule.should_stop()
+        Returns true if the pbar reached 100%
+        """
+        if self.keyboard_int_ctr > 0:
+            return True
+
+        if hasattr(self, "progress_bar"):
+            return self.progress_bar.n == self.total_flows
+
+        return False
+
     def shutdown_gracefully(self):
-        # to tell output.py to no longer send prints here
+        # remove it from the bar because output.py will be handling it from
+        # now on
+        self.remove_stats()
+        if self.keyboard_int_ctr > 0:
+            tqdm.write(
+                "Profiler is done reading all flows. "
+                "Slips is now processing them."
+            )
+        # the purpose of this pbar_finished Event is to tell output.py to no
+        # longer forward msgs to print here
         self.pbar_finished.set()
 
     def main(self):

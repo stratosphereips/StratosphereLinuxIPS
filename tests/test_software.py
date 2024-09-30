@@ -1,5 +1,6 @@
 """Unit test for modules/flowalerts/software.py"""
 
+from slips_files.core.flows.zeek import Software
 from tests.module_factory import ModuleFactory
 import json
 from unittest.mock import MagicMock
@@ -12,17 +13,16 @@ import pytest
         # testcase1:No previous software info
         (
             None,
-            {
-                "starttime": 1632302619.444328,
-                "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
-                "saddr": "192.168.1.247",
-                "daddr": "192.168.1.50",
-                "software": "SSH::CLIENT",
-                "unparsed_version": "OpenSSH_9.1",
-                "version_major": 9,
-                "version_minor": 1,
-                "type_": "software",
-            },
+            Software(
+                starttime="2023-05-06T12:00:00Z",
+                uid="1234",
+                saddr="192.168.1.247",
+                daddr="192.168.1.50",
+                software="SSH::CLIENT",
+                unparsed_version="OpenSSH_9.1",
+                version_major="9",
+                version_minor="1",
+            ),
             False,
         ),
         # testcase2: Same SSH client version
@@ -34,17 +34,16 @@ import pytest
                     "uid": "YTYwNjBiMjIxZDkzOWYyYTc4",
                 }
             },
-            {
-                "starttime": 1632302619.444328,
-                "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
-                "saddr": "192.168.1.247",
-                "daddr": "192.168.1.50",
-                "software": "SSH::CLIENT",
-                "unparsed_version": "OpenSSH_8.1",
-                "version_major": 8,
-                "version_minor": 1,
-                "type_": "software",
-            },
+            Software(
+                starttime="2023-05-06T12:00:00Z",
+                uid="1234",
+                saddr="192.168.1.247",
+                daddr="192.168.1.50",
+                software="SSH::CLIENT",
+                unparsed_version="OpenSSH_8.1",
+                version_major="8",
+                version_minor="1",
+            ),
             False,
         ),
         # testcase3: Different SSH client version
@@ -56,17 +55,16 @@ import pytest
                     "uid": "YTYwNjBiMjIxZDkzOWYyYTc4",
                 }
             },
-            {
-                "starttime": 1632302619.444328,
-                "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
-                "saddr": "192.168.1.247",
-                "daddr": "192.168.1.50",
-                "software": "SSH::CLIENT",
-                "unparsed_version": "OpenSSH_9.1",
-                "version_major": 9,
-                "version_minor": 1,
-                "type_": "software",
-            },
+            Software(
+                starttime="2023-05-06T12:00:00Z",
+                uid="1234",
+                saddr="192.168.1.247",
+                daddr="192.168.1.50",
+                software="SSH::CLIENT",
+                unparsed_version="OpenSSH_9.1",
+                version_major="9",
+                version_minor="1",
+            ),
             True,
         ),
         # testcase4: Different SSH client major version, same minor version
@@ -78,17 +76,16 @@ import pytest
                     "uid": "YTYwNjBiMjIxZDkzOWYyYTc4",
                 }
             },
-            {
-                "starttime": 1632302619.444328,
-                "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
-                "saddr": "192.168.1.247",
-                "daddr": "192.168.1.50",
-                "software": "SSH::CLIENT",
-                "unparsed_version": "OpenSSH_9.1",
-                "version_major": 9,
-                "version_minor": 1,
-                "type_": "software",
-            },
+            Software(
+                starttime="2023-05-06T12:00:00Z",
+                uid="1234",
+                saddr="192.168.1.247",
+                daddr="192.168.1.50",
+                software="SSH::CLIENT",
+                unparsed_version="OpenSSH_9.1",
+                version_major="9",
+                version_minor="1",
+            ),
             True,
         ),
         # testcase5: Different SSH client minor version, same major version
@@ -100,22 +97,23 @@ import pytest
                     "uid": "YTYwNjBiMjIxZDkzOWYyYTc4",
                 }
             },
-            {
-                "starttime": 1632302619.444328,
-                "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
-                "saddr": "192.168.1.247",
-                "daddr": "192.168.1.50",
-                "software": "SSH::CLIENT",
-                "unparsed_version": "OpenSSH_8.2",
-                "version_major": 8,
-                "version_minor": 2,
-                "type_": "software",
-            },
+            Software(
+                starttime="2023-05-06T12:00:00Z",
+                uid="1234",
+                saddr="192.168.1.247",
+                daddr="192.168.1.50",
+                software="SSH::CLIENT",
+                unparsed_version="OpenSSH_8.2",
+                version_major="8",
+                version_minor="2",
+            ),
             True,
         ),
     ],
 )
-def test_check_multiple_ssh_versions(cached_software, flow, expected_result):
+def test_check_multiple_ssh_versions(
+    cached_software, flow: Software, expected_result
+):
     software = ModuleFactory().create_software_analyzer_obj()
     software.db.get_software_from_profile.return_value = cached_software
     assert (

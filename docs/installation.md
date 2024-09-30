@@ -8,14 +8,7 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 
 * [Docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker)
   * Dockerhub (recommended)
-    * On a linux host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-linux)
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux)
-    * On MacOS M1 host
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-m1)
-    * On MacOS Intel processor
-      * [Without P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-macos-intel-processors)
-      * [With P2P support](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
+    * [Linux, MacOS and windows hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#Running-Slips-from-DockerHub)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
 * Native
@@ -27,7 +20,9 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 
 ## Requirements
 
-Slips requires Python 3.10.12 and at least 4 GBs of RAM to run smoothly.
+- Python 3.10.12
+- 5 GBs of disk space (for the docker image)
+- at least 4 GBs of RAM
 
 ## Slips in Docker
 
@@ -46,10 +41,6 @@ For more advanced users, you can:
 
 
 ### Running Slips from DockerHub
-
-1. First, choose the correct image for your architecture
-
-####  For linux
 
 ###### Analyse your own traffic
     docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
@@ -74,77 +65,9 @@ Check the alerts slips generated
 
 		  tail -f output/myfile*/alerts.log
 
-
-####  For MacOS M1
-
-###### Analyze your own traffic
-
-	docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
-
-Please change the name of the interface for your own.
-
-Check the alerts slips generated
-
-    tail -f output/eno1*/alerts.log
-
-    docker run -it --rm --net=host stratosphereips/slips_macos_m1:latest
-
-Docker with P2P is not supported for MacOS M1.
-
-
-#### For MacOS Intel processors
-
-###### Analyze your own traffic
-	docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
-
-Please change the name of the interface for your own.
-Check the alerts slips generated
-
-    tail -f output/eno1*/alerts.log
-
-###### Analyze your PCAP file
-Prepare a dataset directory
-
-		mkdir dataset
-		cp myfile.pcap dataset
-
-Run Slips
-
-    docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap`
-
-Check the alerts slips generated
-
-    tail -f output/myfile*/alerts.log
-
-
-####  For P2P support on Linux
-
-###### To analyze your own traffic with p2p
-    docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
-
-Please change the name of the interface for your own.
-
-Check evidence
-
-      tail -f output_dir/alerts.log
-
-#### For P2P support on MacOS Intel
-
-###### Analyze your own traffic
-    docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips_p2p:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output_dir `
-
-Please change the name of the interface for your own.
-Check evidence
-
-      tail -f output_dir/alerts.log
-
 ---
 
-Once your image is ready, you can run slips using the following command:
-
-    ./slips.py -f dataset/dataset/test7-malicious.pcap
-
-To analyze your own file using slips, you can mount it to your docker using -v
+To analyze your own files using slips, you can mount it to your docker using -v
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
@@ -152,27 +75,11 @@ To analyze your own file using slips, you can mount it to your docker using -v
 	./slips.py -f dataset/myfile.pcap
 
 
-### Updating the image in case there is a new one
+### Update slips image
 
 	docker pull stratosphereips/slips:latest
 
-### Known Error in old GPUs
-If you happen to get the error `Illegal instruction (core dumped)` it means that tensorflow can not be run from inside Docker in your GPU. We recommend to  disable the modules using machine learning by modifying the `disable` line in the configuration to be like this
-	`disable = [template, ensembling, rnn-cc-detection, flowmldetection]`
 
-If you were running slips directly from the docker without cloning the repo, you can do this modification in two ways:
-1. Modify the container
-	1. Run the docker in background using the same command as above but with `-d`
-	2. Get into the docker with `docker exec -it slips /bin/bash`, and then modifying the configuration file in `config/slips.conf` to add the disabled modules
-	3. Run Slips from inside the docker
-			`./slips.py -i enp7s0`
-1. You can
-	1. Clone the Slips repo (clone the same version as the docker you are downloading),
-	2. Modify your local `config/slips.conf`
-	3. Run the docker command above but by mounting the volume of the config.
-		`docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/config:/StratosphereLinuxIPS/config/ -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1`
-
----
 ### Run Slips sharing files between the host and the container
 
 The following instructions will guide you on how to run a Slips docker container with file sharing between the host and the container.
@@ -227,38 +134,34 @@ To run slips on a pcap instead of your interface you can do the following:
 
 #### Limitations
 
-The main limitation of running Slips in a Docker is that every time the container stops, all files inside the container are deleted, including the Redis database of cached data, and you lose all your Threat Intelligence (TI) data and previous detections. Next time you run Slips, it will start making detections without all the TI data until downloading the data again. The only solution is to keep the container up between scans.
+The main limitation of running Slips in a Docker is that every time the container stops,
+all files inside the container are deleted, including the Redis database of cached data,
+and you lose all your Threat Intelligence (TI) data and previous detections.
+Next time you run Slips, it will start making detections without all the TI data until downloading the data again.
+The only solution is to keep the container up between scans.
 
 
 ---
 
 ### Building Slips from the Dockerfile
 
-
-First, you need to check which image is suitable for your architecture.
-
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/docker_images.png" width="850px">
-
-
 Before building the docker locally from the Dockerfile, first you should clone Slips repo or download the code directly:
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
-If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
-
-**NOTE**: replace ubuntu-image with the image that fits your architecture
-
 **NOTE**: you have to be in the main Slips directory to build this.
 
+If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
 
 	cd ~/StratosphereLinuxIPS
-	docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
+	docker build --no-cache -t slips -f docker/Dockerfile .
 	docker run -it --rm --net=host slips
-	./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
+	./slips.py -c config/slips.yaml -f dataset/test3-mixed.binetflow
 
-If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
+If you don't have Internet connection from inside your Docker image while building, you may have another set of networks
+defined in your Docker. For that try:
 
-	docker build --network=host --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
+	docker build --network=host --no-cache -t slips -f docker/Dockerfile .
 
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 
@@ -268,8 +171,7 @@ You can also put your own files in the /dataset/ folder and analyze them with Sl
 
 
 Note that some GPUs don't support tensorflow in docker which may cause "Illegal instruction" errors when running slips.
-
-To fix this you can disable all machine learning based modules when running Slips in docker, or run Slips locally.
+You can read more about it [here](https://stratospherelinuxips.readthedocs.io/en/develop/FAQ.html#getting-illegal-instruction-error-when-running-slips)
 
 ---
 
@@ -318,16 +220,18 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 
 	sudo pip3 install -r install/requirements.txt
 
-_Note: for those using a different base image, you need to also install tensorflow==2.16.1 via pip3._
+_Note: for those using a different base image, you need to also install tensorflow==2.16.1r via pip3._
+
 
 As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs v19. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
 
     curl -fsSL https://deb.nodesource.com/setup_21.x |  sudo -E bash - && sudo apt install -y --no-install-recommends nodejs
-    cd modules/kalipso &&  npm install
+    cd modules/kalipso && npm install
 
 ####  Installing Zeek
 
-The last requirement to run Slips is Zeek. Zeek is not directly available on Ubuntu or Debian. To install it, we will first add the repository source to our apt package manager source list. The following two commands are for Ubuntu, check the repositories for the correct version if you are using a different OS:
+The last requirement to run Slips is Zeek. Zeek is not directly available on Ubuntu or Debian. To install it, we will first add the repository source to our apt package manager source list.
+The following two commands are for Ubuntu, check the repositories for the correct version if you are using a different OS:
 
 	echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_18.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list
 

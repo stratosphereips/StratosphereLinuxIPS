@@ -1,13 +1,9 @@
-import base64
-import binascii
 import ipaddress
 import json
-import os
 from dataclasses import asdict
 from typing import Tuple
 
 from slips_files.core.flows.suricata import SuricataFile
-from slips_files.core.flows.zeek import DHCP
 from slips_files.common.slips_utils import utils
 
 
@@ -21,7 +17,6 @@ class Publisher:
         Publish the GW addr in the new_dhcp channel
         :param starttime: epoch starttime
         """
-
         # this channel is used for setting the default gw ip,
         # only 1 flow is enough for that
         # on home networks, the router serves as a simple DHCP server
@@ -71,20 +66,9 @@ class FlowHandler:
         self.publisher = Publisher(self.db)
         self.flow = flow
         self.symbol = symbol_handler
-        self.running_non_stop: bool = self.is_running_non_stop()
+        self.running_non_stop: bool = self.db.is_running_non_stop()
 
-    def is_running_non_stop(self) -> bool:
-        """
-        Slips runs non-stop in case of an interface or a growing zeek dir,
-        it only stops on ctrl+c
-        """
-        if (
-            self.db.get_input_type() == "interface"
-            or self.db.is_growing_zeek_dir()
-        ):
-            return True
-
-    def is_supported_flow(self):
+    def is_supported_flow_type(self):
         supported_types = (
             "ssh",
             "ssl",
@@ -109,21 +93,6 @@ class FlowHandler:
             and self.flow.type_ in supported_types
         )
 
-    def make_sure_theres_a_uid(self):
-        """
-        Generates a uid and adds it to the flow if none is found
-        """
-        # dhcp flows have uids field instead of uid
-        if (type(self.flow) == DHCP and not self.flow.uids) or (
-            type(self.flow) != DHCP and not self.flow.uid
-        ):
-            # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
-            # Zeeks uses human-readable strings in Base62 format, from 112 bits usually.
-            # We do base64 with some bits just because we need a fast unique way
-            self.flow.uid = base64.b64encode(
-                binascii.b2a_hex(os.urandom(9))
-            ).decode("utf-8")
-
     def handle_conn(self):
         role = "Client"
         daddr_as_obj = ipaddress.ip_address(self.flow.daddr)
@@ -134,7 +103,8 @@ class FlowHandler:
         tupleid = f"{daddr_as_obj}-{self.flow.dport}-{self.flow.proto}"
 
         # Compute the symbol for this flow, for this TW, for this profile.
-        # The symbol is based on the 'letters' of the original Startosphere IPS tool
+        # The symbol is based on the 'letters' of the original
+        # Startosphere IPS tool
         symbol: Tuple = self.symbol.compute(self.flow, self.twid, "OutTuples")
 
         # Change symbol for its internal data. Symbol is a tuple and is
@@ -249,7 +219,8 @@ class FlowHandler:
 
     def handle_files(self):
         """
-        Send files.log data to new_downloaded_file channel in the TI module to see if it's malicious
+        Send files.log data to new_downloaded_file channel in the TI module to
+         see if it's malicious
         """
 
         # files slips sees can be of 2 types: suricata or zeek

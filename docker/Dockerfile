@@ -1,28 +1,19 @@
-# this image contains the dependencies of slips
-# to save time in CI
-# This image doesn't have slips installed, we'll be doing this from .github/workflows/CI-staging.yml
-# this image doesn't have node.js requirements and doesn't support kalipso
-# because it's only used for unit testing,
-# and we don't have unit tests for kalipso yet
 FROM ubuntu:22.04
-
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
-
 # Blocking module requirement to avoid using sudo
 ENV IS_IN_A_DOCKER_CONTAINER=True
-
-# When using github actions, we build and run this image but we have no control over
-# the running options, for example we can't use --cap-add NET_ADMIN
-# so all blocking module unit tests will fail because we don't have admin privs
-# we use this environment variable to check if we're running this image (this means slips is
-# running in github actions) we disable the blocking module unit tests
-ENV IS_DEPENDENCY_IMAGE=True
-
 # destionation dir for slips inside the container
-ENV SLIPS_DIR=/Slips
+ENV SLIPS_DIR=/StratosphereLinuxIPS
+
+ENV NODE_VERSION=22.5.0
+ENV NVM_DIR=/root/.nvm
+
+# use bash instead of sh
+SHELL ["/bin/bash", "-c"]
 
 
+# Install wget and add Zeek and redis repositories to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
     ca-certificates \
@@ -44,6 +35,7 @@ RUN apt update && apt install -y --no-install-recommends \
     vim \
     less \
     unzip \
+    golang \
     python3-certifi \
     python3-dev \
     python3-tzlocal \
@@ -56,19 +48,43 @@ RUN apt update && apt install -y --no-install-recommends \
     && apt install -y --no-install-recommends --fix-missing \
     zeek \
     redis \
+    npm \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
     && apt clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash - \
+    && export NVM_DIR="$HOME/.nvm" \
+    && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  \
+    && nvm install 22 \
 
 
-# you should build the image using
-# docker build --no-cache -t slips_dependencies -f docker/dependency-image/Dockerfile .
-# or this step won't be able to find requirements.txt
-COPY install/requirements.txt ${SLIPS_DIR}/install/requirements.txt
+RUN pip3 install --no-cache-dir --upgrade pip
+
+RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
+    && cd python-idmefv2 \
+    && git submodule update --init --recursive \
+    && python3 setup.py install \
+    && cd ..
+
+
+# Switch to Slips installation dir on login.
+WORKDIR ${SLIPS_DIR}
+
+COPY P2P-image $SLIPS_DIR
+
+RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
+    && chmod 774 slips.py \
+    && git init \
+    && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
+    && cd modules/kalipso \
+    && npm install \
+
+
+# build the pigeon and add pigeon to path
+RUN cd p2p4slips \
+    && go build \
+    && export PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/";
 
 WORKDIR ${SLIPS_DIR}
 
-RUN pip3 install -r install/requirements.txt
-
-
-CMD redis-server --daemonize yes && /bin/bash
+CMD /bin/bash

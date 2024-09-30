@@ -7,13 +7,13 @@ from typing import (
     Optional,
 )
 
+from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
-from slips_files.common.abstracts.observer import IObservable
 
 
-class IModule(IObservable, ABC, Process):
+class IModule(ABC, Process):
     """
     An interface for all slips modules
     """
@@ -39,15 +39,18 @@ class IModule(IObservable, ABC, Process):
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.logger = logger
+        self.printer = Printer(self.logger, self.name)
         self.db = DBManager(self.logger, self.output_dir, self.redis_port)
-        IObservable.__init__(self)
-        self.add_observer(self.logger)
+        self.keyboard_int_ctr = 0
         self.init(**kwargs)
         # should after the module's init() so the module has a chance to
         # set its own channels
         # tracks whether or not in the last iteration there was a msg
         # received in that channel
         self.channel_tracker: Dict[str, dict] = self.init_channel_tracker()
+
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     @property
     @abstractmethod
@@ -120,36 +123,6 @@ class IModule(IObservable, ABC, Process):
             return False
         return True
 
-    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text
-        by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format
-                    like 'Test {}'.format('here')
-        :param log_to_logfiles_only: logs to slips.log only, not to cli
-        """
-
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": str(text),
-                "verbose": verbose,
-                "debug": debug,
-                "log_to_logfiles_only": log_to_logfiles_only,
-            }
-        )
-
     def shutdown_gracefully(self):
         """
         Tells slips.py that this module is
@@ -201,7 +174,6 @@ class IModule(IObservable, ABC, Process):
             self.print_traceback()
             return True
 
-        keyboard_int_ctr = 0
         while True:
             try:
                 if self.should_stop():
@@ -215,10 +187,10 @@ class IModule(IObservable, ABC, Process):
                     self.shutdown_gracefully()
 
             except KeyboardInterrupt:
-                keyboard_int_ctr += 1
+                self.keyboard_int_ctr += 1
 
-                if keyboard_int_ctr >= 2:
-                    # on the second ctrl+c Slips immediately stop
+                if self.keyboard_int_ctr >= 2:
+                    # on the second ctrl+c the module immediately stops
                     return True
 
                 # on the first ctrl + C keep looping until the should_stop

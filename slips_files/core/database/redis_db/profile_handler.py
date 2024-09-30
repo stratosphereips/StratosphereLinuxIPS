@@ -11,15 +11,11 @@ from typing import (
     List,
     Set,
 )
-
 import redis
 import validators
 
-from slips_files.common.abstracts.observer import IObservable
-from slips_files.core.output import Output
 
-
-class ProfileHandler(IObservable):
+class ProfileHandler:
     """
     Helper class for the Redis class in database.py
     Contains all the logic related to flows, profiles and timewindows
@@ -27,41 +23,10 @@ class ProfileHandler(IObservable):
 
     name = "DB"
 
-    def __init__(self, logger: Output):
-        IObservable.__init__(self)
-        self.logger = logger
-        self.add_observer(self.logger)
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like f'Test {here}'
-        """
-
-        self.notify_observers(
-            {
-                "from": self.name,
-                "txt": text,
-                "verbose": verbose,
-                "debug": debug,
-            }
-        )
-
     def is_doh_server(self, ip: str) -> bool:
         """returns whether the given ip is a DoH server"""
         info: dict = self.get_ip_info(ip)
-        return info.get("is_doh_server", False)
+        return info.get("is_doh_server", False) if info else False
 
     def get_outtuples_from_profile_tw(self, profileid, twid):
         """Get the out tuples"""
@@ -153,40 +118,17 @@ class ProfileHandler(IObservable):
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
-        http_flow_dict = {
-            "uid": flow.uid,
-            "type": flow.type_,
-            "method": flow.method,
-            "host": flow.host,
-            "uri": flow.uri,
-            "version": flow.version,
-            "user_agent": flow.user_agent,
-            "request_body_len": flow.request_body_len,
-            "response_body_len": flow.response_body_len,
-            "status_code": flow.status_code,
-            "status_msg": flow.status_msg,
-            "resp_mime_types": flow.resp_mime_types,
-            "resp_fuids": flow.resp_fuids,
-            "stime": flow.starttime,
-            "daddr": flow.daddr,
-        }
         # Convert to json string
-        http_flow_dict = json.dumps(http_flow_dict)
         http_flow = {
             "profileid": profileid,
             "twid": twid,
-            "flow": http_flow_dict,
-            "stime": flow.starttime,
+            "flow": asdict(flow),
         }
         to_send = json.dumps(http_flow)
         self.publish("new_http", to_send)
         self.publish("new_url", to_send)
 
-        self.print(f"Adding HTTP flow to DB: {http_flow_dict}", 3, 0)
-
-        http_flow.pop("flow", None)
-        http_flow["uid"] = flow.uid
-
+        self.print(f"Adding HTTP flow to DB: {flow}", 3, 0)
         # Check if the host domain AND the url is detected by the threat
         # intelligence.
         # not all flows have a host value so don't send empty hosts to ti
@@ -230,29 +172,10 @@ class ProfileHandler(IObservable):
         The idea is that from the flow.uid of a netflow, you can access which
          other type of info is related to that flow.uid
         """
-        dns_flow = {
-            "flow.uid": flow.uid,
-            "type": flow.type_,
-            "query": flow.query,
-            "qclass_name": flow.qclass_name,
-            "flow.qtype_name": flow.qtype_name,
-            "rcode_name": flow.rcode_name,
-            "answers": flow.answers,
-            "ttls": flow.TTLs,
-            "stime": flow.starttime,
-        }
-
-        dns_flow = json.dumps(dns_flow)
-        # TODO we should just send the DNS obj!
         to_send = {
             "profileid": profileid,
             "twid": twid,
-            "flow": dns_flow,
-            "stime": flow.starttime,
-            "uid": flow.uid,
-            "rcode_name": flow.rcode_name,
-            "daddr": flow.daddr,
-            "answers": flow.answers,
+            "flow": asdict(flow),
         }
 
         to_send = json.dumps(to_send)
@@ -703,9 +626,7 @@ class ProfileHandler(IObservable):
                 flow.saddr,
                 profileid,
                 twid,
-                flow.proto.upper(),
-                flow.starttime,
-                flow.uid,
+                flow,
                 "srcip",
                 daddr=flow.daddr,
             )
@@ -713,9 +634,7 @@ class ProfileHandler(IObservable):
                 flow.daddr,
                 profileid,
                 twid,
-                flow.proto.upper(),
-                flow.starttime,
-                flow.uid,
+                flow,
                 "dstip",
             )
 
@@ -767,7 +686,7 @@ class ProfileHandler(IObservable):
             contacted_ips[daddr] = uid
         return contacted_ips
 
-    def markProfileTWAsBlocked(self, profileid, twid):
+    def mark_profile_and_timewindow_as_blocked(self, profileid, twid):
         """Add this profile and tw to the list of blocked
         a profile is only blocked if it was blocked using the user's
         firewall, not if it just generated an alert
@@ -802,50 +721,23 @@ class ProfileHandler(IObservable):
         label="",
     ):
         """
-        Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
+        Function to add a flow by interpreting the data. The flow is added to
+        the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
-        : param new_profile_added : is set to True for everytime we see a new srcaddr
         """
-        summary_state = self.get_final_state_from_flags(flow.state, flow.pkts)
-        flow_dict = {
-            "ts": flow.starttime,
-            "dur": flow.dur,
-            "saddr": flow.saddr,
-            "sport": flow.sport,
-            "daddr": flow.daddr,
-            "dport": flow.dport,
-            "proto": flow.proto,
-            "origstate": flow.state,
-            "state": summary_state,
-            "pkts": flow.pkts,
-            "allbytes": flow.bytes,
-            "spkts": flow.spkts,
-            "sbytes": flow.sbytes,
-            "appproto": flow.appproto,
-            "smac": flow.smac,
-            "dmac": flow.dmac,
-            "label": label,
-            "flow_type": flow.type_,
-            "module_labels": {},
-        }
-
-        # Convert to json string
-        flow_dict = json.dumps(flow_dict)
-        # The key was not there before. So this flow is not repeated
-        # Store the label in our uniq set, and increment it by 1
         if label:
             self.r.zincrby("labels", 1, label)
 
-        flow_dict = {flow.uid: flow_dict}
-
-        # Get the dictionary and convert to json string
-        flow_dict = json.dumps(flow_dict)
-        # Prepare the data to publish.
         to_send = {
             "profileid": profileid,
             "twid": twid,
-            "flow": flow_dict,
+            "flow": asdict(flow),
             "stime": flow.starttime,
+            "interpreted_state": self.get_final_state_from_flags(
+                flow.state, flow.pkts
+            ),
+            "label": label,
+            "module_labels": {},
         }
         to_send = json.dumps(to_send)
 
@@ -854,7 +746,8 @@ class ProfileHandler(IObservable):
             self.set_input_metadata({"file_start": flow.starttime})
             self.first_flow = False
 
-        # dont send arp flows in this channel, they have their own new_arp channel
+        # dont send arp flows in this channel, they have their own
+        # new_arp channel
         if flow.type_ != "arp":
             self.publish("new_flow", to_send)
         return True
@@ -903,36 +796,14 @@ class ProfileHandler(IObservable):
         The idea is that from the uid of a netflow, you can access which
         other type of info is related to that uid
         """
-        ssh_flow_dict = {
-            "uid": flow.uid,
-            "type": flow.type_,
-            "version": flow.version,
-            "auth_attempts": flow.auth_attempts,
-            "auth_success": flow.auth_success,
-            "client": flow.client,
-            "server": flow.server,
-            "cipher_alg": flow.cipher_alg,
-            "mac_alg": flow.mac_alg,
-            "compression_alg": flow.compression_alg,
-            "kex_alg": flow.kex_alg,
-            "host_key_alg": flow.host_key_alg,
-            "host_key": flow.host_key,
-            "stime": flow.starttime,
-            "daddr": flow.daddr,
-        }
-        # Convert to json string
-        ssh_flow_dict = json.dumps(ssh_flow_dict)
-
         to_send = {
             "profileid": profileid,
             "twid": twid,
-            "flow": ssh_flow_dict,
-            "stime": flow.starttime,
-            "uid": flow.uid,
+            "flow": asdict(flow),
         }
         to_send = json.dumps(to_send)
         self.publish("new_ssh", to_send)
-        self.print(f"Adding SSH flow to DB: {ssh_flow_dict}", 3, 0)
+        self.print(f"Adding SSH flow to DB: {flow}", 3, 0)
         self.give_threat_intelligence(
             profileid,
             twid,
@@ -950,30 +821,14 @@ class ProfileHandler(IObservable):
         flow,
     ):
         """ " Send notice.log data to new_notice channel to look for self-signed certificates"""
-        notice_flow = {
-            "type": "notice",
-            "daddr": flow.daddr,
-            "sport": flow.sport,
-            "dport": flow.dport,
-            "note": flow.note,
-            "msg": flow.msg,
-            "scanned_port": flow.scanned_port,
-            "scanning_ip": flow.scanning_ip,
-            "stime": flow.starttime,
-        }
-        notice_flow = json.dumps(
-            notice_flow
-        )  # this is going to be sent insidethe to_send dict
         to_send = {
             "profileid": profileid,
             "twid": twid,
-            "flow": notice_flow,
-            "stime": flow.starttime,
-            "uid": flow.uid,
+            "flow": asdict(flow),
         }
         to_send = json.dumps(to_send)
         self.publish("new_notice", to_send)
-        self.print(f"Adding notice flow to DB: {notice_flow}", 3, 0)
+        self.print(f"Adding notice flow to DB: {flow}", 3, 0)
         self.give_threat_intelligence(
             profileid,
             twid,
@@ -992,40 +847,12 @@ class ProfileHandler(IObservable):
         The idea is that from the uid of a netflow, you can access which other
          type of info is related to that uid
         """
-        ssl_flow = {
-            "uid": flow.uid,
-            "type": flow.type_,
-            "version": flow.version,
-            "cipher": flow.cipher,
-            "resumed": flow.resumed,
-            "established": flow.established,
-            "cert_chain_fuids": flow.cert_chain_fuids,
-            "client_cert_chain_fuids": flow.client_cert_chain_fuids,
-            "subject": flow.subject,
-            "issuer": flow.issuer,
-            "validation_status": flow.validation_status,
-            "curve": flow.curve,
-            "server_name": flow.server_name,
-            "daddr": flow.daddr,
-            "dport": flow.dport,
-            "stime": flow.starttime,
-            "ja3": flow.ja3,
-            "ja3s": flow.ja3s,
-            "is_DoH": flow.is_DoH,
-        }
-
-        ssl_flow = json.dumps(ssl_flow)
-        to_send = {
-            "profileid": profileid,
-            "twid": twid,
-            "flow": ssl_flow,
-            "stime": flow.starttime,
-        }
+        to_send = {"profileid": profileid, "twid": twid, "flow": asdict(flow)}
         to_send = json.dumps(to_send)
         self.publish("new_ssl", to_send)
-        self.print(f"Adding SSL flow to DB: {ssl_flow}", 3, 0)
+        self.print(f"Adding SSL flow to DB: {flow}", 3, 0)
         # Check if the server_name (SNI) is detected by the threat intelligence.
-        # Empty field in the end, cause we have extrafield for the IP.
+        # Empty field in the end, cause we have extra field for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
         if not flow.server_name:
             return False
@@ -1534,14 +1361,12 @@ class ProfileHandler(IObservable):
     def get_first_flow_time(self) -> Optional[str]:
         return self.r.hget("analysis", "file_start")
 
-    def add_profile(self, profileid, starttime, duration):
+    def add_profile(self, profileid, starttime):
         """
         Add a new profile to the DB. Both the list of profiles and the
          hashmap of profile data
         Profiles are stored in two structures. A list of profiles (index)
          and individual hashmaps for each profile (like a table)
-        Duration is only needed for registration purposes in the profile.
-        Nothing operational
         """
         try:
             if self.r.sismember("profiles", profileid):
@@ -1555,7 +1380,7 @@ class ProfileHandler(IObservable):
             # Add the start time of profile
             self.r.hset(profileid, "starttime", starttime)
             # For now duration of the TW is fixed
-            self.r.hset(profileid, "duration", duration)
+            self.r.hset(profileid, "duration", self.width)
             # When a new profiled is created assign threat level = 0
             # and confidence = 0.05
             confidence = 0.05

@@ -2,11 +2,13 @@
 Data classes for all types of zeek flows
 """
 
-from dataclasses import dataclass
+from dataclasses import (
+    dataclass,
+    field,
+)
 from typing import List
 from datetime import timedelta
 from slips_files.common.slips_utils import utils
-
 
 
 @dataclass
@@ -39,7 +41,7 @@ class Conn:
     dir_: str = "->"
 
     def __post_init__(self) -> None:
-        endtime = str(self.starttime) + str(timedelta(seconds=self.dur))
+        endtime = str(self.starttime) + str(timedelta(seconds=float(self.dur)))
         self.endtime: str = endtime
         self.pkts: int = self.spkts + self.dpkts
         self.bytes: int = self.sbytes + self.dbytes
@@ -61,7 +63,7 @@ class DNS:
     qtype_name: str
     rcode_name: str
 
-    answers: str
+    answers: List[str]
     TTLs: str
 
     type_: str = "dns"
@@ -70,7 +72,7 @@ class DNS:
         # If the answer is only 1, Zeek gives a string
         # so convert to a list
         self.answers = (
-            [self.answers] if type(self.answers) == str else self.answers
+            [self.answers] if isinstance(self.answers, str) else self.answers
         )
 
 
@@ -225,7 +227,6 @@ class Tunnel:
 @dataclass
 class Notice:
     starttime: str
-    uid: str
     saddr: str
     daddr: str
 
@@ -240,11 +241,14 @@ class Notice:
 
     # TODO srsly what is this?
     dst: str
-
+    # every evidence needs a uid, notice.log flows dont have one by
+    # default, slips adds one to them to be able to deal with it.
     type_: str = "notice"
+    uid: str = field(default_factory=utils.generate_uid)
 
     def __post_init__(self) -> None:
-        # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
+        # portscan notices don't have id.orig_h or id.resp_h
+        # fields, instead they have src and dst
         if not self.saddr:
             self.saddr = self.scanning_ip
 
@@ -283,12 +287,12 @@ class Files:
     type_: str = "files"
 
     def __post_init__(self) -> None:
-        if type(self.tx_hosts) != list:
+        if not isinstance(self.tx_hosts, list):
             self.tx_hosts = [self.tx_hosts]
         if saddr := self.tx_hosts[0]:
             self.saddr = saddr
 
-        if type(self.rx_hosts) != list:
+        if not isinstance(self.rx_hosts, list):
             self.rx_hosts = [self.rx_hosts]
 
         if daddr := self.rx_hosts[0]:

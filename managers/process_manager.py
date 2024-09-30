@@ -96,11 +96,7 @@ class ProcessManager:
         ):
             return False
 
-        if (
-            self.main.args.growing
-            or self.main.args.input_module
-            or self.main.args.testing
-        ):
+        if self.main.args.growing or self.main.args.input_module:
             return False
 
         return True
@@ -307,7 +303,6 @@ class ProcessManager:
                 )
                 print(traceback.format_exc())
                 failed_to_load_modules += 1
-
                 continue
 
             # Walk through all members of currently imported modules.
@@ -350,12 +345,12 @@ class ProcessManager:
         for module_name in modules_to_call:
             module_class = modules_to_call[module_name]["obj"]
             if module_name == "Progress Bar":
-                # started it manually in main.py
-                # otherwise we miss some of the print right when slips
+                # started it manually in main.py to be able to start it
+                # very early.
+                # otherwise we miss some of the prints right when slips
                 # starts, because when the pbar is supported, it handles
                 # all the printing
                 continue
-
             module = module_class(
                 self.main.logger,
                 self.main.args.output,

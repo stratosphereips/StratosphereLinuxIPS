@@ -1,5 +1,8 @@
 """Unit test for modules/flowalerts/dns.py"""
 
+from dataclasses import asdict
+
+from slips_files.core.flows.zeek import DNS
 from tests.module_factory import ModuleFactory
 from numpy import arange
 from unittest.mock import patch, Mock
@@ -28,10 +31,19 @@ dst_profileid = f"profile_{daddr}"
 )
 def test_should_detect_dns_without_conn(domain, rcode_name, expected_result):
     dns = ModuleFactory().create_dns_analyzer_obj()
-    assert (
-        dns.should_detect_dns_without_conn(domain, rcode_name)
-        == expected_result
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="",
+        daddr="",
+        query=domain,
+        qclass_name="",
+        qtype_name="",
+        rcode_name=rcode_name,
+        answers="",
+        TTLs="",
     )
+    assert dns.should_detect_dns_without_conn(flow) == expected_result
 
 
 @pytest.mark.parametrize(
@@ -85,16 +97,24 @@ def test_is_cname_contacted(
 def test_detect_young_domains(
     domain, answers, age, should_detect, expected_result
 ):
+
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.should_detect_young_domain = Mock(return_value=should_detect)
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="192.168.1.5",
+        daddr="1.1.1.1",
+        query=domain,
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers=answers,
+        TTLs="",
+    )
     dns.db.get_domain_data.return_value = {"Age": age}
 
-    assert (
-        dns.detect_young_domains(
-            domain, answers, timestamp, profileid, twid, uid
-        )
-        is expected_result
-    )
+    assert dns.detect_young_domains(twid, flow) == expected_result
 
 
 @pytest.mark.parametrize(
@@ -112,11 +132,19 @@ def test_detect_young_domains_other_cases(
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.should_detect_young_domain = Mock(return_value=True)
     dns.db.get_domain_data.return_value = domain_data
-
-    result = dns.detect_young_domains(
-        domain, answers, timestamp, profileid, twid, uid
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="192.168.1.5",
+        daddr="1.1.1.1",
+        query=domain,
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers=answers,
+        TTLs="",
     )
-
+    result = dns.detect_young_domains(twid, flow)
     assert result is expected_result
     dns.should_detect_young_domain.assert_called_once_with(domain)
     dns.db.get_domain_data.assert_called_once_with(domain)
@@ -147,7 +175,7 @@ def test_extract_ips_from_dns_answers():
     ],
 )
 def test_is_connection_made_by_different_version(
-    mocker, contacted_ips, other_ip, expected_result
+    contacted_ips, other_ip, expected_result
 ):
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.db.get_all_contacted_ips_in_profileid_twid.return_value = contacted_ips
@@ -194,16 +222,20 @@ def test_check_invalid_dns_answers_call_counts(
     expected_db_deletes,
 ):
     dns = ModuleFactory().create_dns_analyzer_obj()
-    profileid, twid, timestamp, uid = (
-        "profileid_1.1.1.1",
-        "timewindow1",
-        1234567890,
-        "uid1",
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="1.1.1.1",
+        daddr="192.168.1.5",
+        query=domain,
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers=answers,
+        TTLs="",
     )
     dns.set_evidence.invalid_dns_answer = Mock()
-    dns.check_invalid_dns_answers(
-        domain, answers, profileid, twid, timestamp, uid
-    )
+    dns.check_invalid_dns_answers(twid, flow)
 
     assert (
         dns.set_evidence.invalid_dns_answer.call_count
@@ -214,17 +246,26 @@ def test_check_invalid_dns_answers_call_counts(
 
 def test_check_invalid_dns_answers_with_invalid_answer():
     dns = ModuleFactory().create_dns_analyzer_obj()
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="1.1.1.1",
+        daddr="192.168.1.5",
+        query="example.com",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers=["127.0.0.1"],
+        TTLs="",
+    )
     dns.set_evidence.invalid_dns_answer = Mock()
     dns.db.delete_dns_resolution = Mock()
-    domain, answers = "example.com", ["127.0.0.1"]
-    dns.check_invalid_dns_answers(
-        domain, answers, profileid, twid, timestamp, uid
-    )
+    dns.check_invalid_dns_answers(twid, flow)
 
     dns.set_evidence.invalid_dns_answer.assert_called_once_with(
-        domain, answers[0], profileid, twid, timestamp, uid
+        twid, flow, flow.answers[0]
     )
-    dns.db.delete_dns_resolution.assert_called_once_with(answers[0])
+    dns.db.delete_dns_resolution.assert_called_once_with(flow.answers[0])
 
 
 @pytest.mark.parametrize(
@@ -255,28 +296,21 @@ def test_check_dns_arpa_scan(domains, timestamps, expected_result):
     dns.arpa_scan_threshold = 10
 
     for i, (domain, ts) in enumerate(zip(domains, timestamps)):
-        is_arpa_scan = dns.check_dns_arpa_scan(
-            domain, timestamp + ts, profileid, twid, f"uid_{i}"
+        flow = DNS(
+            starttime=ts,
+            uid=f"uid_{i}",
+            saddr="1.1.1.1",
+            daddr="192.168.1.5",
+            query=domain,
+            qclass_name="",
+            qtype_name="",
+            rcode_name="",
+            answers=["127.0.0.1"],
+            TTLs="",
         )
+        is_arpa_scan = dns.check_dns_arpa_scan(profileid, twid, flow)
 
     assert is_arpa_scan == expected_result
-
-
-@pytest.mark.parametrize(
-    "test_ip, mock_query_side_effect, expected_result",
-    [
-        # Testcase 1: Successful DNS query, server found
-        ("8.8.8.8", None, True),
-        # Testcase 2: DNS query raises exception, not a server
-        ("192.168.1.100", Exception("DNS timeout error"), False),
-    ],
-)
-def test_is_dns_server(test_ip, mock_query_side_effect, expected_result):
-    dns = ModuleFactory().create_dns_analyzer_obj()
-    with patch("dns.query.udp", side_effect=mock_query_side_effect):
-        result = dns.is_dns_server(test_ip)
-
-    assert result == expected_result
 
 
 def test_read_configuration():
@@ -296,28 +330,30 @@ def test_read_configuration():
 def test_check_high_entropy_dns_answers_with_call():
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.shannon_entropy_threshold = 4.0
-
-    domain = "example.com"
-    answers = ["A 1.2.3.4", "TXT abcdefghijklmnopqrstuvwxyz1234567890"]
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1243",
+        saddr="1.1.1.1",
+        daddr="192.168.1.5",
+        query="example.com",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers=["A 1.2.3.4", "TXT abcdefghijklmnopqrstuvwxyz1234567890"],
+        TTLs="",
+    )
     expected_entropy = 4.5
     dns.estimate_shannon_entropy = Mock()
     dns.estimate_shannon_entropy.return_value = expected_entropy
 
     dns.set_evidence.suspicious_dns_answer = Mock()
 
-    dns.check_high_entropy_dns_answers(
-        domain, answers, daddr, profileid, twid, timestamp, uid
-    )
-
+    dns.check_high_entropy_dns_answers(twid, flow)
     dns.set_evidence.suspicious_dns_answer.assert_called_once_with(
-        domain,
-        answers[1],
-        expected_entropy,
-        daddr,
-        profileid,
         twid,
-        timestamp,
-        uid,
+        flow,
+        expected_entropy,
+        flow.answers[1],
     )
     assert dns.estimate_shannon_entropy.call_count == 1
 
@@ -347,14 +383,22 @@ def test_check_high_entropy_dns_answers_no_call(
     dns.estimate_shannon_entropy = Mock()
     dns.estimate_shannon_entropy.return_value = expected_entropy
     dns.set_evidence.suspicious_dns_answer = Mock()
-
-    dns.check_high_entropy_dns_answers(
-        domain, answers, daddr, profileid, twid, timestamp, uid
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1243",
+        saddr="1.1.1.1",
+        daddr="192.168.1.5",
+        query="example.com",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers=["A 1.2.3.4", "TXT abcdefghijklmnopqrstuvwxyz1234567890"],
+        TTLs="",
     )
+    dns.check_high_entropy_dns_answers(twid, flow)
 
     assert dns.set_evidence.suspicious_dns_answer.call_count == 0
-    expected_estimate_calls = sum("TXT" in answer for answer in answers)
-    assert dns.estimate_shannon_entropy.call_count == expected_estimate_calls
+    assert dns.estimate_shannon_entropy.call_count == 1
 
 
 @pytest.mark.parametrize(
@@ -365,20 +409,24 @@ def test_check_high_entropy_dns_answers_no_call(
             {
                 "data": json.dumps(
                     {
+                        "flow": asdict(
+                            DNS(
+                                starttime="1726568479.5997488",
+                                uid="1243",
+                                saddr="1.1.1.1",
+                                daddr="192.168.1.5",
+                                query="example.com",
+                                qclass_name="",
+                                qtype_name="",
+                                rcode_name="NOERROR",
+                                answers=["192.168.1.1"],
+                                TTLs="",
+                            )
+                        ),
                         "profileid": profileid,
                         "twid": twid,
-                        "uid": uid,
-                        "daddr": daddr,
-                        "stime": timestamp,
-                        "flow": json.dumps(
-                            {
-                                "query": "example.com",
-                                "answers": ["192.168.1.1"],
-                                "rcode_name": "NOERROR",
-                            }
-                        ),
                     }
-                )
+                ),
             },
             {
                 "check_dns_without_connection": 1,
@@ -389,31 +437,9 @@ def test_check_high_entropy_dns_answers_no_call(
                 "check_dns_arpa_scan": 1,
             },
         ),
-        (
-            # Testcase2: Missing DNS answers
-            {
-                "data": json.dumps(
-                    {
-                        "profileid": profileid,
-                        "twid": twid,
-                        "uid": uid,
-                        "stime": timestamp,
-                        "flow": json.dumps({"query": "", "answers": []}),
-                    }
-                )
-            },
-            {
-                "check_dns_without_connection": 0,
-                "check_high_entropy_dns_answers": 1,
-                "check_invalid_dns_answers": 1,
-                "detect_dga": 1,
-                "detect_young_domains": 1,
-                "check_dns_arpa_scan": 1,
-            },
-        ),
     ],
 )
-def test_analyze_new_flow_msg(mocker, test_case, expected_calls):
+def test_analyze_new_flow_msg(test_case, expected_calls):
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.connections_checked_in_dns_conn_timer_thread = []
     dns.check_dns_without_connection = Mock()
@@ -511,21 +537,30 @@ def test_detect_dga_no_alert(
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.nxdomains = initial_nxdomains
     dns.nxdomains_threshold = 10
-
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid=uid,
+        saddr="1.1.1.1",
+        daddr="192.168.1.5",
+        query=query,
+        qclass_name="",
+        qtype_name="",
+        rcode_name=rcode_name,
+        answers=["127.0.0.1"],
+        TTLs="",
+    )
     dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock()
     dns.flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = (
         False
     )
     dns.set_evidence.dga = Mock()
 
-    result = dns.detect_dga(rcode_name, query, timestamp, profileid, twid, uid)
-
-    assert result == expected_result
+    assert dns.detect_dga(profileid, twid, flow) == expected_result
     assert dns.nxdomains == expected_nxdomains
     dns.set_evidence.dga.assert_not_called()
 
 
-def test_detect_dga_alert(mocker):
+def test_detect_dga_alert():
     dns = ModuleFactory().create_dns_analyzer_obj()
 
     initial_nxdomains = {
@@ -551,21 +586,28 @@ def test_detect_dga_alert(mocker):
     dns.flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = (
         False
     )
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid=uid,
+        saddr="1.1.1.1",
+        daddr="192.168.1.5",
+        query="example10.com",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="NXDOMAIN",
+        answers=["127.0.0.1"],
+        TTLs="",
+    )
 
     dns.set_evidence.dga = Mock()
-
-    result = dns.detect_dga(
-        "NXDOMAIN", "example10.com", timestamp, profileid, twid, uid
-    )
+    result = dns.detect_dga(profileid, twid, flow)
     expected_result = True
     assert result == expected_result
     assert dns.nxdomains == {f"{profileid}_{twid}": ([], [])}
-    dns.set_evidence.dga.assert_called_once_with(
-        10, timestamp, profileid, twid, [uid] * 10
-    )
+    dns.set_evidence.dga.assert_called_once_with(twid, flow, 10, [uid] * 10)
 
 
-def test_detect_dga_whitelisted(mocker):
+def test_detect_dga_whitelisted():
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.nxdomains = {}
     dns.nxdomains_threshold = 10
@@ -574,11 +616,19 @@ def test_detect_dga_whitelisted(mocker):
     dns.flowalerts.whitelist.domain_analyzer.is_whitelisted.return_value = True
 
     dns.set_evidence.dga = Mock()
-
-    result = dns.detect_dga(
-        "NXDOMAIN", "example.com", timestamp, profileid, twid, uid
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid=uid,
+        saddr="1.1.1.1",
+        daddr="192.168.1.5",
+        query="example.com",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="NXDOMAIN",
+        answers=["127.0.0.1"],
+        TTLs="",
     )
-
+    result = dns.detect_dga(profileid, twid, flow)
     expected_result = False
     assert result == expected_result
     assert dns.nxdomains == {}
@@ -594,7 +644,7 @@ def test_detect_dga_whitelisted(mocker):
     ],
     ids=["arpa_domain", "local_domain"],
 )
-def test_detect_dga_special_domains(mocker, query, expected_result):
+def test_detect_dga_special_domains(query, expected_result):
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.nxdomains = {}
     dns.nxdomains_threshold = 10
@@ -605,8 +655,19 @@ def test_detect_dga_special_domains(mocker, query, expected_result):
     )
 
     dns.set_evidence.dga = Mock()
-
-    result = dns.detect_dga("NXDOMAIN", query, timestamp, profileid, twid, uid)
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid=uid,
+        saddr="1.1.1.1",
+        daddr="192.168.1.5",
+        query=query,
+        qclass_name="",
+        qtype_name="",
+        rcode_name="NXDOMAIN",
+        answers=["127.0.0.1"],
+        TTLs="",
+    )
+    result = dns.detect_dga(profileid, twid, flow)
 
     assert result == expected_result
     assert dns.nxdomains == {}

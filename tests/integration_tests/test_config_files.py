@@ -95,7 +95,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     # test label=malicious
     assert int(database.get_label_count("malicious")) > 370
     # test disable
-    for module in ["template", "ensembling", "Flow ML Detection"]:
+    for module in ["template", "Flow ML Detection"]:
         print(f"Checking if {module} is disabled")
         assert module in database.get_disabled_modules()
     print("Deleting the output directory")
