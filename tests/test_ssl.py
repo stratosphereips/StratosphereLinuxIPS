@@ -1,7 +1,10 @@
 """Unit test for modules/flowalerts/ssl.py"""
 
 from dataclasses import asdict
-from unittest.mock import Mock
+from unittest.mock import (
+    Mock,
+    patch,
+)
 
 from slips_files.core.flows.zeek import (
     SSL,
@@ -189,7 +192,7 @@ def test_detect_doh(mocker, is_doh, expected_calls):
         ("www.example.com", 15000, False),
     ],
 )
-def test_check_pastebin_download(
+async def test_check_pastebin_download(
     mocker,
     server_name,
     downloaded_bytes,
@@ -201,7 +204,6 @@ def test_check_pastebin_download(
         "modules.flowalerts.set_evidence.SetEvidnceHelper.pastebin_download"
     )
 
-    conn_log_flow = {"resp_bytes": downloaded_bytes}
     flow = SSL(
         starttime="1726593782.8840969",
         uid="123",
@@ -224,7 +226,12 @@ def test_check_pastebin_download(
         ja3s="",
         is_DoH="",
     )
-    ssl.check_pastebin_download(flow, conn_log_flow, twid)
+    conn_log_flow = {"resp_bytes": downloaded_bytes}
+    with patch(
+        "slips_files.common.slips_utils.utils.get_original_conn_flow"
+    ) as mock_get_original_conn_flow:
+        mock_get_original_conn_flow.side_effect = [None, conn_log_flow]
+        await ssl.check_pastebin_download(twid, flow)
 
     assert mock_set_evidence.call_count == expected_call_count
 
@@ -353,11 +360,8 @@ def test_check_non_ssl_port_443_conns(
     assert mock_set_evidence.call_count == expected_call_count
 
 
-def test_analyze_new_ssl_msg(mocker):
+async def test_analyze_new_ssl_msg(mocker):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
-    mock_pending_ssl_flows_put = mocker.patch.object(
-        ssl.pending_ssl_flows, "put"
-    )
     mock_check_self_signed_certs = mocker.patch.object(
         ssl, "check_self_signed_certs"
     )
@@ -403,20 +407,9 @@ def test_analyze_new_ssl_msg(mocker):
         ),
     }
 
-    ssl.analyze(msg)
-
-    mock_pending_ssl_flows_put.assert_called_once_with(
-        (
-            flow,
-            "profile_192.168.1.1",
-            "timewindow1",
-        )
-    )
-
+    await ssl.analyze(msg)
     mock_check_self_signed_certs.assert_called_once_with("timewindow1", flow)
-
     mock_detect_malicious_ja3.assert_called_once_with("timewindow1", flow)
-
     mock_detect_incompatible_cn.assert_called_once_with(
         "profile_192.168.1.1", "timewindow1", flow
     )
@@ -424,7 +417,7 @@ def test_analyze_new_ssl_msg(mocker):
     mock_detect_doh.assert_called_once_with("timewindow1", flow)
 
 
-def test_analyze_new_flow_msg(mocker):
+async def test_analyze_new_flow_msg(mocker):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_check_non_ssl_port_443_conns = mocker.patch.object(
         ssl, "check_non_ssl_port_443_conns"
@@ -460,21 +453,18 @@ def test_analyze_new_flow_msg(mocker):
         ),
     }
 
-    ssl.analyze(msg)
+    await ssl.analyze(msg)
 
     mock_check_non_ssl_port_443_conns.assert_called_once_with(
         "timewindow1", flow
     )
 
 
-def test_analyze_no_messages(
+async def test_analyze_no_messages(
     mocker,
 ):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
 
-    mock_pending_ssl_flows_put = mocker.patch.object(
-        ssl.pending_ssl_flows, "put"
-    )
     mock_check_self_signed_certs = mocker.patch.object(
         ssl, "check_self_signed_certs"
     )
@@ -489,9 +479,8 @@ def test_analyze_no_messages(
         ssl, "check_non_ssl_port_443_conns"
     )
 
-    ssl.analyze({})
+    await ssl.analyze({})
 
-    mock_pending_ssl_flows_put.assert_not_called()
     mock_check_self_signed_certs.assert_not_called()
     mock_detect_malicious_ja3.assert_not_called()
     mock_detect_incompatible_cn.assert_not_called()

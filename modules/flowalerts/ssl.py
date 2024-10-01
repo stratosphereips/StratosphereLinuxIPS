@@ -40,7 +40,7 @@ class SSL(IFlowalertsAnalyzer):
         if "pastebin" not in ssl_flow.server_name:
             return False
 
-        conn_log_flow = self.utils.get_original_conn_flow(ssl_flow, self.db)
+        conn_log_flow = utils.get_original_conn_flow(ssl_flow, self.db)
         if not conn_log_flow:
             await asyncio.sleep(40)
             conn_log_flow = utils.get_original_conn_flow(ssl_flow, self.db)
