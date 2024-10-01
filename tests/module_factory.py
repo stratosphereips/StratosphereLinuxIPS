@@ -217,13 +217,7 @@ class ModuleFactory:
     @patch(DB_MANAGER, name="mock_db")
     def create_ssl_analyzer_obj(self, mock_db):
         flowalerts = self.create_flowalerts_obj()
-        with patch(
-            "modules.flowalerts.ssl.SSL"
-            ".wait_for_ssl_flows_to_appear_in_connlog",
-            return_value=Mock(),
-        ):
-            ssl = SSL(flowalerts.db, flowalerts=flowalerts)
-        return ssl
+        return SSL(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_ssh_analyzer_obj(self, mock_db):
@@ -608,4 +602,3 @@ class ModuleFactory:
             termination_event,
         )
         return riskiq
-
