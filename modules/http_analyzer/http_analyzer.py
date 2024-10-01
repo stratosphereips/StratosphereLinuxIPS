@@ -196,9 +196,7 @@ class HTTPAnalyzer(IModule):
         self.connections_counter[host] = ([], 0)
         return True
 
-    def set_evidence_incompatible_user_agent(
-        self, profileid, twid, flow, user_agent
-    ):
+    def set_evidence_incompatible_user_agent(self, twid, flow, user_agent):
 
         os_type: str = user_agent.get("os_type", "").lower()
         os_name: str = user_agent.get("os_name", "").lower()
@@ -300,9 +298,7 @@ class HTTPAnalyzer(IModule):
         browser = user_agent.get("browser", "").lower()
         # user_agent = user_agent.get('user_agent', '')
         if "safari" in browser and "apple" not in vendor:
-            self.set_evidence_incompatible_user_agent(
-                profileid, twid, flow, user_agent
-            )
+            self.set_evidence_incompatible_user_agent(twid, flow, user_agent)
             return True
 
         # make sure all of them are lowercase
@@ -344,7 +340,7 @@ class HTTPAnalyzer(IModule):
                     # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
                     # is found in the UA that belongs to an apple device
                     self.set_evidence_incompatible_user_agent(
-                        profileid, twid, flow, user_agent
+                        twid, flow, user_agent
                     )
                     return True
 
@@ -638,10 +634,10 @@ class HTTPAnalyzer(IModule):
             return False
 
         conn_log_flow: Optional[dict]
-        conn_log_flow = self.utils.get_original_conn_flow(flow, self.db)
+        conn_log_flow = utils.get_original_conn_flow(flow, self.db)
         if not conn_log_flow:
             await asyncio.sleep(15)
-            conn_log_flow = self.utils.get_original_conn_flow(flow, self.db)
+            conn_log_flow = utils.get_original_conn_flow(flow, self.db)
             if not conn_log_flow:
                 return
 
