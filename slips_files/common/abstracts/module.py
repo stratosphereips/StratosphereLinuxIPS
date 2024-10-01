@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import traceback
 import warnings
@@ -6,6 +7,7 @@ from multiprocessing import Process, Event
 from typing import (
     Dict,
     Optional,
+    Callable,
 )
 from slips_files.common.printer import Printer
 from slips_files.core.output import Output
