@@ -1,11 +1,7 @@
+import asyncio
 import json
-import multiprocessing
-import threading
-import time
 from typing import (
-    Tuple,
     Union,
-    Dict,
 )
 
 from slips_files.common.abstracts.flowalerts_analyzer import (
@@ -21,15 +17,6 @@ from slips_files.core.flows.zeek import SSL
 class SSL(IFlowalertsAnalyzer):
     def init(self):
         self.classifier = FlowClassifier()
-        # in pastebin download detection, we wait for each conn.log flow
-        # of the seen ssl flow to appear
-        # this is the dict of ssl flows we're waiting for
-        self.pending_ssl_flows = multiprocessing.Queue()
-        # thread that waits for ssl flows to appear in conn.log
-        self.ssl_thread_started = False
-        self.ssl_waiting_thread = threading.Thread(
-            target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
-        )
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -40,70 +27,25 @@ class SSL(IFlowalertsAnalyzer):
             conf.get_pastebin_download_threshold()
         )
 
-    def wait_for_ssl_flows_to_appear_in_connlog(self):
-        """
-        thread that waits forever for ssl flows to appear in conn.log
-        whenever the conn.log flow of an ssl flow is found, thread calls
-        check_pastebin_download
-        ssl flows to wait for are stored in pending_ssl_flows
-        """
-        # this is the time we give ssl flows to appear in conn.log,
-        # when this time is over, we check, then wait again, etc.
-        wait_time = 60 * 2
-
-        # this thread shouldn't run on interface only because in zeek dirs we
-        # we should wait for the conn.log to be read too
-
-        while not self.flowalerts.should_stop():
-            size = self.pending_ssl_flows.qsize()
-            if size == 0:
-                # nothing in queue
-                time.sleep(30)
-                continue
-            # try to get the conn of each pending flow only once
-            # this is to ensure that re-added flows to the queue aren't checked twice
-            for ssl_flow in range(size):
-                try:
-                    ssl_flow: Tuple[Union[SSL, SuricataTLS], str, str] = (
-                        self.pending_ssl_flows.get(timeout=0.5)
-                    )
-                except Exception:
-                    continue
-
-                flow, profileid, twid = ssl_flow
-                # get the conn.log with the same uid,
-                # returns {uid: {actual flow..}}
-                # always returns a dict, never returns None
-                conn_log_flow: Dict[str, str] = self.db.get_flow(flow.uid)
-                if conn_log_flow := conn_log_flow.get(flow.uid):
-                    conn_log_flow: dict = json.loads(conn_log_flow)
-                    if "starttime" in conn_log_flow:
-                        # this means the flow is found in conn.log
-                        self.check_pastebin_download(flow, conn_log_flow, twid)
-                else:
-                    # flow not found in conn.log yet,
-                    # re-add it to the queue to check it later
-                    self.pending_ssl_flows.put((flow, profileid, twid))
-
-            # give the ssl flows remaining in self.pending_ssl_flows
-            # 2 more mins to appear
-            time.sleep(wait_time)
-
-    def check_pastebin_download(
+    async def check_pastebin_download(
         self,
-        ssl_flow: Union[SSL, SuricataTLS],
-        conn_log_flow: Dict[str, str],
         twid: str,
+        ssl_flow: Union[SSL, SuricataTLS],
     ):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
         This function waits for the ssl.log flow to appear
-        in conn.log before alerting
-        : param flow: this is the conn.log of the ssl flow
-        we're currently checking
+        in conn.log for 40s before alerting
         """
         if "pastebin" not in ssl_flow.server_name:
             return False
+
+        conn_log_flow = utils.get_original_conn_flow(ssl_flow, self.db)
+        if not conn_log_flow:
+            await asyncio.sleep(40)
+            conn_log_flow = utils.get_original_conn_flow(ssl_flow, self.db)
+            if not conn_log_flow:
+                return False
 
         # orig_bytes is number of payload bytes downloaded
         downloaded_bytes = conn_log_flow["resp_bytes"]
@@ -202,20 +144,18 @@ class SSL(IFlowalertsAnalyzer):
         self.set_evidence.doh(twid, flow)
         self.db.set_ip_info(flow.daddr, {"is_doh_server": True})
 
-    def analyze(self, msg: dict):
-        if not self.ssl_thread_started:
-            self.ssl_waiting_thread.start()
-            self.ssl_thread_started = True
-
+    async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            # we'll be checking pastebin downloads of this ssl flow
-            # later
-            # todo: can i put ssl flow obj in the queue??
-            self.pending_ssl_flows.put((flow, profileid, twid))
+
+            task = asyncio.create_task(
+                self.check_pastebin_download(twid, flow)
+            )
+            # to wait for these functions before flowalerts shuts down
+            self.flowalerts.tasks.append(task)
 
             self.check_self_signed_certs(twid, flow)
             self.detect_malicious_ja3(twid, flow)

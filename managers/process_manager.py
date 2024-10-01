@@ -581,7 +581,9 @@ class ProcessManager:
             return True
         return False
 
-    def shutdown_interactive(self, to_kill_first, to_kill_last):
+    def shutdown_interactive(
+        self, to_kill_first, to_kill_last
+    ) -> Tuple[List[Process], List[Process]]:
         """
         Shuts down modules in interactive mode only.
         it won't work with the daemon's -S because the

@@ -1,11 +1,10 @@
+import asyncio
 import collections
-import contextlib
 import json
 import math
 from typing import List
 import validators
 
-from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -157,20 +156,8 @@ class DNS(IFlowalertsAnalyzer):
             # by this computer but using a different ip version
             return True
 
-    def check_dns_without_connection(self, profileid, twid, flow):
-        """
-        Makes sure all cached DNS answers are used in contacted_ips
-        """
-        if not self.should_detect_dns_without_conn(flow):
-            return False
-
-        # One DNS query may not be answered exactly by UID,
-        # but the computer can re-ask the domain,
-        # and the next DNS resolution can be
-        # answered. So dont check the UID, check if the domain has an IP
-
-        # self.print(f'The DNS query to {domain} had as answers {answers} ')
-
+    def get_previous_domain_resolutions(self, query) -> List[str]:
+        prev_resolutions = []
         # It can happen that this domain was already resolved
         # previously, but with other IPs
         # So we get from the DB all the IPs for this domain
@@ -180,25 +167,27 @@ class DNS(IFlowalertsAnalyzer):
         # with AAAA, and the computer chooses the A address.
         # Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
-        if prev_domain_resolutions := self.db.get_domain_data(flow.query):
-            prev_domain_resolutions = prev_domain_resolutions.get("IPs", [])
-            # if there's a domain in the cache
-            # (prev_domain_resolutions) that is not in the
-            # current answers given to this function,
-            # append it to the answers list
-            flow.answers.extend(
-                [
-                    ans
-                    for ans in prev_domain_resolutions
-                    if ans not in flow.answers
-                ]
-            )
+        if prev_domain_resolutions := self.db.get_domain_data(query):
+            prev_resolutions = prev_domain_resolutions.get("IPs", [])
+        return prev_resolutions
+
+    def is_any_flow_answer_contacted(self, profileid, twid, flow) -> bool:
+        """
+        checks if any of the answers of the given dns flow were contacted
+        before
+        """
+        # we're doing this to answer this question, was the query we asked
+        # the dns for, resolved before to an IP that is not in the
+        # current flow.answer AND that previous resolution IP was contancted?
+        # if so, we extend the flow.asnwers to include
+        # these IPs. the goal is to avoid FPs
+        flow.answers.extend(self.get_previous_domain_resolutions(flow.query))
 
         if flow.answers == ["-"]:
             # If no IPs are in the answer, we can not expect
             # the computer to connect to anything
             # self.print(f'No ips in the answer, so ignoring')
-            return False
+            return True
 
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
             profileid, twid
@@ -220,38 +209,35 @@ class DNS(IFlowalertsAnalyzer):
                 )
             ):
                 # this dns resolution has a connection. We can exit
-                return False
+                return True
 
         # Check if there was a connection to any of the CNAMEs
         if self.is_cname_contacted(flow.answers, contacted_ips):
             # this is not a DNS without resolution
+            return True
+
+    async def check_dns_without_connection(
+        self, profileid, twid, flow
+    ) -> bool:
+        """
+        Makes sure all cached DNS answers are there in contacted_ips
+        """
+        if not self.should_detect_dns_without_conn(flow):
             return False
 
-        # self.print(f'It seems that none of the IPs were contacted')
-        # Found a DNS query which none of its IPs was contacted
-        # It can be that Slips is still reading it from the files.
-        # Lets check back in some time
-        # Create a timer thread that will wait some seconds for the
-        # connection to arrive and then check again
-        if flow.uid not in self.connections_checked_in_dns_conn_timer_thread:
-            # comes here if we haven't started the timer
-            # thread for this dns before mark this dns as checked
-            self.connections_checked_in_dns_conn_timer_thread.append(flow.uid)
-            params = [profileid, twid, flow]
-            # self.print(f'Starting the timer to check on {domain}, uid {uid}.
-            # time {datetime.datetime.now()}')
-            timer = TimerThread(40, self.check_dns_without_connection, params)
-            timer.start()
-        else:
-            # It means we already checked this dns with the Timer process
-            # but still no connection for it.
-            self.set_evidence.dns_without_conn(twid, flow)
-            # This UID will never appear again, so we can remove it and
-            # free some memory
-            with contextlib.suppress(ValueError):
-                self.connections_checked_in_dns_conn_timer_thread.remove(
-                    flow.uid
-                )
+        if self.is_any_flow_answer_contacted(profileid, twid, flow):
+            return False
+
+        # Found a DNS query and none of its answers were contacted
+        await asyncio.sleep(40)
+
+        if self.is_any_flow_answer_contacted(profileid, twid, flow):
+            return False
+
+        # Reaching here means we already waited some time for the connection
+        # of this dns to arrive but none was found
+        self.set_evidence.dns_without_conn(twid, flow)
+        return True
 
     @staticmethod
     def estimate_shannon_entropy(string):
@@ -408,14 +394,20 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_arpa_queries.pop(profileid)
         return True
 
-    def analyze(self, msg):
+    async def analyze(self, msg):
         if not utils.is_msg_intended_for(msg, "new_dns"):
             return False
         msg = json.loads(msg["data"])
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        self.check_dns_without_connection(profileid, twid, flow)
+        task = asyncio.create_task(
+            self.check_dns_without_connection(profileid, twid, flow)
+        )
+        # Allow the event loop to run the scheduled task
+        await asyncio.sleep(0)
+        # to wait for these functions before flowalerts shuts down
+        self.flowalerts.tasks.append(task)
         self.check_high_entropy_dns_answers(twid, flow)
         self.check_invalid_dns_answers(twid, flow)
         self.detect_dga(profileid, twid, flow)

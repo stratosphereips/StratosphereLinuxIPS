@@ -401,7 +401,8 @@ class SQLiteDB:
                 self.trial = 0
                 # discard query
                 self.print(
-                    f"Error executing query: {query} - {e}. Query discarded",
+                    f"Error executing query: {query} {params}- {e}. "
+                    f"Query discarded",
                     0,
                     1,
                 )
