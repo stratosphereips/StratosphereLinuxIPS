@@ -45,7 +45,6 @@ jobs:
           - tests/test_asn_info.py
           - tests/test_urlhaus.py
           - tests/test_markov_chain.py
-          - tests/test_progress_bar.py
           - tests/test_daemon.py
           - tests/test_go_director.py
           - tests/test_notify.py

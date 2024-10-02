@@ -22,7 +22,7 @@ class IModule(ABC, Process):
     An interface for all slips modules
     """
 
-    name = ""
+    name = "IModule"
     description = "Template module"
     authors = ["Template Author"]
     # should be filled with the channels each module subscribes to

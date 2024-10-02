@@ -1,16 +1,14 @@
 import asyncio
-from abc import ABC
-from multiprocessing import Process
 from typing import Callable
 from slips_files.common.abstracts.module import IModule
 
 
-class AsyncModule(IModule, ABC, Process):
+class AsyncModule(IModule):
     """
     An abstract class for asynchronous slips modules
     """
 
-    name = "Async Module Abstract Class"
+    name = "AsyncModule"
 
     def __init__(self, *args, **kwargs):
         IModule.__init__(self, *args, **kwargs)

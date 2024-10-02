@@ -462,7 +462,6 @@ class Input(ICore):
 
             if not growing_zeek_dir:
                 # get the total number of flows slips is going to read
-                # (used later for the progress bar)
                 total_flows += self.get_flows_number(full_path)
 
             # Add log file to the database
@@ -914,18 +913,6 @@ class Input(ICore):
         sends the total amount of flows to process with the first flow only
         """
         to_send = {"line": line, "input_type": self.input_type}
-        # send the total flows slips is going to read to the profiler
-        # the profiler will give it to output() for initialising
-        # the progress bar in case of interface and pcaps, we don't know
-        # the total_flows beforehand
-        # and we don't print a pbar
-        if self.is_first_flow and hasattr(self, "total_flows"):
-            self.is_first_flow = False
-            to_send.update(
-                {
-                    "total_flows": self.total_flows,
-                }
-            )
         # when the queue is full, the default behaviour is to block
         # if necessary until a free slot is available
         self.profiler_queue.put(to_send)

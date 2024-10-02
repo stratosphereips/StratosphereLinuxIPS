@@ -15,7 +15,6 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from threading import Lock
 from multiprocessing.connection import Connection
-from multiprocessing import Event
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -47,8 +46,6 @@ class Output(IObserver):
         slips_logfile="output/slips.log",
         input_type=False,
         sender_pipe: Connection = None,
-        has_pbar: bool = False,
-        pbar_finished: Event = None,
         stop_daemon: bool = None,
         stdout="",
     ):
@@ -59,10 +56,6 @@ class Output(IObserver):
         self.debug = debug
         self.stdout = stdout
         self.input_type = input_type
-        self.has_pbar = has_pbar
-        self.pbar_finished: Event = pbar_finished
-        # pipe for sending progress bar msgs
-        self.pbar_sender_pipe = sender_pipe
         self.stop_daemon = stop_daemon
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
@@ -154,13 +147,7 @@ class Output(IObserver):
             else:
                 to_print = txt
 
-            # when the pbar reaches 100% aka we're is_pbar_finished() == True
-            # we print alerts at the very bottom of the screen using print
-            # instead of printing alerts at the top of the pbar using tqdm
-            if self.has_pbar and not self.is_pbar_finished():
-                self.tell_pbar({"event": "print", "txt": to_print})
-            else:
-                print(to_print, end=end)
+            print(to_print, end=end)
 
         except Exception as e:
             print(f"Problem printing {txt}. {e}")
@@ -178,22 +165,6 @@ class Output(IObserver):
         with open(self.errors_logfile, "a") as errors_logfile:
             errors_logfile.write(f'{date_time} [{msg["from"]}] {msg["txt"]}\n')
         self.errors_logfile_lock.release()
-
-    def handle_printing_stats(self, stats: str):
-        """
-        slips prints the stats as a pbar postfix,
-        or in a separate line if pbar isn't supported
-        this method handles the 2 cases depending on the availability
-        of the pbar
-        """
-        # if we're done reading flows, aka pbar reached 100% or we dont
-        # have a pbar
-        # we print the stats in a new line, instead of next to the pbar
-        if self.has_pbar and not self.is_pbar_finished():
-            self.tell_pbar({"event": "update_stats", "stats": stats})
-        else:
-            # print the stats with no sender
-            self.print("", stats, end="\r")
 
     def enough_verbose(self, verbose: int):
         """
@@ -221,7 +192,7 @@ class Output(IObserver):
             txt = red(txt)
 
         if "analyzed IPs" in txt:
-            self.handle_printing_stats(txt)
+            self.print("", txt, end="\r")
             return
 
         # There should be a level 0 that we never print. So its >, and not >=
@@ -239,70 +210,17 @@ class Output(IObserver):
         if debug == 1:
             self.log_error(msg)
 
-    def tell_pbar(self, msg: dict):
-        """
-        writes to the pbar pipe. anything sent by this method
-        will be received by the pbar class
-        """
-        self.pbar_sender_pipe.send(msg)
-
-    def is_pbar_finished(self) -> bool:
-        """checks the pbar_finished event set by the pbar module"""
-        return self.pbar_finished.is_set()
-
-    def forward_progress_bar_msgs(self, msg: dict) -> bool:
-        """
-        forwards 'init' and 'update' msgs to pbar module
-        pbar "print" msgs don't reach this function
-        returns true if the msg was sucessfuly forwarded to pbar process
-        """
-        try:
-            pbar_event: str = msg["bar"]
-        except KeyError:
-            return False
-
-        if pbar_event == "init":
-            self.tell_pbar(
-                {
-                    "event": pbar_event,
-                    "total_flows": msg["bar_info"]["total_flows"],
-                }
-            )
-            return True
-
-        if pbar_event == "update" and not self.is_pbar_finished():
-            self.tell_pbar(
-                {
-                    "event": "update_bar",
-                }
-            )
-            return True
-        return False
-
     def update(self, msg: dict):
         """
         is called whenever any module need to print something using the
         Printer.notify_observers()
         each msg should be in the following format
         {
-            bar: 'update' or 'init'
-            log_to_logfiles_only: bool that indicates wheteher we
+            log_to_logfiles_only: bool that indicates whether we
             wanna log the text to all logfiles or the cli only?
             txt: text to log to the logfiles and/or the cli
-            bar_info: {
-                input_type: only given when we send bar:'init',
-                            specifies the type of the input file
-                             given to slips
-                    eg zeek, argus, etc
-                total_flows: int,
         }
         """
-        # if pbar wasn't supported, profiler.py won't send update msgs
-        # the only process that sends msgs here is profiler.py
-        if "bar" in msg:
-            self.forward_progress_bar_msgs(msg)
-            return
-
         # output to terminal and logs or logs only?
         if msg.get("log_to_logfiles_only", False):
             self.log_line(msg)
