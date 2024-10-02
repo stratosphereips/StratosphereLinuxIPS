@@ -67,10 +67,7 @@ class Profiler(ICore, IObservable):
         is_profiler_done: multiprocessing.Semaphore = None,
         profiler_queue=None,
         is_profiler_done_event: multiprocessing.Event = None,
-        has_pbar: bool = False,
     ):
-        # we made it an observable to be able to pass msgs to Output.py
-        # to init the pbar.
         IObservable.__init__(self)
         self.add_observer(self.logger)
         # when profiler is done processing, it releases this semaphore,
@@ -84,7 +81,6 @@ class Profiler(ICore, IObservable):
         self.input_type = False
         self.rec_lines = 0
         self.is_localnet_set = False
-        self.has_pbar = has_pbar
         self.whitelist = Whitelist(self.logger, self.db)
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
@@ -371,22 +367,6 @@ class Profiler(ICore, IObservable):
         """
         return msg == "stop"
 
-    def init_pbar(self, total_flows: int):
-        """
-        sends the output.py a msg with the pbar details for initialization
-        """
-        # Find the number of flows we're going to receive of input received
-        self.notify_observers(
-            {
-                "bar": "init",
-                "bar_info": {
-                    "input_type": self.input_type,
-                    "total_flows": total_flows,
-                },
-            }
-        )
-        self.supported_pbar = True
-
     def get_private_client_ips(self) -> List[str]:
         """
         returns the private ips found in the client_ips param
@@ -469,7 +449,7 @@ class Profiler(ICore, IObservable):
 
             line: dict = msg["line"]
             input_type: str = msg["input_type"]
-            total_flows: int = msg.get("total_flows", 0)
+            # total_flows: int = msg.get("total_flows", 0)
 
             # TODO who is putting this True here?
             if line is True:
@@ -484,8 +464,6 @@ class Profiler(ICore, IObservable):
             if not self.input_type:
                 # Find the type of input received
                 self.input_type = self.define_separator(line, input_type)
-                if self.has_pbar:
-                    self.init_pbar(total_flows)
 
             # What type of input do we have?
             if not self.input_type:
@@ -505,10 +483,6 @@ class Profiler(ICore, IObservable):
                     self.add_flow_to_profile()
                     self.handle_setting_local_net()
 
-                # now that one flow is processed tell output.py
-                # to update the bar
-                if self.has_pbar:
-                    self.notify_observers({"bar": "update"})
             except Exception as e:
                 self.print(
                     f"Problem processing line {line}. Line discarded. {e}",

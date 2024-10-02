@@ -2,8 +2,6 @@ from unittest.mock import MagicMock, mock_open, patch, call as mockedcall
 import pytest
 from tests.module_factory import ModuleFactory
 from pathlib import Path
-import sys
-from io import StringIO
 
 
 @pytest.mark.parametrize(
@@ -43,11 +41,8 @@ def test_log_line(mock_convert_format, msg, expected_log_content):
         handle.write.assert_called_once_with(expected_log_content)
 
 
-def test_print_no_pbar():
-    """Test printing when has_pbar is False."""
+def test_print():
     output = ModuleFactory().create_output_obj()
-    output.has_pbar = False
-    output.tell_pbar = MagicMock()
     sender = "SenderName"
     txt = "This is a test message."
 
@@ -55,96 +50,6 @@ def test_print_no_pbar():
         output.print(sender, txt)
 
     (mock_print.assert_called_once_with(f"[{sender}] {txt}", end="\n"))
-    output.tell_pbar.assert_not_called()
-
-
-def test_print_pbar_finished():
-    """Test printing when pbar is finished."""
-    output = ModuleFactory().create_output_obj()
-    output.has_pbar = True
-    output.pbar_finished = MagicMock()
-    output.pbar_finished.is_set.return_value = True
-    output.tell_pbar = MagicMock()
-    sender = "SenderName"
-    txt = "This is a test message."
-
-    with patch("builtins.print") as mock_print:
-        output.print(sender, txt)
-
-    (mock_print.assert_called_once_with(f"[{sender}] {txt}", end="\n"))
-    output.tell_pbar.assert_not_called()
-
-
-def test_print_pbar_active_with_sender():
-    """Test printing with active pbar and a sender."""
-    output = ModuleFactory().create_output_obj()
-    output.has_pbar = True
-    output.pbar_finished = MagicMock()
-    output.pbar_finished.is_set.return_value = False
-    output.tell_pbar = MagicMock()
-    sender = "SenderName"
-    txt = "This is a test message."
-
-    with patch("builtins.print") as mock_print:
-        output.print(sender, txt)
-
-    (
-        output.tell_pbar.assert_called_once_with(
-            {"event": "print", "txt": f"[{sender}] {txt}"}
-        )
-    )
-    mock_print.assert_not_called()
-
-
-def test_print_pbar_active_no_sender():
-    """Test printing with active pbar and no sender."""
-    output = ModuleFactory().create_output_obj()
-    output.has_pbar = True
-    output.pbar_finished = MagicMock()
-    output.pbar_finished.is_set.return_value = False
-    output.tell_pbar = MagicMock()
-    sender = ""
-    txt = "This is a message with no sender."
-
-    with patch("builtins.print") as mock_print:
-        output.print(sender, txt)
-
-    (output.tell_pbar.assert_called_once_with({"event": "print", "txt": txt}))
-    mock_print.assert_not_called()
-
-
-def test_handle_printing_stats_pbar_not_finished():
-    """Test when pbar is not finished, stats should be sent to pbar."""
-    output = ModuleFactory().create_output_obj()
-    output.has_pbar = True
-    output.pbar_finished = MagicMock()
-    output.pbar_finished.is_set.return_value = False
-    output.tell_pbar = MagicMock() 
-    stats = "Analyzed IPs: 10"
-
-    output.handle_printing_stats(stats)
-
-    output.tell_pbar.assert_called_once_with(
-        {"event": "update_stats", "stats": stats}
-    )
-
-
-def test_handle_printing_stats_pbar_finished():
-    """Test when pbar is finished, stats should be printed directly."""
-    output = ModuleFactory().create_output_obj()
-    output.has_pbar = True
-    output.pbar_finished = MagicMock()
-    output.pbar_finished.is_set.return_value = True
-
-    original_stdout = sys.stdout
-    captured_output = StringIO()
-    sys.stdout = captured_output
-
-    stats = "Analyzed IPs: 20"
-    output.handle_printing_stats(stats)
-
-    sys.stdout = original_stdout
-    assert captured_output.getvalue().strip() == stats
 
 
 @pytest.mark.parametrize(
@@ -222,7 +127,7 @@ def test_output_line_all_outputs(mock_log_error, mock_log_line, mock_print):
 @patch("slips_files.core.output.Output.log_error")
 def test_output_line_no_outputs(mock_log_error, mock_log_line, mock_print):
     """
-    Test that output_line doesn't print or log when the provided 
+    Test that output_line doesn't print or log when the provided
     verbose level (3) is higher than the module's verbose level (2).
     """
     output = ModuleFactory().create_output_obj()
@@ -266,64 +171,27 @@ def test_output_line_no_error_log(mock_log_error, mock_log_line, mock_print):
 
 
 @pytest.mark.parametrize(
-    "is_set_return_value, expected_result",
-    [  # Testcase 1: pbar_finished is set
-        (True, True),
-        # Testcase 2: pbar_finished is not set
-        (False, False),
-    ],
-)
-def test_is_pbar_finished(is_set_return_value, expected_result):
-    """Test that the is_pbar_finished method returns the correct result."""
-    output = ModuleFactory().create_output_obj()
-    output.pbar_finished = MagicMock()
-    output.pbar_finished.is_set.return_value = is_set_return_value
-
-    assert output.is_pbar_finished() == expected_result
-
-
-@pytest.mark.parametrize(
-    "msg, expected_forward_progress_bar_calls, " "expected_output_line_calls",
+    "msg, expected_output_line_calls",
     [
-        (  # Testcase 1: msg contains 'bar' key with 'init'
-            {"bar": "init", "bar_info": {"total_flows": 1000}},
-            [{"bar": "init", "bar_info": {"total_flows": 1000}}],
-            [],
-        ),
-        (  # Testcase 2: msg contains 'bar' key with 'update'
-            {"bar": "update"},
-            [{"bar": "update"}],
-            [],
-        ),
-        (  # Testcase 3: msg does not contain 'bar' key
+        (  # Testcase 1: a valid msg
             {"from": "SenderName", "txt": "This is a test message."},
             [],
             [{"from": "SenderName", "txt": "This is a test message."}],
         ),
-        (  # Testcase 4: Empty message
+        (  # Testcase 2: Empty message
             {},
             [],
             [{}],
         ),
     ],
 )
-def test_update(
-    msg, expected_forward_progress_bar_calls, expected_output_line_calls
-):
+def test_update(msg, expected_output_line_calls):
     """Test that the update method handles
     different cases correctly."""
     output = ModuleFactory().create_output_obj()
-
-    output.forward_progress_bar_msgs = MagicMock()
     output.output_line = MagicMock()
 
     output.update(msg)
-
-    assert output.forward_progress_bar_msgs.call_count == len(
-        expected_forward_progress_bar_calls
-    )
-    for call in expected_forward_progress_bar_calls:
-        output.forward_progress_bar_msgs.assert_any_call(call)
 
     assert output.output_line.call_count == len(expected_output_line_calls)
     for call in expected_output_line_calls:
@@ -344,117 +212,6 @@ def test_update_log_to_logfiles_only():
     output.update(msg)
 
     output.log_line.assert_called_once_with(msg)
-
-
-@pytest.mark.parametrize(
-    "msg, expected_call",
-    [
-        (  # Testcase 1: Initialization message
-            {"bar": "init", "bar_info": {"total_flows": 1000}},
-            {"event": "init", "total_flows": 1000},
-        ),
-        (  # Testcase 2: Update message
-            {"bar": "update"},
-            {"event": "update_bar"},
-        ),
-    ],
-)
-def test_forward_progress_bar_msgs_valid(msg, expected_call):
-    """Test valid progress bar messages."""
-    output = ModuleFactory().create_output_obj()
-    output.tell_pbar = MagicMock()
-    output.is_pbar_finished = MagicMock(return_value=False)
-
-    output.forward_progress_bar_msgs(msg)
-
-    output.tell_pbar.assert_called_once_with(expected_call)
-
-
-def test_forward_progress_bar_msgs_update_finished():
-    """Test update message when progress bar is finished."""
-    output = ModuleFactory().create_output_obj()
-    output.tell_pbar = MagicMock()
-    output.is_pbar_finished = MagicMock(return_value=True)
-
-    output.forward_progress_bar_msgs({"bar": "update"})
-
-    output.tell_pbar.assert_not_called()
-
-
-def test_forward_progress_bar_msgs_unknown_bar():
-    """Test message with unknown 'bar' value."""
-    output = ModuleFactory().create_output_obj()
-    output.tell_pbar = MagicMock()
-
-    output.forward_progress_bar_msgs({"bar": "unknown"})
-
-    output.tell_pbar.assert_not_called()
-
-
-def test_tell_pbar():
-    """Test that tell_pbar sends the message through the pipe."""
-    output = ModuleFactory().create_output_obj()
-    output.pbar_sender_pipe = MagicMock()
-
-    msg = {"event": "update", "progress": 50}
-    output.tell_pbar(msg)
-
-    output.pbar_sender_pipe.send.assert_called_once_with(msg)
-
-
-def test_tell_pbar_empty_message():
-    """Test that tell_pbar handles empty messages correctly."""
-    output = ModuleFactory().create_output_obj()
-    output.pbar_sender_pipe = MagicMock()
-
-    msg = {}
-    output.tell_pbar(msg)
-
-    output.pbar_sender_pipe.send.assert_called_once_with(msg)
-
-
-def test_tell_pbar_none_message():
-    """Test that tell_pbar handles None messages correctly."""
-    output = ModuleFactory().create_output_obj()
-    output.pbar_sender_pipe = MagicMock()
-
-    msg = None
-    output.tell_pbar(msg)
-
-    output.pbar_sender_pipe.send.assert_called_once_with(msg)
-
-
-def test_tell_pbar_large_message():
-    """Test that tell_pbar can handle large messages."""
-    output = ModuleFactory().create_output_obj()
-    output.pbar_sender_pipe = MagicMock()
-
-    msg = {"event": "update", "data": "x" * 1000000}
-    output.tell_pbar(msg)
-
-    output.pbar_sender_pipe.send.assert_called_once_with(msg)
-
-
-def test_tell_pbar_multiple_calls():
-    """Test that tell_pbar works correctly
-    for multiple consecutive calls."""
-    output = ModuleFactory().create_output_obj()
-    output.pbar_sender_pipe = MagicMock()
-
-    msgs = [
-        {"event": "init"},
-        {"event": "update", "progress": 25},
-        {"event": "update", "progress": 50},
-        {"event": "update", "progress": 75},
-        {"event": "finish"},
-    ]
-
-    for msg in msgs:
-        output.tell_pbar(msg)
-
-    assert output.pbar_sender_pipe.send.call_count == len(msgs)
-    for msg in msgs:
-        output.pbar_sender_pipe.send.assert_any_call(msg)
 
 
 def test_create_logfile_existing():

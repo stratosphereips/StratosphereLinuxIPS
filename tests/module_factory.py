@@ -13,10 +13,8 @@ from slips_files.core.database.database_manager import DBManager
 
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
-from multiprocessing.connection import Connection
 from modules.flowalerts.downloaded_file import DownloadedFile
 from slips_files.core.helpers.symbols_handler import SymbolHandler
-from modules.progress_bar.progress_bar import PBar
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
 from modules.flowalerts.software import Software
@@ -45,7 +43,7 @@ from modules.virustotal.virustotal import VT
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
-from multiprocessing import Queue, Event
+from multiprocessing import Queue
 from slips_files.core.helpers.flow_handler import FlowHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
@@ -511,25 +509,6 @@ class ModuleFactory:
             )
             go_director.print = Mock()
         return go_director
-
-    @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_progress_bar_obj(self, mock_db):
-        mock_pipe = Mock(spec=Connection)
-        mock_pbar_finished = Mock(spec=Event)
-        pbar = PBar(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),
-        )
-        pbar.init(
-            pipe=mock_pipe,
-            slips_mode="normal",
-            pbar_finished=mock_pbar_finished,
-        )
-        pbar.print = Mock()
-
-        return pbar
 
     @patch(DB_MANAGER, name="mock_db")
     def create_daemon_object(self, mock_db):

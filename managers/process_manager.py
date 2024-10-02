@@ -13,7 +13,6 @@ from multiprocessing import (
     Event,
     Process,
     Semaphore,
-    Pipe,
 )
 from typing import (
     List,
@@ -28,7 +27,6 @@ from exclusiveprocess import (
 import multiprocessing
 
 import modules
-from modules.progress_bar.progress_bar import PBar
 from modules.update_manager.update_manager import UpdateManager
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
@@ -69,37 +67,11 @@ class ProcessManager:
         # cant get more lines anymore!
         self.is_profiler_done_event = Event()
         self.read_config()
-        # for the communication between output.py and the progress bar
-        # Pipe(False) means the pipe is unidirectional.
-        # aka only msgs can go from output -> pbar and not vice versa
-        # recv_pipe used only for receiving,
-        # send_pipe used only for sending
-        self.pbar_recv_pipe, self.output_send_pipe = Pipe(False)
-        self.pbar_finished: Event = Event()
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
             self.main.input_type
         )
-
-    def is_pbar_supported(self) -> bool:
-        """
-        When running on a pcap, interface, or taking flows from an
-        external module, the total amount of flows is unknown
-        so the pbar is not supported
-        """
-        # input type can be false whne using -S or in unit tests
-        if (
-            not self.main.input_type
-            or self.main.input_type in ("interface", "pcap", "stdin")
-            or self.main.mode == "daemonized"
-        ):
-            return False
-
-        if self.main.args.growing or self.main.args.input_module:
-            return False
-
-        return True
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
@@ -109,30 +81,10 @@ class ProcessManager:
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
             input_type=self.main.input_type,
-            sender_pipe=self.output_send_pipe,
-            has_pbar=self.is_pbar_supported(),
-            pbar_finished=self.pbar_finished,
             stop_daemon=self.main.args.stopdaemon,
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
-
-    def start_progress_bar(self):
-        pbar = PBar(
-            self.main.logger,
-            self.main.args.output,
-            self.main.redis_port,
-            self.termination_event,
-            pipe=self.pbar_recv_pipe,
-            slips_mode=self.main.mode,
-            pbar_finished=self.pbar_finished,
-        )
-        pbar.start()
-        self.main.db.store_pid(pbar.name, int(pbar.pid))
-        self.main.print(
-            f"Started {green('PBar')} process [" f"PID {green(pbar.pid)}]"
-        )
-        return pbar
 
     def start_profiler_process(self):
         profiler_process = Profiler(
@@ -143,7 +95,6 @@ class ProcessManager:
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
-            has_pbar=self.is_pbar_supported(),
         )
         profiler_process.start()
         self.main.print(
@@ -344,13 +295,6 @@ class ProcessManager:
         modules_to_call = self.get_modules()[0]
         for module_name in modules_to_call:
             module_class = modules_to_call[module_name]["obj"]
-            if module_name == "Progress Bar":
-                # started it manually in main.py to be able to start it
-                # very early.
-                # otherwise we miss some of the prints right when slips
-                # starts, because when the pbar is supported, it handles
-                # all the printing
-                continue
             module = module_class(
                 self.main.logger,
                 self.main.args.output,
@@ -726,8 +670,6 @@ class ProcessManager:
                         )
                         if not to_kill_first and not to_kill_last:
                             # all modules are done
-                            # now close the communication between output.py
-                            # and the pbar
                             break
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules
@@ -758,8 +700,6 @@ class ProcessManager:
                 format_ = self.main.conf.export_labeled_flows_to().lower()
                 self.main.db.export_labeled_flows(format_)
 
-            self.output_send_pipe.close()
-            self.pbar_recv_pipe.close()
             # if store_a_copy_of_zeek_files is set to yes in slips.yaml
             # copy the whole zeek_files dir to the output dir
             self.main.store_zeek_dir_copy()

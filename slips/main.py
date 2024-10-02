@@ -489,13 +489,8 @@ class Main:
 
     def update_stats(self):
         """
-        updates the statistics shown next to the progress bar
-         or shown in a new line
+        updates the statistics printed every 5s
         """
-        # for input of type : pcap, interface and growing
-        # zeek directories, we prin the stats using slips.py
-        # for other files, we print a progress bar +
-        # the stats using outputprocess
         if not self.mode == "interactive":
             return
 
@@ -607,10 +602,6 @@ class Main:
                 1,
                 0,
             )
-            # start progress bar before all modules so it doesn't miss
-            # any prints in its queue and slips wouldn't seem like it's frozen
-            self.proc_man.start_progress_bar()
-
             self.cpu_profiler_init()
             self.memory_profiler_init()
 
