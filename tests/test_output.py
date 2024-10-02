@@ -175,12 +175,10 @@ def test_output_line_no_error_log(mock_log_error, mock_log_line, mock_print):
     [
         (  # Testcase 1: a valid msg
             {"from": "SenderName", "txt": "This is a test message."},
-            [],
             [{"from": "SenderName", "txt": "This is a test message."}],
         ),
         (  # Testcase 2: Empty message
             {},
-            [],
             [{}],
         ),
     ],
