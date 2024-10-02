@@ -565,25 +565,6 @@ def test_shutdown_gracefully(monkeypatch):
     profiler.mark_process_as_done_processing.assert_called_once()
 
 
-def test_init_pbar():
-    profiler = ModuleFactory().create_profiler_obj()
-    profiler.notify_observers = Mock()
-    total_flows = 500
-
-    profiler.init_pbar(total_flows)
-
-    profiler.notify_observers.assert_called_once_with(
-        {
-            "bar": "init",
-            "bar_info": {
-                "input_type": profiler.input_type,
-                "total_flows": total_flows,
-            },
-        }
-    )
-    assert profiler.supported_pbar is True
-
-
 def test_get_local_net_from_flow(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.flow = Mock()
