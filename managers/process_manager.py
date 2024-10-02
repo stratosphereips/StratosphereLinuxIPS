@@ -29,7 +29,9 @@ import multiprocessing
 import modules
 from modules.update_manager.update_manager import UpdateManager
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.module import (
+    IModule,
+)
 
 from slips_files.common.style import green
 from slips_files.core.evidencehandler import EvidenceHandler
@@ -120,7 +122,7 @@ class ProcessManager:
             1,
             0,
         )
-        self.main.db.store_pid("Evidence", int(evidence_process.pid))
+        self.main.db.store_pid("EvidenceHandler", int(evidence_process.pid))
         return evidence_process
 
     def start_input_process(self):
@@ -205,6 +207,9 @@ class ProcessManager:
                 return True
         return False
 
+    def is_abstract_module(self, obj) -> bool:
+        return obj.name in ("IModule", "AsyncModule")
+
     def get_modules(self):
         """
         Get modules from the 'modules' folder.
@@ -261,7 +266,7 @@ class ProcessManager:
                 # Check if current member is a class.
                 if inspect.isclass(member_object) and (
                     issubclass(member_object, IModule)
-                    and member_object is not IModule
+                    and not self.is_abstract_module(member_object)
                 ):
                     plugins[member_object.name] = dict(
                         obj=member_object,
@@ -410,7 +415,7 @@ class ProcessManager:
         # slips won't reach this function unless they are done already.
         # so no need to kill them last
         pids_to_kill_last = [
-            self.main.db.get_pid_of("Evidence"),
+            self.main.db.get_pid_of("EvidenceHandler"),
         ]
 
         if self.main.args.blocking:
