@@ -511,7 +511,7 @@ class Main:
             f"\r[{now}] Analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
-            f"Last {self.twid_width} number of IPs:"
+            f"Last ({self.twid_width}) number of IPs:"
             f" {green(modified_ips_in_the_last_tw)}. "
         )
         self.print(stats)
