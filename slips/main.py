@@ -507,15 +507,31 @@ class Main:
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
-        msg = (
-            f"Total analyzed IPs so far: "
-            f"{green(profiles_len)}. "
-            f"Evidence Added: {green(evidence_number)}. "
-            f"IPs sending traffic in the last "
-            f"{self.twid_width}: {green(modified_ips_in_the_last_tw)}. "
-            f"({now})"
+        stats = (
+            f"\r[{now}] Analyzed IPs: {green(profiles_len)}. "
+            f"{self.get_analyzed_flows_percentage()}"
+            f"Evidence: {green(evidence_number)}. "
+            f"Last {self.twid_width} number of IPs:"
+            f" {green(modified_ips_in_the_last_tw)}. "
         )
-        self.print(msg)
+        self.print(stats)
+        sys.stdout.flush()  # Make sure the output is displayed immediately
+
+    def get_analyzed_flows_percentage(self) -> str:
+        """
+        returns a str with the percentage of analyzed flows so far to be
+        logged in the stats
+        """
+        if self.is_total_flows_unknown():
+            return ""
+
+        if not hasattr(self, "total_flows"):
+            self.total_flows = self.db.get_total_flows()
+
+        flows_percentage = int(
+            (self.db.get_processed_flows_so_far() / self.total_flows) * 100
+        )
+        return f"Analyzed Flows: {green(flows_percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:
         """
