@@ -121,6 +121,8 @@ def test_memory_profiler_release_disabled():
 )
 def test_update_stats(mode, time_diff, expected_calls):
     main = ModuleFactory().create_main_obj()
+    main.is_total_flows_unknown = Mock()
+    main.is_total_flows_unknown.return_value = False
     main.mode = mode
     main.last_updated_stats_time = datetime.now() - timedelta(
         seconds=time_diff
