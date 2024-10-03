@@ -35,7 +35,7 @@ class fidesModule(IModule):
     # Name: short name of the module. Do not use spaces
     name = "Fides"
     description = "Trust computation module for P2P interactions."
-    authors = ['David Otta']
+    authors = ['David Otta', 'Lukáš Forst']
 
     def init(self):
         # Process.__init__(self) done by IModule
@@ -143,10 +143,10 @@ class fidesModule(IModule):
         """
         Initializations that run only once before the main() function runs in a loop
         """
-        #print("~", end="")
+        print("~", end="")
         # utils.drop_root_privs()
         self.__setup_trust_model()
-        #print("~", end="")
+        print("~", end="")
 
 
     def main(self):
