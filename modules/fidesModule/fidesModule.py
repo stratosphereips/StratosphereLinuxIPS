@@ -9,7 +9,6 @@ import os
 import json
 import sys
 from dataclasses import asdict
-from multiprocessing import Process
 
 
 from ..fidesModule.messaging.message_handler import MessageHandler
@@ -28,6 +27,8 @@ from ..fidesModule.originals.abstracts import Module
 from ..fidesModule.originals.database import __database__
 from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
 from ..fidesModule.persistance.trust import SlipsTrustDatabase
+from ..fidesModule.persistence.trust_in_memory import InMemoryTrustDatabase
+from ..fidesModule.persistence.threat_intelligence_in_memory import InMemoryThreatIntelligenceDatabase
 
 logger = Logger("SlipsFidesModule")
 
@@ -55,7 +56,7 @@ class fidesModule(IModule):
 
         # load trust model configuration
         #self.__trust_model_config = load_configuration(self.__slips_config.trust_model_path) # TODO fix this to make it work under new management
-        self.__trust_model_config = load_configuration(slips_conf)
+        self.__trust_model_config = load_configuration("/StratosphereLinuxIPS/modules/fidesModule/config/fides.conf.yml")
 
 
         # prepare variables for global protocols
@@ -71,23 +72,23 @@ class fidesModule(IModule):
 
     def __setup_trust_model(self):
         r = self.db.rdb
-        #print("-1-", end="")
+        print("-1-", end="")
 
         # create database wrappers for Slips using Redis
-        trust_db = SlipsTrustDatabase(self.__trust_model_config, r)
-        #print("-2-", end="")
-        ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, r)
-        #print("-3-", end="")
+        trust_db = InMemoryTrustDatabase(self.__trust_model_config)
+        print("-2-", end="")
+        ti_db =  InMemoryThreatIntelligenceDatabase()
+        print("-3-", end="")
 
         # create queues
         # TODO: [S] check if we need to use duplex or simplex queue for communication with network module
         network_fides_queue = RedisSimplexQueue(r, send_channel='fides2network', received_channel='network2fides')
-        #print("-3.5-", end="")
+        print("-3.5-", end="")
         # 1 # slips_fides_queue = RedisSimplexQueue(r, send_channel='fides2slips', received_channel='slips2fides')
-        #print("-4-", end="")
+        print("-4-", end="")
 
         bridge = NetworkBridge(network_fides_queue)
-        #print("-5-", end="")
+        print("-5-", end="")
 
         recommendations = RecommendationProtocol(self.__trust_model_config, trust_db, bridge)
         trust = InitialTrustProtocol(trust_db, self.__trust_model_config, recommendations)
