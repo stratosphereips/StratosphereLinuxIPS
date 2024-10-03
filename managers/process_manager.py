@@ -8,6 +8,7 @@ import sys
 import time
 import traceback
 from collections import OrderedDict
+from datetime import datetime
 from multiprocessing import (
     Queue,
     Event,
@@ -468,15 +469,17 @@ class ProcessManager:
 
         return alive_processes
 
-    def get_analysis_time(self):
+    def get_analysis_time(self) -> Tuple[str, str]:
         """
         Returns how long slips tool to analyze the given file
+        returns analysis_time in minutes and slips end_time as a date
         """
-        # set analysis end date
-        end_date = self.main.metadata_man.set_analysis_end_date()
-
         start_time = self.main.db.get_slips_start_time()
-        return utils.get_time_diff(start_time, end_date, return_type="minutes")
+        end_time = utils.convert_format(datetime.now(), utils.alerts_format)
+        return (
+            utils.get_time_diff(start_time, end_time, return_type="minutes"),
+            end_time,
+        )
 
     def stop_slips(self) -> bool:
         """
@@ -633,11 +636,6 @@ class ProcessManager:
 
             # close all tws
             self.main.db.check_tw_to_close(close_all=True)
-            analysis_time = self.get_analysis_time()
-            print(
-                f"Analysis of {self.main.input_information} "
-                f"finished in {analysis_time:.2f} minutes"
-            )
 
             graceful_shutdown = True
             if self.main.mode == "daemonized":
@@ -712,6 +710,15 @@ class ProcessManager:
             # if delete_zeek_files is set to yes in slips.yaml,
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
+
+            analysis_time, end_date = self.get_analysis_time()
+            self.main.metadata_man.set_analysis_end_date(end_date)
+
+            print(
+                f"Analysis of {self.main.input_information} "
+                f"finished in {analysis_time:.2f} minutes"
+            )
+
             self.main.db.close()
             if graceful_shutdown:
                 print(

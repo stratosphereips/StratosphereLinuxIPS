@@ -485,7 +485,7 @@ class Profiler(ICore, IObservable):
                     self.db.increment_processed_flows()
             except Exception as e:
                 self.print(
-                    f"Problem processing line {line}. Line discarded. {e}",
+                    f"Problem processing line {line}. " f"Line discarded. {e}",
                     0,
                     1,
                 )
