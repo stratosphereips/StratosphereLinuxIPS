@@ -47,7 +47,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = (
         f"./slips.py "
-        f"-t  -e 1 "
+        f"-t -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
         f"-c tests/integration_tests/test.yaml "
