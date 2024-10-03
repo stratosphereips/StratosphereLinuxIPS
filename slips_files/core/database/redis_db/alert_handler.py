@@ -246,6 +246,7 @@ class AlertHandler:
         # which means that any evidence passed to this function
         # can never be a part of a past alert
         self.r.hdel(f"{profileid}_{twid}_evidence", evidence_id)
+        self.r.incr("number_of_evidence", -1)
 
     def cache_whitelisted_evidence_ID(self, evidence_ID: str):
         """
