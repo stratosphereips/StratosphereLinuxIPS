@@ -33,7 +33,6 @@ Slips v1.1.2
 - [GUI](#graphical-user-interface)
 - [Requirements](#requirements)
 - [Installation](#installation)
-- [Extended Usage](#extended-usage)
 - [Configuration](#configuration)
 - [Features](#features)
 - [Contributing](#contributing)
@@ -60,7 +59,7 @@ Slips is a powerful endpoint behavioral intrusion prevention and detection syste
 Slips is the first free software behavioral machine learning-based IDS/IPS for endpoints. It was created in 2012 by Sebastian Garcia at the Stratosphere Laboratory, AIC, FEE, Czech Technical University in Prague. The goal was to offer a local IDS/IPS that leverages machine learning to detect network attacks using behavioral analysis.
 
 
-Slips is supported on Linux and MacOS only. The blocking features of Slips are only supported on Linux
+Slips is supported on Linux, MacOS, and windows dockers only. The blocking features of Slips are only supported on Linux
 
 Slips is Python-based and relies on [Zeek network analysis framework](https://zeek.org/get-zeek/) for capturing live traffic and analyzing PCAPs. and relies on
 Redis >= 7.0.4 for interprocess communication.
@@ -70,7 +69,7 @@ Redis >= 7.0.4 for interprocess communication.
 
 The recommended way to use Slips is on Docker.
 
-#### Linux
+#### Linux and Windows hosts
 ```
 docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
 ```
@@ -83,26 +82,11 @@ docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-sw
 cat output_dir/alerts.log
 ```
 
-#### Macos M1
-In macos do not use --net=host if you want to access the internal container's ports from the host.
+#### Macos
+In MacOS, do not use --net=host if you want to access the internal container's ports from the host.
 
 ```
-docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
-```
-
-```
-./slips.py -f dataset/test7-malicious.pcap -o output_dir
-```
-
-```
-cat output_dir/alerts.log
-```
-
-
-#### Macos Intel
-
-```
-docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+docker run --rm -it -p 55000:55000 --platform linux/amd64 --cpu-shares "700" --memory="8g" --memory-swap="8g" --cap-add=NET_ADMIN --name slips stratosphereips/slips_macos_m1:latest
 ```
 
 ```
@@ -160,7 +144,8 @@ Slips can be run on different platforms, the easiest and most recommended way if
 
 * [Docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker)
   * Dockerhub (recommended)
-    * [Linux, MacOS and windows hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#Running-Slips-from-DockerHub)
+    * [Linux and windows hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#linux-and-windows-hosts)
+    * [MacOS hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#macos-hosts)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
 * Native
@@ -169,39 +154,7 @@ Slips can be run on different platforms, the easiest and most recommended way if
 * [on RPI (Beta)](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-on-a-raspberry-pi)
 
 
-
 ---
-
-# Extended Usage
-
-### Linux
-
-##### [Analyse your own traffic without P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#analyse-your-own-traffic)
-
-
-##### [Analyse your own traffic with P2P ](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-linux)
-
-
-##### [Analyse a pcap without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#analyze-your-pcap-file)
-
-
-
-### Macos M1
-
-#### [Analyse your own traffic without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#id1)
-
-
-### MacOS Intel processors
-
-
-##### [Analyse your own traffic without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#id2)
-
-
-##### [Analyse your own traffic with using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#for-p2p-support-on-macos-intel)
-
-
-##### [Analyse a PCAP without using P2P](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#id2)
-
 
 
 # Configuration
