@@ -1495,6 +1495,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """return the path of zeek log files slips is currently using"""
         return self.r.get("zeek_path")
 
+    def increment_processed_flows(self):
+        return self.r.incr(self.constants.PROCESSED_FLOWS, 1)
+
+    def get_processed_flows_so_far(self) -> int:
+        return int(self.r.get(self.constants.PROCESSED_FLOWS))
+
     def store_std_file(self, **kwargs):
         """
         available args are

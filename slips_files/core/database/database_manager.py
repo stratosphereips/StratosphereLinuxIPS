@@ -640,7 +640,13 @@ class DBManager:
         return self.rdb.add_software_to_profile(*args, **kwargs)
 
     def get_total_flows(self, *args, **kwargs):
-        return self.rdb.get_total_flows(*args, **kwargs)
+        return int(self.rdb.get_total_flows(*args, **kwargs))
+
+    def increment_processed_flows(self, *args, **kwargs):
+        return self.rdb.increment_processed_flows(*args, **kwargs)
+
+    def get_processed_flows_so_far(self, *args, **kwargs):
+        return self.rdb.get_processed_flows_so_far(*args, **kwargs)
 
     def add_out_ssh(self, *args, **kwargs):
         return self.rdb.add_out_ssh(*args, **kwargs)

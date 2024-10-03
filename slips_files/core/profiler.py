@@ -482,7 +482,7 @@ class Profiler(ICore, IObservable):
                 if self.flow:
                     self.add_flow_to_profile()
                     self.handle_setting_local_net()
-
+                    self.db.increment_processed_flows()
             except Exception as e:
                 self.print(
                     f"Problem processing line {line}. Line discarded. {e}",
