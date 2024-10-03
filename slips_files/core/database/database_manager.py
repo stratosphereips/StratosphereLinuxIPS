@@ -433,8 +433,8 @@ class DBManager:
     def delete_evidence(self, *args, **kwargs):
         return self.rdb.delete_evidence(*args, **kwargs)
 
-    def cache_whitelisted_evidence_ID(self, *args, **kwargs):
-        return self.rdb.cache_whitelisted_evidence_ID(*args, **kwargs)
+    def cache_whitelisted_evidence_id(self, *args, **kwargs):
+        return self.rdb.cache_whitelisted_evidence_id(*args, **kwargs)
 
     def is_whitelisted_evidence(self, *args, **kwargs):
         return self.rdb.is_whitelisted_evidence(*args, **kwargs)
