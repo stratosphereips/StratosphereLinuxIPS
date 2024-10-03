@@ -235,8 +235,8 @@ class AlertHandler:
         """
         self.r.sadd("processed_evidence", evidence_id)
 
-    def is_evidence_processed(self, evidence_ID: str) -> bool:
-        return self.r.sismember("processed_evidence", evidence_ID)
+    def is_evidence_processed(self, evidence_id: str) -> bool:
+        return self.r.sismember("processed_evidence", evidence_id)
 
     def delete_evidence(self, profileid, twid, evidence_id: str):
         """
@@ -246,20 +246,23 @@ class AlertHandler:
         # which means that any evidence passed to this function
         # can never be a part of a past alert
         self.r.hdel(f"{profileid}_{twid}_evidence", evidence_id)
+        self.r.incr("number_of_evidence", -1)
 
-    def cache_whitelisted_evidence_ID(self, evidence_ID: str):
+    def cache_whitelisted_evidence_id(self, evidence_id: str):
         """
-        Keep track of whitelisted evidence IDs to avoid showing them in alerts later
+        Keep track of whitelisted evidence IDs to avoid showing them in
+        alerts later
         """
         # without this function, slips gets the stored evidence id from the db,
         # before deleteEvidence is called, so we need to keep track of whitelisted evidence ids
-        self.r.sadd("whitelisted_evidence", evidence_ID)
+        self.r.sadd("whitelisted_evidence", evidence_id)
 
-    def is_whitelisted_evidence(self, evidence_ID):
+    def is_whitelisted_evidence(self, evidence_id):
         """
-        Check if we have the evidence ID as whitelisted in the db to avoid showing it in alerts
+        Check if we have the evidence ID as whitelisted in the db to
+        avoid showing it in alerts
         """
-        return self.r.sismember("whitelisted_evidence", evidence_ID)
+        return self.r.sismember("whitelisted_evidence", evidence_id)
 
     def remove_whitelisted_evidence(self, all_evidence: dict) -> dict:
         """

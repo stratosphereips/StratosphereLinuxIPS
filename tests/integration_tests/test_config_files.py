@@ -47,7 +47,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = (
         f"./slips.py "
-        f"-t  -e 1 "
+        f"-t -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
         f"-c tests/integration_tests/test.yaml "
@@ -74,7 +74,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     assert is_evidence_present(log_file, disabled_evidence) is False
     print("Testing time_window_width param.")
     # testing time_window_width param in the configuration file
-    assert check_for_text("in the last 115740 days", output_dir) is True
+    assert check_for_text("115740 days 17 hrs 46 mins 39 seconds", output_dir)
 
     print("Make sure slips didn't delete zeek files.")
     # test delete_zeek_files param

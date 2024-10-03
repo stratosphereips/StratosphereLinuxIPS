@@ -117,7 +117,7 @@ def test_output_line_all_outputs(mock_log_error, mock_log_line, mock_print):
 
     output.output_line(msg)
 
-    mock_print.assert_called_with(msg["from"], msg["txt"])
+    mock_print.assert_called_with(msg["from"], msg["txt"], end="\n")
     mock_log_line.assert_called_with(msg)
     mock_log_error.assert_called_with(msg)
 
@@ -165,7 +165,7 @@ def test_output_line_no_error_log(mock_log_error, mock_log_line, mock_print):
 
     output.output_line(msg)
 
-    mock_print.assert_called_with(msg["from"], msg["txt"])
+    mock_print.assert_called_with(msg["from"], msg["txt"], end="\n")
     mock_log_line.assert_called_with(msg)
     mock_log_error.assert_not_called()
 

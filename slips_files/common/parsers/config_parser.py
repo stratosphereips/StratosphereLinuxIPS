@@ -226,46 +226,25 @@ class ConfigParser(object):
             )
         return disabled_detections
 
-    def get_tw_width(self):
+    def get_tw_width(self) -> str:
         twid_width = self.get_tw_width_as_float()
-        # twid_width = f'{twid_width / 60} mins' if twid_width <= 60
-        # else f'{twid_width / 60 / 60}h'
-        twid_width = str(timedelta(seconds=twid_width))
-        if ", 0:00:00" in twid_width:
-            # and int number of days. '1 day, 0:00:00' for example,
-            # we only need 1 day
-            return twid_width.replace(", 0:00:00", "")
+        # timedelta puts it in the form of X days, hours:minutes:seconds
+        total_seconds = int(timedelta(seconds=twid_width).total_seconds())
+        days, remainder = divmod(
+            total_seconds, 86400
+        )  # 86400 seconds in a day
+        hrs, remainder = divmod(remainder, 3600)  # 3600 seconds in an hour
+        mins, sec = divmod(remainder, 60)
 
-        if ":" in twid_width and "day" not in twid_width:
-            # less than a day
-            hrs, mins, sec = twid_width.split(":")
-            hrs = int(hrs)
-            mins = int(mins)
-            sec = int(sec)
+        time_dict = {"day": days, "hr": hrs, "min": mins, "second": sec}
 
-            res = ""
-            if hrs := hrs:
-                res += f"{hrs} hrs "
-                # remove the s
-                if hrs == 1:
-                    res = f"{res[:-2]} "
-
-            if mins := mins:
-                res += f"{mins} mins "
-                if mins == 1:
-                    res = f"{res[:-2]} "
-
-            if sec := sec:
-                res += f"{sec} seconds "
-                if sec == 1:
-                    res = f"{res[:-2]} "
-
-            if res.endswith(" "):
-                res = res[:-1]
-            return res
-
-        # width is a combination of days mins and seconds
-        return twid_width
+        # Build the result string, correctly handling singular/plural
+        time_parts = [
+            f"{value} {key}{'s' if value != 1 else ''}"
+            for key, value in time_dict.items()
+            if value > 0
+        ]
+        return " ".join(time_parts) if time_parts else "0 seconds"
 
     def enable_metadata(self):
         return self.read_configuration("parameters", "metadata_dir", False)

@@ -642,7 +642,7 @@ class EvidenceHandler(ICore):
                 self.db.mark_evidence_as_processed(evidence.id)
                 # Ignore evidence if IP is whitelisted
                 if self.whitelist.is_whitelisted_evidence(evidence):
-                    self.db.cache_whitelisted_evidence_ID(evidence.id)
+                    self.db.cache_whitelisted_evidence_id(evidence.id)
                     # Modules add evidence to the db before
                     # reaching this point, now remove evidence from db so
                     # it could be completely ignored
