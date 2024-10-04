@@ -3,6 +3,7 @@ from typing import Callable, Optional
 
 from redis.client import Redis
 
+from slips_files.core.database.database_manager import DBManager
 from ..messaging.queue import Queue
 from ..utils.logger import Logger
 
@@ -39,7 +40,7 @@ class RedisSimplexQueue(Queue):
     One for sending data and one for listening.
     """
 
-    def __init__(self, r: Redis, send_channel: str, received_channel: str):
+    def __init__(self, r:DBManager, send_channel: str, received_channel: str):
         self.__r = r
         self.__receive = received_channel
         self.__send = send_channel
