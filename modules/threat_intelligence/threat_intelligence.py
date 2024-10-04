@@ -1288,7 +1288,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         ip_info: Dict[str, str] = self.db.is_blacklisted_ip(ip)
         return ip_info
 
-    def is_inboud_traffic(self, ip: str, ip_state: str) -> bool:
+    def is_inbound_traffic(self, ip: str, ip_state: str) -> bool:
         """
         checks if the given ip is connecting to us
         returns true of the given conditions
@@ -1305,7 +1305,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         )
 
     def search_online_for_ip(self, ip: str, ip_state: str):
-        if self.is_inboud_traffic(ip, ip_state):
+        if self.is_inbound_traffic(ip, ip_state):
             # we're excluding outbound traffic from spamhaus queries
             # to reduce FPs
             if spamhaus_res := self.spamhaus.query(ip):
