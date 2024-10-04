@@ -140,7 +140,7 @@ parameters:
    # your own IP and is used to improve detections
    # it would be useful to specify it when analyzing pcaps or zeek logs
    # client_ips : [10.0.0.1, 172.16.0.9, 172.217.171.238]
-   client_ips : "[]"
+   client_ips : []
 
 #############################
 detection:

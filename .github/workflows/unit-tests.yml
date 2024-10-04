@@ -55,6 +55,7 @@ jobs:
           - tests/test_cesnet.py
           - tests/test_output.py
           - tests/test_riskiq.py
+          - tests/test_spamhaus.py
 
     steps:
     - uses: actions/checkout@v4

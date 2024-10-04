@@ -479,12 +479,13 @@ class Main:
         self.args.debug = max(self.args.debug, 0)
 
     def print_version(self):
-        slips_version = f"Slips. Version {green(self.version)}"
+        slips_version = f"Slips Version: {green(self.version)}"
         branch_info = utils.get_branch_info()
         if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
             self.commit, self.branch = branch_info
             slips_version += f" ({self.commit[:8]})"
+        slips_version.replace("\n", "")
         print(slips_version)
 
     def update_stats(self):
