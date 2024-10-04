@@ -81,6 +81,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         "control_channel",
         "new_module_flow" "cpu_profile",
         "memory_profile",
+        "fides_d",
+        "fides2network",
+        "network2fides",
+        "fides2slips",
+        "slips2fides",
     }
     separator = "_"
     normal_label = "benign"
