@@ -1,6 +1,7 @@
 from typing import (
     Dict,
     Tuple,
+    Union,
 )
 
 from dns.exception import DNSException
@@ -26,7 +27,7 @@ class Spamhaus:
         resolver.cache = dns.resolver.LRUCache()
         return resolver
 
-    def query(self, ip):
+    def query(self, ip) -> Union[bool, Dict[str, str]]:
         """Queries the Spamhaus DNSBL to check if the IP is listed."""
         spamhaus_dns_hostname: str = self._get_dns_hostname(ip)
         spamhaus_result = self._perform_dns_query(spamhaus_dns_hostname)

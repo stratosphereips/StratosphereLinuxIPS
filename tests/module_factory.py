@@ -9,6 +9,7 @@ import os
 
 from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
+from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.core.database.database_manager import DBManager
 
 from slips_files.core.helpers.notify import Notify
@@ -350,6 +351,10 @@ class ModuleFactory:
         # override the self.print function to avoid broken pipes
         threatintel.print = Mock()
         return threatintel
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_spamhaus_obj(self, mock_db):
+        return Spamhaus(mock_db)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_update_manager_obj(self, mock_db):
