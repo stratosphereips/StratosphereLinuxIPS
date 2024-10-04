@@ -159,6 +159,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.path_to_local_ti_files = conf.local_ti_data_path()
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)
+        self.client_ips: List[str] = conf.client_ips()
 
     def set_evidence_malicious_asn(
         self,
@@ -1039,9 +1040,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         """
         if not domain:
             return True
-        ignored_TLDs = (".arpa", ".local")
+        ignored_tlds = (".arpa", ".local")
 
-        for keyword in ignored_TLDs:
+        for keyword in ignored_tlds:
             if domain.endswith(keyword):
                 return True
 
@@ -1287,9 +1288,28 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         ip_info: Dict[str, str] = self.db.is_blacklisted_ip(ip)
         return ip_info
 
-    def search_online_for_ip(self, ip):
-        if spamhaus_res := self.spamhaus.query(ip):
-            return spamhaus_res
+    def is_inboud_traffic(self, ip: str, ip_state: str) -> bool:
+        """
+        checks if the given ip is connecting to us
+        returns true of the given conditions
+        1. ip is a saddr
+        2. ip is public
+        3. ip is not our host ip
+        """
+        host_ip: str = self.db.get_host_ip()
+        return (
+            "src" in ip_state
+            and ipaddress.ip_address(ip).is_global
+            and ip != host_ip
+            and ip not in self.client_ips
+        )
+
+    def search_online_for_ip(self, ip: str, ip_state: str):
+        if self.is_inboud_traffic(ip, ip_state):
+            # we're excluding outbound traffic from spamhaus queries
+            # to reduce FPs
+            if spamhaus_res := self.spamhaus.query(ip):
+                return spamhaus_res
 
     def ip_has_blacklisted_asn(
         self,
@@ -1459,9 +1479,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
 
         Parameters:
             - ip (str): The IP address to check.
-            - uid (str): Unique identifier for the network flow.
-            - daddr (str): Destination IP address in the network flow.
-            - timestamp (str): Timestamp when the network flow occurred.
+            - uid (str): Unique identifier for the flow.
+            - daddr (str): Destination IP address in the flow.
+            - timestamp (str): Timestamp when the flow.
             - profileid (str): Identifier of the profile associated with
              the network flow.
             - twid (str): Time window identifier for when the network
@@ -1484,7 +1504,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         """
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
-            ip_info = self.search_online_for_ip(ip)
+            ip_info = self.search_online_for_ip(ip, ip_state)
         if not ip_info:
             # not malicious
             return False
@@ -1889,18 +1909,14 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             # for more detailed description of the evidence
             is_dns_response = data.get("is_dns_response")
             dns_query = data.get("dns_query")
-            # IP is the IP that we want the TI for. It can be a SRC or DST IP
+            # this is the IP/domain that we want the TI for.
             to_lookup = data.get("to_lookup", "")
             # detect the type given because sometimes,
             # http.log host field has ips OR domains
             type_ = utils.detect_ioc_type(to_lookup)
 
-            # ip_state will say if it is a srcip or if it was a dst_ip
+            # ip_state can be "srcip" or "dstip"
             ip_state = data.get("ip_state")
-
-            # If given an IP, ask for it
-            # Block only if the traffic isn't outgoing ICMP port unreachable packet
-
             if type_ == "ip":
                 ip = to_lookup
                 if not self.should_lookup(ip, protocol, ip_state):

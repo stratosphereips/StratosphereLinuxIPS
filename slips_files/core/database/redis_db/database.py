@@ -1199,7 +1199,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
 
     def get_host_ip(self) -> Optional[str]:
-        """Greturns the latest added host ip"""
+        """returns the latest added host ip"""
         host_ip: List[str] = self.r.zrevrange(
             "host_ip", 0, 0, withscores=False
         )

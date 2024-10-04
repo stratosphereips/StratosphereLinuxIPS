@@ -545,9 +545,9 @@ class ConfigParser(object):
 
     def client_ips(self) -> List[str]:
         client_ips: str = self.read_configuration(
-            "parameters", "client_ips", "[]"
+            "parameters", "client_ips", []
         )
-        client_ips: str = utils.sanitize(client_ips)
+        client_ips: str = utils.sanitize(str(client_ips))
         client_ips: List[str] = (
             client_ips.replace("[", "").replace("]", "").split(",")
         )
