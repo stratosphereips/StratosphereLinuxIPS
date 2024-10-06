@@ -30,9 +30,7 @@ from ..fidesModule.persistance.trust import SlipsTrustDatabase
 from ..fidesModule.persistence.trust_in_memory import InMemoryTrustDatabase
 from ..fidesModule.persistence.threat_intelligence_in_memory import InMemoryThreatIntelligenceDatabase
 
-import redis
-
-logger = Logger("SlipsFidesModule")
+from pathlib import Path
 
 class fidesModule(IModule):
     # Name: short name of the module. Do not use spaces
@@ -58,7 +56,9 @@ class fidesModule(IModule):
 
         # load trust model configuration
         #self.__trust_model_config = load_configuration(self.__slips_config.trust_model_path) # TODO fix this to make it work under new management
-        self.__trust_model_config = load_configuration("/StratosphereLinuxIPS/modules/fidesModule/config/fides.conf.yml")
+        current_dir = Path(__file__).resolve().parent
+        config_path = current_dir / "config" / "fides.conf.yml"
+        self.__trust_model_config = load_configuration(config_path)
 
 
         # prepare variables for global protocols
