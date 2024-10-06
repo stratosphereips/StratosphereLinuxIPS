@@ -172,3 +172,4 @@ output/
 config-live-macos-*
 dataset-private/*
 appendonly.aof
+/slipsOut/flows.sqlite
