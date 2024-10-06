@@ -10,7 +10,7 @@ import json
 import sys
 from dataclasses import asdict
 
-
+from .evaluation.ti_evaluation import TIEvaluation
 from ..fidesModule.messaging.message_handler import MessageHandler
 from ..fidesModule.messaging.network_bridge import NetworkBridge
 from ..fidesModule.model.configuration import load_configuration
@@ -44,7 +44,8 @@ class fidesModule(IModule):
         
         slips_conf = os.path.join('modules', 'fidesModule', 'config', 'fides.conf.yml')
 
-        # self.__slips_config = slips_conf # TODONE give it path to config file and move the config file to module
+        # self.__slips_config = slips_conf # TODONE give it path to config
+        # file and move the config file to module
         self.read_configuration() # hope it works
 
         # connect to slips database
@@ -52,7 +53,7 @@ class fidesModule(IModule):
 
         # IModule has its own logger, no set-up
         LoggerPrintCallbacks.clear()
-        LoggerPrintCallbacks.append(self.__format_and_print)
+        LoggerPrintCallbacks.append(self.print)
 
         # load trust model configuration
         #self.__trust_model_config = load_configuration(self.__slips_config.trust_model_path) # TODO fix this to make it work under new management
@@ -66,6 +67,10 @@ class fidesModule(IModule):
         self.__intelligence: ThreatIntelligenceProtocol
         self.__alerts: AlertProtocol
         self.__slips_fides: RedisQueue
+        self.__channel_slips_fides = self.db.subscribe("fides_d")
+        self.channels = {
+            "fides_d": self.__channel_slips_fides,
+        }
 
     def read_configuration(self) -> bool:
         """reurns true if all necessary configs are present and read"""
@@ -98,7 +103,7 @@ class fidesModule(IModule):
         print("-6-", end="")
 
         intelligence = ThreatIntelligenceProtocol(trust_db, ti_db, bridge, self.__trust_model_config, opinion, trust,
-                                                  self.__slips_config.interaction_evaluation_strategy,
+                                                  TIEvaluation(),
                                                   self.__network_opinion_callback)
         print("-6.5-", end="")
         alert = AlertProtocol(trust_db, bridge, trust, self.__trust_model_config, opinion,
@@ -123,14 +128,12 @@ class fidesModule(IModule):
         self.__intelligence = intelligence
         self.__alerts = alert
         # 1 # self.__slips_fides = slips_fides_queue
-        self.__channel_slips_fides = self.db.subscribe("fides_d")
+
         # and finally execute listener
         self.__bridge.listen(message_handler, block=False)
         print("-9-", end="")
 
-        self.channels = {
-            "fides_d": self.__channel_slips_fides,
-        }
+
 
     def __network_opinion_callback(self, ti: SlipsThreatIntelligence):
         """This is executed every time when trust model was able to create an aggregated network opinion."""
