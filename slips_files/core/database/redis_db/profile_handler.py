@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import sys
 import time
@@ -223,13 +224,42 @@ class ProfileHandler:
                     extra_info=extra_info,
                 )
 
+    def _was_flow_flipped(self, flow) -> bool:
+        """
+        The majority of the FP with horizontal port scan detection
+        happen because a benign computer changes wifi, and many not
+        established conns are redone, which look like a port scan to
+        10 webpages. To avoid this, we IGNORE all the flows that have
+        in the history of flags (field history in zeek), the ^,
+        that means that the flow was swapped/flipped.
+        The below key_name is only used by the portscan module to check
+        for horizontal portscan, which means we can safely ignore it
+        here and it won't affect the rest of slips
+        """
+        state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
+        return "^" in state_hist
+
+    @staticmethod
+    def _is_multicast_or_broadcast(daddr: str) -> bool:
+        """
+        to avoid reporting port scans on the
+        broadcast or multicast addresses or invalid values
+        """
+        if daddr == "255.255.255.255":
+            return True
+
+        daddr_obj = ipaddress.ip_address(daddr)
+        return daddr_obj.is_multicast
+
     def add_port(
         self, profileid: str, twid: str, flow: dict, role: str, port_type: str
     ):
         """
         Store info learned from ports for this flow
-        The flow can go out of the IP (we are acting as Client) or into the IP (we are acting as Server)
-        role: 'Client' or 'Server'. Client also defines that the flow is going out, Server that is going in
+        The flow can go out of the IP (we are acting as Client) or into the IP
+         (we are acting as Server)
+        role: 'Client' or 'Server'. Client also defines that the flow is going
+         out, Server that is going in
         port_type: 'Dst' or 'Src'.
         Depending if this port was a destination port or a source port
         """
@@ -244,17 +274,8 @@ class ProfileHandler:
         uid = flow.uid
         ip = str(flow.daddr)
         spkts = flow.spkts
-        state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
 
-        if "^" in state_hist:
-            # The majority of the FP with horizontal port scan detection happen because a
-            # benign computer changes wifi, and many not established conns are redone,
-            # which look like a port scan to 10 webpages. To avoid this, we IGNORE all
-            # the flows that have in the history of flags (field history in zeek), the ^,
-            # that means that the flow was swapped/flipped.
-            # The below key_name is only used by the portscan module to check for horizontal
-            # portscan, which means we can safely ignore it here and it won't affect the rest
-            # of slips
+        if self._was_flow_flipped(flow):
             return False
 
         # Choose which port to use based if we were asked Dst or Src
@@ -265,10 +286,10 @@ class ProfileHandler:
         ip_key = "srcips" if role == "Server" else "dstips"
 
         # Get the state. Established, NotEstablished
-        summaryState = self.get_final_state_from_flags(state, pkts)
+        summary_state = self.get_final_state_from_flags(state, pkts)
 
         old_profileid_twid_data = self.get_data_from_profile_tw(
-            profileid, twid, port_type, summaryState, proto, role, "Ports"
+            profileid, twid, port_type, summary_state, proto, role, "Ports"
         )
 
         try:
@@ -278,7 +299,8 @@ class ProfileHandler:
             port_data["totalpkt"] += pkts
             port_data["totalbytes"] += totbytes
 
-            # if there's a conn from this ip on this port, update the pkts of this conn
+            # if there's a conn from this ip on this port, update the pkts
+            # of this conn
             if ip in port_data[ip_key]:
                 port_data[ip_key][ip]["pkts"] += pkts
                 port_data[ip_key][ip]["spkts"] += spkts
@@ -309,13 +331,25 @@ class ProfileHandler:
         old_profileid_twid_data[port] = port_data
         data = json.dumps(old_profileid_twid_data)
         hash_key = f"{profileid}{self.separator}{twid}"
-        key_name = f"{port_type}Ports{role}{proto}{summaryState}"
-        self.r.hset(hash_key, key_name, str(data))
+        key_name = f"{port_type}Ports{role}{proto}{summary_state}"
         self.mark_profile_tw_as_modified(profileid, twid, starttime)
+
+        if key_name == "DstPortsClientTCPNot Established":
+            # this key is used in horizontal ps module only
+            # to avoid unnecessary storing and filtering of data, we store
+            # only unresolved non multicast non broadcast ips.
+            # if this key is ever needed for another module, we'll need to
+            # workaround this
+            ip_resolved = self.get_dns_resolution(ip)
+            if ip_resolved or self._is_multicast_or_broadcast(ip):
+                return
+
+        self.r.hset(hash_key, key_name, str(data))
 
     def get_final_state_from_flags(self, state, pkts):
         """
-        Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
+        Analyze the flags given and return a summary of the state. Should work
+         with Argus and Bro flags
         We receive the pakets to distinguish some Reset connections
         """
         try:
@@ -641,14 +675,14 @@ class ProfileHandler:
         self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
-        summaryState = self.get_final_state_from_flags(flow.state, flow.pkts)
-        key_name = f"{direction}IPs{role}{flow.proto.upper()}{summaryState}"
+        summary_state = self.get_final_state_from_flags(flow.state, flow.pkts)
+        key_name = f"{direction}IPs{role}{flow.proto.upper()}{summary_state}"
         # Get the previous data about this key
         old_profileid_twid_data = self.get_data_from_profile_tw(
             profileid,
             twid,
             direction,
-            summaryState,
+            summary_state,
             flow.proto,
             role,
             "IPs",
