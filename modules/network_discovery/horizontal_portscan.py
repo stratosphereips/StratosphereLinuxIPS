@@ -48,9 +48,6 @@ class HorizontalPortscan:
         """
         Get the list of dstports that we tried to connect
          to (not established flows)
-         these unknowns are the info this function retrieves
-         profileid -> unknown_dstip:unknown_dstports
-
          here, the profileid given is the client.
          :return: the following dict
          #TODO this is wrong, fix it
@@ -165,11 +162,7 @@ class HorizontalPortscan:
         returns all the uids of flows sent on a sigle port
         to different destination IPs
         """
-        uids = []
-        for dstip in dstips:
-            for uid in dstips[dstip]["uid"]:
-                uids.append(uid)
-        return uids
+        return [uid for dstip in dstips for uid in dstips[dstip]["uid"]]
 
     def set_evidence_horizontal_portscan(self, evidence: dict):
         threat_level = ThreatLevel.HIGH
