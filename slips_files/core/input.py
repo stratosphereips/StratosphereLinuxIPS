@@ -116,10 +116,10 @@ class Input(ICore):
         self.is_profiler_done_event = is_profiler_done_event
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
-    def is_done_processing(self):
+    def mark_self_as_done_processing(self):
         """
-        marks this process as done processing so
-        slips.py would know when to terminate
+        marks this process as done processing and wait for the profiler to
+        stop so slips.py would know when to terminate
         """
         # signal slips.py that this process is done
         # tell profiler that this process is
@@ -474,14 +474,14 @@ class Input(ICore):
 
         if total_flows == 0 and not growing_zeek_dir:
             # we're given an empty dir/ zeek logfile
-            self.is_done_processing()
+            self.mark_self_as_done_processing()
             return True
 
         self.total_flows = total_flows
         self.db.set_input_metadata({"total_flows": total_flows})
         self.lines = self.read_zeek_files()
         self.print_lines_read()
-        self.is_done_processing()
+        self.mark_self_as_done_processing()
         return True
 
     def print_lines_read(self):
@@ -549,7 +549,7 @@ class Input(ICore):
                 if self.testing:
                     break
 
-        self.is_done_processing()
+        self.mark_self_as_done_processing()
         return True
 
     def handle_suricata(self):
@@ -567,7 +567,7 @@ class Input(ICore):
                 self.lines += 1
                 if self.testing:
                     break
-        self.is_done_processing()
+        self.mark_self_as_done_processing()
         return True
 
     def is_zeek_tabs_file(self, filepath: str) -> bool:
@@ -617,7 +617,7 @@ class Input(ICore):
         # as we're running on an interface
         self.bro_timeout = 30
         self.lines = self.read_zeek_files()
-        self.is_done_processing()
+        self.mark_self_as_done_processing()
         return True
 
     def handle_nfdump(self):
@@ -628,7 +628,7 @@ class Input(ICore):
         self.nfdump_output = result.stdout.decode("utf-8")
         self.lines = self.read_nfdump_output()
         self.print_lines_read()
-        self.is_done_processing()
+        self.mark_self_as_done_processing()
         return True
 
     def start_observer(self):
@@ -684,7 +684,7 @@ class Input(ICore):
             self.is_zeek_tabs = False
         self.lines = self.read_zeek_files()
         self.print_lines_read()
-        self.is_done_processing()
+        self.mark_self_as_done_processing()
 
         connlog_path = os.path.join(self.zeek_dir, "conn.log")
 
@@ -905,7 +905,7 @@ class Input(ICore):
                 self.lines += 1
                 self.print("Done reading 1 CYST flow.\n ", 0, 3)
 
-        self.is_done_processing()
+        self.mark_self_as_done_processing()
 
     def give_profiler(self, line):
         """

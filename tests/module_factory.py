@@ -264,7 +264,7 @@ class ModuleFactory:
             termination_event=Mock(),
         )
         input.db = mock_db
-        input.is_done_processing = do_nothing
+        input.mark_self_as_done_processing = do_nothing
         input.bro_timeout = 1
         # override the print function to avoid broken pipes
         input.print = Mock()
