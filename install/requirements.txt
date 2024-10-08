@@ -11,7 +11,7 @@ certifi==2024.7.4
 tensorflow==2.16.1
 colorama==0.4.6
 Keras
-validators==0.33.0
+validators==0.34.0
 ipwhois==1.2.0
 matplotlib==3.9.2
 recommonmark==0.7.1
