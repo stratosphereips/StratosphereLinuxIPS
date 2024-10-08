@@ -163,7 +163,7 @@ class IDMEFv2:
 
         except jsonschema.exceptions.ValidationError as e:
             # TODO should be logged using a module's print!
-            print(f"IDMEFv2 Validation failure: {e.message}")
+            print(f"IDMEFv2 Validation failure: {e} {e.message}")
 
         except Exception as e:
             print(f"Error in convert(): {e}")

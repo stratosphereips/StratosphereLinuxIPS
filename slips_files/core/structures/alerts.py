@@ -37,11 +37,7 @@ class Alert:
     # list of evidence acausing this alert
     correl_id: List[str] = field(
         default=None,
-        metadata={
-            "validate": lambda x: (
-                all(utils.is_valid_uuid4(uuid_) for uuid_ in x) if x else True
-            )
-        },
+        metadata={"validate": lambda x: is_valid_correl_id(x)},
     )
     last_flow_datetime: str = ""
 
@@ -54,6 +50,8 @@ class Alert:
             else:
                 # remove duplicate uids
                 self.correl_id = list(set(self.correl_id))
+        else:
+            self.correl_id = []
 
         # timestamp of the flow causing the last evidence of this alert
         if not self.last_flow_datetime:
