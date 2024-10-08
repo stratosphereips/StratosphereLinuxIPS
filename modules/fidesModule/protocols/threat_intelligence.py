@@ -32,9 +32,7 @@ class ThreatIntelligenceProtocol(Protocol):
                  ti_evaluation_strategy: TIEvaluation,
                  network_opinion_callback: Callable[[SlipsThreatIntelligence], None]
                  ):
-        print("-6.1-", end="")
         super().__init__(configuration, trust_db, bridge)
-        print("-6.2-", end="")
         self.__ti_db = ti_db
         self.__aggregator = aggregator
         self.__trust_protocol = trust_protocol

@@ -10,7 +10,7 @@ import json
 import sys
 from dataclasses import asdict
 
-from .evaluation.ti_evaluation import TIEvaluation
+from .evaluation.ti_evaluation import *
 from ..fidesModule.messaging.message_handler import MessageHandler
 from ..fidesModule.messaging.network_bridge import NetworkBridge
 from ..fidesModule.model.configuration import load_configuration
@@ -31,6 +31,8 @@ from ..fidesModule.persistence.trust_in_memory import InMemoryTrustDatabase
 from ..fidesModule.persistence.threat_intelligence_in_memory import InMemoryThreatIntelligenceDatabase
 
 from pathlib import Path
+
+# logger = Logger("SlipsFidesModule")
 
 class fidesModule(IModule):
     # Name: short name of the module. Do not use spaces
@@ -68,8 +70,16 @@ class fidesModule(IModule):
         self.__alerts: AlertProtocol
         self.__slips_fides: RedisQueue
         self.__channel_slips_fides = self.db.subscribe("fides_d")
+        self.f2n = self.db.subscribe("fides2network")
+        self.n2f = self.db.subscribe("network2fides")
+        self.s2f = self.db.subscribe("slips2fides")
+        self.f2s = self.db.subscribe("fides2slips")
         self.channels = {
             "fides_d": self.__channel_slips_fides,
+            "network2fides": self.n2f,
+            "fides2network": self.f2n,
+            "slips2fides": self.s2f,
+            "fides2slips": self.f2s,
         }
 
     def read_configuration(self) -> bool:
@@ -78,37 +88,27 @@ class fidesModule(IModule):
         self.__slips_config = conf.export_to()
 
     def __setup_trust_model(self):
-        print("-1-", end="")
-
         # create database wrappers for Slips using Redis
         trust_db = InMemoryTrustDatabase(self.__trust_model_config)
-        print("-2-", end="")
         ti_db =  InMemoryThreatIntelligenceDatabase()
-        print("-3-", end="")
 
         # create queues
         # TODO: [S] check if we need to use duplex or simplex queue for communication with network module
-        network_fides_queue = RedisSimplexQueue(self.db, send_channel='fides2network', received_channel='network2fides')
-        print("-3.5-", end="")
+        network_fides_queue = RedisSimplexQueue(self.db, send_channel="fides2network", received_channel="network2fides", channels=self.channels)
         # 1 # slips_fides_queue = RedisSimplexQueue(r, send_channel='fides2slips', received_channel='slips2fides')
-        print("-4-", end="")
 
         bridge = NetworkBridge(network_fides_queue)
-        print("-5-", end="")
 
         recommendations = RecommendationProtocol(self.__trust_model_config, trust_db, bridge)
         trust = InitialTrustProtocol(trust_db, self.__trust_model_config, recommendations)
         peer_list = PeerListUpdateProtocol(trust_db, bridge, recommendations, trust)
         opinion = OpinionAggregator(self.__trust_model_config, ti_db, self.__trust_model_config.ti_aggregation_strategy)
-        print("-6-", end="")
 
         intelligence = ThreatIntelligenceProtocol(trust_db, ti_db, bridge, self.__trust_model_config, opinion, trust,
-                                                  TIEvaluation(),
+                                                  MaxConfidenceTIEvaluation(),
                                                   self.__network_opinion_callback)
-        print("-6.5-", end="")
         alert = AlertProtocol(trust_db, bridge, trust, self.__trust_model_config, opinion,
                               self.__network_opinion_callback)
-        print("-7-", end="")
 
         # TODO: [S+] add on_unknown and on_error handlers if necessary
         message_handler = MessageHandler(
@@ -131,15 +131,14 @@ class fidesModule(IModule):
 
         # and finally execute listener
         self.__bridge.listen(message_handler, block=False)
-        print("-9-", end="")
 
 
 
     def __network_opinion_callback(self, ti: SlipsThreatIntelligence):
         """This is executed every time when trust model was able to create an aggregated network opinion."""
-        logger.info(f'Callback: Target: {ti.target}, Score: {ti.score}, Confidence: {ti.confidence}.')
+        #logger.info(f'Callback: Target: {ti.target}, Score: {ti.score}, Confidence: {ti.confidence}.')
         # TODO: [S+] document that we're sending this type
-        self.__slips_fides.send(json.dumps(asdict(ti)))
+        self.db.publish("fides2slips", json.dumps(asdict(ti)))
 
     def __format_and_print(self, level: str, msg: str):
         # TODO: [S+] determine correct level for trust model log levels
@@ -158,7 +157,7 @@ class fidesModule(IModule):
     def main(self):
         print("+", end="")
         try:
-            if msg := self.get_msg("tw_modified"):
+            if msg := self.get_msg("slips2fides"):
                 # if there's no string data message we can continue in waiting
                 if not msg['data']:# or type(msg['data']) != str:
                     return
@@ -170,8 +169,8 @@ class fidesModule(IModule):
                                                     score=data['score'])
                 elif data['type'] == 'intelligence_request':
                     self.__intelligence.request_data(target=data['target'])
-                else:
-                    logger.warn(f"Unhandled message! {message['data']}", message)
+                # else:
+                    # logger.warn(f"Unhandled message! {message['data']}", message)
                     
 
         except KeyboardInterrupt:
@@ -179,5 +178,7 @@ class fidesModule(IModule):
             return # REPLACE old continue
         except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
-            logger.error(f'Problem on the run() line {exception_line}, {ex}.')
+
+            print(exception_line)
+            # logger.error(f'Problem on the run() line {exception_line}, {ex}.')
             return True
