@@ -42,7 +42,7 @@ class RedisSimplexQueue(Queue):
 
     def __init__(self, db:DBManager, send_channel: str, received_channel:str, channels):
         self.db = db
-        self.__pub = db.rdb.pubsub  #channels[send_channel]
+        self.__pub = channels[received_channel]
         self.__pub_sub_thread: Optional[Thread] = None
         self.__send = send_channel
         self.__receive = received_channel
@@ -73,7 +73,7 @@ class RedisSimplexQueue(Queue):
 
     def __listen_blocking(self, on_message: Callable[[str], None]):
         ## subscription done in init
-        # if not self.__pub.subscribed:
+        #if not self.__pub.subscribed:
         #    self.__pub.subscribe(self.__receive)
 
         for msg in self.__pub.listen():
