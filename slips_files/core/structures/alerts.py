@@ -46,11 +46,15 @@ class Alert:
     last_flow_datetime: str = ""
 
     def __post_init__(self):
-        if not is_valid_correl_id(self.correl_id):
-            raise ValueError(f"uid must be a list of strings .. {self}")
-        else:
-            # remove duplicate uids
-            self.correl_id = list(set(self.correl_id))
+        if self.correl_id:
+            if not is_valid_correl_id(self.correl_id):
+                raise ValueError(
+                    f"correl_id must be a list of strings. {self}"
+                )
+            else:
+                # remove duplicate uids
+                self.correl_id = list(set(self.correl_id))
+
         # timestamp of the flow causing the last evidence of this alert
         if not self.last_flow_datetime:
             last_flow_timestamp: str = self.last_evidence.timestamp
