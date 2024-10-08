@@ -25,7 +25,7 @@ pytest-xdist==3.6.1
 scipy==1.14.0
 scikit-learn==1.5.1
 GitPython==3.1.43
-protobuf==4.25.3
+protobuf==5.28.2
 exclusiveprocess==0.9.4
 setuptools
 pytest-dependency==0.6.0
