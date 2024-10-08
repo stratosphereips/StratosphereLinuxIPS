@@ -1,9 +1,14 @@
 import json
 import threading
 from dataclasses import is_dataclass, asdict
+from tabnanny import verbose
 from typing import Optional, List, Callable
 
-LoggerPrintCallbacks: List[Callable[[str, str], None]] = [lambda level, msg: print(f'{level}: {msg}')]
+LoggerPrintCallbacks: List[Callable[[str, Optional[str], Optional[int], Optional[int], Optional[bool]], None]] = [
+    lambda msg, level=None, verbose=1, debug=0, log_to_logfiles_only=False: print(
+        f'{level}: {msg}' if level is not None else f'UNSPECIFIED_LEVEL: {msg}'
+    )
+]
 """Set this to custom callback that should be executed when there's new log message.
 
 First parameter is level ('DEBUG', 'INFO', 'WARN', 'ERROR'), second is message to be logged.
@@ -22,6 +27,12 @@ class Logger:
         if name is None:
             name = self.__try_to_guess_name()
         self.__name = name
+        self.log_levels = log_levels = {
+            'INFO': 1,
+            'WARN': 2,
+            'ERROR': 3
+        }
+
 
     # this whole method is a hack
     # noinspection PyBroadException
@@ -43,16 +54,16 @@ class Logger:
         return name
 
     def debug(self, message: str, params=None):
-        return self.__print('DEBUG', message, params)
+        return self.__print('DEBUG', message)
 
     def info(self, message: str, params=None):
-        return self.__print('INFO', message, params)
+        return self.__print('INFO', message)
 
     def warn(self, message: str, params=None):
-        return self.__print('WARN', message, params)
+        return self.__print('WARN', message)
 
     def error(self, message: str, params=None):
-        return self.__print('ERROR', message, params)
+        return self.__print('ERROR', message)
 
     def __format(self, message: str, params=None):
         thread = threading.get_ident()
@@ -65,4 +76,8 @@ class Logger:
     def __print(self, level: str, message: str, params=None):
         formatted_message = self.__format(message, params)
         for print_callback in LoggerPrintCallbacks:
-            print_callback(level, formatted_message)
+            if level == 'DEBUG':
+                print_callback(formatted_message, verbose=0) # automatically verbose = 1 - print, debug = 0 - do not print
+            else:
+                print_callback(formatted_message, verbose=self.log_levels[level])
+
