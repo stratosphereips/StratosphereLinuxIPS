@@ -44,11 +44,11 @@ class fidesModule(IModule):
         # Process.__init__(self) done by IModule
         self.__output = self.logger
         
-        slips_conf = os.path.join('modules', 'fidesModule', 'config', 'fides.conf.yml')
+        #slips_conf = os.path.join('modules', 'fidesModule', 'config', 'fides.conf.yml')
 
         # self.__slips_config = slips_conf # TODONE give it path to config
         # file and move the config file to module
-        self.read_configuration() # hope it works
+        #self.read_configuration() # hope it works
 
         # connect to slips database
         #__database__.start(slips_conf) # __database__ replaced by self.db from IModule, no need ot start it
@@ -69,13 +69,11 @@ class fidesModule(IModule):
         self.__intelligence: ThreatIntelligenceProtocol
         self.__alerts: AlertProtocol
         self.__slips_fides: RedisQueue
-        self.__channel_slips_fides = self.db.subscribe("fides_d")
         self.f2n = self.db.subscribe("fides2network")
         self.n2f = self.db.subscribe("network2fides")
         self.s2f = self.db.subscribe("slips2fides")
         self.f2s = self.db.subscribe("fides2slips")
         self.channels = {
-            "fides_d": self.__channel_slips_fides,
             "network2fides": self.n2f,
             "fides2network": self.f2n,
             "slips2fides": self.s2f,
@@ -121,7 +119,6 @@ class fidesModule(IModule):
             on_unknown=None,
             on_error=None
         )
-        print("-8-", end="")
 
         # bind local vars
         self.__bridge = bridge
@@ -148,14 +145,11 @@ class fidesModule(IModule):
         """
         Initializations that run only once before the main() function runs in a loop
         """
-        print("~", end="")
         # utils.drop_root_privs()
         self.__setup_trust_model()
-        print("~", end="")
 
 
     def main(self):
-        print("+", end="")
         try:
             if msg := self.get_msg("slips2fides"):
                 # if there's no string data message we can continue in waiting
