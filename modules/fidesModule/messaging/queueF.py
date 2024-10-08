@@ -72,8 +72,9 @@ class RedisSimplexQueue(Queue):
         return self.__pub_sub_thread
 
     def __listen_blocking(self, on_message: Callable[[str], None]):
-        if not self.__pub.subscribed:
-            self.__pub.subscribe(self.__receive)
+        ## subscription done in init
+        # if not self.__pub.subscribed:
+        #    self.__pub.subscribe(self.__receive)
 
         for msg in self.__pub.listen():
             self.__exec_message(msg, on_message)
