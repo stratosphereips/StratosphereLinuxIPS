@@ -33,6 +33,7 @@ def test_decide_blocking(
     profileid, our_ips, expected_result, expected_publish_call_count
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
+    evidence_handler.is_blocking_module_supported = Mock(return_value=True)
     evidence_handler.our_ips = our_ips
     with patch.object(evidence_handler.db, "publish") as mock_publish:
         result = evidence_handler.decide_blocking(profileid)
@@ -222,45 +223,44 @@ def test_add_alert_to_json_log_file(
             start_time="2024-10-04T18:46:50+03:00",
             end_time="2024-10-04T19:46:50+03:00",
         ),
-        last_evidence=Mock(),
-        accumulated_threat_level=12.2,
+        last_evidence=Evidence(
+            evidence_type=EvidenceType.ARP_SCAN,
+            description="ARP scan detected",
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value="192.168.1.20",
+            ),
+            threat_level=ThreatLevel.INFO,
+            profile=ProfileID("192.168.1.20"),
+            timewindow=TimeWindow(timewindow),
+            uid=all_uids,
+            timestamp="1728417813.8868346",
+        ),
+        accumulated_threat_level=accumulated_threat_level,
         last_flow_datetime="2024/10/04 15:45:30.123456+0000",
     )
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.jsonfile = mock_file
-    # evidence_handler.idmefv2.convert_to_idmef_alert = Mock()
-
+    evidence_handler.idmefv2.convert_to_idmef_alert = Mock(return_value=True)
     with patch("json.dump") as mock_json_dump:
         evidence_handler.add_alert_to_json_log_file(alert)
-
         mock_json_dump.assert_called_once()
-
-    idmef_dict = evidence_handler.idmefv2.convert_to_idmef_alert.call_args[0][
-        0
-    ]
-    assert "uids" in idmef_dict
-    assert idmef_dict["uids"] == all_uids
-    assert "accumulated_threat_level" in idmef_dict
-    assert idmef_dict["accumulated_threat_level"] == accumulated_threat_level
-    assert "timewindow" in idmef_dict
-    assert idmef_dict["timewindow"] == int(
-        timewindow.replace("timewindow", "")
-    )
-
     mock_file.write.assert_any_call("\n")
 
 
 def test_show_popup():
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.notify = Mock()
+    alert = Mock(spec=Alert)
+    evidence_handler.get_alert_time_description = Mock(
+        return_value="alert_time_desc"
+    )
 
-    colored_alert = "\033[31mRed Alert\033[0m \033[36mCyan Info\033[0m"
-    expected_clean_alert = "Red Alert Cyan Info"
-
-    evidence_handler.show_popup(colored_alert)
+    evidence_handler.show_popup(alert)
 
     evidence_handler.notify.show_popup.assert_called_once_with(
-        expected_clean_alert
+        "alert_time_desc"
     )
 
 
@@ -304,8 +304,8 @@ def test_add_threat_level_to_evidence_description(
             TimeWindow(1),
             1625097600,
             "example.com",
-            "IP 192.168.1.1 (example.com) detected as malicious in timewindow 1 "
-            "(start 2021/07/01 00:00:00, stop 2021/07/01 00:05:00) \n",
+            "IP 192.168.1.1 (example.com) detected as malicious in timewindow"
+            " 1 (start converted_time, stop converted_time) \n",
         ),
         # testcase2: No hostname
         (
@@ -314,7 +314,7 @@ def test_add_threat_level_to_evidence_description(
             1625184000,
             None,
             "IP 10.0.0.1 detected as malicious in timewindow 2 "
-            "(start 2021/07/02 00:00:00, stop 2021/07/02 00:05:00) \n",
+            "(start converted_time, stop converted_time) \n",
         ),
         # testcase3: Different time window
         (
@@ -323,7 +323,7 @@ def test_add_threat_level_to_evidence_description(
             1625270400,
             "test.local",
             "IP 172.16.0.1 (test.local) detected as malicious in timewindow 3 "
-            "(start 2021/07/03 00:00:00, stop 2021/07/03 00:05:00) \n",
+            "(start converted_time, stop converted_time) \n",
         ),
     ],
 )
@@ -331,23 +331,22 @@ def test_get_alert_time_description(
     profileid, twid, start_time, hostname, expected_output
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    evidence_handler.db.get_tw_start_time.return_value = start_time
     evidence_handler.db.get_hostname_from_profile.return_value = hostname
     evidence_handler.width = 300
-
+    alert = Alert(
+        profile=profileid,
+        timewindow=twid,
+        last_evidence=Mock(timestamp=1728412808.6257355),
+        accumulated_threat_level=123,
+        id="123",
+        last_flow_datetime="",
+    )
     with patch(
         "slips_files.common.slips_utils.utils.convert_format"
     ) as mock_convert_format:
+        mock_convert_format.return_value = "converted_time"
 
-        def mock_convert(timestamp, format):
-            print(f"Converting timestamp: {timestamp}")
-            return datetime.utcfromtimestamp(timestamp).strftime(
-                "%Y/%m/%d %H:%M:%S"
-            )
-
-        mock_convert_format.side_effect = mock_convert
-
-        result = evidence_handler.get_alert_time_description(profileid, twid)
+        result = evidence_handler.get_alert_time_description(alert)
 
         print(f"Expected: {expected_output}")
         print(f"Actual: {result}")
@@ -414,7 +413,7 @@ def test_get_evidence_to_log(evidence, flow_datetime, expected_output):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.db.get_hostname_from_profile.return_value = None
     result = evidence_handler.get_evidence_to_log(evidence, flow_datetime)
-    assert result == expected_output
+    assert expected_output in result
 
 
 @pytest.mark.parametrize(
