@@ -40,15 +40,15 @@ class RedisSimplexQueue(Queue):
     One for sending data and one for listening.
     """
 
-    def __init__(self, r:DBManager, send_channel: str, received_channel: str):
-        self.__r = r
-        self.__receive = received_channel
-        self.__send = send_channel
-        self.__pub = self.__r.pubsub()
+    def __init__(self, db:DBManager, send_channel: str, received_channel:str, channels):
+        self.db = db
+        self.__pub = db.rdb.pubsub  #channels[send_channel]
         self.__pub_sub_thread: Optional[Thread] = None
+        self.__send = send_channel
+        self.__receive = received_channel
 
     def send(self, serialized_data: str, **argv):
-        self.__r.publish(self.__send, serialized_data)
+        self.db.publish(self.__send, serialized_data)
 
     def listen(self,
                on_message: Callable[[str], None],
@@ -80,6 +80,7 @@ class RedisSimplexQueue(Queue):
 
     def __exec_message(self, redis_msg: dict, on_message: Callable[[str], None]):
         data = None
+
         if redis_msg is not None \
                 and redis_msg['data'] is not None \
                 and type(redis_msg['data']) == str:
@@ -106,21 +107,6 @@ class RedisSimplexQueue(Queue):
         except Exception as ex:
             logger.error(f'Error when executing on_message!, {ex}')
 
-    def get_message(self, timeout_seconds: float = 0) -> Optional[dict]:
-        """Get the next message if one is available, otherwise None.
-
-        Note that this method returns directly message coming from the Redis,
-        the data that were sent ar
-
-        If timeout is specified, the system will wait for `timeout` seconds
-        before returning. Timeout should be specified as a floating point
-        number.
-        """
-        if not self.__pub.subscribed:
-            self.__pub.subscribe(self.__receive)
-
-        return self.__pub.get_message(timeout=timeout_seconds)
-
 
 class RedisDuplexQueue(RedisSimplexQueue):
     """
@@ -128,5 +114,5 @@ class RedisDuplexQueue(RedisSimplexQueue):
     for duplex communication (sending and listening on the same channel).
     """
 
-    def __init__(self, r: Redis, channel: str):
-        super().__init__(r, channel, channel)
+    def __init__(self, db:DBManager, channel: str, channels):
+        super().__init__(db, channel, channel, channels)
