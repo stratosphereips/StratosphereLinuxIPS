@@ -9,6 +9,7 @@ import os
 
 from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
+from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.evidencehandler import EvidenceHandler
 
@@ -264,7 +265,7 @@ class ModuleFactory:
             termination_event=Mock(),
         )
         input.db = mock_db
-        input.is_done_processing = do_nothing
+        input.mark_self_as_done_processing = do_nothing
         input.bro_timeout = 1
         # override the print function to avoid broken pipes
         input.print = Mock()
@@ -351,6 +352,10 @@ class ModuleFactory:
         # override the self.print function to avoid broken pipes
         threatintel.print = Mock()
         return threatintel
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_spamhaus_obj(self, mock_db):
+        return Spamhaus(mock_db)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_update_manager_obj(self, mock_db):

@@ -4,7 +4,11 @@ from tests.module_factory import ModuleFactory
 import os
 import pytest
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import (
+    MagicMock,
+    patch,
+    Mock,
+)
 import ipaddress
 from slips_files.core.structures.evidence import ThreatLevel
 
@@ -618,67 +622,6 @@ def test_should_update_local_ti_file(
 
 
 @pytest.mark.parametrize(
-    "ip_address, mock_resolver_return, expected_result",
-    [
-        # Test Case 1: IP found in SBL Data and XBL CBL Data
-        (
-            "1.2.3.4",
-            [
-                MagicMock(to_text=lambda: "127.0.0.2"),
-                MagicMock(to_text=lambda: "127.0.0.4"),
-            ],
-            {
-                "source": "SBL Data, XBL CBL Data, spamhaus",
-                "description": "IP address of exploited systems."
-                "This includes machines operating open proxies, "
-                "systems infected with trojans, and other "
-                "malware vectors.",
-                "threat_level": "medium",
-                "tags": "spam",
-            },
-        ),
-        # Test Case 2: IP found in PBL Spamhaus Maintained
-        (
-            "5.6.7.8",
-            [MagicMock(to_text=lambda: "127.0.0.11")],
-            {
-                "source": "PBL Spamhaus Maintained, spamhaus",
-                "description": "IP is not expected be delivering unauthenticated"
-                " SMTP email to any Internet mail server,"
-                " such as dynamic and residential IP space",
-                "threat_level": "medium",
-                "tags": "spam",
-            },
-        ),
-        # Test Case 3: IP not found in any Spamhaus list
-        ("9.10.11.12", [], None),
-    ],
-)
-def test_spamhaus_success(
-    mocker, ip_address, mock_resolver_return, expected_result
-):
-    """
-    Test the `spamhaus` method for successful Spamhaus DNSBL queries.
-    """
-    threatintel = ModuleFactory().create_threatintel_obj()
-    mock_resolver = mocker.patch("dns.resolver.resolve")
-    mock_resolver.return_value = mock_resolver_return
-    result = threatintel.spamhaus(ip_address)
-    assert result == expected_result
-
-
-def test_spamhaus_dns_error(mocker):
-    """
-    Test the `spamhaus` method's handling of DNS resolution errors.
-    """
-    threatintel = ModuleFactory().create_threatintel_obj()
-    mock_resolver = mocker.patch("dns.resolver.resolve")
-    mock_resolver.side_effect = Exception("DNS resolution error")
-    result = threatintel.spamhaus("13.14.15.16")
-    assert result is None
-
-
-@pytest.mark.parametrize(
     "domain, expected",
     [
         ("example.local", True),
@@ -831,24 +774,6 @@ def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.is_blacklisted_ip.return_value = mock_return_value
     result = threatintel.search_offline_for_ip(ip_address)
-    assert result == expected_result
-
-
-@pytest.mark.parametrize(
-    "ip_address, mock_return_value, expected_result",
-    [
-        ("1.2.3.4", {"description": "Spam IP"}, {"description": "Spam IP"}),
-        ("10.0.0.1", None, None),
-    ],
-)
-@patch("modules.threat_intelligence.threat_intelligence.ThreatIntel.spamhaus")
-def test_search_online_for_ip(
-    mock_spamhaus, ip_address, mock_return_value, expected_result
-):
-    """Test `search_online_for_ip` for querying online threat intelligence sources."""
-    mock_spamhaus.return_value = mock_return_value
-    threatintel = ModuleFactory().create_threatintel_obj()
-    result = threatintel.search_online_for_ip(ip_address)
     assert result == expected_result
 
 
@@ -1166,6 +1091,50 @@ def test_is_malicious_ip(offline_result, online_result, expected_result):
             "srcip",
         )
         assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "ip_address, mock_return_value, expected_result",
+    [
+        ("1.2.3.4", {"description": "Spam IP"}, {"description": "Spam IP"}),
+        ("10.0.0.1", None, None),
+    ],
+)
+@patch("modules.threat_intelligence.spamhaus.Spamhaus.query")
+def test_search_online_for_ip(
+    mock_spamhaus, ip_address, mock_return_value, expected_result
+):
+    """Test `search_online_for_ip` for querying online threat intelligence sources."""
+    mock_spamhaus.return_value = mock_return_value
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.is_inbound_traffic = Mock()
+    threatintel.is_inbound_traffic.return_value = True
+    result = threatintel.search_online_for_ip(ip_address, "dstip")
+    assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "ip, ip_state, is_global, expected",
+    [
+        ("8.8.8.8", "src", True, True),  # Valid inbound traffic
+        ("192.168.1.2", "src", False, False),  # Not global
+        ("192.168.1.1", "src", True, False),  # Host IP
+        ("192.168.1.10", "src", True, False),  # Client IP
+        ("8.8.8.8", "dst", True, False),  # We are connecting to it,
+        # not inboud
+    ],
+)
+@patch("ipaddress.ip_address")
+def test_is_inbound_traffic(
+    mock_ip_address, ip, ip_state, is_global, expected
+):
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.get_host_ip = Mock(return_value="192.168.1.1")
+    threatintel.client_ips = ["192.168.1.10", "10.0.0.1"]
+    # Mock the global status of the IP address
+    mock_ip_address.return_value.is_global = is_global
+    result = threatintel.is_inbound_traffic(ip, ip_state)
+    assert result == expected
 
 
 @pytest.mark.parametrize(

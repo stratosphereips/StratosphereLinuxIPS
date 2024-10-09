@@ -325,7 +325,7 @@ Besides searching 40+ TI files for every IP/domain Slips encounters, Slips integ
 
 1. **URLhaus**: This service is utilized for checking URLs observed in `http.log` and files observed in `files.log` against known malicious URLs and files. URLhaus provides a comprehensive database of malicious URLs, which Slips queries to determine if observed URLs or files are associated with known malware or phishing campaigns.
 
-2. **Spamhaus**: Spamhaus is used for IP lookups to assess the reputation of IP addresses encountered during the analysis. By querying Spamhaus, Slips can identify IP addresses associated with spamming activities, botnets, and other malicious behaviors, enhancing its ability to detect and alert on suspicious network traffic.
+2. **Spamhaus**: Spamhaus is used for inbound traffic IP lookups to assess the reputation of IP addresses encountered during the analysis. By querying Spamhaus, Slips can identify IP addresses associated with spamming activities, botnets, and other malicious behaviors, enhancing its ability to detect and alert on suspicious network traffic.
 
 3. **Circl.lu**: Circl.lu's service is leveraged for hash lookups, particularly for downloaded files. Each file hash extracted from `files.log` is checked against Circl.lu's extensive database of known malicious file hashes. This integration allows Slips to identify and react to the transfer or presence of known malicious files within the monitored network environment.
 

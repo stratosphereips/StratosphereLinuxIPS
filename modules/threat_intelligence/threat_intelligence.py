@@ -3,13 +3,13 @@ import os
 import json
 from uuid import uuid4
 import validators
-import dns
 import requests
 import threading
 import time
 import multiprocessing
 from typing import Dict, List
 
+from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
@@ -27,7 +27,7 @@ from slips_files.core.structures.evidence import (
 )
 
 
-class ThreatIntel(IModule, URLhaus):
+class ThreatIntel(IModule, URLhaus, Spamhaus):
     name = "Threat Intelligence"
     description = (
         "Check if the source IP or destination IP"
@@ -69,6 +69,7 @@ class ThreatIntel(IModule, URLhaus):
             target=self.make_pending_query, daemon=True
         )
         self.urlhaus = URLhaus(self.db)
+        self.spamhaus = Spamhaus(self.db)
 
     def make_pending_query(self):
         """Processes the pending Circl.lu queries stored in the queue.
@@ -158,6 +159,7 @@ class ThreatIntel(IModule, URLhaus):
         self.path_to_local_ti_files = conf.local_ti_data_path()
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)
+        self.client_ips: List[str] = conf.client_ips()
 
     def set_evidence_malicious_asn(
         self,
@@ -1019,116 +1021,6 @@ class ThreatIntel(IModule, URLhaus):
         """
         return protocol == "ICMP" and ip_state == "dstip"
 
-    def spamhaus(self, ip):
-        """Supports IP lookups only.
-
-        Queries the Spamhaus DNSBL (DNS-based Block List) to determine if the
-         given IP address is listed as a source of spam or malicious activity.
-
-        Parameters:
-            ip (str): The IP address to query against the Spamhaus DNSBL.
-
-        Returns:
-            dict or False: A dictionary containing information about the
-            listing if the IP is found in the Spamhaus DNSBL, including the
-            source dataset, description, threat level, and tags.
-            Returns False if the IP is not listed.
-
-        Each IP found in the DNSBL is associated with specific datasets
-         indicating the nature of the threat. This method maps the response
-         from the DNSBL query to human-readable information.
-
-        Note:
-            This method requires an active internet connection to query the
-             Spamhaus DNSBL and proper DNS resolution settings that allow
-             querying Spamhaus.
-        """
-        # these are spamhaus datasets
-        lists_names = {
-            "127.0.0.2": "SBL Data",
-            "127.0.0.3": "SBL CSS Data",
-            "127.0.0.4": "XBL CBL Data",
-            "127.0.0.9": "SBL DROP/EDROP Data",
-            "127.0.0.10": "PBL ISP Maintained",
-            "127.0.0.11": "PBL Spamhaus Maintained",
-            0: False,
-        }
-
-        list_description = {
-            "127.0.0.2": (
-                "IP under the control of, used by, or made "
-                "available for use"
-                " by spammers and abusers in unsolicited bulk "
-                "email or other types of Internet-based abuse that "
-                "threatens networks or users"
-            ),
-            "127.0.0.3": (
-                "IP involved in sending low-reputation email, "
-                "may display a risk to users or a compromised host"
-            ),
-            "127.0.0.4": (
-                "IP address of exploited systems."
-                "This includes machines operating open proxies, "
-                "systems infected with trojans, and other "
-                "malware vectors."
-            ),
-            "127.0.0.9": (
-                "IP is part of a netblock that is ‘hijacked’ "
-                "or leased by professional spam "
-                "or cyber-crime operations and therefore used "
-                "for dissemination of malware, "
-                "trojan downloaders, botnet controllers, etc."
-            ),
-            "127.0.0.10": (
-                "IP address should not -according to the ISP "
-                "controlling it- "
-                "be delivering unauthenticated SMTP email to "
-                "any Internet mail server"
-            ),
-            "127.0.0.11": (
-                "IP is not expected be delivering unauthenticated"
-                " SMTP email to any Internet mail server,"
-                " such as dynamic and residential IP space"
-            ),
-        }
-
-        spamhaus_dns_hostname = (
-            ".".join(ip.split(".")[::-1]) + ".zen.spamhaus.org"
-        )
-
-        try:
-            spamhaus_result = dns.resolver.resolve(spamhaus_dns_hostname, "A")
-        except Exception:
-            spamhaus_result = 0
-
-        if not spamhaus_result:
-            return
-
-        # convert dns answer to text
-        lists_that_have_this_ip = [data.to_text() for data in spamhaus_result]
-
-        # get the source and description of the ip
-        source_dataset = ""
-        description = ""
-        for list in lists_that_have_this_ip:
-            name = lists_names.get(list, False)
-            if not name:
-                continue
-            source_dataset += f"{name}, "
-            description = list_description.get(list, "")
-
-        if not source_dataset:
-            return False
-
-        source_dataset += "spamhaus"
-
-        return {
-            "source": source_dataset,
-            "description": description,
-            "threat_level": "medium",
-            "tags": "spam",
-        }
-
     def is_ignored_domain(self, domain):
         """Checks if the given domain should be ignored based on its top-level domain
         (TLD).
@@ -1148,9 +1040,9 @@ class ThreatIntel(IModule, URLhaus):
         """
         if not domain:
             return True
-        ignored_TLDs = (".arpa", ".local")
+        ignored_tlds = (".arpa", ".local")
 
-        for keyword in ignored_TLDs:
+        for keyword in ignored_tlds:
             if domain.endswith(keyword):
                 return True
 
@@ -1396,9 +1288,28 @@ class ThreatIntel(IModule, URLhaus):
         ip_info: Dict[str, str] = self.db.is_blacklisted_ip(ip)
         return ip_info
 
-    def search_online_for_ip(self, ip):
-        if spamhaus_res := self.spamhaus(ip):
-            return spamhaus_res
+    def is_inbound_traffic(self, ip: str, ip_state: str) -> bool:
+        """
+        checks if the given ip is connecting to us
+        returns true of the given conditions
+        1. ip is a saddr
+        2. ip is public
+        3. ip is not our host ip
+        """
+        host_ip: str = self.db.get_host_ip()
+        return (
+            "src" in ip_state
+            and ipaddress.ip_address(ip).is_global
+            and ip != host_ip
+            and ip not in self.client_ips
+        )
+
+    def search_online_for_ip(self, ip: str, ip_state: str):
+        if self.is_inbound_traffic(ip, ip_state):
+            # we're excluding outbound traffic from spamhaus queries
+            # to reduce FPs
+            if spamhaus_res := self.spamhaus.query(ip):
+                return spamhaus_res
 
     def ip_has_blacklisted_asn(
         self,
@@ -1568,9 +1479,9 @@ class ThreatIntel(IModule, URLhaus):
 
         Parameters:
             - ip (str): The IP address to check.
-            - uid (str): Unique identifier for the network flow.
-            - daddr (str): Destination IP address in the network flow.
-            - timestamp (str): Timestamp when the network flow occurred.
+            - uid (str): Unique identifier for the flow.
+            - daddr (str): Destination IP address in the flow.
+            - timestamp (str): Timestamp when the flow.
             - profileid (str): Identifier of the profile associated with
              the network flow.
             - twid (str): Time window identifier for when the network
@@ -1593,7 +1504,7 @@ class ThreatIntel(IModule, URLhaus):
         """
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
-            ip_info = self.search_online_for_ip(ip)
+            ip_info = self.search_online_for_ip(ip, ip_state)
         if not ip_info:
             # not malicious
             return False
@@ -1998,18 +1909,14 @@ class ThreatIntel(IModule, URLhaus):
             # for more detailed description of the evidence
             is_dns_response = data.get("is_dns_response")
             dns_query = data.get("dns_query")
-            # IP is the IP that we want the TI for. It can be a SRC or DST IP
+            # this is the IP/domain that we want the TI for.
             to_lookup = data.get("to_lookup", "")
             # detect the type given because sometimes,
             # http.log host field has ips OR domains
             type_ = utils.detect_ioc_type(to_lookup)
 
-            # ip_state will say if it is a srcip or if it was a dst_ip
+            # ip_state can be "srcip" or "dstip"
             ip_state = data.get("ip_state")
-
-            # If given an IP, ask for it
-            # Block only if the traffic isn't outgoing ICMP port unreachable packet
-
             if type_ == "ip":
                 ip = to_lookup
                 if not self.should_lookup(ip, protocol, ip_state):
