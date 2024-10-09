@@ -30,7 +30,11 @@ import time
 import traceback
 
 from slips_files.common.idmefv2 import IDMEFv2
-from slips_files.common.style import red, cyan
+from slips_files.common.style import (
+    red,
+    cyan,
+    green,
+)
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
@@ -90,8 +94,6 @@ class EvidenceHandler(ICore):
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
-
-        self.print(f"Storing Slips logs in {self.output_dir}")
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_ips()
 
@@ -599,6 +601,9 @@ class EvidenceHandler(ICore):
             f" threat level: " f"{evidence.threat_level.name.lower()}."
         )
         return evidence
+
+    def pre_main(self):
+        self.print(f"Using threshold: {green(self.detection_threshold)}")
 
     def main(self):
         while not self.should_stop():
