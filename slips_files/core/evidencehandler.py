@@ -13,8 +13,10 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA  02110-1301, USA.
+# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
+# stratosphere@aic.fel.cvut.cz
 
 import json
 from typing import List, Dict, Optional
@@ -99,7 +101,8 @@ class EvidenceHandler(ICore):
         self.detection_threshold = conf.evidence_detection_threshold()
         self.print(
             f"Detection Threshold: {self.detection_threshold} "
-            f"attacks per minute ({self.detection_threshold * int(self.width) / 60} "
+            f"attacks per minute "
+            f"({self.detection_threshold * int(self.width) / 60} "
             f"in the current time window width)",
             2,
             0,
@@ -111,35 +114,6 @@ class EvidenceHandler(ICore):
         # In docker, disable alerts no matter what slips.yaml says
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
-
-    def format_evidence_string(
-        self, ip, detection_module, attacker, description
-    ) -> str:
-        """
-        Function to add the dns resolution of the src and dst ips of
-         each evidence
-        :return : string with a correct evidence displacement
-        """
-        evidence_string = ""
-        dns_resolution_attacker = self.db.get_dns_resolution(attacker)
-        dns_resolution_attacker = dns_resolution_attacker.get("domains", [])
-        dns_resolution_attacker = (
-            dns_resolution_attacker[:3] if dns_resolution_attacker else ""
-        )
-
-        dns_resolution_ip = self.db.get_dns_resolution(ip)
-        dns_resolution_ip = dns_resolution_ip.get("domains", [])
-        if len(dns_resolution_ip) >= 1:
-            dns_resolution_ip = dns_resolution_ip[0]
-        elif len(dns_resolution_ip) == 0:
-            dns_resolution_ip = ""
-
-        # dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. '
-        # if dns_resolution_attacker and len(
-        #     dns_resolution_ip[:3]
-        #     ) > 0 else '. '
-
-        return f"{evidence_string}"
 
     def line_wrap(self, txt):
         """
@@ -274,8 +248,8 @@ class EvidenceHandler(ICore):
         all_evidence: Dict[str, Evidence],
     ) -> str:
         """
-        Function to format the string with all the desciptions of the
-        evidence causing an alert
+        Function to format the string with all the desciption of the
+        evidence causing the given alert
         """
         # get the first evidence
         # doesnt matter which one here because they all share the profile
@@ -330,7 +304,6 @@ class EvidenceHandler(ICore):
             f"given enough evidence on timewindow "
             f"{alert.timewindow.number}. (real time {now})"
         )
-
         # log to alerts.log
         self.add_to_log_file(alert_description)
         # log to alerts.json
@@ -343,6 +316,10 @@ class EvidenceHandler(ICore):
     def get_evidence_that_were_part_of_a_past_alert(
         self, profileid: str, twid: str
     ) -> List[str]:
+        """
+        returns a list of evidence <ids that were part of an alert in the
+        given timewindow
+        """
         past_alerts: dict = self.db.get_profileid_twid_alerts(profileid, twid)
         try:
             past_evidence_ids = list(past_alerts.values())[0]
@@ -442,16 +419,15 @@ class EvidenceHandler(ICore):
 
         # Compute the moving average of evidence
         evidence_threat_level: float = threat_level * confidence
-        self.print(f"\t\tWeighted Threat Level: {evidence_threat_level}", 3, 0)
+        self.print(
+            f"\t\tWeighted Threat Level: " f"{evidence_threat_level}", 3, 0
+        )
         return evidence_threat_level
-
-    def get_last_evidence_ID(self, tw_evidence: dict) -> str:
-        return list(tw_evidence.keys())[-1]
 
     def send_to_exporting_module(self, tw_evidence: Dict[str, Evidence]):
         """
         sends all given evidence to export_evidence channel
-        :param tw_evidence: alll evidence that happened in a certain
+        :param tw_evidence: all evidence that happened in a certain
         timewindow
         format is {evidence_id (str) :  Evidence obj}
         """
@@ -460,18 +436,18 @@ class EvidenceHandler(ICore):
             evidence: dict = utils.to_dict(evidence)
             self.db.publish("export_evidence", json.dumps(evidence))
 
-    def is_blocking_module_enabled(self) -> bool:
+    def is_blocking_module_supported(self) -> bool:
         """
         returns true if slips is running in an interface or growing
          zeek dir with -p
-        or if slips is using custom flows. meaning slips is reading the
-        flows by a custom module not by
-        inputprocess. there's no need for -p to enable the blocking
+        or if slips is using custom flows (meaning slips is reading the
+        flows by a custom module not by input.py).
         """
         custom_flows = "-im" in sys.argv or "--input-module" in sys.argv
+        blocking_module_enabled = "-p" in sys.argv
         return (
-            self.is_running_non_stop and "-p" not in sys.argv
-        ) or custom_flows
+            self.is_running_non_stop or custom_flows
+        ) and blocking_module_enabled
 
     def handle_new_alert(
         self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
@@ -500,10 +476,10 @@ class EvidenceHandler(ICore):
     def decide_blocking(self, ip_to_block: str) -> bool:
         """
         Decide whether to block or not and send to the blocking module
-         returns True if the profile was blocked by Slips blocking module
+         returns True if the given IP was blocked by Slips blocking module
         """
         # send ip to the blocking module
-        if not self.is_blocking_module_enabled():
+        if not self.is_blocking_module_supported():
             return False
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)

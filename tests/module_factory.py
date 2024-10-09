@@ -11,6 +11,7 @@ from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
 from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.evidencehandler import EvidenceHandler
 
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
@@ -571,6 +572,18 @@ class ModuleFactory:
         return cesnet
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_evidence_handler_obj(self, mock_db):
+        logger = Mock()
+        output_dir = "/tmp"
+        redis_port = 6379
+        termination_event = Mock()
+        handler = EvidenceHandler(
+            logger, output_dir, redis_port, termination_event
+        )
+        handler.db = mock_db
+        return handler
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_symbol_handler_obj(self, mock_db):
         mock_logger = Mock()
         mock_db.get_t2_for_profile_tw.return_value = (1000.0, 2000.0)
@@ -585,4 +598,5 @@ class ModuleFactory:
             6379,
             termination_event,
         )
+        riskiq.db = mock_db
         return riskiq
