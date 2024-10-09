@@ -9,6 +9,8 @@ from ..model.peer_trust_data import PeerTrustData, TrustMatrix
 from ..model.threat_intelligence import SlipsThreatIntelligence
 from ..persistence.trust import TrustDatabase
 
+from slips_files.core.database.database_manager import DBManager
+
 
 # because this will be implemented
 # noinspection DuplicatedCode
@@ -17,9 +19,9 @@ class SlipsTrustDatabase(TrustDatabase):
 
     # TODO: [S] implement this
 
-    def __init__(self, configuration: TrustModelConfiguration, r: Redis):
+    def __init__(self, configuration: TrustModelConfiguration, db : DBManager):
         super().__init__(configuration)
-        self.__r = r
+        self.__db = db
 
     def store_connected_peers_list(self, current_peers: List[PeerInfo]):
         """Stores list of peers that are directly connected to the Slips."""

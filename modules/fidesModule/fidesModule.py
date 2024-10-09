@@ -11,6 +11,7 @@ import sys
 from dataclasses import asdict
 
 from .evaluation.ti_evaluation import *
+from .model.configuration import TrustModelConfiguration
 from ..fidesModule.messaging.message_handler import MessageHandler
 from ..fidesModule.messaging.network_bridge import NetworkBridge
 from ..fidesModule.model.configuration import load_configuration
@@ -27,8 +28,12 @@ from ..fidesModule.originals.abstracts import Module
 from ..fidesModule.originals.database import __database__
 from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
 from ..fidesModule.persistance.trust import SlipsTrustDatabase
+
+
 from ..fidesModule.persistence.trust_in_memory import InMemoryTrustDatabase
 from ..fidesModule.persistence.threat_intelligence_in_memory import InMemoryThreatIntelligenceDatabase
+from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
+from ..fidesModule.persistance.trust import SlipsTrustDatabase
 
 from pathlib import Path
 
@@ -61,7 +66,7 @@ class fidesModule(IModule):
         #self.__trust_model_config = load_configuration(self.__slips_config.trust_model_path) # TODO fix this to make it work under new management
         current_dir = Path(__file__).resolve().parent
         config_path = current_dir / "config" / "fides.conf.yml"
-        self.__trust_model_config = load_configuration(config_path)
+        self.__trust_model_config = load_configuration(config_path.__str__())
 
 
         # prepare variables for global protocols
@@ -87,8 +92,10 @@ class fidesModule(IModule):
 
     def __setup_trust_model(self):
         # create database wrappers for Slips using Redis
-        trust_db = InMemoryTrustDatabase(self.__trust_model_config)
-        ti_db =  InMemoryThreatIntelligenceDatabase()
+        # trust_db = InMemoryTrustDatabase(self.__trust_model_config)
+        # ti_db =  InMemoryThreatIntelligenceDatabase()
+        trust_db = SlipsTrustDatabase(self.__trust_model_config, self.db)
+        ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, self.db)
 
         # create queues
         # TODO: [S] check if we need to use duplex or simplex queue for communication with network module
