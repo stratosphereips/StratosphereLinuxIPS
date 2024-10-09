@@ -81,7 +81,7 @@ That's it, now you have a ready-to-merge PR!
 [1] These contributions guidelines are inspired by the project [Snoopy](https://raw.githubusercontent.com/a2o/snoopy/master/.github/CONTRIBUTING.md)﻿
 
 
-# FAQ
+## FAQ
 
 ### How does slips work?
 
