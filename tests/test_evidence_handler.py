@@ -602,7 +602,7 @@ def test_is_evidence_done_by_others(evidence, expected_result):
 
 
 @pytest.mark.parametrize(
-    "all_evidence, profileid, twid, flow_datetime, expected_output",
+    "all_evidence, profileid, twid, expected_output",
     [
         # testcase1: Single evidence
         (
@@ -622,10 +622,8 @@ def test_is_evidence_done_by_others(evidence, expected_result):
             },
             ProfileID("192.168.1.1"),
             TimeWindow(1),
-            "2024/10/08 21:40:08.625736+0300",
-            "2024/10/08 21:40:08.625736+0300 IP 192.168.1.1 "
-            "detected as malicious in timewindow 1 (start 2023/07/01 12:00:00, "
-            "stop 2023/07/01 12:05:00) \n"
+            "IP 192.168.1.1 detected as malicious in timewindow 1"
+            " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) \n"
             "given the following evidence:\n"
             "\t- Detected Port scan detected threat level: medium.\n",
         ),
@@ -659,10 +657,8 @@ def test_is_evidence_done_by_others(evidence, expected_result):
             },
             ProfileID("192.168.1.1"),
             TimeWindow(1),
-            "2024/10/08 21:40:08.625736+0300",
-            "2024/10/08 21:40:08.625736+0300 IP 192.168.1.1 "
-            "detected as malicious in timewindow 1 (start 2023/07/01 12:00:00, "
-            "stop 2023/07/01 12:05:00) \n"
+            "IP 192.168.1.1 detected as malicious in timewindow 1"
+            " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) \n"
             "given the following evidence:\n"
             "\t- Detected Port scan detected threat level: medium.\n"
             "\t- Detected Malicious JA3 fingerprint threat level: high.\n",
@@ -670,12 +666,16 @@ def test_is_evidence_done_by_others(evidence, expected_result):
     ],
 )
 def test_format_evidence_for_printing(
-    all_evidence, profileid, twid, flow_datetime, expected_output
+    all_evidence, profileid, twid, expected_output
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     with patch.object(
         evidence_handler, "get_alert_time_description"
-    ) as mock_get_alert_time:
+    ) as mock_get_alert_time, patch(
+        "slips_files.common.slips_utils.utils.convert_format"
+    ) as mock_convert_format:
+        mock_convert_format.return_value = "converted_time"
+
         mock_get_alert_time.return_value = (
             f"IP {profileid.ip} detected as malicious "
             f"in timewindow {twid.number} (start 2023/07/01 12:00:00, "
@@ -702,6 +702,7 @@ def test_format_evidence_for_printing(
             .replace("\033[0m", "")
         )
         assert expected_output in result
+        assert "converted_time" in result
 
 
 @pytest.mark.parametrize(
