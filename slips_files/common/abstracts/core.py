@@ -23,11 +23,14 @@ class ICore(IModule, Process):
         """
         IModule.__init__(self, *args, **kwargs)
 
+    def pre_main(self): ...
+
     def run(self):
         """
         must be called run because this is what multiprocessing runs
         """
         try:
+            self.pre_main()
             # this should be defined in every core file
             # this won't run in a loop because it's not a module
             error: bool = self.main()
