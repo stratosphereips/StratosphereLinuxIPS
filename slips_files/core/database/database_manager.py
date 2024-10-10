@@ -924,3 +924,9 @@ class DBManager:
 
     def get_fides_ti(self, target: str):
         return self.rdb.get_fides_ti(target)
+
+    def store_connected_peers(self, peers: List[str]):
+        self.rdb.store_connected_peers(peers)
+
+    def get_connected_peers(self):
+        return self.rdb.get_connected_peers()

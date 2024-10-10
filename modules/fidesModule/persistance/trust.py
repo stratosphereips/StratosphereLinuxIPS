@@ -1,6 +1,7 @@
 from typing import List, Optional, Union
 
 from redis.client import Redis
+from tensorflow.python.ops.numpy_ops.np_utils import result_type_unary
 
 from ..messaging.model import PeerInfo
 from ..model.aliases import PeerId, Target, OrganisationId
@@ -10,6 +11,7 @@ from ..model.threat_intelligence import SlipsThreatIntelligence
 from ..persistence.trust import TrustDatabase
 
 from slips_files.core.database.database_manager import DBManager
+import json
 
 
 # because this will be implemented
@@ -21,16 +23,19 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def __init__(self, configuration: TrustModelConfiguration, db : DBManager):
         super().__init__(configuration)
-        self.__db = db
+        self.db = db
 
     def store_connected_peers_list(self, current_peers: List[PeerInfo]):
         """Stores list of peers that are directly connected to the Slips."""
 
-        raise NotImplemented()
+        json_peers = [json.dumps(peer.to_dict()) for peer in current_peers]
+        self.db.store_connected_peers(json_peers)
 
     def get_connected_peers(self) -> List[PeerInfo]:
         """Returns list of peers that are directly connected to the Slips."""
-        raise NotImplemented()
+        json_peers = self.db.get_connected_peers()
+        current_peers = [PeerInfo(**json.loads(peer_json)) for peer_json in json_peers]
+        return current_peers
 
     def get_peers_with_organisations(self, organisations: List[OrganisationId]) -> List[PeerInfo]:
         """Returns list of peers that have one of given organisations."""
