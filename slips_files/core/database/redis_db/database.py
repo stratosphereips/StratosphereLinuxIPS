@@ -8,6 +8,7 @@ from slips_files.core.database.redis_db.constants import (
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
+from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 
 import os
 import signal
@@ -28,7 +29,7 @@ from typing import (
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
-class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
+class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
     _obj = None

@@ -92,10 +92,10 @@ class fidesModule(IModule):
 
     def __setup_trust_model(self):
         # create database wrappers for Slips using Redis
-        # trust_db = InMemoryTrustDatabase(self.__trust_model_config)
-        # ti_db =  InMemoryThreatIntelligenceDatabase()
-        trust_db = SlipsTrustDatabase(self.__trust_model_config, self.db)
-        ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, self.db)
+        trust_db = InMemoryTrustDatabase(self.__trust_model_config)
+        ti_db =  InMemoryThreatIntelligenceDatabase()
+        # trust_db = SlipsTrustDatabase(self.__trust_model_config, self.db)
+        # ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, self.db)
 
         # create queues
         # TODO: [S] check if we need to use duplex or simplex queue for communication with network module

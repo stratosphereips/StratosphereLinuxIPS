@@ -930,3 +930,6 @@ class DBManager:
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
+
+    def get_fides_ti(self, target: str):
+        return self.rdb.get_fides_ti(target)

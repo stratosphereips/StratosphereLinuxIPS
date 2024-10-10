@@ -7,26 +7,31 @@ from typing import (
 )
 
 
-class IoCHandler:
+class P2PHandler:
     """
     Helper class for the Redis class in database.py
     Contains all the logic related to setting and retrieving evidence and
     alerts in the db
     """
 
-    name = "DB"
+    name = "TrustDB"
+
+    def get_fides_ti(self, target: str):
+        """
+        returns the TI stored for specified target or None
+        """
+        return self.r.get(target) or None
+
+
+
+
+
 
     def set_loaded_ti_files(self, number_of_loaded_files: int):
         """
         Stores the number of successfully loaded TI files
         """
         self.r.set(self.constants.LOADED_TI_FILES, number_of_loaded_files)
-
-    def get_loaded_ti_feeds(self):
-        """
-        returns the number of successfully loaded TI files. or 0 if none is loaded
-        """
-        return self.r.get(self.constants.LOADED_TI_FILES) or 0
 
     def delete_feed_entries(self, url: str):
         """
