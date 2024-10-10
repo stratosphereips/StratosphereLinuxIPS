@@ -21,3 +21,16 @@ class PeerInfo:
     There are cases when we don't know the IP of the peer - when running behind NAT 
     or when the peers used TURN server to connect to each other.
     """
+
+    def to_dict(self):
+        """Convert to dictionary for serialization."""
+        return {
+            'id': self.id,
+            'organisations': [org for org in self.organisations],
+            'ip': self.ip,
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Create an instance from a dictionary."""
+        return cls(**data)
