@@ -12,11 +12,11 @@ from slips_files.core.database.database_manager import DBManager
 class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
     """Implementation of ThreatIntelligenceDatabase that uses Slips native storage for the TI."""
 
-    def __init__(self, configuration: TrustModelConfiguration, db: Redis):
+    def __init__(self, configuration: TrustModelConfiguration, db: DBManager):
         self.__configuration = configuration
-        self.__db = db
+        self.db = db
 
     def get_for(self, target: Target) -> Optional[SlipsThreatIntelligence]:
         """Returns threat intelligence for given target or None if there are no data."""
-        # TODO: [S] implement this
-        raise NotImplemented()
+        # TODONE: [S] implement this
+        return self.db.get_fides_ti(target)

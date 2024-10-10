@@ -173,3 +173,6 @@ config-live-macos-*
 dataset-private/*
 appendonly.aof
 /slipsOut/flows.sqlite
+/slipsOut/metadata/info.txt
+/slipsOut/metadata/slips.yaml
+/slipsOut/metadata/whitelist.conf
