@@ -28,3 +28,17 @@ class SlipsThreatIntelligence(ThreatIntelligence):
 
     confidentiality: Optional[ConfidentialityLevel] = None
     """Confidentiality level if known."""
+
+    def to_dict(self):
+        return {
+            "target": self.target,
+            "confidentiality": self.confidentiality if self.confidentiality else None
+        }
+
+    # Create an instance from a dictionary
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            target=Target(data["target"]),
+            confidentiality=ConfidentialityLevel(**data["confidentiality"]) if data.get("confidentiality") else None
+        )

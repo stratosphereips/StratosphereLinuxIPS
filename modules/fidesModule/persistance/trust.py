@@ -12,7 +12,7 @@ from ..persistence.trust import TrustDatabase
 
 from slips_files.core.database.database_manager import DBManager
 import json
-
+from ..utils.time import Time, now
 
 # because this will be implemented
 # noinspection DuplicatedCode
@@ -43,7 +43,15 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_peers_with_geq_recommendation_trust(self, minimal_recommendation_trust: float) -> List[PeerInfo]:
         """Returns peers that have >= recommendation_trust then the minimal."""
-        raise NotImplemented()
+        connected_peers = self.get_connected_peers()
+        out = []
+        for peer in connected_peers:
+            td = self.get_peer_trust_data(peer.id)
+
+            if td is not None and td.recommendation_trust >= minimal_recommendation_trust:
+                out.append(peer)
+        return out
+
 
     def store_peer_trust_data(self, trust_data: PeerTrustData):
         """Stores trust data for given peer - overwrites any data if existed."""
@@ -77,8 +85,13 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def cache_network_opinion(self, ti: SlipsThreatIntelligence):
         """Caches aggregated opinion on given target."""
-        raise NotImplemented()
+        self.db.cache_network_opinion(ti.target, ti.to_dict())
 
     def get_cached_network_opinion(self, target: Target) -> Optional[SlipsThreatIntelligence]:
         """Returns cached network opinion. Checks cache time and returns None if data expired."""
-        raise NotImplemented()
+        rec = self.db.get_cached_network_opinion(target, self.__configuration.network_opinion_cache_valid_seconds, now())
+        if rec is None:
+            return None
+        else:
+            return SlipsThreatIntelligence.from_dict(rec)
+

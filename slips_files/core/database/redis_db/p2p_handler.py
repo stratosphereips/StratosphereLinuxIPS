@@ -8,6 +8,7 @@ from typing import (
 
 trust = "peers_strust"
 hash = "peer_info"
+FIDES_CACHE_KEY = "cached_class"
 
 class P2PHandler:
     """
@@ -69,3 +70,29 @@ class P2PHandler:
         """
         self.r.srem(trust, peer_id)
         self.r.hdel(hash, peer_id)
+
+    def cache_network_opinion(self, target: str, opinion: __dict__, time: float ):
+        cache_key = f"{FIDES_CACHE_KEY}:{target}"
+
+        cache_data = {"created_seconds": time, **opinion}
+        self.r.hmset(cache_key, cache_data)
+
+    def get_cached_network_opinion(self, target: str, cache_valid_seconds: int, current_time: float):
+        cache_key = f"{FIDES_CACHE_KEY}:{target}"
+        cache_data = self.r.hgetall(cache_key)
+        if not cache_data:
+            return None
+
+        cache_data = {k.decode(): v.decode() for k, v in cache_data.items()}
+
+        # Get the time the opinion was cached
+        created_seconds = float(cache_data.get("created_seconds", 0))
+        # Check if the cached entry is still valid
+        if current_time - created_seconds > cache_valid_seconds:
+            # The cached opinion has expired, delete the entry
+            self.r.delete(cache_key)
+            return None
+
+        # Return the opinion (excluding the created_seconds field)
+        opinion = {k: v for k, v in cache_data.items() if k != "created_seconds"}
+        return opinion
