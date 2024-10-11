@@ -6,6 +6,8 @@ from typing import (
     Union,
 )
 
+trust = "peers_strust"
+hash = "peer_info"
 
 class P2PHandler:
     """
@@ -33,3 +35,37 @@ class P2PHandler:
         else:
             json_peers= json.loads(json_list)
             return json_peers
+
+    def store_peer_td(self, peer_id, td:str):
+        self.r.sadd(trust, peer_id)
+        self.r.hset(hash, peer_id, td)
+
+    def get_peer_td(self, peer_id: str):
+        """
+        Get peer trust data by peer_id.
+        """
+        return self.r.hget(hash, peer_id)
+
+    def update_peer_td(self, peer_id: str, updated_td: str):
+        """
+        Update peer information.
+        """
+        if self.r.sismember(trust, peer_id):
+            self.r.hset(hash, peer_id, updated_td)
+        else:
+            self.store_peer_td(peer_id, updated_td)
+
+    def get_all_peers_td(self):
+        """
+        Get all connected peers trust data.
+        """
+        peer_ids = self.r.smembers(trust)
+        peers = {peer_id: self.r.hget(hash, peer_id) for peer_id in peer_ids}
+        return peers
+
+    def remove_peer_td(self, peer_id: str):
+        """
+        Remove a peer trust data from the set and hash.
+        """
+        self.r.srem(trust, peer_id)
+        self.r.hdel(hash, peer_id)

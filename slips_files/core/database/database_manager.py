@@ -930,3 +930,12 @@ class DBManager:
 
     def get_connected_peers(self):
         return self.rdb.get_connected_peers()
+
+    def store_peer_trust_data(self, id: str, td: str):
+        self.rdb.update_peer_td(id, td)
+
+    def get_peer_trust_data(self, id: str):
+        self.rdb.get_peer_td(id)
+
+    def get_all_peers_trust_data(self):
+        return self.rdb.get_all_peers_td()
