@@ -9,31 +9,6 @@ from ..utils.logger import Logger
 
 logger = Logger(__name__)
 
-
-class RedisQueue(Queue):
-    """Implementation of Queue interface that uses two Redis queues."""
-
-    def listen(self,
-               on_message: Callable[[str], None],
-               block: bool = False,
-               sleep_time_in_new_thread: float = 0.001,
-               **argv
-               ):
-        """Starts listening, if :param: block = True, the method blocks current thread!"""
-        raise NotImplemented('Use implementation and not interface!')
-
-    def get_message(self, timeout_seconds: float = 0) -> Optional[dict]:
-        """Get the next message if one is available, otherwise None.
-
-        Note that this method returns directly message coming from the Redis, no parsing is done.
-
-        If timeout is specified, the system will wait for `timeout` seconds
-        before returning. Timeout should be specified as a floating point
-        number.
-        """
-        raise NotImplemented('Use implementation and not interface!')
-
-
 class RedisSimplexQueue(Queue):
     """
     Implementation of Queue interface that uses two Redis queues.
