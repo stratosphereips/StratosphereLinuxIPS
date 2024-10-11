@@ -922,6 +922,8 @@ class DBManager:
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
 
+
+
     def get_fides_ti(self, target: str):
         return self.rdb.get_fides_ti(target)
 
@@ -939,3 +941,9 @@ class DBManager:
 
     def get_all_peers_trust_data(self):
         return self.rdb.get_all_peers_td()
+
+    def cache_network_opinion(self, target: str, opinion: __dict__, time: float):
+        self.rdb.cache_network_opinion(target, opinion, time)
+
+    def get_cached_network_opinion(self, target: str, cache_valid_seconds: int, current_time: float):
+        self.rdb.get_cached_network_opinion(target, cache_valid_seconds, current_time)

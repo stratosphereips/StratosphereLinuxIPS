@@ -23,7 +23,7 @@ from ..fidesModule.protocols.peer_list import PeerListUpdateProtocol
 from ..fidesModule.protocols.recommendation import RecommendationProtocol
 from ..fidesModule.protocols.threat_intelligence import ThreatIntelligenceProtocol
 from ..fidesModule.utils.logger import LoggerPrintCallbacks, Logger
-from ..fidesModule.messaging.queueF import RedisQueue, RedisSimplexQueue
+from ..fidesModule.messaging.queueF import RedisSimplexQueue
 from ..fidesModule.originals.abstracts import Module
 from ..fidesModule.originals.database import __database__
 from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
@@ -34,6 +34,7 @@ from ..fidesModule.persistence.trust_in_memory import InMemoryTrustDatabase
 from ..fidesModule.persistence.threat_intelligence_in_memory import InMemoryThreatIntelligenceDatabase
 from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
 from ..fidesModule.persistance.trust import SlipsTrustDatabase
+
 
 from pathlib import Path
 
