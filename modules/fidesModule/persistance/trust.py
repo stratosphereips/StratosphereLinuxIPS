@@ -47,7 +47,9 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def store_peer_trust_data(self, trust_data: PeerTrustData):
         """Stores trust data for given peer - overwrites any data if existed."""
-        raise NotImplemented()
+        id = trust_data.id
+        td_json = json.dumps(trust_data.to_dict())
+        self.db.store_peer_trust_data(id, td_json)
 
     def store_peer_trust_matrix(self, trust_matrix: TrustMatrix):
         """Stores trust matrix."""
@@ -56,7 +58,18 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_peer_trust_data(self, peer: Union[PeerId, PeerInfo]) -> Optional[PeerTrustData]:
         """Returns trust data for given peer ID, if no data are found, returns None."""
-        raise NotImplemented()
+        if isinstance(peer, PeerId):
+            peer_id = peer
+        elif isinstance(peer, PeerInfo):
+            peer_id = peer.id
+        else:
+            return None
+
+        td_json = self.db.get_peer_trust_data(peer.id)
+        if td_json is None:
+            return None
+        return PeerTrustData(**json.loads(td_json))
+
 
     def get_peers_trust_data(self, peer_ids: List[Union[PeerId, PeerInfo]]) -> TrustMatrix:
         """Return trust data for each peer from peer_ids."""

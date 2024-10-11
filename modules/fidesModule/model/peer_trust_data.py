@@ -94,6 +94,38 @@ class PeerTrustData:
         """Size of the recommendation history, in model's notation rh_ij."""
         return len(self.recommendation_history)
 
+    def to_dict(self):
+        return {
+            "info": self.info.to_dict(),  # Assuming PeerInfo has to_dict method
+            "has_fixed_trust": self.has_fixed_trust,
+            "service_trust": self.service_trust,
+            "reputation": self.reputation,
+            "recommendation_trust": self.recommendation_trust,
+            "competence_belief": self.competence_belief,
+            "integrity_belief": self.integrity_belief,
+            "initial_reputation_provided_by_count": self.initial_reputation_provided_by_count,
+            "service_history": [sh.to_dict() for sh in self.service_history],  # Assuming ServiceHistory has to_dict
+            "recommendation_history": [rh.to_dict() for rh in self.recommendation_history] # Assuming RecommendationHistory has to_dict
+        }
+
+    # Method to create an object from a dictionary
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            info=PeerInfo.from_dict(data["info"]),  # Assuming PeerInfo has from_dict method
+            has_fixed_trust=data["has_fixed_trust"],
+            service_trust=data["service_trust"],
+            reputation=data["reputation"],
+            recommendation_trust=data["recommendation_trust"],
+            competence_belief=data["competence_belief"],
+            integrity_belief=data["integrity_belief"],
+            initial_reputation_provided_by_count=data["initial_reputation_provided_by_count"],
+            service_history=[ServiceHistory.from_dict(sh) for sh in data["service_history"]],
+            # Assuming ServiceHistory has from_dict
+            recommendation_history=[RecommendationHistory.from_dict(rh) for rh in data["recommendation_history"]]
+            # Assuming RecommendationHistory has from_dict
+        )
+
 
 TrustMatrix = Dict[PeerId, PeerTrustData]
 """Matrix that have PeerId as a key and then value is data about trust we have."""
