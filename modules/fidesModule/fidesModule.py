@@ -73,7 +73,6 @@ class fidesModule(IModule):
         self.__bridge: NetworkBridge
         self.__intelligence: ThreatIntelligenceProtocol
         self.__alerts: AlertProtocol
-        self.__slips_fides: RedisQueue
         self.f2n = self.db.subscribe("fides2network")
         self.n2f = self.db.subscribe("network2fides")
         self.s2f = self.db.subscribe("slips2fides")
@@ -131,7 +130,6 @@ class fidesModule(IModule):
         self.__bridge = bridge
         self.__intelligence = intelligence
         self.__alerts = alert
-        # 1 # self.__slips_fides = slips_fides_queue
 
         # and finally execute listener
         self.__bridge.listen(message_handler, block=False)
