@@ -34,6 +34,7 @@ from ..fidesModule.persistence.trust_in_memory import InMemoryTrustDatabase
 from ..fidesModule.persistence.threat_intelligence_in_memory import InMemoryThreatIntelligenceDatabase
 from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
 from ..fidesModule.persistance.trust import SlipsTrustDatabase
+from ..fidesModule.persistance.sqlite_db import SQLiteDB
 
 
 from pathlib import Path
@@ -85,6 +86,8 @@ class fidesModule(IModule):
             "fides2slips": self.f2s,
         }
 
+        self.sqlite = SQLiteDB(self.logger, os.path.join(os.getcwd(), 'p2p_db.sqlite'))
+
     def read_configuration(self) -> bool:
         """reurns true if all necessary configs are present and read"""
         conf = ConfigParser()
@@ -92,10 +95,10 @@ class fidesModule(IModule):
 
     def __setup_trust_model(self):
         # create database wrappers for Slips using Redis
-        trust_db = InMemoryTrustDatabase(self.__trust_model_config)
-        ti_db =  InMemoryThreatIntelligenceDatabase()
-        # trust_db = SlipsTrustDatabase(self.__trust_model_config, self.db)
-        # ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, self.db)
+        # trust_db = InMemoryTrustDatabase(self.__trust_model_config)
+        # ti_db =  InMemoryThreatIntelligenceDatabase()
+        trust_db = SlipsTrustDatabase(self.__trust_model_config, self.db)
+        ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, self.db)
 
         # create queues
         # TODO: [S] check if we need to use duplex or simplex queue for communication with network module
