@@ -28,7 +28,7 @@ class ServiceHistoryRecord:
         return {
             'satisfaction': self.satisfaction,
             'weight': self.weight,
-            'timestamp': self.timestamp.isoformat()  # Convert datetime to ISO format for serialization
+            'timestamp': self.timestamp
         }
 
     @classmethod
@@ -37,7 +37,7 @@ class ServiceHistoryRecord:
         return cls(
             satisfaction=dict_obj['satisfaction'],
             weight=dict_obj['weight'],
-            timestamp=datetime.fromisoformat(dict_obj['timestamp'])  # Convert ISO format back to datetime
+            timestamp=dict_obj['timestamp']  # Convert ISO format back to datetime
         )
 
 
