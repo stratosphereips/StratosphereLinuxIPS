@@ -23,6 +23,23 @@ class ServiceHistoryRecord:
     timestamp: Time
     """Date time when this interaction happened."""
 
+    def to_dict(self):
+        """Convert the instance to a dictionary."""
+        return {
+            'satisfaction': self.satisfaction,
+            'weight': self.weight,
+            'timestamp': self.timestamp.isoformat()  # Convert datetime to ISO format for serialization
+        }
+
+    @classmethod
+    def from_dict(cls, dict_obj):
+        """Create an instance of ServiceHistoryRecord from a dictionary."""
+        return cls(
+            satisfaction=dict_obj['satisfaction'],
+            weight=dict_obj['weight'],
+            timestamp=datetime.fromisoformat(dict_obj['timestamp'])  # Convert ISO format back to datetime
+        )
+
 
 ServiceHistory = List[ServiceHistoryRecord]
 """Ordered list with history of service interactions. 
