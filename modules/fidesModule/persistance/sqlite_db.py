@@ -75,8 +75,54 @@ class SQLiteDB:
             self.logger.debug("Closing database connection")
             self.connection.close()
 
+    def create_tables(self) -> None:
+        """
+        Creates the necessary tables in the SQLite database.
+        """
+        table_creation_queries = [
+            """
+            CREATE TABLE IF NOT EXISTS PeerInfo (
+                peerID TEXT PRIMARY KEY
+                -- Add other attributes here (e.g., name TEXT, email TEXT, ...)
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS ServiceHistory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                peerID TEXT,
+                -- Add other attributes here (e.g., serviceDate DATE, serviceType TEXT, ...)
+                FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID)
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS RecommendationHistory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                peerID TEXT,
+                -- Add other attributes here (e.g., recommendationDate DATE, recommendedBy TEXT, ...)
+                FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID)
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS Organisation (
+                organisationID TEXT PRIMARY KEY
+                -- Add other attributes here (e.g., organisationName TEXT, location TEXT, ...)
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS PeerOrganisation (
+                peerID TEXT,
+                organisationID TEXT,
+                PRIMARY KEY (peerID, organisationID),
+                FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID),
+                FOREIGN KEY (organisationID) REFERENCES Organisation(organisationID)
+            );
+            """
+        ]
 
-# Example usage of the SQLiteDB class
+        for query in table_creation_queries:
+            self.logger.debug(f"Creating tables with query: {query}")
+            self.execute_query(query)
+
 
 if __name__ == "__main__":
     # Step 1: Set up a logger
