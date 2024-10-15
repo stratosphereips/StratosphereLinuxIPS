@@ -1,5 +1,6 @@
 from typing import List, Optional, Union
 
+from pandas.io.sql import SQLDatabase
 from redis.client import Redis
 from tensorflow.python.ops.numpy_ops.np_utils import result_type_unary
 
@@ -21,9 +22,10 @@ class SlipsTrustDatabase(TrustDatabase):
 
     # TODO: [S] implement this
 
-    def __init__(self, configuration: TrustModelConfiguration, db : DBManager):
+    def __init__(self, configuration: TrustModelConfiguration, db : DBManager, sqldb : SQLDatabase):
         super().__init__(configuration)
         self.db = db
+        self.sqldb = sqldb
 
     def store_connected_peers_list(self, current_peers: List[PeerInfo]):
         """Stores list of peers that are directly connected to the Slips."""
