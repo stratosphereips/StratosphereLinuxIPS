@@ -82,7 +82,8 @@ class SQLiteDB:
         table_creation_queries = [
             """
             CREATE TABLE IF NOT EXISTS PeerInfo (
-                peerID TEXT PRIMARY KEY
+                peerID TEXT PRIMARY KEY,
+                ip VARCHAR(39) NOT NULL
                 -- Add other attributes here (e.g., name TEXT, email TEXT, ...)
             );
             """,
@@ -90,7 +91,10 @@ class SQLiteDB:
             CREATE TABLE IF NOT EXISTS ServiceHistory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 peerID TEXT,
-                -- Add other attributes here (e.g., serviceDate DATE, serviceType TEXT, ...)
+                satisfaction FLOAT NOT NULL  CHECK (satisfaction >= 0.0 AND satisfaction <= 1.0),
+                weight FLOAT NOT NULL CHECK (weight >= 0.0 AND weight <= 1.0),
+                service_time float NOT NULL,
+                -- Add other attributes here (e.g., serviceDate DATE, serviceType TEXT)
                 FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID)
             );
             """,
@@ -98,6 +102,9 @@ class SQLiteDB:
             CREATE TABLE IF NOT EXISTS RecommendationHistory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 peerID TEXT,
+                satisfaction FLOAT NOT NULL  CHECK (satisfaction >= 0.0 AND satisfaction <= 1.0),
+                weight FLOAT NOT NULL CHECK (weight >= 0.0 AND weight <= 1.0),
+                recommend_time FLOAT NOT NULL,
                 -- Add other attributes here (e.g., recommendationDate DATE, recommendedBy TEXT, ...)
                 FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID)
             );
@@ -115,6 +122,25 @@ class SQLiteDB:
                 PRIMARY KEY (peerID, organisationID),
                 FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID),
                 FOREIGN KEY (organisationID) REFERENCES Organisation(organisationID)
+            );
+            """
+            
+            """
+            CREATE TABLE PeerTrustData (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                peerID VARCHAR(255),                  -- The peer providing the trust evaluation
+                has_fixed_trust INTEGER NOT NULL CHECK (is_active IN (0, 1)),              -- Whether the trust is dynamic or fixed
+                service_trust REAL NOT NULL CHECK (service_trust >= 0.0 AND service_trust <= 1.0),                   -- Service Trust Metric (0 <= service_trust <= 1)
+                reputation REAL NOT NULL CHECK (reputation >= 0.0 AND reputation <= 1.0),                       -- Reputation Metric (0 <= reputation <= 1)
+                recommendation_trust REAL NOT NULL CHECK (recommendation_trust >= 0.0 AND recommendation_trust <= 1.0),            -- Recommendation Trust Metric (0 <= recommendation_trust <= 1)
+                competence_belief REAL NOT NULL CHECK (competence_belief >= 0.0 AND competence_belief <= 1.0),               -- Competence Belief (0 <= competence_belief <= 1)
+                integrity_belief REAL NOT NULL CHECK (integrity_belief >= 0.0 AND integrity_belief <= 1.0),                -- Integrity Belief (0 <= integrity_belief <= 1)
+                initial_reputation_provided_by_count INTEGER NOT NULL,  -- Count of peers providing initial reputation
+                service_history_id INTEGER,            -- Reference to ServiceHistory (could be NULL if not applicable)
+                recommendation_history_id INTEGER,     -- Reference to RecommendationHistory (could be NULL if not applicable)
+                FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID),
+                FOREIGN KEY (service_history_id) REFERENCES ServiceHistory(id),
+                FOREIGN KEY (recommendation_history_id) REFERENCES RecommendationHistory(id)
             );
             """
         ]
