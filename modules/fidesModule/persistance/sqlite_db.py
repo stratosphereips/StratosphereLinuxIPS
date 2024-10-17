@@ -29,22 +29,6 @@ class SQLiteDB:
         self.__connect()
         self.__create_tables()
 
-    def __insert_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
-        data = peer_trust_data.to_dict()
-        self.__save('PeerTrustData', data)
-
-    def __insert_recommendation_history(self, recommendation_record: RecommendationHistoryRecord) -> None:
-        data = recommendation_record.to_dict()
-        self.__save('RecommendationHistory', data)
-
-    def __insert_service_history(self, service_record: ServiceHistoryRecord) -> None:
-        data = service_record.to_dict()
-        self.__save('ServiceHistory', data)
-
-    def __insert_peer_info(self, peer_info: PeerInfo) -> None:
-        data = peer_info.to_dict()
-        self.__save('PeerInfo', data)
-
     def insert_organisation_if_not_exists(self, organisation_id: OrganisationId) -> None:
         """
         Inserts an organisation into the Organisation table if it doesn't already exist.
@@ -64,13 +48,19 @@ class SQLiteDB:
         query = "INSERT OR IGNORE INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)"
         self.__execute_query(query, [peer_id, organisation_id])
 
-    def store_connected_peers_list(self, peer_info_list: List[PeerInfo]) -> None:
+    def store_connected_peers_list(self, peers: List[PeerInfo]) -> None:
         """
         Stores a list of PeerInfo instances into the database.
 
-        :param peer_info_list: A list of PeerInfo instances to be stored.
+        :param peers: A list of PeerInfo instances to be stored.
         """
-        for peer_info in peer_info_list:
+
+        peer_ids = [peer.id for peer in peers]  # Extract the peer IDs from list L
+        placeholders = ','.join('?' for _ in peer_ids)
+        delete_query = f"DELETE FROM PeerInfo WHERE peerID NOT IN ({placeholders})"
+        self.__execute_query(delete_query, peer_ids)
+
+        for peer_info in peers:
             peer = {
                 'peerID': peer_info.id,
                 'ip': peer_info.ip,
@@ -120,6 +110,22 @@ class SQLiteDB:
         # Extract organisationIDs from the query result and return as a list
         return [row[0] for row in results]
 
+    def __insert_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
+        data = peer_trust_data.to_dict()
+        self.__save('PeerTrustData', data)
+
+    def __insert_recommendation_history(self, recommendation_record: RecommendationHistoryRecord) -> None:
+        data = recommendation_record.to_dict()
+        self.__save('RecommendationHistory', data)
+
+    def __insert_service_history(self, service_record: ServiceHistoryRecord) -> None:
+        data = service_record.to_dict()
+        self.__save('ServiceHistory', data)
+
+    def __insert_peer_info(self, peer_info: PeerInfo) -> None:
+        data = peer_info.to_dict()
+        self.__save('PeerInfo', data)
+
     def __connect(self) -> None:
         """
         Establishes a connection to the SQLite database.
@@ -156,7 +162,7 @@ class SQLiteDB:
         placeholders = ', '.join('?' * len(data))
         query = f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({placeholders})"
         self.logger.debug(f"Saving data: {data} into table: {table}")
-        self.execute_query(query, list(data.values()))
+        self.__execute_query(query, list(data.values()))
 
     def __delete(self, table: str, condition: str, params: Optional[List[Any]] = None) -> None:
         """
@@ -169,7 +175,7 @@ class SQLiteDB:
         """
         query = f"DELETE FROM {table} WHERE {condition}"
         self.logger.debug(f"Deleting from table: {table} where {condition}")
-        self.execute_query(query, params)
+        self.__execute_query(query, params)
 
     def __close(self) -> None:
         """
