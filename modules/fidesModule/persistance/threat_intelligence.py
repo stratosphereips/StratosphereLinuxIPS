@@ -20,3 +20,7 @@ class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
         """Returns threat intelligence for given target or None if there are no data."""
         # TODONE: [S] implement this
         return self.db.get_fides_ti(target)
+
+    def save(self, ti: SlipsThreatIntelligence):
+        raise(NotImplementedError)
+
