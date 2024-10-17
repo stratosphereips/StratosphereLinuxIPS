@@ -4,12 +4,14 @@ from pandas.io.sql import SQLDatabase
 from redis.client import Redis
 from tensorflow.python.ops.numpy_ops.np_utils import result_type_unary
 
+from conftest import current_dir
 from ..messaging.model import PeerInfo
 from ..model.aliases import PeerId, Target, OrganisationId
 from ..model.configuration import TrustModelConfiguration
 from ..model.peer_trust_data import PeerTrustData, TrustMatrix
 from ..model.threat_intelligence import SlipsThreatIntelligence
 from ..persistence.trust import TrustDatabase
+from .sqlite_db import SQLiteDB
 
 from slips_files.core.database.database_manager import DBManager
 import json
@@ -22,7 +24,7 @@ class SlipsTrustDatabase(TrustDatabase):
 
     # TODO: [S] implement this
 
-    def __init__(self, configuration: TrustModelConfiguration, db : DBManager, sqldb : SQLDatabase):
+    def __init__(self, configuration: TrustModelConfiguration, db : DBManager, sqldb : SQLiteDB):
         super().__init__(configuration)
         self.db = db
         self.sqldb = sqldb
@@ -32,11 +34,15 @@ class SlipsTrustDatabase(TrustDatabase):
 
         json_peers = [json.dumps(peer.to_dict()) for peer in current_peers]
         self.db.store_connected_peers(json_peers)
+        self.sqldb.store_connected_peers_list(current_peers)
 
     def get_connected_peers(self) -> List[PeerInfo]:
         """Returns list of peers that are directly connected to the Slips."""
         json_peers = self.db.get_connected_peers()
-        current_peers = [PeerInfo(**json.loads(peer_json)) for peer_json in json_peers]
+        if not json_peers:
+            current_peers = self.sqldb.get_connected_peers()
+        else:
+            current_peers = [PeerInfo(**json.loads(peer_json)) for peer_json in json_peers]
         return current_peers
 
     def get_peers_with_organisations(self, organisations: List[OrganisationId]) -> List[PeerInfo]:
