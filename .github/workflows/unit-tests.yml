@@ -57,6 +57,7 @@ jobs:
           - tests/test_riskiq.py
           - tests/test_spamhaus.py
           - tests/test_evidence_handler.py
+          - tests/test_alert_handler.py
 
     steps:
     - uses: actions/checkout@v4

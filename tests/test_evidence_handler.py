@@ -114,7 +114,7 @@ def test_handle_new_alert(profile_ip, timewindow, tw_evidence, block):
     evidence_handler.decide_blocking = Mock(return_value=block)
     evidence_handler.show_popup = Mock()
     evidence_handler.print = Mock()
-    evidence_handler.db.set_accumulated_threat_level = Mock()
+    evidence_handler.db._set_accumulated_threat_level = Mock()
 
     evidence_handler.handle_new_alert(alert, tw_evidence)
     if evidence_handler.popup_alerts:

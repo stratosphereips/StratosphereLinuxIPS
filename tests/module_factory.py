@@ -51,6 +51,7 @@ from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.p2ptrust.trust.base_model import BaseModel
+from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from modules.arp.arp import ARP
 from slips.daemon import Daemon
 from slips_files.core.helpers.checker import Checker
@@ -600,3 +601,6 @@ class ModuleFactory:
         )
         riskiq.db = mock_db
         return riskiq
+
+    def create_alert_handler_obj(self):
+        return AlertHandler()
