@@ -158,6 +158,8 @@ class AlertHandler:
         """
         # create the profile if it doesn't exist
         self.add_profile(str(evidence.profile), evidence.timestamp)
+        # normalize confidence, should range from 0 to 1
+        evidence.confidence = min(evidence.confidence, 1)
 
         # Ignore evidence if it's disabled in the configuration file
         if self.is_detection_disabled(evidence.evidence_type):

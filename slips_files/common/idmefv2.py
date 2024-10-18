@@ -162,12 +162,11 @@ class IDMEFv2:
             return msg
 
         except jsonschema.exceptions.ValidationError as e:
-            # TODO should be logged using a module's print!
-            print(f"IDMEFv2 Validation failure: {e} {e.message}")
+            self.print(f"Validation failure: {e} {e}", 0, 1)
 
         except Exception as e:
-            print(f"Error in convert(): {e}")
-            print(traceback.format_exc())
+            self.print(f"Error in convert(): {e}", 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
 
     def is_icmp_code(self, code) -> bool:
         """checks if the given string is an icmp error code"""
@@ -308,9 +307,7 @@ class IDMEFv2:
             return msg
 
         except jsonschema.exceptions.ValidationError as e:
-            # TODO should be logged using a module's print!
-            print(f"IDMEFv2 Validation failure: {e.message}")
-
+            self.print(f"Validation failure: {e}", 0, 1)
         except Exception as e:
-            print(f"Error in convert_to_idmef_event(): {e}")
-            print(traceback.format_exc())
+            self.print(f"Error in convert_to_idmef_event(): {e}", 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
