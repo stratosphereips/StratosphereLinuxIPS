@@ -146,7 +146,6 @@ class EvidenceHandler(ICore):
 
     def handle_unable_to_log(self):
         self.print("Error logging evidence/alert.")
-        self.print(traceback.format_exc(), 0, 1)
 
     def add_alert_to_json_log_file(self, alert: Alert):
         """
