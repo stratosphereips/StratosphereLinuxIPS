@@ -159,25 +159,46 @@ def test_set_evidence_causing_alert(
 
 
 @pytest.mark.parametrize(
-    "profileid, twid, accumulated_threat_lvl, expected_call",
+    "profile_ip, twid, accumulated_threat_lvl, expected_call",
     [
         # Testcase 1: Set accumulated threat level
-        ("profile1", "twid1", 10.5, {"profile1_twid1": 10.5}),
+        ("192.168.1.9", 1, 10.5, {"profile_192.168.1.9_timewindow1": 10.5}),
         # Testcase 2: Set accumulated threat level with a different value
-        ("profile2", "twid2", 5.0, {"profile2_twid2": 5.0}),
+        ("192.168.1.3", 2, 5.0, {"profile_192.168.1.3_timewindow2": 5.0}),
         # Testcase 3: Set accumulated threat level to 0
-        ("profile3", "twid3", 0.0, {"profile3_twid3": 0.0}),
+        ("192.168.1.8", 3, 0.0, {"profile_192.168.1.8_timewindow3": 0.0}),
     ],
 )
 def test_set_accumulated_threat_level(
-    profileid, twid, accumulated_threat_lvl, expected_call
+    profile_ip, twid, accumulated_threat_lvl, expected_call
 ):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
-
-    alert_handler.set_accumulated_threat_level(
-        profileid, twid, accumulated_threat_lvl
+    alert = Alert(
+        profile=ProfileID(profile_ip),
+        timewindow=TimeWindow(
+            twid,
+            start_time="2024-10-04T18:46:50+03:00",
+            end_time="2024-10-04T19:46:50+03:00",
+        ),
+        last_evidence=Evidence(
+            evidence_type=EvidenceType.ARP_SCAN,
+            description="ARP scan detected",
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value="192.168.1.20",
+            ),
+            threat_level=ThreatLevel.INFO,
+            profile=ProfileID(profile_ip),
+            timewindow=TimeWindow(twid),
+            uid=[],
+            timestamp="1728417813.8868346",
+        ),
+        accumulated_threat_level=30,
+        last_flow_datetime="2024/10/04 15:45:30.123456+0000",
     )
+    alert_handler._set_accumulated_threat_level(alert, accumulated_threat_lvl)
 
     alert_handler.r.zadd.assert_called_once_with(
         "accumulated_threat_levels", expected_call
@@ -242,7 +263,7 @@ def test_cache_whitelisted_evidence_id(evidence_id, expected_calls):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
-    alert_handler.cache_whitelisted_evidence_ID(evidence_id)
+    alert_handler.cache_whitelisted_evidence_id(evidence_id)
 
     assert alert_handler.r.sadd.call_count == len(expected_calls)
     alert_handler.r.sadd.assert_has_calls(expected_calls)
