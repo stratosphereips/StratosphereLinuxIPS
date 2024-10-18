@@ -574,7 +574,7 @@ class Main:
                 stderr, slips_logfile
             )
             self.printer = Printer(self.logger, self.name)
-
+            self.print(f"Storing Slips logs in {self.args.output}")
             self.redis_port: int = self.redis_man.get_redis_port()
             # dont start the redis server if it's already started
             start_redis_server = not utils.is_port_in_use(self.redis_port)
@@ -606,9 +606,7 @@ class Main:
             host_ip = self.host_ip_man.store_host_ip()
 
             self.print(
-                f"Using redis server on "
-                f"port: "
-                f"{green(self.redis_port)}",
+                f"Using redis server on port: {green(self.redis_port)}",
                 1,
                 0,
             )
