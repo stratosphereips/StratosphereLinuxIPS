@@ -211,7 +211,7 @@ class AlertHandler:
         self.update_threat_level(str(alert.profile), "critical", 1)
 
         # reset the accumulated threat level now that an alert is generated
-        self.set_accumulated_threat_level(alert, 0)
+        self._set_accumulated_threat_level(alert, 0)
         self.mark_profile_as_malicious(alert.profile)
 
         alert_details = {
@@ -332,7 +332,7 @@ class AlertHandler:
             f"{profileid}_{twid}",
         )
 
-    def set_accumulated_threat_level(
+    def _set_accumulated_threat_level(
         self,
         alert: Alert,
         accumulated_threat_lvl: float,
