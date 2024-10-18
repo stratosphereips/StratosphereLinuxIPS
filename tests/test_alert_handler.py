@@ -1,7 +1,21 @@
+from typing import Dict
+
 import pytest
 from unittest.mock import MagicMock, call
 import json
+from unittest.mock import ANY
+from slips_files.core.structures.evidence import (
+    ProfileID,
+    TimeWindow,
+    Evidence,
+    EvidenceType,
+    Attacker,
+    Direction,
+    IoCType,
+    ThreatLevel,
+)
 from tests.module_factory import ModuleFactory
+from slips_files.core.structures.alerts import Alert
 
 
 @pytest.mark.parametrize(
@@ -14,7 +28,7 @@ from tests.module_factory import ModuleFactory
     ],
 )
 def test_get_victim(profileid, attacker, expected_victim):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     result = alert_handler.get_victim(profileid, attacker)
     assert result == expected_victim
 
@@ -45,7 +59,7 @@ def test_get_victim(profileid, attacker, expected_victim):
 def test_remove_whitelisted_evidence(
     all_evidence, expected_result, side_effect
 ):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.sismember.side_effect = side_effect
 
@@ -55,7 +69,7 @@ def test_remove_whitelisted_evidence(
 
 
 def test_mark_profile_as_malicious():
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
     profile_id = "profile123"
@@ -67,52 +81,81 @@ def test_mark_profile_as_malicious():
 
 
 @pytest.mark.parametrize(
-    "profileid, twid, alert_ID, evidence_IDs, "
+    "profile_ip, twid, alert_id, evidence_ids, "
     "expected_old_alerts, expected_new_alerts",
     [
         # Testcase 1: No previous alerts
         (
-            "profile1",
-            "twid1",
-            "profile1_twid1_alert1",
+            "192.168.1.20",
+            1,
+            "1234",
             ["ev1", "ev2", "ev3"],
             {},
-            {"profile1_twid1_alert1": '["ev1", "ev2", "ev3"]'},
+            {"1234": ["ev3", "ev2", "ev1"]},
         ),
         # Testcase 2: Update previous alerts
         (
-            "profile2",
-            "twid2",
-            "profile2_twid2_alert2",
+            "192.168.1.40",
+            2,
+            "5678",
             ["ev4", "ev5"],
-            {"profile2_twid2_alert1": '["ev1", "ev2"]'},
+            {"old_alert_id_8987": '["ev1", "ev2"]'},
             {
-                "profile2_twid2_alert1": '["ev1", "ev2"]',
-                "profile2_twid2_alert2": '["ev4", "ev5"]',
+                "old_alert_id_8987": ["ev1", "ev2"],
+                "5678": ["ev5", "ev4"],
             },
         ),
     ],
 )
 def test_set_evidence_causing_alert(
-    profileid,
+    profile_ip,
     twid,
-    alert_ID,
-    evidence_IDs,
+    alert_id,
+    evidence_ids,
     expected_old_alerts,
     expected_new_alerts,
 ):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.hget.return_value = json.dumps(expected_old_alerts)
-
-    alert_handler.set_evidence_causing_alert(
-        profileid, twid, alert_ID, evidence_IDs
+    alert = Alert(
+        id=alert_id,
+        profile=ProfileID(profile_ip),
+        timewindow=TimeWindow(
+            twid,
+            start_time="2024-10-04T18:46:50+03:00",
+            end_time="2024-10-04T19:46:50+03:00",
+        ),
+        last_evidence=Evidence(
+            evidence_type=EvidenceType.ARP_SCAN,
+            description="ARP scan detected",
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value="192.168.1.20",
+            ),
+            threat_level=ThreatLevel.INFO,
+            profile=ProfileID(profile_ip),
+            timewindow=TimeWindow(twid),
+            uid=[],
+            timestamp="1728417813.8868346",
+        ),
+        accumulated_threat_level=30,
+        last_flow_datetime="2024/10/04 15:45:30.123456+0000",
+        correl_id=evidence_ids,
     )
+    alert_handler.set_evidence_causing_alert(alert)
 
-    alert_handler.r.hset.assert_called_once_with(
-        f"{profileid}_{twid}", "alerts", json.dumps(expected_new_alerts)
-    )
     alert_handler.r.incr.assert_called_once_with("number_of_alerts", 1)
+    alert_handler.r.hset.assert_called_once_with(
+        f"profile_{profile_ip}_timewindow{twid}", "alerts", ANY
+    )
+    called_args, _ = alert_handler.r.hset.call_args
+    alerts_added: Dict[str, str] = json.loads(called_args[2])
+    for alert_id, expected_evidence_list in expected_new_alerts.items():
+        assert alert_id in alerts_added
+        added_evidence_list = json.loads(alerts_added[alert_id])
+        assert sorted(expected_evidence_list) == sorted(added_evidence_list)
 
 
 @pytest.mark.parametrize(
@@ -129,7 +172,7 @@ def test_set_evidence_causing_alert(
 def test_set_accumulated_threat_level(
     profileid, twid, accumulated_threat_lvl, expected_call
 ):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
     alert_handler.set_accumulated_threat_level(
@@ -163,7 +206,7 @@ def test_set_accumulated_threat_level(
 def test_update_accumulated_threat_level(
     profileid, twid, update_val, expected_call
 ):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
     alert_handler.update_accumulated_threat_level(profileid, twid, update_val)
@@ -172,7 +215,7 @@ def test_update_accumulated_threat_level(
 
 
 def test_delete_evidence():
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
     profileid = "profile123"
@@ -195,8 +238,8 @@ def test_delete_evidence():
         ("evidence_456", [call("whitelisted_evidence", "evidence_456")]),
     ],
 )
-def test_cache_whitelisted_evidence_ID(evidence_id, expected_calls):
-    alert_handler = ModuleFactory().create_alert_handler()
+def test_cache_whitelisted_evidence_id(evidence_id, expected_calls):
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
     alert_handler.cache_whitelisted_evidence_ID(evidence_id)
@@ -217,7 +260,7 @@ def test_cache_whitelisted_evidence_ID(evidence_id, expected_calls):
 def test_update_ips_info(
     profileid, max_threat_lvl, confidence, expected_ip_info
 ):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.rcache = MagicMock()
     alert_handler.get_ip_info = MagicMock(
         return_value={"score": 0.5, "confidence": 0.6}
@@ -240,7 +283,7 @@ def test_update_ips_info(
     ],
 )
 def test_init_evidence_number(initial_value, expected_value):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.get.return_value = initial_value
 
@@ -261,7 +304,7 @@ def test_init_evidence_number(initial_value, expected_value):
     ],
 )
 def test_get_evidence_number(returned_value, expected_result):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.get.return_value = returned_value
 
@@ -281,7 +324,7 @@ def test_get_evidence_number(returned_value, expected_result):
     ],
 )
 def test_set_max_threat_level(profileid, threat_level, expected_call):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
     alert_handler.set_max_threat_level(profileid, threat_level)
@@ -299,7 +342,7 @@ def test_set_max_threat_level(profileid, threat_level, expected_call):
     ],
 )
 def test_get_accumulated_threat_level(profileid, twid, expected_result):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.zscore.return_value = expected_result
 
@@ -323,7 +366,7 @@ def test_get_accumulated_threat_level(profileid, twid, expected_result):
 def test_is_whitelisted_evidence(
     evidence_id, sismember_return_value, expected_result
 ):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.sismember.return_value = sismember_return_value
 
@@ -358,7 +401,7 @@ def test_is_whitelisted_evidence(
 def test_get_profileid_twid_alerts(
     profileid, twid, stored_alerts, expected_result
 ):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.hget.return_value = stored_alerts
 
@@ -379,7 +422,7 @@ def test_get_profileid_twid_alerts(
     ],
 )
 def test_is_evidence_processed(evidence_id, sismember_return, expected_result):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.sismember.return_value = sismember_return
 
@@ -403,7 +446,7 @@ def test_is_evidence_processed(evidence_id, sismember_return, expected_result):
     ],
 )
 def test_set_flow_causing_evidence(uids, evidence_ID):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
     alert_handler.set_flow_causing_evidence(uids, evidence_ID)
@@ -429,7 +472,7 @@ def test_set_flow_causing_evidence(uids, evidence_ID):
 def test_get_flows_causing_evidence(
     evidence_ID, returned_uids, expected_result
 ):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.hget.return_value = returned_uids
 
@@ -451,7 +494,7 @@ def test_get_flows_causing_evidence(
     ],
 )
 def test_get_evidence_causing_alert(profileid, twid, alert_id, expected_alert):
-    alert_handler = ModuleFactory().create_alert_handler()
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.hget.return_value = (
         '{"profile1_twid1_alert1": ["ev1", "ev2", "ev3"]}'

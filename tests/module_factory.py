@@ -602,5 +602,5 @@ class ModuleFactory:
         riskiq.db = mock_db
         return riskiq
 
-    def create_alert_handler(self):
+    def create_alert_handler_obj(self):
         return AlertHandler()
