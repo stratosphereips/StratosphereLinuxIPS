@@ -22,6 +22,8 @@ from ..utils.time import Time, now
 class SlipsTrustDatabase(TrustDatabase):
     """Trust database implementation that uses Slips redis as a storage."""
 
+    # TODO: [S] implement this
+
     def __init__(self, configuration: TrustModelConfiguration, db : DBManager, sqldb : SQLiteDB):
         super().__init__(configuration)
         self.db = db
@@ -45,6 +47,7 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_peers_with_organisations(self, organisations: List[OrganisationId]) -> List[PeerInfo]:
         """Returns list of peers that have one of given organisations."""
+        self.sqldb.get_peers_by_organisations(organisations)
         out = []
         raw = self.get_connected_peers()
 

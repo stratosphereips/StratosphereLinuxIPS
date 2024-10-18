@@ -29,6 +29,35 @@ class SQLiteDB:
         self.__connect()
         self.__create_tables()
 
+    def get_peers_by_organisations(self, organisation_ids: List[str]) -> List[PeerInfo]:
+        """
+        Fetch PeerInfo records for peers that belong to at least one of the given organisations.
+        Each peer will also have their associated organisations.
+
+        :param organisation_ids: List of organisation IDs to filter peers by.
+        :return: List of PeerInfo objects with associated organisation IDs.
+        """
+        placeholders = ','.join('?' for _ in organisation_ids)
+        query = f"""
+        SELECT P.peerID, P.ip, GROUP_CONCAT(PO.organisationID) as organisations
+        FROM PeerInfo P
+        JOIN PeerOrganisation PO ON P.peerID = PO.peerID
+        WHERE PO.organisationID IN ({placeholders})
+        GROUP BY P.peerID, P.ip;
+        """
+
+        results = self.__execute_query(query, organisation_ids)
+
+        # Convert the result into a list of PeerInfo objects
+        peers = []
+        for row in results:
+            peerID = row[0]
+            ip = row[1]
+            organisations = row[2].split(',') if row[2] else []
+            peers.append(PeerInfo(id=peerID, organisations=organisations, ip=ip))
+
+        return peers
+
     def insert_organisation_if_not_exists(self, organisation_id: OrganisationId) -> None:
         """
         Inserts an organisation into the Organisation table if it doesn't already exist.
