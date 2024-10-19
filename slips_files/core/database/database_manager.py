@@ -153,9 +153,6 @@ class DBManager:
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
 
-    def set_accumulated_threat_level(self, *args, **kwargs):
-        return self.rdb.set_accumulated_threat_level(*args, **kwargs)
-
     def update_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
 
