@@ -305,6 +305,17 @@ class SQLiteDB:
                 FOREIGN KEY (peer_trust_data_id) REFERENCES PeerTrustData(id) ON DELETE CASCADE,
                 FOREIGN KEY (recommendation_history_id) REFERENCES RecommendationHistory(id) ON DELETE CASCADE
             );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS ThreatIntelligence (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                peerID TEXT,
+                score FLOAT NOT NULL CHECK (score >= 0.0 AND score <= 1.0),
+                confidence FLOAT NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+                target TEXT,
+                confidentiality FLOAT CHECK (confidentiality >= 0.0 AND confidentiality <= 1.0),
+                FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID) ON DELETE CASCADE
+            );
             """
         ]
 
