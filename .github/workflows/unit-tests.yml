@@ -58,6 +58,7 @@ jobs:
           - tests/test_spamhaus.py
           - tests/test_evidence_handler.py
           - tests/test_alert_handler.py
+          - tests/test_redis_manager.py
 
     steps:
     - uses: actions/checkout@v4
