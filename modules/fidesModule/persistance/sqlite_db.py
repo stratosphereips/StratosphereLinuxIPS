@@ -8,6 +8,7 @@ from ..model.recommendation_history import RecommendationHistory, Recommendation
 from ..model.service_history import ServiceHistoryRecord, ServiceHistory
 from .. model.threat_intelligence import SlipsThreatIntelligence, ThreatIntelligence
 from ..model.aliases import *
+import threading
 
 """
 Programmers notes:
@@ -16,6 +17,8 @@ Python has None, SQLite has NULL, conversion is automatic in both ways.
 """
 
 class SQLiteDB:
+    _lock = threading.Lock()
+
     def __init__(self, logger: logging.Logger, db_path: str) -> None:
         """
         Initializes the SQLiteDB instance, sets up logging, and connects to the database.
@@ -170,14 +173,21 @@ class SQLiteDB:
         :param params: Optional list of parameters for parameterized queries.
         :return: List of results returned from the executed query.
         """
-        self.logger.debug(f"Executing query: {query}")
-        cursor = self.connection.cursor()
-        if params:
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query)
-        self.connection.commit()
-        return cursor.fetchall()
+        with SQLiteDB._lock:
+            self.logger.debug(f"Executing query: {query}")
+            cursor = self.connection.cursor()
+            try:
+                if params:
+                    cursor.execute(query, params)
+                else:
+                    cursor.execute(query)
+                self.connection.commit()
+                return cursor.fetchall()
+            except Exception as e:
+                self.logger.error(f"Error executing query: {e}")
+                raise
+            finally:
+                cursor.close()  # Ensure the cursor is always closed
 
     def __save(self, table: str, data: dict) -> None:
         """
