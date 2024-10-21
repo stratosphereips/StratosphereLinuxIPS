@@ -1,23 +1,11 @@
+import shutil
 from unittest.mock import patch, mock_open, Mock, call
 import os
 import redis
 import pytest
+
+import slips_files
 from tests.module_factory import ModuleFactory
-
-
-@pytest.mark.parametrize(
-    "test_start_port, expected_start_port",
-    [
-        # Testcase1: default start port
-        (32768, 32768),
-        # Testcase2: default start port
-        (32769, 32769),
-    ],
-)
-def test_get_start_port(test_start_port, expected_start_port, mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
-    redis_manager.start_port = test_start_port
-    assert redis_manager.get_start_port() == expected_start_port
 
 
 @pytest.mark.parametrize(
@@ -61,18 +49,18 @@ def test_log_redis_server_pid_normal_ports(
     redis_manager.main.args.output = "output_dir"
     redis_manager.main.args.daemon = is_daemon
     redis_manager.main.args.save = save_db
+    redis_manager.remove_old_logline = Mock()
+    slips_files.common.slips_utils.utils.convert_format = Mock(
+        return_value="Date"
+    )
 
-    with patch("builtins.open", mock_open()) as mock_file, patch(
-        "os.getpid", return_value="os_pid"
-    ), patch(
-        "slips_files.common.slips_utils.utils.convert_format",
-        return_value="Date",
-    ), patch.object(
-        redis_manager, "remove_old_logline"
-    ) as mock_remove_old_logline:
+    with (
+        patch("builtins.open", mock_open()) as mock_file,
+        patch("os.getpid", return_value="os_pid"),
+    ):
         redis_manager.log_redis_server_pid(redis_port, redis_pid)
         mock_file().write.assert_called_with(expected_output)
-        mock_remove_old_logline.assert_not_called()
+        redis_manager.remove_old_logline.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -90,15 +78,14 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
     redis_manager.main.args.db = db_path
 
-    with patch.object(
-        redis_manager, "get_pid_of_redis_server", return_value=redis_pid
-    ) as mock_get_pid, patch.object(
-        redis_manager, "log_redis_server_pid"
-    ) as mock_log, patch.object(
-        redis_manager, "remove_old_logline"
-    ) as mock_remove, patch(
-        "builtins.print"
-    ) as mock_print:
+    with (
+        patch.object(
+            redis_manager, "get_pid_of_redis_server", return_value=redis_pid
+        ) as mock_get_pid,
+        patch.object(redis_manager, "log_redis_server_pid") as mock_log,
+        patch.object(redis_manager, "remove_old_logline") as mock_remove,
+        patch("builtins.print") as mock_print,
+    ):
         redis_manager.load_redis_db(redis_port)
 
         assert redis_manager.main.input_information == os.path.basename(
@@ -117,23 +104,22 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
 def test_load_db_success(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
     redis_manager.main.args.db = "/path/to/db.rdb"
-    redis_manager.main.db.start = Mock()
+    redis_manager.main.db.init_redis_server = Mock()
     redis_manager.main.db.load = Mock(return_value=True)
     redis_manager.main.terminate_slips = Mock()
 
-    with patch.object(
-        redis_manager, "get_pid_of_redis_server", return_value=1234
-    ) as mock_get_pid, patch.object(
-        redis_manager, "flush_redis_server"
-    ) as mock_flush, patch.object(
-        redis_manager, "kill_redis_server"
-    ) as mock_kill, patch.object(
-        redis_manager, "load_redis_db"
-    ) as mock_load_redis_db:
+    with (
+        patch.object(
+            redis_manager, "get_pid_of_redis_server", return_value=1234
+        ) as mock_get_pid,
+        patch.object(redis_manager, "flush_redis_server") as mock_flush,
+        patch.object(redis_manager, "kill_redis_server") as mock_kill,
+        patch.object(redis_manager, "load_redis_db") as mock_load_redis_db,
+    ):
         redis_manager.load_db()
 
         assert redis_manager.input_type == "database"
-        redis_manager.main.db.start.assert_called_once_with(6379)
+        redis_manager.main.db.init_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
         mock_flush.assert_called_once_with(pid=1234)
         mock_kill.assert_called_once_with(1234)
@@ -144,40 +130,34 @@ def test_load_db_success(mock_db):
 
 def test_load_db_failure(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
-    redis_manager.main.args.db = "/path/to/db.rdb"
-    redis_manager.main.db.start = Mock()
+    rdb_path = "/path/to/db.rdb"
+    redis_manager.main.args.db = rdb_path
+    redis_manager.main.db.init_redis_server = Mock()
     redis_manager.main.db.load = Mock(return_value=False)
     redis_manager.main.terminate_slips = Mock()
 
-    with patch.object(
-        redis_manager, "get_pid_of_redis_server", return_value=1234
-    ) as mock_get_pid, patch.object(
-        redis_manager, "flush_redis_server"
-    ) as mock_flush, patch.object(
-        redis_manager, "kill_redis_server"
-    ) as mock_kill, patch.object(
-        redis_manager, "load_redis_db"
-    ) as mock_load_redis_db, patch(
-        "builtins.print"
-    ) as mock_print:
+    with (
+        patch.object(
+            redis_manager, "get_pid_of_redis_server", return_value=1234
+        ) as mock_get_pid,
+        patch.object(redis_manager, "flush_redis_server") as mock_flush,
+        patch.object(redis_manager, "kill_redis_server") as mock_kill,
+        patch.object(redis_manager, "load_redis_db") as mock_load_redis_db,
+        patch("builtins.print") as mock_print,
+    ):
         redis_manager.load_db()
 
         assert redis_manager.input_type == "database"
-        redis_manager.main.db.start.assert_called_once_with(6379)
+        redis_manager.main.db.init_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
         mock_flush.assert_called_once_with(pid=1234)
         mock_kill.assert_called_once_with(1234)
-        redis_manager.main.db.load.assert_called_once_with("/path/to/db.rdb")
+        redis_manager.main.db.load.assert_called_once_with(rdb_path)
         mock_print.assert_called_once_with(
-            "Error loading the database /path/to/db.rdb"
+            f"Error loading the database {rdb_path}"
         )
         redis_manager.main.terminate_slips.assert_called_once()
         mock_load_redis_db.assert_not_called()
-
-
-def test_get_end_port(mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
-    assert redis_manager.get_end_port() == 32850
 
 
 @pytest.mark.parametrize(
@@ -203,13 +183,14 @@ def test_check_redis_database(
     ping_side_effect, expected_system_calls, expected_result, mock_db
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
-
     mock_redis = Mock()
     mock_redis.ping.side_effect = ping_side_effect
 
-    with patch("redis.StrictRedis", return_value=mock_redis), patch(
-        "os.system"
-    ) as mock_system, patch("time.sleep") as mock_sleep:
+    with (
+        patch("redis.StrictRedis", return_value=mock_redis),
+        patch("os.system") as mock_system,
+        patch("time.sleep") as mock_sleep,
+    ):
         result = redis_manager.check_redis_database()
 
         assert result == expected_result
@@ -224,11 +205,12 @@ def test_check_redis_database_failure(mock_db):
     mock_redis = Mock()
     mock_redis.ping.side_effect = redis.exceptions.ConnectionError
 
-    with patch("redis.StrictRedis", return_value=mock_redis), patch(
-        "os.system"
-    ) as mock_system, patch("time.sleep") as mock_sleep, patch.object(
-        redis_manager.main, "terminate_slips"
-    ) as mock_terminate:
+    with (
+        patch("redis.StrictRedis", return_value=mock_redis),
+        patch("os.system") as mock_system,
+        patch("time.sleep") as mock_sleep,
+        patch.object(redis_manager.main, "terminate_slips") as mock_terminate,
+    ):
         result = redis_manager.check_redis_database()
 
         expected_result = False
@@ -248,7 +230,7 @@ def test_get_random_redis_port_first_available(mock_db):
     with patch("socket.socket", return_value=mock_socket):
         result = redis_manager.get_random_redis_port()
 
-        assert result == 32768
+        assert result == redis_manager.start_port
         mock_socket.bind.assert_called_once_with(("localhost", 32768))
         mock_socket.close.assert_called_once()
 
@@ -261,8 +243,7 @@ def test_get_random_redis_port_some_in_use(mock_db):
 
     with patch("socket.socket", return_value=mock_socket):
         result = redis_manager.get_random_redis_port()
-
-        assert result == 32800
+        assert result == redis_manager.start_port + 32
         assert mock_socket.bind.call_count == 33
         assert mock_socket.close.call_count == 33
 
@@ -273,9 +254,10 @@ def test_get_random_redis_port_all_in_use(mock_db):
     mock_socket = Mock()
     mock_socket.bind.side_effect = OSError
 
-    with patch("socket.socket", return_value=mock_socket), patch(
-        "builtins.print"
-    ) as mock_print:
+    with (
+        patch("socket.socket", return_value=mock_socket),
+        patch("builtins.print") as mock_print,
+    ):
         result = redis_manager.get_random_redis_port()
 
         expected_result = False
@@ -295,9 +277,7 @@ def test_clear_redis_cache_database(mock_db):
     with patch("redis.StrictRedis") as mock_redis:
         mock_redis_instance = Mock()
         mock_redis.return_value = mock_redis_instance
-
         result = redis_manager.clear_redis_cache_database()
-
         mock_redis.assert_called_once_with(
             host="localhost",
             port=6379,
@@ -306,19 +286,18 @@ def test_clear_redis_cache_database(mock_db):
             decode_responses=True,
         )
         mock_redis_instance.flushdb.assert_called_once()
-        expected_result = True
-        assert result == expected_result
+        assert result
 
 
 @pytest.mark.parametrize(
     "port",
     [
         # Testcase 1: Using the starting port of slips range
-        (32768),
+        32768,
         # Testcase 2: Another port within slips range
-        (32769),
+        32769,
         # Testcase 3: One more port for good measure
-        (32770),
+        32770,
     ],
 )
 def test_print_port_in_use(port, mock_db):
@@ -333,38 +312,6 @@ def test_print_port_in_use(port, mock_db):
             f"Or kill your open redis ports using: ./slips.py -k "
         )
         mock_print.assert_called_once_with(expected_output)
-
-
-@pytest.mark.parametrize(
-    "port, is_in_use, expected_result, " "print_called, terminate_called",
-    [
-        # Testcase 1: Default port, should return False even if in use
-        (6379, True, False, False, False),
-        # Testcase 2: Port in use, should return True and print message
-        (32768, True, True, True, True),
-        # Testcase 3: Port available, should return False
-        (32769, False, False, False, False),
-    ],
-)
-def test_check_if_port_is_in_use(
-    port, is_in_use, expected_result, print_called, terminate_called, mock_db
-):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
-
-    with patch(
-        "slips_files.common.slips_utils.utils.is_port_in_use",
-        return_value=is_in_use,
-    ), patch.object(
-        redis_manager, "print_port_in_use"
-    ) as mock_print, patch.object(
-        redis_manager.main, "terminate_slips"
-    ) as mock_terminate:
-        result = redis_manager.check_if_port_is_in_use(port)
-
-        assert result == expected_result
-
-        assert mock_print.called == print_called
-        assert mock_terminate.called == terminate_called
 
 
 @pytest.mark.parametrize(
@@ -385,9 +332,7 @@ def test_get_pid_of_redis_server(port, cmd_output, expected_pid, mock_db):
 
     with patch("subprocess.Popen") as mock_popen:
         mock_popen.return_value.communicate.return_value = (cmd_output, None)
-
         result = redis_manager.get_pid_of_redis_server(port)
-
         assert result == expected_pid
 
 
@@ -410,9 +355,10 @@ def test_remove_old_logline(
     redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
 
     mock_file = mock_open(read_data=file_content)
-    with patch("builtins.open", mock_file) as mocked_open, patch(
-        "os.replace"
-    ) as mock_replace:
+    with (
+        patch("builtins.open", mock_file) as mocked_open,
+        patch("os.replace") as mock_replace,
+    ):
         redis_manager.remove_old_logline(redis_port)
 
         mocked_open.assert_any_call(redis_manager.running_logfile, "r")
@@ -444,16 +390,17 @@ def test_remove_server_from_log(
     redis_port, file_content, expected_output, mock_db
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    shutil.move = Mock()
 
     with patch(
         "builtins.open", mock_open(read_data=file_content)
-    ) as mock_file, patch("os.replace") as mock_replace:
+    ) as mock_file:
         redis_manager.remove_server_from_log(redis_port)
 
         mock_file().write.assert_has_calls(
             [call(line + "\n") for line in expected_output.strip().split("\n")]
         )
-        mock_replace.assert_called_once_with(
+        shutil.move.assert_called_once_with(
             "tmp_running_slips_log.txt", redis_manager.running_logfile
         )
 
@@ -506,9 +453,10 @@ def test_print_open_redis_servers(
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
 
-    with patch("builtins.open", mock_open(read_data=file_content)), patch(
-        "builtins.print"
-    ) as mock_print:
+    with (
+        patch("builtins.open", mock_open(read_data=file_content)),
+        patch("builtins.print") as mock_print,
+    ):
         result = redis_manager.print_open_redis_servers()
 
         mock_print.assert_called_once_with(expected_output)
