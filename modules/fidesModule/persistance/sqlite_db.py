@@ -32,6 +32,99 @@ class SQLiteDB:
         self.__connect()
         self.__create_tables()
 
+    def get_peers_by_minimal_recommendation_trust(self, minimal_recommendation_trust: float) -> List[PeerInfo]:
+        # SQL query to select PeerInfo of peers that meet the minimal recommendation_trust criteria
+        query = """
+        SELECT pi.peerID, pi.ip
+        FROM PeerTrustData ptd
+        JOIN PeerInfo pi ON ptd.peerID = pi.peerID
+        WHERE ptd.recommendation_trust >= ?;
+        """
+
+        # Execute the query, passing the minimal_recommendation_trust as a parameter
+        result_rows = self.__execute_query(query, [minimal_recommendation_trust])
+
+        peer_list = []
+        for row in result_rows:
+            peer_id = row[0]
+            ip = row[1]
+
+            # Get the organisations for the peer using the get_peer_organisations method below
+            organisations = self.get_peer_organisations(peer_id)
+
+            # Create a PeerInfo instance with the retrieved organisations and IP
+            peer_info = PeerInfo(id=peer_id, organisations=organisations, ip=ip)
+            peer_list.append(peer_info)
+
+        return peer_list
+
+    def get_peer_trust_data(self, peer_id: str) -> PeerTrustData:
+        # Fetch PeerTrustData along with PeerInfo
+        query_peer_trust = """
+        SELECT ptd.*, pi.peerID, pi.ip
+        FROM PeerTrustData ptd
+        JOIN PeerInfo pi ON ptd.peerID = pi.peerID
+        WHERE ptd.peerID = ?;
+        """
+        peer_trust_row = self.__execute_query(query_peer_trust, [peer_id])
+
+        # If no result found, return None
+        if not peer_trust_row:
+            return None
+
+        peer_trust_row = peer_trust_row[0]  # Get the first row (since fetchall() returns a list of rows)
+
+        # Unpack PeerTrustData row (adjust indices based on your column order)
+        (trust_data_id, peerID, has_fixed_trust, service_trust, reputation, recommendation_trust,
+         competence_belief, integrity_belief, initial_reputation_count, _, ip) = peer_trust_row
+
+        # Fetch ServiceHistory for the peer
+        query_service_history = """
+        SELECT sh.satisfaction, sh.weight, sh.service_time
+        FROM ServiceHistory sh
+        JOIN PeerTrustServiceHistory pts ON sh.id = pts.service_history_id
+        JOIN PeerTrustData ptd ON pts.peer_trust_data_id = ptd.id
+        WHERE ptd.peerID = ?;
+        """
+        service_history_rows = self.__execute_query(query_service_history, [peer_id])
+
+        service_history = [
+            ServiceHistoryRecord(satisfaction=row[0], weight=row[1], timestamp=row[2])
+            for row in service_history_rows
+        ]
+
+        # Fetch RecommendationHistory for the peer
+        query_recommendation_history = """
+        SELECT rh.satisfaction, rh.weight, rh.recommend_time
+        FROM RecommendationHistory rh
+        JOIN PeerTrustRecommendationHistory ptr ON rh.id = ptr.recommendation_history_id
+        JOIN PeerTrustData ptd ON ptr.peer_trust_data_id = ptd.id
+        WHERE ptd.peerID = ?;
+        """
+        recommendation_history_rows = self.__execute_query(query_recommendation_history, [peer_id])
+
+        recommendation_history = [
+            RecommendationHistoryRecord(satisfaction=row[0], weight=row[1], timestamp=row[2])
+            for row in recommendation_history_rows
+        ]
+
+        # Construct PeerInfo
+        peer_info = PeerInfo(id=peerID, organisations=self.get_peer_organisations(peerID), ip=ip)  # Assuming organisation info is not fetched here.
+
+        # Construct and return PeerTrustData object
+        return PeerTrustData(
+            info=peer_info,
+            has_fixed_trust=bool(has_fixed_trust),
+            service_trust=service_trust,
+            reputation=reputation,
+            recommendation_trust=recommendation_trust,
+            competence_belief=competence_belief,
+            integrity_belief=integrity_belief,
+            initial_reputation_provided_by_count=initial_reputation_count,
+            service_history=service_history,
+            recommendation_history=recommendation_history
+        )
+
     def get_peers_by_organisations(self, organisation_ids: List[str]) -> List[PeerInfo]:
         """
         Fetch PeerInfo records for peers that belong to at least one of the given organisations.

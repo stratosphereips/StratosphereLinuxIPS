@@ -22,8 +22,6 @@ from ..utils.time import Time, now
 class SlipsTrustDatabase(TrustDatabase):
     """Trust database implementation that uses Slips redis as a storage."""
 
-    # TODO: [S] implement this
-
     def __init__(self, configuration: TrustModelConfiguration, db : DBManager, sqldb : SQLiteDB):
         super().__init__(configuration)
         self.db = db
@@ -38,7 +36,7 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_connected_peers(self) -> List[PeerInfo]:
         """Returns list of peers that are directly connected to the Slips."""
-        json_peers = self.db.get_connected_peers()
+        json_peers = self.db.get_connected_peers() # on no data returns []
         if not json_peers:
             current_peers = self.sqldb.get_connected_peers()
         else:
@@ -59,13 +57,19 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_peers_with_geq_recommendation_trust(self, minimal_recommendation_trust: float) -> List[PeerInfo]:
         """Returns peers that have >= recommendation_trust then the minimal."""
-        connected_peers = self.get_connected_peers()
+        connected_peers = self.get_connected_peers() # returns data or []
         out = []
-        for peer in connected_peers:
-            td = self.get_peer_trust_data(peer.id)
 
-            if td is not None and td.recommendation_trust >= minimal_recommendation_trust:
-                out.append(peer)
+        # if no peers present in Redis, try SQLite DB
+        if connected_peers:
+            for peer in connected_peers:
+                td = self.get_peer_trust_data(peer.id)
+
+                if td is not None and td.recommendation_trust >= minimal_recommendation_trust:
+                    out.append(peer)
+        else:
+            out = self.sqldb.get_peers_by_minimal_recommendation_trust(minimal_recommendation_trust)
+
         return out
 
 
