@@ -98,8 +98,19 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_peers_trust_data(self, peer_ids: List[Union[PeerId, PeerInfo]]) -> TrustMatrix:
         """Return trust data for each peer from peer_ids."""
-        # TODO add SQLite backup
-        return {peer_id: self.get_peer_trust_data(peer_id) for peer_id in peer_ids}
+        out = {}
+        peer_id = None
+
+        for peer in peer_ids:
+            # get PeerID to properly create TrustMatrix
+            if isinstance(peer, PeerId):
+                peer_id = peer
+            elif isinstance(peer, PeerInfo):
+                peer_id = peer.id
+
+            # TrustMatrix = Dict[PeerId, PeerTrustData]; here - peer_id: PeerId
+            out[peer_id] = self.get_peer_trust_data(peer_id)
+        return out
 
     def cache_network_opinion(self, ti: SlipsThreatIntelligence):
         """Caches aggregated opinion on given target."""
