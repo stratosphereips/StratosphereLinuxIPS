@@ -67,7 +67,7 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def store_peer_trust_data(self, trust_data: PeerTrustData):
         """Stores trust data for given peer - overwrites any data if existed."""
-        # TODO add SQLite backup
+        self.sqldb.store_peer_trust_data(trust_data)
         id = trust_data.id
         td_json = json.dumps(trust_data.to_dict())
         self.db.store_peer_trust_data(id, td_json)
