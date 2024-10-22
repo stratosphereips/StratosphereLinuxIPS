@@ -32,6 +32,89 @@ class SQLiteDB:
         self.__connect()
         self.__create_tables()
 
+    def store_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
+        # Start building the transaction query
+        # Using a list to store all queries
+        queries = []
+
+        # Insert PeerInfo first to ensure the peer exists
+        queries.append("""
+        INSERT OR REPLACE INTO PeerInfo (peerID, ip) 
+        VALUES (?, ?);
+        """)
+
+        # Insert organisations for the peer into the PeerOrganisation table
+        org_queries = [
+            "INSERT OR REPLACE INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?);"
+            for org_id in peer_trust_data.info.organisations
+        ]
+        queries.extend(org_queries)
+
+        # Insert PeerTrustData itself
+        queries.append("""
+        INSERT INTO PeerTrustData (
+            peerID, has_fixed_trust, service_trust, reputation, recommendation_trust, 
+            competence_belief, integrity_belief, initial_reputation_provided_by_count
+        ) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """)
+
+        # Prepare to insert service history and link to PeerTrustData
+        for sh in peer_trust_data.service_history:
+            queries.append("""
+            INSERT INTO ServiceHistory (peerID, satisfaction, weight, service_time)
+            VALUES (?, ?, ?, ?);
+            """)
+
+            # Insert into PeerTrustServiceHistory
+            queries.append("""
+            INSERT INTO PeerTrustServiceHistory (peer_trust_data_id, service_history_id)
+            VALUES (last_insert_rowid(), last_insert_rowid());
+            """)
+
+        # Prepare to insert recommendation history and link to PeerTrustData
+        for rh in peer_trust_data.recommendation_history:
+            queries.append("""
+            INSERT INTO RecommendationHistory (peerID, satisfaction, weight, recommend_time)
+            VALUES (?, ?, ?, ?);
+            """)
+
+            # Insert into PeerTrustRecommendationHistory
+            queries.append("""
+            INSERT INTO PeerTrustRecommendationHistory (peer_trust_data_id, recommendation_history_id)
+            VALUES (last_insert_rowid(), last_insert_rowid());
+            """)
+
+        # Combine all queries into a single transaction
+        full_query = "BEGIN TRANSACTION;\n" + "\n".join(queries) + "\nCOMMIT;"
+
+        # Flatten the parameters for the queries
+        params = []
+        params.append((peer_trust_data.info.id, peer_trust_data.info.ip))  # For PeerInfo
+
+        # For PeerOrganisation
+        params.extend([(peer_trust_data.info.id, org_id) for org_id in peer_trust_data.info.organisations])
+
+        # For PeerTrustData
+        params.append((peer_trust_data.info.id, int(peer_trust_data.has_fixed_trust),
+                       peer_trust_data.service_trust, peer_trust_data.reputation,
+                       peer_trust_data.recommendation_trust, peer_trust_data.competence_belief,
+                       peer_trust_data.integrity_belief, peer_trust_data.initial_reputation_provided_by_count))
+
+        # For ServiceHistory
+        for sh in peer_trust_data.service_history:
+            params.append((peer_trust_data.info.id, sh.satisfaction, sh.weight, sh.timestamp))
+
+        # For RecommendationHistory
+        for rh in peer_trust_data.recommendation_history:
+            params.append((peer_trust_data.info.id, rh.satisfaction, rh.weight, rh.timestamp))
+
+        # Flatten the params to match the expected structure for __execute_query
+        flat_params = [item for sublist in params for item in sublist]
+
+        # Execute the transaction as a single query
+        self.__execute_query(full_query, flat_params)
+
     def get_peers_by_minimal_recommendation_trust(self, minimal_recommendation_trust: float) -> List[PeerInfo]:
         # SQL query to select PeerInfo of peers that meet the minimal recommendation_trust criteria
         query = """
@@ -236,7 +319,7 @@ class SQLiteDB:
         return [row[0] for row in results]
 
     def __insert_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
-        data = peer_trust_data.to_dict()
+        data = peer_trust_data.to_dict(remove_histories=True)
         self.__save('PeerTrustData', data)
 
     def __insert_recommendation_history(self, recommendation_record: RecommendationHistoryRecord) -> None:

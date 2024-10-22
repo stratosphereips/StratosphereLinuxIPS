@@ -94,8 +94,8 @@ class PeerTrustData:
         """Size of the recommendation history, in model's notation rh_ij."""
         return len(self.recommendation_history)
 
-    def to_dict(self):
-        return {
+    def to_dict(self, remove_histories: bool = False):
+        data = {
             "info": self.info.to_dict(),  # Assuming PeerInfo has to_dict method
             "has_fixed_trust": self.has_fixed_trust,
             "service_trust": self.service_trust,
@@ -107,6 +107,12 @@ class PeerTrustData:
             "service_history": [sh.to_dict() for sh in self.service_history],  # Assuming ServiceHistory has to_dict
             "recommendation_history": [rh.to_dict() for rh in self.recommendation_history] # Assuming RecommendationHistory has to_dict
         }
+
+        if remove_histories:
+            del data["service_history"]
+            del data["recommendation_history"]
+
+        return data
 
     # Method to create an object from a dictionary
     @classmethod
