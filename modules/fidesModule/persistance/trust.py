@@ -114,12 +114,12 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def cache_network_opinion(self, ti: SlipsThreatIntelligence):
         """Caches aggregated opinion on given target."""
-        # TODO add SQLite backup
+        # cache is not backed up into SQLite, can be recalculated, not critical
         self.db.cache_network_opinion(ti.target, ti.to_dict())
 
     def get_cached_network_opinion(self, target: Target) -> Optional[SlipsThreatIntelligence]:
         """Returns cached network opinion. Checks cache time and returns None if data expired."""
-        # TODO add SQLite backup
+        # cache is not backed up into SQLite, can be recalculated, not critical
         rec = self.db.get_cached_network_opinion(target, self.__configuration.network_opinion_cache_valid_seconds, now())
         if rec is None:
             return None
