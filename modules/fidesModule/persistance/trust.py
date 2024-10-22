@@ -31,8 +31,8 @@ class SlipsTrustDatabase(TrustDatabase):
         """Stores list of peers that are directly connected to the Slips."""
 
         json_peers = [json.dumps(peer.to_dict()) for peer in current_peers]
-        self.db.store_connected_peers(json_peers)
         self.sqldb.store_connected_peers_list(current_peers)
+        self.db.store_connected_peers(json_peers)
 
     def get_connected_peers(self) -> List[PeerInfo]:
         """Returns list of peers that are directly connected to the Slips."""
@@ -79,18 +79,21 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_peer_trust_data(self, peer: Union[PeerId, PeerInfo]) -> Optional[PeerTrustData]:
         """Returns trust data for given peer ID, if no data are found, returns None."""
+        out = None
+
         if isinstance(peer, PeerId):
             peer_id = peer
         elif isinstance(peer, PeerInfo):
             peer_id = peer.id
         else:
-            return None
+            return out
 
         td_json = self.db.get_peer_trust_data(peer.id)
-        if td_json is None:
-            # TODO add SQLite backup
-            return None
-        return PeerTrustData(**json.loads(td_json))
+        if td_json: # Redis has available data
+            out = PeerTrustData(**json.loads(td_json))
+        else: # if redis is empty, try SQLite
+            out = self.sqldb.get_peer_trust_data(peer_id)
+        return out
 
 
     def get_peers_trust_data(self, peer_ids: List[Union[PeerId, PeerInfo]]) -> TrustMatrix:
