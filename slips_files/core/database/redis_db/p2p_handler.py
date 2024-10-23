@@ -25,6 +25,13 @@ class P2PHandler:
         """
         return self.r.get(target) or None
 
+    def save_fides_ti(self, target: str, data: str):
+        """
+        :param target: target is used as a key to store the data
+        :param data: SlipsThreatIntelligence that is to be saved
+        """
+        self.r.set(target, data)
+
     def store_connected_peers(self, peers: List[str]):
         self.r.set('connected_peers', json.dumps(peers))
 
