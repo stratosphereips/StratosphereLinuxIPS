@@ -32,6 +32,59 @@ class SQLiteDB:
         self.__connect()
         self.__create_tables()
 
+    def get_slips_threat_intelligence_by_target(self, target: Target) -> Optional[SlipsThreatIntelligence]:
+        """
+        Retrieves a SlipsThreatIntelligence record by its target.
+
+        :param target: The target (IP address, domain, etc.) of the intelligence.
+        :return: A SlipsThreatIntelligence instance or None if not found.
+        """
+        query = """
+        SELECT score, confidence, target, confidentiality 
+        FROM ThreatIntelligence 
+        WHERE target = ?;
+        """
+
+        # Execute the query to get the result
+        rows = self.__execute_query(query, [target])
+
+        if rows:
+            score, confidence, target, confidentiality = rows[0]
+            return SlipsThreatIntelligence(
+                score=score,
+                confidence=confidence,
+                target=target,
+                confidentiality=confidentiality
+            )
+
+        return None
+
+    def store_slips_threat_intelligence(self, intelligence: SlipsThreatIntelligence) -> None:
+        """
+        Stores or updates the given SlipsThreatIntelligence object in the database based on the target.
+
+        :param intelligence: The SlipsThreatIntelligence object to store or update.
+        """
+        query = """
+        INSERT INTO ThreatIntelligence (
+            target, score, confidence, confidentiality
+        ) 
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(target) DO UPDATE SET 
+            score = excluded.score,
+            confidence = excluded.confidence,
+            confidentiality = excluded.confidentiality;
+        """
+
+        # Convert the confidentiality to None if not provided, and flatten data for insertion
+        params = [
+            intelligence.target, intelligence.score, intelligence.confidence,
+            intelligence.confidentiality
+        ]
+
+        # Execute the query
+        self.__execute_query(query, params)
+
     def store_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
         # Start building the transaction query
         # Using a list to store all queries
@@ -491,6 +544,14 @@ class SQLiteDB:
                 target TEXT,
                 confidentiality FLOAT CHECK (confidentiality >= 0.0 AND confidentiality <= 1.0),
                 FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID) ON DELETE CASCADE
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS ThreatIntelligence (
+                target TEXT PRIMARY KEY,  -- The target of the intelligence (IP, domain, etc.)
+                score REAL NOT NULL CHECK (score >= -1.0 AND score <= 1.0),
+                confidence REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+                confidentiality REAL CHECK (confidentiality >= 0.0 AND confidentiality <= 1.0) -- Optional confidentiality level
             );
             """
         ]

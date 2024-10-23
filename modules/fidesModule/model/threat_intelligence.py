@@ -32,7 +32,9 @@ class SlipsThreatIntelligence(ThreatIntelligence):
     def to_dict(self):
         return {
             "target": self.target,
-            "confidentiality": self.confidentiality if self.confidentiality else None
+            "confidentiality": self.confidentiality if self.confidentiality else None,
+            "score": self.score,
+            "confidence": self.confidence
         }
 
     # Create an instance from a dictionary
@@ -40,5 +42,7 @@ class SlipsThreatIntelligence(ThreatIntelligence):
     def from_dict(cls, data: dict):
         return cls(
             target=Target(data["target"]),
-            confidentiality=ConfidentialityLevel(**data["confidentiality"]) if data.get("confidentiality") else None
+            confidentiality=ConfidentialityLevel(**data["confidentiality"]) if data.get("confidentiality") else None,
+            score=Score(**data["score"]) if data.get("score") else None,
+            confidence=Confidence(**data["confidence"]) if data.get("confidence") else None
         )
