@@ -46,7 +46,7 @@ class SlipsTrustDatabase(TrustDatabase):
     def get_peers_with_organisations(self, organisations: List[OrganisationId]) -> List[PeerInfo]:
         """Returns list of peers that have one of given organisations."""
         self.sqldb.get_peers_by_organisations(organisations)
-        #TODO implement this for Redis
+        #TODOOO implement this for Redis
 
     def get_peers_with_geq_recommendation_trust(self, minimal_recommendation_trust: float) -> List[PeerInfo]:
         """Returns peers that have >= recommendation_trust then the minimal."""
