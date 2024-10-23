@@ -173,7 +173,7 @@ modules:
    # Names of other modules that you can disable (they all should be lowercase with no special characters):
    # ensembling, threatintelligence, blocking,
    # networkdiscovery, timeline, virustotal, rnnccdetection, flowmldetection, updatemanager
-   disable: "[template , ensembling, Flow ML Detection, Update Manager]"
+   disable: [template, ensembling, Flow ML Detection, Update Manager]
 
    # For each line in timeline file there is a timestamp.
    # By default the timestamp is seconds in unix time. However

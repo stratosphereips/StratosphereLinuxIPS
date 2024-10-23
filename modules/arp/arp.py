@@ -433,7 +433,7 @@ class ARP(IModule):
                 threat_level=threat_level,
                 confidence=confidence,
                 description=description,
-                profile=ProfileID(ip=saddr),
+                profile=ProfileID(ip=attackers_ip),
                 timewindow=TimeWindow(
                     number=int(twid.replace("timewindow", ""))
                 ),

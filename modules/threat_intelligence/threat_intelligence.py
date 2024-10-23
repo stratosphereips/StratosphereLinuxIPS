@@ -1132,7 +1132,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=srcip),
+            profile=ProfileID(ip=daddr),
             timewindow=twid,
             uid=[file_info["flow"]["uid"]],
             timestamp=ts,

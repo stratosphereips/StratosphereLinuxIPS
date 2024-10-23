@@ -296,7 +296,7 @@ class URLhaus:
             confidence=0.7,
             description=description,
             timestamp=timestamp,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
         )

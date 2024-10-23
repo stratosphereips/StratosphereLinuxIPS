@@ -577,17 +577,12 @@ class EvidenceHandler(ICore):
         update the accumulated threat level of the profileid and twid of
         the given evidence and return the updated value
         """
-        profileid: str = str(evidence.profile)
-        twid: str = str(evidence.timewindow)
         evidence_threat_level: float = self.get_threat_level(evidence)
-
-        self.db.update_accumulated_threat_level(
-            profileid, twid, evidence_threat_level
+        return self.db.update_accumulated_threat_level(
+            str(evidence.profile),
+            str(evidence.timewindow),
+            evidence_threat_level,
         )
-        accumulated_threat_level: float = self.db.get_accumulated_threat_level(
-            profileid, twid
-        )
-        return accumulated_threat_level
 
     def show_popup(self, alert: Alert):
         alert_description: str = self.get_alert_time_description(alert)
@@ -656,6 +651,7 @@ class EvidenceHandler(ICore):
                         profileid, twid
                     )
                 )
+                # filtered evidence dont add to the acc threat level
                 if not self.is_filtered_evidence(evidence, past_evidence_ids):
                     accumulated_threat_level: float = (
                         self.update_accumulated_threat_level(evidence)
