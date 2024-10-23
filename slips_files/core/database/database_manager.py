@@ -934,7 +934,7 @@ class DBManager:
         self.rdb.store_connected_peers(peers)
 
     def get_connected_peers(self):
-        return self.rdb.get_connected_peers()
+        return self.rdb.get_connected_peers() # no data -> []
 
     def store_peer_trust_data(self, id: str, td: str):
         self.rdb.update_peer_td(id, td)

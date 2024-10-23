@@ -36,7 +36,7 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_connected_peers(self) -> List[PeerInfo]:
         """Returns list of peers that are directly connected to the Slips."""
-        json_peers = self.db.get_connected_peers()
+        json_peers = self.db.get_connected_peers() # on no data returns []
         if not json_peers:
             current_peers = self.sqldb.get_connected_peers()
         else:
@@ -48,6 +48,7 @@ class SlipsTrustDatabase(TrustDatabase):
         out = []
         raw = self.get_connected_peers()
 
+        #self.sqldb.get_peers_by_organisations(organisations)
         for peer in raw:
             for organisation in organisations:
                 if organisation in peer.organisations:
@@ -56,18 +57,24 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_peers_with_geq_recommendation_trust(self, minimal_recommendation_trust: float) -> List[PeerInfo]:
         """Returns peers that have >= recommendation_trust then the minimal."""
-        connected_peers = self.get_connected_peers()
+        connected_peers = self.get_connected_peers() # returns data or []
         out = []
-        for peer in connected_peers:
-            td = self.get_peer_trust_data(peer.id)
 
-            if td is not None and td.recommendation_trust >= minimal_recommendation_trust:
-                out.append(peer)
+        # if no peers present in Redis, try SQLite DB
+        if connected_peers:
+            for peer in connected_peers:
+                td = self.get_peer_trust_data(peer.id)
+
+                if td is not None and td.recommendation_trust >= minimal_recommendation_trust:
+                    out.append(peer)
+        else:
+            out = self.sqldb.get_peers_by_minimal_recommendation_trust(minimal_recommendation_trust)
+
         return out
-
 
     def store_peer_trust_data(self, trust_data: PeerTrustData):
         """Stores trust data for given peer - overwrites any data if existed."""
+        self.sqldb.store_peer_trust_data(trust_data)
         id = trust_data.id
         td_json = json.dumps(trust_data.to_dict())
         self.db.store_peer_trust_data(id, td_json)
@@ -79,29 +86,47 @@ class SlipsTrustDatabase(TrustDatabase):
 
     def get_peer_trust_data(self, peer: Union[PeerId, PeerInfo]) -> Optional[PeerTrustData]:
         """Returns trust data for given peer ID, if no data are found, returns None."""
+        out = None
+
         if isinstance(peer, PeerId):
             peer_id = peer
         elif isinstance(peer, PeerInfo):
             peer_id = peer.id
         else:
-            return None
+            return out
 
         td_json = self.db.get_peer_trust_data(peer.id)
-        if td_json is None:
-            return None
-        return PeerTrustData(**json.loads(td_json))
+        if td_json: # Redis has available data
+            out = PeerTrustData(**json.loads(td_json))
+        else: # if redis is empty, try SQLite
+            out = self.sqldb.get_peer_trust_data(peer_id)
+        return out
 
 
     def get_peers_trust_data(self, peer_ids: List[Union[PeerId, PeerInfo]]) -> TrustMatrix:
         """Return trust data for each peer from peer_ids."""
-        return {peer_id: self.get_peer_trust_data(peer_id) for peer_id in peer_ids}
+        out = {}
+        peer_id = None
+
+        for peer in peer_ids:
+            # get PeerID to properly create TrustMatrix
+            if isinstance(peer, PeerId):
+                peer_id = peer
+            elif isinstance(peer, PeerInfo):
+                peer_id = peer.id
+
+            # TrustMatrix = Dict[PeerId, PeerTrustData]; here - peer_id: PeerId
+            out[peer_id] = self.get_peer_trust_data(peer_id)
+        return out
 
     def cache_network_opinion(self, ti: SlipsThreatIntelligence):
         """Caches aggregated opinion on given target."""
+        # cache is not backed up into SQLite, can be recalculated, not critical
         self.db.cache_network_opinion(ti.target, ti.to_dict())
 
     def get_cached_network_opinion(self, target: Target) -> Optional[SlipsThreatIntelligence]:
         """Returns cached network opinion. Checks cache time and returns None if data expired."""
+        # cache is not backed up into SQLite, can be recalculated, not critical
         rec = self.db.get_cached_network_opinion(target, self.__configuration.network_opinion_cache_valid_seconds, now())
         if rec is None:
             return None
