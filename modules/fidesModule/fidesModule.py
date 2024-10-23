@@ -36,6 +36,8 @@ from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenc
 from ..fidesModule.persistance.trust import SlipsTrustDatabase
 from ..fidesModule.persistance.sqlite_db import SQLiteDB
 
+from ..fidesModule.model.configuration import load_configuration
+
 
 from pathlib import Path
 
@@ -50,15 +52,6 @@ class fidesModule(IModule):
     def init(self):
         # Process.__init__(self) done by IModule
         self.__output = self.logger
-        
-        #slips_conf = os.path.join('modules', 'fidesModule', 'config', 'fides.conf.yml')
-
-        # self.__slips_config = slips_conf # TODONE give it path to config
-        # file and move the config file to module
-        #self.read_configuration() # hope it works
-
-        # connect to slips database
-        #__database__.start(slips_conf) # __database__ replaced by self.db from IModule, no need ot start it
 
         # IModule has its own logger, no set-up
         LoggerPrintCallbacks.clear()
@@ -97,8 +90,8 @@ class fidesModule(IModule):
         # create database wrappers for Slips using Redis
         # trust_db = InMemoryTrustDatabase(self.__trust_model_config)
         # ti_db =  InMemoryThreatIntelligenceDatabase()
-        trust_db = SlipsTrustDatabase(self.__trust_model_config, self.db)
-        ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, self.db)
+        trust_db = SlipsTrustDatabase(self.__trust_model_config, self.db, self.sqlite)
+        ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, self.db, self.sqlite)
 
         # create queues
         # TODO: [S] check if we need to use duplex or simplex queue for communication with network module
@@ -113,7 +106,7 @@ class fidesModule(IModule):
         opinion = OpinionAggregator(self.__trust_model_config, ti_db, self.__trust_model_config.ti_aggregation_strategy)
 
         intelligence = ThreatIntelligenceProtocol(trust_db, ti_db, bridge, self.__trust_model_config, opinion, trust,
-                                                  MaxConfidenceTIEvaluation(),
+                                                  self.__trust_model_config.interaction_evaluation_strategy,
                                                   self.__network_opinion_callback)
         alert = AlertProtocol(trust_db, bridge, trust, self.__trust_model_config, opinion,
                               self.__network_opinion_callback)
