@@ -328,7 +328,8 @@ class AlertHandler:
         :param update_val: can be +ve to increase the threat level or -ve
         to decrease
         """
-        self.r.zincrby(
+
+        return self.r.zincrby(
             "accumulated_threat_levels",
             update_val,
             f"{profileid}_{twid}",
