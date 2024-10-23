@@ -9,13 +9,15 @@ from ..persistence.threat_intelligence import ThreatIntelligenceDatabase
 
 from slips_files.core.database.database_manager import DBManager
 import json
+from .sqlite_db import SQLiteDB
 
 class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
     """Implementation of ThreatIntelligenceDatabase that uses Slips native storage for the TI."""
 
-    def __init__(self, configuration: TrustModelConfiguration, db: DBManager, sqldb):
+    def __init__(self, configuration: TrustModelConfiguration, db: DBManager, sqldb : SQLiteDB):
         self.__configuration = configuration
         self.db = db
+        self.sqldb = sqldb
 
     def get_for(self, target: Target) -> Optional[SlipsThreatIntelligence]:
         """Returns threat intelligence for given target or None if there are no data."""
@@ -23,9 +25,10 @@ class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
         if out:
             out = SlipsThreatIntelligence(**json.loads(out))
         else:
-            pass #TODO implement SQLite fall back
+            out = self.sqldb.get_slips_threat_intelligence_by_target(target)
         return out
 
     def save(self, ti: SlipsThreatIntelligence):
+        self.sqldb.store_slips_threat_intelligence(ti)
         self.db.save_fides_ti(ti.target, json.dumps(ti.to_dict()))
 
