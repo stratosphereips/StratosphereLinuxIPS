@@ -945,7 +945,7 @@ class DBManager:
     def get_all_peers_trust_data(self):
         return self.rdb.get_all_peers_td()
 
-    def cache_network_opinion(self, target: str, opinion: __dict__, time: float):
+    def cache_network_opinion(self, target: str, opinion: dict, time: float):
         self.rdb.cache_network_opinion(target, opinion, time)
 
     def get_cached_network_opinion(self, target: str, cache_valid_seconds: int, current_time: float):
