@@ -7,7 +7,7 @@ pandas==2.2.2
 tzlocal==5.2
 cabby==0.1.23
 stix2==3.0.1
-certifi==2024.7.4
+certifi==2024.8.30
 tensorflow==2.16.1
 colorama==0.4.6
 Keras
