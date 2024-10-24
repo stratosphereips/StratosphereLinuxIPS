@@ -11,6 +11,10 @@ from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
 from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.database.redis_db.constants import (
+    Constants,
+    Channels,
+)
 from slips_files.core.evidencehandler import EvidenceHandler
 
 from slips_files.core.helpers.notify import Notify
@@ -552,26 +556,26 @@ class ModuleFactory:
         notify = Notify()
         return notify
 
-    def create_ioc_handler(self):
-        return IoCHandler()
+    def create_ioc_handler_obj(self):
+        handler = IoCHandler()
+        handler.r = Mock()
+        handler.rcache = Mock()
+        handler.constants = Constants()
+        handler.channels = Channels()
+        return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_cesnet_obj(self):
+    def create_cesnet_obj(self, mock_db):
         output_dir = "dummy_output_dir"
         redis_port = 6379
         termination_event = MagicMock()
 
-        with patch.object(
-            DBManager, "create_sqlite_db", return_value=MagicMock()
-        ):
-            cesnet = CESNET(
-                self.logger, output_dir, redis_port, termination_event
-            )
-            cesnet.db = MagicMock()
-            cesnet.wclient = MagicMock()
-            cesnet.node_info = [
-                {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
-            ]
+        cesnet = CESNET(self.logger, output_dir, redis_port, termination_event)
+        cesnet.db = mock_db
+        cesnet.wclient = MagicMock()
+        cesnet.node_info = [
+            {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
+        ]
 
         cesnet.print = MagicMock()
         return cesnet

@@ -67,10 +67,8 @@ def test_give_threat_intelligence(
     extra_info,
     expected_data,
 ):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.r = mocker.Mock()
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.publish = mocker.Mock()
-
     result = ioc_handler.give_threat_intelligence(
         profileid,
         twid,
@@ -90,84 +88,6 @@ def test_give_threat_intelligence(
 
 
 @pytest.mark.parametrize(
-    "ip, profileid, twid",
-    [
-        # Testcase 1: New IP and profile/tw
-        ("1.1.1.1", 1, "tw1"),
-        # Testcase 2: Existing IP, new profile/tw
-        ("2.2.2.2", 2, "tw2"),
-    ],
-)
-def test_set_malicious_ip(mocker, ip, profileid, twid):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.r = mocker.Mock()
-    ioc_handler.get_malicious_ip = mocker.Mock(return_value={})
-    ioc_handler.set_malicious_ip(ip, profileid, twid)
-
-    expected_data = {str(profileid): str({twid})}
-    ioc_handler.r.hset.assert_called_with(
-        "MaliciousIPs", ip, json.dumps(expected_data)
-    )
-
-
-@pytest.mark.parametrize(
-    "domain, profileid, twid",
-    [
-        # Testcase 1: New domain and profile/tw
-        ("example.com", 1, "tw1"),
-        # Testcase 2: Existing domain, new profile/tw
-        ("google.com", 2, "tw2"),
-    ],
-)
-def test_set_malicious_domain(mocker, domain, profileid, twid):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.r = mocker.Mock()
-    ioc_handler.get_malicious_domain = mocker.Mock(return_value={})
-    ioc_handler.set_malicious_domain(domain, profileid, twid)
-
-    expected_data = {str(profileid): str({twid})}
-    ioc_handler.r.hset.assert_called_with(
-        "MaliciousDomains", domain, json.dumps(expected_data)
-    )
-
-
-@pytest.mark.parametrize(
-    "ip, expected_data",
-    [
-        # Testcase 1: IP with data
-        ("1.1.1.1", {"1": str({1, 2, 3}), "2": str({4, 5})}),
-        # Testcase 2: IP without data
-        ("2.2.2.2", {}),
-    ],
-)
-def test_get_malicious_ip(mocker, ip, expected_data):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.r = mocker.Mock()
-    ioc_handler.r.hget.return_value = json.dumps(expected_data)
-
-    result = ioc_handler.get_malicious_ip(ip)
-    assert result == expected_data
-
-
-@pytest.mark.parametrize(
-    "domain, expected_data",
-    [
-        # Testcase 1: Domain with data
-        ("example.com", {"1": str({1, 2, 3}), "2": str({4, 5})}),
-        # Testcase 2: Domain without data
-        ("google.com", {}),
-    ],
-)
-def test_get_malicious_domain(mocker, domain, expected_data):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.r = mocker.Mock()
-    ioc_handler.r.hget.return_value = json.dumps(expected_data)
-
-    result = ioc_handler.get_malicious_domain(domain)
-    assert result == expected_data
-
-
-@pytest.mark.parametrize(
     "sha1, expected_result",
     [
         # Testcase 1: SSL info found
@@ -180,12 +100,10 @@ def test_get_malicious_domain(mocker, domain, expected_data):
         ("xyz456", False),
     ],
 )
-def test_get_ssl_info(mocker, sha1, expected_result):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
+def test_is_blacklisted_ssl(mocker, sha1, expected_result):
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.rcache.hmget.return_value = [expected_result]
-
-    result = ioc_handler.get_ssl_info(sha1)
+    result = ioc_handler.is_blacklisted_ssl(sha1)
     assert result == expected_result
 
 
@@ -198,43 +116,19 @@ def test_get_ssl_info(mocker, sha1, expected_result):
         ("file2.txt", {}),
     ],
 )
-def test_get_TI_file_info(mocker, file, expected_file_info):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
+def test_get_ti_feed_info(mocker, file, expected_file_info):
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.rcache.hget.return_value = json.dumps(expected_file_info)
-
-    result = ioc_handler.get_TI_file_info(file)
+    result = ioc_handler.get_ti_feed_info(file)
     assert result == expected_file_info
 
 
-def test_delete_file_info(mocker):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
-
-    ioc_handler.delete_file_info("file1.txt")
-    ioc_handler.rcache.hdel.assert_called_with("TI_files_info", "file1.txt")
-
-
-def test_getURLData_with_data(mocker):
-    url = "https://example.com"
-    expected_data = {"VirusTotal": 5, "Malicious": ""}
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
-    ioc_handler.rcache.hget.return_value = json.dumps(expected_data)
-
-    result = ioc_handler.getURLData(url)
-    assert result == expected_data
-
-
-def test_getURLData_without_data(mocker):
-    url = "https://google.com"
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
-    ioc_handler.rcache.hget.return_value = None
-
-    result = ioc_handler.getURLData(url)
-    expected_result = False
-    assert result == expected_result
+def test_delete_ti_feed(mocker):
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
+    ioc_handler.delete_ti_feed("file1.txt")
+    ioc_handler.rcache.hdel.assert_called_with(
+        ioc_handler.constants.TI_FILES_INFO, "file1.txt"
+    )
 
 
 @pytest.mark.parametrize(
@@ -247,10 +141,8 @@ def test_getURLData_without_data(mocker):
     ],
 )
 def test_is_profile_malicious(mocker, profileid, expected_result):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.r = mocker.Mock()
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.r.hget.return_value = expected_result
-
     result = ioc_handler.is_profile_malicious(profileid)
     assert result == expected_result
 
@@ -272,12 +164,9 @@ def test_is_profile_malicious(mocker, profileid, expected_result):
         ),
     ],
 )
-def test_set_TI_file_info(mocker, file, data, expected_data):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
-
-    ioc_handler.set_TI_file_info(file, data)
-
+def test_set_ti_feed_info(mocker, file, data, expected_data):
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
+    ioc_handler.set_ti_feed_info(file, data)
     ioc_handler.rcache.hset.assert_called_with(
         "TI_files_info", file, json.dumps(expected_data)
     )
@@ -301,13 +190,9 @@ def test_set_TI_file_info(mocker, file, data, expected_data):
     ],
 )
 def test_set_info_for_domains(mocker, domain, info_to_set, expected_data):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.get_domain_data = mocker.Mock(return_value={})
-    ioc_handler.r = mocker.Mock()
-
     ioc_handler.set_info_for_domains(domain, info_to_set, "add")
-
     expected_data_str = json.dumps(expected_data)
     ioc_handler.rcache.hset.assert_called_with(
         "DomainsInfo", domain, expected_data_str
@@ -315,65 +200,28 @@ def test_set_info_for_domains(mocker, domain, info_to_set, expected_data):
     ioc_handler.r.publish.assert_called_with("dns_info_change", domain)
 
 
-@pytest.mark.parametrize(
-    "url, urldata, expected_data",
-    [
-        # Testcase 1: New URL
-        (
-            "http://example.com",
-            {"VirusTotal": {"URL": 1}, "Malicious": "yes"},
-            {"VirusTotal": {"URL": 1}, "Malicious": "yes"},
-        ),
-        # Testcase 2: Existing URL, overwrite data
-        (
-            "http://google.com",
-            {"VirusTotal": {"URL": 2}, "Malicious": "no"},
-            {"VirusTotal": {"URL": 2}, "Malicious": "no"},
-        ),
-    ],
-)
-def test_set_info_for_urls(mocker, url, urldata, expected_data):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
-    ioc_handler.getURLData = mocker.Mock(return_value={})
-    ioc_handler.setNewURL = mocker.Mock()
-
-    ioc_handler.set_info_for_urls(url, urldata)
-
-    expected_data_str = json.dumps(expected_data)
+def test__store_new_url(mocker):
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
+    url = "https://example.com"
+    ioc_handler.is_cached_url_by_vt = mocker.Mock(return_value=False)
+    ioc_handler._store_new_url(url)
     ioc_handler.rcache.hset.assert_called_with(
-        "URLsInfo", url, expected_data_str
-    )
-
-
-def test_setNewURL(mocker):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
-    ioc_handler.getURLData = mocker.Mock(return_value=False)
-
-    ioc_handler.setNewURL("https://example.com")
-    ioc_handler.rcache.hset.assert_called_with(
-        "URLsInfo", "https://example.com", "{}"
+        ioc_handler.constants.VT_CACHED_URL_INFO, url, "{}"
     )
 
 
 def test_get_domain_data_with_data(mocker):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
-
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     test_domain = "example.com"
     expected_data = {"key1": "value1", "key2": "value2"}
     ioc_handler.rcache.hget.return_value = json.dumps(expected_data)
-
     result = ioc_handler.get_domain_data(test_domain)
     assert result == expected_data
 
 
 def test_get_domain_data_without_data(mocker):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.rcache.hget.return_value = None
-
     result = ioc_handler.get_domain_data("google.com")
     assert result is False
 
@@ -388,11 +236,9 @@ def test_get_domain_data_without_data(mocker):
     ],
 )
 def test_set_new_domain(mocker, domain):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.get_domain_data = mocker.Mock(return_value=False)
-
-    ioc_handler.set_new_domain(domain)
+    ioc_handler._set_new_domain(domain)
     ioc_handler.rcache.hset.assert_called_with("DomainsInfo", domain, "{}")
 
 
@@ -405,13 +251,10 @@ def test_set_new_domain(mocker, domain):
         ("feed2.txt", 5678.90, {"time": 5678.90}),
     ],
 )
-def test_set_last_update_time(mocker, file, time, expected_data):
-    ioc_handler = ModuleFactory().create_ioc_handler()
-    ioc_handler.rcache = mocker.Mock()
+def test_set_feed_last_update_time(mocker, file, time, expected_data):
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.rcache.hget.return_value = json.dumps({"time": 100.0})
-
-    ioc_handler.set_last_update_time(file, time)
-
+    ioc_handler.set_feed_last_update_time(file, time)
     expected_data_json = json.dumps(expected_data)
     ioc_handler.rcache.hset.assert_called_with(
         "TI_files_info", file, expected_data_json
