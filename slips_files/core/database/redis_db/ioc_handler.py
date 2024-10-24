@@ -79,8 +79,7 @@ class IoCHandler:
         :param file: a valid filename not a feed url
         """
         data = self.rcache.hget(self.constants.TI_FILES_INFO, file)
-        data = json.loads(data) if data else {}
-        return data
+        return json.loads(data) if data else {}
 
     def give_threat_intelligence(
         self,
