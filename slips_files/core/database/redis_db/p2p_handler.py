@@ -78,7 +78,7 @@ class P2PHandler:
         self.r.srem(trust, peer_id)
         self.r.hdel(hash, peer_id)
 
-    def cache_network_opinion(self, target: str, opinion: __dict__, time: float ):
+    def cache_network_opinion(self, target: str, opinion: dict, time: float ):
         cache_key = f"{FIDES_CACHE_KEY}:{target}"
 
         cache_data = {"created_seconds": time, **opinion}
