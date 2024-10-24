@@ -539,7 +539,7 @@ class SQLiteDB:
                 target TEXT PRIMARY KEY,  -- The target of the intelligence (IP, domain, etc.)
                 score REAL NOT NULL CHECK (score >= -1.0 AND score <= 1.0),
                 confidence REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
-                confidentiality REAL CHECK (confidentiality >= 0.0 AND confidentiality <= 1.0) -- Optional confidentiality level
+                confidentiality REAL -- Optional confidentiality level
             );
             """
         ]

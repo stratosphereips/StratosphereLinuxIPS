@@ -52,8 +52,8 @@ def test_get_slips_threat_intelligence_by_target(db):
     # Create a SlipsThreatIntelligence object and insert it
     intelligence = SlipsThreatIntelligence(
         target="192.168.1.1",
-        score=70.0,
-        confidence=85.0,
+        score=0.70,
+        confidence=-1.0,
         confidentiality=None  # Optional field left as None
     )
     db.store_slips_threat_intelligence(intelligence)
