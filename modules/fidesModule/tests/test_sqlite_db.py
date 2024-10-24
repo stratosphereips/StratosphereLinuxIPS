@@ -53,7 +53,7 @@ def test_get_slips_threat_intelligence_by_target(db):
     intelligence = SlipsThreatIntelligence(
         target="192.168.1.1",
         score=0.70,
-        confidence=-1.0,
+        confidence=1.0,
         confidentiality=None  # Optional field left as None
     )
     db.store_slips_threat_intelligence(intelligence)
@@ -64,8 +64,8 @@ def test_get_slips_threat_intelligence_by_target(db):
     # Assert the retrieved data matches what was stored
     assert result is not None
     assert result.target == "192.168.1.1"
-    assert result.score == 70.0
-    assert result.confidence == 85.0
+    assert result.score == 0.7
+    assert result.confidence == 1
     assert result.confidentiality is None  # Should be None since it was not set
 
 
