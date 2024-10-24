@@ -1,14 +1,14 @@
 import ipaddress
+import multiprocessing
 import os
 import json
-from uuid import uuid4
-import validators
-import requests
 import threading
 import time
-import multiprocessing
+from uuid import uuid4
+import validators
 from typing import Dict, List
 
+from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -47,10 +47,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             database.
             channels (dict): Subscriptions to database channels for receiving
             threat intelligence and file download notifications.
-            circllu_queue (multiprocessing.Queue): A queue for holding pending
-             Circl.lu queries.
-            circllu_calls_thread (threading.Thread): A daemon thread that
-            processes items in the circllu_queue every 2 minutes.
             urlhaus (URLhaus): An instance of the URLhaus module for
             querying URLhaus data.
         """
@@ -63,54 +59,13 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         }
         self.__read_configuration()
         self.get_all_blacklisted_ip_ranges()
-        self.create_circl_lu_session()
-        self.circllu_queue = multiprocessing.Queue()
-        self.circllu_calls_thread = threading.Thread(
-            target=self.make_pending_query, daemon=True
-        )
         self.urlhaus = URLhaus(self.db)
         self.spamhaus = Spamhaus(self.db)
-
-    def make_pending_query(self):
-        """Processes the pending Circl.lu queries stored in the queue.
-        This method runs as a daemon thread, executing a batch of up to 10
-        queries every 2 minutes. After processing a batch, it waits for
-        another 2 minutes before attempting the next batch of queries.
-        This method continuously checks the queue for new items and
-        processes them accordingly.
-
-        Side Effects:
-            - Calls `is_malicious_hash` for each flow information
-            item retrieved from the queue.
-            - Modifies the state of the `circllu_queue` by
-            removing processed items.
-        """
-        max_queries = 10
-        while True:
-            time.sleep(120)
-            try:
-                flow_info = self.circllu_queue.get(timeout=0.5)
-            except Exception:
-                # queue is empty wait extra 2 min
-                continue
-
-            queries_done = 0
-            while self.circllu_queue != [] and queries_done <= max_queries:
-                self.is_malicious_hash(flow_info)
-                queries_done += 1
-
-    def create_circl_lu_session(self):
-        """Creates a new session for making API requests to Circl.lu. This session is
-        configured with SSL verification enabled and sets the `Accept` header to
-        `application/json`, indicating that responses should be in JSON format.
-
-        Side Effects:
-            - Initializes the `circl_session` attribute with a new
-            requests session configured for Circl.lu API calls.
-        """
-        self.circl_session = requests.session()
-        self.circl_session.verify = True
-        self.circl_session.headers = {"accept": "application/json"}
+        self.pending_queries = multiprocessing.Queue()
+        self.calls_thread = threading.Thread(
+            target=self.handle_pending_queries, daemon=True
+        )
+        self.circllu = Circllu(self.db, self.pending_queries)
 
     def get_all_blacklisted_ip_ranges(self):
         """Retrieves and caches the malicious IP ranges from the database,
@@ -1068,15 +1023,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         file. It leverages the provided information to detail the nature
         of the threat and its detection, storing these entries in the
         database for further analysis and response.
-
-        Note:
-            - The method relies on predefined mappings of threat levels to
-            specific enum values and formats timestamps according to the
-            system's alert format.
-            - It directly interacts with the database to store the
-            generated evidence, enhancing the system's awareness and
-            response capabilities against detected threats.
         """
+        # this srcip is tx_hosts in the zeek files.log, aka sender of the
+        # file, aka server
         srcip = file_info["flow"]["saddr"]
         threat_level: str = utils.threat_level_to_string(
             file_info["threat_level"]
@@ -1087,10 +1036,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
 
         description: str = (
             f'Malicious downloaded file {file_info["flow"]["md5"]}. '
-            f'size: {file_info["flow"]["size"]} '
-            f"from IP: {daddr}. "
+            f'size: {file_info["flow"]["size"]} bytes. '
+            f"File was downloaded from server: {srcip}. "
             f'Detected by: {file_info["blacklist"]}. '
-            f"Score: {confidence}. "
+            f"Confidence: {confidence}. "
         )
         ts = utils.convert_format(
             file_info["flow"]["starttime"], utils.alerts_format
@@ -1140,108 +1089,11 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
 
         self.db.set_evidence(evidence)
 
-    @staticmethod
-    def calculate_threat_level(circl_trust: str) -> float:
-        """Converts a Circl.lu trust score into a standardized threat level.
-
-        Parameters:
-            - circl_trust (str): The trust level from Circl.lu, where 0
-            indicates completely malicious and 100 completely benign.
-
-        Returns:
-            - A float representing the threat level, scaled from 0 (benign)
-            to 1 (malicious).
-        """
-        # the lower the value, the more malicious the file is
-        benign_percentage = float(circl_trust)
-        malicious_percentage = 100 - benign_percentage
-        # scale the benign percentage from 0 to 1
-        threat_level = float(malicious_percentage) / 100
-        return threat_level
-
-    @staticmethod
-    def calculate_confidence(blacklists: str) -> float:
-        """Calculates the confidence score based on the count of blacklists that
-        marked the file as malicious.
-
-        Parameters:
-            - blacklists (str): A space-separated string of blacklists
-            that flagged the file.
-
-        Returns:
-            - A confidence score as a float. A higher score indicates
-            higher confidence in the file's maliciousness.
-        """
-        blacklists = len(blacklists.split(" "))
-        if blacklists == 1:
-            confidence = 0.5
-        elif blacklists == 2:
-            confidence = 0.7
-        else:
-            confidence = 1
-        return confidence
-
-    def circl_lu(self, flow_info: dict):
-        """Queries the Circl.lu API to determine if an MD5 hash of a
-        file is known to be malicious based on the file's hash.Utilizes
-        internal helper functions to calculate a threat level and
-        confidence score based on the Circl.lu API
-        response.
-
-        Parameters:
-            - flow_info (dict): Information about the network flow including
-             the MD5 hash of the file to be checked.
-
-        Returns:
-            - A dictionary containing the 'confidence' score, 'threat_level',
-            and a list of 'blacklist' sources that flagged the file as
-            malicious. If the API call fails, or the file is not known
-             to be malicious,
-            None is returned.
-
-        Side Effects:
-            - May enqueue the flow information into `circllu_queue`
-            for later processing if the API call encounters an exception.
-            - Makes a network request to the Circl.lu API.
-        """
-        md5 = flow_info["flow"]["md5"]
-        circl_base_url = "https://hashlookup.circl.lu/lookup/"
-        try:
-            circl_api_response = self.circl_session.get(
-                f"{circl_base_url}/md5/{md5}",
-                headers=self.circl_session.headers,
-            )
-        except Exception:
-            # add the hash to the cirllu queue and ask for it later
-            self.circllu_queue.put(flow_info)
-            return
-
-        if circl_api_response.status_code != 200:
-            return
-        response = json.loads(circl_api_response.text)
-        # KnownMalicious: List of source considering the hashed file as
-        # being malicious (CIRCL)
-        if "KnownMalicious" not in response:
-            return
-
-        file_info = {
-            "confidence": ThreatIntel.calculate_confidence(
-                response["KnownMalicious"]
-            ),
-            "threat_level": ThreatIntel.calculate_threat_level(
-                response["hashlookup:trust"]
-            ),
-            "blacklist": f'{response["KnownMalicious"]}, circl.lu',
-        }
-        return file_info
-
     def search_online_for_hash(self, flow_info: dict):
         """
         Attempts to find information about a file hash by
         querying online sources.
-        Currently, it queries the Circl.lu and URLhaus databases
-        for any matches to the
-        provided MD5 hash.
+        Currently, it queries the Circl.lu and URLhaus.
 
         Parameters:
             - flow_info (dict): Contains information about the flow,
@@ -1253,15 +1105,11 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             confidence level, threat level, and the source of the information.
             - None: If no information is found about the hash in
             the queried sources.
-
-        The function first attempts to find information using the
-        Circl.lu service. If no information is found there, it then
-        queries the URLhaus service.
         """
-        if circllu_info := self.circl_lu(flow_info):
+        if circllu_info := self.circllu.lookup(flow_info):
             return circllu_info
 
-        if urlhaus_info := self.urlhaus.urlhaus_lookup(
+        if urlhaus_info := self.urlhaus.lookup(
             flow_info["flow"]["md5"], "md5_hash"
         ):
             return urlhaus_info
@@ -1459,7 +1307,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         return False, False
 
     def search_online_for_url(self, url):
-        return self.urlhaus.urlhaus_lookup(url, "url")
+        return self.urlhaus.lookup(url, "url")
 
     def is_malicious_ip(
         self,
@@ -1873,6 +1721,43 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             self.db.set_ti_feed_info(filename, malicious_file_info)
             return True
 
+    def handle_pending_queries(self):
+        """Processes the pending Circl.lu queries stored in the queue.
+        This method runs as a daemon thread, executing a batch of up to 10
+        queries every 2 minutes. After processing a batch, it waits for
+        another 2 minutes before attempting the next batch of queries.
+        This method continuously checks the queue for new items and
+        processes them accordingly.
+
+        Side Effects:
+            - Calls `is_malicious_hash` for each flow information
+            item retrieved from the queue.
+            - Modifies the state of the `circllu_queue` by
+            removing processed items.
+        """
+        max_queries = 10
+        while True:
+            time.sleep(120)
+            try:
+                flow_info = self.pending_queries.get(timeout=0.5)
+            except Exception:
+                # queue is empty wait extra 2 mins
+                continue
+
+            queries_done = 0
+            while (
+                not self.pending_queries.empty()
+                and queries_done <= max_queries
+            ):
+                self.is_malicious_hash(flow_info)
+                queries_done += 1
+
+    def should_lookup(self, ip: str, protocol: str, ip_state: str) -> bool:
+        """Return whether slips should lookup the given ip or notd."""
+        return utils.is_ignored_ip(ip) or self.is_outgoing_icmp_packet(
+            protocol, ip_state
+        )
+
     def pre_main(self):
         utils.drop_root_privs()
         # Load the local Threat Intelligence files that are
@@ -1886,13 +1771,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         for local_file in local_files:
             self.update_local_file(local_file)
 
-        self.circllu_calls_thread.start()
-
-    def should_lookup(self, ip: str, protocol: str, ip_state: str) -> bool:
-        """Return whether slips should lookup the given ip or notd."""
-        return utils.is_ignored_ip(ip) or self.is_outgoing_icmp_packet(
-            protocol, ip_state
-        )
+        self.calls_thread.start()
 
     def main(self):
         # The channel can receive an IP address or a domain name

@@ -9,6 +9,7 @@ import os
 
 from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
+from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.constants import (
@@ -406,6 +407,11 @@ class ModuleFactory:
         """Create an instance of URLhaus."""
         urlhaus = URLhaus(mock_db)
         return urlhaus
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_circllu_obj(self, mock_db):
+        """Create an instance of Circllu."""
+        return Circllu(mock_db, Queue())
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_set_evidence_helper(self, mock_db):

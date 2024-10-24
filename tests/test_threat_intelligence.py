@@ -5,7 +5,6 @@ import os
 import pytest
 import json
 from unittest.mock import (
-    MagicMock,
     patch,
     Mock,
 )
@@ -106,16 +105,6 @@ def test_check_local_ti_files_for_update(
         threatintel.should_update_local_ti_file(own_malicious_iocs)
         == expected_return
     )
-
-
-def test_create_circl_lu_session():
-    """
-    Test the creation of a session for Circl.lu API requests.
-    """
-    threatintel = ModuleFactory().create_threatintel_obj()
-    threatintel.create_circl_lu_session()
-    assert threatintel.circl_session.verify is True
-    assert threatintel.circl_session.headers == {"accept": "application/json"}
 
 
 @pytest.mark.parametrize(
@@ -657,8 +646,8 @@ def test_is_ignored_domain(domain, expected):
             },
             (
                 "Malicious downloaded file 1234567890abcdef1234567890abcdef. "
-                "size: 1024 from IP: 192.168.1.1. "
-                "Detected by: VirusTotal. Score: 0.9."
+                "size: 1024 bytes. File was downloaded from server: 10.0.0.1. "
+                "Detected by: VirusTotal. Confidence: 0.9. "
             ),
             ThreatLevel.HIGH,
             0.9,
@@ -667,14 +656,14 @@ def test_is_ignored_domain(domain, expected):
         (
             {
                 "flow": {
-                    "saddr": "10.0.0.2",
+                    "saddr": "8.8.8.8",
                     "daddr": "192.168.1.2",
                     "md5": "abcdef0123456789abcdef0123456789",
                     "size": 512,
                     "uid": "uid456",
                     "starttime": "2023-11-29 08:00:00",
                 },
-                "profileid": "profile_10.0.0.2",
+                "profileid": "profile_8.8.8.8",
                 "twid": "timewindow2",
                 "threat_level": 0.2,
                 "confidence": 0.5,
@@ -682,8 +671,8 @@ def test_is_ignored_domain(domain, expected):
             },
             (
                 "Malicious downloaded file abcdef0123456789abcdef0123456789. "
-                "size: 512 from IP: 192.168.1.2. "
-                "Detected by: Example Blacklist. Score: 0.5."
+                "size: 512 bytes. File was downloaded from server: 8.8.8.8. "
+                "Detected by: Example Blacklist. Confidence: 0.5. "
             ),
             ThreatLevel.LOW,
             0.5,
@@ -740,19 +729,14 @@ def test_search_online_for_hash(
     online threat intelligence sources.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
-    mock_circl_lu = mocker.patch.object(threatintel, "circl_lu")
-    mock_urlhaus_lookup = mocker.patch.object(
-        threatintel.urlhaus, "urlhaus_lookup"
-    )
+    threatintel.urlhaus.lookup = Mock(return_value=urlhaus_lookup_return)
+    threatintel.circllu.lookup = Mock(return_value=circl_lu_return)
     flow_info = {
         "flow": {"md5": "1234567890abcdef1234567890abcdef"},
         "type": "zeek",
         "profileid": "profile_10.0.0.1",
         "twid": "timewindow1",
     }
-
-    mock_circl_lu.return_value = circl_lu_return
-    mock_urlhaus_lookup.return_value = urlhaus_lookup_return
     result = threatintel.search_online_for_hash(flow_info)
     assert result == expected_result
 
@@ -854,9 +838,7 @@ def test_search_online_for_url(
     """Test `search_online_for_url` for
     querying online threat intelligence sources."""
     threatintel = ModuleFactory().create_threatintel_obj()
-    mock_urlhaus_lookup = mocker.patch.object(
-        threatintel.urlhaus, "urlhaus_lookup"
-    )
+    mock_urlhaus_lookup = mocker.patch.object(threatintel.urlhaus, "lookup")
     mock_urlhaus_lookup.return_value = mock_return_value
     result = threatintel.search_online_for_url(url)
     assert result == expected_result
@@ -1346,96 +1328,6 @@ def test_main_file_hash_lookup(mocker):
     }
     threatintel.main()
     mock_is_malicious_hash.assert_called_once()
-
-
-@pytest.mark.parametrize(
-    "status_code, response_text, expected_result",
-    [  # Testcase1:successful API query
-        (
-            200,
-            json.dumps(
-                {
-                    "KnownMalicious": "blacklist1 blacklist2",
-                    "hashlookup:trust": "75",
-                }
-            ),
-            {
-                "confidence": 0.7,
-                "threat_level": 0.25,
-                "blacklist": "blacklist1 blacklist2, circl.lu",
-            },
-        ),
-        # Testcase2:Not Found error
-        (
-            404,
-            "{}",
-            None,
-        ),
-        # Testcase3:500 Internal Server Error
-        (
-            500,
-            "Internal Server Error",
-            None,
-        ),
-    ],
-)
-def test_circl_lu(mocker, status_code, response_text, expected_result):
-    """
-    Test the `circl_lu` method for various Circl.lu API responses.
-    """
-    threatintel = ModuleFactory().create_threatintel_obj()
-    mock_session = mocker.patch.object(threatintel, "circl_session")
-    flow_info = {"flow": {"md5": "1234567890abcdef1234567890abcdef"}}
-    mock_response = MagicMock()
-    mock_response.status_code = status_code
-    mock_response.text = response_text
-    mock_session.get.return_value = mock_response
-    result = threatintel.circl_lu(flow_info)
-    assert result == expected_result
-
-
-@pytest.mark.parametrize(
-    "circl_trust, expected_threat_level",
-    [
-        # Testcase 1:Completely malicious
-        ("0", 1.0),
-        # Testcase 2:Completely benign
-        ("100", 0.0),
-        # Testcase 3:Moderately malicious
-        ("50", 0.5),
-        # Testcase 4:More malicious
-        ("25", 0.75),
-    ],
-)
-def test_calculate_threat_level(circl_trust, expected_threat_level):
-    """
-    Test `calculate_threat_level` for accurately converting
-    Circl.lu trust scores to threat levels.
-    """
-    threatintel = ModuleFactory().create_threatintel_obj()
-    assert (
-        threatintel.calculate_threat_level(circl_trust)
-        == expected_threat_level
-    )
-
-
-@pytest.mark.parametrize(
-    "blacklists, expected_confidence",
-    [  # Testcase 1:One blacklist
-        ("blacklist1", 0.5),
-        # Testcase 2:Two blacklists
-        ("blacklist1 blacklist2", 0.7),
-        # Testcase 3:Three or more blacklists
-        ("blacklist1 blacklist2 blacklist3", 1),
-    ],
-)
-def test_calculate_confidence(blacklists, expected_confidence):
-    """
-    Test `calculate_confidence` to ensure it properly assigns confidence
-    scores based on the number of blacklists flagging a file.
-    """
-    threatintel = ModuleFactory().create_threatintel_obj()
-    assert threatintel.calculate_confidence(blacklists) == expected_confidence
 
 
 @pytest.mark.parametrize(
