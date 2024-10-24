@@ -30,8 +30,8 @@ def test_store_slips_threat_intelligence(db):
     # Create a SlipsThreatIntelligence object
     intelligence = SlipsThreatIntelligence(
         target="example.com",
-        score=85.5,
-        confidence=90.0,
+        score=-1,
+        confidence=0.9,
         confidentiality=0.75
     )
 
@@ -44,8 +44,8 @@ def test_store_slips_threat_intelligence(db):
     # Assert the retrieved data matches what was stored
     assert result is not None
     assert result.target == "example.com"
-    assert result.score == 85.5
-    assert result.confidence == 90.0
+    assert result.score == -1
+    assert result.confidence == 0.9
     assert result.confidentiality == 0.75
 
 def test_get_slips_threat_intelligence_by_target(db):
