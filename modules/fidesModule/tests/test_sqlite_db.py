@@ -76,17 +76,17 @@ def test_get_peer_trust_data(db):
     peer_trust_data = PeerTrustData(
         info=peer_info,
         has_fixed_trust=True,
-        service_trust=85.0,
-        reputation=95.0,
-        recommendation_trust=90.0,
-        competence_belief=80.0,
-        integrity_belief=85.0,
+        service_trust=0.85,
+        reputation=0.95,
+        recommendation_trust=1,
+        competence_belief=0.8,
+        integrity_belief=0.0,
         initial_reputation_provided_by_count=10,
         service_history=[
-            ServiceHistoryRecord(satisfaction=4.5, weight=0.9, timestamp=20.15)
+            ServiceHistoryRecord(satisfaction=0.5, weight=0.9, timestamp=20.15)
         ],
         recommendation_history=[
-            RecommendationHistoryRecord(satisfaction=4.8, weight=1.0, timestamp=1234.55)
+            RecommendationHistoryRecord(satisfaction=0.8, weight=1.0, timestamp=1234.55)
         ]
     )
 
@@ -100,12 +100,16 @@ def test_get_peer_trust_data(db):
     assert result is not None
     assert result.info.id == "peer123"
     assert result.info.ip == "192.168.0.10"
-    assert result.service_trust == 85.0
-    assert result.recommendation_trust == 90.0
+    assert result.service_trust == 0.85
+    assert result.reputation == 0.95
+    assert result.recommendation_trust == 1
+    assert result.competence_belief == 0.8
+    assert result.integrity_belief == 0.0
+    assert result.initial_reputation_provided_by_count == 10
     assert len(result.service_history) == 1
-    assert result.service_history[0].satisfaction == 4.5
+    assert result.service_history[0].satisfaction == 0.5
     assert len(result.recommendation_history) == 1
-    assert result.recommendation_history[0].satisfaction == 4.8
+    assert result.recommendation_history[0].satisfaction == 0.8
 
 def test_get_connected_peers(db):
     # Create PeerInfo data for multiple peers
