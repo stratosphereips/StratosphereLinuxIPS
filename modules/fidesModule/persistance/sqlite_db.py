@@ -506,7 +506,7 @@ class SQLiteDB:
             CREATE TABLE IF NOT EXISTS PeerTrustData (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 peerID TEXT,                  -- The peer providing the trust evaluation
-                has_fixed_trust INTEGER NOT NULL CHECK (is_active IN (0, 1)),   -- Whether the trust is dynamic or fixed
+                has_fixed_trust INTEGER NOT NULL CHECK (has_fixed_trust IN (0, 1)),   -- Whether the trust is dynamic or fixed
                 service_trust REAL NOT NULL CHECK (service_trust >= 0.0 AND service_trust <= 1.0),  -- Service Trust Metric
                 reputation REAL NOT NULL CHECK (reputation >= 0.0 AND reputation <= 1.0),           -- Reputation Metric
                 recommendation_trust REAL NOT NULL CHECK (recommendation_trust >= 0.0 AND recommendation_trust <= 1.0), -- Recommendation Trust Metric
