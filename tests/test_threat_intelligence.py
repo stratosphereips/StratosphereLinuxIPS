@@ -646,8 +646,8 @@ def test_is_ignored_domain(domain, expected):
             },
             (
                 "Malicious downloaded file 1234567890abcdef1234567890abcdef. "
-                "size: 1024 from IP: 192.168.1.1. "
-                "Detected by: VirusTotal. Score: 0.9."
+                "size: 1024 bytes. File was downloaded from server: 10.0.0.1. "
+                "Detected by: VirusTotal. Confidence: 0.9. "
             ),
             ThreatLevel.HIGH,
             0.9,
@@ -656,14 +656,14 @@ def test_is_ignored_domain(domain, expected):
         (
             {
                 "flow": {
-                    "saddr": "10.0.0.2",
+                    "saddr": "8.8.8.8",
                     "daddr": "192.168.1.2",
                     "md5": "abcdef0123456789abcdef0123456789",
                     "size": 512,
                     "uid": "uid456",
                     "starttime": "2023-11-29 08:00:00",
                 },
-                "profileid": "profile_10.0.0.2",
+                "profileid": "profile_8.8.8.8",
                 "twid": "timewindow2",
                 "threat_level": 0.2,
                 "confidence": 0.5,
@@ -671,8 +671,8 @@ def test_is_ignored_domain(domain, expected):
             },
             (
                 "Malicious downloaded file abcdef0123456789abcdef0123456789. "
-                "size: 512 from IP: 192.168.1.2. "
-                "Detected by: Example Blacklist. Score: 0.5."
+                "size: 512 bytes. File was downloaded from server: 8.8.8.8. "
+                "Detected by: Example Blacklist. Confidence: 0.5. "
             ),
             ThreatLevel.LOW,
             0.5,

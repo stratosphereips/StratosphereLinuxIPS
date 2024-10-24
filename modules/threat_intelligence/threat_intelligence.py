@@ -1037,7 +1037,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         description: str = (
             f'Malicious downloaded file {file_info["flow"]["md5"]}. '
             f'size: {file_info["flow"]["size"]} bytes. '
-            f"File was downloaded from server: {srcip}."
+            f"File was downloaded from server: {srcip}. "
             f'Detected by: {file_info["blacklist"]}. '
             f"Confidence: {confidence}. "
         )
