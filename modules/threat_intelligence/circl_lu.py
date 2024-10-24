@@ -1,8 +1,5 @@
 import json
-import multiprocessing
-import threading
-import time
-
+from multiprocessing.queues import Queue
 import requests
 
 
@@ -11,17 +8,15 @@ class Circllu:
     description = "Circl.lu lookups of IPs"
     authors = ["Alya Gomaa"]
 
-    def __init__(self, db):
+    def __init__(self, db, pending_queries: Queue):
         self.db = db
         self.create_session()
-        self.pending_queries = multiprocessing.Queue()
-        self.calls_thread = threading.Thread(
-            target=self.handle_pending_queries, daemon=True
-        )
+        self.pending_queries = pending_queries
 
     @staticmethod
     def calculate_threat_level(circl_trust: str) -> float:
-        """Converts a Circl.lu trust score into a standardized threat level.
+        """Converts a Circl.lu trust score into a threat level that slips
+        can deal with.
 
         Parameters:
             - circl_trust (str): The trust level from Circl.lu, where 0
@@ -50,34 +45,6 @@ class Circllu:
         self.circl_session = requests.session()
         self.circl_session.verify = True
         self.circl_session.headers = {"accept": "application/json"}
-
-    def handle_pending_queries(self):
-        """Processes the pending Circl.lu queries stored in the queue.
-        This method runs as a daemon thread, executing a batch of up to 10
-        queries every 2 minutes. After processing a batch, it waits for
-        another 2 minutes before attempting the next batch of queries.
-        This method continuously checks the queue for new items and
-        processes them accordingly.
-
-        Side Effects:
-            - Calls `is_malicious_hash` for each flow information
-            item retrieved from the queue.
-            - Modifies the state of the `circllu_queue` by
-            removing processed items.
-        """
-        max_queries = 10
-        while True:
-            time.sleep(120)
-            try:
-                flow_info = self.pending_queries.get(timeout=0.5)
-            except Exception:
-                # queue is empty wait extra 2 min
-                continue
-
-            queries_done = 0
-            while self.pending_queries != [] and queries_done <= max_queries:
-                self.is_malicious_hash(flow_info)
-                queries_done += 1
 
     @staticmethod
     def calculate_confidence(blacklists: str) -> float:

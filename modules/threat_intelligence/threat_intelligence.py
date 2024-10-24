@@ -1,6 +1,9 @@
 import ipaddress
+import multiprocessing
 import os
 import json
+import threading
+import time
 from uuid import uuid4
 import validators
 from typing import Dict, List
@@ -58,7 +61,11 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.get_all_blacklisted_ip_ranges()
         self.urlhaus = URLhaus(self.db)
         self.spamhaus = Spamhaus(self.db)
-        self.circllu = Circllu(self.db)
+        self.pending_queries = multiprocessing.Queue()
+        self.calls_thread = threading.Thread(
+            target=self.handle_pending_queries, daemon=True
+        )
+        self.circllu = Circllu(self.db, self.pending_queries)
 
     def get_all_blacklisted_ip_ranges(self):
         """Retrieves and caches the malicious IP ranges from the database,
@@ -1017,6 +1024,8 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         of the threat and its detection, storing these entries in the
         database for further analysis and response.
         """
+        # this srcip is tx_hosts in the zeek files.log, aka sender of the
+        # file, aka server
         srcip = file_info["flow"]["saddr"]
         threat_level: str = utils.threat_level_to_string(
             file_info["threat_level"]
@@ -1027,10 +1036,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
 
         description: str = (
             f'Malicious downloaded file {file_info["flow"]["md5"]}. '
-            f'size: {file_info["flow"]["size"]} '
-            f"from IP: {daddr}. "
+            f'size: {file_info["flow"]["size"]} bytes. '
+            f"File was downloaded from server: {srcip}."
             f'Detected by: {file_info["blacklist"]}. '
-            f"Score: {confidence}. "
+            f"Confidence: {confidence}. "
         )
         ts = utils.convert_format(
             file_info["flow"]["starttime"], utils.alerts_format
@@ -1712,6 +1721,43 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             self.db.set_ti_feed_info(filename, malicious_file_info)
             return True
 
+    def handle_pending_queries(self):
+        """Processes the pending Circl.lu queries stored in the queue.
+        This method runs as a daemon thread, executing a batch of up to 10
+        queries every 2 minutes. After processing a batch, it waits for
+        another 2 minutes before attempting the next batch of queries.
+        This method continuously checks the queue for new items and
+        processes them accordingly.
+
+        Side Effects:
+            - Calls `is_malicious_hash` for each flow information
+            item retrieved from the queue.
+            - Modifies the state of the `circllu_queue` by
+            removing processed items.
+        """
+        max_queries = 10
+        while True:
+            time.sleep(120)
+            try:
+                flow_info = self.pending_queries.get(timeout=0.5)
+            except Exception:
+                # queue is empty wait extra 2 mins
+                continue
+
+            queries_done = 0
+            while (
+                not self.pending_queries.empty()
+                and queries_done <= max_queries
+            ):
+                self.is_malicious_hash(flow_info)
+                queries_done += 1
+
+    def should_lookup(self, ip: str, protocol: str, ip_state: str) -> bool:
+        """Return whether slips should lookup the given ip or notd."""
+        return utils.is_ignored_ip(ip) or self.is_outgoing_icmp_packet(
+            protocol, ip_state
+        )
+
     def pre_main(self):
         utils.drop_root_privs()
         # Load the local Threat Intelligence files that are
@@ -1725,13 +1771,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         for local_file in local_files:
             self.update_local_file(local_file)
 
-        self.circllu.calls_thread.start()
-
-    def should_lookup(self, ip: str, protocol: str, ip_state: str) -> bool:
-        """Return whether slips should lookup the given ip or notd."""
-        return utils.is_ignored_ip(ip) or self.is_outgoing_icmp_packet(
-            protocol, ip_state
-        )
+        self.calls_thread.start()
 
     def main(self):
         # The channel can receive an IP address or a domain name
