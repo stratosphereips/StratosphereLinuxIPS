@@ -406,7 +406,7 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_circllu_obj(self, mock_db):
         """Create an instance of Circllu."""
-        return Circllu(mock_db)
+        return Circllu(mock_db, Queue())
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_set_evidence_helper(self, mock_db):
