@@ -278,8 +278,7 @@ class SQLiteDB:
         :param peer_id: The peer's ID.
         :param organisation_id: The organisation's ID.
         """
-        query = "INSERT OR IGNORE INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)"
-        self.__execute_query(query, [peer_id, organisation_id])
+        self.__insert_peer_organisation(peer_id, organisation_id)
 
     def store_connected_peers_list(self, peers: List[PeerInfo]) -> None:
         """
@@ -298,7 +297,7 @@ class SQLiteDB:
                 'peerID': peer_info.id,
                 'ip': peer_info.ip,
             }
-            self.__insert_peer_info(peer_info)
+            self.__insert_peer_info(peer)
 
             for organisation_id in peer_info.organisations:
                 self.insert_organisation_if_not_exists(organisation_id)
@@ -310,23 +309,24 @@ class SQLiteDB:
 
         :return: A list of PeerInfo instances.
         """
-        # Step 1: Query the PeerInfo table to get all peer information
-        peer_info_query = "SELECT peerID, ip FROM PeerInfo"
-        peer_info_results = self.__execute_query(peer_info_query)
-
         peer_info_list = []
 
-        # Step 2: For each peer, get the associated organisations from PeerOrganisation table
-        for row in peer_info_results:
-            peer_id = row[0]  # peerID is the first column
-            ip = row[1]  # ip is the second column
+        with SQLiteDB._lock:
+            # Step 1: Query the PeerInfo table to get all peer information
+            peer_info_query = "SELECT peerID, ip FROM PeerInfo"
+            peer_info_results = self.__execute_query(peer_info_query)
 
-            # Step 3: Get associated organisations from PeerOrganisation table
-            organisations = self.get_peer_organisations(peer_id)
+            # Step 2: For each peer, get the associated organisations from PeerOrganisation table
+            for row in peer_info_results:
+                peer_id = row[0]  # peerID is the first column
+                ip = row[1]  # ip is the second column
 
-            # Step 4: Create the PeerInfo object and add to the list
-            peer_info = PeerInfo(id=peer_id, organisations=organisations, ip=ip)
-            peer_info_list.append(peer_info)
+                # Step 3: Get associated organisations from PeerOrganisation table
+                organisations = self.get_peer_organisations(peer_id)
+
+                # Step 4: Create the PeerInfo object and add to the list
+                peer_info = PeerInfo(id=peer_id, organisations=organisations, ip=ip)
+                peer_info_list.append(peer_info)
 
         return peer_info_list
 
@@ -343,21 +343,28 @@ class SQLiteDB:
         # Extract organisationIDs from the query result and return as a list
         return [row[0] for row in results]
 
-    def __insert_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
-        data = peer_trust_data.to_dict(remove_histories=True)
-        self.__save('PeerTrustData', data)
+    def __insert_peer_info(self, peer_info: dict) -> None:
+        """
+        Inserts or updates the given PeerInfo object in the database.
 
-    def __insert_recommendation_history(self, recommendation_record: RecommendationHistoryRecord) -> None:
-        data = recommendation_record.to_dict()
-        self.__save('RecommendationHistory', data)
+        :param peer_info: The PeerInfo object to insert or update.
+        """
+        # Insert or replace PeerInfo
+        self.__save('PeerInfo', peer_info)
 
-    def __insert_service_history(self, service_record: ServiceHistoryRecord) -> None:
-        data = service_record.to_dict()
-        self.__save('ServiceHistory', data)
 
-    def __insert_peer_info(self, peer_info: PeerInfo) -> None:
-        data = peer_info.to_dict()
-        self.__save('PeerInfo', data)
+    def __insert_peer_organisation(self, peer_id: PeerId, organisation_id: OrganisationId) -> None:
+        """
+        Inserts a PeerOrganisation record.
+
+        :param peer_id: The peer's ID.
+        :param organisation_id: The organisation's ID.
+        """
+        query = """
+        INSERT OR REPLACE INTO PeerOrganisation (peerID, organisationID)
+        VALUES (?, ?);
+        """
+        self.__execute_query(query, [peer_id, organisation_id])
 
     def __connect(self) -> None:
         """
