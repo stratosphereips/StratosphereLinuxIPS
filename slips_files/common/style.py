@@ -20,3 +20,7 @@ def cyan(txt):
     returns the text in green
     """
     return colored(txt, "cyan")
+
+
+def yellow(txt):
+    return colored(txt, "yellow")
