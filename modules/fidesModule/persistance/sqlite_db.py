@@ -17,7 +17,7 @@ Python has None, SQLite has NULL, conversion is automatic in both ways.
 """
 
 class SQLiteDB:
-    _lock = threading.Lock()
+    _lock = threading.RLock()
 
     def __init__(self, logger: logging.Logger, db_path: str) -> None:
         """
@@ -86,87 +86,59 @@ class SQLiteDB:
         self.__execute_query(query, params)
 
     def store_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
-        # Start building the transaction query
-        # Using a list to store all queries
-        queries = []
+        with SQLiteDB._lock:
+            # Insert PeerInfo first to ensure the peer exists
+            self.__execute_query("""
+                INSERT OR REPLACE INTO PeerInfo (peerID, ip) 
+                VALUES (?, ?);
+            """, (peer_trust_data.info.id, peer_trust_data.info.ip))
 
-        # Insert PeerInfo first to ensure the peer exists
-        queries.append("""
-        INSERT OR REPLACE INTO PeerInfo (peerID, ip) 
-        VALUES (?, ?);
-        """)
+            # Insert organisations for the peer into the PeerOrganisation table
+            for org_id in peer_trust_data.info.organisations:
+                self.__execute_query("""
+                    INSERT OR REPLACE INTO PeerOrganisation (peerID, organisationID) 
+                    VALUES (?, ?);
+                """, (peer_trust_data.info.id, org_id))
 
-        # Insert organisations for the peer into the PeerOrganisation table
-        org_queries = [
-            "INSERT OR REPLACE INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?);"
-            for org_id in peer_trust_data.info.organisations
-        ]
-        queries.extend(org_queries)
+            # Insert PeerTrustData itself
+            self.__execute_query("""
+                INSERT INTO PeerTrustData (
+                    peerID, has_fixed_trust, service_trust, reputation, recommendation_trust, 
+                    competence_belief, integrity_belief, initial_reputation_provided_by_count
+                ) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """, (
+                peer_trust_data.info.id, int(peer_trust_data.has_fixed_trust),
+                peer_trust_data.service_trust, peer_trust_data.reputation,
+                peer_trust_data.recommendation_trust, peer_trust_data.competence_belief,
+                peer_trust_data.integrity_belief, peer_trust_data.initial_reputation_provided_by_count
+            ))
 
-        # Insert PeerTrustData itself
-        queries.append("""
-        INSERT INTO PeerTrustData (
-            peerID, has_fixed_trust, service_trust, reputation, recommendation_trust, 
-            competence_belief, integrity_belief, initial_reputation_provided_by_count
-        ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-        """)
+            # Prepare to insert service history and link to PeerTrustData
+            for sh in peer_trust_data.service_history:
+                self.__execute_query("""
+                    INSERT INTO ServiceHistory (peerID, satisfaction, weight, service_time)
+                    VALUES (?, ?, ?, ?);
+                """, (peer_trust_data.info.id, sh.satisfaction, sh.weight, sh.timestamp))
 
-        # Prepare to insert service history and link to PeerTrustData
-        for sh in peer_trust_data.service_history:
-            queries.append("""
-            INSERT INTO ServiceHistory (peerID, satisfaction, weight, service_time)
-            VALUES (?, ?, ?, ?);
-            """)
+                # Insert into PeerTrustServiceHistory
+                self.__execute_query("""
+                    INSERT INTO PeerTrustServiceHistory (peer_trust_data_id, service_history_id)
+                    VALUES (last_insert_rowid(), last_insert_rowid());
+                """)
 
-            # Insert into PeerTrustServiceHistory
-            queries.append("""
-            INSERT INTO PeerTrustServiceHistory (peer_trust_data_id, service_history_id)
-            VALUES (last_insert_rowid(), last_insert_rowid());
-            """)
+            # Prepare to insert recommendation history and link to PeerTrustData
+            for rh in peer_trust_data.recommendation_history:
+                self.__execute_query("""
+                    INSERT INTO RecommendationHistory (peerID, satisfaction, weight, recommend_time)
+                    VALUES (?, ?, ?, ?);
+                """, (peer_trust_data.info.id, rh.satisfaction, rh.weight, rh.timestamp))
 
-        # Prepare to insert recommendation history and link to PeerTrustData
-        for rh in peer_trust_data.recommendation_history:
-            queries.append("""
-            INSERT INTO RecommendationHistory (peerID, satisfaction, weight, recommend_time)
-            VALUES (?, ?, ?, ?);
-            """)
-
-            # Insert into PeerTrustRecommendationHistory
-            queries.append("""
-            INSERT INTO PeerTrustRecommendationHistory (peer_trust_data_id, recommendation_history_id)
-            VALUES (last_insert_rowid(), last_insert_rowid());
-            """)
-
-        # Combine all queries into a single transaction
-        full_query = "BEGIN TRANSACTION;\n" + "\n".join(queries) + "\nCOMMIT;"
-
-        # Flatten the parameters for the queries
-        params = []
-        params.append((peer_trust_data.info.id, peer_trust_data.info.ip))  # For PeerInfo
-
-        # For PeerOrganisation
-        params.extend([(peer_trust_data.info.id, org_id) for org_id in peer_trust_data.info.organisations])
-
-        # For PeerTrustData
-        params.append((peer_trust_data.info.id, int(peer_trust_data.has_fixed_trust),
-                       peer_trust_data.service_trust, peer_trust_data.reputation,
-                       peer_trust_data.recommendation_trust, peer_trust_data.competence_belief,
-                       peer_trust_data.integrity_belief, peer_trust_data.initial_reputation_provided_by_count))
-
-        # For ServiceHistory
-        for sh in peer_trust_data.service_history:
-            params.append((peer_trust_data.info.id, sh.satisfaction, sh.weight, sh.timestamp))
-
-        # For RecommendationHistory
-        for rh in peer_trust_data.recommendation_history:
-            params.append((peer_trust_data.info.id, rh.satisfaction, rh.weight, rh.timestamp))
-
-        # Flatten the params to match the expected structure for __execute_query
-        flat_params = [item for sublist in params for item in sublist]
-
-        # Execute the transaction as a single query
-        self.__execute_query(full_query, flat_params)
+                # Insert into PeerTrustRecommendationHistory
+                self.__execute_query("""
+                    INSERT INTO PeerTrustRecommendationHistory (peer_trust_data_id, recommendation_history_id)
+                    VALUES (last_insert_rowid(), last_insert_rowid());
+                """)
 
     def get_peers_by_minimal_recommendation_trust(self, minimal_recommendation_trust: float) -> List[PeerInfo]:
         # SQL query to select PeerInfo of peers that meet the minimal recommendation_trust criteria
@@ -306,8 +278,7 @@ class SQLiteDB:
         :param peer_id: The peer's ID.
         :param organisation_id: The organisation's ID.
         """
-        query = "INSERT OR IGNORE INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)"
-        self.__execute_query(query, [peer_id, organisation_id])
+        self.__insert_peer_organisation(peer_id, organisation_id)
 
     def store_connected_peers_list(self, peers: List[PeerInfo]) -> None:
         """
@@ -326,7 +297,7 @@ class SQLiteDB:
                 'peerID': peer_info.id,
                 'ip': peer_info.ip,
             }
-            self.__insert_peer_info(peer_info)
+            self.__insert_peer_info(peer)
 
             for organisation_id in peer_info.organisations:
                 self.insert_organisation_if_not_exists(organisation_id)
@@ -338,23 +309,24 @@ class SQLiteDB:
 
         :return: A list of PeerInfo instances.
         """
-        # Step 1: Query the PeerInfo table to get all peer information
-        peer_info_query = "SELECT peerID, ip FROM PeerInfo"
-        peer_info_results = self.__execute_query(peer_info_query)
-
         peer_info_list = []
 
-        # Step 2: For each peer, get the associated organisations from PeerOrganisation table
-        for row in peer_info_results:
-            peer_id = row[0]  # peerID is the first column
-            ip = row[1]  # ip is the second column
+        with SQLiteDB._lock:
+            # Step 1: Query the PeerInfo table to get all peer information
+            peer_info_query = "SELECT peerID, ip FROM PeerInfo"
+            peer_info_results = self.__execute_query(peer_info_query)
 
-            # Step 3: Get associated organisations from PeerOrganisation table
-            organisations = self.get_peer_organisations(peer_id)
+            # Step 2: For each peer, get the associated organisations from PeerOrganisation table
+            for row in peer_info_results:
+                peer_id = row[0]  # peerID is the first column
+                ip = row[1]  # ip is the second column
 
-            # Step 4: Create the PeerInfo object and add to the list
-            peer_info = PeerInfo(id=peer_id, organisations=organisations, ip=ip)
-            peer_info_list.append(peer_info)
+                # Step 3: Get associated organisations from PeerOrganisation table
+                organisations = self.get_peer_organisations(peer_id)
+
+                # Step 4: Create the PeerInfo object and add to the list
+                peer_info = PeerInfo(id=peer_id, organisations=organisations, ip=ip)
+                peer_info_list.append(peer_info)
 
         return peer_info_list
 
@@ -371,21 +343,28 @@ class SQLiteDB:
         # Extract organisationIDs from the query result and return as a list
         return [row[0] for row in results]
 
-    def __insert_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
-        data = peer_trust_data.to_dict(remove_histories=True)
-        self.__save('PeerTrustData', data)
+    def __insert_peer_info(self, peer_info: dict) -> None:
+        """
+        Inserts or updates the given PeerInfo object in the database.
 
-    def __insert_recommendation_history(self, recommendation_record: RecommendationHistoryRecord) -> None:
-        data = recommendation_record.to_dict()
-        self.__save('RecommendationHistory', data)
+        :param peer_info: The PeerInfo object to insert or update.
+        """
+        # Insert or replace PeerInfo
+        self.__save('PeerInfo', peer_info)
 
-    def __insert_service_history(self, service_record: ServiceHistoryRecord) -> None:
-        data = service_record.to_dict()
-        self.__save('ServiceHistory', data)
 
-    def __insert_peer_info(self, peer_info: PeerInfo) -> None:
-        data = peer_info.to_dict()
-        self.__save('PeerInfo', data)
+    def __insert_peer_organisation(self, peer_id: PeerId, organisation_id: OrganisationId) -> None:
+        """
+        Inserts a PeerOrganisation record.
+
+        :param peer_id: The peer's ID.
+        :param organisation_id: The organisation's ID.
+        """
+        query = """
+        INSERT OR REPLACE INTO PeerOrganisation (peerID, organisationID)
+        VALUES (?, ?);
+        """
+        self.__execute_query(query, [peer_id, organisation_id])
 
     def __connect(self) -> None:
         """
@@ -405,6 +384,13 @@ class SQLiteDB:
         with SQLiteDB._lock:
             self.logger.debug(f"Executing query: {query}")
             cursor = self.connection.cursor()
+
+            # Split the query string by semicolons to handle multiple queries
+            queries = [q.strip() + ';' for q in query.split(';') if q.strip()]
+            results = []
+
+            cursor = self.connection.cursor()
+            start_idx = 0
             try:
                 if params:
                     cursor.execute(query, params)
@@ -501,13 +487,12 @@ class SQLiteDB:
                 FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID) ON DELETE CASCADE,
                 FOREIGN KEY (organisationID) REFERENCES Organisation(organisationID) ON DELETE CASCADE
             );
-            """
-            
+            """,
             """
             CREATE TABLE IF NOT EXISTS PeerTrustData (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 peerID TEXT,                  -- The peer providing the trust evaluation
-                has_fixed_trust INTEGER NOT NULL CHECK (is_active IN (0, 1)),   -- Whether the trust is dynamic or fixed
+                has_fixed_trust INTEGER NOT NULL CHECK (has_fixed_trust IN (0, 1)),   -- Whether the trust is dynamic or fixed
                 service_trust REAL NOT NULL CHECK (service_trust >= 0.0 AND service_trust <= 1.0),  -- Service Trust Metric
                 reputation REAL NOT NULL CHECK (reputation >= 0.0 AND reputation <= 1.0),           -- Reputation Metric
                 recommendation_trust REAL NOT NULL CHECK (recommendation_trust >= 0.0 AND recommendation_trust <= 1.0), -- Recommendation Trust Metric
@@ -537,21 +522,10 @@ class SQLiteDB:
             """,
             """
             CREATE TABLE IF NOT EXISTS ThreatIntelligence (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                peerID TEXT,
-                score FLOAT NOT NULL CHECK (score >= 0.0 AND score <= 1.0),
-                confidence FLOAT NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
-                target TEXT,
-                confidentiality FLOAT CHECK (confidentiality >= 0.0 AND confidentiality <= 1.0),
-                FOREIGN KEY (peerID) REFERENCES PeerInfo(peerID) ON DELETE CASCADE
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS ThreatIntelligence (
                 target TEXT PRIMARY KEY,  -- The target of the intelligence (IP, domain, etc.)
                 score REAL NOT NULL CHECK (score >= -1.0 AND score <= 1.0),
                 confidence REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
-                confidentiality REAL CHECK (confidentiality >= 0.0 AND confidentiality <= 1.0) -- Optional confidentiality level
+                confidentiality REAL -- Optional confidentiality level
             );
             """
         ]
