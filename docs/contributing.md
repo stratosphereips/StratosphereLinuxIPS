@@ -159,3 +159,10 @@ It's a good idea to read the code before checking this graph
 
 Evidence Handler is the only process that stops but keeps waiting in memory for new msgs to arrive until all other modules are done. because if any of the modules added an evidence, EvidenceHandler should be up to report and handle it or else it will be discarded.
 Once all modules are done processing, EvidenceHandler is killed by the Process manager.
+
+
+### How the tests work?
+
+- Running the tests locally should be done using ./tests/run_all_tests.sh
+- It runs the unit tests first, then the integration tests.
+- Please get familiar with pytest first https://docs.pytest.org/en/stable/how-to/output.html
