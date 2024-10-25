@@ -623,7 +623,7 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):
         logger = Mock()
-        output_dir = '/tmp'
+        output_dir = "/tmp"
         redis_port = 6379
         termination_event = Mock()
         tl = Timeline(logger, output_dir, redis_port, termination_event)
