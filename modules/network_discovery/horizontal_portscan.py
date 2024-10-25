@@ -20,6 +20,11 @@ BROADCAST_ADDR = "255.255.255.255"
 
 
 class HorizontalPortscan:
+    """
+    Horizontal scanning sends requests to the same port
+    on different hosts.
+    """
+
     def __init__(self, db):
         self.db = db
         # to keep track of the max dports reported per timewindow
@@ -27,20 +32,6 @@ class HorizontalPortscan:
         # The minimum amount of scanned dstips to trigger an evidence
         # is increased exponentially every evidence, and is reset each timewindow
         self.minimum_dstips_to_set_evidence = 5
-
-    def get_resolved_ips(self, dstips: dict) -> list:
-        """
-        returns the list of dstips that have dns resolution, we will
-        discard them when checking for horizontal portscans
-        """
-        dstips_to_discard = []
-        # Remove dstips that have DNS resolution already
-        for dip in dstips:
-            dns_resolution = self.db.get_dns_resolution(dip)
-            dns_resolution = dns_resolution.get("domains", [])
-            if dns_resolution:
-                dstips_to_discard.append(dip)
-        return dstips_to_discard
 
     def get_not_estab_dst_ports(
         self, protocol: str, state: str, profileid: str, twid: str

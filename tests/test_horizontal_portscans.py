@@ -478,53 +478,6 @@ def test_is_valid_saddr(ip, expected_val):
     assert horizontal_ps.is_valid_saddr(profileid) == expected_val
 
 
-def test_get_resolved_ips():
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
-    dstips = ["1.1.1.1", "2.2.2.2", "3.3.3.3"]
-
-    horizontal_ps.db.get_dns_resolution.side_effect = [
-        {"domains": ["example.com"]},
-        {"domains": []},
-        {"domains": ["test.com", "another.com"]},
-    ]
-
-    resolved_ips = horizontal_ps.get_resolved_ips(dstips)
-    assert sorted(resolved_ips) == ["1.1.1.1", "3.3.3.3"]
-
-
-def test_get_resolved_ips_empty_list():
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
-    dstips = []
-
-    resolved_ips = horizontal_ps.get_resolved_ips(dstips)
-    assert resolved_ips == []
-
-
-def test_get_resolved_ips_invalid_ip():
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
-    dstips = ["1.1.1.1", "256.256.256.256", "3.3.3.3"]
-    horizontal_ps.db.get_dns_resolution.side_effect = [
-        {"domains": ["example.com"]},
-        {},
-        {"domains": ["test.com"]},
-    ]
-
-    resolved_ips = horizontal_ps.get_resolved_ips(dstips)
-    assert sorted(resolved_ips) == ["1.1.1.1", "3.3.3.3"]
-
-
-def test_get_resolved_ips_mixed_list():
-    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
-    dstips = ["1.1.1.1", "2.2.2.2", "3.3.3.3"]
-    horizontal_ps.db.get_dns_resolution.side_effect = [
-        {"domains": ["example.com"]},
-        {"domains": []},
-        {"domains": ["test.com"]},
-    ]
-    resolved_ips = horizontal_ps.get_resolved_ips(dstips)
-    assert sorted(resolved_ips) == ["1.1.1.1", "3.3.3.3"]
-
-
 def test_check_valid_ip():
     horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     horizontal_ps.db.get_field_separator.return_value = "_"
