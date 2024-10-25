@@ -23,7 +23,7 @@ import os
 from slips_files.common.abstracts.observer import IObserver
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import red
+from slips_files.common.style import red, yellow
 
 
 class Output(IObserver):
@@ -191,7 +191,8 @@ class Output(IObserver):
         # if debug level is 3 make it red
         if debug == 3:
             txt = red(txt)
-
+        if "Warning" in txt:
+            txt = yellow(txt)
         if "Analyzed IPs" in txt:
             self.print("", txt, end="\r")
             return

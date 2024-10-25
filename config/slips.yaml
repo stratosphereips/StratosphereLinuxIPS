@@ -54,8 +54,8 @@ parameters:
    # analysis_direction : all
    analysis_direction : out
 
-
    # Delete zeek log files after stopping slips.
+   # this parameter deletes arp.log every 1h. useful for saving disk space
    delete_zeek_files : False
 
    # Store a copy of zeek files in the output dir after the analysis is done.

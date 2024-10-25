@@ -1,5 +1,6 @@
 import json
 import ipaddress
+import os
 import time
 import threading
 from multiprocessing import Queue
@@ -43,13 +44,13 @@ class ARP(IModule):
         # are required?
         self.arp_scan_threshold = 5
         self.delete_arp_periodically = False
-        self.arp_ts = 0
+        self.arp_log_creation_time = 0
         self.period_before_deleting = 0
         if self.delete_zeek_files and not self.store_zeek_files_copy:
             self.delete_arp_periodically = True
             # first time arp.log is created
-            self.arp_ts = time.time()
-            # in seconds
+            self.arp_log_creation_time = time.time()
+            # thats one hour in seconds
             self.period_before_deleting = 3600
         self.timer_thread_arp_scan = threading.Thread(
             target=self.wait_for_arp_scans, daemon=True
@@ -63,6 +64,13 @@ class ARP(IModule):
         conf = ConfigParser()
         self.home_network = conf.home_network_ranges
         self.delete_zeek_files = conf.delete_zeek_files()
+        if self.delete_zeek_files:
+            self.print(
+                "Warning: Slips will delete Zeek log files after "
+                "the analysis is done. and will delete arp.log every 1h. "
+                "You can modify this by changing "
+                "delete_zeek_files in the config file."
+            )
         self.store_zeek_files_copy = conf.store_zeek_files_copy()
 
     def wait_for_arp_scans(self):
@@ -475,20 +483,32 @@ class ARP(IModule):
             "00:00:00:00:00:00",
         ]
 
+    def clear_arp_logfile(self):
+        if self.db.get_input_type() not in ("pcap", "interface"):
+            # no arp.log to clear
+            return
+
+        if not self.delete_arp_periodically:
+            return
+
+        if (
+            time.time()
+            >= self.arp_log_creation_time + self.period_before_deleting
+        ):
+            arp_log_file_path = os.path.join(
+                self.db.get_output_dir(), "zeek_files/arp.log"
+            )
+            open(arp_log_file_path, "w").close()
+            # update ts of the new arp.log
+            self.arp_log_creation_time = time.time()
+
     def pre_main(self):
         """runs once before the main() is executed in a loop"""
         utils.drop_root_privs()
         self.timer_thread_arp_scan.start()
 
     def main(self):
-        if (
-            self.delete_arp_periodically
-            and time.time() >= self.arp_ts + self.period_before_deleting
-        ):
-            # clear arp.log
-            open("zeek_files/arp.log", "w").close()
-            # update ts of the new arp.log
-            self.arp_ts = time.time()
+        self.clear_arp_logfile()
 
         if msg := self.get_msg("new_arp"):
             msg = json.loads(msg["data"])
