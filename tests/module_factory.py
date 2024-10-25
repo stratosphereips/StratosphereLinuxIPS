@@ -9,7 +9,14 @@ import os
 
 from managers.host_ip_manager import HostIPManager
 from modules.flowalerts.conn import Conn
+from modules.threat_intelligence.circl_lu import Circllu
+from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.database.redis_db.constants import (
+    Constants,
+    Channels,
+)
+from slips_files.core.evidencehandler import EvidenceHandler
 
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
@@ -49,8 +56,10 @@ from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from modules.p2ptrust.trust.base_model import BaseModel
+from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from modules.arp.arp import ARP
 from slips.daemon import Daemon
+from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.helpers.checker import Checker
 from modules.cesnet.cesnet import CESNET
 from modules.riskiq.riskiq import RiskIQ
@@ -263,7 +272,7 @@ class ModuleFactory:
             termination_event=Mock(),
         )
         input.db = mock_db
-        input.is_done_processing = do_nothing
+        input.mark_self_as_done_processing = do_nothing
         input.bro_timeout = 1
         # override the print function to avoid broken pipes
         input.print = Mock()
@@ -352,6 +361,10 @@ class ModuleFactory:
         return threatintel
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_spamhaus_obj(self, mock_db):
+        return Spamhaus(mock_db)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_update_manager_obj(self, mock_db):
         update_manager = UpdateManager(
             self.logger,
@@ -394,6 +407,11 @@ class ModuleFactory:
         """Create an instance of URLhaus."""
         urlhaus = URLhaus(mock_db)
         return urlhaus
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_circllu_obj(self, mock_db):
+        """Create an instance of Circllu."""
+        return Circllu(mock_db, Queue())
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_set_evidence_helper(self, mock_db):
@@ -544,26 +562,41 @@ class ModuleFactory:
         notify = Notify()
         return notify
 
+    def create_ioc_handler_obj(self):
+        handler = IoCHandler()
+        handler.r = Mock()
+        handler.rcache = Mock()
+        handler.constants = Constants()
+        handler.channels = Channels()
+        return handler
+
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_cesnet_obj(self, mock_db):
         output_dir = "dummy_output_dir"
         redis_port = 6379
         termination_event = MagicMock()
 
-        with patch.object(
-            DBManager, "create_sqlite_db", return_value=MagicMock()
-        ):
-            cesnet = CESNET(
-                self.logger, output_dir, redis_port, termination_event
-            )
-            cesnet.db = MagicMock()
-            cesnet.wclient = MagicMock()
-            cesnet.node_info = [
-                {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
-            ]
+        cesnet = CESNET(self.logger, output_dir, redis_port, termination_event)
+        cesnet.db = mock_db
+        cesnet.wclient = MagicMock()
+        cesnet.node_info = [
+            {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
+        ]
 
         cesnet.print = MagicMock()
         return cesnet
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_evidence_handler_obj(self, mock_db):
+        logger = Mock()
+        output_dir = "/tmp"
+        redis_port = 6379
+        termination_event = Mock()
+        handler = EvidenceHandler(
+            logger, output_dir, redis_port, termination_event
+        )
+        handler.db = mock_db
+        return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_symbol_handler_obj(self, mock_db):
@@ -580,4 +613,8 @@ class ModuleFactory:
             6379,
             termination_event,
         )
+        riskiq.db = mock_db
         return riskiq
+
+    def create_alert_handler_obj(self):
+        return AlertHandler()

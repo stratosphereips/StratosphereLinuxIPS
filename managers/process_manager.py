@@ -8,6 +8,7 @@ import sys
 import time
 import traceback
 from collections import OrderedDict
+from datetime import datetime
 from multiprocessing import (
     Queue,
     Event,
@@ -468,15 +469,17 @@ class ProcessManager:
 
         return alive_processes
 
-    def get_analysis_time(self):
+    def get_analysis_time(self) -> Tuple[str, str]:
         """
         Returns how long slips tool to analyze the given file
+        returns analysis_time in minutes and slips end_time as a date
         """
-        # set analysis end date
-        end_date = self.main.metadata_man.set_analysis_end_date()
-
         start_time = self.main.db.get_slips_start_time()
-        return utils.get_time_diff(start_time, end_date, return_type="minutes")
+        end_time = utils.convert_format(datetime.now(), utils.alerts_format)
+        return (
+            utils.get_time_diff(start_time, end_time, return_type="minutes"),
+            end_time,
+        )
 
     def stop_slips(self) -> bool:
         """
@@ -489,25 +492,21 @@ class ProcessManager:
         if self.should_run_non_stop():
             return False
 
-        if (
-            self.stop_slips_received()
-            or self.slips_is_done_receiving_new_flows()
-        ):
-            return True
+        return (
+            self.is_stop_msg_received() or self.is_done_receiving_new_flows()
+        )
 
-        return False
-
-    def stop_slips_received(self):
+    def is_stop_msg_received(self) -> bool:
         """
-        returns true if the channel received the 'stop_slips' msg
+        returns true if the control_channel channel received the
+        'stop_slips' msg
         """
         message = self.main.c1.get_message(timeout=0.01)
-        if (
+        return (
             message
             and utils.is_msg_intended_for(message, "control_channel")
             and message["data"] == "stop_slips"
-        ):
-            return True
+        )
 
     def is_debugger_active(self) -> bool:
         """Returns true if the debugger is currently active"""
@@ -522,13 +521,11 @@ class ProcessManager:
         # these are the cases where slips should be running non-stop
         # when slips is reading from a special module other than the input process
         # this module should handle the stopping of slips
-        if (
+        return (
             self.is_debugger_active()
             or self.main.input_type in ("stdin", "cyst")
             or self.main.is_interface
-        ):
-            return True
-        return False
+        )
 
     def shutdown_interactive(
         self, to_kill_first, to_kill_last
@@ -570,23 +567,38 @@ class ProcessManager:
         # all of them are killed
         return None, None
 
-    def slips_is_done_receiving_new_flows(self) -> bool:
+    def can_acquire_semaphore(self, semaphore) -> bool:
         """
+        return True if the given semaphore can be aquired
+        """
+        if semaphore.acquire(block=False):
+            # ok why are we releasing after aquiring?
+            # because once the module release the semaphore, this process
+            # needs to be able to acquire it as many times as it wants,
+            # not just once (which is what happens if we dont release)
+            semaphore.release()
+            return True
+        return False
+
+    def is_done_receiving_new_flows(self) -> bool:
+        """
+        Determines if slips is still receiving new flows.
         this method will return True when the input and profiler release
         the semaphores signaling that they're done
-        If they're still processing it will return False
+        If they're still processing (we can't acquire the semaphore),
+        it will return False
         """
-        # try to acquire the semaphore without blocking
-        input_done_processing: bool = self.is_input_done.acquire(block=False)
-        profiler_done_processing: bool = self.is_profiler_done.acquire(
-            block=False
+        # the goal of using can_acquire_semaphore()
+        # is to avoid the race condition that happens when
+        # one of the 2 semaphores (input and profiler) is released and
+        # the other isnt
+        input_done_processing: bool = self.can_acquire_semaphore(
+            self.is_input_done
         )
-
-        if input_done_processing and profiler_done_processing:
-            return True
-
-        # can't acquire the semaphore, processes are still running
-        return False
+        profiler_done_processing: bool = self.can_acquire_semaphore(
+            self.is_profiler_done
+        )
+        return input_done_processing and profiler_done_processing
 
     def kill_daemon_children(self):
         """
@@ -633,11 +645,6 @@ class ProcessManager:
 
             # close all tws
             self.main.db.check_tw_to_close(close_all=True)
-            analysis_time = self.get_analysis_time()
-            print(
-                f"Analysis of {self.main.input_information} "
-                f"finished in {analysis_time:.2f} minutes"
-            )
 
             graceful_shutdown = True
             if self.main.mode == "daemonized":
@@ -712,6 +719,15 @@ class ProcessManager:
             # if delete_zeek_files is set to yes in slips.yaml,
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
+
+            analysis_time, end_date = self.get_analysis_time()
+            self.main.metadata_man.set_analysis_end_date(end_date)
+
+            print(
+                f"Analysis of {self.main.input_information} "
+                f"finished in {analysis_time:.2f} minutes"
+            )
+
             self.main.db.close()
             if graceful_shutdown:
                 print(

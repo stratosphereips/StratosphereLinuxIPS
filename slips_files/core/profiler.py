@@ -30,6 +30,7 @@ from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.core import ICore
+from slips_files.common.style import green
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
@@ -406,6 +407,7 @@ class Profiler(ICore, IObservable):
             return
 
         local_net: str = self.get_local_net()
+        self.print(f"Used local network: {green(local_net)}")
         self.db.set_local_network(local_net)
 
     def should_stop(self):
@@ -436,6 +438,7 @@ class Profiler(ICore, IObservable):
 
     def pre_main(self):
         utils.drop_root_privs()
+        self.print(f"Used client IPs: {green(str(self.client_ips))}")
 
     def main(self):
         while True:
@@ -482,10 +485,10 @@ class Profiler(ICore, IObservable):
                 if self.flow:
                     self.add_flow_to_profile()
                     self.handle_setting_local_net()
-
+                    self.db.increment_processed_flows()
             except Exception as e:
                 self.print(
-                    f"Problem processing line {line}. Line discarded. {e}",
+                    f"Problem processing line {line}. " f"Line discarded. {e}",
                     0,
                     1,
                 )

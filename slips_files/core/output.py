@@ -23,7 +23,7 @@ import os
 from slips_files.common.abstracts.observer import IObserver
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import red
+from slips_files.common.style import red, yellow
 
 
 class Output(IObserver):
@@ -185,13 +185,15 @@ class Output(IObserver):
         """
         verbose = msg.get("verbose", self.verbose)
         debug = msg.get("debug", self.debug)
+        end = msg.get("end", "\n")
         sender, txt = msg["from"], msg["txt"]
 
         # if debug level is 3 make it red
         if debug == 3:
             txt = red(txt)
-
-        if "analyzed IPs" in txt:
+        if "Warning" in txt:
+            txt = yellow(txt)
+        if "Analyzed IPs" in txt:
             self.print("", txt, end="\r")
             return
 
@@ -200,7 +202,7 @@ class Output(IObserver):
             # when printing started processes, don't print a sender
             if "Start" in txt:
                 sender = ""
-            self.print(sender, txt)
+            self.print(sender, txt, end=end)
             self.log_line(msg)
 
         # if the line is an error and we're running slips without -e 1 ,

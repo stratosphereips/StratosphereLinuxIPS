@@ -479,12 +479,13 @@ class Main:
         self.args.debug = max(self.args.debug, 0)
 
     def print_version(self):
-        slips_version = f"Slips. Version {green(self.version)}"
+        slips_version = f"Slips Version: {green(self.version)}"
         branch_info = utils.get_branch_info()
         if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
             self.commit, self.branch = branch_info
             slips_version += f" ({self.commit[:8]})"
+        slips_version.replace("\n", "")
         print(slips_version)
 
     def update_stats(self):
@@ -507,15 +508,31 @@ class Main:
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
-        msg = (
-            f"Total analyzed IPs so far: "
-            f"{green(profiles_len)}. "
-            f"Evidence Added: {green(evidence_number)}. "
-            f"IPs sending traffic in the last "
-            f"{self.twid_width}: {green(modified_ips_in_the_last_tw)}. "
-            f"({now})"
+        stats = (
+            f"\r[{now}] Analyzed IPs: {green(profiles_len)}. "
+            f"{self.get_analyzed_flows_percentage()}"
+            f"Evidence: {green(evidence_number)}. "
+            f"Last ({self.twid_width}) number of IPs:"
+            f" {green(modified_ips_in_the_last_tw)}. "
         )
-        self.print(msg)
+        self.print(stats)
+        sys.stdout.flush()  # Make sure the output is displayed immediately
+
+    def get_analyzed_flows_percentage(self) -> str:
+        """
+        returns a str with the percentage of analyzed flows so far to be
+        logged in the stats
+        """
+        if self.is_total_flows_unknown():
+            return ""
+
+        if not hasattr(self, "total_flows"):
+            self.total_flows = self.db.get_total_flows()
+
+        flows_percentage = int(
+            (self.db.get_processed_flows_so_far() / self.total_flows) * 100
+        )
+        return f"Analyzed Flows: {green(flows_percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:
         """
@@ -557,7 +574,7 @@ class Main:
                 stderr, slips_logfile
             )
             self.printer = Printer(self.logger, self.name)
-
+            self.print(f"Storing Slips logs in {self.args.output}")
             self.redis_port: int = self.redis_man.get_redis_port()
             # dont start the redis server if it's already started
             start_redis_server = not utils.is_port_in_use(self.redis_port)
@@ -589,9 +606,7 @@ class Main:
             host_ip = self.host_ip_man.store_host_ip()
 
             self.print(
-                f"Using redis server on "
-                f"port: "
-                f"{green(self.redis_port)}",
+                f"Using redis server on port: {green(self.redis_port)}",
                 1,
                 0,
             )

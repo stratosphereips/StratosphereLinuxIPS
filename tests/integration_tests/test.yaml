@@ -141,7 +141,7 @@ detection:
 
 modules:
 # List of modules to ignore. By default we always ignore the template! do not remove it from the list
-    disable : "[template , ensembling, Flow ML Detection, Update Manager]"
+    disable : [template, ensembling, Flow ML Detection, Update Manager]
 # Names of other modules that you can disable: ensembling, threat_intelligence, blocking,
 #  portscan_detector, timeline, virustotal, rnn-cc-detection, flowmldetection
 

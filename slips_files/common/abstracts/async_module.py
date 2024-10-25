@@ -29,6 +29,9 @@ class AsyncModule(IModule):
         return loop.run_until_complete(func())
 
     def run(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():

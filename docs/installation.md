@@ -8,7 +8,8 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 
 * [Docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker)
   * Dockerhub (recommended)
-    * [Linux, MacOS and windows hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#Running-Slips-from-DockerHub)
+    * [Linux and windows hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#linux-and-windows-hosts)
+    * [MacOS hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#macos-hosts)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
 * Native
@@ -33,7 +34,7 @@ In both cases, you need to have the Docker platform installed in your computer.
 Instructions how to install Docker is https://docs.docker.com/get-docker/.
 
 The recommended way of using slips would be to
-* [Run Slips from Dockerhub](#Running-Slips-from-DockerHub)
+* Run Slips from Dockerhub
 
 For more advanced users, you can:
 * [Run Slips using docker compose](#Running-Slips-using-docker-compose)
@@ -41,6 +42,8 @@ For more advanced users, you can:
 
 
 ### Running Slips from DockerHub
+
+#### Linux And Windows Hosts
 
 ###### Analyse your own traffic
     docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
@@ -50,20 +53,16 @@ Check the alerts slips generated
 
       tail -f output/eno1*/alerts.log
 
-###### Analyze your PCAP file
 
-Prepare a dataset directory
+#### MacOS Hosts
 
-    mkdir dataset
-    cp myfile.pcap dataset
+###### Analyse your own traffic
+    docker run --platform linux/amd64 --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
 
-Run Slips
-
-		docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -f dataset/myfile.pcap
-
+Please change the name of the interface to your own.
 Check the alerts slips generated
 
-		  tail -f output/myfile*/alerts.log
+      tail -f output/eno1*/alerts.log
 
 ---
 

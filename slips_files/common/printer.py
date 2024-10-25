@@ -17,7 +17,9 @@ class Printer(IObservable):
         self.logger = logger
         self.add_observer(self.logger)
 
-    def print(self, text, verbose=1, debug=0, log_to_logfiles_only=False):
+    def print(
+        self, text, verbose=1, debug=0, log_to_logfiles_only=False, end="\n"
+    ):
         """
         Function to use to print text using the slips_files/core/output.py.
         The output process then decides how, when and where to print this txt.
@@ -34,6 +36,7 @@ class Printer(IObservable):
         :param text: text to print.
         :param log_to_logfiles_only: if this is True, Sips logs to logfile
         only and doesn't log the given text to cli
+        :param end: this is exactly linke print()'s end kwarg
         """
         self.notify_observers(
             {
@@ -42,5 +45,6 @@ class Printer(IObservable):
                 "verbose": verbose,
                 "debug": debug,
                 "log_to_logfiles_only": log_to_logfiles_only,
+                "end": end,
             }
         )

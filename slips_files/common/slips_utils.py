@@ -460,6 +460,7 @@ class Utils(object):
         version_file = "VERSION"
         with open(version_file, "r") as f:
             version = f.read()
+        version = version.replace("\n", "")
         return version
 
     def change_logfiles_ownership(self, file: str, UID, GID):

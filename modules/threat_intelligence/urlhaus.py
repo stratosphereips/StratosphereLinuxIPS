@@ -117,7 +117,7 @@ class URLhaus:
             "file_name": file_name,
         }
 
-    def urlhaus_lookup(self, ioc, type_of_ioc: str):
+    def lookup(self, ioc, type_of_ioc: str):
         """
         Supports URL lookups only
         :param ioc: can be domain or ip
@@ -296,7 +296,7 @@ class URLhaus:
             confidence=0.7,
             description=description,
             timestamp=timestamp,
-            profile=ProfileID(ip=saddr),
+            profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
         )

@@ -605,6 +605,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def get_input_type(self) -> str:
         """
         gets input type from the db
+        returns one of the following "stdin", "pcap", "interface",
+        "zeek_log_file", "zeek_folder", "stdin", "nfdump", "binetflow",
+        "suricata"
         """
         return self.r.hget("analysis", "input_type")
 
@@ -1205,7 +1208,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
 
     def get_host_ip(self) -> Optional[str]:
-        """Greturns the latest added host ip"""
+        """returns the latest added host ip"""
         host_ip: List[str] = self.r.zrevrange(
             "host_ip", 0, 0, withscores=False
         )
@@ -1500,6 +1503,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def get_zeek_path(self) -> str:
         """return the path of zeek log files slips is currently using"""
         return self.r.get("zeek_path")
+
+    def increment_processed_flows(self):
+        return self.r.incr(self.constants.PROCESSED_FLOWS, 1)
+
+    def get_processed_flows_so_far(self) -> int:
+        return int(self.r.get(self.constants.PROCESSED_FLOWS))
 
     def store_std_file(self, **kwargs):
         """

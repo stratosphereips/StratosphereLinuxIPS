@@ -223,7 +223,8 @@ def test_different_localnet_usage(
     expected_threat_level,
     expected_description,
 ):
-    """Testing different scenarios for different_localnet_usage method:
+    """
+    Testing different scenarios for different_localnet_usage method:
     - src IP outside localnet
     - dst IP outside localnet using ARP
     - dst IP outside localnet using port
@@ -251,6 +252,11 @@ def test_different_localnet_usage(
         state="Established",
         history="",
     )
+    if expected_attacker_direction == Direction.SRC:
+        profile_ip = flow.saddr
+    else:
+        profile_ip = flow.daddr
+
     set_ev.different_localnet_usage(
         "timewindow3",
         flow,
@@ -264,7 +270,7 @@ def test_different_localnet_usage(
     assert evidence.attacker.direction == expected_attacker_direction
     assert evidence.victim.direction == expected_victim_direction
     assert evidence.threat_level == expected_threat_level
-    assert evidence.profile.ip == flow.saddr
+    assert evidence.profile.ip == profile_ip
     assert evidence.timewindow.number == 3
     assert evidence.uid == [flow.uid]
     assert evidence.description == expected_description
@@ -1787,7 +1793,7 @@ def test_doh(attacker_ip, victim_ip, profile_ip):
     assert evidence.attacker.value == attacker_ip
     assert evidence.victim.value == victim_ip
     assert evidence.threat_level == ThreatLevel.INFO
-    assert evidence.profile.ip == profile_ip
+    assert evidence.profile.ip == attacker_ip
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]
 

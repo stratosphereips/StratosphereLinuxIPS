@@ -37,20 +37,22 @@ class Alert:
     # list of evidence acausing this alert
     correl_id: List[str] = field(
         default=None,
-        metadata={
-            "validate": lambda x: (
-                all(utils.is_valid_uuid4(uuid_) for uuid_ in x) if x else True
-            )
-        },
+        metadata={"validate": lambda x: is_valid_correl_id(x)},
     )
     last_flow_datetime: str = ""
 
     def __post_init__(self):
-        if not is_valid_correl_id(self.correl_id):
-            raise ValueError(f"uid must be a list of strings .. {self}")
+        if self.correl_id:
+            if not is_valid_correl_id(self.correl_id):
+                raise ValueError(
+                    f"correl_id must be a list of strings. {self}"
+                )
+            else:
+                # remove duplicate uids
+                self.correl_id = list(set(self.correl_id))
         else:
-            # remove duplicate uids
-            self.correl_id = list(set(self.correl_id))
+            self.correl_id = []
+
         # timestamp of the flow causing the last evidence of this alert
         if not self.last_flow_datetime:
             last_flow_timestamp: str = self.last_evidence.timestamp

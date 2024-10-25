@@ -213,8 +213,12 @@ class ZeekJSON(IInputType):
                 line.get("source", ""),
                 line.get("analyzers", ""),
                 line.get("sha1", ""),
-                line.get("tx_hosts", ""),
-                line.get("rx_hosts", ""),
+                line.get(
+                    "tx_hosts", ""
+                ),  # this srcip is tx_hosts in the zeek files.log, aka sender of the
+                # file, aka server
+                line.get("rx_hosts", ""),  # this is the host that received
+                # the file
             )
         elif "arp" in file_type:
             self.flow: ARP = ARP(
