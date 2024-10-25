@@ -143,6 +143,19 @@ The goal of suppressing errors by default is the most errors should be handled b
 - All modules in the modules/ directory that implement the IModule interface are automatically imported by slips, for more technical details check the load_modules() function in managers/process_manager.py
 
 
-### Modules Structure
+### There's some missing code in all modules, what's happening?
 
-- All modules should implement the IModule interface in slips_files/common/abstracts/module.py, it ensures that all modules behave the same, for example they all shutdown the same, they all keep track of the redis channels they're using, they all have a common __init__(), they all forward msgs to the printer in the same way, etc.
+- All modules implement the IModule interface in slips_files/common/abstracts/module.py, it ensures that all modules behave the same, for example they all shutdown the same, they all keep track of the redis channels they're using, they all have a common __init__(), they all forward msgs to the printer in the same way, etc.
+- Any logic that will be duplicated accross all modules should be in this interface
+
+
+### How does slips stop?
+
+It all begins when input.py realizes there's no more flows arriving from the zeek files/suricata/nfdump file it's reading.
+
+It's a good idea to read the code before checking this graph
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_slips_stops.jpg"
+
+Evidence Handler is the only process that stops but keeps waiting in memory for new msgs to arrive until all other modules are done. because if any of the modules added an evidence, EvidenceHandler should be up to report and handle it or else it will be discarded.
+Once all modules are done processing, EvidenceHandler is killed by the Process manager.
