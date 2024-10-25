@@ -599,6 +599,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def get_input_type(self) -> str:
         """
         gets input type from the db
+        returns one of the following "stdin", "pcap", "interface",
+        "zeek_log_file", "zeek_folder", "stdin", "nfdump", "binetflow",
+        "suricata"
         """
         return self.r.hget("analysis", "input_type")
 
