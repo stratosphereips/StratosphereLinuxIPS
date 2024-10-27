@@ -1,10 +1,5 @@
 from typing import List, Optional, Union
 
-from pandas.io.sql import SQLDatabase
-from redis.client import Redis
-from tensorflow.python.ops.numpy_ops.np_utils import result_type_unary
-
-from conftest import current_dir
 from ..messaging.model import PeerInfo
 from ..model.aliases import PeerId, Target, OrganisationId
 from ..model.configuration import TrustModelConfiguration
@@ -15,7 +10,7 @@ from .sqlite_db import SQLiteDB
 
 from slips_files.core.database.database_manager import DBManager
 import json
-from ..utils.time import Time, now
+from ..utils.time import now
 
 # because this will be implemented
 # noinspection DuplicatedCode
@@ -75,9 +70,9 @@ class SlipsTrustDatabase(TrustDatabase):
     def store_peer_trust_data(self, trust_data: PeerTrustData):
         """Stores trust data for given peer - overwrites any data if existed."""
         self.sqldb.store_peer_trust_data(trust_data)
-        id = trust_data.id
+        id_ = trust_data.info.id
         td_json = json.dumps(trust_data.to_dict())
-        self.db.store_peer_trust_data(id, td_json)
+        self.db.store_peer_trust_data(id_, td_json)
 
     def store_peer_trust_matrix(self, trust_matrix: TrustMatrix):
         """Stores trust matrix."""
@@ -122,7 +117,7 @@ class SlipsTrustDatabase(TrustDatabase):
     def cache_network_opinion(self, ti: SlipsThreatIntelligence):
         """Caches aggregated opinion on given target."""
         # cache is not backed up into SQLite, can be recalculated, not critical
-        self.db.cache_network_opinion(ti.target, ti.to_dict())
+        self.db.cache_network_opinion(ti.target, ti.to_dict(), now())
 
     def get_cached_network_opinion(self, target: Target) -> Optional[SlipsThreatIntelligence]:
         """Returns cached network opinion. Checks cache time and returns None if data expired."""
