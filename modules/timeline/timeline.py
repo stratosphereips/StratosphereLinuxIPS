@@ -35,7 +35,7 @@ class Timeline(IModule):
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
         return str(timestamp)
 
-    def validate_bytes(self, bytes: Any) -> int:
+    def ensure_int_bytes(self, bytes: Any) -> int:
         if not isinstance(bytes, int):
             bytes = 0
         return bytes
@@ -152,7 +152,7 @@ class Timeline(IModule):
         elif not dns_resolution:
             dns_resolution = "????"
         else:
-            dns_resolution = ', '.join(dns_resolution)
+            dns_resolution = ", ".join(dns_resolution)
         return dns_resolution
 
     def process_tcp_udp_flow(self, flow):
@@ -271,8 +271,8 @@ class Timeline(IModule):
             return
         try:
             flow.dport_name = self.interpret_dport(flow)
-            flow.sbytes = self.validate_bytes(flow.sbytes)
-            flow.dbytes = self.validate_bytes(flow.dbytes)
+            flow.sbytes = self.ensure_int_bytes(flow.sbytes)
+            flow.dbytes = self.ensure_int_bytes(flow.dbytes)
             flow.timestamp_human = self.convert_timestamp_to_slips_format(
                 flow.starttime
             )
