@@ -61,6 +61,7 @@ from modules.arp.arp import ARP
 from slips.daemon import Daemon
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.helpers.checker import Checker
+from modules.timeline.timeline import Timeline
 from modules.cesnet.cesnet import CESNET
 from modules.riskiq.riskiq import RiskIQ
 from slips_files.common.markov_chains import Matrix
@@ -618,3 +619,13 @@ class ModuleFactory:
 
     def create_alert_handler_obj(self):
         return AlertHandler()
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_timeline_object(self, mock_db):
+        logger = Mock()
+        output_dir = "/tmp"
+        redis_port = 6379
+        termination_event = Mock()
+        tl = Timeline(logger, output_dir, redis_port, termination_event)
+        tl.db = mock_db
+        return tl

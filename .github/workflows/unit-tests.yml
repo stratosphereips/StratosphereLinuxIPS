@@ -56,9 +56,12 @@ jobs:
           - tests/test_output.py
           - tests/test_riskiq.py
           - tests/test_spamhaus.py
+          - tests/test_circllu.py
           - tests/test_evidence_handler.py
           - tests/test_alert_handler.py
           - tests/test_redis_manager.py
+          - tests/test_ioc_handler.py
+          - tests/test_timeline.py
 
     steps:
     - uses: actions/checkout@v4
