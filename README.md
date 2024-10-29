@@ -136,7 +136,7 @@ Then navigate to ```http://localhost:55000/``` from your browser.
 For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
 
 
-##### Kalispo (CLI-Interface)
+##### Kalipso (CLI-Interface)
 
     ./kalipso.sh
 
