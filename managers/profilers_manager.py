@@ -29,6 +29,8 @@ class ProfilersManager:
         self.memory_profiler_multiprocess = (
             self.main.conf.get_memory_profiler_multiprocess()
         )
+        
+        
     def cpu_profiler_init(self):
         from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
         if not self.cpu_profiler_enabled:
@@ -111,36 +113,3 @@ class ProfilersManager:
         ):
             self.memory_profiler.stop()
 
-    def memory_profiler_multiproc_test(self):
-        def target_function():
-            print("Target function started")
-            time.sleep(5)
-
-        def mem_function():
-            print("Mem function started")
-            while True:
-                time.sleep(1)
-                array = []
-                for i in range(1000000):
-                    array.append(i)
-
-        processes = []
-        num_processes = 3
-
-        for _ in range(num_processes):
-            process = multiprocessing.Process(
-                target=target_function if _ % 2 else mem_function
-            )
-            process.start()
-            processes.append(process)
-
-        # Message passing
-        self.main.db.publish("memory_profile", processes[1].pid)  # successful
-        # target_function will timeout and tracker will be cleared
-        time.sleep(5)
-        # end but maybe don't start
-        self.main.db.publish("memory_profile", processes[0].pid)
-        time.sleep(5)  # mem_function will get tracker started
-        # start successfully
-        self.main.db.publish("memory_profile", processes[0].pid)
-        input()
