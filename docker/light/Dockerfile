@@ -49,7 +49,7 @@ COPY . ${SLIPS_DIR}
 WORKDIR ${SLIPS_DIR}
 
 RUN pip3 install --no-cache-dir --upgrade pip  \
-    && egrep -v "tensorflow|Keras|scipy|pytest|flask|tqdm|coverage|pre-commit|ruff|black|scikit-learn|slackclient|matplotlib|stix2|cabby|pandas|numpy" install/requirements.txt | xargs -n 1 pip install \
+    && egrep -v "tensorflow|Keras|scipy|pytest|flask|tqdm|coverage|pre-commit|ruff|black|scikit-learn|scikit_learn|slackclient|matplotlib|stix2|cabby|pandas|numpy" install/requirements.txt | xargs -n 1 pip install \
     && pip freeze \
     && chmod 774 slips.py \
     && git init \
