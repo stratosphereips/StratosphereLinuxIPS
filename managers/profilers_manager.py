@@ -13,28 +13,28 @@ class ProfilersManager:
         self.cpu_profiler_enabled = self.main.conf.get_cpu_profiler_enable()
         self.cpu_profiler_mode = self.main.conf.get_cpu_profiler_mode()
         self.cpu_profiler_multiprocess = (
-            self.main.conf.get_cpu_profiler_multiprocess()
-        )
+            self.main.conf.get_cpu_profiler_multiprocess())
         self.cpu_profiler_dev_mode_entries = (
-            self.main.conf.get_cpu_profiler_dev_mode_entries()
-        )
+            self.main.conf.get_cpu_profiler_dev_mode_entries())
         self.cpu_profiler_output_limit \
             = self.main.conf.get_cpu_profiler_output_limit(),
         self.cpu_profiler_sampling_interval = (
-            self.main.conf.get_cpu_profiler_sampling_interval()
-        )
+            self.main.conf.get_cpu_profiler_sampling_interval())
         
         self.memory_profiler_mode = self.main.conf.get_memory_profiler_mode()
-        self.memory_profiler_enabled = self.main.conf.get_memory_profiler_enable()
+        self.memory_profiler_enabled = (
+            self.main.conf.get_memory_profiler_enable())
         self.memory_profiler_multiprocess = (
-            self.main.conf.get_memory_profiler_multiprocess()
-        )
+            self.main.conf.get_memory_profiler_multiprocess())
         
         
     def cpu_profiler_init(self):
-        from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
         if not self.cpu_profiler_enabled:
             return
+
+        from slips_files.common.performance_profilers.cpu_profiler import (
+            CPUProfiler)
+
         try:
             if (
                 self.cpu_profiler_multiprocess
@@ -80,19 +80,21 @@ class ProfilersManager:
             self.cpu_profiler_enabled = False
     
     def cpu_profiler_release(self):
-        if hasattr(self, "cpuProfilerEnabled"):
-            if self.cpu_profiler_enabled and not self.cpu_profiler_multiprocess:
-                self.cpu_profiler.stop()
-                self.cpu_profiler.print()
+        if not hasattr(self, "cpuProfilerEnabled"):
+            return
+            
+        if (self.cpu_profiler_enabled
+                and not self.cpu_profiler_multiprocess):
+            self.cpu_profiler.stop()
+            self.cpu_profiler.print()
 
     def memory_profiler_init(self):
+        if not self.memory_profiler_enabled:
+            return
+
         from slips_files.common.performance_profilers.memory_profiler import (
             MemoryProfiler,
         )
-        
-        if not self.memory_profiler_enabled:
-            return
-            
         output_dir = os.path.join(self.args.output, "memoryprofile/")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)

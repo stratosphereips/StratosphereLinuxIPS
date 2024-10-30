@@ -21,8 +21,6 @@
 import json
 from typing import List, Dict, Optional
 from datetime import datetime
-
-# from colorama import Fore, Style
 from os import path
 import sys
 import os

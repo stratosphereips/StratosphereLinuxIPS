@@ -40,7 +40,6 @@ class Main:
         self.conf = ConfigParser()
         self.ui_man = UIManager(self)
         self.profilers_manager = ProfilersManager(self)
-
         self.version = utils.get_slips_version()
         # will be filled later
         self.commit = "None"
