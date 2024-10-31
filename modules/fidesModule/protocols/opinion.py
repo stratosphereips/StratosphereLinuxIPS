@@ -7,7 +7,7 @@ from ..model.aliases import PeerId, Target
 from ..model.configuration import TrustModelConfiguration
 from ..model.peer_trust_data import PeerTrustData, TrustMatrix
 from ..model.threat_intelligence import SlipsThreatIntelligence
-from ..persistence.threat_intelligence import ThreatIntelligenceDatabase
+from ..persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
 
 
 class OpinionAggregator:
@@ -17,7 +17,7 @@ class OpinionAggregator:
 
     def __init__(self,
                  configuration: TrustModelConfiguration,
-                 ti_db: ThreatIntelligenceDatabase,
+                 ti_db: SlipsThreatIntelligenceDatabase,
                  ti_aggregation: TIAggregation):
         self.__configuration = configuration
         self.__ti_db = ti_db

@@ -9,7 +9,7 @@ from ..model.aliases import PeerId
 from ..model.configuration import TrustModelConfiguration
 from ..model.peer import PeerInfo
 from ..model.recommendation import Recommendation
-from ..persistence.trust import TrustDatabase
+from ..persistance.trust import SlipsTrustDatabase
 from ..protocols.protocol import Protocol
 from ..utils.logger import Logger
 
@@ -19,7 +19,7 @@ logger = Logger(__name__)
 class RecommendationProtocol(Protocol):
     """Protocol that is responsible for getting and updating recommendation data."""
 
-    def __init__(self, configuration: TrustModelConfiguration, trust_db: TrustDatabase, bridge: NetworkBridge):
+    def __init__(self, configuration: TrustModelConfiguration, trust_db: SlipsTrustDatabase, bridge: NetworkBridge):
         super().__init__(configuration, trust_db, bridge)
         self.__rec_conf = configuration.recommendations
         self.__trust_db = trust_db
