@@ -1,4 +1,5 @@
 import contextlib
+import shutil
 from datetime import datetime
 import redis
 import os
@@ -27,15 +28,18 @@ class RedisManager:
     def log_redis_server_pid(self, redis_port: int, redis_pid: int):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         try:
-            # used in case we need to remove the line using 6379 from running logfile
+            # used in case we need to remove the line using 6379 from running
+            # logfile
             with open(self.running_logfile, "a") as f:
                 # add the header lines if the file is newly created
                 if f.tell() == 0:
                     f.write(
                         "# This file contains a list of used redis ports.\n"
-                        "# Once a server is killed, it will be removed from this file.\n\n"
+                        "# Once a server is killed, it will be removed from "
+                        "this file.\n\n"
                         "Date, File or interface, Used port, Server PID,"
-                        " Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n"
+                        " Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, "
+                        "Save the DB\n"
                     )
 
                 f.write(
@@ -75,7 +79,8 @@ class RedisManager:
 
         # this is where the db will be loaded
         redis_port = 32850
-        # make sure the db on 32850 is flushed and ready for the new db to be loaded
+        # make sure the db on 32850 is flushed and ready for the new db to be
+        # loaded
         if pid := self.get_pid_of_redis_server(redis_port):
             self.flush_redis_server(pid=pid)
             self.kill_redis_server(pid)
@@ -84,7 +89,6 @@ class RedisManager:
             print(f"Error loading the database {self.main.args.db}")
         else:
             self.load_redis_db(redis_port)
-            # self.main.db.disable_redis_persistence()
 
         self.main.terminate_slips()
 
@@ -95,7 +99,8 @@ class RedisManager:
         self, redis_host="localhost", redis_port=6379
     ) -> bool:
         """
-        Check if we have redis-server running (this is the cache db it should always be running)
+        Check if we have redis-server running (this is the cache db it should
+        always be running)
         """
         tries = 0
         while True:
@@ -219,7 +224,8 @@ class RedisManager:
     def get_pid_of_redis_server(self, port: int) -> int:
         """
         Gets the pid of the redis server running on this port
-        Returns str(port) or false if there's no redis-server running on this port
+        Returns str(port) or false if there's no redis-server running on this
+        port
         """
         cmd = "ps aux | grep redis-server"
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
@@ -233,6 +239,13 @@ class RedisManager:
 
         return False
 
+    @staticmethod
+    def is_comment(line: str) -> True:
+        """returns true if the given line is a comment"""
+        return (line.startswith("#") or line.startswith("Date")) or len(
+            line
+        ) < 3
+
     def get_open_redis_servers(self) -> Dict[int, int]:
         """
         fills and returns self.open_servers_PIDs
@@ -244,11 +257,7 @@ class RedisManager:
             with open(self.running_logfile, "r") as f:
                 for line in f.read().splitlines():
                     # skip comments
-                    if (
-                        line.startswith("#")
-                        or line.startswith("Date")
-                        or len(line) < 3
-                    ):
+                    if self.is_comment(line):
                         continue
 
                     line = line.split(",")
@@ -258,14 +267,15 @@ class RedisManager:
                         self.open_servers_pids[pid] = port
                     except ValueError:
                         # sometimes slips can't get the server pid and logs "False"
-                        # in the lofile instead of the PID
+                        # in the logfile instead of the PID
                         # there's nothing we can do about it
                         pass
 
             return self.open_servers_pids
 
         except FileNotFoundError:
-            # print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
+            # print(f"Error: {self.running_logfile} is not found.
+            # Can't kill open servers. Stopping.")
             return {}
 
     def print_open_redis_servers(self):
@@ -310,7 +320,7 @@ class RedisManager:
 
     def get_port_of_redis_server(self, pid: int) -> Union[int, bool]:
         """
-        returns the port of the redis running on this pid
+        returns the port of the redis running on the given pid
         """
         cmd = "ps aux | grep redis-server"
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
@@ -429,8 +439,10 @@ class RedisManager:
 
     def remove_old_logline(self, redis_port):
         """
-        This function should be called after adding a new duplicate line with redis_port
-        The only line with redis_port will be the last line, remove all the ones above
+        This function should be called after adding a new duplicate line with
+         redis_port
+        The only line with redis_port should be the last line, so this
+        functions removes all the lines above with the given port.
         """
         redis_port = str(redis_port)
         tmpfile = "tmp_running_slips_log.txt"
@@ -449,19 +461,28 @@ class RedisManager:
         os.replace(tmpfile, self.running_logfile)
 
     def remove_server_from_log(self, redis_port):
-        """deletes the server running on the given pid from running_slips_logs"""
+        """Deletes the server running on the given redis_port from
+        running_slips_logs."""
         redis_port = str(redis_port)
         tmpfile = "tmp_running_slips_log.txt"
-        with open(self.running_logfile, "r") as logfile:
-            with open(tmpfile, "w") as tmp:
-                all_lines = logfile.read().splitlines()
-                # delete the line using that port
-                for line in all_lines:
-                    if redis_port not in line:
-                        tmp.write(f"{line}\n")
 
-        # replace file with original name
-        os.replace(tmpfile, self.running_logfile)
+        try:
+            with (
+                open(self.running_logfile, "r") as logfile,
+                open(tmpfile, "w") as tmp,
+            ):
+                for line in logfile:
+                    if redis_port not in line:
+                        tmp.write(line)
+
+            # Atomically replace the original file with the temp file
+            shutil.move(tmpfile, self.running_logfile)
+
+        except Exception as e:
+            # Handle exceptions such as file access errors
+            if os.path.exists(tmpfile):
+                os.remove(tmpfile)
+            raise e
 
     def close_open_redis_servers(self):
         """

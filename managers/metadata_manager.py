@@ -67,21 +67,22 @@ class MetadataManager:
         self.main.print(f"Metadata added to {metadata_dir}")
         return self.info_path
 
-    def set_analysis_end_date(self):
+    def set_analysis_end_date(self, end_date):
         """
         Add the analysis end date to the metadata file and
         the db for the web interface to display
         """
-        self.enable_metadata = self.main.conf.enable_metadata()
-        end_date = utils.convert_format(datetime.now(), utils.alerts_format)
+        if not self.main.conf.enable_metadata():
+            return
+
         self.main.db.set_input_metadata({"analysis_end": end_date})
-        if self.enable_metadata:
-            # add slips end date in the metadata dir
-            try:
-                with open(self.info_path, "a") as f:
-                    f.write(f"Slips end date: {end_date}\n")
-            except (NameError, AttributeError):
-                pass
+
+        # add slips end date in the metadata dir
+        try:
+            with open(self.info_path, "a") as f:
+                f.write(f"Slips end date: {end_date}\n")
+        except (NameError, AttributeError):
+            pass
         return end_date
 
     def set_input_metadata(self):

@@ -323,11 +323,20 @@ While file hashes and URLs aren't supported in TI feeds directly, Slips compensa
 
 Besides searching 40+ TI files for every IP/domain Slips encounters, Slips integrates with the following external threat intelligence services to enrich its detection capabilities:
 
-1. **URLhaus**: This service is utilized for checking URLs observed in `http.log` and files observed in `files.log` against known malicious URLs and files. URLhaus provides a comprehensive database of malicious URLs, which Slips queries to determine if observed URLs or files are associated with known malware or phishing campaigns.
+**URLhaus**: This service is utilized for checking URLs observed in `http.log` and files observed in `files.log` against known malicious URLs and files. URLhaus provides a comprehensive database of malicious URLs, which Slips queries to determine if observed URLs or files are associated with known malware or phishing campaigns.
 
-2. **Spamhaus**: Spamhaus is used for IP lookups to assess the reputation of IP addresses encountered during the analysis. By querying Spamhaus, Slips can identify IP addresses associated with spamming activities, botnets, and other malicious behaviors, enhancing its ability to detect and alert on suspicious network traffic.
+**Spamhaus**: Spamhaus is used for inbound traffic IP lookups to assess the reputation of IP addresses encountered during the analysis. By querying Spamhaus, Slips can identify IP addresses associated with spamming activities, botnets, and other malicious behaviors, enhancing its ability to detect and alert on suspicious network traffic.
 
-3. **Circl.lu**: Circl.lu's service is leveraged for hash lookups, particularly for downloaded files. Each file hash extracted from `files.log` is checked against Circl.lu's extensive database of known malicious file hashes. This integration allows Slips to identify and react to the transfer or presence of known malicious files within the monitored network environment.
+**Circl.lu**: Circl.lu's service is leveraged for hash lookups, particularly for downloaded files. Each file hash extracted from `files.log` is checked against Circl.lu's extensive database of known malicious file hashes. This integration allows Slips to identify and react to the transfer or presence of known malicious files within the monitored network environment.
+
+Circllu returns scores (`hashlookup:trust`) for each md5. this score ranges from 0 to 100, with 0 being the most malicious.
+This score is converted to a value that slips can deal with using the following equation
+```python
+malicious_percentage = 100 - circll_score
+# scale the benign percentage from 0 to 1
+threat_level = float(malicious_percentage) / 100
+```
+And then it's converted to a string threat level using the table in https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html#threat-levels
 
 **URLhaus Access**:
   - **Purpose**: Identify malicious URLs and files.
@@ -753,25 +762,24 @@ This module is responsible for detecting scans such as:
 
 Slips considers an IP performing a vertical port scan if it contacts 5 or more different destination ports to the same destination IP in at least one time window (usually 1hs). The flows can be both, Non-Established TCP or UDP flows. On each arriving flow this check is performed.
 
-After detecting a vertical port scan for the first time, if Slips detects new flows to 5 destination ports, then it triggers a waiting process to find out how many packets to new ports will arrive. For this it waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one alert 'port scan' per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
+The first portscan is detected as soon as it happens so the analysts knows.
 
-If one alert was generated (Slips waited 10 seconds and no more flows arrived to new ports in that dst IP) then the counter resets and the same attacker needs to do _again_ more than threshold destinations ports in one IP to be detected. This avoids the problem that after 5 flows that generated an alert, the 6 flow also generates an alert.
+After detecting a vertical port scan for the first time, aka a scan to 6 different destination ports for the same host, the attacker needs to scan more than 6 destinations ports for the same host _again_ to trigger another evidence. This avoids generating one port scan alert per flow in a long scan.
 
 The total number of _packets_ in all flows in the scan give us the confidence of the scan.
+
+To minimize false positives, Slips ignores the broadcast IP 255.255.255.255 and the multicast IP if it's the source of vertical port scan.
 
 
 ### Horizontal port scans
 
-Slips considers an IP performing a horizontal port scan if it contacted more than 6 destination IPs on the same
-specific port with not established connections. Slips checks both TCP and UDP connections for horizontal port scans.
-The initial threshold is now 6 destination IPs using the same destination ports.
+Slips detects TCP and UDP horizontal port scans. It considers an IP performing a horizontal port scan if it contacted 6 or more destination IPs on the same port with not established connections.
 
-After detecting a horizontal port scan, Slips waits 10 seconds to see if more flows arrive,
-since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
+The first portscan is detected as soon as it happens so the analysts knows.
 
-If one alert was generated (Slips waited 10 seconds and no more flows arrived to new IPs) then the counter resets and the same attacker needs to do _again_ more than threshold destinations IPs in the same port to be detected. This avoids the problem that after 6 flows that generated an alert, the 7 flow also generates an alert.
+So, If the first alert was generated with 6 IPs scanned, the attacker needs to scan more than 6 destinations IPs in the same port _again_ to trigger another evidence. This avoids generating one port scan alert per flow in a long scan.
 
-Slips ignores the broadcast IP 255.255.255.255 if it's the source or the destination of horizontal port scans.
+To minimize false positives, Slips ignores the broadcast IP 255.255.255.255 if it's the source or the destination of horizontal port scans, and ignores all resolved IPs if they're the destination of port scans.
 
 
 ### PING Sweeps

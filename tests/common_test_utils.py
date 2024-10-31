@@ -8,6 +8,7 @@ from typing import (
     Dict,
     Optional,
 )
+from unittest.mock import Mock
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -18,6 +19,19 @@ alerts_file = "alerts.log"
 if not os.path.exists(integration_tests_dir):
     path = Path(integration_tests_dir)
     path.mkdir(parents=True, exist_ok=True)
+
+
+def get_mock_coro(return_value):
+    """
+    instead of doing async_func = Mock() which doesn't work
+    you should use this function to mock it
+    so async_func = get_mock_coro(x)
+    """
+
+    async def mock_coro(*args, **kwargs):
+        return return_value
+
+    return Mock(wraps=mock_coro)
 
 
 def do_nothing(*args):

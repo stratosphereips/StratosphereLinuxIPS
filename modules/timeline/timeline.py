@@ -35,7 +35,7 @@ class Timeline(IModule):
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
         return str(timestamp)
 
-    def validate_bytes(self, bytes: Any) -> int:
+    def ensure_int_bytes(self, bytes: Any) -> int:
         if not isinstance(bytes, int):
             bytes = 0
         return bytes
@@ -142,19 +142,17 @@ class Timeline(IModule):
         return altflow_info
 
     def get_dns_resolution(self, ip):
-        """
-        returns a list or a str with the dns resolution of the given ip
-        """
         dns_resolution: dict = self.db.get_dns_resolution(ip)
         dns_resolution: list = dns_resolution.get("domains", [])
 
-        # we should take only one resolution, if there is more
-        # than 3, because otherwise it does not fit in the timeline.
         if len(dns_resolution) > 3:
             dns_resolution = dns_resolution[-1]
-
-        if not dns_resolution:
+        elif len(dns_resolution) == 1:
+            dns_resolution = dns_resolution[0]
+        elif not dns_resolution:
             dns_resolution = "????"
+        else:
+            dns_resolution = ", ".join(dns_resolution)
         return dns_resolution
 
     def process_tcp_udp_flow(self, flow):
@@ -273,8 +271,8 @@ class Timeline(IModule):
             return
         try:
             flow.dport_name = self.interpret_dport(flow)
-            flow.sbytes = self.validate_bytes(flow.sbytes)
-            flow.dbytes = self.validate_bytes(flow.dbytes)
+            flow.sbytes = self.ensure_int_bytes(flow.sbytes)
+            flow.dbytes = self.ensure_int_bytes(flow.dbytes)
             flow.timestamp_human = self.convert_timestamp_to_slips_format(
                 flow.starttime
             )

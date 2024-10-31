@@ -5,6 +5,8 @@ from typing import (
     Optional,
 )
 
+from slips_files.common.style import green
+
 
 class HostIPManager:
     def __init__(self, main):
@@ -35,6 +37,7 @@ class HostIPManager:
 
         if host_ip := self.get_host_ip():
             self.main.db.set_host_ip(host_ip)
+            self.main.print(f"Detected host IP: {green(host_ip)}")
             return host_ip
 
         self.main.print("Not Connected to the internet. Reconnecting in 10s.")

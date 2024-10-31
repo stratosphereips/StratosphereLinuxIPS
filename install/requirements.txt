@@ -1,8 +1,8 @@
 maxminddb==2.6.2
 numpy==1.26.4
 watchdog==5.0.0
-redis==5.0.8
-urllib3==2.2.2
+redis==5.1.1
+urllib3==2.2.3
 pandas==2.2.2
 tzlocal==5.2
 cabby==0.1.23
@@ -11,7 +11,7 @@ certifi==2024.7.4
 tensorflow==2.16.1
 colorama==0.4.6
 Keras
-validators==0.33.0
+validators==0.34.0
 ipwhois==1.2.0
 matplotlib==3.9.2
 recommonmark==0.7.1
@@ -41,8 +41,8 @@ pytest-sugar==1.0.0
 memray==1.13.4
 aid_hash
 black==24.8.0
-ruff==0.6.2
-pre-commit==3.8.0
+ruff==0.6.8
+pre-commit==4.0.1
 coverage==7.6.1
 pyyaml
 git+https://github.com/SECEF/python-idmefv2.git

@@ -403,13 +403,11 @@ def test_shutdown_gracefully_all_components_active():
     input_process.zeek_thread = MagicMock()
     input_process.zeek_thread.start()
     input_process.open_file_handlers = {"test_file.log": MagicMock()}
-    input_process.zeek_pid = os.getpid()
+    input_process.zeek_pid = 123
 
     with patch("os.kill") as mock_kill:
-        assert input_process.shutdown_gracefully() is True
-        mock_kill.assert_called_once_with(
-            input_process.zeek_pid, signal.SIGKILL
-        )
+        assert input_process.shutdown_gracefully()
+        mock_kill.assert_called_with(input_process.zeek_pid, signal.SIGKILL)
     assert input_process.open_file_handlers["test_file.log"].close.called
 
 

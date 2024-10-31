@@ -288,7 +288,7 @@ def test_urlhaus_lookup(
     mock_response.text = json.dumps(mock_response_data)
     mock_request.return_value = mock_response
     urlhaus = ModuleFactory().create_urlhaus_obj()
-    result = urlhaus.urlhaus_lookup(ioc, type_of_ioc)
+    result = urlhaus.lookup(ioc, type_of_ioc)
     assert result == expected_result
 
 
@@ -305,7 +305,7 @@ def test_urlhaus_lookup_json_decode_error(
     mock_request.return_value = mock_response
 
     urlhaus = ModuleFactory().create_urlhaus_obj()
-    result = urlhaus.urlhaus_lookup("https://example.com", "url")
+    result = urlhaus.lookup("https://example.com", "url")
     assert result is None
 
 

@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import ipaddress
 import json
@@ -6,7 +7,6 @@ from typing import Tuple, List, Dict
 import validators
 
 from modules.flowalerts.dns import DNS
-from modules.flowalerts.timer_thread import TimerThread
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -416,16 +416,17 @@ class Conn(IFlowalertsAnalyzer):
             pass
         return False
 
-    def check_connection_without_dns_resolution(self, profileid, twid, flow):
+    async def check_connection_without_dns_resolution(
+        self, profileid, twid, flow
+    ) -> bool:
         """
         Checks if there's a flow to a dstip that has no cached DNS answer
         """
         # The exceptions are:
         # 1- Do not check for DNS requests
         # 2- Ignore some IPs like private IPs, multicast, and broadcast
-
         if self.should_ignore_conn_without_dns(flow):
-            return
+            return False
 
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to
@@ -458,45 +459,33 @@ class Conn(IFlowalertsAnalyzer):
         if self.db.is_ip_resolved(flow.daddr, 24):
             return False
 
-        if flow.uid not in self.connections_checked_in_conn_dns_timer_thread:
-            # comes here if we haven't started the timer
-            # thread for this connection before
-            # mark this connection as checked
-            self.connections_checked_in_conn_dns_timer_thread.append(flow.uid)
-            params = [profileid, twid, flow]
-            # There is no DNS resolution, but it can be that Slips is
-            # still reading it from the files.
-            # To give time to Slips to read all the files and get all the flows
-            # don't alert a Connection Without DNS until 5 seconds has passed
-            # in real time from the time of this checking.
-            timer = TimerThread(
-                15, self.check_connection_without_dns_resolution, params
-            )
-            timer.start()
-        else:
-            # It means we already checked this conn with the Timer process
-            # (we waited 15 seconds for the dns to arrive after
-            # the connection was made)
-            # but still no dns resolution for it.
-            # Sometimes the same computer makes requests using
-            # its ipv4 and ipv6 address, check if this is the case
-            if self.check_if_resolution_was_made_by_different_version(
-                profileid, flow.daddr
-            ):
-                return False
+        # There is no DNS resolution, but it can be that Slips is
+        # still reading it from the files.
+        # To give time to Slips to read all the files and get all the flows
+        # don't alert a Connection Without DNS until 15 seconds has passed
+        # in real time from the time of this checking.
+        await asyncio.sleep(15)
+        if self.db.is_ip_resolved(flow.daddr, 24):
+            return False
 
-            if self.is_well_known_org(flow.daddr):
-                # if the SNI or rDNS of the IP matches a
-                # well-known org, then this is a FP
-                return False
+        # Reaching here means we already waited 15 seconds for the dns
+        # to arrive after the connection was made, but still no dns
+        # resolution for it.
 
-            self.set_evidence.conn_without_dns(twid, flow)
-            # This UID will never appear again, so we can remove it and
-            # free some memory
-            with contextlib.suppress(ValueError):
-                self.connections_checked_in_conn_dns_timer_thread.remove(
-                    flow.uid
-                )
+        # Sometimes the same computer makes requests using
+        # its ipv4 and ipv6 address, check if this is the case
+        if self.check_if_resolution_was_made_by_different_version(
+            profileid, flow.daddr
+        ):
+            return False
+
+        if self.is_well_known_org(flow.daddr):
+            # if the SNI or rDNS of the IP matches a
+            # well-known org, then this is a FP
+            return False
+
+        self.set_evidence.conn_without_dns(twid, flow)
+        return True
 
     def check_conn_to_port_0(self, profileid, twid, flow):
         """
@@ -732,7 +721,7 @@ class Conn(IFlowalertsAnalyzer):
 
         self.set_evidence.conn_to_private_ip(twid, flow)
 
-    def analyze(self, msg):
+    async def analyze(self, msg):
         if utils.is_msg_intended_for(msg, "new_flow"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
@@ -751,7 +740,13 @@ class Conn(IFlowalertsAnalyzer):
             self.check_different_localnet_usage(
                 twid, flow, what_to_check="srcip"
             )
-            self.check_connection_without_dns_resolution(profileid, twid, flow)
+            task = asyncio.create_task(
+                self.check_connection_without_dns_resolution(
+                    profileid, twid, flow
+                )
+            )
+            # to wait for these functions before flowalerts shuts down
+            self.flowalerts.tasks.append(task)
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
             self.check_non_http_port_80_conns(twid, flow)

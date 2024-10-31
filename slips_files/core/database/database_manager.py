@@ -153,9 +153,6 @@ class DBManager:
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
 
-    def set_accumulated_threat_level(self, *args, **kwargs):
-        return self.rdb.set_accumulated_threat_level(*args, **kwargs)
-
     def update_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
 
@@ -433,8 +430,8 @@ class DBManager:
     def delete_evidence(self, *args, **kwargs):
         return self.rdb.delete_evidence(*args, **kwargs)
 
-    def cache_whitelisted_evidence_ID(self, *args, **kwargs):
-        return self.rdb.cache_whitelisted_evidence_ID(*args, **kwargs)
+    def cache_whitelisted_evidence_id(self, *args, **kwargs):
+        return self.rdb.cache_whitelisted_evidence_id(*args, **kwargs)
 
     def is_whitelisted_evidence(self, *args, **kwargs):
         return self.rdb.is_whitelisted_evidence(*args, **kwargs)
@@ -640,7 +637,13 @@ class DBManager:
         return self.rdb.add_software_to_profile(*args, **kwargs)
 
     def get_total_flows(self, *args, **kwargs):
-        return self.rdb.get_total_flows(*args, **kwargs)
+        return int(self.rdb.get_total_flows(*args, **kwargs))
+
+    def increment_processed_flows(self, *args, **kwargs):
+        return self.rdb.increment_processed_flows(*args, **kwargs)
+
+    def get_processed_flows_so_far(self, *args, **kwargs):
+        return self.rdb.get_processed_flows_so_far(*args, **kwargs)
 
     def add_out_ssh(self, *args, **kwargs):
         return self.rdb.add_out_ssh(*args, **kwargs)
@@ -750,7 +753,7 @@ class DBManager:
     def add_tuple(self, *args, **kwargs):
         return self.rdb.add_tuple(*args, **kwargs)
 
-    def search_tws_for_flow(self, profileid, twid, uid, go_back=False):
+    def search_tws_for_flow(self, twid, uid, go_back=False):
         """
         Search for the given uid in the given twid, or the tws before
         :param go_back: how many hours back to search?

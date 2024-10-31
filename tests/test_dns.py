@@ -3,6 +3,7 @@
 from dataclasses import asdict
 
 from slips_files.core.flows.zeek import DNS
+from tests.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
 from numpy import arange
 from unittest.mock import patch, Mock
@@ -439,17 +440,17 @@ def test_check_high_entropy_dns_answers_no_call(
         ),
     ],
 )
-def test_analyze_new_flow_msg(test_case, expected_calls):
+async def test_analyze_new_flow_msg(test_case, expected_calls):
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.connections_checked_in_dns_conn_timer_thread = []
-    dns.check_dns_without_connection = Mock()
+    dns.check_dns_without_connection = get_mock_coro(True)
     dns.check_high_entropy_dns_answers = Mock()
     dns.check_invalid_dns_answers = Mock()
     dns.detect_dga = Mock()
     dns.detect_young_domains = Mock()
     dns.check_dns_arpa_scan = Mock()
 
-    dns.analyze({"channel": "new_dns", "data": test_case["data"]})
+    await dns.analyze({"channel": "new_dns", "data": test_case["data"]})
 
     assert (
         dns.check_dns_without_connection.call_count

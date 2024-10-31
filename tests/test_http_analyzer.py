@@ -2,15 +2,20 @@
 
 import json
 from dataclasses import asdict
+import pytest
 
 from slips_files.core.flows.zeek import (
     HTTP,
     Weird,
+    Conn,
 )
 from tests.module_factory import ModuleFactory
-from unittest.mock import patch, MagicMock
+from unittest.mock import (
+    patch,
+    MagicMock,
+    Mock,
+)
 from modules.http_analyzer.http_analyzer import utils
-import pytest
 import requests
 
 # dummy params used for testing
@@ -325,7 +330,7 @@ def test_set_evidence_weird_http_method(mocker):
         "Some IP identification"
     )
     mocker.spy(http_analyzer.db, "set_evidence")
-    flow = Weird(
+    weird_flow = Weird(
         starttime="1726593782.8840969",
         uid="123",
         saddr="192.168.1.5",
@@ -333,7 +338,28 @@ def test_set_evidence_weird_http_method(mocker):
         name="",
         addl="weird_method_here",
     )
-    http_analyzer.set_evidence_weird_http_method(twid, flow)
+    conn_flow = Conn(
+        starttime="1726249372.312124",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="1.1.1.1",
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="0",
+        dport="12345",
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
+    )
+    http_analyzer.set_evidence_weird_http_method(
+        twid, weird_flow, asdict(conn_flow)
+    )
     http_analyzer.db.set_evidence.assert_called_once()
 
 
@@ -390,8 +416,9 @@ def test_read_configuration_valid(mocker, config_value):
         ),
     ],
 )
-def test_check_weird_http_method(mocker, flow_name, evidence_expected):
+async def test_check_weird_http_method(mocker, flow_name, evidence_expected):
     http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    http_analyzer.set_evidence_weird_http_method = Mock()
     mocker.spy(http_analyzer, "set_evidence_weird_http_method")
 
     msg = {
@@ -402,13 +429,17 @@ def test_check_weird_http_method(mocker, flow_name, evidence_expected):
                 saddr="192.168.1.5",
                 daddr="1.1.1.1",
                 name=flow_name,
-                addl="weird_method_here",
+                addl=flow_name,
             )
         ),
         "twid": twid,
     }
 
-    http_analyzer.check_weird_http_method(msg)
+    with patch(
+        "slips_files.common.slips_utils.utils.get_original_conn_flow"
+    ) as mock_get_original_conn_flow:
+        mock_get_original_conn_flow.side_effect = [None, {"flow": {}}]
+        await http_analyzer.check_weird_http_method(msg)
 
     if evidence_expected:
         http_analyzer.set_evidence_weird_http_method.assert_called_once()

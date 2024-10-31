@@ -54,8 +54,8 @@ parameters:
    # analysis_direction : all
    analysis_direction : out
 
-
    # Delete zeek log files after stopping slips.
+   # this parameter deletes arp.log every 1h. useful for saving disk space
    delete_zeek_files : False
 
    # Store a copy of zeek files in the output dir after the analysis is done.
@@ -140,7 +140,7 @@ parameters:
    # your own IP and is used to improve detections
    # it would be useful to specify it when analyzing pcaps or zeek logs
    # client_ips : [10.0.0.1, 172.16.0.9, 172.217.171.238]
-   client_ips : "[]"
+   client_ips : []
 
 #############################
 detection:
@@ -172,9 +172,9 @@ detection:
 modules:
    # List of modules to ignore. By default we always ignore the template! do not remove it from the list
    # Names of other modules that you can disable (they all should be lowercase with no special characters):
-   # threatintelligence, blocking,
-   # networkdiscovery, timeline, virustotal, rnnccdetection, flowmldetection, updatemanager
-   disable: "[template]"
+   # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
+   # rnnccdetection, flowmldetection, updatemanager
+   disable: [template]
 
    # For each line in timeline file there is a timestamp.
    # By default the timestamp is seconds in unix time. However

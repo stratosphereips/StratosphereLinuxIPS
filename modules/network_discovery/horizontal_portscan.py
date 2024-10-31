@@ -20,6 +20,11 @@ BROADCAST_ADDR = "255.255.255.255"
 
 
 class HorizontalPortscan:
+    """
+    Horizontal scanning sends requests to the same port
+    on different hosts.
+    """
+
     def __init__(self, db):
         self.db = db
         # to keep track of the max dports reported per timewindow
@@ -28,29 +33,12 @@ class HorizontalPortscan:
         # is increased exponentially every evidence, and is reset each timewindow
         self.minimum_dstips_to_set_evidence = 5
 
-    def get_resolved_ips(self, dstips: dict) -> list:
-        """
-        returns the list of dstips that have dns resolution, we will
-        discard them when checking for horizontal portscans
-        """
-        dstips_to_discard = []
-        # Remove dstips that have DNS resolution already
-        for dip in dstips:
-            dns_resolution = self.db.get_dns_resolution(dip)
-            dns_resolution = dns_resolution.get("domains", [])
-            if dns_resolution:
-                dstips_to_discard.append(dip)
-        return dstips_to_discard
-
     def get_not_estab_dst_ports(
         self, protocol: str, state: str, profileid: str, twid: str
     ) -> dict:
         """
         Get the list of dstports that we tried to connect
          to (not established flows)
-         these unknowns are the info this function retrieves
-         profileid -> unknown_dstip:unknown_dstports
-
          here, the profileid given is the client.
          :return: the following dict
          #TODO this is wrong, fix it
@@ -160,16 +148,12 @@ class HorizontalPortscan:
             return True
         return False
 
-    def get_uids(self, dstips: dict):
+    def get_uids(self, dstips: dict) -> List[str]:
         """
         returns all the uids of flows sent on a sigle port
         to different destination IPs
         """
-        uids = []
-        for dstip in dstips:
-            for uid in dstips[dstip]["uid"]:
-                uids.append(uid)
-        return uids
+        return [uid for dstip in dstips for uid in dstips[dstip]["uid"]]
 
     def set_evidence_horizontal_portscan(self, evidence: dict):
         threat_level = ThreatLevel.HIGH
@@ -221,38 +205,8 @@ class HorizontalPortscan:
         return False
 
     @staticmethod
-    def is_valid_daddr(daddr: str):
-        """
-        to avoid reporting port scans on the
-        broadcast or multicast addresses or invalid values
-        """
-        if validators.ipv4(daddr) or validators.ipv6(daddr):
-            daddr_obj = ipaddress.ip_address(daddr)
-            return not daddr_obj.is_multicast and daddr != "255.255.255.255"
-
-        return False
-
-    @staticmethod
     def is_valid_twid(twid: str) -> bool:
         return not (twid in ("", None) or "timewindow" not in twid)
-
-    def filter_dstips(self, dstips: dict) -> dict:
-        """
-        returns the given dict of dstips without resolved IPs, broadcast,
-        and multicast addrs
-        """
-        resolved_ips: List[str] = self.get_resolved_ips(dstips)
-        dstips_to_discard = []
-        for ip in dstips:
-            if not self.is_valid_daddr(ip):
-                dstips_to_discard.append(ip)
-            if ip in resolved_ips:
-                dstips_to_discard.append(ip)
-
-        for ip in dstips_to_discard:
-            dstips.pop(ip)
-
-        return dstips
 
     def check(self, profileid: str, twid: str):
         if not self.is_valid_saddr(profileid) or not self.is_valid_twid(twid):
@@ -274,8 +228,6 @@ class HorizontalPortscan:
             for dport in dports.keys():
                 # PortScan Type 2. Direction OUT
                 dstips: dict = dports[dport]["dstips"]
-
-                dstips: dict = self.filter_dstips(dstips)
 
                 twid_identifier: str = self.get_twid_identifier(
                     profileid, twid, dport

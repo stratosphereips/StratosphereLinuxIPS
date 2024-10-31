@@ -70,10 +70,11 @@ class SuricataFlow:
     flow_source: str = "suricata"
 
     def __post_init__(self):
-        self.dur = (
-            utils.convert_to_datetime(self.endtime)
-            - utils.convert_to_datetime(self.starttime)
-        ).total_seconds() or 0
+        if not self.dur:
+            self.dur = (
+                utils.convert_to_datetime(self.endtime)
+                - utils.convert_to_datetime(self.starttime)
+            ).total_seconds() or 0
         self.pkts = self.dpkts + self.spkts
         self.bytes = self.dbytes + self.sbytes
         self.uid = str(self.uid)

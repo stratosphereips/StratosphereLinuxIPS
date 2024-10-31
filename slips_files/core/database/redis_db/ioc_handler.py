@@ -79,8 +79,7 @@ class IoCHandler:
         :param file: a valid filename not a feed url
         """
         data = self.rcache.hget(self.constants.TI_FILES_INFO, file)
-        data = json.loads(data) if data else {}
-        return data
+        return json.loads(data) if data else {}
 
     def give_threat_intelligence(
         self,
@@ -105,12 +104,10 @@ class IoCHandler:
             "daddr": daddr,
         }
         if extra_info:
-            # sometimes we want to send teh dns query/answer to check it for
+            # sometimes we want to send the dns query/answer to check it for
             # blacklisted ips/domains
             data_to_send.update(extra_info)
-
         self.publish(self.constants.GIVE_TI, json.dumps(data_to_send))
-
         return data_to_send
 
     def set_ti_feed_info(self, file, data):

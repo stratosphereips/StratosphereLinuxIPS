@@ -30,6 +30,7 @@ from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.core import ICore
+from slips_files.common.style import green
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
@@ -67,10 +68,7 @@ class Profiler(ICore, IObservable):
         is_profiler_done: multiprocessing.Semaphore = None,
         profiler_queue=None,
         is_profiler_done_event: multiprocessing.Event = None,
-        has_pbar: bool = False,
     ):
-        # we made it an observable to be able to pass msgs to Output.py
-        # to init the pbar.
         IObservable.__init__(self)
         self.add_observer(self.logger)
         # when profiler is done processing, it releases this semaphore,
@@ -84,7 +82,6 @@ class Profiler(ICore, IObservable):
         self.input_type = False
         self.rec_lines = 0
         self.is_localnet_set = False
-        self.has_pbar = has_pbar
         self.whitelist = Whitelist(self.logger, self.db)
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
@@ -371,22 +368,6 @@ class Profiler(ICore, IObservable):
         """
         return msg == "stop"
 
-    def init_pbar(self, total_flows: int):
-        """
-        sends the output.py a msg with the pbar details for initialization
-        """
-        # Find the number of flows we're going to receive of input received
-        self.notify_observers(
-            {
-                "bar": "init",
-                "bar_info": {
-                    "input_type": self.input_type,
-                    "total_flows": total_flows,
-                },
-            }
-        )
-        self.supported_pbar = True
-
     def get_private_client_ips(self) -> List[str]:
         """
         returns the private ips found in the client_ips param
@@ -426,6 +407,7 @@ class Profiler(ICore, IObservable):
             return
 
         local_net: str = self.get_local_net()
+        self.print(f"Used local network: {green(local_net)}")
         self.db.set_local_network(local_net)
 
     def should_stop(self):
@@ -456,6 +438,7 @@ class Profiler(ICore, IObservable):
 
     def pre_main(self):
         utils.drop_root_privs()
+        self.print(f"Used client IPs: {green(str(self.client_ips))}")
 
     def main(self):
         while True:
@@ -469,7 +452,7 @@ class Profiler(ICore, IObservable):
 
             line: dict = msg["line"]
             input_type: str = msg["input_type"]
-            total_flows: int = msg.get("total_flows", 0)
+            # total_flows: int = msg.get("total_flows", 0)
 
             # TODO who is putting this True here?
             if line is True:
@@ -484,8 +467,6 @@ class Profiler(ICore, IObservable):
             if not self.input_type:
                 # Find the type of input received
                 self.input_type = self.define_separator(line, input_type)
-                if self.has_pbar:
-                    self.init_pbar(total_flows)
 
             # What type of input do we have?
             if not self.input_type:
@@ -504,14 +485,10 @@ class Profiler(ICore, IObservable):
                 if self.flow:
                     self.add_flow_to_profile()
                     self.handle_setting_local_net()
-
-                # now that one flow is processed tell output.py
-                # to update the bar
-                if self.has_pbar:
-                    self.notify_observers({"bar": "update"})
+                    self.db.increment_processed_flows()
             except Exception as e:
                 self.print(
-                    f"Problem processing line {line}. Line discarded. {e}",
+                    f"Problem processing line {line}. " f"Line discarded. {e}",
                     0,
                     1,
                 )
