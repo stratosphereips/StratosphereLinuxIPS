@@ -1,3 +1,17 @@
+- 1.1.3 (October 30th, 2024)
+- Enhanced Slips shutdown process for smoother operations.
+- Optimized resource management in Slips, resolving issues with lingering threads in memory.
+- Remove the progress bar; Slips now provides regular statistical updates.
+- Improve unit testing—special thanks to @Sekhar-Kumar-Dash.
+- Drop support for macOS, P2P, and platform-specific Docker images. A unified Docker image is now available for all platforms.
+- Correct the number of evidence reported in statistics.
+- Fix incorrect end date reported in metadata/info.txt upon analysis completion.
+- Print more information to CLI on Slips startup, including network details, client IP, thresholds used, and more.
+- Reduce false positives from Spamhaus by looking up inbound traffic only.
+- Speed up horizontal port scan detections.
+- Enhance logging of IDMEF errors.
+- Resolve issues with the accumulated threat level reported in alerts.json.
+
 - 1.1.2 (September 30th, 2024)
 - Add a relation between related evidence in alerts.json
 - Better unit tests. Thanks to @Sekhar-Kumar-Dash
