@@ -62,6 +62,8 @@ jobs:
           - tests/test_redis_manager.py
           - tests/test_ioc_handler.py
           - tests/test_timeline.py
+          - tests/test_database.py
+          - tests/test_symbols_handler.py
 
     steps:
     - uses: actions/checkout@v4
@@ -94,10 +96,6 @@ jobs:
 
     - name: Start redis server
       run: redis-server --daemonize yes
-
-    - name: Run Database Unit Tests
-      run: |
-        python3 -m pytest tests/test_database.py -p no:warnings -vv
 
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |
