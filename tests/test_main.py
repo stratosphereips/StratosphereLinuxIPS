@@ -72,41 +72,44 @@ def test_cpu_profiler_release_enabled(
     expected_print_calls,
 ):
     main = ModuleFactory().create_main_obj()
-    main.cpuProfilerEnabled = True
-    main.cpuProfilerMultiprocess = cpu_profiler_multiprocess
+    main.profilers_manager.cpu_profiler_enabled = True
+    main.profilers_manager.cpu_profiler_multiprocess = (
+        cpu_profiler_multiprocess
+    )
+    main.profilers_manager.cpu_profiler = MagicMock()
+    main.profilers_manager.cpu_profiler_release()
 
-    main.cpuProfiler = MagicMock()
-
-    main.cpu_profiler_release()
-
-    assert main.cpuProfiler.stop.call_count == expected_stop_calls
-    assert main.cpuProfiler.print.call_count == expected_print_calls
+    assert (
+        main.profilers_manager.cpu_profiler.stop.call_count
+        == expected_stop_calls
+    )
+    assert (
+        main.profilers_manager.cpu_profiler.print.call_count
+        == expected_print_calls
+    )
 
 
 def test_cpu_profiler_release_disabled():
     main = ModuleFactory().create_main_obj()
-    main.cpuProfilerEnabled = False
-    main.cpu_profiler_release()
-    assert not hasattr(main, "memoryProfiler")
+    main.profilers_manager.cpu_profiler_enabled = False
+    main.profilers_manager.cpu_profiler_release()
+    assert not hasattr(main.profilers_manager, "memory_profiler")
 
 
 def test_memory_profiler_release_enabled():
     main = ModuleFactory().create_main_obj()
-    main.memoryProfilerEnabled = True
-    main.memoryProfiler = MagicMock()
-
-    main.memory_profiler_release()
-
-    main.memoryProfiler.stop.assert_called_once()
+    main.profilers_manager.memory_profiler_enabled = True
+    main.profilers_manager.memory_profiler = MagicMock()
+    main.profilers_manager.memory_profiler_release()
+    main.profilers_manager.memory_profiler.stop.assert_called_once()
 
 
 def test_memory_profiler_release_disabled():
     main = ModuleFactory().create_main_obj()
-    main.memoryProfilerEnabled = False
+    main.profilers_manager.memory_profiler_enabled = False
+    main.profilers_manager.memory_profiler_release()
 
-    main.memory_profiler_release()
-
-    assert not hasattr(main, "memoryProfiler")
+    assert not hasattr(main.profilers_manager, "memory_profiler")
 
 
 @pytest.mark.parametrize(

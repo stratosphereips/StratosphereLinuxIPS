@@ -1,39 +1,44 @@
-import multiprocessing
 import os
 import subprocess
 import sys
-import time
+
 
 class ProfilersManager:
     def __init__(self, main):
         self.main = main
         self.read_configurations()
-        
+
     def read_configurations(self):
         self.cpu_profiler_enabled = self.main.conf.get_cpu_profiler_enable()
         self.cpu_profiler_mode = self.main.conf.get_cpu_profiler_mode()
         self.cpu_profiler_multiprocess = (
-            self.main.conf.get_cpu_profiler_multiprocess())
+            self.main.conf.get_cpu_profiler_multiprocess()
+        )
         self.cpu_profiler_dev_mode_entries = (
-            self.main.conf.get_cpu_profiler_dev_mode_entries())
-        self.cpu_profiler_output_limit \
-            = self.main.conf.get_cpu_profiler_output_limit(),
+            self.main.conf.get_cpu_profiler_dev_mode_entries()
+        )
+        self.cpu_profiler_output_limit = (
+            self.main.conf.get_cpu_profiler_output_limit(),
+        )
         self.cpu_profiler_sampling_interval = (
-            self.main.conf.get_cpu_profiler_sampling_interval())
-        
+            self.main.conf.get_cpu_profiler_sampling_interval()
+        )
+
         self.memory_profiler_mode = self.main.conf.get_memory_profiler_mode()
         self.memory_profiler_enabled = (
-            self.main.conf.get_memory_profiler_enable())
+            self.main.conf.get_memory_profiler_enable()
+        )
         self.memory_profiler_multiprocess = (
-            self.main.conf.get_memory_profiler_multiprocess())
-        
-        
+            self.main.conf.get_memory_profiler_multiprocess()
+        )
+
     def cpu_profiler_init(self):
         if not self.cpu_profiler_enabled:
             return
 
         from slips_files.common.performance_profilers.cpu_profiler import (
-            CPUProfiler)
+            CPUProfiler,
+        )
 
         try:
             if (
@@ -42,9 +47,7 @@ class ProfilersManager:
             ):
                 args = sys.argv
                 if args[-1] != "--no-recurse":
-                    tracer_entries = str(
-                        self.cpu_profiler_dev_mode_entries
-                    )
+                    tracer_entries = str(self.cpu_profiler_dev_mode_entries)
                     viz_args = [
                         "viztracer",
                         "--tracer_entries",
@@ -78,13 +81,12 @@ class ProfilersManager:
         except Exception as e:
             print(e)
             self.cpu_profiler_enabled = False
-    
+
     def cpu_profiler_release(self):
-        if not hasattr(self, "cpuProfilerEnabled"):
+        if not hasattr(self, "cpu_profiler_enabled"):
             return
-            
-        if (self.cpu_profiler_enabled
-                and not self.cpu_profiler_multiprocess):
+
+        if self.cpu_profiler_enabled and not self.cpu_profiler_multiprocess:
             self.cpu_profiler.stop()
             self.cpu_profiler.print()
 
@@ -95,6 +97,7 @@ class ProfilersManager:
         from slips_files.common.performance_profilers.memory_profiler import (
             MemoryProfiler,
         )
+
         output_dir = os.path.join(self.args.output, "memoryprofile/")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -107,11 +110,9 @@ class ProfilersManager:
         )
         self.memory_profiler.start()
 
-
     def memory_profiler_release(self):
         if (
-            hasattr(self, "memoryProfilerEnabled")
+            hasattr(self, "memory_profiler_enabled")
             and self.memory_profiler_enabled
         ):
             self.memory_profiler.stop()
-
