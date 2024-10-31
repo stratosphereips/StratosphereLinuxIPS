@@ -2,7 +2,7 @@ from typing import List
 
 from ..messaging.network_bridge import NetworkBridge
 from ..model.peer import PeerInfo
-from ..persistence.trust import TrustDatabase
+from ..persistance.trust import SlipsTrustDatabase
 from ..protocols.initial_trusl import InitialTrustProtocol
 from ..protocols.recommendation import RecommendationProtocol
 
@@ -11,7 +11,7 @@ class PeerListUpdateProtocol:
     """Protocol handling situations when peer list was updated."""
 
     def __init__(self,
-                 trust_db: TrustDatabase,
+                 trust_db: SlipsTrustDatabase,
                  bridge: NetworkBridge,
                  recommendation_protocol: RecommendationProtocol,
                  trust_protocol: InitialTrustProtocol

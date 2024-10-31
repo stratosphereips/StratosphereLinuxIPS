@@ -7,7 +7,7 @@ from ..model.aliases import Target
 from ..model.configuration import TrustModelConfiguration
 from ..model.peer import PeerInfo
 from ..model.threat_intelligence import ThreatIntelligence, SlipsThreatIntelligence
-from ..persistence.trust import TrustDatabase
+from ..persistance.trust import SlipsTrustDatabase
 from ..protocols.initial_trusl import InitialTrustProtocol
 from ..protocols.opinion import OpinionAggregator
 from ..protocols.protocol import Protocol
@@ -17,7 +17,7 @@ class AlertProtocol(Protocol):
     """Protocol that reacts and dispatches alerts."""
 
     def __init__(self,
-                 trust_db: TrustDatabase,
+                 trust_db: SlipsTrustDatabase,
                  bridge: NetworkBridge,
                  trust_protocol: InitialTrustProtocol,
                  configuration: TrustModelConfiguration,

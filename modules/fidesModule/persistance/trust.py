@@ -15,7 +15,7 @@ from ..utils.time import now
 # because this will be implemented
 # noinspection DuplicatedCode
 class SlipsTrustDatabase(TrustDatabase):
-    """Trust database implementation that uses Slips redis as a storage."""
+    """Trust database implementation that uses Slips redis and own SQLite as a storage."""
 
     def __init__(self, configuration: TrustModelConfiguration, db : DBManager, sqldb : SQLiteDB):
         super().__init__(configuration)

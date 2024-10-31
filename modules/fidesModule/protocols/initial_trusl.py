@@ -3,7 +3,7 @@ from ..evaluation.service.process import process_service_interaction
 from ..model.configuration import TrustModelConfiguration, TrustedEntity
 from ..model.peer import PeerInfo
 from ..model.peer_trust_data import PeerTrustData, trust_data_prototype
-from ..persistence.trust import TrustDatabase
+from ..persistance.trust import SlipsTrustDatabase
 from ..protocols.recommendation import RecommendationProtocol
 from ..utils.logger import Logger
 
@@ -12,7 +12,7 @@ logger = Logger(__name__)
 
 class InitialTrustProtocol:
     def __init__(self,
-                 trust_db: TrustDatabase,
+                 trust_db: SlipsTrustDatabase,
                  configuration: TrustModelConfiguration,
                  recommendation_protocol: RecommendationProtocol
                  ):

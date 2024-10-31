@@ -9,8 +9,8 @@ from ..model.configuration import TrustModelConfiguration
 from ..model.peer import PeerInfo
 from ..model.peer_trust_data import PeerTrustData
 from ..model.threat_intelligence import ThreatIntelligence, SlipsThreatIntelligence
-from ..persistence.threat_intelligence import ThreatIntelligenceDatabase
-from ..persistence.trust import TrustDatabase
+from ..persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
+from ..persistance.trust import SlipsTrustDatabase
 from ..protocols.initial_trusl import InitialTrustProtocol
 from ..protocols.opinion import OpinionAggregator
 from ..protocols.protocol import Protocol
@@ -23,8 +23,8 @@ class ThreatIntelligenceProtocol(Protocol):
     """Class handling threat intelligence requests and responses."""
 
     def __init__(self,
-                 trust_db: TrustDatabase,
-                 ti_db: ThreatIntelligenceDatabase,
+                 trust_db: SlipsTrustDatabase,
+                 ti_db: SlipsThreatIntelligenceDatabase,
                  bridge: NetworkBridge,
                  configuration: TrustModelConfiguration,
                  aggregator: OpinionAggregator,

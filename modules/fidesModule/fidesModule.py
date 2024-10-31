@@ -1,4 +1,4 @@
-# Must imports
+# Must import
 from slips_files.common.imports import *
 
 from slips_files.common.parsers.config_parser import ConfigParser # solves slips_config
@@ -137,11 +137,11 @@ class fidesModule(IModule):
         """This is executed every time when trust model was able to create an aggregated network opinion."""
         #logger.info(f'Callback: Target: {ti.target}, Score: {ti.score}, Confidence: {ti.confidence}.')
         # TODO: [S+] document that we're sending this type
-        self.db.publish("fides2slips", json.dumps(asdict(ti)))
+        self.db.publish("fides2slips", json.dumps(ti.to_dict()))
 
-    def __format_and_print(self, level: str, msg: str):
-        # TODO: [S+] determine correct level for trust model log levels
-        self.__output.put(f"33|{self.name}|{level} {msg}")
+    # def __format_and_print(self, level: str, msg: str):
+    #     # TODO: [S+] determine correct level for trust model log levels
+    #     self.__output.print(f"33|{self.name}|{level} {msg}")
 
     def pre_main(self):
         """
