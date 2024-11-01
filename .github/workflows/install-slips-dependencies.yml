@@ -42,12 +42,14 @@ jobs:
           /var/lib/apt/lists
         key: apt-cache
 
-    - name: Set up Python
+    - name: Set up Python with caching enabled
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
-      run: pip install -r install/requirements.txt
+
+    - name: Install Python dependencies
+      run: python3 -m pip install -r install/requirements.txt
 
     - name: Install Zeek
       run: |
