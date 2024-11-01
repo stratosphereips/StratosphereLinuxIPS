@@ -8,11 +8,11 @@ on:
     inputs:
       zeek-repo-url:
         description: 'Zeek repository URL'
-        required: true
+        required: false
         default: 'http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/'
       zeek-key-url:
         description: 'Zeek key URL'
-        required: true
+        required: false
         default: 'https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key'
       python-version:
         description: 'Python version to set up'
