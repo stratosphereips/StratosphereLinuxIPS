@@ -10,14 +10,17 @@ on:
         description: 'Zeek repository URL'
         required: false
         default: 'http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/'
+        type: string
       zeek-key-url:
         description: 'Zeek key URL'
         required: false
         default: 'https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key'
+        type: string
       python-version:
         description: 'Python version to set up'
         required: false
         default: '3.10.12'
+        type: string
 
 jobs:
   install-dependencies:
