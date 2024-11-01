@@ -19,12 +19,14 @@ jobs:
       run: sysctl vm.overcommit_memory=1
 
     - name: Install APT dependencies
-      run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
+      run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install $(cat install/apt_dependencies.txt)
 
-    - name: Cache APT packages
+    - name: Save APT Cache
       uses: actions/cache@v3
       with:
-        path: /var/cache/apt
+        path: |
+          /var/cache/apt/archives
+          /var/lib/apt/lists
         key: apt-cache
 
     - name: Install Zeek
@@ -34,12 +36,12 @@ jobs:
         sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
+
     - name: Cache Zeek Build
       uses: actions/cache@v3
       with:
         path: /opt/zeek
         key: zeek-cache
-
 
     - name: Set up Python 3.10.12
       uses: actions/setup-python@v5
@@ -121,11 +123,21 @@ jobs:
         path: /opt/zeek
         key: zeek-cache
 
-    - name: Restore APT packages
+    - name: Restore APT cache
       uses: actions/cache@v3
       with:
-        path: /var/cache/apt
+        path: |
+          /var/cache/apt/archives
+          /var/lib/apt/lists
         key: apt-cache
+
+
+    - name: Install apt dependencies (from cache if possible)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y $(cat install/apt_dependencies.txt)
+
+
 
     - name: Start redis server
       run: redis-server --daemonize yes
