@@ -7,7 +7,7 @@ on:
       - 'develop'
 
 jobs:
-  build-zeek:
+  install-dependencies:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
@@ -18,8 +18,16 @@ jobs:
     - name: Enable memory overcommit (for redis)
       run: sysctl vm.overcommit_memory=1
 
-    - name: Install dependencies
+    - name: Install APT dependencies
       run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
+
+    - name: Cache APT packages
+      uses: actions/cache@v3
+      with:
+        path: /var/cache/apt
+        key: ${{ runner.os }}-apt-${{ hashFiles('**/apt-packages.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-apt-
 
     - name: Install Zeek
       run: |
@@ -34,11 +42,29 @@ jobs:
         path: /opt/zeek
         key: ${{ runner.os }}-zeek
 
+    - name: Set up Python 3.10.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10.12"
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python3 -m pip install --no-cache-dir -r install/requirements.txt
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
   tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 1800
-    # make this one depend on the first job
-    needs: build-zeek
+    # make this job depend on the first job
+    needs: install-dependencies
 
     strategy:
       matrix:
@@ -106,15 +132,22 @@ jobs:
         path: /opt/zeek
         key: ${{ runner.os }}-zeek
 
-    - name: Set up Python 3.10.12
-      uses: actions/setup-python@v5
+    - name: Restore APT packages
+      uses: actions/cache@v3
       with:
-        python-version: "3.10.12"
+        path: /var/cache/apt
+        key: ${{ runner.os }}-apt-${{ hashFiles('**/apt-packages.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-apt-
 
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python3 -m pip install --no-cache-dir -r install/requirements.txt
+    - name: Restore pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
 
     - name: Start redis server
       run: redis-server --daemonize yes
