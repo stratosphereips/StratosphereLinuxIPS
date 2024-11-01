@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 1800
     # make this job depend on the first job
-    needs: install-dependencies
+    needs: install-dependencies-using-reusable-workflow
 
     strategy:
       matrix:
