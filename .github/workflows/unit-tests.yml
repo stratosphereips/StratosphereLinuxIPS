@@ -25,9 +25,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: /var/cache/apt
-        key: ${{ runner.os }}-apt-${{ hashFiles('**/apt-packages.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-apt-
+        key: apt-cache
 
     - name: Install Zeek
       run: |
@@ -40,7 +38,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: /opt/zeek
-        key: ${{ runner.os }}-zeek
+        key: zeek-cache
 
     - name: Set up Python 3.10.12
       uses: actions/setup-python@v5
@@ -56,9 +54,9 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        key: pip-cache
+
+
 
   tests:
     runs-on: ubuntu-22.04
@@ -130,24 +128,19 @@ jobs:
       uses: actions/cache@v3
       with:
         path: /opt/zeek
-        key: ${{ runner.os }}-zeek
+        key: zeek-cache
 
     - name: Restore APT packages
       uses: actions/cache@v3
       with:
         path: /var/cache/apt
-        key: ${{ runner.os }}-apt-${{ hashFiles('**/apt-packages.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-apt-
+        key: apt-cache
 
     - name: Restore pip dependencies
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-
+        key: pip-cache
 
     - name: Start redis server
       run: redis-server --daemonize yes
