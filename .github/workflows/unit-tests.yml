@@ -118,12 +118,19 @@ jobs:
         fetch-depth: ''
 
     - name: Restore Zeek Build from Cache
+      id: zeek-cache
       uses: actions/cache@v3
       with:
         path: /opt/zeek
         key: zeek-cache
 
+    - if: ${{ steps.zeek-cache.outputs.cache-hit == 'true' }}
+      name: Echo restored from cache
+      continue-on-error: true
+      run: echo "Restored Zeek dependencies from cache successfully"
+
     - name: Restore APT cache
+      id: apt-cache
       uses: actions/cache@v3
       with:
         path: |
@@ -131,12 +138,20 @@ jobs:
           /var/lib/apt/lists
         key: apt-cache
 
+    - if: ${{ steps.apt-cache.outputs.cache-hit == 'true' }}
+      name: Echo restored from cache
+      continue-on-error: true
+      run: echo "Restored APT dependencies from cache successfully"
+
+    - name: Install Python dependencies (from cache if possible)
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install -r install/requirements.txt
 
     - name: Install apt dependencies (from cache if possible)
       run: |
         sudo apt-get update
         sudo apt-get install -y $(cat install/apt_dependencies.txt)
-
 
 
     - name: Start redis server
