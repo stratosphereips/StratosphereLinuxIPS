@@ -10,7 +10,7 @@ on:
 jobs:
   # uses the common workflow that builds slips
   install-dependencies-using-reusable-workflow:
-    uses: ./.github/workflows/install-slips-dependencies.yaml
+    uses: ./.github/workflows/install-slips-dependencies.yml
 
   unit-tests:
     runs-on: ubuntu-22.04
