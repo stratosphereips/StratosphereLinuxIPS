@@ -6,42 +6,17 @@ on:
       - 'master'
       - 'develop'
 
+
 jobs:
-  install-dependencies:
-    runs-on: ubuntu-22.04
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.ref }}
-        fetch-depth: ''
+  # uses the common workflow that builds slips
+  install-dependencies-using-reusable-workflow:
+    uses: ./.github/workflows/install-slips-dependencies.yaml
 
-    - name: Enable memory overcommit (for redis)
-      run: sysctl vm.overcommit_memory=1
-
-    - name: Install APT dependencies
-      run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install $(cat install/apt_dependencies.txt)
-
-    - name: Save APT Cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          /var/cache/apt/archives
-          /var/lib/apt/lists
-        key: apt-cache
-
-    - name: Set up Python 3.10.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10.12"
-        cache: 'pip' # caching pip dependencies
-        run: pip install -r install/requirements.txt
-
-
-  tests:
+  unit-tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 1800
     # make this job depend on the first job
-    needs: install-dependencies
+    needs: install-dependencies-using-reusable-workflow
 
     strategy:
       matrix:
