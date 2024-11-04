@@ -115,7 +115,7 @@ class ModuleFactory:
         start_redis_server=True,
     ):
         """
-        flush_db is False by default  because we use this funtion to check
+        flush_db is False by default  because we use this function to check
         the db after integration tests to make sure everything's going fine
         """
         # to prevent config/redis.conf from being overwritten
