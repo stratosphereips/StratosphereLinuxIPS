@@ -49,7 +49,7 @@ COPY . ${SLIPS_DIR}
 WORKDIR ${SLIPS_DIR}
 
 RUN pip3 install --no-cache-dir --upgrade pip  \
-    && egrep -v "tensorflow|recommonmark|Keras|scipy|pytest|flask|tqdm|coverage|yappi|pre-commit|ruff|protobuf|black|wheel|scikit-learn|scikit_learn|slackclient|matplotlib|stix2|cabby|pandas|setuptools|numpy|certifi" install/requirements.txt | xargs -n 1 pip install \
+    && grep -v -f docker/light/excluded_libs.txt install/requirements.txt | xargs -n 1 pip install \
     && pip freeze \
     && chmod 774 slips.py \
     && git init \
