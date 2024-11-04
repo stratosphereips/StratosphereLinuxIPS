@@ -39,7 +39,9 @@ jobs:
         key: zeek-cache
 
     - name: Create Zeek symlink
-      run: sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+      run: |
+        sudo apt install -y --no-install-recommends zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
     - name: Restore APT cache
       id: apt-cache
