@@ -38,9 +38,6 @@ jobs:
         path: /opt/zeek
         key: zeek-cache
 
-    - name: Create Zeek symlink
-      run: sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
-
     - name: Restore APT cache
       id: apt-cache
       uses: actions/cache@v3
@@ -50,15 +47,24 @@ jobs:
           /var/lib/apt/lists
         key: apt-cache
 
-    - name: Install Python dependencies (from cache if possible)
+    - name: Install Zeek
       run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install -r install/requirements.txt
+        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+        sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
 
     - name: Install apt dependencies (from cache if possible)
       run: |
         sudo apt-get update
         sudo apt-get install -y $(cat install/apt_dependencies.txt)
+
+    - name: Install Python dependencies (from cache if possible)
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install -r install/requirements.txt
+
 
 
     - name: Start redis server
