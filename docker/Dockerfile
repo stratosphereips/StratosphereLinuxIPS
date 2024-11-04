@@ -70,14 +70,14 @@ RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}
 
-COPY P2P-image $SLIPS_DIR
+COPY . $SLIPS_DIR
 
 RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
     && cd modules/kalipso \
-    && npm install \
+    && npm install
 
 
 # build the pigeon and add pigeon to path
