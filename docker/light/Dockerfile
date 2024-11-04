@@ -48,9 +48,32 @@ COPY . ${SLIPS_DIR}
 
 WORKDIR ${SLIPS_DIR}
 
+RUN cd modules \
+&& rm -rf \
+	rnn_cc_detection/ \
+	timeline/ \
+	kalipso/ \
+	p2ptrust/ \
+	flowmldetection/ \
+	cyst/ \
+	cesnet/ \
+	exporting_alerts/ \
+	riskiq/ \
+	template/ \
+	blocking/ \
+	virustotal/ \
+&& cd .. \
+&& rm -rf dataset/ docs/  tests/ \
+&& rm kalipso.sh \
+  package.json \
+  pytest.ini \
+  webinterface.sh \
+  CITATION.cff \
+  CHANGELOG.md \
+  conftest.py
+
 RUN pip3 install --no-cache-dir --upgrade pip  \
     && grep -v -f docker/light/excluded_libs.txt install/requirements.txt | xargs -n 1 pip install \
-    && pip freeze \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git
