@@ -38,10 +38,8 @@ jobs:
         path: /opt/zeek
         key: zeek-cache
 
-    - if: ${{ steps.zeek-cache.outputs.cache-hit == 'true' }}
-      name: Echo restored from cache
-      continue-on-error: true
-      run: echo "Restored Zeek dependencies from cache successfully"
+    - name: Create Zeek symlink
+      run: sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
     - name: Restore APT cache
       id: apt-cache
@@ -51,11 +49,6 @@ jobs:
           /var/cache/apt/archives
           /var/lib/apt/lists
         key: apt-cache
-
-    - if: ${{ steps.apt-cache.outputs.cache-hit == 'true' }}
-      name: Echo restored from cache
-      continue-on-error: true
-      run: echo "Restored APT dependencies from cache successfully"
 
     - name: Install Python dependencies (from cache if possible)
       run: |
