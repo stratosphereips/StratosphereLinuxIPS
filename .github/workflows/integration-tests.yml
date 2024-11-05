@@ -33,14 +33,14 @@ jobs:
 
     - name: Restore Zeek Build from Cache
       id: zeek-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: /opt/zeek
         key: zeek-cache
 
     - name: Restore APT cache
       id: apt-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           /var/cache/apt/archives
