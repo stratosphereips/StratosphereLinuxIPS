@@ -1,4 +1,4 @@
-name: CI-production-publishing-slips-image
+name: CI-production-publishing-slips-images
 
 on:
   push:
@@ -40,7 +40,7 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build and push Slips image using dockerfile
+    - name: Build and push the main Slips image
       id: docker_build_slips
       uses: docker/build-push-action@v6
       with:
@@ -50,4 +50,16 @@ jobs:
         tags: |
           stratosphereips/slips:latest
           stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        push: true
+
+    - name: Build and push the light Slips image
+      id: docker_build_light_slips
+      uses: docker/build-push-action@v6
+      with:
+        allow: network.host
+        context: ./
+        file: ./docker/light/Dockerfile
+        tags: |
+          stratosphereips/slips_light:latest
+          stratosphereips/slips_light:${{ env.SLIPS_VERSION }}
         push: true

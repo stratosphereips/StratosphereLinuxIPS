@@ -43,10 +43,20 @@ flow = Conn(
     "",
 )
 
+random_port = 6379
+
+
+def get_random_port():
+    global random_port
+    random_port += 1
+    return random_port
+
 
 def test_getProfileIdFromIP():
     """unit test for add_profile and getProfileIdFromIP"""
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
 
     # add a profile
     db.add_profile("profile_192.168.1.1", "00:00")
@@ -57,7 +67,9 @@ def test_getProfileIdFromIP():
 def test_timewindows():
     """unit tests for addNewTW , getLastTWforProfile and
     getFirstTWforProfile"""
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     profileid = "profile_192.168.1.1"
     # add a profile
     db.add_profile(profileid, "00:00")
@@ -70,7 +82,9 @@ def test_timewindows():
 
 
 def test_add_ips():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     # add a profile
     db.add_profile(profileid, "00:00")
     # add a tw to that profile
@@ -82,7 +96,9 @@ def test_add_ips():
 
 
 def test_add_port():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     new_flow = flow
     new_flow.state = "Not Established"
     db.add_port(profileid, twid, flow, "Server", "Dst")
@@ -93,7 +109,9 @@ def test_add_port():
 
 
 def test_set_evidence():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     attacker: Attacker = Attacker(
         direction=Direction.SRC, attacker_type=IoCType.IP, value=test_ip
     )
@@ -125,7 +143,9 @@ def test_set_evidence():
 
 def test_setInfoForDomains():
     """tests setInfoForDomains, setNewDomain and getDomainData"""
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     domain = "www.google.com"
     domain_data = {"threatintelligence": "sample data"}
     db.set_info_for_domains(domain, domain_data)
@@ -136,7 +156,9 @@ def test_setInfoForDomains():
 
 
 def test_subscribe():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     # invalid channel
     assert db.subscribe("invalid_channel") is False
     # valid channel, shoud return a pubsub object
@@ -145,7 +167,9 @@ def test_subscribe():
 
 def test_profile_moddule_labels():
     """tests set and get_profile_module_label"""
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     module_label = "malicious"
     module_name = "test"
     db.set_profile_module_label(profileid, module_name, module_label)
@@ -155,7 +179,9 @@ def test_profile_moddule_labels():
 
 
 def test_add_mac_addr_to_profile():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     ipv4 = "192.168.1.5"
     profileid_ipv4 = f"profile_{ipv4}"
     mac_addr = "00:00:5e:00:53:af"
@@ -179,7 +205,7 @@ def test_add_mac_addr_to_profile():
     assert ipv6 in db.r.hget("MAC", mac_addr)
     # make sure the ipv4 is associated with this
     # ipv6 profile
-    assert ipv4 in str(db.r.hmget(profileid_ipv6, "IPv4"))
+    assert ipv4 in db.get_ipv4_from_profile(profileid_ipv6)
 
     # make sure the ipv6 is associated with the
     # profile that has the same ipv4 as the mac
@@ -187,7 +213,9 @@ def test_add_mac_addr_to_profile():
 
 
 def test_get_the_other_ip_version():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     # profileid is ipv4
     ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
     db.set_ipv6_of_profile(profileid, ipv6)
@@ -215,7 +243,9 @@ def test_get_the_other_ip_version():
     ],
 )
 def test_add_tuple(tupleid: str, symbol, expected_direction, role, flow):
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
     assert symbol[0] in db.r.hget(
         f"profile_{flow.saddr}_{twid}", expected_direction
@@ -233,7 +263,9 @@ def test_add_tuple(tupleid: str, symbol, expected_direction, role, flow):
 def test_update_max_threat_level(
     max_threat_level, cur_threat_level, expected_max
 ):
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     db.set_max_threat_level(profileid, max_threat_level)
     assert (
         db.update_max_threat_level(profileid, cur_threat_level) == expected_max

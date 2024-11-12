@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.1.2
+Slips v1.1.3
 </h1>
 
 
@@ -120,7 +120,7 @@ Then navigate to ```http://localhost:55000/``` from your browser.
 For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
 
 
-##### Kalispo (CLI-Interface)
+##### Kalipso (CLI-Interface)
 
     ./kalipso.sh
 
@@ -182,6 +182,7 @@ Slips key features are:
 * **Peer-to-Peer (P2P) Module**: Slips includes a complex automatic system to find other peers in the network and share IoC data automatically in a balanced, trusted manner. The P2P module can be enabled as needed.
 * **Docker Implementation**: Running Slips through Docker on Linux systems is simplified, allowing real-time traffic analysis.
 * **Detailed Documentation**: Slips provides detailed documentation guiding users through usage instructions for efficient utilization of its features.
+* **Federated learning** Using the feel_project submodule. for more information [check the docs](https://github.com/stratosphereips/feel_project/blob/main/docs/Federated_Learning.md)
 
 
 # Contributing

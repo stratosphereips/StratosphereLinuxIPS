@@ -61,5 +61,3 @@ if __name__ == "__main__":
         # interactive mode
         slips.start()
 
-    slips.cpu_profiler_release()
-    slips.memory_profiler_release()
