@@ -179,7 +179,9 @@ def test_profile_moddule_labels():
 
 
 def test_add_mac_addr_to_profile():
-    db = ModuleFactory().create_db_manager_obj(1234, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
     ipv4 = "192.168.1.5"
     profileid_ipv4 = f"profile_{ipv4}"
     mac_addr = "00:00:5e:00:53:af"

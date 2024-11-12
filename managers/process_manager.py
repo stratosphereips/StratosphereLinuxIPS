@@ -711,6 +711,10 @@ class ProcessManager:
             if self.main.conf.export_labeled_flows():
                 format_ = self.main.conf.export_labeled_flows_to().lower()
                 self.main.db.export_labeled_flows(format_)
+                
+            self.main.profilers_manager.cpu_profiler_release()
+            self.main.profilers_manager.memory_profiler_release()
+
 
             # if store_a_copy_of_zeek_files is set to yes in slips.yaml
             # copy the whole zeek_files dir to the output dir
