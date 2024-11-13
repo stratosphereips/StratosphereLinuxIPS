@@ -376,7 +376,7 @@ class SetEvidnceHelper:
         confidence = round(confidence, 2)  # for readability
         description = (
             f"Possible DGA or domain scanning. {flow.saddr} "
-            f"failed to resolve {nxdomains} domains"
+            f"failed to resolve {nxdomains} different domains"
         )
 
         evidence: Evidence = Evidence(

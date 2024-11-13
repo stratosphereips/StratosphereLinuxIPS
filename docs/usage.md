@@ -14,14 +14,17 @@ It's recommended to use PCAPs.
 
 All the input flows are converted to an internal format. So once read, Slips works the same with all of them.
 
-After Slips was run on the traffic, the Slips output can be analyzed with Kalipso GUI interface. In this section, we will explain how to execute each type of file in Slips, and the output can be analyzed with Kalipso.
+After Slips runs on the given traffic, the output can be analyzed with Kalipso GUI interface.
 
-Either you are [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-and-running-slips-inside-a-docker) or [locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-in-your-own-computer), you can run Slips using the same below commands and configurations.
+In this section, we will explain how to execute each type of file in Slips.
+
+Either you are [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#slips-in-docker) or [locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-natively), you can run Slips using the same below commands and configurations.
 
 
 ## Reading the input
 
-The table below shows the commands Slips uses for different inputs. The first part of the command **./slips.py -c config/slips.yaml** is same, the second part changes depending on the input type. Also, the user can execute **./slips.py --help** to find correct argument to run Slips on each type of the file.
+The table below shows the different parameter Slips uses for different inputs.
+
 
 <style>
 table {
@@ -96,7 +99,7 @@ separately. Configuration of the **config/slips.yaml** is described [here](#modi
 
 Slips has 2 modes, interactive and daemonized.
 
-**Daemonized** : means , output, logs and alerts are written in files.
+**Daemonized** : Slips runs as a daemon in the background. which means all output, logs and alerts are written in files and nothing is displayed in the terminal.
 
 In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and
 ```logsfile``` files specified in ```config/slips.yaml```
@@ -108,44 +111,40 @@ stderr = /var/log/slips/error.log
 logsfile = /var/log/slips/slips.log
 
 NOTE: Since ```/val/log/``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```,
-creat /var/log/slips as root and slips will use it by default.
+create /var/log/slips as root and slips will use it by default.
 
-If slips can't write there, slips will store the logs in the ```Slips/output/``` dir by default.
+If slips can't write there, slips will store the logs in the ```Slips/output/<some_dir>``` dir by default.
 
 NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
- instead of the otput_dir specified in config/slips.yaml
+ instead of the output_dir specified in `config/slips.yaml`
 
 
-
-This is the not the default mode, to use it, run slips with -D
+This is not the default mode, to use it, run slips with -D
 
 
 ```./slips.py -i wlp3s0 -D```
 
 To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
 
+Only one instance of the daemon can run at a time.
 
-Only one instance of the daemon can be running at a time.
-
-**Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
+**Interactive** : For viewing output, logs and alerts in your terminal.
 
 This is the default mode, It doesn't require any flags.
 
-Output files are stored in ```output/``` dir.
+Output files are stored in ```output/<some_dir>``` dir. the output directory used will be logged to your terminal.
+
+
+---
 
 By default you don't need root to run slips, but if you changed the default output directory to a dir that is
 owned by root, you will need to run Slips using sudo or give the current user enough permission so that
 slips can write to those files.
 
 
-
-For detailed information on how slips uses redis check the
-[Running several slips instances section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#running-several-slips-instances)
-
-
 ## Running Several slips instances
 
-By default, Slips will assume you are running only 1 instance and will use the redis port 6379 on each run.
+By default, Slips will assume you are running only one instance and will use the redis port 6379 on each run.
 
 You can run several instances of slips at the same time using the -m flag, and the output of each instance will be stored in
 ```output/filename_timestamp/```  directory.

@@ -1139,8 +1139,8 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
     def is_inbound_traffic(self, ip: str, ip_state: str) -> bool:
         """
         checks if the given ip is connecting to us
-        returns true of the given conditions
-        1. ip is a saddr
+        returns true on the given conditions
+        1. the given ip is a saddr (aka someone connecting TO us)
         2. ip is public
         3. ip is not our host ip
         """
