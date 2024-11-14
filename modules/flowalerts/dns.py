@@ -311,7 +311,7 @@ class DNS(IFlowalertsAnalyzer):
             or flow.query.endswith(".arpa")
             or flow.query.endswith(".local")
             or self.flowalerts.whitelist.domain_analyzer.is_whitelisted(
-                flow.query, Direction.SRC, "alerts"
+                flow.query, Direction.DST, "alerts"
             )
         ):
             return False
