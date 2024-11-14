@@ -224,7 +224,7 @@ class DNS(IFlowalertsAnalyzer):
             # this is not a DNS without resolution
             return True
 
-    def is_interface_timeout_reached(self, flow):
+    def is_interface_timeout_reached(self):
         """
         To avoid false positives in case of an interface
         don't alert ConnectionWithoutDNS until 30 minutes has passed after
@@ -249,7 +249,7 @@ class DNS(IFlowalertsAnalyzer):
         if not self.should_detect_dns_without_conn(flow):
             return False
 
-        if not self.is_interface_timeout_reached(flow):
+        if not self.is_interface_timeout_reached():
             return False
 
         if self.is_any_flow_answer_contacted(profileid, twid, flow):

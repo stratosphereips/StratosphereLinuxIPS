@@ -418,7 +418,7 @@ class Conn(IFlowalertsAnalyzer):
             pass
         return False
 
-    def is_interface_timeout_reached(self, flow) -> bool:
+    def is_interface_timeout_reached(self) -> bool:
         """
         To avoid false positives in case of an interface
         don't alert ConnectionWithoutDNS until 30 minutes has passed after
@@ -452,7 +452,7 @@ class Conn(IFlowalertsAnalyzer):
         # We dont have yet the dhcp in the redis, when is there check it
         # if self.db.get_dhcp_servers(daddr):
         # continue
-        if not self.is_interface_timeout_reached(flow):
+        if not self.is_interface_timeout_reached():
             return False
 
         # search 24hs back for a dns resolution
