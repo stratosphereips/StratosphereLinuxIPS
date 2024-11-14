@@ -431,7 +431,7 @@ class Conn(IFlowalertsAnalyzer):
         start_time = self.db.get_slips_start_time()
         now = datetime.now()
         diff = utils.get_time_diff(start_time, now, return_type="minutes")
-        # less than 30 minutes have passed?
+        # 30 minutes have passed?
         return diff >= self.conn_without_dns_interface_wait_time
 
     async def check_connection_without_dns_resolution(
