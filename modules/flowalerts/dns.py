@@ -35,7 +35,7 @@ class DNS(IFlowalertsAnalyzer):
         self.classifier = FlowClassifier()
         self.our_ips = utils.get_own_ips()
         # In mins
-        self.dns_without_conn_interface_wait_time = 30
+        self.dns_without_conn_interface_wait_time = 5
 
     def name(self) -> str:
         return "DNS_analyzer"

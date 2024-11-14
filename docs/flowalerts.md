@@ -66,7 +66,7 @@ so we simply ignore alerts of this type when connected to well known organizatio
 Slips uses it's own lists of organizations and information about them (IPs, IP ranges, domains, and ASNs). They are stored in ```slips_files/organizations_info``` and they are used to check whether the IP/domain of each flow belong to a known org or not.
 
 Slips doesn't detect 'connection without DNS' when running
-on an interface except for when it's done by this instance's own IP.
+on an interface except for when it's done by this instance's own IP and only after 30 minutes has passed to avoid false positives (assuming the DNS resolution of these connections did happen before slips started).
 
 check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh)
 of the docs for info on how slips detects DoH.
@@ -91,6 +91,8 @@ The domains that are excepted are:
 - Ignore WPAD domain from Windows
 - Ignore domains without a TLD such as the Chrome test domains.
 
+Slips doesn't detect 'DNS resolutions without a connection' when running
+on an interface except for when it's done by this instance's own IP and only after 5 minutes has passed to avoid false positives (assuming the connection did happen and yet to be logged).
 
 
 ## Connection to unknown ports
