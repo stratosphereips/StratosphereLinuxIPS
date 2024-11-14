@@ -1,3 +1,8 @@
+from unittest.mock import (
+    Mock,
+    call,
+)
+
 import redis
 import json
 import time
@@ -178,38 +183,80 @@ def test_profile_moddule_labels():
     assert labels["test"] == "malicious"
 
 
-def test_add_mac_addr_to_profile():
+def test_add_mac_addr_with_new_ipv4():
+    """
+    adding an ipv4 to no cached ip
+    """
     db = ModuleFactory().create_db_manager_obj(
         get_random_port(), flush_db=True
     )
     ipv4 = "192.168.1.5"
     profileid_ipv4 = f"profile_{ipv4}"
     mac_addr = "00:00:5e:00:53:af"
-    # first associate this ip with some mac
+
+    db.rdb.is_gw_mac = Mock(return_value=False)
+    db.r.hget = Mock()
+    db.r.hset = Mock()
+    db.r.hmget = Mock(return_value=[None])  # No entry initially
+
+    # simulate adding a new MAC and IPv4 address
     assert db.add_mac_addr_to_profile(profileid_ipv4, mac_addr) is True
-    assert ipv4 in str(db.r.hget("MAC", mac_addr))
 
-    # now claim that we found another profile
-    # that has the same mac as this one
-    # both ipv4
-    profileid = "profile_192.168.1.6"
-    assert db.add_mac_addr_to_profile(profileid, mac_addr) is False
-    # this ip shouldnt be added to the profile as they're both ipv4
-    assert "192.168.1.6" not in db.r.hget("MAC", mac_addr)
+    # Ensure the IP is associated in the 'MAC' hash
+    db.r.hmget.assert_called_with("MAC", mac_addr)
+    db.r.hset.assert_any_call("MAC", mac_addr, json.dumps([ipv4]))
 
-    # now claim that another ipv6 has this mac
+
+def test_add_mac_addr_with_existing_ipv4():
+    """
+    adding an ipv4 to a cached ipv4
+    """
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
+    ipv4 = "192.168.1.5"
+    mac_addr = "00:00:5e:00:53:af"
+    db.rdb.is_gw_mac = Mock(return_value=False)
+    db.r.hget = Mock()
+    db.r.hset = Mock()
+    db.r.hmget = Mock(return_value=[json.dumps([ipv4])])
+
+    new_profile = "profile_192.168.1.6"
+
+    # try to add a new profile with the same MAC but another IPv4 address
+    assert db.add_mac_addr_to_profile(new_profile, mac_addr) is False
+
+
+def test_add_mac_addr_with_ipv6_association():
+    """
+    adding an ipv6 to a cached ipv4
+    """
+    db = ModuleFactory().create_db_manager_obj(
+        get_random_port(), flush_db=True
+    )
+    ipv4 = "192.168.1.5"
+    profile_ipv4 = "profile_192.168.1.5"
+    mac_addr = "00:00:5e:00:53:af"
+
+    # mock existing entry with ipv6
+    db.rdb.is_gw_mac = Mock(return_value=False)
+    db.rdb.update_mac_of_profile = Mock()
+    db.r.hmget = Mock(return_value=[json.dumps([ipv4])])
+    db.r.hset = Mock()
+    db.r.hget = Mock()
+
     ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
-    profileid_ipv6 = f"profile_{ipv6}"
-    db.add_mac_addr_to_profile(profileid_ipv6, mac_addr)
-    # make sure the mac is associated with his ipv6
-    assert ipv6 in db.r.hget("MAC", mac_addr)
-    # make sure the ipv4 is associated with this
-    # ipv6 profile
-    assert ipv4 in db.get_ipv4_from_profile(profileid_ipv6)
+    profile_ipv6 = f"profile_{ipv6}"
+    # try to associate an ipv6 with the same MAC address
+    assert db.add_mac_addr_to_profile(profile_ipv6, mac_addr)
 
-    # make sure the ipv6 is associated with the
-    # profile that has the same ipv4 as the mac
-    assert ipv6 in str(db.r.hmget(profileid_ipv4, "IPv6"))
+    expected_calls = [
+        call(profile_ipv4, mac_addr),  # call with ipv4 profile id
+        call(profile_ipv6, mac_addr),  # call with ipv6 profile id
+    ]
+    db.rdb.update_mac_of_profile.assert_has_calls(
+        expected_calls, any_order=True
+    )
 
 
 def test_get_the_other_ip_version():
