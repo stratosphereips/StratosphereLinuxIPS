@@ -15,7 +15,6 @@ import redis
 import time
 import json
 import subprocess
-from datetime import datetime
 import ipaddress
 import sys
 import validators
@@ -204,10 +203,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
     @classmethod
     def get_slips_start_time(cls) -> str:
-        """get the time slips started"""
-        if start_time := cls.r.get("slips_start_time"):
-            start_time = utils.convert_format(start_time, "unixtimestamp")
-            return start_time
+        """get the time slips started in unix format"""
+        return cls.r.get("slips_start_time")
 
     @classmethod
     def init_redis_server(cls) -> Tuple[bool, str]:
@@ -363,7 +360,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     @classmethod
     def _set_slips_start_time(cls):
         """store the time slips started (datetime obj)"""
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
+        now = time.time()
         cls.r.set("slips_start_time", now)
 
     def publish(self, channel, msg):

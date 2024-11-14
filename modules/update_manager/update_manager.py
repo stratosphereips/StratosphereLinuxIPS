@@ -912,17 +912,17 @@ class UpdateManager(IModule):
                     return False
 
                 for ioc in file:
-                    date = ioc["InsertDate"]
-                    date = utils.convert_ts_to_tz_aware(date)
-                    diff = utils.get_time_diff(
-                        date, time.time(), return_type="days"
-                    )
+                    date = utils.convert_ts_to_tz_aware(ioc["InsertDate"])
+                    now = utils.convert_ts_to_tz_aware(time.time())
+                    diff = utils.get_time_diff(date, now, return_type="days")
 
                     if diff > self.interval:
                         continue
+
                     domain = ioc["DomainAddress"]
                     if not utils.is_valid_domain(domain):
                         continue
+
                     malicious_domains_dict[domain] = json.dumps(
                         {
                             "description": "",
