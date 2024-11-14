@@ -28,21 +28,21 @@ class Conn(IFlowalertsAnalyzer):
         # thread (we waited for the dns resolution for these connections)
         self.connections_checked_in_conn_dns_timer_thread = []
         self.whitelist = self.flowalerts.whitelist
-        # Threshold how much time to wait when capturing in an interface,
-        # to start reporting connections without DNS
-        # Usually the computer resolved DNS already, so we need to wait a little to report
+        # how much time to wait when running on interface before reporting
+        # connections without DNS? Usually the computer resolved DNS
+        # already, so we need to wait a little to report
         # In mins
         self.conn_without_dns_interface_wait_time = 30
         self.dns_analyzer = DNS(self.db, flowalerts=self)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
+        self.our_ips = utils.get_own_ips()
 
     def read_configuration(self):
         conf = ConfigParser()
         self.long_connection_threshold = conf.long_connection_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
-        self.our_ips = utils.get_own_ips()
         self.client_ips: List[str] = conf.client_ips()
 
     def name(self) -> str:
@@ -377,8 +377,6 @@ class Conn(IFlowalertsAnalyzer):
         """
         checks for the cases that we should ignore the connection without dns
         """
-        # we should ignore this evidence if the ip is ours, whether it's a
-        # private ip or in the list of client_ips
         return (
             flow.type_ != "conn"
             or flow.appproto in ("dns", "icmp")
@@ -391,6 +389,10 @@ class Conn(IFlowalertsAnalyzer):
             # because there's no dns.log to know if the dns was made
             or self.db.get_input_type() == "zeek_log_file"
             or self.db.is_doh_server(flow.daddr)
+            # connection without dns in case of an interface,
+            # should only be detected from the srcip of this device,
+            # not all ips, to avoid so many alerts of this type when port scanning
+            or (self.is_running_non_stop and flow.saddr not in self.our_ips)
         )
 
     def check_if_resolution_was_made_by_different_version(
@@ -416,6 +418,22 @@ class Conn(IFlowalertsAnalyzer):
             pass
         return False
 
+    def is_interface_timeout_reached(self) -> bool:
+        """
+        To avoid false positives in case of an interface
+        don't alert ConnectionWithoutDNS until 30 minutes has passed after
+        starting slips because the dns may have happened before starting slips
+        """
+        if not self.is_running_non_stop:
+            # no timeout
+            return True
+
+        start_time = self.db.get_slips_start_time()
+        now = datetime.now()
+        diff = utils.get_time_diff(start_time, now, return_type="minutes")
+        # 30 minutes have passed?
+        return diff >= self.conn_without_dns_interface_wait_time
+
     async def check_connection_without_dns_resolution(
         self, profileid, twid, flow
     ) -> bool:
@@ -434,26 +452,8 @@ class Conn(IFlowalertsAnalyzer):
         # We dont have yet the dhcp in the redis, when is there check it
         # if self.db.get_dhcp_servers(daddr):
         # continue
-
-        # To avoid false positives in case of an interface
-        # don't alert ConnectionWithoutDNS
-        # until 30 minutes has passed
-        # after starting slips because the dns may have happened before
-        # starting slips
-        if self.is_running_non_stop:
-            # connection without dns in case of an interface,
-            # should only be detected from the srcip of this device,
-            # not all ips, to avoid so many alerts of this type when port scanning
-            saddr = profileid.split("_")[-1]
-            if saddr not in self.our_ips:
-                return False
-
-            start_time = self.db.get_slips_start_time()
-            now = datetime.now()
-            diff = utils.get_time_diff(start_time, now, return_type="minutes")
-            if diff < self.conn_without_dns_interface_wait_time:
-                # less than 30 minutes have passed
-                return False
+        if not self.is_interface_timeout_reached():
+            return False
 
         # search 24hs back for a dns resolution
         if self.db.is_ip_resolved(flow.daddr, 24):

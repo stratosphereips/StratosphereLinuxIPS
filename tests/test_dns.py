@@ -32,6 +32,7 @@ dst_profileid = f"profile_{daddr}"
 )
 def test_should_detect_dns_without_conn(domain, rcode_name, expected_result):
     dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.is_running_non_stop = False
     flow = DNS(
         starttime="1726568479.5997488",
         uid="1234",

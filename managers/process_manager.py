@@ -475,7 +475,7 @@ class ProcessManager:
         returns analysis_time in minutes and slips end_time as a date
         """
         start_time = self.main.db.get_slips_start_time()
-        end_time = utils.convert_format(datetime.now(), utils.alerts_format)
+        end_time = utils.convert_format(datetime.now(), "unixtimestamp")
         return (
             utils.get_time_diff(start_time, end_time, return_type="minutes"),
             end_time,
@@ -711,10 +711,9 @@ class ProcessManager:
             if self.main.conf.export_labeled_flows():
                 format_ = self.main.conf.export_labeled_flows_to().lower()
                 self.main.db.export_labeled_flows(format_)
-                
+
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
-
 
             # if store_a_copy_of_zeek_files is set to yes in slips.yaml
             # copy the whole zeek_files dir to the output dir

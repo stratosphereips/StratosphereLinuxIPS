@@ -265,7 +265,7 @@ class Utils(object):
 
         # convert to the req format
         if required_format == "iso":
-            return datetime_obj.astimezone(self.local_tz).isoformat()
+            return datetime_obj.astimezone().isoformat()
         elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
         else:
@@ -302,7 +302,7 @@ class Utils(object):
 
         given_format = self.get_time_format(ts)
         return (
-            datetime.fromtimestamp(float(ts), tz=self.local_tz)
+            datetime.fromtimestamp(float(ts))
             if given_format == "unixtimestamp"
             else datetime.strptime(ts, given_format)
         )
@@ -415,7 +415,6 @@ class Utils(object):
         except (ipaddress.AddressValueError, ValueError):
             return True
         # Is the IP multicast, private? (including localhost)
-        # local_link or reserved?
         # The broadcast address 255.255.255.255 is reserved.
         return bool(
             (

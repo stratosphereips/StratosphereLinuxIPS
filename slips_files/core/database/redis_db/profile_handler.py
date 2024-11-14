@@ -1229,8 +1229,8 @@ class ProfileHandler:
             return False
 
         # get the ips that belong to this mac
-        cached_ip = self.r.hmget("MAC", mac_addr)[0]
-        if not cached_ip:
+        cached_ips: Optional[List] = self.r.hmget("MAC", mac_addr)[0]
+        if not cached_ips:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset("MAC", mac_addr, ip)
@@ -1241,10 +1241,10 @@ class ProfileHandler:
         else:
             # we found another profile that has the same mac as this one
             # get all the ips, v4 and 6, that are stored with this mac
-            cached_ips = json.loads(cached_ip)
+            cached_ips: List[str] = json.loads(cached_ips)
             # get the last one of them
             found_ip = cached_ips[-1]
-            cached_ips = set(cached_ips)
+            cached_ips: Set[str] = set(cached_ips)
 
             if incoming_ip in cached_ips:
                 # this is the case where we have the given ip already

@@ -2,6 +2,7 @@ import asyncio
 import collections
 import json
 import math
+from datetime import datetime
 from typing import List
 import validators
 
@@ -30,7 +31,11 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_arpa_queries = {}
         # after this number of arpa queries, slips will detect an arpa scan
         self.arpa_scan_threshold = 10
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
+        self.our_ips = utils.get_own_ips()
+        # In mins
+        self.dns_without_conn_interface_wait_time = 5
 
     def name(self) -> str:
         return "DNS_analyzer"
@@ -39,8 +44,7 @@ class DNS(IFlowalertsAnalyzer):
         conf = ConfigParser()
         self.shannon_entropy_threshold = conf.get_entropy_threshold()
 
-    @staticmethod
-    def should_detect_dns_without_conn(flow) -> bool:
+    def should_detect_dns_without_conn(self, flow) -> bool:
         """
         returns False in the following cases
          - All reverse dns resolutions
@@ -65,6 +69,10 @@ class DNS(IFlowalertsAnalyzer):
             or flow.query == "WPAD"
             or flow.rcode_name != "NOERROR"
             or not flow.answers
+            # dns without conn in case of an interface,
+            # should only be detected from the srcip of this device,
+            # not all ips, to avoid so many alerts of this type when port scanning
+            or (self.is_running_non_stop and flow.saddr not in self.our_ips)
         ):
             return False
         return True
@@ -216,6 +224,22 @@ class DNS(IFlowalertsAnalyzer):
             # this is not a DNS without resolution
             return True
 
+    def is_interface_timeout_reached(self):
+        """
+        To avoid false positives in case of an interface
+        don't alert ConnectionWithoutDNS until 30 minutes has passed after
+        starting slips because the dns may have happened before starting slips
+        """
+        if not self.is_running_non_stop:
+            # no timeout
+            return True
+
+        start_time = self.db.get_slips_start_time()
+        now = datetime.now()
+        diff = utils.get_time_diff(start_time, now, return_type="minutes")
+        # 30 minutes have passed?
+        return diff >= self.dns_without_conn_interface_wait_time
+
     async def check_dns_without_connection(
         self, profileid, twid, flow
     ) -> bool:
@@ -223,6 +247,9 @@ class DNS(IFlowalertsAnalyzer):
         Makes sure all cached DNS answers are there in contacted_ips
         """
         if not self.should_detect_dns_without_conn(flow):
+            return False
+
+        if not self.is_interface_timeout_reached():
             return False
 
         if self.is_any_flow_answer_contacted(profileid, twid, flow):

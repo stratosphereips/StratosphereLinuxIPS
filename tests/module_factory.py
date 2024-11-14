@@ -130,8 +130,9 @@ class ModuleFactory:
                 flush_db=flush_db,
                 start_redis_server=start_redis_server,
             )
-        db.r = db.rdb.r
         db.print = Mock()
+        # for easier access to redis db
+        db.r = db.rdb.r
         assert db.get_used_redis_port() == port
         return db
 
