@@ -206,7 +206,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def get_slips_start_time(cls) -> str:
         """get the time slips started"""
         if start_time := cls.r.get("slips_start_time"):
-            start_time = utils.convert_format(start_time, utils.alerts_format)
+            start_time = utils.convert_format(start_time, "unixtimestamp")
             return start_time
 
     @classmethod
