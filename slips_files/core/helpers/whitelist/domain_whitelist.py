@@ -62,7 +62,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         the given domain
         :param domain: domain to check if whitelisted
         :param direction: is the given domain src or dst domain?
-        :param should_ignore: can be flows or alerts
+        :param should_ignore: which whitelist to check? can be flows or alerts
         """
 
         if not isinstance(domain, str):
