@@ -415,7 +415,6 @@ class Utils(object):
         except (ipaddress.AddressValueError, ValueError):
             return True
         # Is the IP multicast, private? (including localhost)
-        # local_link or reserved?
         # The broadcast address 255.255.255.255 is reserved.
         return bool(
             (
