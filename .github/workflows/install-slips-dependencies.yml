@@ -38,7 +38,7 @@ jobs:
       run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install $(cat install/apt_dependencies.txt)
 
     - name: Save APT Cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           /var/cache/apt/archives
