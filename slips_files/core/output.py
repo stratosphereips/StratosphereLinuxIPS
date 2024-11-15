@@ -82,7 +82,7 @@ class Output(IObserver):
     def _read_configuration(self):
         conf = ConfigParser()
         self.printable_twid_width = conf.get_tw_width()
-        self.GID = conf.get_GID()
+        self.GID = conf.get_gid()
         self.UID = conf.get_UID()
 
     def log_branch_info(self, logfile: str):

@@ -5,6 +5,7 @@ from typing import List
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
 import yaml
+from slips_files.common.tensorflow_checker import is_tf_supported
 
 
 class ConfigParser(object):
@@ -587,7 +588,7 @@ class ConfigParser(object):
     def get_UID(self):
         return int(self.read_configuration("Docker", "UID", 0))
 
-    def get_GID(self):
+    def get_gid(self):
         return int(self.read_configuration("Docker", "GID", 0))
 
     def reading_flows_from_cyst(self):
@@ -640,6 +641,9 @@ class ConfigParser(object):
 
         if not self.reading_flows_from_cyst():
             to_ignore.append("cyst")
+
+        if not is_tf_supported():
+            to_ignore += ["flowmldetection", "rnnccdetection"]
 
         return to_ignore
 

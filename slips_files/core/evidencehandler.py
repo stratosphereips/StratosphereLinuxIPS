@@ -107,7 +107,7 @@ class EvidenceHandler(ICore):
             2,
             0,
         )
-        self.GID = conf.get_GID()
+        self.GID = conf.get_gid()
         self.UID = conf.get_UID()
 
         self.popup_alerts = conf.popup_alerts()
