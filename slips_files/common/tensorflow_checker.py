@@ -1,6 +1,24 @@
 import multiprocessing
 
 
+def is_avx_supported():
+    """
+    Illegal instructions are caused by CPUs lack of support for avx
+    instructions
+    """
+    try:
+        with open("/proc/cpuinfo", "r") as cpuinfo:
+            for line in cpuinfo:
+                # look for the flags line and check if avx is listed
+                if line.startswith("flags"):
+                    if "avx" in line.split():
+                        return True
+        return False
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return False
+
+
 def try_import_tensorflow():
     """
     Attempt to import tensorflow in a separate process.
@@ -28,4 +46,5 @@ def is_tf_supported() -> bool:
     if process.exitcode != 0:
         print("TensorFlow import failed. Disabling TensorFlow...")
         return False
-    return True
+
+    return is_avx_supported()
