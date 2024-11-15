@@ -43,7 +43,7 @@ from pathlib import Path
 
 # logger = Logger("SlipsFidesModule")
 
-class fidesModule(IModule):
+class FidesModule(IModule):
     # Name: short name of the module. Do not use spaces
     name = "Fides"
     description = "Trust computation module for P2P interactions."
