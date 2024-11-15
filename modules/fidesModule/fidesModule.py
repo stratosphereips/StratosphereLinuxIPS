@@ -24,20 +24,14 @@ from ..fidesModule.protocols.recommendation import RecommendationProtocol
 from ..fidesModule.protocols.threat_intelligence import ThreatIntelligenceProtocol
 from ..fidesModule.utils.logger import LoggerPrintCallbacks, Logger
 from ..fidesModule.messaging.queueF import RedisSimplexQueue
-from ..fidesModule.originals.abstracts import Module
-from ..fidesModule.originals.database import __database__
-from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
-from ..fidesModule.persistance.trust import SlipsTrustDatabase
 
 
-from ..fidesModule.persistence.trust_in_memory import InMemoryTrustDatabase
-from ..fidesModule.persistence.threat_intelligence_in_memory import InMemoryThreatIntelligenceDatabase
 from ..fidesModule.persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
 from ..fidesModule.persistance.trust import SlipsTrustDatabase
 from ..fidesModule.persistance.sqlite_db import SQLiteDB
 
 from ..fidesModule.model.configuration import load_configuration
-
+from slips_files.core.output import Output
 
 from pathlib import Path
 
@@ -58,7 +52,6 @@ class FidesModule(IModule):
         LoggerPrintCallbacks.append(self.print)
 
         # load trust model configuration
-        #self.__trust_model_config = load_configuration(self.__slips_config.trust_model_path) # TODO fix this to make it work under new management
         current_dir = Path(__file__).resolve().parent
         config_path = current_dir / "config" / "fides.conf.yml"
         self.__trust_model_config = load_configuration(config_path.__str__())

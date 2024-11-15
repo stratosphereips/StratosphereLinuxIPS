@@ -1,6 +1,8 @@
 import sqlite3
 import logging
 from typing import List, Any, Optional
+
+from slips_files.core.output import Output
 from ..model.peer import PeerInfo
 from ..model.peer_trust_data import PeerTrustData
 from ..model.recommendation import Recommendation
@@ -19,7 +21,7 @@ Python has None, SQLite has NULL, conversion is automatic in both ways.
 class SQLiteDB:
     _lock = threading.RLock()
 
-    def __init__(self, logger: logging.Logger, db_path: str) -> None:
+    def __init__(self, logger: Output, db_path: str) -> None:
         """
         Initializes the SQLiteDB instance, sets up logging, and connects to the database.
 
@@ -31,6 +33,9 @@ class SQLiteDB:
         self.connection: Optional[sqlite3.Connection] = None
         self.__connect()
         self.__create_tables()
+
+    def __slips_log(self, txt: str) -> None:
+        self.logger.log_line({"from":"Fides", "txt":txt})
 
     def get_slips_threat_intelligence_by_target(self, target: Target) -> Optional[SlipsThreatIntelligence]:
         """
@@ -370,7 +375,7 @@ class SQLiteDB:
         """
         Establishes a connection to the SQLite database.
         """
-        self.logger.debug(f"Connecting to SQLite database at {self.db_path}")
+        self.__slips_log(f"Connecting to SQLite database at {self.db_path}")
         self.connection = sqlite3.connect(self.db_path)
 
     def __execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[Any]:
@@ -382,7 +387,7 @@ class SQLiteDB:
         :return: List of results returned from the executed query.
         """
         with SQLiteDB._lock:
-            self.logger.debug(f"Executing query: {query}")
+            self.__slips_log(f"Executing query: {query}")
             cursor = self.connection.cursor()
 
             # Split the query string by semicolons to handle multiple queries
@@ -415,7 +420,7 @@ class SQLiteDB:
         columns = ', '.join(data.keys())
         placeholders = ', '.join('?' * len(data))
         query = f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({placeholders})"
-        self.logger.debug(f"Saving data: {data} into table: {table}")
+        self.__slips_log(f"Saving data: {data} into table: {table}")
         self.__execute_query(query, list(data.values()))
 
     def __delete(self, table: str, condition: str, params: Optional[List[Any]] = None) -> None:
@@ -428,7 +433,7 @@ class SQLiteDB:
         :return: None
         """
         query = f"DELETE FROM {table} WHERE {condition}"
-        self.logger.debug(f"Deleting from table: {table} where {condition}")
+        self.__slips_log(f"Deleting from table: {table} where {condition}")
         self.__execute_query(query, params)
 
     def __close(self) -> None:
@@ -436,7 +441,7 @@ class SQLiteDB:
         Closes the SQLite database connection.
         """
         if self.connection:
-            self.logger.debug("Closing database connection")
+            self.__slips_log("Closing database connection")
             self.connection.close()
 
     def __create_tables(self) -> None:
@@ -531,5 +536,5 @@ class SQLiteDB:
         ]
 
         for query in table_creation_queries:
-            self.logger.debug(f"Creating tables with query: {query}")
+            self.__slips_log(f"Creating tables with query: {query}")
             self.__execute_query(query)
