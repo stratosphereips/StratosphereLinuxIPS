@@ -15,8 +15,10 @@ import time
 import asyncio
 import multiprocessing
 
+
 from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
 from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
@@ -60,109 +62,7 @@ class IPInfo(IModule):
         # update asn every 1 month
         self.update_period = 2592000
         self.is_gw_mac_set = False
-        # we can only getthe age of these tlds
-        self.valid_tlds = [
-            ".ac_uk",
-            ".am",
-            ".amsterdam",
-            ".ar",
-            ".at",
-            ".au",
-            ".bank",
-            ".be",
-            ".biz",
-            ".br",
-            ".by",
-            ".ca",
-            ".cc",
-            ".cl",
-            ".club",
-            ".cn",
-            ".co",
-            ".co_il",
-            ".co_jp",
-            ".com",
-            ".com_au",
-            ".com_tr",
-            ".cr",
-            ".cz",
-            ".de",
-            ".download",
-            ".edu",
-            ".education",
-            ".eu",
-            ".fi",
-            ".fm",
-            ".fr",
-            ".frl",
-            ".game",
-            ".global_",
-            ".hk",
-            ".id_",
-            ".ie",
-            ".im",
-            ".in_",
-            ".info",
-            ".ink",
-            ".io",
-            ".ir",
-            ".is_",
-            ".it",
-            ".jp",
-            ".kr",
-            ".kz",
-            ".link",
-            ".lt",
-            ".lv",
-            ".me",
-            ".mobi",
-            ".mu",
-            ".mx",
-            ".name",
-            ".net",
-            ".ninja",
-            ".nl",
-            ".nu",
-            ".nyc",
-            ".nz",
-            ".online",
-            ".org",
-            ".pe",
-            ".pharmacy",
-            ".pl",
-            ".press",
-            ".pro",
-            ".pt",
-            ".pub",
-            ".pw",
-            ".rest",
-            ".ru",
-            ".ru_rf",
-            ".rw",
-            ".sale",
-            ".se",
-            ".security",
-            ".sh",
-            ".site",
-            ".space",
-            ".store",
-            ".tech",
-            ".tel",
-            ".theatre",
-            ".tickets",
-            ".trade",
-            ".tv",
-            ".ua",
-            ".uk",
-            ".us",
-            ".uz",
-            ".video",
-            ".website",
-            ".wiki",
-            ".work",
-            ".xyz",
-            ".za",
-        ]
+        self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     async def open_dbs(self):
@@ -348,13 +248,8 @@ class IPInfo(IModule):
         if domain.endswith(".arpa") or domain.endswith(".local"):
             return False
 
-        # make sure whois supports the given tld
-        for tld in self.valid_tlds:
-            if domain.endswith(tld):
-                # valid tld
-                break
-        else:
-            # tld not supported
+        domain_tld: str = self.whitelist.domain_analyzer.get_tld(domain)
+        if domain_tld not in whois.validTlds():
             return False
 
         cached_data = self.db.get_domain_data(domain)
