@@ -20,7 +20,7 @@ repos:
         - id: check-merge-conflict
         - id: end-of-file-fixer
         - id: detect-private-key
-          exclude: .*dataset/.*|
+          exclude: .*dataset/.*| config/local_ti_files/known_fp_hashes.csv |
                 (?x)(
                      ^config/$|
                       .*test.* |
