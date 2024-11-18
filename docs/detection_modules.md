@@ -449,6 +449,14 @@ Example:
     "6734f37431670b3ab4292b8f60f29984", "high", "Trickbot Malwar"
 
 
+### Whitelisting known FP hashes
+
+To avoid false positive "Malicious downloaded file" detections, before looking up MD5 hashes of each downloaded file online, Slips checks if the given hash is part of a known FP.
+
+The list of known FP MD5 hashes is at config/local_ti_files/known_fp_md5_hashes.csv. This list is taken from https://github.com/Neo23x0/ti-falsepositives/tree/master
+
+If the hash is a part of that list, Slips doesn't look it up.
+
 ### Adding your own remote feed
 
 

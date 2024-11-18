@@ -944,7 +944,7 @@ def test_pre_main(mocker):
     threatintel = ModuleFactory().create_threatintel_obj()
     mocker.patch.object(threatintel, "update_local_file")
     threatintel.pre_main()
-    assert threatintel.update_local_file.call_count == 3
+    assert threatintel.update_local_file.call_count == 4
 
 
 @pytest.mark.parametrize(
@@ -1178,7 +1178,7 @@ def test_is_malicious_hash(
     recording evidence of malicious file hashes.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
-
+    threatintel.db.is_known_fp_md5_hash.return_value = False
     mock_search_online_for_hash = mocker.patch.object(
         threatintel, "search_online_for_hash"
     )
@@ -1197,9 +1197,17 @@ def test_is_malicious_hash(
         "twid": "timewindow1",
     }
     mock_search_online_for_hash.return_value = search_online_result
+
     threatintel.is_malicious_hash(flow_info)
 
     assert threatintel.db.set_evidence.called == expected_set_evidence_call
+
+
+def test_is_malicious_hash_known_fp_md5():
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.is_known_fp_md5_hash.return_value = True
+    flow = {"flow": {"md5": "c0eec84d09bbb7f4cd1a8896f9dff718"}}
+    assert threatintel.is_malicious_hash(flow) is None
 
 
 @pytest.mark.parametrize(

@@ -16,11 +16,12 @@ repos:
       hooks:
         - id: trailing-whitespace
         - id: check-added-large-files
+          exclude: ^config/local_ti_files/known_fp_hashes\.csv$
         - id: check-docstring-first
         - id: check-merge-conflict
         - id: end-of-file-fixer
         - id: detect-private-key
-          exclude: .*dataset/.*|
+          exclude: .*dataset/.* |
                 (?x)(
                      ^config/$|
                       .*test.* |

@@ -18,6 +18,7 @@ class Constants:
     DOMAINS_INFO = "DomainsInfo"
     IPS_INFO = "IPsInfo"
     PROCESSED_FLOWS = "processed_flows_so_far"
+    KNOWN_FPS = "known_fps"
 
 
 class Channels:
