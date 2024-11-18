@@ -559,6 +559,23 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
     def is_valid_threat_level(self, threat_level):
         return threat_level in utils.threat_levels
 
+    def parse_known_fp_hashes(self, fullpath: str):
+        fp_hashes = {}
+        with open(fullpath) as fps:
+            # skip comments
+            for line in fps:
+                if line.startswith("#"):
+                    continue
+
+                # split the line into parts
+                parts = line.split(", ")
+                description = parts[0]
+                hashes = parts[1:]
+                for hash in hashes:
+                    fp_hashes[hash] = description
+
+        self.db.store_known_fps_hash(fp_hashes)
+
     def parse_local_ti_file(self, ti_file_path: str) -> bool:
         """Parses a local threat intelligence (TI) file to extract
          and store various indicators of compromise (IoCs), including IP
@@ -824,34 +841,20 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         return True
 
     def parse_jarm_file(self, path):
-        """Parses a file containing JARM hashes, their associated threat levels, and
-        descriptions, then stores this information in the database. The file is expected
-        to follow a specific format where each line contains a JARM hash, its threat
-        level, and a descriptive text, separated by commas.
+        """
+        Parses a file of JARM hashes with their threat levels and descriptions, then stores the data in the database.
 
         Parameters:
-            path (str): The absolute path to the local file containing
-            JARM hashes.
-
+        path (str): Absolute path to the JARM hash file.
         Returns:
-            bool: Always returns True to indicate the method has executed.
-             This behavior could be modified in the future to reflect the
-              success status of parsing and database storage operations.
 
-        This method processes each line of the provided file, skipping any
-        lines that are commented out or improperly formatted. It validates
-         the threat level of each JARM hash against a predefined list of
-         valid levels,
-         defaulting to 'medium' if the provided level is not recognized.
+        bool: Always True, indicating execution success (may change in the future).
+        Details:
 
-        Side Effects:
-            - Populates the database with new JARM hash records extracted
-            from the provided file. Existing records for a JARM hash are
-            not explicitly handled in this method, so duplicate entries
-            could occur if not managed elsewhere.
-            - Logs the progress of reading the file, including a message
-            indicating the start of the process and any errors related to
-            invalid line formats.
+        Processes each line, skipping comments and invalid formats.
+        Validates threat levels, defaulting to 'medium' if unrecognized.
+        Populates the database with parsed JARM hash records (duplicates are not handled).
+        Logs progress, including errors for invalid lines.
         """
         filename = os.path.basename(path)
         jarm_dict = {}
@@ -898,7 +901,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                         "threat_level": threat_level,
                     }
                 )
-        # Add all loaded JARM to the database
         self.db.add_jarm_to_IoC(jarm_dict)
         return True
 
@@ -1706,16 +1708,14 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
              of the TI file.
         """
         fullpath = os.path.join(self.path_to_local_ti_files, filename)
+        parsers = {
+            "own_malicious_iocs.csv": self.parse_local_ti_file,
+            "own_malicious_JA3.csv": self.parse_ja3_file,
+            "own_malicious_JARM.csv": self.parse_jarm_file,
+            "known_fp_hashes.csv": self.parse_known_fp_hashes,
+        }
         if filehash := self.should_update_local_ti_file(fullpath):
-            if "JA3" in filename:
-                # Load updated data to the database
-                self.parse_ja3_file(fullpath)
-            elif "JARM" in filename:
-                # Load updated data to the database
-                self.parse_jarm_file(fullpath)
-            else:
-                # Load updated data to the database
-                self.parse_local_ti_file(fullpath)
+            parsers[filename](fullpath)
             # Store the new etag and time of file in the database
             malicious_file_info = {"hash": filehash}
             self.db.set_ti_feed_info(filename, malicious_file_info)
@@ -1767,6 +1767,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             "own_malicious_iocs.csv",
             "own_malicious_JA3.csv",
             "own_malicious_JARM.csv",
+            "known_fp_hashes.csv",
         )
         for local_file in local_files:
             self.update_local_file(local_file)
