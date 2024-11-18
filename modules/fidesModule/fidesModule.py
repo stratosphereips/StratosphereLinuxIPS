@@ -140,8 +140,9 @@ class FidesModule(IModule):
         """
         Initializations that run only once before the main() function runs in a loop
         """
-        # utils.drop_root_privs()
+
         self.__setup_trust_model()
+        utils.drop_root_privs()
 
 
     def main(self):
