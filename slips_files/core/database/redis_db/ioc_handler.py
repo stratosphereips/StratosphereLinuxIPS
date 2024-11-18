@@ -120,10 +120,10 @@ class IoCHandler:
         data = json.dumps(data)
         self.rcache.hset(self.constants.TI_FILES_INFO, file, data)
 
-    def store_known_fps_hash(self, fps: Dict[str, List[str]]):
+    def store_known_fp_md5_hashes(self, fps: Dict[str, List[str]]):
         self.rcache.hmset(self.constants.KNOWN_FPS, fps)
 
-    def is_known_fp_hash(self, hash: str) -> Optional[str]:
+    def is_known_fp_md5_hash(self, hash: str) -> Optional[str]:
         """returns the description of the given hash if it is a FP. and
         returns Fals eif the hash is not a FP"""
         return self.rcache.hmget(self.constants.KNOWN_FPS, hash)
