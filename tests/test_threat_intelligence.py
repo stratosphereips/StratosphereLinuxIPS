@@ -1202,6 +1202,13 @@ def test_is_malicious_hash(
     assert threatintel.db.set_evidence.called == expected_set_evidence_call
 
 
+def test_is_malicious_hash_known_fp_md5():
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.is_known_fp_md5_hash.return_value = True
+    flow = {"flow": {"md5": "c0eec84d09bbb7f4cd1a8896f9dff718"}}
+    assert threatintel.is_malicious_hash(flow) is None
+
+
 @pytest.mark.parametrize(
     "url, result, is_malicious",
     [
