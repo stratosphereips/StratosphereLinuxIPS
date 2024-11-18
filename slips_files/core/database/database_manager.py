@@ -86,6 +86,12 @@ class DBManager:
     def set_new_ip(self, *args, **kwargs):
         return self.rdb.set_new_ip(*args, **kwargs)
 
+    def store_known_fps(self, *args, **kwargs):
+        return self.rdb.store_known_fps(*args, **kwargs)
+
+    def is_known_fp_hash(self, *args, **kwargs):
+        return self.rdb.is_known_fp_hash(*args, **kwargs)
+
     def ask_for_ip_info(self, *args, **kwargs):
         return self.rdb.ask_for_ip_info(*args, **kwargs)
 
