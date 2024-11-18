@@ -62,7 +62,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.urlhaus = URLhaus(self.db)
         self.spamhaus = Spamhaus(self.db)
         self.pending_queries = multiprocessing.Queue()
-        self.calls_thread = threading.Thread(
+        self.pending_circllu_calls_thread = threading.Thread(
             target=self.handle_pending_queries, daemon=True
         )
         self.circllu = Circllu(self.db, self.pending_queries)
@@ -574,7 +574,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                 for hash in hashes:
                     fp_hashes[hash] = description
 
-        self.db.store_known_fps_hash(fp_hashes)
+        self.db.store_known_fp_md5_hashes(fp_hashes)
 
     def parse_local_ti_file(self, ti_file_path: str) -> bool:
         """Parses a local threat intelligence (TI) file to extract
@@ -1409,6 +1409,11 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             # .. }
             return
 
+        if self.db.is_known_fp_md5_hash():
+            # this is a known FP https://github.com/Neo23x0/ti-falsepositives/tree/master
+            # its benign so dont look it up
+            return
+
         if blacklist_details := self.search_online_for_hash(flow_info):
             # the md5 appeared in a blacklist
             # update the blacklist_details dict with uid,
@@ -1712,7 +1717,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             "own_malicious_iocs.csv": self.parse_local_ti_file,
             "own_malicious_JA3.csv": self.parse_ja3_file,
             "own_malicious_JARM.csv": self.parse_jarm_file,
-            "known_fp_hashes.csv": self.parse_known_fp_hashes,
+            "known_fp_md5_hashes.csv": self.parse_known_fp_hashes,
         }
         if filehash := self.should_update_local_ti_file(fullpath):
             parsers[filename](fullpath)
@@ -1767,12 +1772,12 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             "own_malicious_iocs.csv",
             "own_malicious_JA3.csv",
             "own_malicious_JARM.csv",
-            "known_fp_hashes.csv",
+            "known_fp_md5_hashes.csv",
         )
         for local_file in local_files:
             self.update_local_file(local_file)
 
-        self.calls_thread.start()
+        self.pending_circllu_calls_thread.start()
 
     def main(self):
         # The channel can receive an IP address or a domain name
