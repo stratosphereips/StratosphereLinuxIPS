@@ -34,8 +34,6 @@ In detail described [here](https://github.com/LukasForst/fides/commits?author=Lu
 
 Implementations of Fides_Module-network-communication can be found in modules/fidesModule/messaging/network_bridge.py.
 
-**Alert** is the most 
-
 ### Configuration
 Evaluation model, evaluation thrash-holds and other configuration is located in fides.conf.yml 
 
