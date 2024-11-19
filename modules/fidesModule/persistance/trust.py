@@ -49,7 +49,6 @@ class SlipsTrustDatabase(TrustDatabase):
                 if organisation in peer.organisations:
                     out.append(peer)
         return out
-        #self.sqldb.get_peers_by_organisations(organisations)
 
     def get_peers_with_geq_recommendation_trust(self, minimal_recommendation_trust: float) -> List[PeerInfo]:
         """Returns peers that have >= recommendation_trust then the minimal."""
