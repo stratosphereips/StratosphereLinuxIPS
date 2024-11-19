@@ -87,7 +87,7 @@ class FidesModule(IModule):
         ti_db = SlipsThreatIntelligenceDatabase(self.__trust_model_config, self.db, self.sqlite)
 
         # create queues
-        # TODO: [S] check if we need to use duplex or simplex queue for communication with network module
+        # TODONE: [S] check if we need to use duplex or simplex queue for communication with network module
         network_fides_queue = RedisSimplexQueue(self.db, send_channel="fides2network", received_channel="network2fides", channels=self.channels)
         # 1 # slips_fides_queue = RedisSimplexQueue(r, send_channel='fides2slips', received_channel='slips2fides')
 
