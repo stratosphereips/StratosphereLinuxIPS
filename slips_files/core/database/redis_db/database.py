@@ -333,7 +333,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
     @classmethod
     def close_redis_server(cls, redis_port):
-        if server_pid := cls.get_redis_server_PID(redis_port):
+        if server_pid := cls.get_redis_server_pid(redis_port):
             os.kill(int(server_pid), signal.SIGKILL)
 
     @classmethod
@@ -506,7 +506,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         data_to_send.update({"cache_age": cache_age, "ip": str(ip)})
         self.publish("p2p_data_request", json.dumps(data_to_send))
 
-    def getSlipsInternalTime(self):
+    def get_slips_internal_time(self):
         return self.r.get("slips_internal_time") or 0
 
     def get_redis_keys_len(self) -> int:
@@ -548,7 +548,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         Returns a list of the loaded/enabled modules
         """
-        return self.r.hkeys("PIDs")
+        return self.r.hkeys(self.constants.PIDS)
 
     def get_disabled_modules(self) -> List[str]:
         if disabled_modules := self.r.hget("analysis", "disabled_modules"):
@@ -861,7 +861,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         self.r.hset("DomainsResolved", domain, json.dumps(ips))
 
     @staticmethod
-    def get_redis_server_PID(redis_port):
+    def get_redis_server_pid(redis_port):
         """
         get the PID of the redis server started on the given redis_port
         retrns the pid
@@ -1134,7 +1134,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def get_gateway_mac(self):
         return self.r.hget("default_gateway", "MAC")
 
-    def get_gateway_MAC_Vendor(self):
+    def get_gateway_mac_vendor(self):
         return self.r.hget("default_gateway", "Vendor")
 
     def set_default_gateway(self, address_type: str, address: str):
@@ -1146,7 +1146,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         if (
             (address_type == "IP" and not self.get_gateway_ip())
             or (address_type == "MAC" and not self.get_gateway_mac())
-            or (address_type == "Vendor" and not self.get_gateway_MAC_Vendor())
+            or (address_type == "Vendor" and not self.get_gateway_mac_vendor())
         ):
             self.r.hset("default_gateway", address_type, address)
 
@@ -1176,13 +1176,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         if data:
             data = json.dumps(data)
-            self.rcache.hset("passiveDNS", ip, data)
+            self.rcache.hset(self.constants.PASSIVE_DNS, ip, data)
 
     def get_passive_dns(self, ip):
         """
         Gets passive DNS from the db
         """
-        if data := self.rcache.hget("passiveDNS", ip):
+        if data := self.rcache.hget(self.constants.PASSIVE_DNS, ip):
             return json.loads(data)
         else:
             return False
@@ -1193,7 +1193,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         data = json.loads(data) if data else {}
         return data
 
-    def setReconnections(self, profileid, twid, data):
+    def set_reconnections(self, profileid, twid, data):
         """Set the reconnections for this TW for this Profile"""
         data = json.dumps(data)
         self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
@@ -1244,10 +1244,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             # starts with the same first octet
             cached_asn: dict = json.loads(cached_asn)
             cached_asn.update(range_info)
-            self.rcache.hset("cached_asn", first_octet, json.dumps(cached_asn))
+            self.rcache.hset(
+                self.constants.CACHED_ASN, first_octet, json.dumps(cached_asn)
+            )
         else:
             # first time storing a range starting with the same first octet
-            self.rcache.hset("cached_asn", first_octet, json.dumps(range_info))
+            self.rcache.hset(
+                self.constants.CACHED_ASN, first_octet, json.dumps(range_info)
+            )
 
     def get_asn_cache(self, first_octet=False):
         """
@@ -1255,9 +1259,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         Returns cached asn of ip if present, or False.
         """
         if first_octet:
-            return self.rcache.hget("cached_asn", first_octet)
-        else:
-            return self.rcache.hgetall("cached_asn")
+            return self.rcache.hget(self.constants.CACHED_ASN, first_octet)
+
+        return self.rcache.hgetall(self.constants.CACHED_ASN)
 
     def store_pid(self, process: str, pid: int):
         """
@@ -1265,14 +1269,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         :param pid: int
         :param process: module name, str
         """
-        self.r.hset("PIDs", process, pid)
+        self.r.hset(self.constants.PIDS, process, pid)
 
     def get_pids(self) -> dict:
         """returns a dict with module names as keys and PIDs as values"""
-        return self.r.hgetall("PIDs")
+        return self.r.hgetall(self.constants.PIDS)
 
     def get_pid_of(self, module_name: str):
-        pid = self.r.hget("PIDs", module_name)
+        pid = self.r.hget(self.constants.PIDS, module_name)
         return int(pid) if pid else None
 
     def get_name_of_module_at(self, given_pid):
@@ -1291,7 +1295,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         # info will be stored in OrgInfo key {'facebook_asn': ..,
         # 'twitter_domains': ...}
-        self.rcache.hset("OrgInfo", f"{org}_{info_type}", org_info)
+        self.rcache.hset(
+            self.constants.ORG_INFO, f"{org}_{info_type}", org_info
+        )
 
     def get_org_info(self, org, info_type) -> str:
         """
@@ -1302,10 +1308,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         returns a json serialized dict with info
         PS: All ASNs returned by this function are uppercase
         """
-        return self.rcache.hget("OrgInfo", f"{org}_{info_type}") or "[]"
+        return (
+            self.rcache.hget(self.constants.ORG_INFO, f"{org}_{info_type}")
+            or "[]"
+        )
 
-    def get_org_IPs(self, org):
-        org_info = self.rcache.hget("OrgInfo", f"{org}_IPs")
+    def get_org_ips(self, org):
+        org_info = self.rcache.hget(self.constants.ORG_INFO, f"{org}_IPs")
 
         if not org_info:
             org_info = {}

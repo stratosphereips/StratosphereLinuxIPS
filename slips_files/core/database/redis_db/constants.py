@@ -18,7 +18,18 @@ class Constants:
     DOMAINS_INFO = "DomainsInfo"
     IPS_INFO = "IPsInfo"
     PROCESSED_FLOWS = "processed_flows_so_far"
+    MALICIOUS_PROFILES = "malicious_profiles"
+    FLOWS_CAUSING_EVIDENCE = "flows_causing_evidence"
+    PROCESSED_EVIDENCE = "processed_evidence"
+    NUMBER_OF_EVIDENCE = "number_of_evidence"
+    WHITELISTED_EVIDENCE = "whitelisted_evidence"
+    PASSIVE_DNS = "passiveDNS"
+    CACHED_ASN = "cached_asn"
+    PIDS = "PIDs"
+    ORG_INFO = "OrgInfo"
+    ACCUMULATED_THREAT_LEVELS = "accumulated_threat_levels"
 
 
 class Channels:
     DNS_INFO_CHANGE = "dns_info_change"
+    NEW_ALERT = "new_alert"

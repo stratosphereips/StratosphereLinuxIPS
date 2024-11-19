@@ -68,7 +68,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         Check if the given ip belongs to the given org
         """
         try:
-            org_subnets: dict = self.db.get_org_IPs(org)
+            org_subnets: dict = self.db.get_org_ips(org)
 
             first_octet: str = utils.get_first_octet(ip)
             if not first_octet:

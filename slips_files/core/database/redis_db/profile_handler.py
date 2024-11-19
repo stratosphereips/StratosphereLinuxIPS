@@ -725,24 +725,24 @@ class ProfileHandler:
         a profile is only blocked if it was blocked using the user's
         firewall, not if it just generated an alert
         """
-        tws = self.getBlockedProfTW(profileid)
+        tws = self.get_blocked_profiles_and_timewindows(profileid)
         tws.append(twid)
         self.r.hset("BlockedProfTW", profileid, json.dumps(tws))
 
-    def getBlockedProfTW(self, profileid):
+    def get_blocked_profiles_and_timewindows(self, profileid):
         """Return all the list of blocked tws"""
         if tws := self.r.hget("BlockedProfTW", profileid):
             return json.loads(tws)
         return []
 
-    def checkBlockedProfTW(self, profileid, twid):
+    def is_blocked_profile_and_tw(self, profileid, twid):
         """
         Check if profile and timewindow is blocked
         """
-        profile_tws = self.getBlockedProfTW(profileid)
+        profile_tws = self.get_blocked_profiles_and_timewindows(profileid)
         return twid in profile_tws
 
-    def wasProfileTWModified(self, profileid, twid):
+    def was_profile_and_tw_modified(self, profileid, twid):
         """Retrieve from the db if this TW of this profile was modified"""
         data = self.r.zrank("ModifiedTW", profileid + self.separator + twid)
         return bool(data)
@@ -941,7 +941,7 @@ class ProfileHandler:
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 
-    def getProfiles(self):
+    def get_profiles(self):
         """Get a list of all the profiles"""
         profiles = self.r.smembers("profiles")
         return profiles if profiles != set() else {}
