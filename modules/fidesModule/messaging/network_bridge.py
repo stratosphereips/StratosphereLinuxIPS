@@ -45,7 +45,7 @@ class NetworkBridge:
                 logger.error(f'There was an error processing message, Exception: {e}.')
                 handler.on_error(message, e)
 
-        logger.info(f'Starts listening...')
+        logger.debug(f'Starts listening...')
         return self.__queue.listen(message_received, block=block)
 
     def send_intelligence_response(self, request_id: str, target: Target, intelligence: ThreatIntelligence):
