@@ -693,11 +693,11 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                     )
 
         # Add all loaded malicious ips to the database
-        self.db.add_ips_to_IoC(malicious_ips)
+        self.db.add_ips_to_ioc(malicious_ips)
         # Add all loaded malicious domains to the database
-        self.db.add_domains_to_IoC(malicious_domains)
-        self.db.add_ip_range_to_IoC(malicious_ip_ranges)
-        self.db.add_asn_to_IoC(malicious_asns)
+        self.db.add_domains_to_ioc(malicious_domains)
+        self.db.add_ip_range_to_ioc(malicious_ip_ranges)
+        self.db.add_asn_to_ioc(malicious_asns)
         return True
 
     def __delete_old_source_ips(self, file):
@@ -724,7 +724,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             if data["source"] == file:
                 old_data.append(ip)
         if old_data:
-            self.db.delete_ips_from_IoC_ips(old_data)
+            self.db.delete_ips_from_ioc_ips(old_data)
 
     def __delete_old_source_domains(self, file):
         """Deletes all domain indicators of compromise (IoCs) associated with a specific
@@ -748,7 +748,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             if data["source"] == file:
                 old_data.append(domain)
         if old_data:
-            self.db.delete_domains_from_IoC_domains(old_data)
+            self.db.delete_domains_from_ioc_domains(old_data)
 
     def __delete_old_source_data_from_database(self, data_file):
         """Deletes old indicators of compromise (IoCs) associated with a specific source
@@ -837,7 +837,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                     }
                 )
         # Add all loaded JA3 to the database
-        self.db.add_ja3_to_IoC(ja3_dict)
+        self.db.add_ja3_to_ioc(ja3_dict)
         return True
 
     def parse_jarm_file(self, path):
@@ -901,7 +901,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                         "threat_level": threat_level,
                     }
                 )
-        self.db.add_jarm_to_IoC(jarm_dict)
+        self.db.add_jarm_to_ioc(jarm_dict)
         return True
 
     def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
@@ -1206,7 +1206,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         if not asn:
             return
 
-        if asn_info := self.db.is_blacklisted_ASN(asn):
+        if asn_info := self.db.is_blacklisted_asn(asn):
             asn_info = json.loads(asn_info)
             self.set_evidence_malicious_asn(
                 ip,
@@ -1359,7 +1359,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             # not malicious
             return False
 
-        self.db.add_ips_to_IoC({ip: json.dumps(ip_info)})
+        self.db.add_ips_to_ioc({ip: json.dumps(ip_info)})
         if is_dns_response:
             self.set_evidence_malicious_ip_in_dns_response(
                 ip,

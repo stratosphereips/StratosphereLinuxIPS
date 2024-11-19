@@ -98,7 +98,8 @@ class DBManager:
     @classmethod
     def discard_obj(cls):
         """
-        when connecting on multiple ports, this dbmanager since it's a singelton
+        when connecting on multiple ports, this dbmanager since it's a
+        singelton
         returns the same instance of the already used db
         to fix this, we call this function every time we find a used db
         that slips should connect to
@@ -111,8 +112,8 @@ class DBManager:
     def update_ip_info(self, *args, **kwargs):
         return self.rdb.update_ip_info(*args, **kwargs)
 
-    def getSlipsInternalTime(self, *args, **kwargs):
-        return self.rdb.getSlipsInternalTime(*args, **kwargs)
+    def get_slips_internal_time(self, *args, **kwargs):
+        return self.rdb.get_slips_internal_time(*args, **kwargs)
 
     def mark_profile_as_malicious(self, *args, **kwargs):
         return self.rdb.mark_profile_as_malicious(*args, **kwargs)
@@ -189,8 +190,8 @@ class DBManager:
     def set_domain_resolution(self, *args, **kwargs):
         return self.rdb.set_domain_resolution(*args, **kwargs)
 
-    def get_redis_server_PID(self, *args, **kwargs):
-        return self.rdb.get_redis_server_PID(*args, **kwargs)
+    def get_redis_server_pid(self, *args, **kwargs):
+        return self.rdb.get_redis_server_pid(*args, **kwargs)
 
     def set_slips_mode(self, *args, **kwargs):
         return self.rdb.set_slips_mode(*args, **kwargs)
@@ -282,8 +283,8 @@ class DBManager:
     def get_gateway_mac(self, *args, **kwargs):
         return self.rdb.get_gateway_mac(*args, **kwargs)
 
-    def get_gateway_MAC_Vendor(self, *args, **kwargs):
-        return self.rdb.get_gateway_MAC_Vendor(*args, **kwargs)
+    def get_gateway_mac_vendor(self, *args, **kwargs):
+        return self.rdb.get_gateway_mac_vendor(*args, **kwargs)
 
     def set_default_gateway(self, *args, **kwargs):
         return self.rdb.set_default_gateway(*args, **kwargs)
@@ -303,8 +304,8 @@ class DBManager:
     def get_reconnections_for_tw(self, *args, **kwargs):
         return self.rdb.get_reconnections_for_tw(*args, **kwargs)
 
-    def setReconnections(self, *args, **kwargs):
-        return self.rdb.setReconnections(*args, **kwargs)
+    def set_reconnections(self, *args, **kwargs):
+        return self.rdb.set_reconnections(*args, **kwargs)
 
     def get_host_ip(self, *args, **kwargs):
         return self.rdb.get_host_ip(*args, **kwargs)
@@ -330,8 +331,8 @@ class DBManager:
     def get_org_info(self, *args, **kwargs):
         return self.rdb.get_org_info(*args, **kwargs)
 
-    def get_org_IPs(self, *args, **kwargs):
-        return self.rdb.get_org_IPs(*args, **kwargs)
+    def get_org_ips(self, *args, **kwargs):
+        return self.rdb.get_org_ips(*args, **kwargs)
 
     def set_whitelist(self, *args, **kwargs):
         return self.rdb.set_whitelist(*args, **kwargs)
@@ -387,8 +388,8 @@ class DBManager:
     def get_evidence_causing_alert(self, *args, **kwargs):
         return self.rdb.get_evidence_causing_alert(*args, **kwargs)
 
-    def get_evidence_by_ID(self, *args, **kwargs):
-        return self.rdb.get_evidence_by_ID(*args, **kwargs)
+    def get_evidence_by_id(self, *args, **kwargs):
+        return self.rdb.get_evidence_by_id(*args, **kwargs)
 
     def is_detection_disabled(self, *args, **kwargs):
         return self.rdb.is_detection_disabled(*args, **kwargs)
@@ -460,12 +461,6 @@ class DBManager:
     def get_loaded_ti_feeds(self, *args, **kwargs):
         return self.rdb.get_loaded_ti_feeds(*args, **kwargs)
 
-    def mark_as_analyzed_by_ti_module(self, *args, **kwargs):
-        return self.rdb.mark_as_analyzed_by_ti_module(*args, **kwargs)
-
-    def get_ti_queue_size(self, *args, **kwargs):
-        return self.rdb.get_ti_queue_size(*args, **kwargs)
-
     def set_cyst_enabled(self, *args, **kwargs):
         return self.rdb.set_cyst_enabled(*args, **kwargs)
 
@@ -475,35 +470,35 @@ class DBManager:
     def give_threat_intelligence(self, *args, **kwargs):
         return self.rdb.give_threat_intelligence(*args, **kwargs)
 
-    def delete_ips_from_IoC_ips(self, *args, **kwargs):
-        return self.rdb.delete_ips_from_IoC_ips(*args, **kwargs)
+    def delete_ips_from_ioc_ips(self, *args, **kwargs):
+        return self.rdb.delete_ips_from_ioc_ips(*args, **kwargs)
 
-    def delete_domains_from_IoC_domains(self, *args, **kwargs):
-        return self.rdb.delete_domains_from_IoC_domains(*args, **kwargs)
+    def delete_domains_from_ioc_domains(self, *args, **kwargs):
+        return self.rdb.delete_domains_from_ioc_domains(*args, **kwargs)
 
-    def add_ips_to_IoC(self, *args, **kwargs):
-        return self.rdb.add_ips_to_IoC(*args, **kwargs)
+    def add_ips_to_ioc(self, *args, **kwargs):
+        return self.rdb.add_ips_to_ioc(*args, **kwargs)
 
-    def add_domains_to_IoC(self, *args, **kwargs):
+    def add_domains_to_ioc(self, *args, **kwargs):
         return self.rdb.add_domains_to_IoC(*args, **kwargs)
 
-    def add_ip_range_to_IoC(self, *args, **kwargs):
-        return self.rdb.add_ip_range_to_IoC(*args, **kwargs)
+    def add_ip_range_to_ioc(self, *args, **kwargs):
+        return self.rdb.add_ip_range_to_ioc(*args, **kwargs)
 
-    def add_asn_to_IoC(self, *args, **kwargs):
-        return self.rdb.add_asn_to_IoC(*args, **kwargs)
+    def add_asn_to_ioc(self, *args, **kwargs):
+        return self.rdb.add_asn_to_ioc(*args, **kwargs)
 
-    def is_blacklisted_ASN(self, *args, **kwargs):
-        return self.rdb.is_blacklisted_ASN(*args, **kwargs)
+    def is_blacklisted_asn(self, *args, **kwargs):
+        return self.rdb.is_blacklisted_asn(*args, **kwargs)
 
-    def add_ja3_to_IoC(self, *args, **kwargs):
-        return self.rdb.add_ja3_to_IoC(*args, **kwargs)
+    def add_ja3_to_ioc(self, *args, **kwargs):
+        return self.rdb.add_ja3_to_ioc(*args, **kwargs)
 
-    def add_jarm_to_IoC(self, *args, **kwargs):
-        return self.rdb.add_jarm_to_IoC(*args, **kwargs)
+    def add_jarm_to_ioc(self, *args, **kwargs):
+        return self.rdb.add_jarm_to_ioc(*args, **kwargs)
 
-    def add_ssl_sha1_to_IoC(self, *args, **kwargs):
-        return self.rdb.add_ssl_sha1_to_IoC(*args, **kwargs)
+    def add_ssl_sha1_to_ioc(self, *args, **kwargs):
+        return self.rdb.add_ssl_sha1_to_ioc(*args, **kwargs)
 
     def get_all_blacklisted_ip_ranges(self, *args, **kwargs):
         return self.rdb.get_all_blacklisted_ip_ranges(*args, **kwargs)
@@ -627,17 +622,17 @@ class DBManager:
     def mark_profile_and_timewindow_as_blocked(self, *args, **kwargs):
         return self.rdb.mark_profile_and_timewindow_as_blocked(*args, **kwargs)
 
-    def getBlockedProfTW(self, *args, **kwargs):
-        return self.rdb.getBlockedProfTW(*args, **kwargs)
+    def get_blocked_profiles_and_timewindows(self, *args, **kwargs):
+        return self.rdb.get_blocked_profiles_and_timewindows(*args, **kwargs)
 
     def get_used_redis_port(self):
         return self.rdb.get_used_port()
 
-    def checkBlockedProfTW(self, *args, **kwargs):
-        return self.rdb.checkBlockedProfTW(*args, **kwargs)
+    def is_blocked_profile_and_tw(self, *args, **kwargs):
+        return self.rdb.is_blocked_profile_and_tw(*args, **kwargs)
 
-    def wasProfileTWModified(self, *args, **kwargs):
-        return self.rdb.wasProfileTWModified(*args, **kwargs)
+    def was_profile_and_tw_modified(self, *args, **kwargs):
+        return self.rdb.was_profile_and_tw_modified(*args, **kwargs)
 
     def add_software_to_profile(self, *args, **kwargs):
         return self.rdb.add_software_to_profile(*args, **kwargs)
@@ -666,10 +661,10 @@ class DBManager:
     def get_first_flow_time(self, *args, **kwargs):
         return self.rdb.get_first_flow_time(*args, **kwargs)
 
-    def getProfiles(self, *args, **kwargs):
-        return self.rdb.getProfiles(*args, **kwargs)
+    def get_profiles(self, *args, **kwargs):
+        return self.rdb.get_profiles(*args, **kwargs)
 
-    def getTWsfromProfile(self, *args, **kwargs):
+    def get_tws_from_profile(self, *args, **kwargs):
         return self.rdb.get_tws_from_profile(*args, **kwargs)
 
     def get_number_of_tws_in_profile(self, *args, **kwargs):
@@ -839,9 +834,6 @@ class DBManager:
 
     def init_tables(self, *args, **kwargs):
         return self.sqlite.init_tables(*args, **kwargs)
-
-    def _init_db(self, *args, **kwargs):
-        return self.sqlite._init_db(*args, **kwargs)
 
     def create_table(self, *args, **kwargs):
         return self.sqlite.create_table(*args, **kwargs)

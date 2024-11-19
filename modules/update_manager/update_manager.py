@@ -569,7 +569,7 @@ class UpdateManager(IModule):
                     )
                     continue
         # Add all loaded malicious sha1 to the database
-        self.db.add_ssl_sha1_to_IoC(malicious_ssl_certs)
+        self.db.add_ssl_sha1_to_ioc(malicious_ssl_certs)
         return True
 
     async def update_TI_file(self, link_to_download: str) -> bool:
@@ -693,7 +693,7 @@ class UpdateManager(IModule):
                                 "source": url,
                             }
                         )
-                        self.db.add_domains_to_IoC(malicious_domains_dict)
+                        self.db.add_domains_to_ioc(malicious_domains_dict)
             except KeyError:
                 self.print(
                     f'RiskIQ returned: {response["message"]}. Update Cancelled.',
@@ -852,7 +852,7 @@ class UpdateManager(IModule):
                         continue
 
             # Add all loaded malicious ja3 to the database
-            self.db.add_ja3_to_IoC(malicious_ja3_dict)
+            self.db.add_ja3_to_ioc(malicious_ja3_dict)
             return True
 
         except Exception:
@@ -895,7 +895,7 @@ class UpdateManager(IModule):
                         }
                     )
 
-            self.db.add_ips_to_IoC(malicious_ips_dict)
+            self.db.add_ips_to_ioc(malicious_ips_dict)
             return True
 
         if "hole.cert.pl" in link_to_download:
@@ -932,7 +932,7 @@ class UpdateManager(IModule):
                             "tags": tags,
                         }
                     )
-            self.db.add_domains_to_IoC(malicious_domains_dict)
+            self.db.add_domains_to_ioc(malicious_domains_dict)
             return True
 
     def get_description_column_index(self, header):
@@ -1386,9 +1386,9 @@ class UpdateManager(IModule):
             ti_file_name: str = ti_file_path.split("/")[-1]
             handlers[data_type](ioc, ti_file_name, feed_link, description)
 
-        self.db.add_ips_to_IoC(self.malicious_ips_dict)
-        self.db.add_domains_to_IoC(self.malicious_domains_dict)
-        self.db.add_ip_range_to_IoC(self.malicious_ip_ranges)
+        self.db.add_ips_to_ioc(self.malicious_ips_dict)
+        self.db.add_domains_to_ioc(self.malicious_domains_dict)
+        self.db.add_ip_range_to_ioc(self.malicious_ip_ranges)
         feed.close()
         return True
 

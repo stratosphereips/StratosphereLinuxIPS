@@ -119,7 +119,8 @@ class IoCHandler:
         """
         data = json.dumps(data)
         self.rcache.hset(self.constants.TI_FILES_INFO, file, data)
-
+    
+    
     def store_known_fp_md5_hashes(self, fps: Dict[str, List[str]]):
         self.rcache.hmset(self.constants.KNOWN_FPS, fps)
 
@@ -128,19 +129,20 @@ class IoCHandler:
         returns Fals eif the hash is not a FP"""
         return self.rcache.hmget(self.constants.KNOWN_FPS, hash)
 
-    def delete_ips_from_IoC_ips(self, ips: List[str]):
+    
+    def delete_ips_from_ioc_ips(self, ips: List[str]):
         """
         Delete the given IPs from IoC
         """
         self.rcache.hdel(self.constants.IOC_IPS, *ips)
 
-    def delete_domains_from_IoC_domains(self, domains: List[str]):
+    def delete_domains_from_ioc_domains(self, domains: List[str]):
         """
         Delete old domains from IoC
         """
         self.rcache.hdel(self.constants.IOC_DOMAINS, *domains)
 
-    def add_ips_to_IoC(self, ips_and_description: Dict[str, str]) -> None:
+    def add_ips_to_ioc(self, ips_and_description: Dict[str, str]) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
         :param ips_and_description: is {ip: json.dumps{'source':..,
@@ -165,7 +167,7 @@ class IoCHandler:
                 self.constants.IOC_DOMAINS, domains_and_description
             )
 
-    def add_ip_range_to_IoC(self, malicious_ip_ranges: dict) -> None:
+    def add_ip_range_to_ioc(self, malicious_ip_ranges: dict) -> None:
         """
         Store a group of IP ranges in the db as they were obtained from an IoC source
         :param malicious_ip_ranges: is
@@ -177,7 +179,7 @@ class IoCHandler:
                 self.constants.IOC_IP_RANGES, malicious_ip_ranges
             )
 
-    def add_asn_to_IoC(self, blacklisted_ASNs: dict):
+    def add_asn_to_ioc(self, blacklisted_ASNs: dict):
         """
         Store a group of ASN in the db as they were obtained from an IoC source
         :param blacklisted_ASNs: is
@@ -187,7 +189,7 @@ class IoCHandler:
         if blacklisted_ASNs:
             self.rcache.hmset(self.constants.IOC_ASN, blacklisted_ASNs)
 
-    def add_ja3_to_IoC(self, ja3: dict) -> None:
+    def add_ja3_to_ioc(self, ja3: dict) -> None:
         """
         Store the malicious ja3 iocs in the db
         :param ja3:  {ja3: {'source':..,'tags':..,
@@ -196,7 +198,7 @@ class IoCHandler:
         """
         self.rcache.hmset(self.constants.IOC_JA3, ja3)
 
-    def add_jarm_to_IoC(self, jarm: dict) -> None:
+    def add_jarm_to_ioc(self, jarm: dict) -> None:
         """
         Store the malicious jarm iocs in the db
         :param jarm:  {jarm: {'source':..,'tags':..,
@@ -204,7 +206,7 @@ class IoCHandler:
         """
         self.rcache.hmset(self.constants.IOC_JARM, jarm)
 
-    def add_ssl_sha1_to_IoC(self, malicious_ssl_certs):
+    def add_ssl_sha1_to_ioc(self, malicious_ssl_certs):
         """
         Store a group of ssl fingerprints in the db
         :param malicious_ssl_certs:  {sha1: {'source':..,'tags':..,
@@ -212,7 +214,7 @@ class IoCHandler:
         """
         self.rcache.hmset(self.constants.IOC_SSL, malicious_ssl_certs)
 
-    def is_blacklisted_ASN(self, asn) -> bool:
+    def is_blacklisted_asn(self, asn) -> bool:
         return self.rcache.hget(self.constants.IOC_ASN, asn)
 
     def is_blacklisted_jarm(self, jarm_hash: str):
