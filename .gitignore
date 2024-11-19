@@ -176,3 +176,4 @@ appendonly.aof
 /slipsOut/metadata/info.txt
 /slipsOut/metadata/slips.yaml
 /slipsOut/metadata/whitelist.conf
+/p2p_db.sqlite
