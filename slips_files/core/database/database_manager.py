@@ -480,7 +480,7 @@ class DBManager:
         return self.rdb.add_ips_to_ioc(*args, **kwargs)
 
     def add_domains_to_ioc(self, *args, **kwargs):
-        return self.rdb.add_domains_to_IoC(*args, **kwargs)
+        return self.rdb.add_domains_to_ioc(*args, **kwargs)
 
     def add_ip_range_to_ioc(self, *args, **kwargs):
         return self.rdb.add_ip_range_to_ioc(*args, **kwargs)
