@@ -143,7 +143,7 @@ class IoCHandler:
         if ips_and_description:
             self.rcache.hmset(self.constants.IOC_IPS, ips_and_description)
 
-    def add_domains_to_IoC(self, domains_and_description: dict) -> None:
+    def add_domains_to_ioc(self, domains_and_description: dict) -> None:
         """
         Store a group of domains in the db as they were obtained from
         an IoC source
