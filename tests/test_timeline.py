@@ -454,7 +454,7 @@ def test_interpret_dport(flow, expected_dport_name):
             {
                 "timestamp": 1625097700,
                 "dport_name": "HTTPS",
-                "preposition": "from",
+                "preposition": "to",
                 "dns_resolution": "????",
                 "daddr": "10.0.0.1",
                 "dport/proto": "443/TCP",
@@ -545,7 +545,7 @@ def test_ensure_int_bytes(input_bytes, expected):
 
 
 @pytest.mark.parametrize(
-    "saddr, daddr," "analysis_direction, expected_result",
+    "host_ip, daddr," "analysis_direction, expected_result",
     [
         # testcase1: Inbound traffic,
         # analysis direction is "all"
@@ -561,12 +561,14 @@ def test_ensure_int_bytes(input_bytes, expected):
         ("10.0.0.1", "10.0.0.1", "all", True),
     ],
 )
-def test_is_inbound_traffic(saddr, daddr, analysis_direction, expected_result):
+def test_is_inbound_traffic(
+    host_ip, daddr, analysis_direction, expected_result
+):
     timeline = ModuleFactory().create_timeline_object()
+    timeline.host_ip = host_ip
     timeline.analysis_direction = analysis_direction
     flow = Mock()
     flow.daddr = daddr
-    flow.saddr = saddr
     assert timeline.is_inbound_traffic(flow) == expected_result
 
 

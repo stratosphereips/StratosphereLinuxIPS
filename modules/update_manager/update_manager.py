@@ -574,7 +574,8 @@ class UpdateManager(IModule):
 
     async def update_TI_file(self, link_to_download: str) -> bool:
         """
-        Update remote TI files, JA3 feeds and SSL feeds by writing them to disk and parsing them
+        Update remote TI files, JA3 feeds and SSL feeds by writing them to
+        disk and parsing them
         """
         try:
             self.log(f"Updating the remote file {link_to_download}")
