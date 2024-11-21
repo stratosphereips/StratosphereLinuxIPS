@@ -352,6 +352,9 @@ class DBManager:
     def is_doh_server(self, *args, **kwargs):
         return self.rdb.is_doh_server(*args, **kwargs)
 
+    def get_analysis_info(self, *args, **kwargs):
+        return self.rdb.get_analysis_info(*args, **kwargs)
+
     def store_dhcp_server(self, *args, **kwargs):
         return self.rdb.store_dhcp_server(*args, **kwargs)
 
@@ -625,6 +628,9 @@ class DBManager:
     def mark_profile_and_timewindow_as_blocked(self, *args, **kwargs):
         return self.rdb.mark_profile_and_timewindow_as_blocked(*args, **kwargs)
 
+    def get_blocked_timewindows_of_profile(self, *args, **kwargs):
+        return self.rdb.get_blocked_timewindows_of_profile(*args, **kwargs)
+
     def get_blocked_profiles_and_timewindows(self, *args, **kwargs):
         return self.rdb.get_blocked_profiles_and_timewindows(*args, **kwargs)
 
@@ -666,6 +672,9 @@ class DBManager:
 
     def get_profiles(self, *args, **kwargs):
         return self.rdb.get_profiles(*args, **kwargs)
+
+    def get_number_of_alerts_so_far(self, *args, **kwargs):
+        return self.rdb.get_number_of_alerts_so_far(*args, **kwargs)
 
     def get_tws_from_profile(self, *args, **kwargs):
         return self.rdb.get_tws_from_profile(*args, **kwargs)
@@ -789,6 +798,9 @@ class DBManager:
 
     def get_timeline_last_lines(self, *args, **kwargs):
         return self.rdb.get_timeline_last_lines(*args, **kwargs)
+
+    def get_profiled_tw_timeline(self, *args, **kwargs):
+        return self.rdb.get_profiled_tw_timeline(*args, **kwargs)
 
     def mark_profile_as_gateway(self, *args, **kwargs):
         return self.rdb.mark_profile_as_gateway(*args, **kwargs)

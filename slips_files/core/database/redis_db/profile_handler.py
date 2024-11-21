@@ -738,13 +738,13 @@ class ProfileHandler:
         a profile is only blocked if it was blocked using the user's
         firewall, not if it just generated an alert
         """
-        tws = self.get_blocked_profiles_and_timewindows(profileid)
+        tws = self.get_blocked_timewindows_of_profile(profileid)
         tws.append(twid)
         self.r.hset(
             self.constants.BLOCKED_PROFILES_AND_TWS, profileid, json.dumps(tws)
         )
 
-    def get_blocked_profiles_and_timewindows(self, profileid):
+    def get_blocked_timewindows_of_profile(self, profileid):
         """Return all the list of blocked tws"""
         if tws := self.r.hget(
             self.constants.BLOCKED_PROFILES_AND_TWS, profileid
@@ -752,11 +752,14 @@ class ProfileHandler:
             return json.loads(tws)
         return []
 
+    def get_blocked_profiles_and_timewindows(self):
+        return self.r.hgetall(self.constants.BLOCKED_PROFILES_AND_TWS)
+
     def is_blocked_profile_and_tw(self, profileid, twid):
         """
         Check if profile and timewindow is blocked
         """
-        profile_tws = self.get_blocked_profiles_and_timewindows(profileid)
+        profile_tws = self.get_blocked_timewindows_of_profile(profileid)
         return twid in profile_tws
 
     def was_profile_and_tw_modified(self, profileid, twid):
@@ -836,6 +839,9 @@ class ProfileHandler:
         gets total flows to process from the db
         """
         return self.r.hget(self.constants.ANALYSIS, "total_flows")
+
+    def get_analysis_info(self):
+        return self.r.hgetall(self.constants.ANALYSIS)
 
     def add_out_ssh(
         self,
@@ -954,7 +960,7 @@ class ProfileHandler:
         """
         try:
             profileid = f"profile_{ip}"
-            if self.r.sismember("profiles", profileid):
+            if self.r.sismember(self.constants.PROFILES, profileid):
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
@@ -964,7 +970,7 @@ class ProfileHandler:
 
     def get_profiles(self):
         """Get a list of all the profiles"""
-        profiles = self.r.smembers("profiles")
+        profiles = self.r.smembers(self.constants.PROFILES)
         return profiles if profiles != set() else {}
 
     def get_tws_from_profile(self, profileid):
@@ -1024,12 +1030,16 @@ class ProfileHandler:
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
-        return self.r.sismember("profiles", profileid) if profileid else False
+        return (
+            self.r.sismember(self.constants.PROFILES, profileid)
+            if profileid
+            else False
+        )
 
     def get_profiles_len(self) -> int:
         """Return the amount of profiles. Redis should be faster than python
         to do this count"""
-        profiles_n = self.r.scard("profiles")
+        profiles_n = self.r.scard(self.constants.PROFILES)
         return 0 if not profiles_n else int(profiles_n)
 
     def get_last_twid_of_profile(self, profileid: str) -> Tuple[str, float]:
@@ -1429,12 +1439,12 @@ class ProfileHandler:
          and individual hashmaps for each profile (like a table)
         """
         try:
-            if self.r.sismember("profiles", profileid):
+            if self.r.sismember(self.constants.PROFILES, profileid):
                 # we already have this profile
                 return False
 
             # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd("profiles", str(profileid))
+            self.r.sadd(self.constants.PROFILES, str(profileid))
             # Create the hashmap with the profileid.
             # The hasmap of each profile is named with the profileid
             # Add the start time of profile
@@ -1477,7 +1487,7 @@ class ProfileHandler:
         were modified with the slips internal time
         """
 
-        sit = self.getSlipsInternalTime()
+        sit = self.get_slips_internal_time()
 
         # for each modified profile
         modification_time = float(sit) - self.width
@@ -1702,6 +1712,9 @@ class ProfileHandler:
         # Get the data in the list from the index asked (first_index) until the last
         data = self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
+
+    def get_profiled_tw_timeline(self, profileid, timewindow):
+        return self.r.zrange(f"{profileid}_{timewindow}_timeline", 0, -1)
 
     def mark_profile_as_gateway(self, profileid):
         """
