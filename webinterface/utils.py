@@ -3,7 +3,7 @@ import os
 
 def read_db_file():
     available_db = []
-    file_path = "../running_slips_info.txt"
+    file_path = "running_slips_info.txt"
 
     if os.path.exists(file_path):
         with open(file_path) as file:

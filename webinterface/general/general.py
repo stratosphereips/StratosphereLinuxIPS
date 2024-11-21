@@ -1,5 +1,7 @@
 from flask import Blueprint
 from flask import render_template
+
+
 from ..database.database import __database__
 
 general = Blueprint(
@@ -17,15 +19,15 @@ def index():
 
 
 @general.route("/blockedProfileTWs")
-def setBlockedProfileTWs():
+def set_blocked_profiles_and_tws():
     """
     Function to set blocked profiles and tws
     """
-    blockedProfileTWs = __database__.db.hgetall("BlockedProfTW")
+    blocked_profiles_and_tws = __database__.db.hgetall("BlockedProfTW")
     data = []
 
-    if blockedProfileTWs:
-        for profile, tws in blockedProfileTWs.items():
+    if blocked_profiles_and_tws:
+        for profile, tws in blocked_profiles_and_tws.items():
             data.append({"blocked": profile + str(tws)})
 
     return {
