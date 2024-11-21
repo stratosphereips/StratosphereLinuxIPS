@@ -108,7 +108,8 @@ class Checker:
                 )
                 self.main.terminate_slips()
 
-        # if we're reading flows from some module other than the input process, make sure it exists
+        # if we're reading flows from some module other than the input
+        # process, make sure it exists
         if self.main.args.input_module and not self.input_module_exists(
             self.main.args.input_module
         ):
@@ -138,14 +139,16 @@ class Checker:
             and self.main.args.blocking
             and os.geteuid() != 0
         ):
-            # If the user wants to blocks, we need permission to modify iptables
+            # If the user wants to blocks, we need permission to modify
+            # iptables
             print("Run Slips with sudo to enable the blocking module.")
             self.main.terminate_slips()
 
         if self.main.args.clearblocking:
             if os.geteuid() != 0:
                 print(
-                    "Slips needs to be run as root to clear the slipsBlocking chain. Stopping."
+                    "Slips needs to be run as root to clear the slipsBlocking "
+                    "chain. Stopping."
                 )
             else:
                 self.delete_blocking_chain()

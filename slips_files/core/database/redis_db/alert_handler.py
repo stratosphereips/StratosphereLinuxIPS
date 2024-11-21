@@ -78,7 +78,10 @@ class AlertHandler:
             "alerts",
             profileid_twid_alerts,
         )
-        self.r.incr("number_of_alerts", 1)
+        self.r.incr(self.constants.NUMBER_OF_ALERTS, 1)
+
+    def get_number_of_alerts_so_far(self):
+        return self.r.get(self.constants.NUMBER_OF_ALERTS)
 
     def get_evidence_causing_alert(
         self, profileid, twid, alert_id: str

@@ -60,6 +60,8 @@ class Constants:
     DHCP_FLOWS = "DHCP_flows"
     REDIS_USED_PORT = "redis_used_port"
     BLOCKED_PROFILES_AND_TWS = "BlockedProfTW"
+    PROFILES = "profiles"
+    NUMBER_OF_ALERTS = "number_of_alerts"
 
 
 class Channels:
