@@ -15,7 +15,7 @@ The module uses Slips' Redis to receive and send messages related to trust and P
 | `network2fides` | Facilitates communication from network (P2P) module to the Fides Module |
 | `fides2network` | Lets the Fides Module request network opinions form network modules     |
 
-In detail described [here](https://github.com/LukasForst/fides/commits?author=LukasForst).
+For more details, the code [here](https://github.com/stratosphereips/fides/tree/bfac47728172d3a4bbb27a5bb53ceef424e45e4f/fides/messaging) may be read.
 
 
 ### **Messages**
