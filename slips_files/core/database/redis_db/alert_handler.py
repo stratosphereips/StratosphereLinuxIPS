@@ -46,6 +46,10 @@ class AlertHandler:
         """keeps track of profiles that generated an alert"""
         self.r.sadd(self.constants.MALICIOUS_PROFILES, str(profileid))
 
+    def get_malicious_profiles(self):
+        """returns profiles that generated an alert"""
+        self.r.smembers(self.constants.MALICIOUS_PROFILES)
+
     def set_evidence_causing_alert(self, alert: Alert):
         """
         When we have a bunch of evidence causing an alert,
