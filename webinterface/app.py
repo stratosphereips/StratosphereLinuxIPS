@@ -20,6 +20,9 @@ app = create_app()
 
 @app.route("/redis")
 def read_redis_port():
+    """
+    is called when changing the db from the button at the top right
+    """
     res = read_db_file()
     return {"data": res}
 
