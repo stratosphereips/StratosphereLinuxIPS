@@ -2,7 +2,7 @@ from flask import Blueprint
 from flask import render_template
 
 
-from ..database.database import __database__
+from ..database.database import db
 
 general = Blueprint(
     "general",
@@ -23,7 +23,7 @@ def set_blocked_profiles_and_tws():
     """
     Function to set blocked profiles and tws
     """
-    blocked_profiles_and_tws = __database__.db.hgetall("BlockedProfTW")
+    blocked_profiles_and_tws = db.get_blocked_profiles_and_timewindows()
     data = []
 
     if blocked_profiles_and_tws:
