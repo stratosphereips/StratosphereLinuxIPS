@@ -96,19 +96,28 @@ class Checker:
         ):
             print("Redis database is not running. Stopping Slips")
             self.main.terminate_slips()
+
         if self.main.args.config and not os.path.exists(self.main.args.config):
             print(f"{self.main.args.config} doesn't exist. Stopping Slips")
             self.main.terminate_slips()
+
+        if self.main.conf.use_p2p() and not self.main.args.interface:
+            self.print(
+                "Warning: P2P is only supported using "
+                "an interface. P2P Disabled."
+            )
 
         if self.main.args.interface:
             interfaces = psutil.net_if_addrs().keys()
             if self.main.args.interface not in interfaces:
                 print(
-                    f"{self.main.args.interface} is not a valid interface. Stopping Slips"
+                    f"{self.main.args.interface} is not a valid interface. "
+                    f"Stopping Slips"
                 )
                 self.main.terminate_slips()
 
-        # if we're reading flows from some module other than the input process, make sure it exists
+        # if we're reading flows from some module other than the input
+        # process, make sure it exists
         if self.main.args.input_module and not self.input_module_exists(
             self.main.args.input_module
         ):
@@ -145,7 +154,8 @@ class Checker:
         if self.main.args.clearblocking:
             if os.geteuid() != 0:
                 print(
-                    "Slips needs to be run as root to clear the slipsBlocking chain. Stopping."
+                    "Slips needs to be run as root to clear the slipsBlocking"
+                    " chain. Stopping."
                 )
             else:
                 self.delete_blocking_chain()

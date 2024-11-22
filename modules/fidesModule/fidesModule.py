@@ -29,7 +29,10 @@ from ..fidesModule.persistance.sqlite_db import SQLiteDB
 
 
 class FidesModule(IModule):
-    # Name: short name of the module. Do not use spaces
+    """
+    This module ony runs when slips is running on an interface
+    """
+
     name = "Fides"
     description = "Trust computation module for P2P interactions."
     authors = ["David Otta", "Lukáš Forst"]

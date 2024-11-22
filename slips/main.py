@@ -70,7 +70,6 @@ class Main:
                 # should be initialised after self.input_type is set
                 self.host_ip_man = HostIPManager(self)
 
-
     def check_zeek_or_bro(self):
         """
         Check if we have zeek or bro
@@ -579,12 +578,6 @@ class Main:
 
             self.db.store_pid("slips.py", int(self.pid))
             self.metadata_man.set_input_metadata()
-
-            if self.conf.use_p2p() and not self.args.interface:
-                self.print(
-                    "Warning: P2P is only supported using "
-                    "an interface. Disabled P2P."
-                )
 
             # warn about unused open redis servers
             open_servers = len(self.redis_man.get_open_redis_servers())

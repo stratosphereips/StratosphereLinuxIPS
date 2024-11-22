@@ -619,8 +619,9 @@ class ConfigParser(object):
             to_ignore.append("exporting_alerts")
 
         use_p2p = self.use_p2p()
-        if not use_p2p or "-i" not in sys.argv:
+        if not (use_p2p and "-i" in sys.argv):
             to_ignore.append("p2ptrust")
+            to_ignore.append("fidesModule")
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.yaml
