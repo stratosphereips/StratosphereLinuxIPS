@@ -1,13 +1,16 @@
 import pytest
-import sqlite3
 from unittest.mock import MagicMock
 
-from ..model.peer import PeerInfo
-from ..model.peer_trust_data import PeerTrustData
-from ..model.threat_intelligence import SlipsThreatIntelligence
-from ..persistance.sqlite_db import SQLiteDB
+from modules.fidesModule.model.peer import PeerInfo
+from modules.fidesModule.model.peer_trust_data import PeerTrustData
+from modules.fidesModule.model.threat_intelligence import (
+    SlipsThreatIntelligence,
+)
+from modules.fidesModule.persistance.sqlite_db import SQLiteDB
 
-from modules.fidesModule.model.recommendation_history import RecommendationHistoryRecord
+from modules.fidesModule.model.recommendation_history import (
+    RecommendationHistoryRecord,
+)
 from modules.fidesModule.model.service_history import ServiceHistoryRecord
 
 
@@ -15,24 +18,24 @@ from modules.fidesModule.model.service_history import ServiceHistoryRecord
 def db():
     # Create an in-memory SQLite database for testing
     logger = MagicMock()  # Mock the logger for testing purposes
-    db_instance = SQLiteDB(logger, ':memory:')  # Using in-memory DB
+    db_instance = SQLiteDB(logger, ":memory:")  # Using in-memory DB
     return db_instance
+
 
 def test_db_connection_and_creation(db):
     # Check if connection is established
     assert db.connection is not None
     # Check if tables exist
-    tables = db._SQLiteDB__execute_query("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = db._SQLiteDB__execute_query(
+        "SELECT name FROM sqlite_master WHERE type='table';"
+    )
     assert len(tables) > 0  # Ensure tables are created
 
 
 def test_store_slips_threat_intelligence(db):
     # Create a SlipsThreatIntelligence object
     intelligence = SlipsThreatIntelligence(
-        target="example.com",
-        score=-1,
-        confidence=0.9,
-        confidentiality=0.75
+        target="example.com", score=-1, confidence=0.9, confidentiality=0.75
     )
 
     # Store the intelligence in the database
@@ -48,13 +51,14 @@ def test_store_slips_threat_intelligence(db):
     assert result.confidence == 0.9
     assert result.confidentiality == 0.75
 
+
 def test_get_slips_threat_intelligence_by_target(db):
     # Create a SlipsThreatIntelligence object and insert it
     intelligence = SlipsThreatIntelligence(
         target="192.168.1.1",
         score=0.70,
         confidence=1.0,
-        confidentiality=None  # Optional field left as None
+        confidentiality=None,  # Optional field left as None
     )
     db.store_slips_threat_intelligence(intelligence)
 
@@ -66,13 +70,16 @@ def test_get_slips_threat_intelligence_by_target(db):
     assert result.target == "192.168.1.1"
     assert result.score == 0.7
     assert result.confidence == 1
-    assert result.confidentiality is None  # Should be None since it was not set
-
+    assert (
+        result.confidentiality is None
+    )  # Should be None since it was not set
 
 
 def test_get_peer_trust_data(db):
     # Create peer info and peer trust data
-    peer_info = PeerInfo(id="peer123", organisations=["org1", "org2"], ip="192.168.0.10")
+    peer_info = PeerInfo(
+        id="peer123", organisations=["org1", "org2"], ip="192.168.0.10"
+    )
     peer_trust_data = PeerTrustData(
         info=peer_info,
         has_fixed_trust=True,
@@ -86,8 +93,10 @@ def test_get_peer_trust_data(db):
             ServiceHistoryRecord(satisfaction=0.5, weight=0.9, timestamp=20.15)
         ],
         recommendation_history=[
-            RecommendationHistoryRecord(satisfaction=0.8, weight=1.0, timestamp=1234.55)
-        ]
+            RecommendationHistoryRecord(
+                satisfaction=0.8, weight=1.0, timestamp=1234.55
+            )
+        ],
     )
 
     # Store peer trust data in the database
@@ -111,11 +120,12 @@ def test_get_peer_trust_data(db):
     assert len(result.recommendation_history) == 1
     assert result.recommendation_history[0].satisfaction == 0.8
 
-def test_get_connected_peers(db):
+
+def test_get_connected_peers_1(db):
     # Create PeerInfo data for multiple peers
     peers = [
         PeerInfo(id="peerA", organisations=["orgA"], ip="192.168.0.1"),
-        PeerInfo(id="peerB", organisations=["orgB", "orgC"], ip="192.168.0.2")
+        PeerInfo(id="peerB", organisations=["orgB", "orgC"], ip="192.168.0.2"),
     ]
 
     # Store connected peers in the database
@@ -131,12 +141,13 @@ def test_get_connected_peers(db):
     assert connected_peers[0].ip == "192.168.0.1"
     assert "orgB" in connected_peers[1].organisations
 
+
 def test_get_peers_by_organisations(db):
     # Create and store PeerInfo data
     peers = [
         PeerInfo(id="peer1", organisations=["org1", "org2"], ip="10.0.0.1"),
         PeerInfo(id="peer2", organisations=["org2", "org3"], ip="10.0.0.2"),
-        PeerInfo(id="peer3", organisations=["org3"], ip="10.0.0.3")
+        PeerInfo(id="peer3", organisations=["org3"], ip="10.0.0.3"),
     ]
     db.store_connected_peers_list(peers)
 
@@ -161,7 +172,7 @@ def test_get_peers_by_minimal_recommendation_trust(db):
         integrity_belief=0.70,
         initial_reputation_provided_by_count=3,
         service_history=[],  # Assuming an empty list for simplicity
-        recommendation_history=[]  # Assuming an empty list for simplicity
+        recommendation_history=[],  # Assuming an empty list for simplicity
     )
 
     peer2 = PeerTrustData(
@@ -174,7 +185,7 @@ def test_get_peers_by_minimal_recommendation_trust(db):
         integrity_belief=0.80,
         initial_reputation_provided_by_count=5,
         service_history=[],
-        recommendation_history=[]
+        recommendation_history=[],
     )
 
     # Store the peer trust data
@@ -194,6 +205,7 @@ def test_get_nonexistent_peer_trust_data(db):
     result = db.get_peer_trust_data("nonexistent_peer")
     assert result is None
 
+
 def test_insert_organisation_if_not_exists(db):
     # Organisation ID to be inserted
     organisation_id = "org123"
@@ -202,11 +214,15 @@ def test_insert_organisation_if_not_exists(db):
     db.insert_organisation_if_not_exists(organisation_id)
 
     # Query the Organisation table to check if the organisation was inserted
-    result = db._SQLiteDB__execute_query("SELECT organisationID FROM Organisation WHERE organisationID = ?", [organisation_id])
+    result = db._SQLiteDB__execute_query(
+        "SELECT organisationID FROM Organisation WHERE organisationID = ?",
+        [organisation_id],
+    )
 
     # Assert that the organisation was inserted
     assert len(result) == 1
     assert result[0][0] == organisation_id
+
 
 def test_insert_peer_organisation_connection(db):
     # Peer and Organisation IDs to be inserted
@@ -219,48 +235,77 @@ def test_insert_peer_organisation_connection(db):
     # Query the PeerOrganisation table to verify the connection
     result = db._SQLiteDB__execute_query(
         "SELECT peerID, organisationID FROM PeerOrganisation WHERE peerID = ? AND organisationID = ?",
-        [peer_id, organisation_id]
+        [peer_id, organisation_id],
     )
 
     # Assert the connection was inserted
     assert len(result) == 1
     assert result[0] == (peer_id, organisation_id)
 
+
 def test_store_connected_peers_list(db):
     # Create PeerInfo objects to insert
     peers = [
         PeerInfo(id="peer1", organisations=["org1", "org2"], ip="192.168.1.1"),
-        PeerInfo(id="peer2", organisations=["org3"], ip="192.168.1.2")
+        PeerInfo(id="peer2", organisations=["org3"], ip="192.168.1.2"),
     ]
 
     # Store the connected peers
     db.store_connected_peers_list(peers)
 
     # Verify the PeerInfo table
-    peer_results = db._SQLiteDB__execute_query("SELECT peerID, ip FROM PeerInfo")
+    peer_results = db._SQLiteDB__execute_query(
+        "SELECT peerID, ip FROM PeerInfo"
+    )
     assert len(peer_results) == 2
     assert peer_results[0] == ("peer1", "192.168.1.1")
     assert peer_results[1] == ("peer2", "192.168.1.2")
 
     # Verify the PeerOrganisation table
-    org_results_peer1 = db._SQLiteDB__execute_query("SELECT organisationID FROM PeerOrganisation WHERE peerID = ?", ["peer1"])
-    assert len(org_results_peer1) == 2  # peer1 should be connected to 2 organisations
+    org_results_peer1 = db._SQLiteDB__execute_query(
+        "SELECT organisationID FROM PeerOrganisation WHERE peerID = ?",
+        ["peer1"],
+    )
+    assert (
+        len(org_results_peer1) == 2
+    )  # peer1 should be connected to 2 organisations
     assert org_results_peer1[0][0] == "org1"
     assert org_results_peer1[1][0] == "org2"
 
-    org_results_peer2 = db._SQLiteDB__execute_query("SELECT organisationID FROM PeerOrganisation WHERE peerID = ?", ["peer2"])
-    assert len(org_results_peer2) == 1  # peer2 should be connected to 1 organisation
+    org_results_peer2 = db._SQLiteDB__execute_query(
+        "SELECT organisationID FROM PeerOrganisation WHERE peerID = ?",
+        ["peer2"],
+    )
+    assert (
+        len(org_results_peer2) == 1
+    )  # peer2 should be connected to 1 organisation
     assert org_results_peer2[0][0] == "org3"
 
-def test_get_connected_peers(db):
+
+def test_get_connected_peers_2(db):
     # Manually insert peer data into PeerInfo table
-    db._SQLiteDB__execute_query("INSERT INTO PeerInfo (peerID, ip) VALUES (?, ?)", ["peer1", "192.168.1.1"])
-    db._SQLiteDB__execute_query("INSERT INTO PeerInfo (peerID, ip) VALUES (?, ?)", ["peer2", "192.168.1.2"])
+    db._SQLiteDB__execute_query(
+        "INSERT INTO PeerInfo (peerID, ip) VALUES (?, ?)",
+        ["peer1", "192.168.1.1"],
+    )
+    db._SQLiteDB__execute_query(
+        "INSERT INTO PeerInfo (peerID, ip) VALUES (?, ?)",
+        ["peer2", "192.168.1.2"],
+    )
 
     # Manually insert associated organisations into PeerOrganisation table
-    db._SQLiteDB__execute_query("INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)", ["peer1", "org1"])
-    db._SQLiteDB__execute_query("INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)", ["peer1", "org2"])
-    db._SQLiteDB__execute_query("INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)", ["peer2", "org3"])
+    db._SQLiteDB__execute_query(
+        "INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)",
+        ["peer1", "org1"],
+    )
+    db._SQLiteDB__execute_query(
+        "INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)",
+        ["peer1", "org2"],
+    )
+    db._SQLiteDB__execute_query(
+        "INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)",
+        ["peer2", "org3"],
+    )
 
     # Call the function to retrieve connected peers
     connected_peers = db.get_connected_peers()
@@ -274,15 +319,21 @@ def test_get_connected_peers(db):
     assert connected_peers[1].ip == "192.168.1.2"
     assert connected_peers[1].organisations == ["org3"]
 
+
 def test_get_peer_organisations(db):
     # Insert a peer and associated organisations into PeerOrganisation
     peer_id = "peer123"
     organisations = ["org1", "org2", "org3"]
     for org_id in organisations:
-        db._SQLiteDB__execute_query("INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)", [peer_id, org_id])
+        db._SQLiteDB__execute_query(
+            "INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)",
+            [peer_id, org_id],
+        )
 
     # Retrieve organisations for the peer
     result = db.get_peer_organisations(peer_id)
 
     # Assert that the retrieved organisations match what was inserted
-    assert set(result) == set(organisations)  # Ensure all organisations are returned, order does not matter
+    assert set(result) == set(
+        organisations
+    )  # Ensure all organisations are returned, order does not matter
