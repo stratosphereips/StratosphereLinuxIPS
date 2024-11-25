@@ -24,8 +24,8 @@ def ts_to_date(ts, seconds=False):
     return utils.convert_format(ts, "%Y/%m/%d %H:%M:%S")
 
 
-def get_all_tw_with_ts(ip):
-    tws = db.get_tws_from_profile(f"profile_{ip}")
+def get_all_tw_with_ts(profileid):
+    tws = db.get_tws_from_profile(profileid)
     dict_tws = defaultdict(dict)
 
     for tw_tuple in tws:
@@ -124,23 +124,15 @@ def set_profile_tws():
     Blocked are highligted in red.
     :return: (profile, [tw, blocked], blocked)
     """
-
-    profiles_dict = {}
+    data = {}
 
     profiles = db.get_profiles()
+    blocked_profiles = db.get_malicious_profiles()
     for profileid in profiles:
-        profile_word, profile_ip = profileid.split("_")
-        profiles_dict[profile_ip] = False
+        blocked: bool = profileid in blocked_profiles
+        profile_ip = profileid.split("_")[-1]
+        data.update({"profile": profile_ip, "blocked": blocked})
 
-    if blocked_profiles := db.get_malicious_profiles():
-        for profile in blocked_profiles:
-            blocked_ip = profile.split("_")[-1]
-            profiles_dict[blocked_ip] = True
-
-    data = [
-        {"profile": profile_ip, "blocked": blocked_state}
-        for profile_ip, blocked_state in profiles_dict.items()
-    ]
     return {"data": data}
 
 
@@ -158,7 +150,7 @@ def set_ip_info(ip):
     return {"data": data}
 
 
-@analysis.route("/tws/<profileid>")
+@analysis.route("/tws/<ip>")
 def set_tws(ip):
     """
     Set timewindows for selected profile
@@ -190,7 +182,7 @@ def set_tws(ip):
     return {"data": data}
 
 
-@analysis.route("/intuples/<profile>/<timewindow>")
+@analysis.route("/intuples/<ip>/<timewindow>")
 def set_intuples(ip, timewindow):
     """
     Set intuples of a chosen profile and timewindow.
@@ -213,7 +205,7 @@ def set_intuples(ip, timewindow):
     return {"data": data}
 
 
-@analysis.route("/outtuples/<profile>/<timewindow>")
+@analysis.route("/outtuples/<ip>/<timewindow>")
 def set_outtuples(ip, timewindow):
     """
     Set outtuples of a chosen profile and timewindow.
@@ -236,7 +228,7 @@ def set_outtuples(ip, timewindow):
     return {"data": data}
 
 
-@analysis.route("/timeline_flows/<profile>/<timewindow>")
+@analysis.route("/timeline_flows/<ip>/<timewindow>")
 def set_timeline_flows(ip, timewindow):
     """
     Set timeline flows of a chosen profile and timewindow.
@@ -264,7 +256,7 @@ def set_timeline_flows(ip, timewindow):
     return {"data": data}
 
 
-@analysis.route("/timeline/<profile>/<timewindow>")
+@analysis.route("/timeline/<ip>/<timewindow>")
 def set_timeline(
     ip,
     timewindow,
@@ -304,13 +296,13 @@ def set_timeline(
     return {"data": data}
 
 
-@analysis.route("/alerts/<profile>/<timewindow>")
-def set_alerts(profile, timewindow):
+@analysis.route("/alerts/<ip>/<timewindow>")
+def set_alerts(ip, timewindow):
     """
     Set alerts for chosen profile and timewindow
     """
     data = []
-    profile = f"profile_{profile}"
+    profile = f"profile_{ip}"
     if alerts := db.get_profileid_twid_alerts(profile, timewindow):
         alerts_tw = alerts.get(timewindow, {})
         tws = get_all_tw_with_ts(profile)
@@ -340,14 +332,14 @@ def set_alerts(profile, timewindow):
     return {"data": data}
 
 
-@analysis.route("/evidence/<profile>/<timewindow>/<alert_id>")
-def set_evidence(profile, timewindow, alert_id: str):
+@analysis.route("/evidence/<ip>/<timewindow>/<alert_id>")
+def set_evidence(ip, timewindow, alert_id: str):
     """
     Set evidence table for the pressed alert in chosen profile and timewindow
     """
 
     data = []
-    profileid = f"profile_{profile}"
+    profileid = f"profile_{ip}"
 
     # get the list of evidence that were part of this alert
     evidence_ids: List[str] = db.get_evidence_causing_alert(
@@ -363,7 +355,7 @@ def set_evidence(profile, timewindow, alert_id: str):
     return {"data": data}
 
 
-@analysis.route("/evidence/<profile>/<timewindow>/")
+@analysis.route("/evidence/<ip>/<timewindow>/")
 def set_evidence_general(ip: str, timewindow: str):
     """
     Set an analysis tag with general evidence
@@ -373,7 +365,6 @@ def set_evidence_general(ip: str, timewindow: str):
     """
     data = []
     profile = f"profile_{ip}"
-
     evidence: Dict[str, str] = db.get_twid_evidence(profile, timewindow)
     if evidence:
         for evidence_details in evidence.values():
