@@ -227,7 +227,7 @@ class Conn(IFlowalertsAnalyzer):
         # reset the reconnection attempts of this src->dst
         current_reconnections[key] = (0, [])
 
-        self.db.setReconnections(profileid, twid, current_reconnections)
+        self.db.set_reconnections(profileid, twid, current_reconnections)
 
     def is_ignored_ip_data_upload(self, ip):
         """

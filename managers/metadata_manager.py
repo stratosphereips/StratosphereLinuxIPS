@@ -128,7 +128,7 @@ class MetadataManager:
         updates the number of processed ips, slips internal time,
          and modified tws so far in the db
         """
-        slips_internal_time = float(self.main.db.getSlipsInternalTime()) + 1
+        slips_internal_time = float(self.main.db.get_slips_internal_time()) + 1
 
         # Get the amount of modified profiles since we last checked
         # this is the modification time of the last timewindow

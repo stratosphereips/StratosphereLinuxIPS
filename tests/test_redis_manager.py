@@ -410,9 +410,23 @@ def test_remove_server_from_log(
     [
         # Testcase 1: Normal case with multiple servers
         (
-            "# Comment\nDate,File,Port,PID\n2024-01-01,file1,"
-            "32768,1000\n2024-01-02,file2,32769,2000\n",
-            {1000: 32768, 2000: 32769},
+            "Date, File or interface, Used port, Server PID, Output Zeek Dir, "
+            "Logs Dir, Slips PID, Is Daemon, Save the DB"
+            "\n2024/11/25 15:11:50.571184,dataset/test6-malicious.suricata.json,"
+            "32768,16408,dir/zeek_files,dir,16398,False,False",
+            {
+                "16408": {
+                    "file_or_interface": "dataset/test6-malicious.suricata.json",
+                    "is_daemon": "False",
+                    "output_dir": "dir",
+                    "pid": "16408",
+                    "port": "32768",
+                    "save_the_db": "False",
+                    "slips_pid": "16398",
+                    "timestamp": "2024/11/25 15:11:50.571184",
+                    "zeek_dir": "dir/zeek_files",
+                },
+            },
         ),
         # Testcase 2: Empty file
         ("", {}),
