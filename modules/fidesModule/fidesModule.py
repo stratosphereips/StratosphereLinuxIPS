@@ -38,7 +38,6 @@ class FidesModule(IModule):
     authors = ["David Otta", "Lukáš Forst"]
 
     def init(self):
-        # Process.__init__(self) done by IModule
         self.__output = self.logger
 
         # IModule has its own logger, no set-up
@@ -88,16 +87,14 @@ class FidesModule(IModule):
         # create queues
         # TODONE: [S] check if we need to use duplex or simplex queue for
         # communication with network module
-        network_fides_queue = RedisSimplexQueue(
+        self.network_fides_queue = RedisSimplexQueue(
             self.db,
             send_channel="fides2network",
             received_channel="network2fides",
             channels=self.channels,
         )
-        # 1 # slips_fides_queue = RedisSimplexQueue(r,
-        # send_channel='fides2slips', received_channel='slips2fides')
 
-        bridge = NetworkBridge(network_fides_queue)
+        bridge = NetworkBridge(self.network_fides_queue)
 
         recommendations = RecommendationProtocol(
             self.__trust_model_config, trust_db, bridge
@@ -163,12 +160,15 @@ class FidesModule(IModule):
     #     # TODO: [S+] determine correct level for trust model log levels
     #     self.__output.print(f"33|{self.name}|{level} {msg}")
 
+    def shutdown_gracefully(self):
+        self.sqlite.close()
+        self.network_fides_queue.stop_all_queue_threads()
+
     def pre_main(self):
         """
         Initializations that run only once before the main() function
          runs in a loop
         """
-
         self.__setup_trust_model()
         utils.drop_root_privs()
 
