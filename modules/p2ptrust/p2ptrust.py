@@ -662,7 +662,8 @@ class Trust(IModule):
             self.gopy_callback(msg)
 
         ret_code = self.pigeon.poll()
-        if ret_code is not None:
+        if ret_code not in (None, 0):
+            # The pigeon stopped with some error
             self.print(
                 f"Pigeon process suddenly terminated with "
                 f"return code {ret_code}. Stopping module."
