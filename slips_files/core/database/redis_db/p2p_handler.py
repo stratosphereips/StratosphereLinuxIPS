@@ -1,23 +1,20 @@
 import json
 from typing import (
-    Dict,
     List,
-    Tuple,
-    Union,
 )
 
 trust = "peers_strust"
 hash = "peer_info"
 FIDES_CACHE_KEY = "cached_class"
 
+
 class P2PHandler:
     """
     Helper class for the Redis class in database.py
-    Contains all the logic related to setting and retrieving evidence and
-    alerts in the db
+    Contains all the logic related Fides module
     """
 
-    name = "TrustDB"
+    name = "P2PHandlerDB"
 
     def get_fides_ti(self, target: str):
         """
@@ -33,18 +30,18 @@ class P2PHandler:
         self.r.set(target, data)
 
     def store_connected_peers(self, peers: List[str]):
-        self.r.set('connected_peers', json.dumps(peers))
+        self.r.set("connected_peers", json.dumps(peers))
 
     def get_connected_peers(self):
-        json_list =  self.r.get('connected_peers') or None
+        json_list = self.r.get("connected_peers") or None
 
         if json_list is None:
             return []
         else:
-            json_peers= json.loads(json_list)
+            json_peers = json.loads(json_list)
             return json_peers
 
-    def store_peer_td(self, peer_id, td:str):
+    def store_peer_td(self, peer_id, td: str):
         self.r.sadd(trust, peer_id)
         self.r.hset(hash, peer_id, td)
 
@@ -78,13 +75,15 @@ class P2PHandler:
         self.r.srem(trust, peer_id)
         self.r.hdel(hash, peer_id)
 
-    def cache_network_opinion(self, target: str, opinion: dict, time: float ):
+    def cache_network_opinion(self, target: str, opinion: dict, time: float):
         cache_key = f"{FIDES_CACHE_KEY}:{target}"
 
         cache_data = {"created_seconds": time, **opinion}
         self.r.hmset(cache_key, cache_data)
 
-    def get_cached_network_opinion(self, target: str, cache_valid_seconds: int, current_time: float):
+    def get_cached_network_opinion(
+        self, target: str, cache_valid_seconds: int, current_time: float
+    ):
         cache_key = f"{FIDES_CACHE_KEY}:{target}"
         cache_data = self.r.hgetall(cache_key)
         if not cache_data:
@@ -101,5 +100,7 @@ class P2PHandler:
             return None
 
         # Return the opinion (excluding the created_seconds field)
-        opinion = {k: v for k, v in cache_data.items() if k != "created_seconds"}
+        opinion = {
+            k: v for k, v in cache_data.items() if k != "created_seconds"
+        }
         return opinion
