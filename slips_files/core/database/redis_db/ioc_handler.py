@@ -119,8 +119,7 @@ class IoCHandler:
         """
         data = json.dumps(data)
         self.rcache.hset(self.constants.TI_FILES_INFO, file, data)
-    
-    
+
     def store_known_fp_md5_hashes(self, fps: Dict[str, List[str]]):
         self.rcache.hmset(self.constants.KNOWN_FPS, fps)
 
@@ -129,7 +128,6 @@ class IoCHandler:
         returns Fals eif the hash is not a FP"""
         return self.rcache.hmget(self.constants.KNOWN_FPS, hash)
 
-    
     def delete_ips_from_ioc_ips(self, ips: List[str]):
         """
         Delete the given IPs from IoC
