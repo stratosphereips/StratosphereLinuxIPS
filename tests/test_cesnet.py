@@ -113,13 +113,13 @@ def test_import_alerts(events, expected_output):
     cesnet.wclient = MagicMock()
     cesnet.wclient.getEvents = MagicMock(return_value=events)
     cesnet.db = MagicMock()
-    cesnet.db.add_ips_to_IoC = MagicMock()
+    cesnet.db.add_ips_to_ioc = MagicMock()
     cesnet.print = MagicMock()
 
     cesnet.import_alerts()
 
-    assert cesnet.db.add_ips_to_IoC.call_count == 1
+    assert cesnet.db.add_ips_to_ioc.call_count == 1
 
-    src_ips = cesnet.db.add_ips_to_IoC.call_args[0][0]
+    src_ips = cesnet.db.add_ips_to_ioc.call_args[0][0]
 
     assert len(src_ips) == expected_output
