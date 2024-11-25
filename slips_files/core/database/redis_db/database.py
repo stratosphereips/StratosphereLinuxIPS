@@ -537,7 +537,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def get_local_network(self):
         return self.r.get(self.constants.LOCAL_NETWORK)
 
-    def get_used_port(self):
+    def get_used_port(self) -> int:
         return int(self.r.config_get(self.constants.REDIS_USED_PORT)["port"])
 
     def get_label_count(self, label):
