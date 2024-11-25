@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, current_app
+from flask import Flask, render_template, redirect, url_for
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from .database.database import db
@@ -40,9 +40,7 @@ def get_post_javascript_data(new_port):
     button at the top right (from /redis)
     should send a msg to update_db() in database.py
     """
-    message_sent.send(
-        current_app._get_current_object(), port=int(new_port), dbnumber=0
-    )
+    message_sent.send(int(new_port))
     return redirect(url_for("index"))
 
 

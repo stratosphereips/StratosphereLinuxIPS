@@ -20,7 +20,7 @@ class Database(object):
 
     def __init__(self):
         # connect to the db manager
-        self.db = self.get_db_manager_obj()
+        self.db: DBManager = self.get_db_manager_obj()
 
     def set_db(self, port):
         """changes the redis db we're connected to"""
@@ -40,7 +40,7 @@ class Database(object):
             port = last_opened_port
 
         dbs: Dict[int, dict] = get_open_redis_servers()
-        output_dir = dbs[port]["output_dir"]
+        output_dir = dbs[str(port)]["output_dir"]
         logger = Output(
             stdout=os.path.join(output_dir, "slips.log"),
             stderr=os.path.join(output_dir, "errors.log"),
@@ -57,11 +57,12 @@ class Database(object):
             return
 
 
-db = Database()
+db_obj = Database()
+db: DBManager = db_obj.db
 
 
 @message_sent.connect
-def update_db(app, port):
+def update_db(port):
     """is called when the user changes the used redis server from the web
     interface"""
-    db.set_db(port)
+    db_obj.set_db(port)
