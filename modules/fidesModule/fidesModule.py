@@ -21,10 +21,10 @@ from ..fidesModule.protocols.threat_intelligence import (
 )
 from ..fidesModule.utils.logger import LoggerPrintCallbacks
 from ..fidesModule.messaging.redis_simplex_queue import RedisSimplexQueue
-from ..fidesModule.persistance.threat_intelligence import (
+from ..fidesModule.persistance.threat_intelligence_db import (
     SlipsThreatIntelligenceDatabase,
 )
-from ..fidesModule.persistance.trust import SlipsTrustDatabase
+from ..fidesModule.persistance.trust_db import SlipsTrustDatabase
 from ..fidesModule.persistance.sqlite_db import SQLiteDB
 
 

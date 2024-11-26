@@ -7,7 +7,7 @@ from ..model.aliases import PeerId, Target
 from ..model.configuration import TrustModelConfiguration
 from ..model.peer_trust_data import PeerTrustData, TrustMatrix
 from ..model.threat_intelligence import SlipsThreatIntelligence
-from ..persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
+from ..persistance.threat_intelligence_db import SlipsThreatIntelligenceDatabase
 
 
 class OpinionAggregator:

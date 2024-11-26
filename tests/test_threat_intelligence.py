@@ -1,4 +1,4 @@
-"""Unit test for modules/threat_intelligence/threat_intelligence.py"""
+"""Unit test for modules/threat_intelligence/threat_intelligence_db.py"""
 
 from tests.module_factory import ModuleFactory
 import os

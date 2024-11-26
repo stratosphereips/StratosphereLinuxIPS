@@ -9,8 +9,8 @@ from ..model.configuration import TrustModelConfiguration
 from ..model.peer import PeerInfo
 from ..model.peer_trust_data import PeerTrustData
 from ..model.threat_intelligence import ThreatIntelligence, SlipsThreatIntelligence
-from ..persistance.threat_intelligence import SlipsThreatIntelligenceDatabase
-from ..persistance.trust import SlipsTrustDatabase
+from ..persistance.threat_intelligence_db import SlipsThreatIntelligenceDatabase
+from ..persistance.trust_db import SlipsTrustDatabase
 from ..protocols.initial_trusl import InitialTrustProtocol
 from ..protocols.opinion import OpinionAggregator
 from ..protocols.protocol import Protocol

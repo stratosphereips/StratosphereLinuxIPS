@@ -3,7 +3,7 @@ from ..evaluation.service.process import process_service_interaction
 from ..model.configuration import TrustModelConfiguration, TrustedEntity
 from ..model.peer import PeerInfo
 from ..model.peer_trust_data import PeerTrustData, trust_data_prototype
-from ..persistance.trust import SlipsTrustDatabase
+from ..persistance.trust_db import SlipsTrustDatabase
 from ..protocols.recommendation import RecommendationProtocol
 from ..utils.logger import Logger
 
