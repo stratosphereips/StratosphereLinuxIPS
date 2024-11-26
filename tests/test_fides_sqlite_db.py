@@ -6,7 +6,7 @@ from modules.fidesModule.model.peer_trust_data import PeerTrustData
 from modules.fidesModule.model.threat_intelligence import (
     SlipsThreatIntelligence,
 )
-from modules.fidesModule.persistance.sqlite_db import SQLiteDB
+from modules.fidesModule.persistence.sqlite_db import SQLiteDB
 
 from modules.fidesModule.model.recommendation_history import (
     RecommendationHistoryRecord,

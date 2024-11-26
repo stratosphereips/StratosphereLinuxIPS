@@ -9,7 +9,7 @@ from ..model.aliases import PeerId
 from ..model.configuration import TrustModelConfiguration
 from ..model.peer import PeerInfo
 from ..model.recommendation import Recommendation
-from ..persistance.trust_db import SlipsTrustDatabase
+from ..persistence.trust_db import SlipsTrustDatabase
 from ..protocols.protocol import Protocol
 from ..utils.logger import Logger
 

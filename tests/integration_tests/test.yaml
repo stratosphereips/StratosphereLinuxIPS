@@ -84,7 +84,7 @@ parameters:
 # By default False. Meaning we don't DELETE the DB by default.
     deletePrevdb : True
 # You can remember the data in all the previous runs of the DB if you put False.
-#  Redis will remember as long as the redis server is not down. The persistance is on the memory, not disk.
+#  Redis will remember as long as the redis server is not down. The persistence is on the memory, not disk.
 #deletePrevdb = False
 
 # Set the label for all the flows that are being read.

@@ -6,7 +6,7 @@ from ..messaging.network_bridge import NetworkBridge
 from ..model.aliases import PeerId
 from ..model.configuration import TrustModelConfiguration
 from ..model.peer_trust_data import PeerTrustData, TrustMatrix
-from modules.fidesModule.persistance.trust import TrustDatabase
+from modules.fidesModule.persistence.trust import TrustDatabase
 
 
 class Protocol:

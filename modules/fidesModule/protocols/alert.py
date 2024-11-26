@@ -10,7 +10,7 @@ from ..model.threat_intelligence import (
     ThreatIntelligence,
     SlipsThreatIntelligence,
 )
-from ..persistance.trust_db import SlipsTrustDatabase
+from ..persistence.trust_db import SlipsTrustDatabase
 from ..protocols.initial_trusl import InitialTrustProtocol
 from ..protocols.opinion import OpinionAggregator
 from ..protocols.protocol import Protocol

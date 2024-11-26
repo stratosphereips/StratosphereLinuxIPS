@@ -2,7 +2,7 @@ from typing import List
 
 from ..messaging.network_bridge import NetworkBridge
 from ..model.peer import PeerInfo
-from ..persistance.trust_db import SlipsTrustDatabase
+from ..persistence.trust_db import SlipsTrustDatabase
 from ..protocols.initial_trusl import InitialTrustProtocol
 from ..protocols.recommendation import RecommendationProtocol
 
