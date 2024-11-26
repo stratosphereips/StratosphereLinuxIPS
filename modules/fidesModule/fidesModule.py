@@ -20,7 +20,7 @@ from ..fidesModule.protocols.threat_intelligence import (
     ThreatIntelligenceProtocol,
 )
 from ..fidesModule.utils.logger import LoggerPrintCallbacks
-from ..fidesModule.messaging.queueF import RedisSimplexQueue
+from ..fidesModule.messaging.redis_simplex_queue import RedisSimplexQueue
 from ..fidesModule.persistance.threat_intelligence import (
     SlipsThreatIntelligenceDatabase,
 )
