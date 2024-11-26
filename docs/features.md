@@ -992,7 +992,7 @@ If not, slips waits for the next evidence, accumulates threat levels, and checks
 
 The threshold that controls Slips sensitivity is determined
 by the ```evidence_detection_threshold``` key in ```config/slips.yaml```,
-by default it is set to ```3.46```.
+by default it is set to ```0.25```.
 
 
 This threshold is used in slips according to the following equation
@@ -1001,33 +1001,28 @@ threshold per width = detection_threshold * width / 60
 
 For example, if you're using the default slips width 3600, the threshold used in slips will be
 
-3.46 * 3600 / 60 = 207.6
+0.25 * 3600 / 60 = 15
 
 This equation's goal is to make it more sensitive on smaller tws, and less sensitive on longer tws
 
 
-When the accumulated threat levels of all evidence detected in a timewindow exceeds 207.6, slips will generate an alert.
+When the accumulated threat levels of all evidence detected in a timewindow exceeds 15, slips will generate an alert.
 
 In simple terms, it means slips will alert when users get the equivalent of 1 alert per minute.
 
 
-The default threshold of 3.46 gives you balanced detections with
+The default threshold of 0.25 gives you balanced detections with
 the optimal false positive rate and accuracy.
-
-The Optimal range is from 3.1 to 3.89.
-The higher the value in this range, the less false positives
-and the less accuracy you get.
 
 
 Here are more options
-- **0.2**:  Use this threshold If you want Slips to be super sensitive with higher FPR,
-       using this means you are less likely to miss a
-       detection but more likely to get false positives.
-- **6.3**:  Use this threshold If you want Slips to be insensitive.
-       meaning Slips will need so much evidence to trigger an alert.
-       May lead to false negatives.
-- **3.1**:  The start of the optimal range, has more false positives but more accurate.
-- **3.86**: The end of the optimal range, has less false positives but less accurate.
+  - 0.08:  Use this threshold If you want Slips to be super sensitive with higher FPR,
+         using this means you are less likely to miss a
+         detection but more likely to get false positives
+  - 0.25:  Optimal threshold, has the most optimal FPR and TPR.
+  - 0.43:  Use this threshold If you want Slips to be insensitive.
+         Using this means Slips will need so many evidence to trigger an alert.
+         May lead to false negatives
 
 
 
