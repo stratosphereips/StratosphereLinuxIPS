@@ -1409,7 +1409,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             # .. }
             return
 
-        if self.db.is_known_fp_md5_hash():
+        if self.db.is_known_fp_md5_hash(flow_info["flow"]["md5"]):
             # this is a known FP https://github.com/Neo23x0/ti-falsepositives/tree/master
             # its benign so dont look it up
             return
