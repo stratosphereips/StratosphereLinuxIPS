@@ -56,12 +56,16 @@ class FidesModule(IModule):
         self.f2n = self.db.subscribe("fides2network")
         self.n2f = self.db.subscribe("network2fides")
         self.s2f = self.db.subscribe("slips2fides")
+        self.ch_alert = self.db.subscribe("new_alert")
         self.f2s = self.db.subscribe("fides2slips")
+        self.ch_ip = self.db.subscribe("new_ip")
         self.channels = {
             "network2fides": self.n2f,
             "fides2network": self.f2n,
             "slips2fides": self.s2f,
             "fides2slips": self.f2s,
+            "new_alert": self.ch_alert,
+            "mew_ip": self.ch_ip,
         }
 
         self.sqlite = SQLiteDB(
@@ -173,6 +177,16 @@ class FidesModule(IModule):
         utils.drop_root_privs()
 
     def main(self):
+        # if msg := self.get_msg("new_alert"):
+        #     if not msg["data"]:
+        #         return
+        #     data = json.loads(msg["data"])
+        #     self.__alerts.dispatch_alert(
+        #         target=data["ip_to_block"],
+        #         confidence=data["confidence"],
+        #         score=data["score"],
+        #     )
+        #
         if msg := self.get_msg("slips2fides"):
             # if there's no string data message we can continue in waiting
             if not msg["data"]:
@@ -185,5 +199,12 @@ class FidesModule(IModule):
                     confidence=data["confidence"],
                     score=data["score"],
                 )
-            elif data["type"] == "intelligence_request":
-                self.__intelligence.request_data(target=data["target"])
+            # elif data["type"] == "intelligence_request":
+            #     self.__intelligence.request_data(target=data["target"])
+        if msg := self.get_msg("new_ip"):
+            # if there's no string data message we can continue in waiting
+            if not msg["data"]:
+                return
+            target_ip = msg["data"]
+
+            self.__intelligence.request_data(target_ip)
