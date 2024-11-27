@@ -188,7 +188,7 @@ class FidesModule(IModule):
         #     )
         #
         if msg := self.get_msg("slips2fides"):
-            # if there's no string data message we can continue in waiting
+            # if there's no string data message we can continue waiting
             if not msg["data"]:
                 return
             data = json.loads(msg["data"])
@@ -201,10 +201,17 @@ class FidesModule(IModule):
                 )
             # elif data["type"] == "intelligence_request":
             #     self.__intelligence.request_data(target=data["target"])
+
         if msg := self.get_msg("new_ip"):
-            # if there's no string data message we can continue in waiting
+            # if there's no string data message we can continue waiting
             if not msg["data"]:
                 return
-            target_ip = msg["data"]
 
-            self.__intelligence.request_data(target_ip)
+            ip = msg["data"]
+
+            if utils.detect_ioc_type(ip) != "ip":
+                return
+
+            if utils.is_ignored_ip(ip):
+                return
+            self.__intelligence.request_data(ip)

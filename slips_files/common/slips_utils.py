@@ -391,19 +391,7 @@ class Utils(object):
         return True
 
     def is_private_ip(self, ip_obj: ipaddress) -> bool:
-        """
-        This function replaces the ipaddress library 'is_private'
-        because it does not work correctly and it does not ignore
-        the ips 0.0.0.0 or 255.255.255.255
-        """
-        # Is it a well-formed ipv4 or ipv6?
-        r_value = False
-        if ip_obj and ip_obj.is_private:
-            if ip_obj != ipaddress.ip_address(
-                "0.0.0.0"
-            ) and ip_obj != ipaddress.ip_address("255.255.255.255"):
-                r_value = True
-        return r_value
+        return ip_obj and ip_obj.is_private
 
     def is_ignored_ip(self, ip: str) -> bool:
         """
@@ -414,6 +402,7 @@ class Utils(object):
             ip_obj = ipaddress.ip_address(ip)
         except (ipaddress.AddressValueError, ValueError):
             return True
+
         # Is the IP multicast, private? (including localhost)
         # The broadcast address 255.255.255.255 is reserved.
         return bool(
@@ -421,8 +410,9 @@ class Utils(object):
                 ip_obj.is_multicast
                 or self.is_private_ip(ip_obj)
                 or ip_obj.is_link_local
+                or ip_obj.is_loopback
                 or ip_obj.is_reserved
-                or ".255" in ip_obj.exploded
+                or ip_obj.broadcast_address
             )
         )
 
