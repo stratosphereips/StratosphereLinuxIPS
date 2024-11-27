@@ -421,7 +421,13 @@ web_interface:
    port : 55000
 
 #############################
-P2P:
+global_p2p:
+   # this is the global p2p's trust model. can only be enabled when
+   # running slips on an interface
+   use_fides: False
+
+#############################
+local_p2p:
    # create p2p.log with additional info about peer communications?
    create_p2p_logfile : False
    use_p2p : False

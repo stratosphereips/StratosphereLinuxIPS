@@ -101,10 +101,16 @@ class Checker:
             print(f"{self.main.args.config} doesn't exist. Stopping Slips")
             self.main.terminate_slips()
 
-        if self.main.conf.use_p2p() and not self.main.args.interface:
-            self.print(
+        if self.main.conf.use_local_p2p() and not self.main.args.interface:
+            print(
                 "Warning: P2P is only supported using "
                 "an interface. P2P Disabled."
+            )
+
+        if self.main.conf.use_fides() and not self.main.args.interface:
+            print(
+                "Warning: Fides is only supported using "
+                "an interface. Fides Module Disabled."
             )
 
         if self.main.args.interface:
