@@ -13,7 +13,7 @@ from slips_files.core.database.database_manager import DBManager
 
 
 class RedisManager:
-    open_servers_pids: Dict[int, int]
+    open_servers_pids: Dict[int, dict]
 
     def __init__(self, main):
         self.main = main
@@ -240,19 +240,19 @@ class RedisManager:
         return False
 
     @staticmethod
-    def is_comment(line: str) -> True:
+    def is_comment(line: str) -> bool:
         """returns true if the given line is a comment"""
         return (line.startswith("#") or line.startswith("Date")) or len(
             line
         ) < 3
 
-    def get_open_redis_servers(self) -> Dict[int, int]:
+    def get_open_redis_servers(self) -> Dict[int, dict]:
         """
         fills and returns self.open_servers_PIDs
         with PIDs and ports of the redis servers started by slips
         read from running_slips.info.txt
         """
-        self.open_servers_pids = {}
+        self.open_servers_pids: Dict[int, dict] = {}
         try:
             with open(self.running_logfile, "r") as f:
                 for line in f.read().splitlines():
@@ -263,8 +263,29 @@ class RedisManager:
                     line = line.split(",")
 
                     try:
-                        pid, port = int(line[3]), int(line[2])
-                        self.open_servers_pids[pid] = port
+                        (
+                            timestamp,
+                            file_or_interface,
+                            port,
+                            pid,
+                            zeek_dir,
+                            output_dir,
+                            slips_pid,
+                            is_daemon,
+                            save_the_db,
+                        ) = line
+
+                        self.open_servers_pids[pid] = {
+                            "timestamp": timestamp,
+                            "file_or_interface": file_or_interface,
+                            "port": port,
+                            "pid": pid,
+                            "zeek_dir": zeek_dir,
+                            "output_dir": output_dir,
+                            "slips_pid": slips_pid,
+                            "is_daemon": is_daemon,
+                            "save_the_db": save_the_db,
+                        }
                     except ValueError:
                         # sometimes slips can't get the server pid and logs "False"
                         # in the logfile instead of the PID
@@ -379,7 +400,8 @@ class RedisManager:
             if not hasattr(self, "open_servers_PIDs"):
                 self.get_open_redis_servers()
 
-            port: int = self.open_servers_pids.get(pid, False)
+            pid_info: Dict[str, str] = self.open_servers_pids.get(pid, {})
+            port: int = pid_info.get("port", False)
             if not port:
                 # try to get the port using a cmd
                 port: int = self.get_port_of_redis_server(pid)

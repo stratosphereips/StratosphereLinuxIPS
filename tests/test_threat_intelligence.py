@@ -414,7 +414,7 @@ def test_delete_old_source_ips_with_deletions(
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
-    threatintel.db.delete_ips_from_IoC_ips.assert_called_once_with(
+    threatintel.db.delete_ips_from_ioc_ips.assert_called_once_with(
         expected_deleted_ips
     )
 
@@ -440,7 +440,7 @@ def test_delete_old_source_ips_no_deletions(mock_ioc_data, file_to_delete):
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
-    threatintel.db.delete_ips_from_IoC_ips.assert_not_called()
+    threatintel.db.delete_ips_from_ioc_ips.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -487,7 +487,7 @@ def test_delete_old_source_domains(
     threatintel.db.get_all_blacklisted_domains.return_value = domains_in_ioc
     threatintel._ThreatIntel__delete_old_source_domains(file_to_delete)
     assert (
-        threatintel.db.delete_domains_from_IoC_domains.call_count
+        threatintel.db.delete_domains_from_ioc_domains.call_count
         == expected_calls
     )
 
@@ -567,11 +567,11 @@ def test_delete_old_source_data_from_database(
     threatintel._ThreatIntel__delete_old_source_data_from_database(data_file)
 
     assert (
-        threatintel.db.delete_ips_from_IoC_ips.call_count
+        threatintel.db.delete_ips_from_ioc_ips.call_count
         == expected_delete_ips_calls
     )
     assert (
-        threatintel.db.delete_domains_from_IoC_domains.call_count
+        threatintel.db.delete_domains_from_ioc_domains.call_count
         == expected_delete_domains_calls
     )
 
@@ -1491,7 +1491,7 @@ def test_ip_has_blacklisted_asn(
     profileid = "profile_127.0.0.1"
     twid = "timewindow1"
     threatintel.db.get_ip_info.return_value = {"asn": {"number": asn}}
-    threatintel.db.is_blacklisted_ASN.return_value = asn_info
+    threatintel.db.is_blacklisted_asn.return_value = asn_info
     threatintel.ip_has_blacklisted_asn(
         ip_address, uid, timestamp, profileid, twid
     )

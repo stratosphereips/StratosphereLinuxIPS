@@ -251,7 +251,7 @@ class CESNET(IModule):
 
                 src_ips.update({srcip: json.dumps(event_info)})
 
-        self.db.add_ips_to_IoC(src_ips)
+        self.db.add_ips_to_ioc(src_ips)
 
     def pre_main(self):
         utils.drop_root_privs()

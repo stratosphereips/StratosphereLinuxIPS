@@ -121,7 +121,8 @@ class ModuleFactory:
         """
         # to prevent config/redis.conf from being overwritten
         with patch(
-            "slips_files.core.database.redis_db.database.RedisDB._set_redis_options",
+            "slips_files.core.database.redis_db.database."
+            "RedisDB._set_redis_options",
             return_value=Mock(),
         ):
             db = DBManager(
@@ -633,7 +634,9 @@ class ModuleFactory:
         return riskiq
 
     def create_alert_handler_obj(self):
-        return AlertHandler()
+        alert_handler = AlertHandler()
+        alert_handler.constants = Constants()
+        return alert_handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):

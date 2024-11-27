@@ -366,7 +366,7 @@ def test_update_riskiq_feed(
     }
     mocker.patch("requests.get", return_value=mock_response)
     result = update_manager.update_riskiq_feed()
-    update_manager.db.add_domains_to_IoC.assert_called_once_with(
+    update_manager.db.add_domains_to_ioc.assert_called_once_with(
         {
             "malicious.com": json.dumps(
                 {
@@ -397,7 +397,7 @@ def test_update_riskiq_feed_invalid_api_key(
 
     result = update_manager.update_riskiq_feed()
     assert result is False
-    update_manager.db.add_domains_to_IoC.assert_not_called()
+    update_manager.db.add_domains_to_ioc.assert_not_called()
     update_manager.db.set_ti_feed_info.assert_not_called()
 
 
@@ -415,7 +415,7 @@ def test_update_riskiq_feed_request_exception(
 
     result = update_manager.update_riskiq_feed()
     assert result is False
-    update_manager.db.add_domains_to_IoC.assert_not_called()
+    update_manager.db.add_domains_to_ioc.assert_not_called()
     update_manager.db.set_ti_feed_info.assert_not_called()
 
 
@@ -612,7 +612,7 @@ def test_parse_ti_feed_valid_data(
         result = update_manager.parse_ti_feed(
             "https://example.com/test.txt", "test.txt"
         )
-    update_manager.db.add_ips_to_IoC.assert_any_call(
+    update_manager.db.add_ips_to_ioc.assert_any_call(
         {
             "1.2.3.4": '{"description": "Test description", '
             '"source": "test.txt", '
@@ -620,7 +620,7 @@ def test_parse_ti_feed_valid_data(
             '"tags": ["tag3"]}'
         }
     )
-    update_manager.db.add_domains_to_IoC.assert_any_call(
+    update_manager.db.add_domains_to_ioc.assert_any_call(
         {
             "example.com": '{"description": "Another description",'
             ' "source": "test.txt",'
@@ -647,8 +647,8 @@ def test_parse_ti_feed_invalid_data(mocker, tmp_path):
     result = update_manager.parse_ti_feed(
         "https://example.com/invalid.txt", str(tmp_path / "invalid.txt")
     )
-    update_manager.db.add_ips_to_IoC.assert_not_called()
-    update_manager.db.add_domains_to_IoC.assert_not_called()
+    update_manager.db.add_ips_to_ioc.assert_not_called()
+    update_manager.db.add_domains_to_ioc.assert_not_called()
     assert result is False
 
 
@@ -783,7 +783,7 @@ def test_parse_ssl_feed_valid_data(mocker, tmp_path):
         str(tmp_path / "test_ssl_feed.csv"),
     )
 
-    update_manager.db.add_ssl_sha1_to_IoC.assert_called_once_with(
+    update_manager.db.add_ssl_sha1_to_ioc.assert_called_once_with(
         {
             "aaabbbcccdddeeeeffff00001111222233334444": json.dumps(
                 {
@@ -818,5 +818,5 @@ def test_parse_ssl_feed_no_valid_fingerprints(mocker, tmp_path):
         str(tmp_path / "test_ssl_feed.csv"),
     )
 
-    update_manager.db.add_ssl_sha1_to_IoC.assert_not_called()
+    update_manager.db.add_ssl_sha1_to_ioc.assert_not_called()
     assert result is False

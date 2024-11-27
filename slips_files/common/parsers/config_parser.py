@@ -101,13 +101,14 @@ class ConfigParser(object):
         return self.home_network_ranges
 
     def evidence_detection_threshold(self):
+        default_value = 0.25
         threshold = self.read_configuration(
-            "detection", "evidence_detection_threshold", 3.46
+            "detection", "evidence_detection_threshold", default_value
         )
         try:
             threshold = float(threshold)
         except ValueError:
-            threshold = 3.46
+            threshold = default_value
         return threshold
 
     def packet_filter(self):

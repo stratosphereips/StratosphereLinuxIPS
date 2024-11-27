@@ -405,15 +405,12 @@ class Utils(object):
 
         # Is the IP multicast, private? (including localhost)
         # The broadcast address 255.255.255.255 is reserved.
-        return bool(
-            (
-                ip_obj.is_multicast
-                or self.is_private_ip(ip_obj)
-                or ip_obj.is_link_local
-                or ip_obj.is_loopback
-                or ip_obj.is_reserved
-                or ip_obj.broadcast_address
-            )
+        return (
+            ip_obj.is_multicast
+            or self.is_private_ip(ip_obj)
+            or ip_obj.is_link_local
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
         )
 
     def get_sha256_hash(self, filename: str):

@@ -41,7 +41,9 @@ class ProfileHandler:
         """
         returns a dict of dhcp flows that happened in this profileid and twid
         """
-        if flows := self.r.hget("DHCP_flows", f"{profileid}_{twid}"):
+        if flows := self.r.hget(
+            self.constants.DHCP_FLOWS, f"{profileid}_{twid}"
+        ):
             return json.loads(flows)
 
     def set_dhcp_flow(self, profileid, twid, requested_addr, uid):
@@ -53,10 +55,16 @@ class ProfileHandler:
             # we already have flows in this twid, update them
             cached_flows.update(flow)
             self.r.hset(
-                "DHCP_flows", f"{profileid}_{twid}", json.dumps(cached_flows)
+                self.constants.DHCP_FLOWS,
+                f"{profileid}_{twid}",
+                json.dumps(cached_flows),
             )
         else:
-            self.r.hset("DHCP_flows", f"{profileid}_{twid}", json.dumps(flow))
+            self.r.hset(
+                self.constants.DHCP_FLOWS,
+                f"{profileid}_{twid}",
+                json.dumps(flow),
+            )
 
     def get_timewindow(self, flowtime, profileid):
         """
@@ -88,7 +96,9 @@ class ProfileHandler:
             tw_start = float(flowtime - (31536000 * 100))
             tw_number: int = 1
         else:
-            starttime_of_first_tw: str = self.r.hget("analysis", "file_start")
+            starttime_of_first_tw: str = self.r.hget(
+                self.constants.ANALYSIS, "file_start"
+            )
             if starttime_of_first_tw:
                 starttime_of_first_tw = float(starttime_of_first_tw)
                 tw_number: int = (
@@ -116,8 +126,10 @@ class ProfileHandler:
     ):
         """
         Store in the DB a http request
-        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
-        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        All the type of flows that are not netflows are stored in a separate
+        hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other
+         type of info is related to that uid
         """
         # Convert to json string
         http_flow = {
@@ -531,7 +543,8 @@ class ProfileHandler:
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getDataFromProfileTW database.py line {exception_line}",
+                f"Error in getDataFromProfileTW database.py line "
+                f"{exception_line}",
                 0,
                 1,
             )
@@ -725,26 +738,36 @@ class ProfileHandler:
         a profile is only blocked if it was blocked using the user's
         firewall, not if it just generated an alert
         """
-        tws = self.getBlockedProfTW(profileid)
+        tws = self.get_blocked_timewindows_of_profile(profileid)
         tws.append(twid)
-        self.r.hset("BlockedProfTW", profileid, json.dumps(tws))
+        self.r.hset(
+            self.constants.BLOCKED_PROFILES_AND_TWS, profileid, json.dumps(tws)
+        )
 
-    def getBlockedProfTW(self, profileid):
+    def get_blocked_timewindows_of_profile(self, profileid):
         """Return all the list of blocked tws"""
-        if tws := self.r.hget("BlockedProfTW", profileid):
+        if tws := self.r.hget(
+            self.constants.BLOCKED_PROFILES_AND_TWS, profileid
+        ):
             return json.loads(tws)
         return []
 
-    def checkBlockedProfTW(self, profileid, twid):
+    def get_blocked_profiles_and_timewindows(self):
+        return self.r.hgetall(self.constants.BLOCKED_PROFILES_AND_TWS)
+
+    def is_blocked_profile_and_tw(self, profileid, twid):
         """
         Check if profile and timewindow is blocked
         """
-        profile_tws = self.getBlockedProfTW(profileid)
+        profile_tws = self.get_blocked_timewindows_of_profile(profileid)
         return twid in profile_tws
 
-    def wasProfileTWModified(self, profileid, twid):
+    def was_profile_and_tw_modified(self, profileid, twid):
         """Retrieve from the db if this TW of this profile was modified"""
-        data = self.r.zrank("ModifiedTW", profileid + self.separator + twid)
+        data = self.r.zrank(
+            self.constants.MODIFIED_TIMEWINDOWS,
+            profileid + self.separator + twid,
+        )
         return bool(data)
 
     def add_flow(
@@ -760,7 +783,7 @@ class ProfileHandler:
         The profileid is the main profile that this flow is related too.
         """
         if label:
-            self.r.zincrby("labels", 1, label)
+            self.r.zincrby(self.constants.LABELS, 1, label)
 
         to_send = {
             "profileid": profileid,
@@ -815,7 +838,10 @@ class ProfileHandler:
         """
         gets total flows to process from the db
         """
-        return self.r.hget("analysis", "total_flows")
+        return self.r.hget(self.constants.ANALYSIS, "total_flows")
+
+    def get_analysis_info(self):
+        return self.r.hgetall(self.constants.ANALYSIS)
 
     def add_out_ssh(
         self,
@@ -854,7 +880,8 @@ class ProfileHandler:
         twid,
         flow,
     ):
-        """ " Send notice.log data to new_notice channel to look for self-signed certificates"""
+        """Send notice.log data to new_notice channel to look for
+        self-signed certificates"""
         to_send = {
             "profileid": profileid,
             "twid": twid,
@@ -909,9 +936,9 @@ class ProfileHandler:
         else:
             sni_ipdata = []
 
-        SNI_port = {"server_name": flow.server_name, "dport": flow.dport}
+        sni_port = {"server_name": flow.server_name, "dport": flow.dport}
         # We do not want any duplicates.
-        if SNI_port not in sni_ipdata:
+        if sni_port not in sni_ipdata:
             # Verify that the SNI is equal to any of the domains in the DNS
             # resolution
             # only add this SNI to our db if it has a DNS resolution
@@ -920,9 +947,9 @@ class ProfileHandler:
                 # 'uid':..}}
                 for ip, resolution in dns_resolutions.items():
                     resolution = json.loads(resolution)
-                    if SNI_port["server_name"] in resolution["domains"]:
+                    if sni_port["server_name"] in resolution["domains"]:
                         # add SNI to our db as it has a DNS resolution
-                        sni_ipdata.append(SNI_port)
+                        sni_ipdata.append(sni_port)
                         self.set_ip_info(flow.daddr, {"SNI": sni_ipdata})
                         break
 
@@ -933,7 +960,7 @@ class ProfileHandler:
         """
         try:
             profileid = f"profile_{ip}"
-            if self.r.sismember("profiles", profileid):
+            if self.r.sismember(self.constants.PROFILES, profileid):
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
@@ -941,9 +968,9 @@ class ProfileHandler:
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 
-    def getProfiles(self):
+    def get_profiles(self):
         """Get a list of all the profiles"""
-        profiles = self.r.smembers("profiles")
+        profiles = self.r.smembers(self.constants.PROFILES)
         return profiles if profiles != set() else {}
 
     def get_tws_from_profile(self, profileid):
@@ -1003,12 +1030,16 @@ class ProfileHandler:
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
-        return self.r.sismember("profiles", profileid) if profileid else False
+        return (
+            self.r.sismember(self.constants.PROFILES, profileid)
+            if profileid
+            else False
+        )
 
     def get_profiles_len(self) -> int:
         """Return the amount of profiles. Redis should be faster than python
         to do this count"""
-        profiles_n = self.r.scard("profiles")
+        profiles_n = self.r.scard(self.constants.PROFILES)
         return 0 if not profiles_n else int(profiles_n)
 
     def get_last_twid_of_profile(self, profileid: str) -> Tuple[str, float]:
@@ -1121,7 +1152,10 @@ class ProfileHandler:
         #  the score of each tw is the ts it was last updated
         # this ts is not network time, it is local time
         data = self.r.zrangebyscore(
-            "ModifiedTW", time, float("+inf"), withscores=True
+            self.constants.MODIFIED_TIMEWINDOWS,
+            time,
+            float("+inf"),
+            withscores=True,
         )
         return data or []
 
@@ -1195,7 +1229,7 @@ class ProfileHandler:
 
     def update_mac_of_profile(self, profileid: str, mac: str):
         """Add the MAC addr to the given profileid key"""
-        self.r.hset(profileid, "MAC", mac)
+        self.r.hset(profileid, self.constants.MAC, mac)
 
     def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
         """
@@ -1229,11 +1263,13 @@ class ProfileHandler:
             return False
 
         # get the ips that belong to this mac
-        cached_ips: Optional[List] = self.r.hmget("MAC", mac_addr)[0]
+        cached_ips: Optional[List] = self.r.hmget(
+            self.constants.MAC, mac_addr
+        )[0]
         if not cached_ips:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
-            self.r.hset("MAC", mac_addr, ip)
+            self.r.hset(self.constants.MAC, mac_addr, ip)
 
             # now that it's decided that this mac belongs to this profileid
             # stoe the mac in the profileid's key in the db
@@ -1293,7 +1329,7 @@ class ProfileHandler:
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
-            self.r.hset("MAC", mac_addr, cached_ips)
+            self.r.hset(self.constants.MAC, mac_addr, cached_ips)
 
             self.update_mac_of_profile(profileid, mac_addr)
             self.update_mac_of_profile(f"profile_{found_ip}", mac_addr)
@@ -1306,7 +1342,7 @@ class ProfileHandler:
         returns the info from the profileid key.
         """
 
-        return self.r.hget(profileid, "MAC")
+        return self.r.hget(profileid, self.constants.MAC)
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
@@ -1393,7 +1429,7 @@ class ProfileHandler:
             self.r.hset(profileid, "dhcp", "true")
 
     def get_first_flow_time(self) -> Optional[str]:
-        return self.r.hget("analysis", "file_start")
+        return self.r.hget(self.constants.ANALYSIS, "file_start")
 
     def add_profile(self, profileid, starttime):
         """
@@ -1403,12 +1439,12 @@ class ProfileHandler:
          and individual hashmaps for each profile (like a table)
         """
         try:
-            if self.r.sismember("profiles", profileid):
+            if self.r.sismember(self.constants.PROFILES, profileid):
                 # we already have this profile
                 return False
 
             # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd("profiles", str(profileid))
+            self.r.sadd(self.constants.PROFILES, str(profileid))
             # Create the hashmap with the profileid.
             # The hasmap of each profile is named with the profileid
             # Add the start time of profile
@@ -1451,7 +1487,7 @@ class ProfileHandler:
         were modified with the slips internal time
         """
 
-        sit = self.getSlipsInternalTime()
+        sit = self.get_slips_internal_time()
 
         # for each modified profile
         modification_time = float(sit) - self.width
@@ -1460,7 +1496,10 @@ class ProfileHandler:
             modification_time = float("inf")
 
         profiles_tws_to_close = self.r.zrangebyscore(
-            "ModifiedTW", 0, modification_time, withscores=True
+            self.constants.MODIFIED_TIMEWINDOWS,
+            0,
+            modification_time,
+            withscores=True,
         )
 
         for profile_tw_to_close in profiles_tws_to_close:
@@ -1483,7 +1522,7 @@ class ProfileHandler:
         Mark the TW as closed so tools can work on its data
         """
         self.r.sadd("ClosedTW", profileid_tw)
-        self.r.zrem("ModifiedTW", profileid_tw)
+        self.r.zrem(self.constants.MODIFIED_TIMEWINDOWS, profileid_tw)
         self.publish("tw_closed", profileid_tw)
 
     def mark_profile_tw_as_modified(self, profileid, twid, timestamp):
@@ -1498,7 +1537,7 @@ class ProfileHandler:
         """
         timestamp = time.time()
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
-        self.r.zadd("ModifiedTW", data)
+        self.r.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
         self.publish("tw_modified", f"{profileid}:{twid}")
         # Check if we should close some TW
         self.check_tw_to_close()
@@ -1673,6 +1712,9 @@ class ProfileHandler:
         # Get the data in the list from the index asked (first_index) until the last
         data = self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
+
+    def get_profiled_tw_timeline(self, profileid, timewindow):
+        return self.r.zrange(f"{profileid}_{timewindow}_timeline", 0, -1)
 
     def mark_profile_as_gateway(self, profileid):
         """
