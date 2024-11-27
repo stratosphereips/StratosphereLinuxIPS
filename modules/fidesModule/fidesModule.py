@@ -65,7 +65,7 @@ class FidesModule(IModule):
             "slips2fides": self.s2f,
             "fides2slips": self.f2s,
             "new_alert": self.ch_alert,
-            "mew_ip": self.ch_ip,
+            "new_ip": self.ch_ip,
         }
 
         self.sqlite = SQLiteDB(
