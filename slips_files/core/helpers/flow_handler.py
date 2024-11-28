@@ -37,7 +37,6 @@ class Publisher:
         """
         if not mac or mac in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
             return
-        # get the src and dst addresses as objects
         try:
             ip_obj = ipaddress.ip_address(ip)
             if ip_obj.is_multicast:
@@ -45,7 +44,7 @@ class Publisher:
         except ValueError:
             return
 
-        # send the src and dst MAC to IP_Info module to get vendor info about this MAC
+        # send the  MAC to IP_Info module to get vendor info about it
         to_send = {"MAC": mac, "profileid": f"profile_{ip}"}
         self.db.publish("new_MAC", json.dumps(to_send))
 

@@ -212,8 +212,8 @@ class IPInfo(AsyncModule):
 
     def get_vendor(self, mac_addr: str, profileid: str) -> dict:
         """
-        Returns vendor info of a MAC address either from an offline or an online
-         database
+        Returns the vendor info  of a MAC address and stores it in slips db
+        either from an offline or an online database
         """
 
         if (
@@ -227,18 +227,18 @@ class IPInfo(AsyncModule):
         if self.db.get_mac_vendor_from_profile(profileid):
             return True
 
-        MAC_info: dict = {"MAC": mac_addr}
+        mac_info: dict = {"MAC": mac_addr}
 
         if vendor := self.get_vendor_offline(mac_addr, profileid):
-            MAC_info["Vendor"] = vendor
+            mac_info["Vendor"] = vendor
             self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
         elif vendor := self.get_vendor_online(mac_addr):
-            MAC_info["Vendor"] = vendor
+            mac_info["Vendor"] = vendor
             self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
         else:
-            MAC_info["Vendor"] = "Unknown"
+            mac_info["Vendor"] = "Unknown"
 
-        return MAC_info
+        return mac_info
 
     # domain info
     def get_age(self, domain):
@@ -375,20 +375,28 @@ class IPInfo(AsyncModule):
 
         return gw_mac
 
-    def check_if_we_have_pending_mac_queries(self):
+    def check_if_we_have_pending_offline_mac_queries(self):
         """
         Checks if we have pending MAC queries to get the vendor of.
-        queries are taken from the pending_mac_queries queue
-        asks the db for them IF update manager is done updating the mac db
+        These pending queries are MACs that should bee looked up in the
+        local downloaded mac db, but aren't because update manager hasn't
+        downloaded it yet for whatever reason.
+        queries are taken from the pending_mac_queries queue.
         """
-        if hasattr(self, "mac_db") and not self.pending_mac_queries.empty():
-            while True:
-                try:
-                    mac, profileid = self.pending_mac_queries.get(timeout=0.5)
-                    self.get_vendor(mac, profileid)
-                except Exception:
-                    # queue is empty
-                    return
+        if not hasattr(self, "mac_db"):
+            return
+
+        if self.pending_mac_queries.empty():
+            return
+
+        while True:
+            try:
+                mac, profileid = self.pending_mac_queries.get(timeout=0.5)
+                if vendor := self.get_vendor_offline(mac, profileid):
+                    self.db.set_mac_vendor_to_profile(profileid, mac, vendor)
+            except Exception:
+                # queue is empty
+                return
 
     def wait_for_dbs(self):
         """
@@ -504,10 +512,10 @@ class IPInfo(AsyncModule):
             profileid: str = data["profileid"]
 
             self.get_vendor(mac_addr, profileid)
-            self.check_if_we_have_pending_mac_queries()
+            self.check_if_we_have_pending_offline_mac_queries()
             # set the gw mac and ip if they're not set yet
             if not self.is_gw_mac_set:
-                # whether we found the gw ip using dhcp in profileprocess
+                # whether we found the gw ip using dhcp in profiler
                 # or using ip route using self.get_gateway_ip()
                 # now that it's found, get and store the mac addr of it
                 if ip := self.db.get_gateway_ip():
