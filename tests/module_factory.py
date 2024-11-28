@@ -128,6 +128,7 @@ class ModuleFactory:
                 output_dir,
                 port,
                 flush_db=flush_db,
+                start_sqlite=False,
                 start_redis_server=start_redis_server,
             )
         db.print = Mock()
