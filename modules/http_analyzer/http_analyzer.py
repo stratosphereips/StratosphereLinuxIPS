@@ -196,7 +196,9 @@ class HTTPAnalyzer(IModule):
         self.connections_counter[host] = ([], 0)
         return True
 
-    def set_evidence_incompatible_user_agent(self, twid, flow, user_agent):
+    def set_evidence_incompatible_user_agent(
+        self, twid, flow, user_agent, vendor
+    ):
 
         os_type: str = user_agent.get("os_type", "").lower()
         os_name: str = user_agent.get("os_name", "").lower()
@@ -207,7 +209,7 @@ class HTTPAnalyzer(IModule):
             f"that belongs to OS: {os_name} "
             f"type: {os_type} browser: {browser}. "
             f"while connecting to {flow.host}{flow.uri}. "
-            f"IP has MAC vendor: {flow.vendor.capitalize()}"
+            f"IP has MAC vendor: {vendor.capitalize()}"
         )
 
         evidence: Evidence = Evidence(
@@ -298,7 +300,9 @@ class HTTPAnalyzer(IModule):
         browser = user_agent.get("browser", "").lower()
         # user_agent = user_agent.get('user_agent', '')
         if "safari" in browser and "apple" not in vendor:
-            self.set_evidence_incompatible_user_agent(twid, flow, user_agent)
+            self.set_evidence_incompatible_user_agent(
+                twid, flow, user_agent, vendor
+            )
             return True
 
         # make sure all of them are lowercase
@@ -340,7 +344,7 @@ class HTTPAnalyzer(IModule):
                     # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
                     # is found in the UA that belongs to an apple device
                     self.set_evidence_incompatible_user_agent(
-                        twid, flow, user_agent
+                        twid, flow, user_agent, vendor
                     )
                     return True
 

@@ -1,9 +1,14 @@
 """Unit test for modules/ip_info/ip_info.py"""
 
+import asyncio
+
 from tests.module_factory import ModuleFactory
 import maxminddb
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import (
+    Mock,
+    patch,
+)
 import json
 import requests
 import socket
@@ -366,14 +371,20 @@ def test_get_vendor_online(
 
     assert vendor == expected_vendor
     mock_requests.assert_called_once_with(
-        "https://api.macvendors.com/00:11:22:33:44:55", timeout=5
+        "https://api.macvendors.com/00:11:22:33:44:55", timeout=2
     )
 
 
-def test_shutdown_gracefully(
+async def tmp_function():
+    # Simulating some asynchronous work
+    await asyncio.sleep(1)
+
+
+async def test_shutdown_gracefully(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.reading_mac_db_task = tmp_function()
 
     mock_asn_db = mocker.Mock()
     mock_country_db = mocker.Mock()
@@ -383,7 +394,8 @@ def test_shutdown_gracefully(
     ip_info.country_db = mock_country_db
     ip_info.mac_db = mock_mac_db
 
-    ip_info.shutdown_gracefully()
+    await ip_info.shutdown_gracefully()
+
     mock_asn_db.close.assert_called_once()
     mock_country_db.close.assert_called_once()
     mock_mac_db.close.assert_called_once()
@@ -446,8 +458,7 @@ def test_handle_new_ip(mocker, ip, is_multicast, cached_info, expected_calls):
     mock_get_geocountry = mocker.patch.object(ip_info, "get_geocountry")
     mock_get_asn = mocker.patch.object(ip_info.asn, "get_asn")
     mock_get_rdns = mocker.patch.object(ip_info, "get_rdns")
-
-    mocker.patch.object(ip_info.asn, "update_asn", return_value=True)
+    ip_info.asn.update_asn = Mock(return_value=True)
     ip_info.handle_new_ip(ip)
     assert mock_get_geocountry.call_count == expected_calls.get(
         "get_geocountry", 0
@@ -468,11 +479,13 @@ def test_check_if_we_have_pending_mac_queries_with_mac_db(
         ("AA:BB:CC:DD:EE:FF", "profile_2"),
         Exception("Empty queue"),
     ]
-    mock_get_vendor = mocker.patch.object(ip_info, "get_vendor")
-    ip_info.check_if_we_have_pending_mac_queries()
-    assert mock_get_vendor.call_count == 2
-    mock_get_vendor.assert_any_call("00:11:22:33:44:55", "profile_1")
-    mock_get_vendor.assert_any_call("AA:BB:CC:DD:EE:FF", "profile_2")
+    mock_get_vendor_offline = mocker.patch.object(
+        ip_info, "get_vendor_offline"
+    )
+    ip_info.check_if_we_have_pending_offline_mac_queries()
+    assert mock_get_vendor_offline.call_count == 2
+    mock_get_vendor_offline.assert_any_call("00:11:22:33:44:55", "profile_1")
+    mock_get_vendor_offline.assert_any_call("AA:BB:CC:DD:EE:FF", "profile_2")
 
 
 def test_check_if_we_have_pending_mac_queries_empty_queue(
@@ -483,7 +496,7 @@ def test_check_if_we_have_pending_mac_queries_empty_queue(
     ip_info.pending_mac_queries = Mock()
     ip_info.pending_mac_queries.empty.return_value = True
     mock_get_vendor = mocker.patch.object(ip_info, "get_vendor")
-    ip_info.check_if_we_have_pending_mac_queries()
+    ip_info.check_if_we_have_pending_offline_mac_queries()
     mock_get_vendor.assert_not_called()
 
 

@@ -203,7 +203,8 @@ class AsyncModule(IModule, ABC, Process):
     async def run_main(self):
         return await self.main()
 
-    def run_async_function(self, func: Callable):
+    @staticmethod
+    def run_async_function(func: Callable):
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(func())
 

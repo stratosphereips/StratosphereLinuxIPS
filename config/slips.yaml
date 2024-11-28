@@ -239,7 +239,7 @@ threatintelligence:
    # 2 weeks = 604800 seconds
    mac_db_update : 1209600
 
-   mac_db : https://maclookup.app/downloads/json-database/get-db?t=22-08-19&h=d1d39c52de447a7e7194331f379e1e99f94f35f1
+   mac_db : https://maclookup.app/downloads/json-database/get-db?t=24-11-28&h=26271dbc3529f006a4be021ec4cf99fab16e39cd
 
    # the file that contains all our TI feeds URLs and their threat level
    ti_files : config/TI_feeds.csv
