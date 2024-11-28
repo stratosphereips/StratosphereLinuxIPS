@@ -47,8 +47,6 @@ class IPInfo(IModule):
         self.asn = ASN(self.db)
         self.JARM = JARM()
         self.classifier = FlowClassifier()
-        # Set the output queue of our database instance
-        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = self.db.subscribe("new_ip")
         self.c2 = self.db.subscribe("new_MAC")
         self.c3 = self.db.subscribe("new_dns")
@@ -64,6 +62,7 @@ class IPInfo(IModule):
         self.is_gw_mac_set = False
         self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        self.valid_tlds = whois.validTlds()
 
     async def open_dbs(self):
         """Function to open the different offline databases used in this
@@ -76,7 +75,8 @@ class IPInfo(IModule):
         except Exception:
             self.print(
                 "Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. "
-                "Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en "
+                "Please download it from "
+                "https://dev.maxmind.com/geoip/docs/databases/asn?lang=en "
                 "Please note it must be the MaxMind DB version."
             )
 
@@ -88,7 +88,8 @@ class IPInfo(IModule):
         except Exception:
             self.print(
                 "Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. "
-                "Please download it from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. "
+                "Please download it from "
+                "https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. "
                 "Please note it must be the MaxMind DB version."
             )
 
@@ -249,7 +250,7 @@ class IPInfo(IModule):
             return False
 
         domain_tld: str = self.whitelist.domain_analyzer.get_tld(domain)
-        if domain_tld not in whois.validTlds():
+        if domain_tld not in self.valid_tlds:
             return False
 
         cached_data = self.db.get_domain_data(domain)
@@ -264,7 +265,9 @@ class IPInfo(IModule):
             with redirect_stdout(f) and redirect_stderr(f):
                 # get registration date
                 try:
-                    creation_date = whois.query(domain).creation_date
+                    creation_date = whois.query(
+                        domain, timeout=2.0
+                    ).creation_date
                 except Exception:
                     return False
 
@@ -359,7 +362,8 @@ class IPInfo(IModule):
                 for line in arp_output.split("\n"):
                     fields = line.split()
                     gw_ip_from_arp_cmd = fields[1].strip("()")
-                    # Match the gw_ip in the output with the one given to this function
+                    # Match the gw_ip in the output with the one given to
+                    # this function
                     if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
                         gw_mac = fields[-4]
                         self.db.set_default_gateway("MAC", gw_mac)
@@ -372,8 +376,8 @@ class IPInfo(IModule):
 
     def check_if_we_have_pending_mac_queries(self):
         """
-        Checks if we have pending queries in pending_mac_queries queue, and asks the db for them IF
-        update manager is done updating the mac db
+        Checks if we have pending queries in pending_mac_queries queue, and
+        asks the db for them IF update manager is done updating the mac db
         """
         if hasattr(self, "mac_db") and not self.pending_mac_queries.empty():
             while True:
@@ -387,7 +391,8 @@ class IPInfo(IModule):
 
     def wait_for_dbs(self):
         """
-        wait for update manager to finish updating the mac db and open the rest of dbs before starting this module
+        wait for update manager to finish updating the mac db and open the
+        rest of dbs before starting this module
         """
         # this is the loop that controls te running on open_dbs
         loop = asyncio.new_event_loop()
