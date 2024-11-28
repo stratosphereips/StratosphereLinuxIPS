@@ -479,7 +479,7 @@ class IPInfo(AsyncModule):
         if ip := self.get_gateway_ip():
             self.db.set_default_gateway("IP", ip)
 
-    def handle_new_ip(self, ip):
+    def handle_new_ip(self, ip: str):
         try:
             # make sure its a valid ip
             ip_addr = ipaddress.ip_address(ip)
@@ -487,23 +487,25 @@ class IPInfo(AsyncModule):
             # not a valid ip skip
             return
 
-        if not ip_addr.is_multicast:
-            # Do we have cached info about this ip in redis?
-            # If yes, load it
-            cached_ip_info = self.db.get_ip_info(ip)
-            if not cached_ip_info:
-                cached_ip_info = {}
+        if ip_addr.is_multicast:
+            return
 
-            # Get the geocountry
-            if cached_ip_info == {} or "geocountry" not in cached_ip_info:
-                self.get_geocountry(ip)
+        # Do we have cached info about this ip in redis?
+        # If yes, load it
+        cached_ip_info = self.db.get_ip_info(ip)
+        if not cached_ip_info:
+            cached_ip_info = {}
 
-            # only update the ASN for this IP if more than 1 month
-            # passed since last ASN update on this IP
-            if self.asn.should_update_asn(cached_ip_info):
-                self.asn.get_asn(ip, cached_ip_info)
+        # Get the geocountry
+        if cached_ip_info == {} or "geocountry" not in cached_ip_info:
+            self.get_geocountry(ip)
 
-            self.get_rdns(ip)
+        # only update the ASN for this IP if more than 1 month
+        # passed since last ASN update on this IP
+        if self.asn.should_update_asn(cached_ip_info):
+            self.asn.get_asn(ip, cached_ip_info)
+
+        self.get_rdns(ip)
 
     async def main(self):
         if msg := self.get_msg("new_MAC"):
