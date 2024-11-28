@@ -57,8 +57,6 @@ class IPInfo(IModule):
             "new_dns": self.c3,
             "check_jarm_hash": self.c4,
         }
-        # update asn every 1 month
-        self.update_period = 2592000
         self.is_gw_mac_set = False
         self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
@@ -93,9 +91,9 @@ class IPInfo(IModule):
                 "Please note it must be the MaxMind DB version."
             )
 
-        asyncio.create_task(self.read_macdb())
+        asyncio.create_task(self.read_mac_db())
 
-    async def read_macdb(self):
+    async def read_mac_db(self):
         while True:
             try:
                 self.mac_db = open("databases/macaddress-db.json", "r")
@@ -115,6 +113,7 @@ class IPInfo(IModule):
         """
         if not hasattr(self, "country_db"):
             return False
+
         if utils.is_private_ip(ipaddress.ip_address(ip)):
             # Try to find if it is a local/private IP
             data = {"geocountry": "Private"}
@@ -139,7 +138,7 @@ class IPInfo(IModule):
         """
         return socket.AF_INET6 if ":" in ip else socket.AF_INET
 
-    def get_rdns(self, ip):
+    def get_rdns(self, ip: str) -> dict:
         """
         get reverse DNS of an ip
         returns RDNS of the given ip or False if not found
@@ -151,11 +150,12 @@ class IPInfo(IModule):
             reverse_dns: str = socket.gethostbyaddr(ip)[0]
             # if there's no reverse dns record for this ip, reverse_dns will be an ip.
             try:
-                # reverse_dns is an ip. there's no reverse dns. don't store
+                # check if the reverse_dns value is a valid IP address
                 socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
+                # reverse_dns is an ip. there's no reverse dns. don't store
                 return False
             except socket.error:
-                # all good, store it
+                # reverse_dns is a valid hostname, store it
                 data["reverse_dns"] = reverse_dns
                 self.db.set_ip_info(ip, data)
         except (socket.gaierror, socket.herror, OSError):
@@ -173,7 +173,7 @@ class IPInfo(IModule):
         # of HTTP/1.1 204 No Content
         url = "https://api.macvendors.com"
         try:
-            response = requests.get(f"{url}/{mac_addr}", timeout=5)
+            response = requests.get(f"{url}/{mac_addr}", timeout=2)
             if response.status_code == 200:
                 # this online db returns results in an array like str [{results}],
                 # make it json
@@ -223,7 +223,8 @@ class IPInfo(IModule):
         ):
             return False
 
-        # don't look for the vendor again if we already have it for this profileid
+        # don't look for the vendor again if we already have it for this
+        # profileid
         if self.db.get_mac_vendor_from_profile(profileid):
             return True
 
@@ -260,7 +261,7 @@ class IPInfo(IModule):
 
         # whois library doesn't only raise an exception, it prints the error!
         # the errors are the same exceptions we're handling
-        # temorarily change stdout to /dev/null
+        # so temporarily change stdout to /dev/null
         with open("/dev/null", "w") as f:
             with redirect_stdout(f) and redirect_stderr(f):
                 # get registration date
@@ -376,7 +377,8 @@ class IPInfo(IModule):
 
     def check_if_we_have_pending_mac_queries(self):
         """
-        Checks if we have pending queries in pending_mac_queries queue, and
+        Checks if we have pending MAC queries to get the vendor of.
+        queries are taken from the pending_mac_queries queue
         asks the db for them IF update manager is done updating the mac db
         """
         if hasattr(self, "mac_db") and not self.pending_mac_queries.empty():
@@ -384,7 +386,6 @@ class IPInfo(IModule):
                 try:
                     mac, profileid = self.pending_mac_queries.get(timeout=0.5)
                     self.get_vendor(mac, profileid)
-
                 except Exception:
                     # queue is empty
                     return
@@ -394,7 +395,7 @@ class IPInfo(IModule):
         wait for update manager to finish updating the mac db and open the
         rest of dbs before starting this module
         """
-        # this is the loop that controls te running on open_dbs
+        # this is the loop that controls tasks running on open_dbs
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         # run open_dbs in the background so we don't have
@@ -485,17 +486,15 @@ class IPInfo(IModule):
             if not cached_ip_info:
                 cached_ip_info = {}
 
-            # ------ GeoCountry -------
             # Get the geocountry
             if cached_ip_info == {} or "geocountry" not in cached_ip_info:
                 self.get_geocountry(ip)
 
-            # ------ ASN -------
-            # Get the ASN
             # only update the ASN for this IP if more than 1 month
             # passed since last ASN update on this IP
-            if self.asn.update_asn(cached_ip_info, self.update_period):
+            if self.asn.should_update_asn(cached_ip_info):
                 self.asn.get_asn(ip, cached_ip_info)
+
             self.get_rdns(ip)
 
     def main(self):
