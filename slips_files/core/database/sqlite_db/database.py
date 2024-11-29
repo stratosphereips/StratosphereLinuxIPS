@@ -15,7 +15,10 @@ from slips_files.core.output import Output
 
 
 class SQLiteDB:
-    """Stores all the flows slips reads and handles labeling them"""
+    """
+    Stores all the flows slips reads and handles labeling them
+    Creates a new db and connects to it if there's none in the given output_dir
+    """
 
     name = "SQLiteDB"
     # used to lock each call to commit()

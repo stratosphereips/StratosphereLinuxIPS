@@ -11,22 +11,23 @@ import time
 from datetime import datetime
 from distutils.dir_util import copy_tree
 from typing import Set
+import logging
 
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
+from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.performance_profilers.cpu_profiler import CPUProfiler
-from slips_files.common.performance_profilers.memory_profiler import (
-    MemoryProfiler,
-)
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
+
+
+logging.basicConfig(level=logging.WARNING)
 
 DAEMONIZED_MODE = "daemonized"
 
@@ -42,7 +43,7 @@ class Main:
         self.metadata_man = MetadataManager(self)
         self.conf = ConfigParser()
         self.ui_man = UIManager(self)
-
+        self.profilers_manager = ProfilersManager(self)
         self.version = utils.get_slips_version()
         # will be filled later
         self.commit = "None"
@@ -72,123 +73,6 @@ class Main:
                 self.twid_width = self.conf.get_tw_width()
                 # should be initialised after self.input_type is set
                 self.host_ip_man = HostIPManager(self)
-
-    def cpu_profiler_init(self):
-        self.cpuProfilerEnabled = self.conf.get_cpu_profiler_enable()
-        self.cpuProfilerMode = self.conf.get_cpu_profiler_mode()
-        self.cpuProfilerMultiprocess = (
-            self.conf.get_cpu_profiler_multiprocess()
-        )
-        if self.cpuProfilerEnabled:
-            try:
-                if (
-                    self.cpuProfilerMultiprocess
-                    and self.cpuProfilerMode == "dev"
-                ):
-                    args = sys.argv
-                    if args[-1] != "--no-recurse":
-                        tracer_entries = str(
-                            self.conf.get_cpu_profiler_dev_mode_entries()
-                        )
-                        viz_args = [
-                            "viztracer",
-                            "--tracer_entries",
-                            tracer_entries,
-                            "--max_stack_depth",
-                            "10",
-                            "-o",
-                            str(
-                                os.path.join(
-                                    self.args.output,
-                                    "cpu_profiling_result.json",
-                                )
-                            ),
-                        ]
-                        viz_args.extend(args)
-                        viz_args.append("--no-recurse")
-                        print(
-                            "Starting multiprocess profiling recursive subprocess"
-                        )
-                        subprocess.run(viz_args)
-                        exit(0)
-                else:
-                    self.cpuProfiler = CPUProfiler(
-                        db=self.db,
-                        output=self.args.output,
-                        mode=self.conf.get_cpu_profiler_mode(),
-                        limit=self.conf.get_cpu_profiler_output_limit(),
-                        interval=self.conf.get_cpu_profiler_sampling_interval(),
-                    )
-                    self.cpuProfiler.start()
-            except Exception as e:
-                print(e)
-                self.cpuProfilerEnabled = False
-
-    def cpu_profiler_release(self):
-        if hasattr(self, "cpuProfilerEnabled"):
-            if self.cpuProfilerEnabled and not self.cpuProfilerMultiprocess:
-                self.cpuProfiler.stop()
-                self.cpuProfiler.print()
-
-    def memory_profiler_init(self):
-        self.memoryProfilerEnabled = self.conf.get_memory_profiler_enable()
-        memoryProfilerMode = self.conf.get_memory_profiler_mode()
-        memoryProfilerMultiprocess = (
-            self.conf.get_memory_profiler_multiprocess()
-        )
-        if self.memoryProfilerEnabled:
-            output_dir = os.path.join(self.args.output, "memoryprofile/")
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
-            output_file = os.path.join(output_dir, "memory_profile.bin")
-            self.memoryProfiler = MemoryProfiler(
-                output_file,
-                db=self.db,
-                mode=memoryProfilerMode,
-                multiprocess=memoryProfilerMultiprocess,
-            )
-            self.memoryProfiler.start()
-
-    def memory_profiler_release(self):
-        if (
-            hasattr(self, "memoryProfilerEnabled")
-            and self.memoryProfilerEnabled
-        ):
-            self.memoryProfiler.stop()
-
-    def memory_profiler_multiproc_test(self):
-        def target_function():
-            print("Target function started")
-            time.sleep(5)
-
-        def mem_function():
-            print("Mem function started")
-            while True:
-                time.sleep(1)
-                array = []
-                for i in range(1000000):
-                    array.append(i)
-
-        processes = []
-        num_processes = 3
-
-        for _ in range(num_processes):
-            process = multiprocessing.Process(
-                target=target_function if _ % 2 else mem_function
-            )
-            process.start()
-            processes.append(process)
-
-        # Message passing
-        self.db.publish("memory_profile", processes[1].pid)  # successful
-        # target_function will timeout and tracker will be cleared
-        time.sleep(5)
-        # end but maybe don't start
-        self.db.publish("memory_profile", processes[0].pid)
-        time.sleep(5)  # mem_function will get tracker started
-        # start successfully
-        self.db.publish("memory_profile", processes[0].pid)
-        input()
 
     def check_zeek_or_bro(self):
         """
@@ -617,8 +501,8 @@ class Main:
                 1,
                 0,
             )
-            self.cpu_profiler_init()
-            self.memory_profiler_init()
+            self.profilers_manager.cpu_profiler_init()
+            self.profilers_manager.memory_profiler_init()
 
             if self.args.growing:
                 if self.input_type != "zeek_folder":

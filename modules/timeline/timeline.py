@@ -2,7 +2,10 @@ import traceback
 import sys
 import time
 import json
-from typing import Any
+from typing import (
+    Any,
+    List,
+)
 
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -20,15 +23,19 @@ class Timeline(IModule):
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 
     def init(self):
-        self.separator = self.db.get_field_separator()
+        self.read_configuration()
         self.c1 = self.db.subscribe("new_flow")
         self.channels = {
             "new_flow": self.c1,
         }
+        self.classifier = FlowClassifier()
+        self.host_ip: str = self.db.get_host_ip()
+
+    def read_configuration(self):
         conf = ConfigParser()
         self.is_human_timestamp = conf.timeline_human_timestamp()
         self.analysis_direction = conf.analysis_direction()
-        self.classifier = FlowClassifier()
+        self.client_ips: List[str] = conf.client_ips()
 
     def convert_timestamp_to_slips_format(self, timestamp: float) -> str:
         if self.is_human_timestamp:
@@ -42,7 +49,11 @@ class Timeline(IModule):
 
     def is_inbound_traffic(self, flow) -> bool:
         """return True if profileid's IP is the same as the daddr"""
-        return self.analysis_direction == "all" and flow.daddr == flow.saddr
+        if self.analysis_direction != "all":
+            # slips only detects inbound traffic in the "all" direction
+            return False
+
+        return flow.daddr == self.host_ip or flow.daddr in self.client_ips
 
     def process_dns_altflow(self, alt_flow: dict):
         answer = alt_flow["answers"]

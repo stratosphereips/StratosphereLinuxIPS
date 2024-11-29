@@ -21,8 +21,6 @@
 import json
 from typing import List, Dict, Optional
 from datetime import datetime
-
-# from colorama import Fore, Style
 from os import path
 import sys
 import os
@@ -672,7 +670,7 @@ class EvidenceHandler(ICore):
 
                 # if the profile was already blocked in
                 # this twid, we shouldn't alert
-                profile_already_blocked = self.db.checkBlockedProfTW(
+                profile_already_blocked = self.db.is_blocked_profile_and_tw(
                     profileid, twid
                 )
                 # This is the part to detect if the accumulated

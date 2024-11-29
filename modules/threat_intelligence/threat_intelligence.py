@@ -62,7 +62,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.urlhaus = URLhaus(self.db)
         self.spamhaus = Spamhaus(self.db)
         self.pending_queries = multiprocessing.Queue()
-        self.calls_thread = threading.Thread(
+        self.pending_circllu_calls_thread = threading.Thread(
             target=self.handle_pending_queries, daemon=True
         )
         self.circllu = Circllu(self.db, self.pending_queries)
@@ -559,6 +559,23 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
     def is_valid_threat_level(self, threat_level):
         return threat_level in utils.threat_levels
 
+    def parse_known_fp_hashes(self, fullpath: str):
+        fp_hashes = {}
+        with open(fullpath) as fps:
+            # skip comments
+            for line in fps:
+                if line.startswith("#"):
+                    continue
+
+                # split the line into parts
+                parts = line.split(", ")
+                description = parts[0]
+                hashes = parts[1:]
+                for hash in hashes:
+                    fp_hashes[hash] = description
+
+        self.db.store_known_fp_md5_hashes(fp_hashes)
+
     def parse_local_ti_file(self, ti_file_path: str) -> bool:
         """Parses a local threat intelligence (TI) file to extract
          and store various indicators of compromise (IoCs), including IP
@@ -676,11 +693,11 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                     )
 
         # Add all loaded malicious ips to the database
-        self.db.add_ips_to_IoC(malicious_ips)
+        self.db.add_ips_to_ioc(malicious_ips)
         # Add all loaded malicious domains to the database
-        self.db.add_domains_to_IoC(malicious_domains)
-        self.db.add_ip_range_to_IoC(malicious_ip_ranges)
-        self.db.add_asn_to_IoC(malicious_asns)
+        self.db.add_domains_to_ioc(malicious_domains)
+        self.db.add_ip_range_to_ioc(malicious_ip_ranges)
+        self.db.add_asn_to_ioc(malicious_asns)
         return True
 
     def __delete_old_source_ips(self, file):
@@ -707,7 +724,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             if data["source"] == file:
                 old_data.append(ip)
         if old_data:
-            self.db.delete_ips_from_IoC_ips(old_data)
+            self.db.delete_ips_from_ioc_ips(old_data)
 
     def __delete_old_source_domains(self, file):
         """Deletes all domain indicators of compromise (IoCs) associated with a specific
@@ -731,7 +748,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             if data["source"] == file:
                 old_data.append(domain)
         if old_data:
-            self.db.delete_domains_from_IoC_domains(old_data)
+            self.db.delete_domains_from_ioc_domains(old_data)
 
     def __delete_old_source_data_from_database(self, data_file):
         """Deletes old indicators of compromise (IoCs) associated with a specific source
@@ -820,38 +837,24 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                     }
                 )
         # Add all loaded JA3 to the database
-        self.db.add_ja3_to_IoC(ja3_dict)
+        self.db.add_ja3_to_ioc(ja3_dict)
         return True
 
     def parse_jarm_file(self, path):
-        """Parses a file containing JARM hashes, their associated threat levels, and
-        descriptions, then stores this information in the database. The file is expected
-        to follow a specific format where each line contains a JARM hash, its threat
-        level, and a descriptive text, separated by commas.
+        """
+        Parses a file of JARM hashes with their threat levels and descriptions, then stores the data in the database.
 
         Parameters:
-            path (str): The absolute path to the local file containing
-            JARM hashes.
-
+        path (str): Absolute path to the JARM hash file.
         Returns:
-            bool: Always returns True to indicate the method has executed.
-             This behavior could be modified in the future to reflect the
-              success status of parsing and database storage operations.
 
-        This method processes each line of the provided file, skipping any
-        lines that are commented out or improperly formatted. It validates
-         the threat level of each JARM hash against a predefined list of
-         valid levels,
-         defaulting to 'medium' if the provided level is not recognized.
+        bool: Always True, indicating execution success (may change in the future).
+        Details:
 
-        Side Effects:
-            - Populates the database with new JARM hash records extracted
-            from the provided file. Existing records for a JARM hash are
-            not explicitly handled in this method, so duplicate entries
-            could occur if not managed elsewhere.
-            - Logs the progress of reading the file, including a message
-            indicating the start of the process and any errors related to
-            invalid line formats.
+        Processes each line, skipping comments and invalid formats.
+        Validates threat levels, defaulting to 'medium' if unrecognized.
+        Populates the database with parsed JARM hash records (duplicates are not handled).
+        Logs progress, including errors for invalid lines.
         """
         filename = os.path.basename(path)
         jarm_dict = {}
@@ -898,8 +901,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                         "threat_level": threat_level,
                     }
                 )
-        # Add all loaded JARM to the database
-        self.db.add_jarm_to_IoC(jarm_dict)
+        self.db.add_jarm_to_ioc(jarm_dict)
         return True
 
     def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
@@ -1139,8 +1141,8 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
     def is_inbound_traffic(self, ip: str, ip_state: str) -> bool:
         """
         checks if the given ip is connecting to us
-        returns true of the given conditions
-        1. ip is a saddr
+        returns true on the given conditions
+        1. the given ip is a saddr (aka someone connecting TO us)
         2. ip is public
         3. ip is not our host ip
         """
@@ -1204,7 +1206,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         if not asn:
             return
 
-        if asn_info := self.db.is_blacklisted_ASN(asn):
+        if asn_info := self.db.is_blacklisted_asn(asn):
             asn_info = json.loads(asn_info)
             self.set_evidence_malicious_asn(
                 ip,
@@ -1357,7 +1359,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             # not malicious
             return False
 
-        self.db.add_ips_to_IoC({ip: json.dumps(ip_info)})
+        self.db.add_ips_to_ioc({ip: json.dumps(ip_info)})
         if is_dns_response:
             self.set_evidence_malicious_ip_in_dns_response(
                 ip,
@@ -1405,6 +1407,11 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             # "CmM1ggccDvwnwPCl3","CBwoAH2RcIueFH4eu9","CZVfkc4BGLqRR7wwD5"],
             # "source":"HTTP","depth":0,"analyzers":["SHA1","SHA256","MD5"]
             # .. }
+            return
+
+        if self.db.is_known_fp_md5_hash(flow_info["flow"]["md5"]):
+            # this is a known FP https://github.com/Neo23x0/ti-falsepositives/tree/master
+            # its benign so dont look it up
             return
 
         if blacklist_details := self.search_online_for_hash(flow_info):
@@ -1706,16 +1713,14 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
              of the TI file.
         """
         fullpath = os.path.join(self.path_to_local_ti_files, filename)
+        parsers = {
+            "own_malicious_iocs.csv": self.parse_local_ti_file,
+            "own_malicious_JA3.csv": self.parse_ja3_file,
+            "own_malicious_JARM.csv": self.parse_jarm_file,
+            "known_fp_md5_hashes.csv": self.parse_known_fp_hashes,
+        }
         if filehash := self.should_update_local_ti_file(fullpath):
-            if "JA3" in filename:
-                # Load updated data to the database
-                self.parse_ja3_file(fullpath)
-            elif "JARM" in filename:
-                # Load updated data to the database
-                self.parse_jarm_file(fullpath)
-            else:
-                # Load updated data to the database
-                self.parse_local_ti_file(fullpath)
+            parsers[filename](fullpath)
             # Store the new etag and time of file in the database
             malicious_file_info = {"hash": filehash}
             self.db.set_ti_feed_info(filename, malicious_file_info)
@@ -1767,11 +1772,12 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             "own_malicious_iocs.csv",
             "own_malicious_JA3.csv",
             "own_malicious_JARM.csv",
+            "known_fp_md5_hashes.csv",
         )
         for local_file in local_files:
             self.update_local_file(local_file)
 
-        self.calls_thread.start()
+        self.pending_circllu_calls_thread.start()
 
     def main(self):
         # The channel can receive an IP address or a domain name

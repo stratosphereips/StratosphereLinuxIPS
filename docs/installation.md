@@ -10,6 +10,7 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
   * Dockerhub (recommended)
     * [Linux and windows hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#linux-and-windows-hosts)
     * [MacOS hosts](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#macos-hosts)
+    * [Light Slips Image](#minimal-slips-docker-image)
   * [Docker-compose](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-using-docker-compose)
   * [Dockerfile](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#building-slips-from-the-dockerfile)
 * Native
@@ -31,7 +32,7 @@ Slips can be run inside a Docker. Either using our docker image with from Docker
 or building Slips image from the Dockerfile for more advanced users.
 
 In both cases, you need to have the Docker platform installed in your computer.
-Instructions how to install Docker is https://docs.docker.com/get-docker/.
+For instructions how to install Docker check https://docs.docker.com/get-docker/.
 
 The recommended way of using slips would be to
 * Run Slips from Dockerhub
@@ -72,6 +73,30 @@ To analyze your own files using slips, you can mount it to your docker using -v
 	cp <some-place>/myfile.pcap ~/dataset
 	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
 	./slips.py -f dataset/myfile.pcap
+
+
+#### Minimal Slips Docker Image
+In addition to the full stratosphereips/slips:latest image, there is now a minimal Docker image available: using `docker pull stratosphereips/slips_light:latest`. This image excludes the following modules to reduce size and resource usage:
+
+* rnn_cc_detection/
+* timeline/
+* kalipso/
+* p2ptrust/
+* flowmldetection/
+* cyst/
+* cesnet/
+* exporting_alerts/
+* riskiq/
+* template/
+* blocking/
+* virustotal/
+
+Additionally, several directories and files have been removed from this minimal image, including:
+dataset/, docs/, tests/
+
+Slips' two GUIs, kalipso and the web interface, aren't available in this image. The only way to check the slips output there is by going through the generated logs.
+
+The stratosphereips/slips_light:latest image is recommended for users who do not require these specific modules and want a more lightweight deployment.
 
 
 ### Update slips image

@@ -127,7 +127,7 @@ def test_is_ip_in_org(
     expected_result,
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_org_IPs.return_value = org_ips
+    whitelist.db.get_org_ips.return_value = org_ips
     result = whitelist.org_analyzer.is_ip_in_org(ip, org)
     assert result == expected_result
 

@@ -62,7 +62,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         the given domain
         :param domain: domain to check if whitelisted
         :param direction: is the given domain src or dst domain?
-        :param should_ignore: can be flows or alerts
+        :param should_ignore: which whitelist to check? can be flows or alerts
         """
 
         if not isinstance(domain, str):
@@ -110,5 +110,5 @@ class DomainAnalyzer(IWhitelistAnalyzer):
 
     @staticmethod
     def get_tld(url: str):
-        """returns the top level domain from the gven url"""
+        """returns the top level domain from the given url"""
         return tldextract.extract(url).suffix

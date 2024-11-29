@@ -15,17 +15,28 @@ class HostIPManager:
     def get_host_ip(self) -> Optional[str]:
         """
         tries to determine the machine's IP address by creating a UDP
-        connection to a remote server
+        connection to cloudflare
+        returns ipv4 or ipv6 of the current computer
         """
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("1.1.1.1", 80))
-            ipaddr_check = s.getsockname()[0]
-            s.close()
-        except socket.error:
-            # not connected to the internet
-            return None
-        return ipaddr_check
+        for address_family in (socket.AF_INET, socket.AF_INET6):
+            try:
+                s = socket.socket(address_family, socket.SOCK_DGRAM)
+
+                test_address = (
+                    ("1.1.1.1", 80)
+                    if address_family == socket.AF_INET
+                    else ("2606:4700:4700::1111", 80)
+                )
+
+                s.connect(test_address)
+                ipaddr_check = s.getsockname()[0]
+                s.close()
+                return ipaddr_check
+            except socket.error:
+                continue
+
+        # neither ipv4 nor ipv6 worked
+        return None
 
     def store_host_ip(self) -> Optional[str]:
         """

@@ -81,12 +81,13 @@ parameters:
    # zeek breaks the connection into smaller connections
    tcp_inactivity_timeout : 60
 
-   # Should we delete the previously stored data in the DB when we start??
+   # Should we delete the previously stored data in the DB when we start?
    # By default False. Meaning we don't DELETE the DB by default.
    deletePrevdb : True
+
    # You can remember the data in all the previous runs of the DB if you put False.
-   # Redis will remember as long as the redis server is not down. The persistance is
-   # on the memory, not disk.
+   # Redis will remember as long as the redis server is not down. The persistence is
+   # in memory, not disk.
    # deletePrevdb : False
 
    # Set the label for all the flows that are being read.
@@ -147,22 +148,18 @@ detection:
    # This threshold is the minimum accumulated threat level per
    # time window needed to generate an alert.
    # It controls how sensitive Slips is.
-   # the default 3.46 value gives you balanced detections with
+   # the default 0.25 value gives you balanced detections with
    # the optimal false positive rate and accuracy
 
-   # The optimal range is from 3.1 to 3.89, The higher the value in this range, the less false positives
-   # and the less accuracy you get.
-
    # Here are more options
-   # - 0.2:  Use this threshold If you want Slips to be super sensitive with higher FPR,
+   # - 0.08:  Use this threshold If you want Slips to be super sensitive with higher FPR,
    #        using this means you are less likely to miss a
    #        detection but more likely to get false positives
-   # - 6.3:  Use this threshold If you want Slips to be insensitive.
+   # - 0.25:  Optimal threshold, has the most optimal FPR and TPR.
+   # - 0.43:  Use this threshold If you want Slips to be insensitive.
    #        Using this means Slips will need so many evidence to trigger an alert.
    #        May lead to false negatives
-   # - 3.1:  The start of the Optimal range, has more false positives but more accurate.
-   # - 3.86: The end of the Optimal range, has less false positives but less accurate.
-   evidence_detection_threshold : 3.46
+   evidence_detection_threshold : 0.25
 
 
    # Slips can show a popup/notification with every alert.
@@ -243,7 +240,7 @@ threatintelligence:
    # 2 weeks = 604800 seconds
    mac_db_update : 1209600
 
-   mac_db : https://maclookup.app/downloads/json-database/get-db?t=22-08-19&h=d1d39c52de447a7e7194331f379e1e99f94f35f1
+   mac_db : https://maclookup.app/downloads/json-database/get-db?t=24-11-28&h=26271dbc3529f006a4be021ec4cf99fab16e39cd
 
    # the file that contains all our TI feeds URLs and their threat level
    ti_files : config/TI_feeds.csv

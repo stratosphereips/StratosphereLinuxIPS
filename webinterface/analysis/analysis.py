@@ -3,7 +3,7 @@ from flask import render_template
 import json
 from collections import defaultdict
 from typing import Dict, List
-from ..database.database import __database__
+from ..database.database import db
 from slips_files.common.slips_utils import utils
 
 analysis = Blueprint(
@@ -25,7 +25,7 @@ def ts_to_date(ts, seconds=False):
 
 
 def get_all_tw_with_ts(profileid):
-    tws = __database__.db.zrange(f"tws{profileid}", 0, -1, withscores=True)
+    tws = db.get_tws_from_profile(profileid)
     dict_tws = defaultdict(dict)
 
     for tw_tuple in tws:
@@ -56,10 +56,9 @@ def get_ip_info(ip):
         "ref_file": "-",
         "com_file": "-",
     }
-    if ip_info := __database__.cachedb.hget("IPsInfo", ip):
-        ip_info = json.loads(ip_info)
-        # Hardcoded decapsulation due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
-
+    if ip_info := db.get_ip_info(ip):
+        # Hardcoded decapsulation due to the complexity of data inside.
+        # Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
         # set geocountry
         geocountry = ip_info.get("geocountry", "-")
 
@@ -123,17 +122,15 @@ def set_profile_tws():
     """
     Set profiles and their timewindows into the tree.
     Blocked are highligted in red.
-    :return: (profile, [tw, blocked], blocked)
     """
-
     profiles_dict = {}
     # Fetch profiles
-    profiles = __database__.db.smembers("profiles")
+    profiles = db.get_profiles()
     for profileid in profiles:
         profile_word, profile_ip = profileid.split("_")
         profiles_dict[profile_ip] = False
 
-    if blocked_profiles := __database__.db.smembers("malicious_profiles"):
+    if blocked_profiles := db.get_malicious_profiles():
         for profile in blocked_profiles:
             blocked_ip = profile.split("_")[-1]
             profiles_dict[blocked_ip] = True
@@ -159,22 +156,21 @@ def set_ip_info(ip):
     return {"data": data}
 
 
-@analysis.route("/tws/<profileid>")
-def set_tws(profileid):
+@analysis.route("/tws/<ip>")
+def set_tws(ip):
     """
     Set timewindows for selected profile
-    :param profileid: ip of the profile
+    :param ip: ip of the profile
     :return:
     """
 
     # Fetch all profile TWs
-    tws: Dict[str, dict] = get_all_tw_with_ts(f"profile_{profileid}")
+    profileid = f"profile_{ip}"
+    tws: Dict[str, dict] = get_all_tw_with_ts(profileid)
 
     blocked_tws: List[str] = []
     for tw_id, twid_details in tws.items():
-        is_blocked: bool = __database__.db.hget(
-            f"profile_{profileid}_{tw_id}", "alerts"
-        )
+        is_blocked: bool = db.get_profileid_twid_alerts(profileid, tw_id)
         if is_blocked:
             blocked_tws.append(tw_id)
 
@@ -192,18 +188,17 @@ def set_tws(profileid):
     return {"data": data}
 
 
-@analysis.route("/intuples/<profile>/<timewindow>")
-def set_intuples(profile, timewindow):
+@analysis.route("/intuples/<ip>/<timewindow>")
+def set_intuples(ip, timewindow):
     """
     Set intuples of a chosen profile and timewindow.
-    :param profile: active profile
+    :param ip: ip of active profile
     :param timewindow: active timewindow
     :return: (tuple, string, ip_info)
     """
     data = []
-    if intuples := __database__.db.hget(
-        f"profile_{profile}_{timewindow}", "InTuples"
-    ):
+    profileid = f"profile_{ip}"
+    if intuples := db.get_intuples_from_profile_tw(profileid, timewindow):
         intuples = json.loads(intuples)
         for key, value in intuples.items():
             ip, port, protocol = key.split("-")
@@ -216,21 +211,19 @@ def set_intuples(profile, timewindow):
     return {"data": data}
 
 
-@analysis.route("/outtuples/<profile>/<timewindow>")
-def set_outtuples(profile, timewindow):
+@analysis.route("/outtuples/<ip>/<timewindow>")
+def set_outtuples(ip, timewindow):
     """
     Set outtuples of a chosen profile and timewindow.
-    :param profile: active profile
+    :param ip: ip of active profile
     :param timewindow: active timewindow
     :return: (tuple, key, ip_info)
     """
 
     data = []
-    if outtuples := __database__.db.hget(
-        f"profile_{profile}_{timewindow}", "OutTuples"
-    ):
+    profileid = f"profile_{ip}"
+    if outtuples := db.get_outtuples_from_profile_tw(profileid, timewindow):
         outtuples = json.loads(outtuples)
-
         for key, value in outtuples.items():
             ip, port, protocol = key.split("-")
             ip_info = get_ip_info(ip)
@@ -241,15 +234,16 @@ def set_outtuples(profile, timewindow):
     return {"data": data}
 
 
-@analysis.route("/timeline_flows/<profile>/<timewindow>")
-def set_timeline_flows(profile, timewindow):
+@analysis.route("/timeline_flows/<ip>/<timewindow>")
+def set_timeline_flows(ip, timewindow):
     """
     Set timeline flows of a chosen profile and timewindow.
     :return: list of timeline flows as set initially in database
     """
     data = []
-    if timeline_flows := __database__.db.hgetall(
-        f"profile_{profile}_{timewindow}_flows"
+    profileid = f"profile_{ip}"
+    if timeline_flows := db.get_all_flows_in_profileid_twid(
+        profileid, timewindow
     ):
         for key, value in timeline_flows.items():
             value = json.loads(value)
@@ -268,9 +262,9 @@ def set_timeline_flows(profile, timewindow):
     return {"data": data}
 
 
-@analysis.route("/timeline/<profile>/<timewindow>")
+@analysis.route("/timeline/<ip>/<timewindow>")
 def set_timeline(
-    profile,
+    ip,
     timewindow,
 ):
     """
@@ -278,10 +272,8 @@ def set_timeline(
     :return: list of timeline as set initially in database
     """
     data = []
-
-    if timeline := __database__.db.zrange(
-        f"profile_{profile}_{timewindow}_timeline", 0, -1
-    ):
+    profileid = f"profile_{ip}"
+    if timeline := db.get_profiled_tw_timeline(profileid, timewindow):
         for flow in timeline:
             flow = json.loads(flow)
 
@@ -310,21 +302,18 @@ def set_timeline(
     return {"data": data}
 
 
-@analysis.route("/alerts/<profile>/<timewindow>")
-def set_alerts(profile, timewindow):
+@analysis.route("/alerts/<ip>/<timewindow>")
+def set_alerts(ip, timewindow):
     """
     Set alerts for chosen profile and timewindow
     """
     data = []
-    profile = f"profile_{profile}"
-    if alerts := __database__.db.hget("alerts", profile):
-        alerts = json.loads(alerts)
+    profile = f"profile_{ip}"
+    if alerts := db.get_profileid_twid_alerts(profile, timewindow):
         alerts_tw = alerts.get(timewindow, {})
         tws = get_all_tw_with_ts(profile)
 
-        evidence: Dict[str, str] = __database__.db.hgetall(
-            f"{profile}_{timewindow}_evidence"
-        )
+        evidence: Dict[str, str] = db.get_twid_evidence(profile, timewindow)
 
         for alert_id, evidence_id_list in alerts_tw.items():
             evidence_count = len(evidence_id_list)
@@ -349,46 +338,43 @@ def set_alerts(profile, timewindow):
     return {"data": data}
 
 
-@analysis.route("/evidence/<profile>/<timewindow>/<alert_id>")
-def set_evidence(profile, timewindow, alert_id):
+@analysis.route("/evidence/<ip>/<timewindow>/<alert_id>")
+def set_evidence(ip, timewindow, alert_id: str):
     """
-    Set evidence table for the pressed alert in chosem profile and timewindow
+    Set evidence table for the pressed alert in chosen profile and timewindow
     """
 
     data = []
-    if alerts := __database__.db.hget("alerts", f"profile_{profile}"):
-        alerts = json.loads(alerts)
-        alerts_tw = alerts[timewindow]
-        # get the list of evidence that were part of this alert
-        evidence_ids: List[str] = alerts_tw[alert_id]
+    profileid = f"profile_{ip}"
 
-        profileid = f"profile_{profile}"
-        evidence: Dict[str, str] = __database__.db.hgetall(
-            f"{profileid}_{timewindow}_evidence"
-        )
-
+    # get the list of evidence that were part of this alert
+    evidence_ids: List[str] = db.get_evidence_causing_alert(
+        profileid, timewindow, alert_id
+    )
+    if evidence_ids:
         for evidence_id in evidence_ids:
-            temp_evidence = json.loads(evidence[evidence_id])
-            data.append(temp_evidence)
+            # get the actual evidence represented by the id
+            evidence: Dict[str, str] = db.get_evidence_by_id(
+                profileid, timewindow, evidence_id
+            )
+            data.append(evidence)
     return {"data": data}
 
 
-@analysis.route("/evidence/<profile>/<timewindow>/")
-def set_evidence_general(profile: str, timewindow: str):
+@analysis.route("/evidence/<ip>/<timewindow>/")
+def set_evidence_general(ip: str, timewindow: str):
     """
     Set an analysis tag with general evidence
-    :param profile: the ip
+    :param ip: the ip of the profile
     :param timewindow: timewindowx
     :return: {"data": data} where data is a list of evidences
     """
     data = []
-    profile = f"profile_{profile}"
-
-    evidence: Dict[str, str] = __database__.db.hgetall(
-        f"{profile}_{timewindow}_evidence"
-    )
+    profile = f"profile_{ip}"
+    evidence: Dict[str, str] = db.get_twid_evidence(profile, timewindow)
     if evidence:
         for evidence_details in evidence.values():
+            evidence_details: str
             evidence_details: dict = json.loads(evidence_details)
             data.append(evidence_details)
     return {"data": data}

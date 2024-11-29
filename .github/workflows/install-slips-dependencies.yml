@@ -1,0 +1,64 @@
+name: Install Slips Dependencies
+
+on:
+  # workflow_call make this workflow re-usable
+  workflow_call:
+    # these are like variables to make the workflow more clean
+    # we can pass these variable from another workflows if we want
+    inputs:
+      zeek-repo-url:
+        description: 'Zeek repository URL'
+        required: false
+        default: 'http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/'
+        type: string
+      zeek-key-url:
+        description: 'Zeek key URL'
+        required: false
+        default: 'https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key'
+        type: string
+      python-version:
+        description: 'Python version to set up'
+        required: false
+        default: '3.10.12'
+        type: string
+
+jobs:
+  install-dependencies:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+        fetch-depth: ''
+
+    - name: Enable memory overcommit (for Redis)
+      run: sysctl vm.overcommit_memory=1
+
+    - name: Install APT dependencies
+      run: |
+        sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install $(cat install/apt_dependencies.txt)
+        sudo apt-get -y install font-manager
+
+    - name: Save APT Cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          /var/cache/apt/archives
+          /var/lib/apt/lists
+        key: apt-cache
+
+    - name: Set up Python with caching enabled
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      run: python3 -m pip install -r install/requirements.txt
+
+    - name: Install Zeek
+      run: |
+        echo "deb ${{ inputs.zeek-repo-url }} /" | sudo tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL ${{ inputs.zeek-key-url }} | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/security_zeek.gpg
+        sudo apt update && sudo apt install -y --no-install-recommends zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro

@@ -376,7 +376,7 @@ class SetEvidnceHelper:
         confidence = round(confidence, 2)  # for readability
         description = (
             f"Possible DGA or domain scanning. {flow.saddr} "
-            f"failed to resolve {nxdomains} domains"
+            f"failed to resolve {nxdomains} different domains"
         )
 
         evidence: Evidence = Evidence(
@@ -1351,8 +1351,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1373,8 +1371,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)

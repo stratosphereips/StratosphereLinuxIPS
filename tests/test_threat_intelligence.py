@@ -414,7 +414,7 @@ def test_delete_old_source_ips_with_deletions(
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
-    threatintel.db.delete_ips_from_IoC_ips.assert_called_once_with(
+    threatintel.db.delete_ips_from_ioc_ips.assert_called_once_with(
         expected_deleted_ips
     )
 
@@ -440,7 +440,7 @@ def test_delete_old_source_ips_no_deletions(mock_ioc_data, file_to_delete):
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.get_all_blacklisted_ips.return_value = mock_ioc_data
     threatintel._ThreatIntel__delete_old_source_ips(file_to_delete)
-    threatintel.db.delete_ips_from_IoC_ips.assert_not_called()
+    threatintel.db.delete_ips_from_ioc_ips.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -487,7 +487,7 @@ def test_delete_old_source_domains(
     threatintel.db.get_all_blacklisted_domains.return_value = domains_in_ioc
     threatintel._ThreatIntel__delete_old_source_domains(file_to_delete)
     assert (
-        threatintel.db.delete_domains_from_IoC_domains.call_count
+        threatintel.db.delete_domains_from_ioc_domains.call_count
         == expected_calls
     )
 
@@ -567,11 +567,11 @@ def test_delete_old_source_data_from_database(
     threatintel._ThreatIntel__delete_old_source_data_from_database(data_file)
 
     assert (
-        threatintel.db.delete_ips_from_IoC_ips.call_count
+        threatintel.db.delete_ips_from_ioc_ips.call_count
         == expected_delete_ips_calls
     )
     assert (
-        threatintel.db.delete_domains_from_IoC_domains.call_count
+        threatintel.db.delete_domains_from_ioc_domains.call_count
         == expected_delete_domains_calls
     )
 
@@ -944,7 +944,7 @@ def test_pre_main(mocker):
     threatintel = ModuleFactory().create_threatintel_obj()
     mocker.patch.object(threatintel, "update_local_file")
     threatintel.pre_main()
-    assert threatintel.update_local_file.call_count == 3
+    assert threatintel.update_local_file.call_count == 4
 
 
 @pytest.mark.parametrize(
@@ -1178,7 +1178,7 @@ def test_is_malicious_hash(
     recording evidence of malicious file hashes.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
-
+    threatintel.db.is_known_fp_md5_hash.return_value = False
     mock_search_online_for_hash = mocker.patch.object(
         threatintel, "search_online_for_hash"
     )
@@ -1197,9 +1197,17 @@ def test_is_malicious_hash(
         "twid": "timewindow1",
     }
     mock_search_online_for_hash.return_value = search_online_result
+
     threatintel.is_malicious_hash(flow_info)
 
     assert threatintel.db.set_evidence.called == expected_set_evidence_call
+
+
+def test_is_malicious_hash_known_fp_md5():
+    threatintel = ModuleFactory().create_threatintel_obj()
+    threatintel.db.is_known_fp_md5_hash.return_value = True
+    flow = {"flow": {"md5": "c0eec84d09bbb7f4cd1a8896f9dff718"}}
+    assert threatintel.is_malicious_hash(flow) is None
 
 
 @pytest.mark.parametrize(
@@ -1483,7 +1491,7 @@ def test_ip_has_blacklisted_asn(
     profileid = "profile_127.0.0.1"
     twid = "timewindow1"
     threatintel.db.get_ip_info.return_value = {"asn": {"number": asn}}
-    threatintel.db.is_blacklisted_ASN.return_value = asn_info
+    threatintel.db.is_blacklisted_asn.return_value = asn_info
     threatintel.ip_has_blacklisted_asn(
         ip_address, uid, timestamp, profileid, twid
     )

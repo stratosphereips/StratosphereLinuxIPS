@@ -45,7 +45,6 @@ from modules.http_analyzer.http_analyzer import HTTPAnalyzer
 from modules.ip_info.ip_info import IPInfo
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
-from tests.common_test_utils import do_nothing
 from modules.virustotal.virustotal import VT
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
@@ -115,12 +114,13 @@ class ModuleFactory:
         start_redis_server=True,
     ):
         """
-        flush_db is False by default  because we use this funtion to check
+        flush_db is False by default  because we use this function to check
         the db after integration tests to make sure everything's going fine
         """
         # to prevent config/redis.conf from being overwritten
         with patch(
-            "slips_files.core.database.redis_db.database.RedisDB._set_redis_options",
+            "slips_files.core.database.redis_db.database."
+            "RedisDB._set_redis_options",
             return_value=Mock(),
         ):
             db = DBManager(
@@ -128,10 +128,12 @@ class ModuleFactory:
                 output_dir,
                 port,
                 flush_db=flush_db,
+                start_sqlite=False,
                 start_redis_server=start_redis_server,
             )
-        db.r = db.rdb.r
         db.print = Mock()
+        # for easier access to redis db
+        db.r = db.rdb.r
         assert db.get_used_redis_port() == port
         return db
 
@@ -273,11 +275,11 @@ class ModuleFactory:
             termination_event=Mock(),
         )
         input.db = mock_db
-        input.mark_self_as_done_processing = do_nothing
+        input.mark_self_as_done_processing = Mock()
         input.bro_timeout = 1
         # override the print function to avoid broken pipes
         input.print = Mock()
-        input.stop_queues = do_nothing
+        input.stop_queues = Mock()
         input.testing = True
 
         return input
@@ -618,7 +620,9 @@ class ModuleFactory:
         return riskiq
 
     def create_alert_handler_obj(self):
-        return AlertHandler()
+        alert_handler = AlertHandler()
+        alert_handler.constants = Constants()
+        return alert_handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):
