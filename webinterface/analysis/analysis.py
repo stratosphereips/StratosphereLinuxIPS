@@ -122,17 +122,23 @@ def set_profile_tws():
     """
     Set profiles and their timewindows into the tree.
     Blocked are highligted in red.
-    :return: (profile, [tw, blocked], blocked)
     """
-    data = {}
-
+    profiles_dict = {}
+    # Fetch profiles
     profiles = db.get_profiles()
-    blocked_profiles = db.get_malicious_profiles()
     for profileid in profiles:
-        blocked: bool = profileid in blocked_profiles
-        profile_ip = profileid.split("_")[-1]
-        data.update({"profile": profile_ip, "blocked": blocked})
+        profile_word, profile_ip = profileid.split("_")
+        profiles_dict[profile_ip] = False
 
+    if blocked_profiles := db.get_malicious_profiles():
+        for profile in blocked_profiles:
+            blocked_ip = profile.split("_")[-1]
+            profiles_dict[blocked_ip] = True
+
+    data = [
+        {"profile": profile_ip, "blocked": blocked_state}
+        for profile_ip, blocked_state in profiles_dict.items()
+    ]
     return {"data": data}
 
 

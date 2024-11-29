@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 from distutils.dir_util import copy_tree
 from typing import Set
+import logging
 
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
@@ -24,6 +25,9 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
+
+
+logging.basicConfig(level=logging.WARNING)
 
 DAEMONIZED_MODE = "daemonized"
 

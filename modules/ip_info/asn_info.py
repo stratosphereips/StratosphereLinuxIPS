@@ -11,6 +11,9 @@ from slips_files.common.slips_utils import utils
 class ASN:
     def __init__(self, db=None):
         self.db = db
+        # update asn every 1 month
+        self.update_period = 2592000
+
         # Open the maxminddb ASN offline db
         try:
             self.asn_db = maxminddb.open_database(
@@ -51,7 +54,7 @@ class ASN:
                     asn_info["asn"].update({"number": range_info["number"]})
                 return asn_info
 
-    def update_asn(self, cached_data, update_period) -> bool:
+    def should_update_asn(self, cached_data) -> bool:
         """
         Returns True if
         - no asn data is found in the db OR ip has no cached info
@@ -61,10 +64,10 @@ class ASN:
         try:
             return (
                 time.time() - cached_data["asn"]["timestamp"]
-            ) > update_period
+            ) > self.update_period
         except (KeyError, TypeError):
-            # no there's no cached asn info,or no timestamp, or cached_data is None
-            # we should update
+            # no there's no cached asn info,or no timestamp, or
+            # cached_data is None. we should update
             return True
 
     def get_asn_info_from_geolite(self, ip) -> dict:

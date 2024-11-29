@@ -35,7 +35,9 @@ jobs:
       run: sysctl vm.overcommit_memory=1
 
     - name: Install APT dependencies
-      run: sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install $(cat install/apt_dependencies.txt)
+      run: |
+        sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install $(cat install/apt_dependencies.txt)
+        sudo apt-get -y install font-manager
 
     - name: Save APT Cache
       uses: actions/cache@v4

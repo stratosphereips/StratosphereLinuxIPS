@@ -190,7 +190,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     @classmethod
     def _read_configuration(cls):
         conf = ConfigParser()
-        cls.deletePrevdb: bool = conf.deletePrevdb()
+        cls.deletePrevdb: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.width = conf.get_tw_width_as_float()
         cls.client_ips: List[str] = conf.client_ips()

@@ -81,12 +81,13 @@ parameters:
    # zeek breaks the connection into smaller connections
    tcp_inactivity_timeout : 60
 
-   # Should we delete the previously stored data in the DB when we start??
+   # Should we delete the previously stored data in the DB when we start?
    # By default False. Meaning we don't DELETE the DB by default.
    deletePrevdb : True
+
    # You can remember the data in all the previous runs of the DB if you put False.
    # Redis will remember as long as the redis server is not down. The persistence is
-   # on the memory, not disk.
+   # in memory, not disk.
    # deletePrevdb : False
 
    # Set the label for all the flows that are being read.
@@ -239,7 +240,7 @@ threatintelligence:
    # 2 weeks = 604800 seconds
    mac_db_update : 1209600
 
-   mac_db : https://maclookup.app/downloads/json-database/get-db?t=22-08-19&h=d1d39c52de447a7e7194331f379e1e99f94f35f1
+   mac_db : https://maclookup.app/downloads/json-database/get-db?t=24-11-28&h=26271dbc3529f006a4be021ec4cf99fab16e39cd
 
    # the file that contains all our TI feeds URLs and their threat level
    ti_files : config/TI_feeds.csv
@@ -417,13 +418,7 @@ web_interface:
    port : 55000
 
 #############################
-global_p2p:
-   # this is the global p2p's trust model. can only be enabled when
-   # running slips on an interface
-   use_fides: False
-
-#############################
-local_p2p:
+P2P:
    # create p2p.log with additional info about peer communications?
    create_p2p_logfile : False
    use_p2p : False

@@ -1,3 +1,10 @@
+- 1.1.4 (Nov 29th, 2024)
+- Fix changing the used database in the web interface.
+- Reduce false positive evidence about malicious downloaded files.
+- Fix datetime errors when running on interface
+- Improve the detection of "DNS without connection".
+- Add support for a light Slips docker image.
+
 - 1.1.3 (October 30th, 2024)
 - Enhanced Slips shutdown process for smoother operations.
 - Optimized resource management in Slips, resolving issues with lingering threads in memory.

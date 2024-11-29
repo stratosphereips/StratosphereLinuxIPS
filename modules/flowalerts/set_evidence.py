@@ -1351,8 +1351,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -1373,8 +1371,6 @@ class SetEvidnceHelper:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[flow.uid],
             timestamp=flow.starttime,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)

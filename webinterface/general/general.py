@@ -22,6 +22,7 @@ def index():
 def set_blocked_profiles_and_tws():
     """
     Function to set blocked profiles and tws
+    blocked here means only blocked through the firewall
     """
     blocked_profiles_and_tws = db.get_blocked_profiles_and_timewindows()
     data = []
