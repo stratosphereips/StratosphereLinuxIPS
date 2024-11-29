@@ -20,7 +20,7 @@ from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
-from slips_files.common.abstracts.module import AsyncModule
+from slips_files.common.abstracts.async_module import AsyncModule
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
