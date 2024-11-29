@@ -1,4 +1,4 @@
-- 1.1.3 (Nov 29th, 2024)
+- 1.1.4 (Nov 29th, 2024)
 - Fix changing the used database in the web interface.
 - Reduce false positive evidence about malicious downloaded files.
 - Fix datetime errors when running on interface
