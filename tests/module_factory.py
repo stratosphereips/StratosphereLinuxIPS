@@ -45,7 +45,6 @@ from modules.http_analyzer.http_analyzer import HTTPAnalyzer
 from modules.ip_info.ip_info import IPInfo
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
-from tests.common_test_utils import do_nothing
 from modules.virustotal.virustotal import VT
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
@@ -129,6 +128,7 @@ class ModuleFactory:
                 output_dir,
                 port,
                 flush_db=flush_db,
+                start_sqlite=False,
                 start_redis_server=start_redis_server,
             )
         db.print = Mock()
@@ -275,11 +275,11 @@ class ModuleFactory:
             termination_event=Mock(),
         )
         input.db = mock_db
-        input.mark_self_as_done_processing = do_nothing
+        input.mark_self_as_done_processing = Mock()
         input.bro_timeout = 1
         # override the print function to avoid broken pipes
         input.print = Mock()
-        input.stop_queues = do_nothing
+        input.stop_queues = Mock()
         input.testing = True
 
         return input

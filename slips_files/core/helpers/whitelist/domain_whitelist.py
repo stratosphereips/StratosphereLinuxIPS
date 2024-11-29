@@ -110,5 +110,5 @@ class DomainAnalyzer(IWhitelistAnalyzer):
 
     @staticmethod
     def get_tld(url: str):
-        """returns the top level domain from the gven url"""
+        """returns the top level domain from the given url"""
         return tldextract.extract(url).suffix

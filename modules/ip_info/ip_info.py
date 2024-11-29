@@ -20,7 +20,7 @@ from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.module import AsyncModule
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -35,7 +35,7 @@ from slips_files.core.structures.evidence import (
 )
 
 
-class IPInfo(IModule):
+class IPInfo(AsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "IP Info"
     description = "Get different info about an IP/MAC address"
@@ -47,8 +47,6 @@ class IPInfo(IModule):
         self.asn = ASN(self.db)
         self.JARM = JARM()
         self.classifier = FlowClassifier()
-        # Set the output queue of our database instance
-        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = self.db.subscribe("new_ip")
         self.c2 = self.db.subscribe("new_MAC")
         self.c3 = self.db.subscribe("new_dns")
@@ -59,11 +57,10 @@ class IPInfo(IModule):
             "new_dns": self.c3,
             "check_jarm_hash": self.c4,
         }
-        # update asn every 1 month
-        self.update_period = 2592000
         self.is_gw_mac_set = False
         self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        self.valid_tlds = whois.validTlds()
 
     async def open_dbs(self):
         """Function to open the different offline databases used in this
@@ -76,7 +73,8 @@ class IPInfo(IModule):
         except Exception:
             self.print(
                 "Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. "
-                "Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en "
+                "Please download it from "
+                "https://dev.maxmind.com/geoip/docs/databases/asn?lang=en "
                 "Please note it must be the MaxMind DB version."
             )
 
@@ -88,13 +86,13 @@ class IPInfo(IModule):
         except Exception:
             self.print(
                 "Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. "
-                "Please download it from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. "
+                "Please download it from "
+                "https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. "
                 "Please note it must be the MaxMind DB version."
             )
+        self.reading_mac_db_task = asyncio.create_task(self.read_mac_db())
 
-        asyncio.create_task(self.read_macdb())
-
-    async def read_macdb(self):
+    async def read_mac_db(self):
         while True:
             try:
                 self.mac_db = open("databases/macaddress-db.json", "r")
@@ -114,6 +112,7 @@ class IPInfo(IModule):
         """
         if not hasattr(self, "country_db"):
             return False
+
         if utils.is_private_ip(ipaddress.ip_address(ip)):
             # Try to find if it is a local/private IP
             data = {"geocountry": "Private"}
@@ -138,7 +137,7 @@ class IPInfo(IModule):
         """
         return socket.AF_INET6 if ":" in ip else socket.AF_INET
 
-    def get_rdns(self, ip):
+    def get_rdns(self, ip: str) -> dict:
         """
         get reverse DNS of an ip
         returns RDNS of the given ip or False if not found
@@ -150,11 +149,12 @@ class IPInfo(IModule):
             reverse_dns: str = socket.gethostbyaddr(ip)[0]
             # if there's no reverse dns record for this ip, reverse_dns will be an ip.
             try:
-                # reverse_dns is an ip. there's no reverse dns. don't store
+                # check if the reverse_dns value is a valid IP address
                 socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
+                # reverse_dns is an ip. there's no reverse dns. don't store
                 return False
             except socket.error:
-                # all good, store it
+                # reverse_dns is a valid hostname, store it
                 data["reverse_dns"] = reverse_dns
                 self.db.set_ip_info(ip, data)
         except (socket.gaierror, socket.herror, OSError):
@@ -172,7 +172,7 @@ class IPInfo(IModule):
         # of HTTP/1.1 204 No Content
         url = "https://api.macvendors.com"
         try:
-            response = requests.get(f"{url}/{mac_addr}", timeout=5)
+            response = requests.get(f"{url}/{mac_addr}", timeout=2)
             if response.status_code == 200:
                 # this online db returns results in an array like str [{results}],
                 # make it json
@@ -212,8 +212,8 @@ class IPInfo(IModule):
 
     def get_vendor(self, mac_addr: str, profileid: str) -> dict:
         """
-        Returns vendor info of a MAC address either from an offline or an online
-         database
+        Returns the vendor info  of a MAC address and stores it in slips db
+        either from an offline or an online database
         """
 
         if (
@@ -222,22 +222,23 @@ class IPInfo(IModule):
         ):
             return False
 
-        # don't look for the vendor again if we already have it for this profileid
+        # don't look for the vendor again if we already have it for this
+        # profileid
         if self.db.get_mac_vendor_from_profile(profileid):
             return True
 
-        MAC_info: dict = {"MAC": mac_addr}
+        mac_info: dict = {"MAC": mac_addr}
 
         if vendor := self.get_vendor_offline(mac_addr, profileid):
-            MAC_info["Vendor"] = vendor
+            mac_info["Vendor"] = vendor
             self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
         elif vendor := self.get_vendor_online(mac_addr):
-            MAC_info["Vendor"] = vendor
+            mac_info["Vendor"] = vendor
             self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
         else:
-            MAC_info["Vendor"] = "Unknown"
+            mac_info["Vendor"] = "Unknown"
 
-        return MAC_info
+        return mac_info
 
     # domain info
     def get_age(self, domain):
@@ -249,7 +250,7 @@ class IPInfo(IModule):
             return False
 
         domain_tld: str = self.whitelist.domain_analyzer.get_tld(domain)
-        if domain_tld not in whois.validTlds():
+        if domain_tld not in self.valid_tlds:
             return False
 
         cached_data = self.db.get_domain_data(domain)
@@ -259,12 +260,14 @@ class IPInfo(IModule):
 
         # whois library doesn't only raise an exception, it prints the error!
         # the errors are the same exceptions we're handling
-        # temorarily change stdout to /dev/null
+        # so temporarily change stdout to /dev/null
         with open("/dev/null", "w") as f:
             with redirect_stdout(f) and redirect_stderr(f):
                 # get registration date
                 try:
-                    creation_date = whois.query(domain).creation_date
+                    creation_date = whois.query(
+                        domain, timeout=2.0
+                    ).creation_date
                 except Exception:
                     return False
 
@@ -278,13 +281,14 @@ class IPInfo(IModule):
         self.db.set_info_for_domains(domain, {"Age": age})
         return age
 
-    def shutdown_gracefully(self):
+    async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
             self.asn_db.close()
         if hasattr(self, "country_db"):
             self.country_db.close()
         if hasattr(self, "mac_db"):
             self.mac_db.close()
+        await self.reading_mac_db_task
 
     # GW
     def get_gateway_ip(self):
@@ -359,7 +363,8 @@ class IPInfo(IModule):
                 for line in arp_output.split("\n"):
                     fields = line.split()
                     gw_ip_from_arp_cmd = fields[1].strip("()")
-                    # Match the gw_ip in the output with the one given to this function
+                    # Match the gw_ip in the output with the one given to
+                    # this function
                     if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
                         gw_mac = fields[-4]
                         self.db.set_default_gateway("MAC", gw_mac)
@@ -370,26 +375,35 @@ class IPInfo(IModule):
 
         return gw_mac
 
-    def check_if_we_have_pending_mac_queries(self):
+    def check_if_we_have_pending_offline_mac_queries(self):
         """
-        Checks if we have pending queries in pending_mac_queries queue, and asks the db for them IF
-        update manager is done updating the mac db
+        Checks if we have pending MAC queries to get the vendor of.
+        These pending queries are MACs that should bee looked up in the
+        local downloaded mac db, but aren't because update manager hasn't
+        downloaded it yet for whatever reason.
+        queries are taken from the pending_mac_queries queue.
         """
-        if hasattr(self, "mac_db") and not self.pending_mac_queries.empty():
-            while True:
-                try:
-                    mac, profileid = self.pending_mac_queries.get(timeout=0.5)
-                    self.get_vendor(mac, profileid)
+        if not hasattr(self, "mac_db"):
+            return
 
-                except Exception:
-                    # queue is empty
-                    return
+        if self.pending_mac_queries.empty():
+            return
+
+        while True:
+            try:
+                mac, profileid = self.pending_mac_queries.get(timeout=0.5)
+                if vendor := self.get_vendor_offline(mac, profileid):
+                    self.db.set_mac_vendor_to_profile(profileid, mac, vendor)
+            except Exception:
+                # queue is empty
+                return
 
     def wait_for_dbs(self):
         """
-        wait for update manager to finish updating the mac db and open the rest of dbs before starting this module
+        wait for update manager to finish updating the mac db and open the
+        rest of dbs before starting this module
         """
-        # this is the loop that controls te running on open_dbs
+        # this is the loop that controls tasks running on open_dbs
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         # run open_dbs in the background so we don't have
@@ -465,7 +479,7 @@ class IPInfo(IModule):
         if ip := self.get_gateway_ip():
             self.db.set_default_gateway("IP", ip)
 
-    def handle_new_ip(self, ip):
+    def handle_new_ip(self, ip: str):
         try:
             # make sure its a valid ip
             ip_addr = ipaddress.ip_address(ip)
@@ -473,37 +487,37 @@ class IPInfo(IModule):
             # not a valid ip skip
             return
 
-        if not ip_addr.is_multicast:
-            # Do we have cached info about this ip in redis?
-            # If yes, load it
-            cached_ip_info = self.db.get_ip_info(ip)
-            if not cached_ip_info:
-                cached_ip_info = {}
+        if ip_addr.is_multicast:
+            return
 
-            # ------ GeoCountry -------
-            # Get the geocountry
-            if cached_ip_info == {} or "geocountry" not in cached_ip_info:
-                self.get_geocountry(ip)
+        # Do we have cached info about this ip in redis?
+        # If yes, load it
+        cached_ip_info = self.db.get_ip_info(ip)
+        if not cached_ip_info:
+            cached_ip_info = {}
 
-            # ------ ASN -------
-            # Get the ASN
-            # only update the ASN for this IP if more than 1 month
-            # passed since last ASN update on this IP
-            if self.asn.update_asn(cached_ip_info, self.update_period):
-                self.asn.get_asn(ip, cached_ip_info)
-            self.get_rdns(ip)
+        # Get the geocountry
+        if cached_ip_info == {} or "geocountry" not in cached_ip_info:
+            self.get_geocountry(ip)
 
-    def main(self):
+        # only update the ASN for this IP if more than 1 month
+        # passed since last ASN update on this IP
+        if self.asn.should_update_asn(cached_ip_info):
+            self.asn.get_asn(ip, cached_ip_info)
+
+        self.get_rdns(ip)
+
+    async def main(self):
         if msg := self.get_msg("new_MAC"):
             data = json.loads(msg["data"])
             mac_addr: str = data["MAC"]
             profileid: str = data["profileid"]
 
             self.get_vendor(mac_addr, profileid)
-            self.check_if_we_have_pending_mac_queries()
+            self.check_if_we_have_pending_offline_mac_queries()
             # set the gw mac and ip if they're not set yet
             if not self.is_gw_mac_set:
-                # whether we found the gw ip using dhcp in profileprocess
+                # whether we found the gw ip using dhcp in profiler
                 # or using ip route using self.get_gateway_ip()
                 # now that it's found, get and store the mac addr of it
                 if ip := self.db.get_gateway_ip():

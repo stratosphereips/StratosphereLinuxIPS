@@ -170,7 +170,8 @@ def test_get_cached_asn(ip_address, first_octet, cached_data, expected_result):
 )
 def test_update_asn(cached_data, update_period, expected_result):
     asn_info = ModuleFactory().create_asn_obj()
-    result = asn_info.update_asn(cached_data, update_period)
+    asn_info.update_period = update_period
+    result = asn_info.should_update_asn(cached_data)
     assert result == expected_result
 
 

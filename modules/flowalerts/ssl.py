@@ -82,7 +82,7 @@ class SSL(IFlowalertsAnalyzer):
             self.set_evidence.malicious_ja3(twid, flow, malicious_ja3_dict)
 
         if flow.ja3s in malicious_ja3_dict:
-            self.set_evidence.malicious_ja3s(twid, flow)
+            self.set_evidence.malicious_ja3s(twid, flow, malicious_ja3_dict)
 
     def detect_incompatible_cn(self, profileid, twid, flow):
         """
