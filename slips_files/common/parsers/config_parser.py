@@ -514,7 +514,7 @@ class ConfigParser(object):
             update_period = 1209600  # 2 weeks
         return update_period
 
-    def deletePrevdb(self):
+    def delete_prev_db(self):
         return self.read_configuration("parameters", "deletePrevdb", True)
 
     def rotation_period(self):

@@ -38,9 +38,9 @@ class DBManager:
             self.logger, redis_port, start_redis_server, **kwargs
         )
 
-        # in some rare cases we don't wanna start sqlite,
-        # like when using -S
-        # we just want to connect to redis to get the PIDs
+        # in some rare cases we don't wanna create the sqlite db from scratch,
+        # like when using -S to stop the daemon, we just wanna connect to
+        # the existing one
         self.sqlite = None
         if start_sqlite:
             self.sqlite = self.create_sqlite_db(output_dir)

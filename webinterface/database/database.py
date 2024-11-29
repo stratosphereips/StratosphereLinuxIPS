@@ -52,7 +52,8 @@ class Database(object):
                 output_dir,
                 port,
                 start_redis_server=False,
-                start_sqlite=False,
+                start_sqlite=True,
+                flush_db=False,
             )
         except RuntimeError:
             return
