@@ -146,3 +146,4 @@ class NetworkBridge:
             logger.error(
                 f"Exception during sending an envelope: {ex}.", envelope
             )
+            raise ex
