@@ -93,14 +93,25 @@ class IPInfo(AsyncModule):
         self.reading_mac_db_task = asyncio.create_task(self.read_mac_db())
 
     async def read_mac_db(self):
+        """
+        waits 10 mins for the update manager to download the mac db and
+        opens it for reading. retries opening every 3s
+        """
+        trials = 0
         while True:
+            if trials >= 60:
+                # that's 10 mins of waiting for the macdb (600s)
+                # dont wait forever
+                return
+
             try:
                 self.mac_db = open("databases/macaddress-db.json", "r")
                 return True
             except OSError:
                 # update manager hasn't downloaded it yet
                 try:
-                    time.sleep(3)
+                    time.sleep(10)
+                    trials += 1
                 except KeyboardInterrupt:
                     return False
 
