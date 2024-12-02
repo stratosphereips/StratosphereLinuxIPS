@@ -13,7 +13,7 @@ def test_check_if_update_based_on_update_period():
     update_manager.db.get_ti_feed_info.return_value = {"time": float("inf")}
     url = "abc.com/x"
     # update period hasn't passed
-    assert update_manager.check_if_update(url, float("inf")) is False
+    assert update_manager.should_update(url, float("inf")) is False
 
 
 def test_check_if_update_based_on_e_tag(mocker):
@@ -28,7 +28,7 @@ def test_check_if_update_based_on_e_tag(mocker):
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {"ETag": "1234"}
     mock_requests.return_value.text = ""
-    assert update_manager.check_if_update(url, float("-inf")) is False
+    assert update_manager.should_update(url, float("-inf")) is False
 
     # period passed, etag different
     etag = "1111"
@@ -38,7 +38,7 @@ def test_check_if_update_based_on_e_tag(mocker):
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {"ETag": "2222"}
     mock_requests.return_value.text = ""
-    assert update_manager.check_if_update(url, float("-inf")) is True
+    assert update_manager.should_update(url, float("-inf")) is True
 
 
 def test_check_if_update_based_on_last_modified(
@@ -56,7 +56,7 @@ def test_check_if_update_based_on_last_modified(
     mock_requests.return_value.headers = {"Last-Modified": 10.0}
     mock_requests.return_value.text = ""
 
-    assert update_manager.check_if_update(url, float("-inf")) is False
+    assert update_manager.should_update(url, float("-inf")) is False
 
     # period passed, no etag, last modified changed
     url = "google.com/photos"
@@ -67,7 +67,7 @@ def test_check_if_update_based_on_last_modified(
     mock_requests.return_value.headers = {"Last-Modified": 11}
     mock_requests.return_value.text = ""
 
-    assert update_manager.check_if_update(url, float("-inf")) is True
+    assert update_manager.should_update(url, float("-inf")) is True
 
 
 @pytest.mark.parametrize(
@@ -250,28 +250,29 @@ def test_update_local_file(
     update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.new_hash = "test_hash"
     mocker.patch("builtins.open", mock_open(read_data=test_data))
-    result = update_manager.update_local_file(str(tmp_path / file_name))
+    now = 1678887000.0
+    with patch("time.time", return_value=now):
+        result = update_manager.update_local_file(str(tmp_path / file_name))
     update_manager.db.set_ti_feed_info.assert_called_once_with(
-        str(tmp_path / file_name), {"hash": "test_hash"}
+        str(tmp_path / file_name), {"hash": "test_hash", "time": now}
     )
     assert result is True
 
 
-def test_check_if_update_online_whitelist_download_updated(
-    mocker,
-):
+def test_check_if_update_online_whitelist_download_updated():
     """Update period passed, download succeeds."""
     update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.download_file = Mock()
     update_manager.db.get_ti_feed_info.return_value = {"time": 0}
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
 
     update_manager.download_file = Mock(return_value=Mock(status_code=200))
 
-    result = update_manager.check_if_update_online_whitelist()
+    result = update_manager.should_update_online_whitelist()
 
     assert result is True
-    update_manager.db.set_ti_feed_info.assert_called_once_with(
-        "tranco_whitelist", {"time": mocker.ANY}
+    update_manager.download_file.assert_called_once_with(
+        update_manager.online_whitelist
     )
     assert "tranco_whitelist" in update_manager.responses
 
@@ -281,7 +282,7 @@ def test_check_if_update_online_whitelist_not_updated():
     update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.online_whitelist = "https://example.com/whitelist.txt"
     update_manager.db.get_ti_feed_info.return_value = {"time": time.time()}
-    result = update_manager.check_if_update_online_whitelist()
+    result = update_manager.should_update_online_whitelist()
     assert result is False
     update_manager.db.set_ti_feed_info.assert_not_called()
 
