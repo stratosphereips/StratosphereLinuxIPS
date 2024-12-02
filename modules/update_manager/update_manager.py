@@ -37,8 +37,8 @@ class UpdateManager(IModule):
             self.update_period, self.update_ti_files
         )
         # Timer to update the MAC db
-        # when update_ti_files is called, it decides what exactly to update, the mac db,
-        # online whitelist OT online ti files.
+        # when update_ti_files is called, it decides what exactly to
+        # update, the mac db, online whitelist Or online ti files.
         self.mac_db_update_manager = InfiniteTimer(
             self.mac_db_update_period, self.update_ti_files
         )
@@ -54,6 +54,7 @@ class UpdateManager(IModule):
         self.whitelist = Whitelist(self.logger, self.db)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = "slips_files/organizations_info/"
+        self.path_to_mac_db = "databases/macaddress-db.json"
         # if any keyword of the following is present in a line
         # then this line should be ignored by slips
         # either a not supported ioc type or a header line etc.
@@ -80,20 +81,20 @@ class UpdateManager(IModule):
         self.responses = {}
 
     def read_configuration(self):
-        def read_riskiq_creds(RiskIQ_credentials_path):
+        def read_riskiq_creds(risk_iq_credentials_path):
             self.riskiq_email = None
             self.riskiq_key = None
 
-            if not RiskIQ_credentials_path:
+            if not risk_iq_credentials_path:
                 return
 
-            RiskIQ_credentials_path = os.path.join(
-                os.getcwd(), RiskIQ_credentials_path
+            risk_iq_credentials_path = os.path.join(
+                os.getcwd(), risk_iq_credentials_path
             )
-            if not os.path.exists(RiskIQ_credentials_path):
+            if not os.path.exists(risk_iq_credentials_path):
                 return
 
-            with open(RiskIQ_credentials_path, "r") as f:
+            with open(risk_iq_credentials_path, "r") as f:
                 self.riskiq_email = f.readline().replace("\n", "")
                 self.riskiq_key = f.readline().replace("\n", "")
 
@@ -113,8 +114,8 @@ class UpdateManager(IModule):
         self.ssl_feeds_path = conf.ssl_feeds()
         self.ssl_feeds = self.get_feed_details(self.ssl_feeds_path)
 
-        RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
-        read_riskiq_creds(RiskIQ_credentials_path)
+        risk_iq_credentials_path = conf.RiskIQ_credentials_path()
+        read_riskiq_creds(risk_iq_credentials_path)
         self.riskiq_update_period = conf.riskiq_update_period()
 
         self.mac_db_update_period = conf.mac_db_update_period()
@@ -127,7 +128,8 @@ class UpdateManager(IModule):
 
     def get_feed_details(self, feeds_path):
         """
-        Parse links, threat level and tags from the feeds_path file and return a dict with feed info
+        Parse links, threat level and tags from the feeds_path file and return
+         a dict with feed info
         """
         try:
             with open(feeds_path, "r") as feeds_file:
@@ -238,7 +240,8 @@ class UpdateManager(IModule):
 
                 except IndexError:
                     self.print(
-                        f"Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.",
+                        f"Invalid line: {line} line number: "
+                        f"{line_number} in {ports_info_filepath}. Skipping.",
                         0,
                         1,
                     )
@@ -274,7 +277,8 @@ class UpdateManager(IModule):
     def check_if_update_local_file(self, file_path: str) -> bool:
         """
         Decides whether to update or not based on the file hash.
-        Used for local files that are updated if the contents of the file hash changed
+        Used for local files that are updated if the contents of the file
+        hash changed
         for example: files in slips_files/ports_info
         """
 
@@ -333,13 +337,19 @@ class UpdateManager(IModule):
                 else:
                     return response
             except requests.exceptions.ReadTimeout:
-                error = f"Timeout reached while downloading the file {file_to_download}. Aborting."
+                error = (
+                    f"Timeout reached while downloading the file "
+                    f"{file_to_download}. Aborting."
+                )
 
             except (
                 requests.exceptions.ConnectionError,
                 requests.exceptions.ChunkedEncodingError,
             ):
-                error = f"Connection error while downloading the file {file_to_download}. Aborting."
+                error = (
+                    f"Connection error while downloading the file "
+                    f"{file_to_download}. Aborting."
+                )
 
         if error:
             self.print(error, 0, 1)
@@ -353,13 +363,20 @@ class UpdateManager(IModule):
         """
         return response.headers.get("Last-Modified", False)
 
+    def is_mac_db_file_on_disk(self) -> bool:
+        """checks if the mac db is present in databases/"""
+        return os.path.isfile(self.path_to_mac_db)
+
     def check_if_update(self, file_to_download: str, update_period) -> bool:
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
         :param file_to_download: url that contains the file to download
+        :param update_period: after how many seconds do we need to update
+        this file?
         """
-        # the response will be stored in self.responses if the file is old and needs to be updated
+        # the response will be stored in self.responses if the file is old
+        # and needs to be updated
         # Get the last time this file was updated
         ti_file_info: dict = self.db.get_ti_feed_info(file_to_download)
         last_update = ti_file_info.get("time", float("-inf"))
@@ -381,12 +398,6 @@ class UpdateManager(IModule):
             if not response:
                 return False
 
-            if "maclookup" in file_to_download:
-                # no need to check the e-tag
-                # we always need to download this file for slips to get info about MACs
-                self.responses["mac_db"] = response
-                return True
-
             # Get the E-TAG of this file to compare with current files
             ti_file_info: dict = self.db.get_ti_feed_info(file_to_download)
             old_e_tag = ti_file_info.get("e-tag", "")
@@ -400,7 +411,8 @@ class UpdateManager(IModule):
 
                 if not new_last_modified:
                     self.log(
-                        f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field."
+                        f"Error updating {file_to_download}."
+                        f" Doesn't have an e-tag or Last-Modified field."
                     )
                     return False
 
@@ -466,13 +478,16 @@ class UpdateManager(IModule):
             while True:
                 line = ssl_feed.readline()
                 if line.startswith("# Listingdate"):
-                    # looks like the line that contains column names, search where is the description column
+                    # looks like the line that contains column names,
+                    # search where is the description column
                     for column in line.split(","):
-                        # Listingreason is the description column in  abuse.ch Suricata SSL Fingerprint Blacklist
+                        # Listingreason is the description column in
+                        # abuse.ch Suricata SSL Fingerprint Blacklist
                         if "Listingreason" in column.lower():
                             description_column = line.split(",").index(column)
                 if not line.startswith("#"):
-                    # break while statement if it is not a comment (i.e. does not start with #) or a header line
+                    # break while statement if it is not a comment (i.e.
+                    # does not start with #) or a header line
                     break
 
             # Find in which column is the ssl fingerprint in this file
@@ -503,7 +518,8 @@ class UpdateManager(IModule):
             if sha1_column is None:
                 # can't find a column that contains an ioc
                 self.print(
-                    f"Error while reading the ssl file {full_path}. Could not find a column with sha1 info",
+                    f"Error while reading the ssl file {full_path}. "
+                    f"Could not find a column with sha1 info",
                     0,
                     1,
                 )
@@ -544,7 +560,8 @@ class UpdateManager(IModule):
                     )
                 except IndexError:
                     self.print(
-                        f"IndexError Description column: {description_column}. Line: {line}"
+                        f"IndexError Description column: "
+                        f"{description_column}. Line: {line}"
                     )
 
                 # self.print('\tRead Data {}: {}'.format(sha1, description))
@@ -565,7 +582,8 @@ class UpdateManager(IModule):
                     )
                 else:
                     self.log(
-                        f"The data {data} is not valid. It was found in {filename}."
+                        f"The data {data} is not valid. It was found in "
+                        f"{filename}."
                     )
                     continue
         # Add all loaded malicious sha1 to the database
@@ -696,7 +714,8 @@ class UpdateManager(IModule):
                         self.db.add_domains_to_ioc(malicious_domains_dict)
             except KeyError:
                 self.print(
-                    f'RiskIQ returned: {response["message"]}. Update Cancelled.',
+                    f'RiskIQ returned: {response["message"]}. '
+                    f"Update Cancelled.",
                     0,
                     1,
                 )
@@ -709,9 +728,12 @@ class UpdateManager(IModule):
             return True
         except Exception as e:
             self.log(
-                "An error occurred while updating RiskIQ domains. Updating was aborted."
+                "An error occurred while updating RiskIQ domains. "
+                "Updating was aborted."
             )
-            self.print("An error occurred while updating RiskIQ feed.", 0, 1)
+            self.print(
+                "An error occurred while updating " "RiskIQ feed.", 0, 1
+            )
             self.print(f"Error: {e}", 0, 1)
             return False
 
@@ -731,15 +753,18 @@ class UpdateManager(IModule):
                 while True:
                     line = ja3_feed.readline()
                     if line.startswith("# ja3_md5"):
-                        # looks like the line that contains column names, search where is the description column
+                        # looks like the line that contains column names,
+                        # search where is the description column
                         for column in line.split(","):
-                            # Listingreason is the description column in  abuse.ch Suricata JA3 Fingerprint Blacklist
+                            # Listingreason is the description column in
+                            # abuse.ch Suricata JA3 Fingerprint Blacklist
                             if "Listingreason" in column.lower():
                                 description_column = line.split(",").index(
                                     column
                                 )
                     if not line.startswith("#"):
-                        # break while statement if it is not a comment (i.e. does not startwith #) or a header line
+                        # break while statement if it is not a comment
+                        # (i.e. does not startwith #) or a header line
                         break
 
                 # Find in which column is the ja3 fingerprint in this file
@@ -862,7 +887,8 @@ class UpdateManager(IModule):
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
         """
-        Slips has 2 json TI feeds that are parsed differently. hole.cert.pl and rstcloud
+        Slips has 2 json TI feeds that are parsed differently. hole.cert.pl
+        and rstcloud
         """
         # to support https://hole.cert.pl/domains/domains.json
         tags = self.url_feeds[link_to_download]["tags"]
@@ -874,7 +900,8 @@ class UpdateManager(IModule):
             malicious_ips_dict = {}
             with open(ti_file_path) as feed:
                 self.print(
-                    f"Reading next lines in the file {ti_file_path} for IoC",
+                    f"Reading next lines in the file "
+                    f"{ti_file_path} for IoC",
                     3,
                     0,
                 )
@@ -902,7 +929,8 @@ class UpdateManager(IModule):
             malicious_domains_dict = {}
             with open(ti_file_path) as feed:
                 self.print(
-                    f"Reading next lines in the file {ti_file_path} for IoC",
+                    f"Reading next lines in the file {ti_file_path}"
+                    f" for IoC",
                     3,
                     0,
                 )
@@ -937,7 +965,8 @@ class UpdateManager(IModule):
 
     def get_description_column_index(self, header):
         """
-        Given the first line of a TI file (header line), try to get the index of the description column
+        Given the first line of a TI file (header line), try to get the index
+         of the description column
         """
         description_keywords = (
             "desc",
@@ -1071,7 +1100,8 @@ class UpdateManager(IModule):
     def add_to_ip_ctr(self, ip, blacklist):
         """
         keep track of how many times an ip was there in all blacklists
-        :param blacklist: t make sure we don't count the ip twice in the same blacklist
+        :param blacklist: t make sure we don't count the ip twice in the
+         same blacklist
         """
         blacklist = os.path.basename(blacklist)
         if ip in self.ips_ctr and blacklist not in self.ips_ctr["blacklists"]:
@@ -1085,7 +1115,8 @@ class UpdateManager(IModule):
         try:
             filesize = os.path.getsize(ti_file_path)
         except FileNotFoundError:
-            # happens in integration tests, another instance of slips deleted the file
+            # happens in integration tests, another instance of slips
+            # deleted the file
             return False
 
         if filesize == 0:
@@ -1493,7 +1524,6 @@ class UpdateManager(IModule):
             return False
 
         self.log("Updating the MAC database.")
-        path_to_mac_db = "databases/macaddress-db.json"
 
         # write to file the info as 1 json per line
         mac_info = (
@@ -1501,7 +1531,7 @@ class UpdateManager(IModule):
             .replace("[", "")
             .replace(",{", "\n{")
         )
-        with open(path_to_mac_db, "w") as mac_db:
+        with open(self.path_to_mac_db, "w") as mac_db:
             mac_db.write(mac_info)
 
         self.db.set_ti_feed_info(self.mac_db_link, {"time": time.time()})
@@ -1527,10 +1557,37 @@ class UpdateManager(IModule):
 
         os.remove(online_whitelist_download_path)
 
+    def check_if_update_mac_db(self) -> bool:
+        """checks whether or not slips should download the mac db based on
+        its availability on disk and the update period"""
+        if not self.is_mac_db_file_on_disk():
+            # whether the period passed or not, the db needs to be
+            # re-downloaded
+            return True
+
+        # TODO move this to its own function and re-use it
+        # the response will be stored in self.responses if the file is old
+        # and needs to be updated
+        # Get the last time this file was updated
+        ti_file_info: dict = self.db.get_ti_feed_info(self.mac_db_link)
+        last_update = ti_file_info.get("time", float("-inf"))
+        if last_update + self.mac_db_update_period > time.time():
+            # Update period hasn't passed yet
+            self.loaded_ti_files += 1
+            return False
+
+        response = self.download_file(self.mac_db_link)
+        if not response:
+            return False
+
+        self.responses["mac_db"] = response
+        return True
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
-        we update different types of files remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
+        we update different types of files remote TI files, remote JA3 feeds,
+         RiskIQ domains and local slips files
         """
         if self.update_period <= 0:
             # User does not want to update the malicious IP list.
@@ -1545,9 +1602,7 @@ class UpdateManager(IModule):
         try:
             self.log("Checking if we need to download TI files.")
 
-            if self.check_if_update(
-                self.mac_db_link, self.mac_db_update_period
-            ):
+            if self.check_if_update_mac_db():
                 self.update_mac_db()
 
             if self.check_if_update_online_whitelist():
