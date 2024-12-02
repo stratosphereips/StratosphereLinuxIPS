@@ -14,6 +14,7 @@ import re
 import time
 import asyncio
 import multiprocessing
+from functools import lru_cache
 
 
 from modules.ip_info.jarm import JARM
@@ -197,6 +198,7 @@ class IPInfo(AsyncModule):
         ):
             return False
 
+    @lru_cache(maxsize=700)
     def get_vendor_offline(self, mac_addr, profileid):
         """
         Gets vendor from Slips' offline database databases/macaddr-db.json
