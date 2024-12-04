@@ -19,6 +19,7 @@ import threading
 
 class SQLiteDB:
     _lock = threading.RLock()
+    name = "Fides SQLiteDB"
 
     def __init__(self, logger: Output, db_path: str) -> None:
         """
@@ -34,7 +35,9 @@ class SQLiteDB:
         self.__create_tables()
 
     def __slips_log(self, txt: str) -> None:
-        self.logger.log_line({"from": "Fides", "txt": txt})
+        self.logger.output_line(
+            {"verbose": 2, "debug": 0, "from": self.name, "txt": txt}
+        )
 
     def get_slips_threat_intelligence_by_target(
         self, target: Target

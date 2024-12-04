@@ -69,7 +69,7 @@ class FidesModule(IModule):
         }
 
         self.sqlite = SQLiteDB(
-            self.logger, os.path.join(os.getcwd(), "p2p_db.sqlite")
+            self.logger, os.path.join(self.output_dir, "fides_p2p_db.sqlite")
         )
 
     def read_configuration(self):

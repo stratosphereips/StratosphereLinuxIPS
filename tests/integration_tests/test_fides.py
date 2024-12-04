@@ -3,7 +3,7 @@ This file tests 2 different config files other than slips' default config/slips.
 test/test.yaml and tests/test2.yaml
 """
 
-from slips.main import Main
+from pathlib import PosixPath
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
@@ -13,21 +13,23 @@ import pytest
 import os
 import subprocess
 import time
+import sys
 
 alerts_file = "alerts.log"
 
 
-def create_Main_instance(input_information):
-    """returns an instance of Main() class in slips.py"""
-    main = Main(testing=True)
-    main.input_information = input_information
-    main.input_type = "pcap"
-    main.line_type = False
-    return main
-
-
-# ./slips.py -e 1 -f dataset/test13-malicious-dhcpscan-zeek-dir -g -o a -c
-# tests/integration_tests/fides_config.yaml
+def countdown_sigterm(seconds):
+    """
+    counts down from the given number of seconds, printing a message each second.
+    """
+    while seconds > 0:
+        sys.stdout.write(
+            f"\rSending sigterm in {seconds} "
+        )  # overwrite the line
+        sys.stdout.flush()  # ensures immediate output
+        time.sleep(1)  # waits for 1 second
+        seconds -= 1
+    sys.stdout.write("\rSending sigterm now!          \n")
 
 
 @pytest.mark.parametrize(
@@ -36,7 +38,7 @@ def create_Main_instance(input_information):
         (
             "dataset/test13-malicious-dhcpscan-zeek-dir",
             "fides_integration_test/",
-            6644,
+            6379,  # todo change to 6644
         )
     ],
 )
@@ -45,7 +47,7 @@ def test_conf_file2(path, output_dir, redis_port):
     In this test we're using tests/test2.conf
     """
 
-    output_dir = create_output_dir(output_dir)
+    output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = [
         "./slips.py",
@@ -54,13 +56,13 @@ def test_conf_file2(path, output_dir, redis_port):
         "-e",
         "1",
         "-f",
-        path,
+        str(path),
         "-o",
-        output_dir,
+        str(output_dir),
         "-c",
         "tests/integration_tests/fides_config.yaml",
-        "-P",
-        str(redis_port),
+        # "-P", #todo uncomment this
+        # str(redis_port),
     ]
 
     print("running slips ...")
@@ -75,12 +77,13 @@ def test_conf_file2(path, output_dir, redis_port):
         )
 
         print(f"Output and errors are logged in {output_file}")
-
-        time.sleep(60)
-        # send a SIGKILL to the process
+        countdown_sigterm(30)
+        # send a SIGTERM to the process
+        os.kill(process.pid, 15)
+        print("SIGTERM sent. killing slips")
         os.kill(process.pid, 9)
 
-    print(f"Process with PID {process.pid} was killed.")
+    print(f"Slips with PID {process.pid} was killed.")
 
     print("Slip is done, checking for errors in the output dir.")
     assert_no_errors(output_dir)
@@ -89,4 +92,4 @@ def test_conf_file2(path, output_dir, redis_port):
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir, start_redis_server=False
     )
-    assert db.get_msgs_received_at_runtime("Fides") == 1
+    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == 1
