@@ -187,20 +187,18 @@ class FidesModule(IModule):
         #         score=data["score"],
         #     )
         #
-        if msg := self.get_msg("slips2fides"):
+        if msg := self.get_msg("new_alert"):
             # if there's no string data message we can continue waiting
             if not msg["data"]:
                 return
-            data = json.loads(msg["data"])
-
-            if data["type"] == "alert":
-                self.__alerts.dispatch_alert(
-                    target=data["target"],
-                    confidence=data["confidence"],
-                    score=data["score"],
-                )
-            # elif data["type"] == "intelligence_request":
-            #     self.__intelligence.request_data(target=data["target"])
+            alert_info: dict = json.loads(msg["data"])
+            profileid = alert_info["profileid"]
+            target = profileid.split("_")[-1]
+            self.__alerts.dispatch_alert(
+                target=target,
+                confidence=0.5,
+                score=0.8,
+            )
 
         if msg := self.get_msg("new_ip"):
             # if there's no string data message we can continue waiting
