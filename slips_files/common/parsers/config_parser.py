@@ -629,7 +629,7 @@ class ConfigParser(object):
             to_ignore.append("p2ptrust")
 
         use_fides = self.use_fides()
-        if not (use_fides and "-i" in sys.argv):
+        if not (use_fides and ("-i" in sys.argv or "-g" in sys.argv)):
             to_ignore.append("fidesModule")
 
         # ignore CESNET sharing module if send and receive are
