@@ -24,7 +24,8 @@ class AsyncModule(IModule):
     async def run_main(self):
         return await self.main()
 
-    def run_async_function(self, func: Callable):
+    @staticmethod
+    def run_async_function(func: Callable):
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(func())
 
@@ -44,7 +45,6 @@ class AsyncModule(IModule):
             self.print_traceback()
             return
 
-        keyboard_int_ctr = 0
         while True:
             try:
                 if self.should_stop():
@@ -59,10 +59,10 @@ class AsyncModule(IModule):
                     return
 
             except KeyboardInterrupt:
-                keyboard_int_ctr += 1
-                if keyboard_int_ctr >= 2:
+                self.keyboard_int_ctr += 1
+                if self.keyboard_int_ctr >= 2:
                     # on the second ctrl+c Slips immediately stop
-                    return
+                    return True
                 # on the first ctrl + C keep looping until the should_stop()
                 # returns true
                 continue

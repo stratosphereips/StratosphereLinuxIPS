@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using sudo
 ENV IS_IN_A_DOCKER_CONTAINER=True
 # destionation dir for slips inside the container
-ENV SLIPS_DIR=/StratosphereLinuxIPs
+ENV SLIPS_DIR=/StratosphereLinuxIPS
 
 # use bash instead of sh
 SHELL ["/bin/bash", "-c"]
