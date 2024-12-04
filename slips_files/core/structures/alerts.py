@@ -13,6 +13,7 @@ from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
     Evidence,
+    ThreatLevel,
 )
 
 
@@ -20,6 +21,19 @@ def is_valid_correl_id(correl_id: List[str]) -> bool:
     return isinstance(correl_id, list) or not all(
         isinstance(uid, str) for uid in correl_id
     )
+
+
+def normalize(value: float):
+    """
+    normalize a single value to a range between 0 and 1.
+    :param value: numerical value to normalize
+    :return: normalized value
+    """
+    # this corresponds to config_threshold =   5*60/3600 = 0.08
+    min_value = 5
+    # this corresponds to config_threshold = 26*60/3600 = 0.43
+    max_value = 26
+    return (value - min_value) / (max_value - min_value)
 
 
 @dataclass
@@ -40,6 +54,8 @@ class Alert:
         metadata={"validate": lambda x: is_valid_correl_id(x)},
     )
     last_flow_datetime: str = ""
+    threat_level: ThreatLevel = ThreatLevel.CRITICAL
+    confidence: float = 0
 
     def __post_init__(self):
         if self.correl_id:
@@ -59,6 +75,14 @@ class Alert:
             self.last_flow_datetime = utils.convert_format(
                 last_flow_timestamp, "iso"
             )
+
+        if not self.confidence:
+            # convert the accumulated threat level to  a confidence value
+            # ranging from 0 to 1
+            # this means that the more evidence slips generates the more
+            # confident it is of the alert.
+            # this value is needed by fides and the global p2p
+            self.confidence: float = normalize(self.accumulated_threat_level)
 
 
 def dict_to_alert(alert: dict) -> Alert:

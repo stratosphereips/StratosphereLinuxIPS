@@ -250,10 +250,6 @@ class EvidenceHandler(ICore):
         Function to format the string with all the desciption of the
         evidence causing the given alert
         """
-        # get the first evidence
-        # doesnt matter which one here because they all share the profile
-        # and twid
-        evidence = list(all_evidence.values())[0]
         # once we reach a certain threshold of accumulated
         # threat_levels, we produce an alert
         # Now instead of printing the last evidence only,
