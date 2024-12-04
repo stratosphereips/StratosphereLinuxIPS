@@ -14,13 +14,14 @@ import re
 import time
 import asyncio
 import multiprocessing
+from functools import lru_cache
 
 
 from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
-from slips_files.common.abstracts.module import AsyncModule
+from slips_files.common.abstracts.async_module import AsyncModule
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -93,14 +94,25 @@ class IPInfo(AsyncModule):
         self.reading_mac_db_task = asyncio.create_task(self.read_mac_db())
 
     async def read_mac_db(self):
+        """
+        waits 10 mins for the update manager to download the mac db and
+        opens it for reading. retries opening every 3s
+        """
+        trials = 0
         while True:
+            if trials >= 60:
+                # that's 10 mins of waiting for the macdb (600s)
+                # dont wait forever
+                return
+
             try:
                 self.mac_db = open("databases/macaddress-db.json", "r")
                 return True
             except OSError:
                 # update manager hasn't downloaded it yet
                 try:
-                    time.sleep(3)
+                    time.sleep(10)
+                    trials += 1
                 except KeyboardInterrupt:
                     return False
 
@@ -186,6 +198,7 @@ class IPInfo(AsyncModule):
         ):
             return False
 
+    @lru_cache(maxsize=700)
     def get_vendor_offline(self, mac_addr, profileid):
         """
         Gets vendor from Slips' offline database databases/macaddr-db.json

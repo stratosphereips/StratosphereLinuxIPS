@@ -1,11 +1,16 @@
-- 1.1.4 (Nov 29th, 2024)
+1.1.4.1 (Dec 3rd, 2024)
+- Fix abstract class starting with the rest of the modules.
+- Fix the updating of the MAC vendors database used in slips.
+- Improve MAC vendor offline lookups.
+
+1.1.4 (Nov 29th, 2024)
 - Fix changing the used database in the web interface.
 - Reduce false positive evidence about malicious downloaded files.
 - Fix datetime errors when running on interface
 - Improve the detection of "DNS without connection".
 - Add support for a light Slips docker image.
 
-- 1.1.3 (October 30th, 2024)
+1.1.3 (October 30th, 2024)
 - Enhanced Slips shutdown process for smoother operations.
 - Optimized resource management in Slips, resolving issues with lingering threads in memory.
 - Remove the progress bar; Slips now provides regular statistical updates.
@@ -19,7 +24,7 @@
 - Enhance logging of IDMEF errors.
 - Resolve issues with the accumulated threat level reported in alerts.json.
 
-- 1.1.2 (September 30th, 2024)
+1.1.2 (September 30th, 2024)
 - Add a relation between related evidence in alerts.json
 - Better unit tests. Thanks to @Sekhar-Kumar-Dash
 - Discontinued MacOS m1 docker images, P2p images, and slips dependencies image.
@@ -42,7 +47,7 @@
 - Update python dependencies.
 - Better handling of problems connecting to Redis database.
 
-- 1.1 (July 2024)
+1.1 (July 2024)
 - Update Python version to 3.10.12 and all python libraries used by Slips.
 - Update nodejs and zeek.
 - Improve the stopping of Slips. Modules now have more time to process flows.
@@ -54,7 +59,7 @@
 - Horizontal port scan detection improvements.
 
 
-- 1.0.15 (June 2024)
+1.0.15 (June 2024)
 - Add a Parameter to export strato letters to re-train the RNN model.
 - Better organization of flowalerts module by splitting it into many specialized files.
 - Better unit tests. thanks to @Sekhar-Kumar-Dash
@@ -70,7 +75,7 @@
 - The port of the web interface is now configurable in slips.conf
 
 
-- 1.0.14 (May 2024)
+1.0.14 (May 2024)
 - Improve whitelists. better matching of ASNs, domains, and organizations.
 - Whitelist Microsoft, Apple, Twitter, Facebook and Google alerts by default to reduce false positives.
 - Better unit tests. thanks to @Sekhar-Kumar-Dash
@@ -79,7 +84,7 @@
 - Add more info to metadata/info.txt for each run.
 
 
-- 1.0.13 (April 2024)
+1.0.13 (April 2024)
 - Whitelist alerts to all organizations by default to reduce false positives.
 - Improve and compress Slips Docker images. thanks to @verovaleros
 - Improve CI and add pre-commit hooks.
@@ -90,7 +95,7 @@
 - Better unit tests. thanks to @Sekhar-Kumar-Dash
 - Fix problems stopping the daemon.
 
-- 1.0.12 (March 2024)
+1.0.12 (March 2024)
 - Add an option to specify the current client IP in slips.conf to help avoid false positives.
 - Better handling of URLhaus threat intelligence.
 - Change how slips determines the local network of the current client IP.
@@ -107,7 +112,7 @@
 - Use the latest Redis and NodeJS version in all docker images.
 
 
-- 1.0.11 (February 2024)
+1.0.11 (February 2024)
 - Improve the logging of evidence in alerts.json and alerts.log.
 - Optimize the storing of evidence in the Redis database.
 - Fix problem of missing evidence, now all evidence is logged correctly.
@@ -117,7 +122,7 @@
 - Fix problem closing the progress bar.
 - Fix problem releasing the terminal when Slips is done.
 
-- 1.0.10 (January 2024)
+1.0.10 (January 2024)
 - Faster ensembling of evidence.
 - Log accumulated threat levels of each evidence in alerts.json.
 - Better handling of the termination of the progress bar.
@@ -239,7 +244,7 @@
 - Fix caching ASN ranges
 - Code optimizations
 
-- 1.0.1 (Jan 2023)
+1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections
 - Fix Duplicate evidence in multiple alerts
 - Fix FP urlhaus detetcions, now we use it to check urls only, not domains.
