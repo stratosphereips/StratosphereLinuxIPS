@@ -92,4 +92,4 @@ def test_conf_file2(path, output_dir, redis_port):
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir, start_redis_server=False
     )
-    assert db.get_msgs_received_at_runtime("Fides") == 1
+    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == 1
