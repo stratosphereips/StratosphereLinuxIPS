@@ -107,7 +107,9 @@ class Checker:
                 "an interface. P2P Disabled."
             )
 
-        if self.main.conf.use_fides() and not self.main.args.interface:
+        if self.main.conf.use_fides() and not (
+            self.main.args.interface or self.main.args.growing
+        ):
             print(
                 "Warning: Fides is only supported using "
                 "an interface. Fides Module Disabled."
