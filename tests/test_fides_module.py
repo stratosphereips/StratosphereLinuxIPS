@@ -15,7 +15,7 @@ from modules.http_analyzer.http_analyzer import utils
 @pytest.fixture
 def cleanup_database():
     # name of the database created by Fides
-    db_name = "p2p_db.sqlite"
+    db_name = "fides_p2p_db.sqlite"
 
     yield  # Let the test run
 
