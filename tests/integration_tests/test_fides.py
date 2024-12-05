@@ -38,7 +38,7 @@ def countdown_sigterm(seconds):
         (
             "dataset/test13-malicious-dhcpscan-zeek-dir",
             "fides_integration_test/",
-            6379,  # todo change to 6644
+            6644,
         )
     ],
 )
@@ -50,7 +50,7 @@ def test_conf_file2(path, output_dir, redis_port):
     # Get the current working directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
     # Navigate two levels up
-    base_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
+    #base_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
 
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
@@ -66,8 +66,8 @@ def test_conf_file2(path, output_dir, redis_port):
         str(output_dir),
         "-c",
         "tests/integration_tests/fides_config.yaml",
-        "-P", #todo uncomment this
-        str(redis_port), #todo and uncomment this
+        "-P",
+        str(redis_port),
     ]
 
     print("running slips ...")
@@ -80,7 +80,6 @@ def test_conf_file2(path, output_dir, redis_port):
             command,  # Replace with your command
             stdout=log_file,
             stderr=log_file,
-            cwd=base_dir,
         )
 
         print(f"Output and errors are logged in {output_file}")
@@ -93,11 +92,11 @@ def test_conf_file2(path, output_dir, redis_port):
     print(f"Slips with PID {process.pid} was killed.")
 
     print("Slip is done, checking for errors in the output dir.")
-    # assert_no_errors(output_dir) # todo ask Alya what is the best solution here
+    assert_no_errors(output_dir)
     print("Deleting the output directory")
-    shutil.rmtree(output_dir) # todo uncomment this
+    shutil.rmtree(output_dir)
     print("Checking database")
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir, start_redis_server=False
     )
-    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == 1
+    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == '1'

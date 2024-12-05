@@ -157,12 +157,7 @@ class FidesModule(IModule):
     def __network_opinion_callback(self, ti: SlipsThreatIntelligence):
         """This is executed every time when trust model was able to create an
         aggregated network opinion."""
-        # TODO: [S+] document that we're sending this type
         self.db.publish("fides2slips", json.dumps(ti.to_dict()))
-
-    # def __format_and_print(self, level: str, msg: str):
-    #     # TODO: [S+] determine correct level for trust model log levels
-    #     self.__output.print(f"33|{self.name}|{level} {msg}")
 
     def shutdown_gracefully(self):
         self.sqlite.close()
@@ -213,3 +208,7 @@ class FidesModule(IModule):
             if utils.is_ignored_ip(ip):
                 return
             self.__intelligence.request_data(ip)
+
+        # TODO: delete whole if below, exists for testing purposes for tests/integration_tests/test_fides.py
+        if msg := self.get_msg("fides2network"):
+            pass
