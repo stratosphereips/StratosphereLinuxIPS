@@ -210,5 +210,5 @@ class FidesModule(IModule):
             self.__intelligence.request_data(ip)
 
         # TODO: delete whole if below, exists for testing purposes for tests/integration_tests/test_fides.py
-        if msg := self.get_msg("fides2network"):
-            pass
+        self.get_msg("fides2network")
+
