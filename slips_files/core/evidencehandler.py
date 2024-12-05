@@ -690,7 +690,7 @@ class EvidenceHandler(ICore):
                         evidence.timewindow.start_time = tw_start
                         evidence.timewindow.end_time = tw_end
 
-                        alert = Alert(
+                        alert: Alert = Alert(
                             profile=evidence.profile,
                             timewindow=evidence.timewindow,
                             last_evidence=evidence,

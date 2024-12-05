@@ -14,6 +14,7 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
     Evidence,
     ThreatLevel,
+    dict_to_evidence,
 )
 
 
@@ -29,8 +30,11 @@ def normalize(value: float):
     :param value: numerical value to normalize
     :return: normalized value
     """
-    # this corresponds to config_threshold =   5*60/3600 = 0.08
-    min_value = 5
+    # this corresponds to the most sensitive config_threshold 0.08333333333333333
+    # 0.08333333333333333*3600/60 = 5
+    # but the value from the config is 0.08 for simplicity, so the min value
+    # would be 4.8 instead of 5 here, to avoid negative confidence values
+    min_value = 4.8
     # this corresponds to config_threshold = 26*60/3600 = 0.43
     max_value = 26
     return (value - min_value) / (max_value - min_value)
@@ -97,11 +101,38 @@ def dict_to_alert(alert: dict) -> Alert:
         ),
         timewindow=TimeWindow(
             alert["timewindow"]["number"],
-            alert["timewindow"]["start_time"],
-            alert["timewindow"]["end_time"],
+            utils.convert_format(alert["timewindow"]["start_time"], "iso"),
+            utils.convert_format(alert["timewindow"]["end_time"], "iso"),
         ),
-        last_evidence=alert["last_evidence"],
+        last_evidence=dict_to_evidence(alert["last_evidence"]),
         accumulated_threat_level=alert.get("accumulated_threat_level"),
         id=alert.get("id", ""),
         correl_id=alert.get("correl_id"),
+        last_flow_datetime=utils.convert_format(
+            alert["last_flow_datetime"], "iso"
+        ),
+        threat_level=ThreatLevel[alert["threat_level"].upper()],
+        confidence=alert.get("confidence"),
     )
+
+
+def alert_to_dict(alert: Alert) -> dict:
+    """
+    converts an Alert object to a dictionary.
+    """
+    evidence_to_send: dict = utils.to_dict(alert.last_evidence)
+    return {
+        "profile": {"ip": alert.profile.ip},
+        "timewindow": {
+            "number": alert.timewindow.number,
+            "start_time": alert.timewindow.start_time,
+            "end_time": alert.timewindow.end_time,
+        },
+        "last_evidence": evidence_to_send,
+        "accumulated_threat_level": alert.accumulated_threat_level,
+        "id": alert.id,
+        "correl_id": alert.correl_id,
+        "last_flow_datetime": alert.last_flow_datetime,
+        "threat_level": alert.threat_level.name,
+        "confidence": alert.confidence,
+    }
