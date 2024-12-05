@@ -507,9 +507,12 @@ class Main:
             if self.args.growing:
                 if self.input_type != "zeek_folder":
                     self.print(
-                        f"Parameter -g should be using with "
-                        f"-f <dirname> not a {self.input_type}. "
-                        f"Ignoring -g"
+                        f"Parameter -g should be used with "
+                        f"-f <dirname> not a {self.input_type} file. "
+                        f"Ignoring -g. Analyzing {self.input_information} "
+                        f"instead.",
+                        verbose=1,
+                        debug=3,
                     )
                 else:
                     self.print(

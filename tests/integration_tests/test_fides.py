@@ -2,6 +2,7 @@
 This file tests 2 different config files other than slips' default config/slips.yaml
 test/test.yaml and tests/test2.yaml
 """
+
 import shutil
 from pathlib import PosixPath
 from tests.common_test_utils import (
@@ -46,12 +47,6 @@ def test_conf_file2(path, output_dir, redis_port):
     """
     In this test we're using tests/test2.conf
     """
-
-    # Get the current working directory
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Navigate two levels up
-    #base_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
-
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = [
@@ -93,10 +88,14 @@ def test_conf_file2(path, output_dir, redis_port):
 
     print("Slip is done, checking for errors in the output dir.")
     assert_no_errors(output_dir)
-    print("Deleting the output directory")
-    shutil.rmtree(output_dir)
     print("Checking database")
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir, start_redis_server=False
     )
-    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == '1'
+    # todo send() is not implemented
+    # iris is supposed to be receiving this msg, that last thing fides does
+    # is send a msg to this channel for iris to receive it
+    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+
+    print("Deleting the output directory")
+    shutil.rmtree(output_dir)
