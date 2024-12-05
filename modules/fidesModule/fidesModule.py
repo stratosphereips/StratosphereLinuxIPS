@@ -134,7 +134,7 @@ class FidesModule(IModule):
             self.__network_opinion_callback,
         )
 
-        # TODO: [S+] add on_unknown and on_error handlers if necessary
+        # [S+] add on_unknown and on_error handlers if necessary
         message_handler = MessageHandler(
             on_peer_list_update=peer_list.handle_peer_list_updated,
             on_recommendation_request=recommendations.handle_recommendation_request,
