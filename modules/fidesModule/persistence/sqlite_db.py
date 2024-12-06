@@ -465,7 +465,7 @@ class SQLiteDB:
         Establishes a connection to the SQLite database.
         """
         self.__slips_log(f"Connecting to SQLite database at {self.db_path}")
-        self.connection = sqlite3.connect(self.db_path)
+        self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
 
     def __execute_query(
         self, query: str, params: Optional[List[Any]] = None
