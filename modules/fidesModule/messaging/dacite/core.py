@@ -33,6 +33,9 @@ from ..dacite.types import (
     is_subclass,
 )
 
+from dataclasses import dataclass
+from typing import List, Optional
+
 T = TypeVar("T")
 
 

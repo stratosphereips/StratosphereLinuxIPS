@@ -1,5 +1,9 @@
-from typing import Dict, List, Callable, Optional, Union
+from http.client import responses
+from typing import Dict, List, Callable, Optional, Union, Any
 
+from absl.logging import debug
+
+from slips_files.common.printer import Printer
 from ..messaging.dacite import from_dict
 
 from ..messaging.model import NetworkMessage, PeerInfo, \
@@ -13,12 +17,18 @@ from ..utils.logger import Logger
 logger = Logger(__name__)
 
 
+
 class MessageHandler:
     """
     Class responsible for parsing messages and handling requests coming from the queue.
 
     The entrypoint is on_message.
     """
+
+
+
+    #def print(self, *args, **kwargs):
+    #    return self.printer.print(*args, **kwargs)
 
     version = 1
 
@@ -32,6 +42,7 @@ class MessageHandler:
                  on_unknown: Optional[Callable[[NetworkMessage], None]] = None,
                  on_error: Optional[Callable[[Union[str, NetworkMessage], Exception], None]] = None
                  ):
+        #self.logger = None
         self.__on_peer_list_update_callback = on_peer_list_update
         self.__on_recommendation_request_callback = on_recommendation_request
         self.__on_recommendation_response_callback = on_recommendation_response
@@ -40,6 +51,7 @@ class MessageHandler:
         self.__on_intelligence_response_callback = on_intelligence_response
         self.__on_unknown_callback = on_unknown
         self.__on_error = on_error
+        #self.printer = Printer(self.logger, self.name)
 
     def on_message(self, message: NetworkMessage):
         """
@@ -147,11 +159,17 @@ class MessageHandler:
     def __on_nl2tl_intelligence_response(self, data: Dict):
         logger.debug('nl2tl_intelligence_response message')
 
-        responses = [PeerIntelligenceResponse(
-            sender=from_dict(data_class=PeerInfo, data=single['sender']),
-            intelligence=from_dict(data_class=ThreatIntelligence, data=single['payload']['intelligence']),
-            target=single['payload']['target']
-        ) for single in data]
+        responses = []
+
+        try:
+            responses = [PeerIntelligenceResponse(
+                sender=from_dict(data_class=PeerInfo, data=single['sender']),
+                intelligence=from_dict(data_class=ThreatIntelligence, data=single['payload']['intelligence']),
+                target=single['payload']['target']
+            ) for single in data]
+        except Exception as e:
+            print("Error in Fides message_handler.py __on_nl2tl_intelligence_response(): ", e.__str__())
+            #self.print("Error in Fides message_handler.py __on_nl2tl_intelligence_response(): ")
         return self.__on_intelligence_response(responses)
 
     def __on_intelligence_response(self, responses: List[PeerIntelligenceResponse]):
