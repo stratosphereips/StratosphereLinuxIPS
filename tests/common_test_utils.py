@@ -8,6 +8,7 @@ from typing import (
     Dict,
     Optional,
 )
+from pathlib import PosixPath
 from unittest.mock import Mock
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -64,7 +65,7 @@ def is_evidence_present(log_file, expected_evidence):
         return False
 
 
-def create_output_dir(dirname):
+def create_output_dir(dirname) -> PosixPath:
     """
     creates this output dir inside output/integration_tests/
     returns a full path to the created output dir
@@ -174,6 +175,6 @@ def assert_no_errors(output_dir):
                 # reading large files
                 # the goal of this is to be able to view the error from CI
                 # without having to download the artifacts
-                assert not has_error_keywords(line), (
-                    read_file_if_small(file) or line
-                )
+                assert not has_error_keywords(
+                    line
+                ), f"file: {file} {read_file_if_small(file) or line}"

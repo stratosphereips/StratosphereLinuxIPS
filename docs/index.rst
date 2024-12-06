@@ -18,8 +18,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
 - **Detection modules**. Explanation of detection modules in Slips, types of input and output. See :doc:`Detection modules <detection_modules>`.
 
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
-  
-- **Training with your own data**. Explanation on how to re-train the machine learning system of Slips with your own traffic (normal or malicious).See :doc:`Training <training>`. 
+
+- **Training with your own data**. Explanation on how to re-train the machine learning system of Slips with your own traffic (normal or malicious).See :doc:`Training <training>`.
 
 - **Detections per Flow**. Explanation on how Slips works to make detections on each flow with different techniques. See :doc:`Flow Alerts <flowalerts>`.
 
@@ -41,9 +41,9 @@ This documentation gives an overview how Slips works, how to use it and how to h
 .. toctree::
    :maxdepth: 2
    :hidden:
-   :caption: Slips 
-   
-   self 
+   :caption: Slips
+
+   self
    installation
    usage
    architecture
@@ -59,6 +59,4 @@ This documentation gives an overview how Slips works, how to use it and how to h
    FAQ
    code_documentation
    datasets
-
-
-
+   fides_module
