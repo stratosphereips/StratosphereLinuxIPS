@@ -107,6 +107,7 @@ class SlipsTrustDatabase(TrustDatabase):
         """Returns trust data for given peer ID, if no data are found,
         returns None."""
         out = None
+        peer_id = ""
 
         if isinstance(peer, PeerId):
             peer_id = peer
@@ -115,7 +116,7 @@ class SlipsTrustDatabase(TrustDatabase):
         else:
             return out
 
-        td_json = self.db.get_peer_trust_data(peer.id)
+        td_json = self.db.get_peer_trust_data(peer_id)
         if td_json:  # Redis has available data
             out = PeerTrustData(**json.loads(td_json))
         else:  # if redis is empty, try SQLite
