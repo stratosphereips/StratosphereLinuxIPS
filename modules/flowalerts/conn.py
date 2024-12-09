@@ -37,6 +37,7 @@ class Conn(IFlowalertsAnalyzer):
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
         self.our_ips = utils.get_own_ips()
+        self.input_type: str = self.db.get_input_type()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -387,7 +388,7 @@ class Conn(IFlowalertsAnalyzer):
             # so we shouldn't be doing this detection on this ip
             or flow.daddr in self.client_ips
             # because there's no dns.log to know if the dns was made
-            or self.db.get_input_type() == "zeek_log_file"
+            or self.input_type == "zeek_log_file"
             or self.db.is_doh_server(flow.daddr)
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
