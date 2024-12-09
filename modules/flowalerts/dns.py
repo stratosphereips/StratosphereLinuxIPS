@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import ipaddress
 import json
 import math
 from datetime import datetime
@@ -286,12 +287,18 @@ class DNS(IFlowalertsAnalyzer):
         Uses shannon entropy to detect DNS TXT answers
         with encoded/encrypted strings
         """
+        # to avoid FPs when devices announce their presence in the TXT
+        # records of mDNS answers
+        if ipaddress.ip_address(flow.saddr).is_multicast:
+            return
+
         if not flow.answers:
             return
 
         for answer in flow.answers:
             if "TXT" not in answer:
                 continue
+
             entropy = self.estimate_shannon_entropy(answer)
             if entropy >= self.shannon_entropy_threshold:
                 self.set_evidence.suspicious_dns_answer(
