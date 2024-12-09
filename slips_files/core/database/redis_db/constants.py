@@ -26,7 +26,6 @@ class Constants:
     SRCIPS_SEEN_IN_CONN_LOG = "srcips_seen_in_connlog"
     PASSIVE_DNS = "passiveDNS"
     DNS_RESOLUTION = "DNSresolution"
-    RESOLVED_DOMAINS = "ResolvedDomains"
     DOMAINS_RESOLVED = "DomainsResolved"
     CACHED_ASN = "cached_asn"
     PIDS = "PIDs"

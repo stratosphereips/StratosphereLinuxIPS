@@ -843,8 +843,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             # we store ALL dns resolutions seen since starting slips
             # store with the IP as the key
             self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
-            # store with the domain as the key:
-            self.r.hset(self.constants.RESOLVED_DOMAINS, domains[0], answer)
             # these ips will be associated with the query in our db
             ips_to_add.append(answer)
 
