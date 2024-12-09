@@ -25,6 +25,7 @@ class Constants:
     WHITELISTED_EVIDENCE = "whitelisted_evidence"
     SRCIPS_SEEN_IN_CONN_LOG = "srcips_seen_in_connlog"
     PASSIVE_DNS = "passiveDNS"
+    # called for every ip in kalipso timeline
     DNS_RESOLUTION = "DNSresolution"
     DOMAINS_RESOLVED = "DomainsResolved"
     CACHED_ASN = "cached_asn"

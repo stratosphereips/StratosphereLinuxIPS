@@ -866,6 +866,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def set_domain_resolution(self, domain, ips):
         """
         stores all the resolved domains with their ips in the db
+        stored as {Domain: [IP, IP, IP]} in the db
         """
         self.r.hset(self.constants.DOMAINS_RESOLVED, domain, json.dumps(ips))
 
