@@ -289,7 +289,7 @@ class DNS(IFlowalertsAnalyzer):
         """
         # to avoid FPs when devices announce their presence in the TXT
         # records of mDNS answers
-        if ipaddress.ipaddress(flow.saddr).is_multicast:
+        if ipaddress.ip_address(flow.saddr).is_multicast:
             return
 
         if not flow.answers:
