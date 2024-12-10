@@ -239,9 +239,41 @@ class IoCHandler:
         info = self.rcache.hmget(self.constants.IOC_SSL, sha1)[0]
         return False if info is None else info
 
+    def _match_exact_domain(self, domain: str) -> Optional[Dict[str, str]]:
+        """checks if the given domain is blacklisted.
+        checks only the exact given domain, no subdomains"""
+        domain_description = self.rcache.hget(
+            self.constants.IOC_DOMAINS, domain
+        )
+        if not domain_description:
+            return
+        return json.loads(domain_description)
+
+    def _match_subdomain(self, domain: str):
+        """
+        Checks if we have any blacklisted domain that is a part of the
+        given domain
+        """
+        ioc_domains: Dict[str, Dict[str, str]] = self.rcache.hgetall(
+            self.constants.IOC_DOMAINS
+        )
+        for malicious_domain, domain_info in ioc_domains.items():
+            malicious_domain: str
+            domain_info: str
+            #  if we contacted images.google.com and we have
+            #  google.com in our blacklists, we find a match
+            if malicious_domain in domain:
+                # domain_info is something like this
+                # {"description": "['hack''malware''phishing']",
+                # "source": "OCD-Datalake-russia-ukraine_IOCs-ALL.csv",
+                # "threat_level": "medium",
+                # "tags": ["Russia-UkraineIoCs"]}
+                domain_info: Dict[str, str] = json.loads(domain_info)
+                return domain_info
+
     def is_blacklisted_domain(
         self, domain: str
-    ) -> Tuple[Dict[str, str], bool]:
+    ) -> Union[Tuple[Dict[str, str], bool], bool]:
         """
         Search in the dB of malicious domains and return a
         description if we found a match
@@ -250,32 +282,15 @@ class IoCHandler:
         bool: True if we found a match for exactly the given
         domain False if we matched a subdomain
         """
-        domain_description = self.rcache.hget(
-            self.constants.IOC_DOMAINS, domain
-        )
-        is_subdomain = False
-        if domain_description:
-            return json.loads(domain_description), is_subdomain
+        if match := self._match_exact_domain(domain):
+            is_subdomain = False
+            return match, is_subdomain
 
-        # try to match subdomain
-        ioc_domains: Dict[str, Dict[str, str]] = self.rcache.hgetall(
-            self.constants.IOC_DOMAINS
-        )
-        for malicious_domain, domain_info in ioc_domains.items():
-            malicious_domain: str
-            domain_info: str
-            # something like this
-            # {"description": "['hack''malware''phishing']",
-            # "source": "OCD-Datalake-russia-ukraine_IOCs-ALL.csv",
-            # "threat_level": "medium",
-            # "tags": ["Russia-UkraineIoCs"]}
-            domain_info: Dict[str, str] = json.loads(domain_info)
-            #  if the we contacted images.google.com and we have
-            #  google.com in our blacklists, we find a match
-            if malicious_domain in domain:
-                is_subdomain = True
-                return domain_info, is_subdomain
-        return False, is_subdomain
+        if match := self._match_subdomain(domain):
+            is_subdomain = True
+            return match, is_subdomain
+
+        return False, False
 
     def get_all_blacklisted_ip_ranges(self) -> dict:
         """

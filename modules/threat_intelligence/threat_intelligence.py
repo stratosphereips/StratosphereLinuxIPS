@@ -1429,16 +1429,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         """Determines if a URL is considered malicious by querying online threat
         intelligence sources.
 
-        Parameters:
-            - url (str): The URL to check.
-            - uid (str): Unique identifier for the network flow.
-            - timestamp (str): Timestamp when the network flow occurred.
-            - daddr (str): Destination IP address in the network flow.
-            - profileid (str): Identifier of the profile associated
-            with the network flow.
-            - twid (str): Time window identifier for when the network
-            flow occurred.
-
         Returns:
             - None: The function does not return a value but triggers
             evidence creation if the URL is found to be malicious.
@@ -1632,18 +1622,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         identified as
         malicious, it records an evidence entry and marks the
         domain in the database.
-
-        Parameters:
-            domain (str): The domain name to be evaluated for
-             malicious activity.
-            uid (str): Unique identifier of the network flow
-            associated with this domain query.
-            timestamp (str): Timestamp when the domain query
-            was observed.
-            profileid (str): Identifier of the network profile
-            that initiated the domain query.
-            twid (str): Time window identifier during which the
-            domain query occurred.
 
         Returns:
             bool: False if the domain is ignored or not found in the
