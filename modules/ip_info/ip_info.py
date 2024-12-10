@@ -198,30 +198,33 @@ class IPInfo(AsyncModule):
         ):
             return False
 
+    @staticmethod
     @lru_cache(maxsize=700)
+    def _get_vendor_offline_cached(oui, mac_db_content):
+        """
+        Static helper to perform the actual lookup based on OUI and cached content.
+        """
+        for line in mac_db_content:
+            if oui in line:
+                line = json.loads(line)
+                return line["vendorName"]
+        return False
+
     def get_vendor_offline(self, mac_addr, profileid):
         """
-        Gets vendor from Slips' offline database databases/macaddr-db.json
+        Gets vendor from Slips' offline database at databases/macaddr-db.json.
         """
-        if not hasattr(self, "mac_db"):
+        if not hasattr(self, "mac_db") or self.mac_db is None:
             # when update manager is done updating the mac db, we should ask
             # the db for all these pending queries
             self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
         oui = mac_addr[:8].upper()
-        # parse the mac db and search for this oui
         self.mac_db.seek(0)
-        while True:
-            line = self.mac_db.readline()
-            if line == "":
-                # reached the end of file without finding the vendor
-                # set the vendor to unknown to avoid searching for it again
-                return False
+        mac_db_content = self.mac_db.readlines()
 
-            if oui in line:
-                line = json.loads(line)
-                return line["vendorName"]
+        return self._get_vendor_offline_cached(oui, tuple(mac_db_content))
 
     def get_vendor(self, mac_addr: str, profileid: str) -> dict:
         """
