@@ -9,6 +9,10 @@ from typing import (
 
 from slips_files.common.data_structures.trie import Trie
 
+# for future developers, remember to invalidate_trie_cache() on every
+# change to the self.constants.IOC_DOMAINS key or slips will keep using an
+# invalid cache to lookup malicious domains
+
 
 class IoCHandler:
     """
@@ -24,7 +28,7 @@ class IoCHandler:
         self.trie = None
         self.is_trie_cached = False
 
-    def build_trie(self):
+    def _build_trie(self):
         """Retrieve domains from Redis and construct the trie."""
         self.trie = Trie()
         ioc_domains: Dict[str, str] = self.rcache.hgetall(
@@ -43,10 +47,10 @@ class IoCHandler:
             self.trie.insert(domain, json.loads(domain_info))
         self.is_trie_cached = True
 
-    def invalidate_trie_cache(self):
+    def _invalidate_trie_cache(self):
         """
         Invalidate the trie cache.
-        used whenever IOC_DOMAINS key is updated. #todo
+        used whenever IOC_DOMAINS key is updated.
         """
         self.trie = None
         self.is_trie_cached = False
@@ -77,6 +81,7 @@ class IoCHandler:
             if feed_to_delete in domain_description["source"]:
                 # this entry has the given feed as source, delete it
                 self.rcache.hdel(self.constants.IOC_DOMAINS, domain)
+                self._invalidate_trie_cache()
 
         # get all IPs that are read from TI files in our db
         ioc_ips = self.rcache.hgetall(self.constants.IOC_IPS)
@@ -173,6 +178,7 @@ class IoCHandler:
         Delete old domains from IoC
         """
         self.rcache.hdel(self.constants.IOC_DOMAINS, *domains)
+        self._invalidate_trie_cache()
 
     def add_ips_to_ioc(self, ips_and_description: Dict[str, str]) -> None:
         """
@@ -198,6 +204,7 @@ class IoCHandler:
             self.rcache.hmset(
                 self.constants.IOC_DOMAINS, domains_and_description
             )
+            self._invalidate_trie_cache()
 
     def add_ip_range_to_ioc(self, malicious_ip_ranges: dict) -> None:
         """
@@ -296,7 +303,7 @@ class IoCHandler:
         # added to the db, when that happens we invalidate the cache,
         # rebuild the trie, and keep using it from there.
         if not self.is_trie_cached:
-            self.build_trie()
+            self._build_trie()
 
         found, domain_info = self.trie.search(domain)
         if found:
