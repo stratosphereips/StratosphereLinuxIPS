@@ -7,6 +7,8 @@ from typing import (
     Optional,
 )
 
+from slips_files.common.data_structures.trie import Trie
+
 
 class IoCHandler:
     """
@@ -16,6 +18,38 @@ class IoCHandler:
     """
 
     name = "DB"
+
+    def __init__(self):
+        # used for faster domain lookups
+        self.trie = None
+        self.is_trie_cached = False
+
+    def build_trie(self):
+        """Retrieve domains from Redis and construct the trie."""
+        self.trie = Trie()
+        ioc_domains: Dict[str, str] = self.rcache.hgetall(
+            self.constants.IOC_DOMAINS
+        )
+        for domain, domain_info in ioc_domains.items():
+            domain: str
+            domain_info: str
+            # domain_info is something like this
+            # {"description": "['hack''malware''phishing']",
+            # "source": "OCD-Datalake-russia-ukraine_IOCs-ALL.csv",
+            # "threat_level": "medium",
+            # "tags": ["Russia-UkraineIoCs"]}
+
+            # store parsed domain info
+            self.trie.insert(domain, json.loads(domain_info))
+        self.is_trie_cached = True
+
+    def invalidate_trie_cache(self):
+        """
+        Invalidate the trie cache.
+        used whenever IOC_DOMAINS key is updated. #todo
+        """
+        self.trie = None
+        self.is_trie_cached = False
 
     def set_loaded_ti_files(self, number_of_loaded_files: int):
         """
@@ -249,34 +283,30 @@ class IoCHandler:
             return
         return json.loads(domain_description)
 
-    def _match_subdomain(self, domain: str):
+    def _match_subdomain(self, domain: str) -> Optional[Dict[str, str]]:
         """
         Checks if we have any blacklisted domain that is a part of the
         given domain
+        Uses a cached trie for optimization.
         """
-        ioc_domains: Dict[str, Dict[str, str]] = self.rcache.hgetall(
-            self.constants.IOC_DOMAINS
-        )
-        for malicious_domain, domain_info in ioc_domains.items():
-            malicious_domain: str
-            domain_info: str
-            #  if we contacted images.google.com and we have
-            #  google.com in our blacklists, we find a match
-            if malicious_domain in domain:
-                # domain_info is something like this
-                # {"description": "['hack''malware''phishing']",
-                # "source": "OCD-Datalake-russia-ukraine_IOCs-ALL.csv",
-                # "threat_level": "medium",
-                # "tags": ["Russia-UkraineIoCs"]}
-                domain_info: Dict[str, str] = json.loads(domain_info)
-                return domain_info
+        # the goal here is we dont retrieve that huge amount of domains
+        # from the db on every domain lookup
+        # so we retrieve once, put em in a trie (aka cache them in memory),
+        # keep using them from that data structure until a new domain is
+        # added to the db, when that happens we invalidate the cache,
+        # rebuild the trie, and keep using it from there.
+        if not self.is_trie_cached:
+            self.build_trie()
+
+        found, domain_info = self.trie.search(domain)
+        if found:
+            return domain_info
 
     def is_blacklisted_domain(
         self, domain: str
     ) -> Union[Tuple[Dict[str, str], bool], bool]:
         """
-        Search in the dB of malicious domains and return a
-        description if we found a match
+        Check if the given domain or its subdomain is blacklisted.
         returns a tuple (description, is_subdomain)
         description: description of the subdomain if found
         bool: True if we found a match for exactly the given
@@ -289,7 +319,6 @@ class IoCHandler:
         if match := self._match_subdomain(domain):
             is_subdomain = True
             return match, is_subdomain
-
         return False, False
 
     def get_all_blacklisted_ip_ranges(self) -> dict:

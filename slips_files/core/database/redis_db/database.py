@@ -131,6 +131,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 )
 
             cls._instances[cls.redis_port] = super().__new__(cls)
+            super().__init__(cls)
+
             # By default the slips internal time is
             # 0 until we receive something
             cls.set_slips_internal_time(0)
