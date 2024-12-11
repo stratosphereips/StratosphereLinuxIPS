@@ -394,7 +394,9 @@ class Utils(object):
         sock.close()
         return True
 
-    def is_private_ip(self, ip: Union[ipaddress, str]) -> bool:
+    def is_private_ip(
+        self, ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address, str]
+    ) -> bool:
         ip_classes = {ipaddress.IPv4Address, ipaddress.IPv6Address}
         for class_ in ip_classes:
             if isinstance(ip, class_):
