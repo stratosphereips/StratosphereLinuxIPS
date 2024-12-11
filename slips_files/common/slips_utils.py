@@ -397,6 +397,9 @@ class Utils(object):
     def is_private_ip(
         self, ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address, str]
     ) -> bool:
+        if self.detect_ioc_type(ip) != "ip":
+            return False
+
         ip_classes = {ipaddress.IPv4Address, ipaddress.IPv6Address}
         for class_ in ip_classes:
             if isinstance(ip, class_):
