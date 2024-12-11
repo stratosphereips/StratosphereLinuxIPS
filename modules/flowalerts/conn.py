@@ -200,14 +200,17 @@ class Conn(IFlowalertsAnalyzer):
             self.set_evidence.unknown_port(twid, flow)
             return True
 
+    def is_telnet(self, flow) -> bool:
+        telnet_ports = (23, 2323)
+        return int(flow.dport) in telnet_ports and flow.proto.lower() == "tcp"
+
     def check_multiple_telnet_reconnection_attempts(
         self, profileid, twid, flow
     ):
         if flow.interpreted_state != NOT_ESTAB:
             return
 
-        telnet_ports = (23, 2323)
-        if not (flow.dport in telnet_ports and flow.proto.lower() == "tcp"):
+        if not self.is_telnet(flow):
             return
 
         key = f"{flow.saddr}-{flow.daddr}-telnet"
