@@ -264,6 +264,7 @@ class Conn(IFlowalertsAnalyzer):
             reconnections = 1
 
         if reconnections < self.multiple_reconnection_attempts_threshold:
+            self.db.set_reconnections(profileid, twid, current_reconnections)
             return
 
         self.set_evidence.multiple_reconnection_attempts(

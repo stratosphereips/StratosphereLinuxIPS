@@ -1,3 +1,5 @@
+- Add multiple telnet reconnection attempts detection
+
 1.1.4.1 (Dec 3rd, 2024)
 - Fix abstract class starting with the rest of the modules.
 - Fix the updating of the MAC vendors database used in slips.
