@@ -265,7 +265,7 @@ class Utils(object):
 
         # convert to the req format
         if required_format == "iso":
-            return datetime_obj.astimezone().isoformat()
+            return datetime_obj.astimezone(tz=self.local_tz).isoformat()
         elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
         else:
