@@ -15,6 +15,10 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 
 
+NOT_ESTAB = "Not Established"
+ESTAB = "Established"
+
+
 class Conn(IFlowalertsAnalyzer):
     def init(self):
         # get the default gateway
@@ -38,6 +42,7 @@ class Conn(IFlowalertsAnalyzer):
         self.classifier = FlowClassifier()
         self.our_ips = utils.get_own_ips()
         self.input_type: str = self.db.get_input_type()
+        self.multiple_reconnection_attempts_threshold = 5
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -171,7 +176,7 @@ class Conn(IFlowalertsAnalyzer):
         """
         if not flow.dport:
             return
-        if flow.interpreted_state != "Established":
+        if flow.interpreted_state != ESTAB:
             # detect unknown ports on established conns only
             return False
 
@@ -194,6 +199,45 @@ class Conn(IFlowalertsAnalyzer):
             # we don't have info about this port
             self.set_evidence.unknown_port(twid, flow)
             return True
+
+    def check_multiple_telnet_reconnection_attempts(
+        self, profileid, twid, flow
+    ):
+        if flow.interpreted_state != NOT_ESTAB:
+            return
+
+        telnet_ports = (23, 2323)
+        if not (flow.dport in telnet_ports and flow.proto.lower() == "tcp"):
+            return
+
+        key = f"{flow.saddr}-{flow.daddr}-telnet"
+        # add this conn to the stored number of reconnections
+        current_reconnections = self.db.get_reconnections_for_tw(
+            profileid, twid
+        )
+        try:
+            reconnections, uids = current_reconnections[key]
+            reconnections += 1
+            uids.append(flow.uid)
+            current_reconnections[key] = (reconnections, uids)
+        except KeyError:
+            current_reconnections[key] = (1, [flow.uid])
+            reconnections = 1
+
+        if reconnections < 4:
+            # update the reconnections ctr in the db
+            self.db.set_reconnections(profileid, twid, current_reconnections)
+            return
+
+        self.set_evidence.multiple_telnet_reconnection_attempts(
+            twid, flow, reconnections, current_reconnections[key][1]
+        )
+
+        # reset the reconnection attempts of this src->dst since an evidence
+        # is set
+        current_reconnections[key] = (0, [])
+
+        self.db.set_reconnections(profileid, twid, current_reconnections)
 
     def check_multiple_reconnection_attempts(self, profileid, twid, flow):
         """
@@ -219,7 +263,7 @@ class Conn(IFlowalertsAnalyzer):
             current_reconnections[key] = (1, [flow.uid])
             reconnections = 1
 
-        if reconnections < 5:
+        if reconnections < self.multiple_reconnection_attempts_threshold:
             return
 
         self.set_evidence.multiple_reconnection_attempts(
@@ -511,7 +555,7 @@ class Conn(IFlowalertsAnalyzer):
         )
 
     def detect_connection_to_multiple_ports(self, profileid, twid, flow):
-        if flow.proto != "tcp" or flow.interpreted_state != "Established":
+        if flow.proto != "tcp" or flow.interpreted_state != ESTAB:
             return
 
         dport_name = flow.appproto
@@ -525,7 +569,7 @@ class Conn(IFlowalertsAnalyzer):
         # Connection to multiple ports to the destination IP
         if profileid.split("_")[1] == flow.saddr:
             direction = "Dst"
-            state = "Established"
+            state = ESTAB
             protocol = "TCP"
             role = "Client"
             type_data = "IPs"
@@ -565,7 +609,7 @@ class Conn(IFlowalertsAnalyzer):
         # Happens in the mode 'all'
         elif profileid.split("_")[-1] == flow.daddr:
             direction = "Src"
-            state = "Established"
+            state = ESTAB
             protocol = "TCP"
             role = "Server"
             type_data = "IPs"
@@ -608,7 +652,7 @@ class Conn(IFlowalertsAnalyzer):
             str(flow.dport) == "80"
             and flow.proto.lower() == "tcp"
             and str(flow.appproto).lower() != "http"
-            and flow.interpreted_state == "Established"
+            and flow.interpreted_state == ESTAB
             and (flow.sbytes + flow.dbytes) != 0
         ):
             self.set_evidence.non_http_port_80_conn(twid, flow)
@@ -734,6 +778,9 @@ class Conn(IFlowalertsAnalyzer):
             self.check_long_connection(twid, flow)
             self.check_unknown_port(profileid, twid, flow)
             self.check_multiple_reconnection_attempts(profileid, twid, flow)
+            self.check_multiple_telnet_reconnection_attempts(
+                profileid, twid, flow
+            )
             self.check_conn_to_port_0(profileid, twid, flow)
             self.check_different_localnet_usage(
                 twid, flow, what_to_check="dstip"
