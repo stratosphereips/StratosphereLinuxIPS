@@ -58,7 +58,6 @@ class IPInfo(AsyncModule):
             "new_dns": self.c3,
             "check_jarm_hash": self.c4,
         }
-        self.is_gw_mac_set = False
         self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.valid_tlds = whois.validTlds()
@@ -307,7 +306,7 @@ class IPInfo(AsyncModule):
         await self.reading_mac_db_task
 
     # GW
-    def get_gateway_ip(self):
+    def get_gateway_ip_if_interface(self):
         """
         Slips tries different ways to get the ip of the default gateway
         this method tries to get the default gateway IP address using ip route
@@ -352,6 +351,7 @@ class IPInfo(AsyncModule):
             return gw_mac
 
         if not self.is_running_non_stop:
+            # running on pcap or a given zeek file/dir
             # no MAC in arp.log (in the db) and can't use arp tables,
             # so it's up to the db.is_gw_mac() function to determine the gw mac
             # if it's seen associated with a public IP
@@ -492,8 +492,13 @@ class IPInfo(AsyncModule):
         utils.drop_root_privs()
         self.wait_for_dbs()
         # the following method only works when running on an interface
-        if ip := self.get_gateway_ip():
+        if ip := self.get_gateway_ip_if_interface():
             self.db.set_default_gateway("IP", ip)
+
+            # whether we found the gw ip using dhcp in profiler
+            # or using ip route using self.get_gateway_ip()
+            # now that it's found, get and store the mac addr of it
+            self.get_gateway_mac(ip)
 
     def handle_new_ip(self, ip: str):
         try:
@@ -531,16 +536,6 @@ class IPInfo(AsyncModule):
 
             self.get_vendor(mac_addr, profileid)
             self.check_if_we_have_pending_offline_mac_queries()
-            # set the gw mac and ip if they're not set yet
-            if not self.is_gw_mac_set:
-                # whether we found the gw ip using dhcp in profiler
-                # or using ip route using self.get_gateway_ip()
-                # now that it's found, get and store the mac addr of it
-                if ip := self.db.get_gateway_ip():
-                    # now that we know the GW IP address,
-                    # try to get the MAC of this IP (of the gw)
-                    self.get_gateway_mac(ip)
-                    self.is_gw_mac_set = True
 
         if msg := self.get_msg("new_dns"):
             msg = json.loads(msg["data"])

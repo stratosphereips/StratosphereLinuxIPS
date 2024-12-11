@@ -148,7 +148,7 @@ def test_detect_mitm_arp_attack_with_original_ip():
     gateway_mac = "aa:bb:cc:dd:ee:ff"
 
     arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_ip_if_interface.return_value = gateway_ip
     arp.db.get_gateway_mac.return_value = gateway_mac
 
     result = arp.detect_mitm_arp_attack(twid, flow)
@@ -174,7 +174,7 @@ def test_detect_mitm_arp_attack_same_ip():
     gateway_mac = "aa:bb:cc:dd:ee:ff"
 
     arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_ip_if_interface.return_value = gateway_ip
     arp.db.get_gateway_mac.return_value = gateway_mac
 
     result = arp.detect_mitm_arp_attack(twid, flow)
@@ -200,7 +200,7 @@ def test_detect_mitm_arp_attack_gateway_mac():
     gateway_mac = "44:11:44:11:44:11"
 
     arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_ip_if_interface.return_value = gateway_ip
     arp.db.get_gateway_mac.return_value = gateway_mac
 
     result = arp.detect_mitm_arp_attack(twid, flow)
@@ -226,7 +226,7 @@ def test_detect_mitm_arp_attack_gateway_ip_as_victim():
     gateway_mac = "aa:bb:cc:dd:ee:ff"
 
     arp.db.get_ip_of_mac.return_value = json.dumps([f"profile_{original_ip}"])
-    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_ip_if_interface.return_value = gateway_ip
     arp.db.get_gateway_mac.return_value = gateway_mac
 
     result = arp.detect_mitm_arp_attack(twid, flow)
@@ -251,7 +251,7 @@ def test_detect_mitm_arp_attack_no_original_ip():
     gateway_mac = "aa:bb:cc:dd:ee:ff"
 
     arp.db.get_ip_of_mac.return_value = None
-    arp.db.get_gateway_ip.return_value = gateway_ip
+    arp.db.get_gateway_ip_if_interface.return_value = gateway_ip
     arp.db.get_gateway_mac.return_value = gateway_mac
 
     result = arp.detect_mitm_arp_attack(twid, flow)
