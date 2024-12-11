@@ -16,7 +16,11 @@ import os
 import sys
 import ipaddress
 import aid_hash
-from typing import Any, Optional
+from typing import (
+    Any,
+    Optional,
+    Union,
+)
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
@@ -265,7 +269,7 @@ class Utils(object):
 
         # convert to the req format
         if required_format == "iso":
-            return datetime_obj.astimezone().isoformat()
+            return datetime_obj.astimezone(tz=self.local_tz).isoformat()
         elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
         else:
@@ -390,20 +394,19 @@ class Utils(object):
         sock.close()
         return True
 
-    def is_private_ip(self, ip_obj: ipaddress) -> bool:
-        """
-        This function replaces the ipaddress library 'is_private'
-        because it does not work correctly and it does not ignore
-        the ips 0.0.0.0 or 255.255.255.255
-        """
-        # Is it a well-formed ipv4 or ipv6?
-        r_value = False
-        if ip_obj and ip_obj.is_private:
-            if ip_obj != ipaddress.ip_address(
-                "0.0.0.0"
-            ) and ip_obj != ipaddress.ip_address("255.255.255.255"):
-                r_value = True
-        return r_value
+    def is_private_ip(
+        self, ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address, str]
+    ) -> bool:
+        ip_classes = {ipaddress.IPv4Address, ipaddress.IPv6Address}
+        for class_ in ip_classes:
+            if isinstance(ip, class_):
+                return ip and ip.is_private
+
+        if self.detect_ioc_type(ip) != "ip":
+            return False
+        # convert the given str ip to obj
+        ip_obj = ipaddress.ip_address(ip)
+        return ip_obj.is_private
 
     def is_ignored_ip(self, ip: str) -> bool:
         """
@@ -414,16 +417,15 @@ class Utils(object):
             ip_obj = ipaddress.ip_address(ip)
         except (ipaddress.AddressValueError, ValueError):
             return True
+
         # Is the IP multicast, private? (including localhost)
         # The broadcast address 255.255.255.255 is reserved.
-        return bool(
-            (
-                ip_obj.is_multicast
-                or self.is_private_ip(ip_obj)
-                or ip_obj.is_link_local
-                or ip_obj.is_reserved
-                or ".255" in ip_obj.exploded
-            )
+        return (
+            ip_obj.is_multicast
+            or self.is_private_ip(ip_obj)
+            or ip_obj.is_link_local
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
         )
 
     def get_sha256_hash(self, filename: str):

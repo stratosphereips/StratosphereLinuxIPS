@@ -881,6 +881,45 @@ class SetEvidnceHelper:
         )
         self.db.set_evidence(evidence)
 
+    def multiple_telnet_reconnection_attempts(
+        self, twid, flow, reconnections, uids: List[str]
+    ):
+        """
+        Set evidence for 4+ telnet unsuccessful attempts.
+        """
+        confidence: float = 0.5
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+
+        twid: int = int(twid.replace("timewindow", ""))
+
+        description = (
+            f"Multiple Telnet reconnection attempts from IP: {flow.saddr} "
+            f"to Destination IP: {flow.daddr}  "
+            f"reconnections: {reconnections}"
+        )
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
+            ),
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid),
+            uid=uids,
+            timestamp=flow.starttime,
+        )
+
+        self.db.set_evidence(evidence)
+
     def multiple_reconnection_attempts(
         self, twid, flow, reconnections, uids: List[str]
     ) -> None:
