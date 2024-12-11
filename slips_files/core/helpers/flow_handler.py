@@ -161,7 +161,7 @@ class FlowHandler:
         self.db.add_out_notice(self.profileid, self.twid, self.flow)
 
         if "Gateway_addr_identified" in self.flow.note:
-            # get the gw addr form the msg
+            # get the gw addr from the msg
             gw_addr = self.flow.msg.split(": ")[-1].strip()
             self.db.set_default_gateway("IP", gw_addr)
 
