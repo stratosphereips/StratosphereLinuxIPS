@@ -201,8 +201,14 @@ class Conn(IFlowalertsAnalyzer):
             return True
 
     def is_telnet(self, flow) -> bool:
+        try:
+            dport = int(flow.dport)
+        except ValueError:
+            # binetflow icmp ports are hex strings
+            return False
+
         telnet_ports = (23, 2323)
-        return int(flow.dport) in telnet_ports and flow.proto.lower() == "tcp"
+        return dport in telnet_ports and flow.proto.lower() == "tcp"
 
     def check_multiple_telnet_reconnection_attempts(
         self, profileid, twid, flow
