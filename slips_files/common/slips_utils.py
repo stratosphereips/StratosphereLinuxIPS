@@ -16,7 +16,11 @@ import os
 import sys
 import ipaddress
 import aid_hash
-from typing import Any, Optional
+from typing import (
+    Any,
+    Optional,
+    Union,
+)
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
@@ -390,8 +394,15 @@ class Utils(object):
         sock.close()
         return True
 
-    def is_private_ip(self, ip_obj: ipaddress) -> bool:
-        return ip_obj and ip_obj.is_private
+    def is_private_ip(self, ip: Union[ipaddress, str]) -> bool:
+        ip_classes = {ipaddress.IPv4Address, ipaddress.IPv6Address}
+        for class_ in ip_classes:
+            if isinstance(ip, class_):
+                return ip and ip.is_private
+
+        # convert the given str ip to obj
+        ip_obj = ipaddress.ip_address(ip)
+        return ip_obj.is_private
 
     def is_ignored_ip(self, ip: str) -> bool:
         """
