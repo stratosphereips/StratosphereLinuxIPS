@@ -71,6 +71,8 @@ jobs:
           - test_timeline.py
           - test_database.py
           - test_symbols_handler.py
+          - test_fides_sqlite_db.py
+          - test_fides_module.py
 
     steps:
     - uses: actions/checkout@v4
