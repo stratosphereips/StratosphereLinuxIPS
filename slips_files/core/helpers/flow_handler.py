@@ -176,7 +176,7 @@ class FlowHandler:
             if not self.db.get_gateway_mac() and gw_ip:
                 gw_mac = self.db.get_mac_addr_from_profile(f"profile_{gw_ip}")
                 if gw_mac:
-                    self.db.set_default_gateway("MAC", self.gw_mac)
+                    self.db.set_default_gateway("MAC", gw_mac)
 
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
 
