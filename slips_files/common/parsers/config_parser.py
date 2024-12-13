@@ -215,17 +215,9 @@ class ConfigParser(object):
         return twid_width
 
     def disabled_detections(self) -> list:
-        disabled_detections = self.read_configuration(
+        return self.read_configuration(
             "DisabledAlerts", "disabled_detections", []
         )
-        if disabled_detections:
-            disabled_detections = (
-                disabled_detections.replace("[", "")
-                .replace("]", "")
-                .replace(",", "")
-                .split()
-            )
-        return disabled_detections
 
     def get_tw_width(self) -> str:
         twid_width = self.get_tw_width_as_float()
@@ -290,14 +282,7 @@ class ConfigParser(object):
         return debug
 
     def export_to(self):
-        return (
-            self.read_configuration("exporting_alerts", "export_to", "[]")
-            .replace("]", "")
-            .replace("[", "")
-            .replace(" ", "")
-            .lower()
-            .split(",")
-        )
+        return self.read_configuration("exporting_alerts", "export_to", [])
 
     def export_strato_letters(self) -> bool:
         return self.read_configuration(

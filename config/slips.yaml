@@ -289,7 +289,7 @@ exporting_alerts:
    # available options [slack,stix] without quotes
    # export_to : [stix]
    # export_to : [slack]
-   export_to : "[]"
+   export_to : []
 
    # We'll use this channel to send alerts
    slack_channel_name : proj_slips_alerting_module
@@ -368,7 +368,7 @@ DisabledAlerts:
    # MALICIOUS_DOWNLOADED_FILE, MALICIOUS_URL
 
    # disabled_detections = [THREAT_INTELLIGENCE_BLACKLISTED_IP, CONNECTION_TO_PRIVATE_IP]
-   disabled_detections : "[]"
+   disabled_detections : []
 
 #############################
 Docker:
