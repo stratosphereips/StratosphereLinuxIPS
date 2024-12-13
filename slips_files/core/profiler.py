@@ -4,6 +4,7 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
+import json
 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,6 +23,7 @@ import pprint
 import multiprocessing
 from typing import (
     List,
+    Optional,
 )
 
 import validators
@@ -95,6 +97,8 @@ class Profiler(ICore, IObservable):
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
+        self.gw_mac = None
+        self.gw_ip = None
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -140,6 +144,87 @@ class Profiler(ICore, IObservable):
         )
         return rev_profileid, rev_twid
 
+    def get_gw_ip_using_gw_mac(self) -> Optional[str]:
+        """
+        gets the ip of the given mac from the db
+        prioritizes returning the ipv4. if not found, the function returns
+        the ipv6. or none if both are not found.
+        """
+        # the db returns a serialized list of IPs belonging to this mac
+        gw_ips: str = self.db.get_ip_of_mac(self.gw_mac)
+
+        if not gw_ips:
+            return
+
+        gw_ips: List[str] = json.loads(gw_ips)
+        # try to get the ipv4 if found in that list
+        for ip in gw_ips:
+            try:
+                ipaddress.IPv4Address(ip)
+                return ip
+            except ipaddress.AddressValueError:
+                continue
+
+        # all of them are ipv6, return the first
+        return gw_ips[0]
+
+    def is_gw_info_detected(self, info_type: str) -> bool:
+        """
+        checks own attributes and the db for the gw mac/ip
+        :param info_type: can be 'mac' or 'ip'
+        """
+        info_mapping = {
+            "mac": ("gw_mac", self.db.get_gateway_mac),
+            "ip": ("gw_ip", self.db.get_gateway_ip),
+        }
+
+        if info_type not in info_mapping:
+            raise ValueError(f"Unsupported info_type: {info_type}")
+
+        attr, check_db_method = info_mapping[info_type]
+
+        if getattr(self, attr):
+            # the reason we don't just check the db is we don't want a db
+            # call per each flow
+            return True
+
+        # did some other module manage to get it?
+        if info := check_db_method():
+            setattr(self, attr, info)
+            return True
+
+        return False
+
+    def get_gateway_info(self):
+        """
+        Gets the IP and MAC of the gateway and stores them in the db
+
+        usually the mac of the flow going from a private ip -> a
+        public ip is the mac of the GW
+        """
+        gw_mac_found: bool = self.is_gw_info_detected("mac")
+        if not gw_mac_found:
+            if utils.is_private_ip(
+                self.flow.saddr
+            ) and not utils.is_ignored_ip(self.flow.daddr):
+                self.gw_mac: str = self.flow.dmac
+                self.db.set_default_gateway("MAC", self.gw_mac)
+                self.print(
+                    f"MAC address of the gateway detected: "
+                    f"{green(self.gw_mac)}"
+                )
+                gw_mac_found = True
+
+        # we need the mac to be set to be able to find the ip using it
+        if not self.is_gw_info_detected("ip") and gw_mac_found:
+            self.gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac()
+            if self.gw_ip:
+                self.db.set_default_gateway("IP", self.gw_ip)
+                self.print(
+                    f"IP address of the gateway detected: "
+                    f"{green(self.gw_ip)}"
+                )
+
     def add_flow_to_profile(self):
         """
         This is the main function that takes the columns of a flow
@@ -169,6 +254,8 @@ class Profiler(ICore, IObservable):
             if self.flow.type_ not in ("software", "weird"):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
+
+        self.get_gateway_info()
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(self.flow):
