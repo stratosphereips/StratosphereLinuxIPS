@@ -548,7 +548,7 @@ class Profiler(ICore, IObservable):
     def pre_main(self):
         utils.drop_root_privs()
         client_ips = [str(ip) for ip in self.client_ips]
-        self.print(f"Used client IPs: " f"{green(", ".join(client_ips))}")
+        self.print(f"Used client IPs: {green(', '.join(client_ips))}")
 
     def main(self):
         while True:
