@@ -22,10 +22,11 @@ import pprint
 import multiprocessing
 from typing import (
     List,
+    Union,
 )
 
 import validators
-
+from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -103,7 +104,10 @@ class Profiler(ICore, IObservable):
         self.analysis_direction = conf.analysis_direction()
         self.label = conf.label()
         self.width = conf.get_tw_width_as_float()
-        self.client_ips: List[str] = conf.client_ips()
+        self.client_ips: List[
+            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
+        ]
+        self.client_ips = conf.client_ips()
 
     def convert_starttime_to_epoch(self):
         try:
@@ -368,14 +372,16 @@ class Profiler(ICore, IObservable):
         """
         return msg == "stop"
 
-    def get_private_client_ips(self) -> List[str]:
+    def get_private_client_ips(
+        self,
+    ) -> List[Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]]:
         """
         returns the private ips found in the client_ips param
         in the config file
         """
         private_clients = []
         for ip in self.client_ips:
-            if utils.is_private_ip(ipaddress.ip_address(ip)):
+            if utils.is_private_ip(ip):
                 private_clients.append(ip)
         return private_clients
 
@@ -387,14 +393,30 @@ class Profiler(ICore, IObservable):
         """
         # For now the local network is only ipv4, but it
         # could be ipv6 in the future. Todo.
-        private_client_ips: List[str] = self.get_private_client_ips()
+        private_client_ips: List[
+            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
+        ]
+        private_client_ips = self.get_private_client_ips()
+
         if private_client_ips:
+            # does the client ip from the config already have the localnet?
+            for range_ in private_client_ips:
+                if isinstance(range_, IPv4Network) or isinstance(
+                    range_, IPv6Network
+                ):
+                    self.is_localnet_set = True
+                    return str(range_)
+
             # all client ips should belong to the same local network,
             # it doesn't make sense to have ips belonging to different
             # networks in the config file!
-            ip = private_client_ips[0]
+            ip: str = str(private_client_ips[0])
         else:
-            ip = self.flow.saddr
+            ip: str = self.flow.saddr
+            # make surethe saddr is a private ip that we can use the range
+            # of. because it may be a flow of ingoing traffic right?
+            if not utils.is_private_ip(ip):
+                return
 
         self.is_localnet_set = True
         return utils.get_cidr_of_private_ip(ip)
@@ -438,7 +460,8 @@ class Profiler(ICore, IObservable):
 
     def pre_main(self):
         utils.drop_root_privs()
-        self.print(f"Used client IPs: {green(str(self.client_ips))}")
+        client_ips = [str(ip) for ip in self.client_ips]
+        self.print(f"Used client IPs: " f"{green(", ".join(client_ips))}")
 
     def main(self):
         while True:
@@ -487,6 +510,7 @@ class Profiler(ICore, IObservable):
                     self.handle_setting_local_net()
                     self.db.increment_processed_flows()
             except Exception as e:
+                self.print_traceback()
                 self.print(
                     f"Problem processing line {line}. " f"Line discarded. {e}",
                     0,
