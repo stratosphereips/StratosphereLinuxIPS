@@ -1173,7 +1173,7 @@ def test_check_connection_to_local_ip(
     """
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.set_evidence.conn_to_private_ip = Mock()
-    conn.db.get_gateway_ip_if_interface.return_value = "192.168.1.1"
+    conn.db.get_gateway_ip.return_value = "192.168.1.1"
     flow = Conn(
         starttime="1726249372.312124",
         uid="123",
