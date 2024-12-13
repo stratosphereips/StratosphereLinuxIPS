@@ -1,5 +1,8 @@
 import platform
-from typing import Union
+from typing import (
+    Union,
+    Optional,
+)
 from uuid import uuid4
 import datetime
 import maxminddb
@@ -337,7 +340,7 @@ class IPInfo(AsyncModule):
             gw_ip = route_default_result[2]
         return gw_ip
 
-    def get_gateway_mac(self, gw_ip: str):
+    def get_gateway_mac(self, gw_ip: str) -> Optional[str]:
         """
         Given the gw_ip, this function tries to get the MAC
          from arp.log or from arp tables
