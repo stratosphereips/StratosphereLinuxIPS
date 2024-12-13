@@ -1539,7 +1539,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         return self.r.incr(self.constants.PROCESSED_FLOWS, 1)
 
     def get_processed_flows_so_far(self) -> int:
-        return int(self.r.get(self.constants.PROCESSED_FLOWS))
+        processed_flows = self.r.get(self.constants.PROCESSED_FLOWS)
+        if not processed_flows:
+            return 0
+        return int(processed_flows)
 
     def store_std_file(self, **kwargs):
         """

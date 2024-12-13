@@ -421,7 +421,7 @@ def test_get_gateway_ip(
     mocker.patch("platform.system", return_value=platform_system)
     mocker.patch("subprocess.check_output", return_value=subprocess_output)
     mocker.patch("sys.argv", ["-i", "eth0"])
-    result = ip_info.get_gateway_ip()
+    result = ip_info.get_gateway_ip_if_interface()
     assert result == expected_ip
 
 
