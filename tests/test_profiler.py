@@ -643,3 +643,100 @@ def test_notify_observers_with_correct_message():
     test_msg = {"action": "test_action"}
     profiler.notify_observers(test_msg)
     observer_mock.update.assert_called_once_with(test_msg)
+
+
+@patch("slips_files.core.profiler.utils.is_private_ip")
+@patch("slips_files.core.profiler.utils.is_ignored_ip")
+def test_get_gateway_info_sets_mac_and_ip(
+    mock_is_ignored_ip, mock_is_private_ip
+):
+    profiler = ModuleFactory().create_profiler_obj()
+    # mac not detected, ip not detected
+    profiler.is_gw_info_detected = Mock()
+    profiler.is_gw_info_detected.side_effect = [False, False]
+    mock_is_private_ip.return_value = True
+    mock_is_ignored_ip.return_value = False
+    profiler.get_gw_ip_using_gw_mac = Mock()
+    profiler.get_gw_ip_using_gw_mac.return_value = "8.8.8.1"
+    profiler.flow = Conn(
+        "1.0",
+        "1234",
+        "192.168.1.1",
+        "8.8.8.8",
+        5,
+        "TCP",
+        "dhcp",
+        80,
+        88,
+        20,
+        20,
+        20,
+        20,
+        "",
+        "00:11:22:33:44:55",
+        "Established",
+        "",
+    )
+    profiler.get_gateway_info()
+
+    # assertions for mac
+    profiler.db.set_default_gateway.assert_any_call("MAC", profiler.flow.dmac)
+    profiler.print.assert_any_call(
+        "MAC address of the gateway detected:"
+        " \033[32m00:11:22:33:44:55\033[0m"
+    )
+
+    # assertions for ip
+    profiler.db.set_default_gateway.assert_any_call("IP", "8.8.8.1")
+    profiler.print.assert_any_call(
+        "IP address of the gateway detected:" " \033[32m8.8.8.1\033[0m"
+    )
+
+
+@patch("slips_files.core.profiler.utils.is_private_ip")
+def test_get_gateway_info_no_mac_detected(mock_is_private_ip):
+    profiler = ModuleFactory().create_profiler_obj()
+
+    # mac not detected, ip not detected
+    profiler.is_gw_info_detected = Mock()
+    profiler.is_gw_info_detected.side_effect = [False, False]
+    mock_is_private_ip.return_value = False
+    profiler.flow = Conn(
+        "1.0",
+        "1234",
+        "192.168.1.1",
+        "8.8.8.8",
+        5,
+        "TCP",
+        "dhcp",
+        80,
+        88,
+        20,
+        20,
+        20,
+        20,
+        "",
+        "00:11:22:33:44:55",
+        "Established",
+        "",
+    )
+    profiler.get_gateway_info()
+
+    # mac and ip should not be set
+    profiler.db.set_default_gateway.assert_not_called()
+    profiler.print.assert_not_called()
+
+
+def test_get_gateway_info_mac_detected_but_no_ip():
+    profiler = ModuleFactory().create_profiler_obj()
+    # mac detected, ip not detected
+    profiler.is_gw_info_detected = Mock()
+    profiler.is_gw_info_detected.side_effect = [True, False]
+    profiler.get_gw_ip_using_gw_mac = Mock()
+    profiler.get_gw_ip_using_gw_mac.return_value = None
+
+    profiler.get_gateway_info()
+
+    # assertions for mac
+    profiler.db.set_default_gateway.assert_not_called()
+    profiler.print.assert_not_called()
