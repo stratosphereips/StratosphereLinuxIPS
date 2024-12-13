@@ -6,7 +6,12 @@ import threading
 import time
 from uuid import uuid4
 import validators
-from typing import Dict, List
+from typing import (
+    Dict,
+    List,
+    Union,
+)
+from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
@@ -114,7 +119,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.path_to_local_ti_files = conf.local_ti_data_path()
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)
-        self.client_ips: List[str] = conf.client_ips()
+        self.client_ips: List[
+            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
+        ]
+        self.client_ips = conf.client_ips()
 
     def set_evidence_malicious_asn(
         self,
@@ -1151,7 +1159,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             "src" in ip_state
             and ipaddress.ip_address(ip).is_global
             and ip != host_ip
-            and ip not in self.client_ips
+            and not utils.is_ip_in_client_ips(ip, self.client_ips)
         )
 
     def search_online_for_ip(self, ip: str, ip_state: str):

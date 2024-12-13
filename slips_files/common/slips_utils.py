@@ -20,7 +20,9 @@ from typing import (
     Any,
     Optional,
     Union,
+    List,
 )
+from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
@@ -118,14 +120,33 @@ class Utils(object):
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels
 
-    def get_original_conn_flow(self, altflow, db) -> Optional[dict]:
+    @staticmethod
+    def get_original_conn_flow(altflow, db) -> Optional[dict]:
         """Returns the original conn.log of the given altflow"""
         original_conn_flow = db.get_flow(altflow.uid)
         original_flow_uid = next(iter(original_conn_flow))
         if original_conn_flow[original_flow_uid]:
             return json.loads(original_conn_flow[original_flow_uid])
 
-    def sanitize(self, input_string):
+    @staticmethod
+    def is_ip_in_client_ips(ip_to_check: str, client_ips: List) -> bool:
+        ip = ipaddress.ip_address(ip_to_check)
+        for entry in client_ips:
+            if isinstance(entry, ipaddress.IPv4Network) or isinstance(
+                entry, ipaddress.IPv6Network
+            ):
+                if ip in entry:
+                    return True
+
+            elif isinstance(entry, ipaddress.IPv4Address) or isinstance(
+                entry, ipaddress.IPv6Address
+            ):
+                if ip == entry:
+                    return True
+        return False
+
+    @staticmethod
+    def sanitize(input_string):
         """
         Sanitize strings taken from the user
         """
@@ -179,6 +200,18 @@ class Utils(object):
         Detects the type of incoming data:
         ipv4, ipv6, domain, ip range, asn, md5, etc
         """
+
+        objs_map = {
+            IPv4Network: "ip",
+            IPv6Network: "ip",
+            IPv4Address: "ip_range",
+            IPv6Address: "ip_range",
+        }
+
+        for obj, obj_type in objs_map.items():
+            if isinstance(data, obj):
+                return obj_type
+
         data = data.strip()
         try:
             ipaddress.ip_address(data)
@@ -397,7 +430,7 @@ class Utils(object):
     def is_private_ip(
         self, ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address, str]
     ) -> bool:
-        ip_classes = {ipaddress.IPv4Address, ipaddress.IPv6Address}
+        ip_classes = {IPv4Network, IPv6Network, IPv4Address, IPv6Address}
         for class_ in ip_classes:
             if isinstance(ip, class_):
                 return ip and ip.is_private

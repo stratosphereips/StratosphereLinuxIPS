@@ -440,7 +440,7 @@ class Conn(IFlowalertsAnalyzer):
             # from the internet to our ip, the dns res was probably
             # made on their side before connecting to us,
             # so we shouldn't be doing this detection on this ip
-            or flow.daddr in self.client_ips
+            or utils.is_ip_in_client_ips(flow.daddr, self.client_ips)
             # because there's no dns.log to know if the dns was made
             or self.input_type == "zeek_log_file"
             or self.db.is_doh_server(flow.daddr)
