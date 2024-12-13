@@ -740,3 +740,54 @@ def test_get_gateway_info_mac_detected_but_no_ip():
     # assertions for mac
     profiler.db.set_default_gateway.assert_not_called()
     profiler.print.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "info_type, attr_name, db_method, db_value",
+    [
+        ("mac", "gw_mac", "get_gateway_mac", "00:1A:2B:3C:4D:5E"),
+        ("ip", "gw_ip", "get_gateway_ip", "192.168.1.1"),
+    ],
+)
+def test_is_gw_info_detected(info_type, attr_name, db_method, db_value):
+    # create a profiler object using the ModuleFactory
+    profiler = ModuleFactory().create_profiler_obj()
+
+    # mock the profiler's database methods and attributes
+    setattr(profiler, attr_name, None)
+    getattr(profiler.db, db_method).return_value = db_value
+
+    # test with info_type
+    result = profiler.is_gw_info_detected(info_type)
+
+    # assertions
+    assert result
+    assert getattr(profiler, attr_name) == db_value
+    getattr(profiler.db, db_method).assert_called_once()
+
+
+def test_is_gw_info_detected_unsupported_info_type():
+    # create a profiler object using the ModuleFactory
+    profiler = ModuleFactory().create_profiler_obj()
+
+    # test with an unsupported info_type
+    with pytest.raises(ValueError) as exc_info:
+        profiler.is_gw_info_detected("unsupported_type")
+
+    # assertion
+    assert str(exc_info.value) == "Unsupported info_type: unsupported_type"
+
+
+def test_is_gw_info_detected_when_attribute_is_already_set():
+    # create a profiler object using the ModuleFactory
+    profiler = ModuleFactory().create_profiler_obj()
+
+    # set gw_mac attribute to a value
+    profiler.gw_mac = "00:1A:2B:3C:4D:5E"
+
+    # test with info_type "mac"
+    result = profiler.is_gw_info_detected("mac")
+
+    # assertions
+    assert result
+    assert profiler.gw_mac == "00:1A:2B:3C:4D:5E"
