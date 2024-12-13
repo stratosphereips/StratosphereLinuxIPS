@@ -60,6 +60,10 @@ class Publisher:
 
 
 class FlowHandler:
+    """
+    Each flow seen by slips will be a different instance of this class
+    """
+
     def __init__(self, db, symbol_handler, flow):
         self.db = db
         self.publisher = Publisher(self.db)
@@ -161,9 +165,18 @@ class FlowHandler:
         self.db.add_out_notice(self.profileid, self.twid, self.flow)
 
         if "Gateway_addr_identified" in self.flow.note:
-            # get the gw addr from the msg
-            gw_addr = self.flow.msg.split(": ")[-1].strip()
-            self.db.set_default_gateway("IP", gw_addr)
+            # foirst check if the gw ip and mac are set by
+            # profiler.get_gateway_info() or ip_info module
+            gw_ip = False
+            if not self.db.get_gateway_ip():
+                # get the gw addr from the msg
+                gw_ip = self.flow.msg.split(": ")[-1].strip()
+                self.db.set_default_gateway("IP", gw_ip)
+
+            if not self.db.get_gateway_mac() and gw_ip:
+                gw_mac = self.db.get_mac_addr_from_profile(f"profile_{gw_ip}")
+                if gw_mac:
+                    self.db.set_default_gateway("MAC", self.gw_mac)
 
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
 
