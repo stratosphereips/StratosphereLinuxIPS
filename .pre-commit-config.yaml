@@ -37,3 +37,9 @@ repos:
           language_version: python3.12.3
           # excludes formatting slips_files/common/imports.py
           exclude: imports
+
+-     repo: https://github.com/adrienverge/yamllint.git
+      rev: v1.31.0
+      hooks:
+        - id: yamllint
+          files: "slips.yaml"
