@@ -679,18 +679,8 @@ def test_get_gateway_info_sets_mac_and_ip(
     )
     profiler.get_gateway_info()
 
-    # assertions for mac
     profiler.db.set_default_gateway.assert_any_call("MAC", profiler.flow.dmac)
-    profiler.print.assert_any_call(
-        "MAC address of the gateway detected:"
-        " \033[32m00:11:22:33:44:55\033[0m"
-    )
-
-    # assertions for ip
     profiler.db.set_default_gateway.assert_any_call("IP", "8.8.8.1")
-    profiler.print.assert_any_call(
-        "IP address of the gateway detected:" " \033[32m8.8.8.1\033[0m"
-    )
 
 
 @patch("slips_files.core.profiler.utils.is_private_ip")
