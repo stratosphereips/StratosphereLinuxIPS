@@ -206,11 +206,18 @@ class Profiler(ICore, IObservable):
         usually the mac of the flow going from a private ip -> a
         public ip is the mac of the GW
         """
+
+        if not hasattr(self.flow, "dmac"):
+            # some suricata flows dont have that, like SuricataFile objs
+            return
+
         gw_mac_found: bool = self.is_gw_info_detected("mac")
         if not gw_mac_found:
-            if utils.is_private_ip(
-                self.flow.saddr
-            ) and not utils.is_ignored_ip(self.flow.daddr):
+            if (
+                utils.is_private_ip(self.flow.saddr)
+                and not utils.is_ignored_ip(self.flow.daddr)
+                and self.flow.dmac
+            ):
                 self.gw_mac: str = self.flow.dmac
                 self.db.set_default_gateway("MAC", self.gw_mac)
                 self.print(
