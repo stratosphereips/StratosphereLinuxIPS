@@ -33,6 +33,7 @@ evaluating it on today’s data as it is coming in.
 At the start of the training, every client needs to adjust its features to a
 common range. For this purpose, they each fit a MinMax scaler, which finds
 
+![image](https://github.com/user-attachments/assets/25ca7237-ede8-459d-b08d-57fdbc78d55a)
 
 Figure: Diagram of the training process. Each day is treated as a separate
 training process with multiple federated training rounds. The aggregator co-
@@ -107,6 +108,14 @@ ensures that the learned distributions do not diverge from each other and
 The loss function for each sample can
 be represented as:
 
+![image](https://github.com/user-attachments/assets/460d2681-9736-4dc4-9f6b-86f99965dd02)
+
+
+![image](https://github.com/user-attachments/assets/31678f02-4570-4467-a125-9d8653963589)
+
+Figure: Architecture of the Neural Network models used in this work. The
+Classifier-only model is derived from the Multi-Head model by removing its
+reconstruction head.
 
 For detection, the reconstruction loss is used as an anomalous likelihood.
 Each client derives an anomaly threshold based on its validation data. The
@@ -148,6 +157,10 @@ embedding space. The model is trained to distinguish malicious traffic from
 benign; malicious being the positive class. Only benign samples are passed
 to the decoder part of the network so that the network does not learn to
 reconstruct the malicious samples well.
+
+![image](https://github.com/user-attachments/assets/1ddffcfb-0774-463d-a0c0-1f09e2c22ca3)
+
+
 
 The Classifier-only model was created to evaluate if the decoder part of
 the Multi-Head model brings any benefits. Its structure is identical to the
@@ -386,6 +399,9 @@ of processed aggregated numerical features and does not contain any Zeek
 flow data or identifiable information.
 
 
+![image](https://github.com/user-attachments/assets/7dea91f4-0be1-4367-8eeb-33e5e6505ac4)
+
+
 #### Malware Traffic
 The malicious traffic comes from the deployment of real malware in the
 Stratosphere Laboratory. All malware use TLS for command and control
@@ -395,6 +411,7 @@ malware on individual days. The number of malware flows is much lower
 than the benign traffic, and two of them have TLS activity only on the first
 day.
 
+![image](https://github.com/user-attachments/assets/cf6d9d42-a27a-4692-8afd-30ff7f8a62bf)
 
 #### Feature Extraction
 To train neural network models on the data, we need to extract numerical
@@ -419,6 +436,9 @@ their values. Both benign and malware data were processed in this manner.
 The processed dataset without the identifying information can be found at:
 https://github.com/stratosphereips/feel_data
 
+![image](https://github.com/user-attachments/assets/de337742-57b4-4cc5-a14a-a18415c871cc)
+
+
 #### Dataset Mixing
 For the purpose of this work, we needed to mix the malware and benign
 traffic to form a supervised dataset. For the CTU-50-FEEL dataset, we have
@@ -435,7 +455,8 @@ clients receive the vaccines, they incorporate them into their local dataset
 and use them to train the supervised models.
 
 
-Table: Malware datasets used as a vaccine in the supervised experiments.
+![image](https://github.com/user-attachments/assets/5f6c0d30-f682-417b-894d-a5c8afbd8c01)
+
 
 
 We also designed a scenario that enables us to assess how the proposed
@@ -469,9 +490,8 @@ data, it test how well it is able to generalize from one type of malware
 to others, as well as how well the models can adapt to new malware
 appearing.
 
+![image](https://github.com/user-attachments/assets/6a0fdd29-5d62-4839-870d-3a8ce773fb28)
 
-Table: Number of benign and malicious samples in each client in the raw
-CTU-50-FEEL on a particular day.
 
 - Challenge two: The situation where on the third and fourth days, malware
 that was previously used as a vaccine reappears after not being present
@@ -480,6 +500,7 @@ on the previous day. This evaluates how well the knowledge is preserved
 - Challenge three: The situation where the last day contains all available
 malware to test the final model on as much malicious data as possible.
 
+![image](https://github.com/user-attachments/assets/64d3aee6-d5a5-43c9-b65a-f4a07397299e)
 
 ### Experiments
 This chapter describes the experiments conducted to evaluate the methods
@@ -555,6 +576,9 @@ in amounts of benign
 data between these days. Possibly the A1 model may be more resilient after
 multiple rounds of fine-tuning.
 
+![image](https://github.com/user-attachments/assets/41e26b88-c8f4-4bc8-8e22-a00bdea62b15)
+
+
 Table: Summary of the anomaly detection experiments. The provided values
 are averages over the four testing days with ten runs each.
 
@@ -629,6 +653,7 @@ A more pronounced difference is in the TPR of the local models, which
 improved when trained only on the clients with their own malware. This
 supports the claim from the previous subsection that when training locally,
 using malicious data only from the vaccine results in worse performance.
+![image](https://github.com/user-attachments/assets/65935bb5-eec6-4f43-9956-c683bef212ff)
 
 Table: Summary of the S1, S2, and S3 experiments all conducted on the
 CTU-50-FEEL dataset. The provided values are averages over the 4 testing
@@ -742,12 +767,15 @@ to investigate whether the models need to be periodically retrained from
 scratch to maintain their performance. A longer dataset would be useful for
 this purpose.
 
+![image](https://github.com/user-attachments/assets/bf251463-b17d-4058-9748-d1976745086f)
+
 
 Figure: Comparison of the three types of models on the A1 (for unsupervised)
 and S1 (supervised) scenarios. The models trained on the CTU-50-FEEL dataset,
 split amongst ten clients. The days refer to the days on which the models were
 tested, being trained on the previous day. At the end of the day’s training, the
 model was saved to be reused the next day.
+![image](https://github.com/user-attachments/assets/12083155-f834-44b2-a0ae-0481a3d651e1)
 
 Figure: Results of the supervised models on a CTU-50-FEEL-less-malware
 dataset. The models were trained from scratch each day in the S4+S3 experiment
@@ -822,8 +850,7 @@ trained on two tasks:
 (i) reconstructing an input feature vector similar to an autoencoder;
 (ii) classification of the traffic.
 
-The Classifier-only model
-was derived from the Multi-Head model by discarding the reconstruction
+The Classifier-only model was derived from the Multi-Head model by discarding the reconstruction
 part of the network. The rationale behind training the Multi-Head model on
 two tasks is that even clients with mostly benign data can contribute to the
 learning by improving the embedding of the model.
