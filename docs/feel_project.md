@@ -782,6 +782,15 @@ dataset. The models were trained from scratch each day in the S4+S3 experiment
 and the previous day’s model was reused in the S4 experiment.
 
 
+##### Detailed results
+
+![image](https://github.com/user-attachments/assets/e7ee2952-1472-4d39-89a0-8bd50e9fa62b)
+![image](https://github.com/user-attachments/assets/97745f8a-7cce-488d-96d3-f45afd5e9bd5)
+![image](https://github.com/user-attachments/assets/4e8c1131-2c80-45ae-9b89-255cc9e79599)
+![image](https://github.com/user-attachments/assets/d90499f5-65e0-46bb-84e4-3c7be55b4c22)
+
+
+
 ---
 
 Our results showed that federated-trained models consistently outperformed
