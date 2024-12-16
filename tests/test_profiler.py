@@ -1,7 +1,6 @@
 """Unit test for slips_files/core/performance_profiler.py"""
 
 from unittest.mock import Mock
-
 from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing
 import subprocess
@@ -719,6 +718,8 @@ def test_get_gateway_info_no_mac_detected(mock_is_private_ip):
 
 def test_get_gateway_info_mac_detected_but_no_ip():
     profiler = ModuleFactory().create_profiler_obj()
+    profiler.flow = Mock()
+    profiler.flow.dmac = "123"
     # mac detected, ip not detected
     profiler.is_gw_info_detected = Mock()
     profiler.is_gw_info_detected.side_effect = [True, False]
