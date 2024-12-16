@@ -1,4 +1,5 @@
-# Feel Project
+# Federated Learning for ML
+
 
 ## Methodology
 
@@ -883,4 +884,8 @@ model than in the case of Multi-Head model.
 
 ## Community Adoption of the Federated Learning for ML
 
-# todo
+Slips and FEEL projects were showcased at the following conferences, where attendees were invited to share our project and provide feedback.
+
+- [2023 Slips BlackHat Europe 2023 Arsenal. ](https://www.youtube.com/watch?v=FHJCN8eWtEw&ab_channel=StratosphereIPS)
+- [2023 Slips BlackHat Asia 2023 Arsenal. ](https://www.youtube.com/watch?v=HyNvf8pCIlQ&t=1s&ab_channel=StratosphereIPS)
+- [2024 Slips BlackHat Asia 2024 Arsenal. ](https://www.youtube.com/watch?v=j9IPFZHiuTA&t=1s&ab_channel=StratosphereIPS)
