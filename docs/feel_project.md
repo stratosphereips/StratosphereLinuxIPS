@@ -1,7 +1,8 @@
-# Federated Learning for Machine Learning
+# Feel Project
 
+## Methodology
 
-## Implementation
+### Proposed Solution
 
 We use horizontal cross-device federated learning for detecting malicious
 activity in encrypted TLS network traffic. Cross-device in this context means,
@@ -19,7 +20,7 @@ with each client’s local data.
 
 
 
-### Architecture
+###  Solution Architecture
 Our federated learning system consists of a central aggregator and multiple
 clients. The aggregator is a dedicated machine that initializes and coordinates
 the training process. There are ten clients in our system, representing the
@@ -182,7 +183,8 @@ we call a "vaccine", to help with the convergence. Traditionally in the security
 field, vaccines are a harmless part of the malware that is injected into the
 host machines [to prevent infections](https://ieeexplore.ieee.org/document/6468401). Our vaccines differ in that they are
 not a passive mechanism but an aid in the learning process and a way to
-tackle data heterogeneity, as suggested [here](https://arxiv.org/abs/1912.04977) in Chapter 3.
+tackle data heterogeneity, as suggested [here](https://arxiv.org/abs/1912.04977)
+in [the Dataset Section](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/docs/feel_project.md#dataset).
 The vaccines are comprised of only numerical values and, as such, do not pose any risk to the
 clients. In our setting, the central aggregator is responsible for gathering and
 distributing this set of data to the clients. This approach could be achieved in
@@ -259,7 +261,7 @@ https://github.com/stratosphereips/feel_project. This repository contains the im
 for orchestrating and running experiments and analyzing their results. It also
 includes the preprocessing of raw data into hourly feature vectors used by
 the models. The feature extraction is based on an in part reused from the
-work done by František Střasák in [43].
+work done [by František Střasák](https://dspace.cvut.cz/bitstream/handle/10467/68528/F3-BP-2017-Strasak-Frantisek-strasak_thesis_2017.pdf).
 
 
 
@@ -315,8 +317,8 @@ evaluate classification and detection models. However, it can not capture
 all the relevant information on its own. TPR indicates what ratio of the
 malicious samples was detected, and FPR shows how much of the benign
 samples are misclassified as malicious. The F-score is often advocated as a
-summarizing metric when comparing the performance of two classifiers [9,
-Chapter 11] [11]. We use its unweighted variant F1.
+summarizing metric when comparing the performance of two classifiers.
+We use its unweighted variant F1.
 
 
 #### Comparison to Other Settings
@@ -374,7 +376,7 @@ is shown in the Dataset Mixing Section.
 #### Benign Traffic
 The CTU-50-FEEL dataset has the traffic of 10 real human users (no simula-
 tions) over five consecutive days. The original format of the flows uses the
-Zeek logs to form the dataset [50]. Zeek is an open-source tool for monitoring
+Zeek logs to form the dataset. [Zeek](https://zeek.org/) is an open-source tool for monitoring
 and analyzing network traffic. It saves the network events into log files based
 on their type. The conn.log contains records about each connection, such
 as the used protocol, the originator, and the responder, as well as a unique
@@ -384,7 +386,7 @@ contain information about HTTPS connections and the certificate used to
 establish the encrypted connection. Zeek can generate other types of logs for
 different types of traffic or protocols, but those that are not used for feature
 extraction. All flows in the log files were labeled using the Stratosphere Lab’s
-tool netflowlabeler [51].
+tool [netflowlabeler](https://github.com/stratosphereips/netflowlabeler).
 
 
 The following Table shows the number of TLS flows per client for each day. The traffic
@@ -416,7 +418,7 @@ day.
 #### Feature Extraction
 To train neural network models on the data, we need to extract numerical
 features from the data. For that, we took advantage of the work done by
-František Strašák in [43]. The methodology used allows us to extract useful
+František Strašák [here](https://dspace.cvut.cz/bitstream/handle/10467/68528/F3-BP-2017-Strasak-Frantisek-strasak_thesis_2017.pdf. The methodology used allows us to extract useful
 and proven features from TLS data to detect threats. However, in our work,
 we have decided to aggregate the traffic in one-hour windows, instead of
 per-day. This enables faster detection of possible threats, as the feature
@@ -430,7 +432,7 @@ values, along with information about the amount of data transferred and
 some temporal aspects of the connection, are extracted from the conn.log
 files. Features relating to the TLS traffic are computed from the values
 contained in ssl.log files using the certificate information located in the
-x509.log filse. The complete list of features can be seen in the following Table. Features
+x509.log files. The complete list of features can be seen in the following Table. Features
 mentioned as not used in the table were omitted because of low variance in
 their values. Both benign and malware data were processed in this manner.
 The processed dataset without the identifying information can be found at:
@@ -447,7 +449,7 @@ Two of the malware only had some HTTPS activity on the first day. This
 mixing was designed to fully utilize all captured malware traffic. The total
 number of feature vectors for each client can be seen in the following table.
 In the Supervised Approach Section we described the malware vaccine which is a set feature
-vectors from the malware dataset, which is send to the clients to improve the
+vectors from the malware dataset, which is sent to the clients to improve the
 convergence of the supervised federated methods. On each day we dedicated
 one day of a malware datasets to be used as a vaccine. Which malware
 dataset is used as a vaccine for a given day is shown in the following table. When the
@@ -503,9 +505,10 @@ malware to test the final model on as much malicious data as possible.
 ![image](https://github.com/user-attachments/assets/64d3aee6-d5a5-43c9-b65a-f4a07397299e)
 
 ### Experiments
-This chapter describes the experiments conducted to evaluate the methods
-proposed in Chapter 4 using the dataset described in Chapter 5. We provide
-a description of the parameters used when running the experiments and an
+This section describes the experiments conducted to evaluate the methods
+proposed in the Methodology chapter using the dataset described
+in [the Dataset Section](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/docs/feel_project.md#dataset).
+We provide a description of the parameters used when running the experiments and an
 the results.
 
 
@@ -571,8 +574,8 @@ seems to be the case for testing days 3 and 4 according to the results in
 Appendix A.1. However, on the final day, the A1 model outperforms the
 A2 model. An explanation for this observation might be a change in the
 distribution of the clients’ benign data between day 4 (the training day) and
-day 5 (testing day). [the table in the Dataset Mixing section]() shows the differences
-in amounts of benign
+day 5 (testing day). [Table 5.5](https://private-user-images.githubusercontent.com/41242896/396211886-6a0fdd29-5d62-4839-870d-3a8ce773fb28.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzQzNzI4NjMsIm5iZiI6MTczNDM3MjU2MywicGF0aCI6Ii80MTI0Mjg5Ni8zOTYyMTE4ODYtNmEwZmRkMjktNWQ2Mi00ODM5LTg3MGQtM2E4Y2U3NzNmYjI4LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDEyMTYlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQxMjE2VDE4MDkyM1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWIyNWVkN2E1MzJmOWUxMzJhMGZlNjZmOTQ2MTE3ZDU0ZmEyNWUwYTFiMWJjZmNlMWY1YjI5YjM5ZTY0NTc0MDQmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.cbO4FpCfhA3nz4hiassakG8tc0Z4dcJeCGgc_EN_aE8)
+shows the differences in amounts of benign
 data between these days. Possibly the A1 model may be more resilient after
 multiple rounds of fine-tuning.
 
@@ -615,8 +618,9 @@ global setting and is repeated ten times with a different random seed.
 This scenario represents the base case for the supervised experiments. The
 benign and malicious datasets of the CTU-50-FEEL are split amongst the 10
 clients. In this scenario, every client is used for both training and evaluation.
-The summarized results are shown [in the Table in the Supervised Experiments Section](),
-and the breakdown of the performance on individual days can be seen in [this Figure]().
+The summarized results are shown in the Table 5.2 in
+[the Supervised Experiments Section](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/docs/feel_project.md#supervised-experiments),
+and the breakdown of the performance on individual days can be seen in [this Figure](https://private-user-images.githubusercontent.com/41242896/396213092-bf251463-b17d-4058-9748-d1976745086f.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzQzNzI4NjMsIm5iZiI6MTczNDM3MjU2MywicGF0aCI6Ii80MTI0Mjg5Ni8zOTYyMTMwOTItYmYyNTE0NjMtYjE3ZC00MDU4LTk3NDgtZDE5NzY3NDUwODZmLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDEyMTYlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQxMjE2VDE4MDkyM1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPThkZmZiNmYyZDU5MDVkYTFlZTczNWZhOWE5OTM1OTQ5OTQyZWI0MjdiMTMxNDJjNTMzNjA2YWJkYjM2Y2E0M2MmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.HGiNAPQ-qcMEElcEAIm3Y7WjjdPkeHEEyo8fccCpgIs).
 The figure also compares the performance of supervised models to that of the anomaly
 detection model. As expected, the supervised models achieve much better
 results, and even the locally trained supervised models outperform centralized
@@ -668,7 +672,8 @@ transfer this knowledge into the future.
 However, there is also a risk of gradual degradation of the model and worse
 adaptability to shifting distribution of data. In this type of experiments, we
 train a new model every day to measure the impacts of these potential risks.
-The summary of results in [this Table]() shows that while the performance of
+The summary of results in [this Table](https://private-user-images.githubusercontent.com/41242896/396212878-65935bb5-eec6-4f43-9956-c683bef212ff.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzQzNzI4NjMsIm5iZiI6MTczNDM3MjU2MywicGF0aCI6Ii80MTI0Mjg5Ni8zOTYyMTI4NzgtNjU5MzViYjUtZWVjNi00ZjQzLTk5NTYtYzY4M2JlZjIxMmZmLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDEyMTYlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQxMjE2VDE4MDkyM1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWJhNWU4NjU5YzdiYWE0ZWFkZTA1M2IxNTI2ZWUwMzIxNTFhNTI5ZGRhNDA0NDY4ZjFiYTIwYjdkY2RkN2NkOTkmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.KdKZIS9HoqmcbYyiukcoJxhu2cEZzI-1FZScTYuSa68)
+shows that while the performance of
 the Multi-Head S3 model is comparable to the S1 type, the S3 Classifier-
 only models’s average TPR is much lower with higher variance. The detailed
 results in Table A.5 show that on the first testing day the model performs the
@@ -692,7 +697,7 @@ samples, and the final day, which is only used for evaluation, contains as
 much malware as possible. As the amount of malware and its types change
 every day, it should prove to be much more challenging for the model and its
 ability to adapt.
-[Figure (a)]() presenting the results of this experiment shows that this scenario
+[Figure (a)](https://private-user-images.githubusercontent.com/41242896/396213461-12083155-f834-44b2-a0ae-0481a3d651e1.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzQzNzI4NjMsIm5iZiI6MTczNDM3MjU2MywicGF0aCI6Ii80MTI0Mjg5Ni8zOTYyMTM0NjEtMTIwODMxNTUtZjgzNC00NGIyLWEwYWUtMDQ4MWEzZDY1MWUxLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDEyMTYlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQxMjE2VDE4MDkyM1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWQ0MjRiYzNkM2I4MmZkZWE1Y2U3ZGFjYjFjNDczOTVlNDhmN2Q3NTcxMWU4MWYyYTY0Mjk0YmE1MjkxNmI2MDImWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.6LbCo9FlKWiVCvxMPqE8PFfaAnyAxmCv4AumJKEOHaM) presenting the results of this experiment shows that this scenario
 is much more challenging for the supervised methods. Although the overall
 accuracy is still higher than in the unsupervised experiments, there are
 measurable differences between the two classification models.
@@ -781,6 +786,8 @@ Figure: Results of the supervised models on a CTU-50-FEEL-less-malware
 dataset. The models were trained from scratch each day in the S4+S3 experiment
 and the previous day’s model was reused in the S4 experiment.
 
+##### Detailed results
+
 
 ##### Detailed results
 
@@ -809,6 +816,8 @@ One way to handle the situation of different distribution of data is to
 train a new model for each day, which ensures that the daily models are
 independent and do not suffer from degraded performance due to changes in
 data distribution.
+
+
 The experiments were successful in showing that the models from the
 previous day could be reused, and its training could be resumed on a new
 day of data. This leads to lower computational and communication overhead,
@@ -829,6 +838,8 @@ or out of the ordinary and mark it as potentially malicious. However, our
 experiments showed that this method was not always able to accurately detect
 all types of malware, as some of it was indistinguishable from normal traffic
 for the model.
+
+
 To take advantage of labels, we also run supervised methods of detection.
 In this setting, we assume that only a subset of clients was able to observe
 the malicious activity. Having malicious samples only in some clients make
@@ -856,8 +867,8 @@ restart the training process with a differently initialized model.
 In the supervised experiments, we have evaluated two types of models: a
 Multi-Head model and a Classifier-only model. The Multi-Head model was
 trained on two tasks:
-(i) reconstructing an input feature vector similar to an autoencoder;
-(ii) classification of the traffic.
+- reconstructing an input feature vector similar to an autoencoder
+- classification of the traffic.
 
 The Classifier-only model was derived from the Multi-Head model by discarding the reconstruction
 part of the network. The rationale behind training the Multi-Head model on
