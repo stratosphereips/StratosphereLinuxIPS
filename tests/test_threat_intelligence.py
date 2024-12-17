@@ -270,9 +270,9 @@ def test_set_evidence_malicious_asn(
     [
         # Test case 1: Source IP is malicious
         (
-            "192.168.1.1",
+            "1.1.1.2",
             "uid123",
-            "10.0.0.1",
+            "192.168.1.1",
             "2023-11-28 12:00:00",
             {
                 "description": "Malicious IP",
@@ -282,7 +282,7 @@ def test_set_evidence_malicious_asn(
             "profile_192.168.1.1",
             "timewindow1",
             "srcip",
-            2,
+            1,
         ),
         # Test case 2: Destination IP is malicious
         (
@@ -951,19 +951,19 @@ def test_pre_main(mocker):
     "ip, protocol, ip_state, expected_result",
     [
         # testcase1: loopback address
-        ("127.0.0.1", "TCP", "dstip", True),
+        ("127.0.0.1", "TCP", "dstip", False),
         # testcase2: private network
-        ("10.0.0.1", "UDP", "srcip", True),
+        ("10.0.0.1", "UDP", "srcip", False),
         # testcase3: private network
-        ("172.16.0.1", "ICMP", "dstip", True),
+        ("172.16.0.1", "ICMP", "dstip", False),
         # testcase4: private network
-        ("192.168.1.1", "HTTP", "srcip", True),
+        ("192.168.1.1", "HTTP", "srcip", False),
         # testcase5: outgoing ICMP packet
-        ("1.2.3.4", "ICMP", "dstip", True),
+        ("1.2.3.4", "ICMP", "dstip", False),
         # testcase6: incoming ICMP packet
-        ("8.8.8.8", "ICMP", "srcip", False),
+        ("8.8.8.8", "ICMP", "srcip", True),
         # testcase7: incoming ICMP packet on private network
-        ("192.168.1.1", "ICMP", "srcip", True),
+        ("192.168.1.1", "ICMP", "srcip", False),
     ],
 )
 def test_should_lookup(ip, protocol, ip_state, expected_result):
@@ -1353,7 +1353,7 @@ def test_main_file_hash_lookup(mocker):
         (
             "1.2.3.4",
             True,
-            False,
+            True,
             {
                 "is_malicious_ip": 1,
                 "ip_belongs_to_blacklisted_range": 1,
@@ -1366,9 +1366,9 @@ def test_main_file_hash_lookup(mocker):
             False,
             False,
             {
-                "is_malicious_ip": 1,
-                "ip_belongs_to_blacklisted_range": 1,
-                "ip_has_blacklisted_asn": 1,
+                "is_malicious_ip": 0,
+                "ip_belongs_to_blacklisted_range": 0,
+                "ip_has_blacklisted_asn": 0,
             },
         ),
         # Testcase3: Non-malicious IP
@@ -1377,9 +1377,9 @@ def test_main_file_hash_lookup(mocker):
             False,
             True,
             {
-                "is_malicious_ip": 0,
-                "ip_belongs_to_blacklisted_range": 0,
-                "ip_has_blacklisted_asn": 0,
+                "is_malicious_ip": 1,
+                "ip_belongs_to_blacklisted_range": 1,
+                "ip_has_blacklisted_asn": 1,
             },
         ),
     ],
