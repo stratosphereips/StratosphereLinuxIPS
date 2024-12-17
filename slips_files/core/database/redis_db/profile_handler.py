@@ -668,6 +668,9 @@ class ProfileHandler:
         #############
 
         # OTH means that we didnt see the true src ip and dst ip
+        # from zeek docs; OTH: No SYN seen, just midstream traffic
+        # (one example of this is a “partial connection” that was not
+        # later closed).
         if flow.state != "OTH":
             self.ask_for_ip_info(
                 flow.saddr,
