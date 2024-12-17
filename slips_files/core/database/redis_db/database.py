@@ -487,7 +487,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         is the ip param src or dst
         """
-        # if the daddr key arg is not given, we know for sure that the ip given is the daddr
+        # if the daddr key arg is not given, we know for sure that the ip
+        # given is the daddr
         daddr = daddr or ip
         data_to_send = self.give_threat_intelligence(
             profileid,
