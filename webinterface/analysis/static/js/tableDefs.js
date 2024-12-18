@@ -14,10 +14,11 @@ let analysisSubTableDefs = {
             {data: 'name'}
         ],
         fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
-            switch(aData['blocked']){
-                case true:
-                    $('td', nRow).css('background-color', '#FFC0CB')
-                    break;
+            if (aData['blocked'] === true) {
+                $('td', nRow).css('background-color', '#FFC0CB');
+            }
+            if (aData['alert'] === true) {
+                $('td', nRow).css('background-color', '#FF6347'); 
             }
         }
     },
