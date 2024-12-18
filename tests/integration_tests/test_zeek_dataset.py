@@ -46,6 +46,7 @@ alerts_file = "alerts.log"
                 "Suspicious user-agent:",
                 "Download of an executable",
                 "GRE tunnel",
+                "Multiple reconnection attempts to Destination IP: 123.22.123.22 from IP: 10.0.2.15",
             ],
             "test14-malicious-zeek-dir/",
             6670,
