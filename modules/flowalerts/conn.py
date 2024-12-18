@@ -267,19 +267,19 @@ class Conn(IFlowalertsAnalyzer):
             reconnections, uids = current_reconnections[key]
             reconnections += 1
             uids.append(flow.uid)
-            current_reconnections[key] = (reconnections, uids)
         except KeyError:
-            current_reconnections[key] = (1, [flow.uid])
+            uids = [flow.uid]
             reconnections = 1
 
+        current_reconnections[key] = (reconnections, uids)
         if reconnections < self.multiple_reconnection_attempts_threshold:
             self.db.set_reconnections(profileid, twid, current_reconnections)
             return
 
         self.set_evidence.multiple_reconnection_attempts(
-            twid, flow, reconnections
+            twid, flow, reconnections, uids
         )
-        # reset the reconnection attempts of this src->dst
+        # reset the reconnection counter of this src->dst
         current_reconnections[key] = (0, [])
 
         self.db.set_reconnections(profileid, twid, current_reconnections)
