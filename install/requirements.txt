@@ -30,7 +30,7 @@ pytest-dependency==0.6.0
 whois==1.20240129.2
 flask
 tldextract==5.1.2
-termcolor==2.4.0
+termcolor==2.5.0
 yappi==1.6.0
 pytest-sugar==1.0.0
 aid_hash
