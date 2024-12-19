@@ -24,6 +24,7 @@ The detection techniques are:
 - DNS ARPA Scans
 - SSH version changing
 - Incompatible CN
+- CN URL Mismatch
 - Weird HTTP methods
 - Non-SSL connections on port 443
 - Non-HTTP connections on port 80
@@ -278,10 +279,17 @@ If they are different, slips generates an alert
 
 Zeek logs each Certificate CN in ssl.log
 
-When slips enccounters a cn that claims to belong to any of Slips supported orgs (Google, Microsoft, Apple or Twitter)
+When slips encounters a cn that claims to belong to any of Slips supported orgs (Google, Microsoft, Apple or Twitter)
 Slips checks if the destination address or the destination server name belongs to these org.
 
-If not, slips generates an alert.
+If not, slips generates an evidence.
+
+
+## CN URL Mismatch
+
+Zeek logs each Certificate CN in ssl.log
+For each CN Slips encounters, it checks if the server name is the same as the CN
+Or if it belongs to the same org as the CN. if not, slips triggers an evidence
 
 ## Weird HTTP methods
 
