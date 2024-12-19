@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Union, Optional
+from typing import Union, Optional, List
 import re
 import tldextract
 from slips_files.common.abstracts.flowalerts_analyzer import (
@@ -154,6 +154,8 @@ class SSL(IFlowalertsAnalyzer):
         - by comparing the slds of both of them
         - by checking the whois registrant info from the
             db for both of them
+        Raises ValueError when info for one of the domains isnt found in
+        the db
         """
         root1 = self.get_root_domain(domain1)
         root2 = self.get_root_domain(domain2)
@@ -163,16 +165,28 @@ class SSL(IFlowalertsAnalyzer):
 
         domain1_info: dict = self.db.get_domain_data(domain1)
         if not (domain1_info and "Org" in domain1_info):
-            return
+            raise ValueError
 
         domain2_info: dict = self.db.get_domain_data(domain2)
         if not (domain2_info and "Org" in domain2_info):
-            return
+            raise ValueError
 
         domain1_org = domain1_info["Org"]
         domain2_org = domain2_info["Org"]
 
-        return domain1_org.lower() == domain2_org.lower()
+        if domain1_org.lower() == domain2_org.lower():
+            return True
+
+        domain2_org_list: List[str] = domain2_org.split(" ")
+        # this way of matching ensures that we dont alert on
+        # Yahoo Assets LLC and Yahoo Ad Tech LLC
+        for word in domain1_org.split(" "):
+            if word in ("LLC", "Corp", "Inc", "Ltd"):
+                continue
+            if word in domain2_org_list:
+                return True
+
+        return False
 
     @staticmethod
     def extract_cn(certificate_string: str) -> Optional[str]:
@@ -210,7 +224,11 @@ class SSL(IFlowalertsAnalyzer):
             return
 
         # regex of the cn doesnt match, check orgs of the domains
-        if self.domains_belong_to_same_org(cn, flow.server_name):
+        try:
+            if self.domains_belong_to_same_org(cn, flow.server_name):
+                return
+        except ValueError:
+            # we dont have an info about one of the domains
             return
 
         self.set_evidence.cn_url_mismatch(twid, cn, flow)
