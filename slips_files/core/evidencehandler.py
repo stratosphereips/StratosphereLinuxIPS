@@ -207,7 +207,8 @@ class EvidenceHandler(ICore):
         try:
             # write to alerts.log
             self.logfile.write(data)
-            self.logfile.write("\n")
+            if not data.endswith("\n"):
+                self.logfile.write("\n")
             self.logfile.flush()
         except KeyboardInterrupt:
             return True

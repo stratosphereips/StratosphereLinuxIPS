@@ -166,13 +166,10 @@ class SSL(IFlowalertsAnalyzer):
 
         domain1_info: dict = self.db.get_domain_data(domain1)
         if not (domain1_info and "Org" in domain1_info):
-            print("@@@@@@@@@@@@@@@@ val eerr")
             raise ValueError
 
         domain2_info: dict = self.db.get_domain_data(domain2)
         if not (domain2_info and "Org" in domain2_info):
-            print("@@@@@@@@@@@@@@@@ val eerr")
-
             raise ValueError
 
         domain1_org = domain1_info["Org"]
