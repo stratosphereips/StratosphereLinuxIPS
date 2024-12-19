@@ -273,35 +273,44 @@ class IPInfo(AsyncModule):
             return False
         return True
 
+    def query_whois(self, domain: str):
+        try:
+            with (
+                open("/dev/null", "w") as f,
+                redirect_stdout(f),
+                redirect_stderr(f),
+            ):
+                return whois.query(domain, timeout=2.0)
+        except Exception:
+            return None
+
     def get_domain_info(self, domain):
         """
-        Get the age and org of a domain using whois
+        Gets the age and org of a domain using whois
         """
-        if not self.is_valid_domain(domain):
-            return
-        if self.has_cached_info(domain):
+        if not self.is_valid_domain(domain) or self.has_cached_info(domain):
             return
 
-        # whois library doesn't only raise an exception, it prints the error!
-        # the errors are the same exceptions we're handling
-        # so temporarily change stdout to /dev/null
-        with open("/dev/null", "w") as f:
-            with redirect_stdout(f) and redirect_stderr(f):
-                # get registration date
-                try:
-                    res = whois.query(domain, timeout=2.0)
-                    creation_date = res.creation_date
-                    registrant = res.registrant
-                except Exception:
-                    return
+        res = self.query_whois(domain)
+        if res:
+            if res.creation_date:
+                age = utils.get_time_diff(
+                    res.creation_date,
+                    datetime.datetime.now(),
+                    return_type="days",
+                )
+                self.db.set_info_for_domains(domain, {"Age": age})
 
-        if creation_date:
-            today = datetime.datetime.now()
-            age = utils.get_time_diff(creation_date, today, return_type="days")
-            self.db.set_info_for_domains(domain, {"Age": age})
+            if res.registrant:
+                self.db.set_info_for_domains(domain, {"Org": res.registrant})
+                return
 
-        if registrant:
-            self.db.set_info_for_domains(domain, {"Org": registrant})
+        # usually support.microsoft.com doesnt have a registrant,
+        # but microsoft.com does
+        sld = utils.extract_hostname(domain)
+        sld_res = self.query_whois(sld)
+        if sld_res and sld_res.registrant:
+            self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
     async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
