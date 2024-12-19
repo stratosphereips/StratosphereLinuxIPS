@@ -256,7 +256,7 @@ async def test_check_pastebin_download(
 def test_detect_incompatible_cn(mocker, issuer, expected_call_count):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence." "SetEvidnceHelper.incompatible_cn"
+        "modules.flowalerts.set_evidence.SetEvidnceHelper.incompatible_cn"
     )
 
     ssl.db.whitelist.organization_whitelist.is_ip_in_org.return_value = False
@@ -285,8 +285,97 @@ def test_detect_incompatible_cn(mocker, issuer, expected_call_count):
         ja3s="",
         is_DoH="",
     )
-    ssl.detect_incompatible_cn(profileid, twid, flow)
+    ssl.detect_incompatible_cn(twid, flow)
     assert mock_set_evidence.call_count == expected_call_count
+
+
+@pytest.mark.parametrize(
+    "domain1, domain2, expected",
+    [
+        ("example.com", "sub.example.com", "example.com"),  # same root domain
+        ("example.com", "another.com", None),  # different organizations
+        ("yahoo.com", "adtech.yahoo.com", "yahoo.com"),  # partial org name
+        # match
+        ("example.com", "nonexistent.com", ValueError),  # domain not found
+        ("nonexistent.com", "another.com", ValueError),  # domain not found
+    ],
+)
+def test_domains_belong_to_same_org(domain1, domain2, expected):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.db.get_domain_data.side_effect = lambda domain: {
+        "example.com": {"Org": "Example LLC"},
+        "sub.example.com": {"Org": "Example LLC"},
+        "another.com": {"Org": "Another Corp"},
+        "yahoo.com": {"Org": "Yahoo Assets LLC"},
+        "adtech.yahoo.com": {"Org": "Yahoo Ad Tech LLC"},
+    }.get(domain, None)
+
+    # test the function
+    if expected is ValueError:
+        with pytest.raises(ValueError):
+            ssl.domains_belong_to_same_org(domain1, domain2)
+    else:
+        assert ssl.domains_belong_to_same_org(domain1, domain2) == expected
+
+
+@pytest.mark.parametrize(
+    "certificate_string, expected",
+    [
+        ("CN=example.com, OU=IT, O=Example LLC", "example.com"),  # standard CN
+        (
+            "O=Example LLC, CN=example.org, OU=Engineering",
+            "example.org",
+        ),  # CN in the middle
+        ("OU=IT, O=Example LLC", None),  # no CN present
+        ("", None),  # empty certificate string
+        ("CN=example.com", "example.com"),  # CN only
+        (
+            "OU=IT, CN=sub.example.com, CN=example.com",
+            "sub.example.com",
+        ),  # first CN is extracted
+        (
+            "CN=example-with-dashes.com, O=Example Org",
+            "example-with-dashes.com",
+        ),  # CN with special characters
+    ],
+)
+def test_extract_cn(certificate_string, expected):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    result = ssl.extract_cn(certificate_string)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "flow, expected_call_count",
+    [
+        # case: cn matches server name
+        ({"subject": "CN=example.com", "server_name": "example.com"}, 0),
+        # case: cn does not match server name, but belongs to the same org
+        ({"subject": "CN=example.com", "server_name": "sub.example.com"}, 0),
+        # case: cn does not match server name, and domains don't belong to the same org
+        ({"subject": "CN=example.com", "server_name": "another.com"}, 1),
+        # case: no subject in flow
+        ({"subject": "", "server_name": "example.com"}, 0),
+        # case: cn not found in subject
+        ({"subject": "O=Example LLC, OU=IT", "server_name": "example.com"}, 0),
+        # case: no domain info in db, ValueError raised
+        ({"subject": "CN=example.com", "server_name": "nonexistent.com"}, 0),
+    ],
+)
+def test_detect_cn_url_mismatch(mocker, flow, expected_call_count):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+
+    ssl.set_evidence.cn_url_mismatch = Mock()
+    twid = "timewindow1"
+
+    ssl.db.get_domain_data.side_effect = lambda domain: {
+        "example.com": {"Org": "Example LLC"},
+        "sub.example.com": {"Org": "Example LLC"},
+        "another.com": {"Org": "Another Org"},
+    }.get(domain, None)
+    flow_obj = mocker.Mock(**flow)
+    ssl.detect_cn_url_mismatch(twid, flow_obj)
+    assert ssl.set_evidence.cn_url_mismatch.call_count == expected_call_count
 
 
 @pytest.mark.parametrize(

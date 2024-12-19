@@ -187,10 +187,6 @@ class Utils(object):
         except ValueError:
             return False
 
-    def extract_domain_from_url(self, url: str) -> str:
-        extracted = tldextract.extract(url)
-        return f"{extracted.domain}.{extracted.suffix}"
-
     def is_valid_domain(self, domain: str) -> bool:
         extracted = tldextract.extract(domain)
         return bool(extracted.domain) and bool(extracted.suffix)

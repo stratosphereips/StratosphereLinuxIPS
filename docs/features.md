@@ -59,6 +59,15 @@ Slips checks if the destination address or the destination server name belongs t
 
 If not, slips generates an alert.
 
+
+### CN URL Mismatch
+
+Zeek logs each Certificate CN in ssl.log
+For each CN Slips encounters, it checks if the server name is the same as the CN
+Or if it belongs to the same org as the CN. if not, slips triggers an evidence
+
+
+
 ### High entropy DNS TXT answers
 
 Slips check every DNS answer with TXT record for high entropy
