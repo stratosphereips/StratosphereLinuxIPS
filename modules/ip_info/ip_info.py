@@ -177,7 +177,6 @@ class IPInfo(AsyncModule):
         return data
 
     # MAC functions
-
     def get_vendor_online(self, mac_addr):
         # couldn't find vendor using offline db, search online
 
@@ -258,46 +257,60 @@ class IPInfo(AsyncModule):
 
         return mac_info
 
-    # domain info
-    def get_age(self, domain):
-        """
-        Get the age of a domain using whois library
-        """
+    def has_cached_info(self, domain) -> bool:
+        cached_data = self.db.get_domain_data(domain)
+        if cached_data and ("Age" in cached_data and "Org" in cached_data):
+            # we already have info about this domain
+            return True
+        return False
 
+    def is_valid_domain(self, domain: str) -> bool:
         if domain.endswith(".arpa") or domain.endswith(".local"):
             return False
 
         domain_tld: str = self.whitelist.domain_analyzer.get_tld(domain)
         if domain_tld not in self.valid_tlds:
             return False
+        return True
 
-        cached_data = self.db.get_domain_data(domain)
-        if cached_data and "Age" in cached_data:
-            # we already have age info about this domain
-            return False
+    def query_whois(self, domain: str):
+        try:
+            with (
+                open("/dev/null", "w") as f,
+                redirect_stdout(f),
+                redirect_stderr(f),
+            ):
+                return whois.query(domain, timeout=2.0)
+        except Exception:
+            return None
 
-        # whois library doesn't only raise an exception, it prints the error!
-        # the errors are the same exceptions we're handling
-        # so temporarily change stdout to /dev/null
-        with open("/dev/null", "w") as f:
-            with redirect_stdout(f) and redirect_stderr(f):
-                # get registration date
-                try:
-                    creation_date = whois.query(
-                        domain, timeout=2.0
-                    ).creation_date
-                except Exception:
-                    return False
+    def get_domain_info(self, domain):
+        """
+        Gets the age and org of a domain using whois
+        """
+        if not self.is_valid_domain(domain) or self.has_cached_info(domain):
+            return
 
-        if not creation_date:
-            # no creation date was found for this domain
-            return False
+        res = self.query_whois(domain)
+        if res:
+            if res.creation_date:
+                age = utils.get_time_diff(
+                    res.creation_date,
+                    datetime.datetime.now(),
+                    return_type="days",
+                )
+                self.db.set_info_for_domains(domain, {"Age": age})
 
-        today = datetime.datetime.now()
+            if res.registrant:
+                self.db.set_info_for_domains(domain, {"Org": res.registrant})
+                return
 
-        age = utils.get_time_diff(creation_date, today, return_type="days")
-        self.db.set_info_for_domains(domain, {"Age": age})
-        return age
+        # usually support.microsoft.com doesnt have a registrant,
+        # but microsoft.com does
+        sld = utils.extract_hostname(domain)
+        sld_res = self.query_whois(sld)
+        if sld_res and sld_res.registrant:
+            self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
     async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
@@ -544,7 +557,7 @@ class IPInfo(AsyncModule):
             msg = json.loads(msg["data"])
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             if domain := flow.query:
-                self.get_age(domain)
+                self.get_domain_info(domain)
 
         if msg := self.get_msg("new_ip"):
             ip = msg["data"]

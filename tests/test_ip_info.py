@@ -144,47 +144,48 @@ def test_get_vendor_broadcast_mac(
     ip_info.db.set_mac_vendor_to_profile.assert_not_called()
 
 
-def test_get_age_no_creation_date():
+def test_get_domain_info_no_creation_date():
     domain = "example.com"
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_info.db.get_domain_data.return_value = None
-    with patch("whois.query") as mock_whois:
-        mock_whois.return_value = Mock(creation_date=None)
+    ip_info.query_whois = Mock()
+    ip_info.query_whois.return_value = Mock(
+        creation_date=None, registrant=None
+    )
 
-        result = ip_info.get_age(domain)
+    result = ip_info.get_domain_info(domain)
 
-        assert result is False
-        ip_info.db.set_info_for_domains.assert_not_called()
+    assert result is None
+    ip_info.db.set_info_for_domains.assert_not_called()
 
 
-def test_get_age_invalid_tld():
+def test_get_domain_info_invalid_tld():
     domain = "example.invalid"
     ip_info = ModuleFactory().create_ip_info_obj()
-    result = ip_info.get_age(domain)
+    result = ip_info.get_domain_info(domain)
 
-    assert result is False
+    assert result is None
     ip_info.db.get_domain_data.assert_not_called()
     ip_info.db.set_info_for_domains.assert_not_called()
 
 
-def test_get_age_cached_data():
+def test_get_domain_info_cached_data():
     domain = "cached.com"
-    cached_age = 100
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_domain_data.return_value = {"Age": cached_age}
+    ip_info.db.get_domain_data.return_value = {"Age": 100, "Org": "Cached LLC"}
 
-    result = ip_info.get_age(domain)
+    result = ip_info.get_domain_info(domain)
 
-    assert result is False
+    assert result is None
     ip_info.db.set_info_for_domains.assert_not_called()
 
 
 @pytest.mark.parametrize("domain", ["example.arpa", "example.local"])
-def test_get_age_special_domains(domain):
+def test_get_domain_info_special_domains(domain):
     ip_info = ModuleFactory().create_ip_info_obj()
-    result = ip_info.get_age(domain)
+    result = ip_info.get_domain_info(domain)
 
-    assert result is False
+    assert result is None
     ip_info.db.get_domain_data.assert_not_called()
     ip_info.db.set_info_for_domains.assert_not_called()
 
