@@ -171,9 +171,8 @@ def test_get_domain_info_invalid_tld():
 
 def test_get_domain_info_cached_data():
     domain = "cached.com"
-    cached_age = 100
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_domain_data.return_value = {"Age": cached_age}
+    ip_info.db.get_domain_data.return_value = {"Age": 100, "Org": "Cached LLC"}
 
     result = ip_info.get_domain_info(domain)
 
