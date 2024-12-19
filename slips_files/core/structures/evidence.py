@@ -56,6 +56,7 @@ class EvidenceType(Enum):
     NON_SSL_PORT_443_CONNECTION = auto()
     WEIRD_HTTP_METHOD = auto()
     INCOMPATIBLE_CN = auto()
+    CN_URL_MISMATCH = auto()
     DGA_NXDOMAINS = auto()
     DNS_WITHOUT_CONNECTION = auto()
     PASTEBIN_DOWNLOAD = auto()
