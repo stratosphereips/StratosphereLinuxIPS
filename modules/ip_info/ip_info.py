@@ -177,7 +177,6 @@ class IPInfo(AsyncModule):
         return data
 
     # MAC functions
-
     def get_vendor_online(self, mac_addr):
         # couldn't find vendor using offline db, search online
 
@@ -258,23 +257,30 @@ class IPInfo(AsyncModule):
 
         return mac_info
 
-    # domain info
-    def get_age(self, domain):
-        """
-        Get the age of a domain using whois library
-        """
+    def has_cached_info(self, domain) -> bool:
+        cached_data = self.db.get_domain_data(domain)
+        if cached_data and ("Age" in cached_data and "Org" in cached_data):
+            # we already have info about this domain
+            return True
+        return False
 
+    def is_valid_domain(self, domain: str) -> bool:
         if domain.endswith(".arpa") or domain.endswith(".local"):
             return False
 
         domain_tld: str = self.whitelist.domain_analyzer.get_tld(domain)
         if domain_tld not in self.valid_tlds:
             return False
+        return True
 
-        cached_data = self.db.get_domain_data(domain)
-        if cached_data and "Age" in cached_data:
-            # we already have age info about this domain
-            return False
+    def get_domain_info(self, domain):
+        """
+        Get the age and org of a domain using whois
+        """
+        if not self.is_valid_domain(domain):
+            return
+        if self.has_cached_info(domain):
+            return
 
         # whois library doesn't only raise an exception, it prints the error!
         # the errors are the same exceptions we're handling
@@ -283,21 +289,19 @@ class IPInfo(AsyncModule):
             with redirect_stdout(f) and redirect_stderr(f):
                 # get registration date
                 try:
-                    creation_date = whois.query(
-                        domain, timeout=2.0
-                    ).creation_date
+                    res = whois.query(domain, timeout=2.0)
+                    creation_date = res.creation_date
+                    registrant = res.registrant
                 except Exception:
-                    return False
+                    return
 
-        if not creation_date:
-            # no creation date was found for this domain
-            return False
+        if creation_date:
+            today = datetime.datetime.now()
+            age = utils.get_time_diff(creation_date, today, return_type="days")
+            self.db.set_info_for_domains(domain, {"Age": age})
 
-        today = datetime.datetime.now()
-
-        age = utils.get_time_diff(creation_date, today, return_type="days")
-        self.db.set_info_for_domains(domain, {"Age": age})
-        return age
+        if registrant:
+            self.db.set_info_for_domains(domain, {"Org": registrant})
 
     async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
@@ -544,7 +548,7 @@ class IPInfo(AsyncModule):
             msg = json.loads(msg["data"])
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             if domain := flow.query:
-                self.get_age(domain)
+                self.get_domain_info(domain)
 
         if msg := self.get_msg("new_ip"):
             ip = msg["data"]
