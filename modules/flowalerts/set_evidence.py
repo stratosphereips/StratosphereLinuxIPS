@@ -25,7 +25,9 @@ class SetEvidnceHelper:
         twid_number: int = int(twid.replace("timewindow", ""))
         confidence: float = 0.8
         description: str = (
-            f"CN {cn} of domain {flow.server_name} " f"mismatch the domain."
+            f"a CN mismatch. The common name (CN) '{cn}' in the SSL "
+            f"certificate for the domain '{flow.server_name}' does not match "
+            f"the server's domain."
         )
 
         # to add a correlation between the 2 evidence in alerts.json
