@@ -1,5 +1,5 @@
 maxminddb==2.6.2
-numpy==1.26.4
+numpy==2.2.1
 watchdog==5.0.0
 redis==5.1.1
 urllib3==2.2.3
