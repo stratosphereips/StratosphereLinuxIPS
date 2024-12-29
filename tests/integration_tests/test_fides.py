@@ -47,11 +47,9 @@ def countdown(seconds, message):
         seconds -= 1
     sys.stdout.write(f"\rSending {message} now!          \n")
 
-def message_send():
-    import redis
-
+def message_send(port):
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
+    redis_client = redis.StrictRedis(host='localhost', port=port, db=0)
 
     message  = '''
 {
@@ -276,7 +274,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
 
         print(f"Output and errors are logged in {output_file}")
         countdown(12, "test message")
-        message_send()
+        message_send(redis_port)
 
         countdown(18, "sigterm")
         # send a SIGTERM to the process
@@ -293,12 +291,17 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         redis_port, output_dir=output_dir, start_redis_server=False
     )
     assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+    # assert db.get_msgs_received_at_runtime("Fides")["network2fides"] == "1" -- cannot be tested, because bridge is receiving hte message, not fides module
 
     dch = db.subscribe("fides2slips")
+    rc = RedisClient(redis_port)
 
     print("Checking Fides' data outlets")
-    print(fdb.get_peer_trust_data('peer1'))
-    assert db.get_msgs_received_at_runtime("Fides")["fides2slips"] == "1"
+    print(fdb.get_peer_trust_data('peer1').recommendation_history)
+    print(db.get_peer_trust_data('peer1'))
+    print(fdb.get_peer_trust_data('stratosphere.org'))
+    print(db.get_cached_network_opinion('stratosphere.org', 200000000000, 200000000000))
+    print(rc.get_cached_network_opinion('stratosphere.org',0,0))
 
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
