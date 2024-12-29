@@ -28,6 +28,8 @@ class SlipsTrustDatabase(TrustDatabase):
         super().__init__(configuration)
         self.db = db
         self.sqldb = sqldb
+        self.__configuration = configuration
+        self.conf = configuration
 
     def store_connected_peers_list(self, current_peers: List[PeerInfo]):
         """Stores list of peers that are directly connected to the Slips."""

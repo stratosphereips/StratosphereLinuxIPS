@@ -954,7 +954,7 @@ class DBManager:
         self.rdb.update_peer_td(id, td)
 
     def get_peer_trust_data(self, id: str):
-        self.rdb.get_peer_td(id)
+        return self.rdb.get_peer_td(id)
 
     def get_all_peers_trust_data(self):
         return self.rdb.get_all_peers_td()
@@ -965,6 +965,6 @@ class DBManager:
     def get_cached_network_opinion(
         self, target: str, cache_valid_seconds: int, current_time: float
     ):
-        self.rdb.get_cached_network_opinion(
+        return self.rdb.get_cached_network_opinion(
             target, cache_valid_seconds, current_time
         )

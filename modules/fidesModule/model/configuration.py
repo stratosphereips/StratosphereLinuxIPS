@@ -128,6 +128,8 @@ class TrustModelConfiguration:
     ti_aggregation_strategy: TIAggregation
     """Threat Intelligence aggregation strategy."""
 
+    database: str
+
 
 def load_configuration(file_path: str) -> TrustModelConfiguration:
     with open(file_path, "r") as stream:
@@ -174,7 +176,8 @@ def __parse_config(data: dict) -> TrustModelConfiguration:
                                for e in data['trust']['organisations']],
         network_opinion_cache_valid_seconds=data['trust']['networkOpinionCacheValidSeconds'],
         interaction_evaluation_strategy=__parse_evaluation_strategy(data),
-        ti_aggregation_strategy=TIAggregationStrategy[data['trust']['tiAggregationStrategy']]()
+        ti_aggregation_strategy=TIAggregationStrategy[data['trust']['tiAggregationStrategy']](),
+        database=data['database'] if 'database' in data else "fides_p2p_db.sqlite",
     )
 
 

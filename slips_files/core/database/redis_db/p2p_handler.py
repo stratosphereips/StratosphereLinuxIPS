@@ -5,7 +5,7 @@ from typing import (
 
 trust = "peers_strust"
 hash = "peer_info"
-FIDES_CACHE_KEY = "cached_class"
+FIDES_CACHE_KEY = "fides_cache"
 
 
 class P2PHandler:
@@ -89,7 +89,7 @@ class P2PHandler:
         if not cache_data:
             return None
 
-        cache_data = {k.decode(): v.decode() for k, v in cache_data.items()}
+        cache_data = {k: v for k, v in cache_data.items()}
 
         # Get the time the opinion was cached
         created_seconds = float(cache_data.get("created_seconds", 0))

@@ -80,6 +80,7 @@ class ThreatIntelligenceProtocol(Protocol):
         ti = self.__aggregator.evaluate_intelligence_response(target, r, trust_matrix)
         # cache data for further retrieval
         self._trust_db.cache_network_opinion(ti)
+        #test = self._trust_db.get_cached_network_opinion(target)
 
         interaction_matrix = self.__ti_evaluation_strategy.evaluate(
             aggregated_ti=ti,

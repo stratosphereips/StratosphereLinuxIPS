@@ -72,7 +72,7 @@ class FidesModule(IModule):
         # so it shouldnt be stored in the current output dir, it should be
         # in the main slips dir
         self.sqlite = SQLiteDB(
-            self.logger, os.path.join(os.getcwd(), "fides_p2p_db.sqlite")
+            self.logger, os.path.join(os.getcwd(), self.__trust_model_config.database)
         )
 
     def read_configuration(self):
@@ -214,3 +214,4 @@ class FidesModule(IModule):
 
         # TODO: delete whole if below, exists for testing purposes for tests/integration_tests/test_fides.py
         self.get_msg("fides2network")
+        self.get_msg("fides2slips")
