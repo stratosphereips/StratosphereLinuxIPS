@@ -49,7 +49,7 @@ To enable it, change ```use_fides=False``` to ```use_fides=True``` in ```config/
 The module uses Slips' Redis to receive and send messages related to trust intelligence, evaluation of trust in peers and alert message dispatch.
 
 **Used Channels**
-
+odules/fidesModule/messaging/message_handler.py
 | **Slips Channel Name** | **Purpose**                                                             |
 |-----------------|-------------------------------------------------------------------------|
 | `slips2fides`   | Provides communication channel from Slips to Fides                      |
@@ -124,5 +124,69 @@ no private information is shared.
 
 ## Programmers notes
 
-modules/fidesModule/messaging/message_handler.py
-modules/fidesModule/messaging/dacite/core.py
+Variables used in the trust evaluation and its accompanied processes, such as database-backup in persistent SQLite storage and memory persistent
+Redis database of Slips, are strings, integers and floats grouped into custom dataclasses. Aforementioned data classes can
+be found in modules/fidesModule/model. The reader may find that all of the floating variables are in the interval <-1; 1>
+and some of them are between <0; 1>, please refer to the modules/fidesModule/model directory.
+
+The Fides Module is designed to cooperate with a global-peer-to-peer module. The communication is done using Slips' Redis
+channel, for more information please refer to communication and messages sections above.
+
+An example of a message answering Fides-Module's opinion request follows.
+```
+import redis
+
+# connect to redis database 0
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
+
+message = '''
+{
+    "type": "nl2tl_intelligence_response",
+    "version": 1,
+    "data": [
+        {
+            "sender": {
+                "id": "peer1",
+                "organisations": ["org_123", "org_456"],
+                "ip": "192.168.1.1"
+            },
+            "payload": {
+                "intelligence": {
+                    "target": {"type": "server", "value": "192.168.1.10"},
+                    "confidentiality": {"level": 0.8},
+                    "score": 0.5,
+                    "confidence": 0.95
+                },
+                "target": "stratosphere.org"
+            }
+        },
+        {
+            "sender": {
+                "id": "peer2",
+                "organisations": ["org_789"],
+                "ip": "192.168.1.2"
+            },
+            "payload": {
+                "intelligence": {
+                    "target": {"type": "workstation", "value": "192.168.1.20"},
+                    "confidentiality": {"level": 0.7},
+                    "score": -0.85,
+                    "confidence": 0.92
+                },
+                "target": "stratosphere.org"
+            }
+        }
+    ]
+}
+'''
+
+# publish the message to the "network2fides" channel
+channel = "network2fides"
+redis_client.publish(channel, message)
+
+print(f"Message published to channel '{channel}'.")
+```
+
+For more information about message handling, please also refer to modules/fidesModule/messaging/message_handler.py
+and to modules/fidesModule/messaging/dacite/core.py for message parsing.
+
