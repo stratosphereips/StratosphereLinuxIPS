@@ -1,6 +1,9 @@
+from dataclasses import asdict
 from unittest.mock import patch, MagicMock, call
 import json
 from tests.module_factory import ModuleFactory
+from slips_files.core.flows.zeek import HTTP, DNS, Conn
+from unittest.mock import ANY
 import pytest
 
 
@@ -56,8 +59,7 @@ def test_get_outtuples_from_profile_tw(hget_return_value, expected_out_tuples):
 )
 def test_get_intuples_from_profile_tw(hget_return_value, expected_in_tuples):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     profileid = "profile_1"
     twid = "timewindow1"
 
@@ -84,7 +86,7 @@ def test_get_intuples_from_profile_tw(hget_return_value, expected_in_tuples):
 )
 def test_get_dhcp_flows(hget_return_value, expected_dhcp_flows):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
     twid = "timewindow1"
 
@@ -119,7 +121,7 @@ def test_get_dhcp_flows(hget_return_value, expected_dhcp_flows):
 )
 def test_set_dhcp_flow(cached_flows, expected_hset_call):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.get_dhcp_flows = MagicMock(return_value=cached_flows)
 
     profileid = "profile_1"
@@ -188,8 +190,7 @@ def test_get_final_state_from_flags(flags, packet_count, expected_state):
 )
 def test_get_data_from_profile_tw(hget_return_value, expected_data):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     profileid = "profile_1"
     twid = "timewindow1"
     direction = "Dst"
@@ -336,8 +337,7 @@ def test_update_ip_info(
 )
 def test_update_times_contacted(hget_return_value, expected_hset_call):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     profileid = "profile_1"
     twid = "timewindow1"
     ip = "192.168.1.100"
@@ -386,8 +386,6 @@ def test_get_all_contacted_ips_in_profileid_twid(
     all_flows, expected_contacted_ips
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
 
     profileid = "profile_1"
     twid = "timewindow1"
@@ -402,7 +400,7 @@ def test_get_all_contacted_ips_in_profileid_twid(
 
 
 @pytest.mark.parametrize(
-    "getBlockedProfTW_return_value, expected_hset_call",
+    "blocked_tws, expected_hset_call",
     [
         # Testcase 1: No previous blocked TWs
         ([], ("BlockedProfTW", "profile_1", json.dumps(["timewindow3"]))),
@@ -417,20 +415,18 @@ def test_get_all_contacted_ips_in_profileid_twid(
         ),
     ],
 )
-def test_markProfileTWAsBlocked(
-    getBlockedProfTW_return_value, expected_hset_call
+def test_mark_profile_and_timewindow_as_blocked(
+    blocked_tws, expected_hset_call
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.getBlockedProfTW = MagicMock(
-        return_value=getBlockedProfTW_return_value
+    handler.get_blocked_timewindows_of_profile = MagicMock(
+        return_value=blocked_tws
     )
 
     profileid = "profile_1"
     twid = "timewindow3"
 
-    handler.markProfileTWAsBlocked(profileid, twid)
-
+    handler.mark_profile_and_timewindow_as_blocked(profileid, twid)
     handler.r.hset.assert_called_once_with(*expected_hset_call)
 
 
@@ -439,22 +435,17 @@ def test_markProfileTWAsBlocked(
     [  # Testcase 1: TWs exist for the profile
         (
             json.dumps(["timewindow1", "timewindow2"]).encode(),
-            ["timewindow1", "timewindow2"],
+            b'["timewindow1", "timewindow2"]',
         ),
         # Testcase 2: No TWs exist for the profile
-        (None, []),
+        (None, None),
     ],
 )
-def test_getBlockedProfTW(hget_return_value, expected_tws):
+def test_get_blocked_profiles_and_timewindows(hget_return_value, expected_tws):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    profileid = "profile_1"
-
-    handler.r.hget.return_value = hget_return_value
-
-    tws = handler.getBlockedProfTW(profileid)
-
-    handler.r.hget.assert_called_once_with("BlockedProfTW", profileid)
+    handler.r.hgetall.return_value = hget_return_value
+    tws = handler.get_blocked_profiles_and_timewindows()
+    handler.r.hgetall.assert_called_once_with("BlockedProfTW")
     assert tws == expected_tws
 
 
@@ -467,15 +458,16 @@ def test_getBlockedProfTW(hget_return_value, expected_tws):
         (None, False),
     ],
 )
-def test_wasProfileTWModified(zrank_return_value, expected_was_modified):
+def test_was_profile_and_tw_modified(
+    zrank_return_value, expected_was_modified
+):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     profileid = "profile_1"
     twid = "timewindow1"
     handler.r.zrank.return_value = zrank_return_value
 
-    was_modified = handler.wasProfileTWModified(profileid, twid)
+    was_modified = handler.was_profile_and_tw_modified(profileid, twid)
 
     handler.r.zrank.assert_called_with(
         "ModifiedTW", f"{profileid}{handler.separator}{twid}"
@@ -493,7 +485,6 @@ def test_wasProfileTWModified(zrank_return_value, expected_was_modified):
 )
 def test_get_total_flows(hget_return_value, expected_total_flows):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.r.hget.return_value = hget_return_value
 
@@ -514,7 +505,6 @@ def test_get_total_flows(hget_return_value, expected_total_flows):
 )
 def test_get_profileid_from_ip(ip, sismember_return_value, expected_profileid):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.r.sismember.return_value = sismember_return_value
 
@@ -538,19 +528,19 @@ def test_get_profileid_from_ip(ip, sismember_return_value, expected_profileid):
         ),
     ],
 )
-def test_getProfiles(smembers_return_value, expected_profiles):
+def test_get_profiles(smembers_return_value, expected_profiles):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.r.smembers.return_value = smembers_return_value
 
-    profiles = handler.getProfiles()
+    profiles = handler.get_profiles()
     handler.r.smembers.assert_called_once_with("profiles")
     assert profiles == expected_profiles
 
 
 @pytest.mark.parametrize(
-    "profileid, expected_num_tws, " "expected_getTWsfromProfile_return_value",
+    "profileid, expected_num_tws, "
+    "expected_get_tws_from_profile_return_value",
     [  # Testcase 1: Profile with multiple timewindows
         (
             "profile_1",
@@ -566,15 +556,15 @@ def test_getProfiles(smembers_return_value, expected_profiles):
     ],
 )
 def test_get_number_of_tws_in_profile(
-    profileid, expected_num_tws, expected_getTWsfromProfile_return_value
+    profileid, expected_num_tws, expected_get_tws_from_profile_return_value
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.getTWsfromProfile = MagicMock(
-        return_value=expected_getTWsfromProfile_return_value
+    handler.get_tws_from_profile = MagicMock(
+        return_value=expected_get_tws_from_profile_return_value
     )
 
     num_tws = handler.get_number_of_tws_in_profile(profileid)
-    handler.getTWsfromProfile.assert_called_once_with(profileid)
+    handler.get_tws_from_profile.assert_called_once_with(profileid)
     assert num_tws == expected_num_tws
 
 
@@ -600,8 +590,7 @@ def test_get_srcips_from_profile_tw(
     profileid, twid, expected_srcips, expected_hget_call
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     handler.r.hget.return_value = expected_srcips
     srcips = handler.get_srcips_from_profile_tw(profileid, twid)
     handler.r.hget.assert_called_once_with(*expected_hget_call.args)
@@ -626,13 +615,12 @@ def test_get_srcips_from_profile_tw(
         (None, None, False),
     ],
 )
-def test_getTWsfromProfile(profileid, zrange_return_value, expected_tws):
+def test_get_tws_from_profile(profileid, zrange_return_value, expected_tws):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.r.zrange.return_value = zrange_return_value
 
-    tws = handler.getTWsfromProfile(profileid)
+    tws = handler.get_tws_from_profile(profileid)
 
     assert handler.r.zrange.called is bool(profileid)
     assert tws == expected_tws
@@ -667,8 +655,7 @@ def test_get_dstips_from_profile_tw(
     profileid, twid, expected_dstips, expected_hget_call
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     handler.r.hget.return_value = expected_dstips
     dstips = handler.get_dstips_from_profile_tw(profileid, twid)
     handler.r.hget.assert_called_once_with(*expected_hget_call.args)
@@ -685,7 +672,7 @@ def test_get_dstips_from_profile_tw(
 )
 def test_has_profile(sismember_return_value, expected_has_profile):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.sismember.return_value = sismember_return_value
@@ -706,7 +693,6 @@ def test_has_profile(sismember_return_value, expected_has_profile):
 )
 def test_get_profiles_len(scard_return_value, expected_profiles_len):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.r.scard.return_value = scard_return_value
 
@@ -735,7 +721,7 @@ def test_get_last_twid_of_profile(
     zrange_return_value, expected_twid, expected_starttime
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.zrange.return_value = zrange_return_value
@@ -767,7 +753,7 @@ def test_get_first_twid_for_profile(
     zrange_return_value, expected_twid, expected_starttime_of_tw
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.zrange.return_value = zrange_return_value
@@ -816,7 +802,7 @@ def test_add_new_tw(
     expected_update_threat_level_call,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.update_threat_level = MagicMock()
 
     handler.add_new_tw(profileid, timewindow, startoftw)
@@ -837,7 +823,7 @@ def test_add_new_tw(
 )
 def test_get_tw_start_time(zscore_return_value, expected_start_time):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
     twid = "timewindow2"
 
@@ -863,7 +849,6 @@ def test_get_number_of_tws_with_profileid(
     profileid, zcard_return_value, expected_num_tws
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.r.zcard.return_value = zcard_return_value
 
@@ -875,7 +860,6 @@ def test_get_number_of_tws_with_profileid(
 
 def test_get_number_of_tws_without_profileid():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     num_tws = handler.get_number_of_tws(None)
 
@@ -909,7 +893,7 @@ def test_get_modified_tw_since_time(
     time, expected_modified_tws, zrangebyscore_return_value
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.r.zrangebyscore.return_value = zrangebyscore_return_value
 
     modified_tws = handler.get_modified_tw_since_time(time)
@@ -982,7 +966,7 @@ def test_get_modified_tw_since_time(
 )
 def test_get_software_from_profile(hmget_return_value, expected_software):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.hmget.return_value = hmget_return_value
@@ -1006,7 +990,7 @@ def test_get_software_from_profile(hmget_return_value, expected_software):
 )
 def test_get_first_user_agent(hmget_return_value, expected_user_agent):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.hmget.return_value = hmget_return_value
@@ -1049,7 +1033,7 @@ def test_get_user_agent_from_profile(
     get_first_user_agent_return_value, expected_user_agent
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.get_first_user_agent = MagicMock(
@@ -1088,7 +1072,7 @@ def test_set_profile_module_label(
     get_profile_modules_labels_return_value, module, label, expected_data
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.get_profile_modules_labels = MagicMock(
         return_value=get_profile_modules_labels_return_value
     )
@@ -1105,8 +1089,7 @@ def test_set_profile_module_label(
 
 def test_add_tuple_first_time():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     handler.publish_new_letter = MagicMock()
     handler.mark_profile_tw_as_modified = MagicMock()
 
@@ -1136,8 +1119,7 @@ def test_add_tuple_first_time():
 
 def test_add_tuple_not_first_time():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     handler.publish_new_letter = MagicMock()
     handler.mark_profile_tw_as_modified = MagicMock()
 
@@ -1190,8 +1172,8 @@ def test_check_tw_to_close(
     close_all, zrangebyscore_return_value, expected_calls
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.getSlipsInternalTime = MagicMock(return_value=1000.0)
+
+    handler.get_slips_internal_time = MagicMock(return_value=1000.0)
     handler.width = 100
     handler.mark_profile_tw_as_closed = MagicMock()
 
@@ -1243,7 +1225,7 @@ def test_mark_profile_tw_as_closed(
     sadd_return_value, zrem_return_value, publish_call_count
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.r.sadd.return_value = sadd_return_value
     handler.r.zrem.return_value = zrem_return_value
     handler.publish = MagicMock()
@@ -1298,8 +1280,6 @@ def test_get_timeline_last_lines(
     expected_last_index,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
 
     profileid = "profile_1"
     twid = "timewindow1"
@@ -1341,7 +1321,6 @@ def test_get_timeline_last_lines(
 )
 def test_set_ipv6_of_profile(profileid, ip, expected_hset_call):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.set_ipv6_of_profile(profileid, ip)
     handler.r.hset.assert_called_once_with(*expected_hset_call)
@@ -1359,7 +1338,6 @@ def test_set_ipv6_of_profile(profileid, ip, expected_hset_call):
 )
 def test_set_ipv4_of_profile(profileid, ip, expected_hset_call):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.set_ipv4_of_profile(profileid, ip)
     handler.r.hset.assert_called_once_with(*expected_hset_call)
@@ -1441,7 +1419,6 @@ def test_get_modified_profiles_since(
 )
 def test_update_mac_of_profile(profileid, mac, expected_hset_call):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.update_mac_of_profile(profileid, mac)
     handler.r.hset.assert_called_once_with(*expected_hset_call)
@@ -1457,7 +1434,6 @@ def test_update_mac_of_profile(profileid, mac, expected_hset_call):
 )
 def test_get_mac_addr_from_profile(hget_return_value, expected_mac_addr):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     profileid = "profile_1"
 
@@ -1502,7 +1478,6 @@ def test_get_mac_addr_from_profile(hget_return_value, expected_mac_addr):
 )
 def test_add_user_agent_to_profile(user_agent, expected_hset_call):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     profileid = "profile_1"
 
@@ -1520,7 +1495,6 @@ def test_add_user_agent_to_profile(user_agent, expected_hset_call):
 )
 def test_get_user_agents_count(hget_return_value, expected_user_agents_count):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     profileid = "profile_1"
 
@@ -1545,7 +1519,6 @@ def test_get_user_agents_count(hget_return_value, expected_user_agents_count):
 )
 def test_add_to_the_list_of_ipv6(cached_ipv6, ipv6_to_add, expected_result):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     result = handler.add_to_the_list_of_ipv6(ipv6_to_add, cached_ipv6)
     assert set(result) == set(expected_result)
@@ -1553,7 +1526,7 @@ def test_add_to_the_list_of_ipv6(cached_ipv6, ipv6_to_add, expected_result):
 
 def test_set_mac_vendor_to_profile_no_existing_vendor_mac_match():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
     mac_addr = "00:11:22:33:44:55"
     mac_vendor = "Cisco"
@@ -1570,7 +1543,7 @@ def test_set_mac_vendor_to_profile_no_existing_vendor_mac_match():
 
 def test_set_mac_vendor_to_profile_existing_vendor():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
     mac_addr = "00:11:22:33:44:55"
     mac_vendor = "Cisco"
@@ -1587,7 +1560,7 @@ def test_set_mac_vendor_to_profile_existing_vendor():
 
 def test_set_mac_vendor_to_profile_no_existing_vendor_mac_mismatch():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
     mac_addr = "00:11:22:33:44:55"
     mac_vendor = "Cisco"
@@ -1604,7 +1577,6 @@ def test_set_mac_vendor_to_profile_no_existing_vendor_mac_mismatch():
 
 def test_add_mac_addr_to_profile_no_existing_mac():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     profileid = "profile_192.168.1.100"
     mac_addr = "00:11:22:33:44:55"
@@ -1626,7 +1598,6 @@ def test_add_mac_addr_to_profile_no_existing_mac():
 
 def test_add_mac_addr_to_profile_existing_mac():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     profileid = "profile_192.168.1.100"
     mac_addr = "00:11:22:33:44:55"
@@ -1646,7 +1617,7 @@ def test_add_mac_addr_to_profile_existing_mac():
 
 def test_add_first_user_agent_to_profile():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_192.168.1.100"
     user_agent = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -1670,7 +1641,7 @@ def test_add_first_user_agent_to_profile():
 
 def test_add_new_user_agent_to_existing_profile():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_192.168.1.100"
     existing_user_agent = "other_user_agent"
     new_user_agent = (
@@ -1701,7 +1672,7 @@ def test_add_new_user_agent_to_existing_profile():
 
 def test_add_existing_user_agent_to_profile():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_192.168.1.100"
     user_agent = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -1732,7 +1703,6 @@ def test_add_existing_user_agent_to_profile():
 )
 def test_get_profile_modules_labels(hget_return_value, expected_data):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     profileid = "profile_1"
 
@@ -1753,7 +1723,7 @@ def test_get_profile_modules_labels(hget_return_value, expected_data):
 )
 def test_get_mac_vendor_from_profile(hget_return_value, expected_mac_vendor):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.hget.return_value = hget_return_value
@@ -1766,7 +1736,7 @@ def test_get_mac_vendor_from_profile(hget_return_value, expected_mac_vendor):
 
 def test_add_host_name_to_profile_when_hostname_does_not_exist():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.get_hostname_from_profile = MagicMock(return_value=None)
 
     hostname = "new_hostname.com"
@@ -1779,7 +1749,7 @@ def test_add_host_name_to_profile_when_hostname_does_not_exist():
 
 def test_add_host_name_to_profile_when_hostname_exists():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.get_hostname_from_profile = MagicMock(
         return_value="existing_hostname.com"
     )
@@ -1832,7 +1802,7 @@ def test_invalid_ip():
 
 
 @pytest.mark.parametrize(
-    "role, flow_state, expected_ask_for_ip_info_calls, "
+    "role, flow_state, "
     "expected_update_times_contacted_call, "
     "expected_update_ip_info_call, "
     "expected_hset_key",
@@ -1840,32 +1810,11 @@ def test_invalid_ip():
         (
             "Client",
             "S0",
-            [
-                call(
-                    "5.6.7.8",
-                    "profile_1",
-                    "timewindow1",
-                    "TCP",
-                    1000.0,
-                    "abc123",
-                    "srcip",
-                    daddr="1.2.3.4",
-                ),
-                call(
-                    "1.2.3.4",
-                    "profile_1",
-                    "timewindow1",
-                    "TCP",
-                    1000.0,
-                    "abc123",
-                    "dstip",
-                ),
-            ],
-            call("1.2.3.4", "Dst", "profile_1", "timewindow1"),
+            call("1.2.3.4", "Dst", "profile_5.6.7.8", "timewindow1"),
             call(
                 {},
                 1,
-                80,
+                "80",
                 1,
                 100,
                 "1.2.3.4",
@@ -1878,32 +1827,11 @@ def test_invalid_ip():
         (
             "Server",
             "EST",
-            [
-                call(
-                    "5.6.7.8",
-                    "profile_1",
-                    "timewindow1",
-                    "TCP",
-                    1000.0,
-                    "abc123",
-                    "srcip",
-                    daddr="1.2.3.4",
-                ),
-                call(
-                    "1.2.3.4",
-                    "profile_1",
-                    "timewindow1",
-                    "TCP",
-                    1000.0,
-                    "abc123",
-                    "dstip",
-                ),
-            ],
-            call("5.6.7.8", "Src", "profile_1", "timewindow1"),
+            call("5.6.7.8", "Src", "profile_5.6.7.8", "timewindow1"),
             call(
                 {},
                 1,
-                80,
+                "80",
                 1,
                 100,
                 "5.6.7.8",
@@ -1917,35 +1845,59 @@ def test_invalid_ip():
 def test_add_ips(
     role,
     flow_state,
-    expected_ask_for_ip_info_calls,
     expected_update_times_contacted_call,
     expected_update_ip_info_call,
     expected_hset_key,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.ask_for_ip_info = MagicMock()
     handler.update_times_contacted = MagicMock()
     handler.get_data_from_profile_tw = MagicMock(return_value={})
     handler.update_ip_info = MagicMock(return_value={"updated_data": True})
-    handler.separator = "_"
+
     handler.set_new_ip = MagicMock()
 
-    profileid = "profile_1"
+    profileid = "profile_5.6.7.8"
     twid = "timewindow1"
-    flow = MagicMock()
-    flow.uid = "abc123"
-    flow.starttime = 1000.0
-    flow.daddr = "1.2.3.4"
-    flow.saddr = "5.6.7.8"
-    flow.state = flow_state
-    flow.pkts = 1
-    flow.proto = "TCP"
-    flow.dport = 80
-    flow.spkts = 1
-    flow.bytes = 100
-
+    flow = Conn(
+        starttime=str(1000.0),
+        uid="abc123",
+        saddr="5.6.7.8",
+        daddr="1.2.3.4",
+        dur=0.0,
+        proto="TCP",
+        appproto="",
+        sport="1234",
+        dport="80",
+        spkts=1,
+        dpkts=0,
+        sbytes=100,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state=flow_state,
+        history="",
+    )
     handler.add_ips(profileid, twid, flow, role)
+
+    expected_ask_for_ip_info_calls = [
+        call(
+            "5.6.7.8",
+            "profile_5.6.7.8",
+            "timewindow1",
+            flow,
+            "srcip",
+            daddr="1.2.3.4",
+        ),
+        call(
+            "1.2.3.4",
+            "profile_5.6.7.8",
+            "timewindow1",
+            flow,
+            "dstip",
+        ),
+    ]
 
     handler.ask_for_ip_info.assert_has_calls(expected_ask_for_ip_info_calls)
     handler.update_times_contacted.assert_called_once_with(
@@ -1961,308 +1913,163 @@ def test_add_ips(
     )
 
 
-def test_add_out_dns_with_answers():
+@pytest.mark.parametrize(
+    "profileid, twid, flow, expected_calls, expect_set_dns_resolution",
+    [
+        (
+            "profile_192.168.1.5",
+            "timewindow1",
+            DNS(
+                saddr="192.168.1.5",
+                starttime=1000.0,
+                uid="abc123",
+                daddr="8.8.8.8",
+                query="www.example.com",
+                qclass_name="IN",
+                qtype_name="A",
+                rcode_name="NOERROR",
+                answers=["1.2.3.4"],
+                TTLs=[3600],
+            ),
+            [
+                call(
+                    "profile_192.168.1.5",
+                    "timewindow1",
+                    "dstip",
+                    1000.0,
+                    "abc123",
+                    "8.8.8.8",
+                    lookup="www.example.com",
+                ),
+                call(
+                    "profile_192.168.1.5",
+                    "timewindow1",
+                    "dstip",
+                    1000.0,
+                    "abc123",
+                    "8.8.8.8",
+                    lookup="1.2.3.4",
+                    extra_info={
+                        "is_dns_response": True,
+                        "dns_query": "www.example.com",
+                        "domain": "1.2.3.4",
+                    },
+                ),
+            ],
+            True,
+        ),
+        (
+            "profile_1",
+            "timewindow1",
+            DNS(
+                saddr="192.168.1.5",
+                starttime=1000.0,
+                uid="abc123",
+                daddr="8.8.8.8",
+                query="www.example.com",
+                qclass_name="IN",
+                qtype_name="A",
+                rcode_name="NOERROR",
+                answers=[],
+                TTLs=[3600],
+            ),
+            [
+                call(
+                    "profile_1",
+                    "timewindow1",
+                    "dstip",
+                    1000.0,
+                    "abc123",
+                    "8.8.8.8",
+                    lookup="www.example.com",
+                )
+            ],
+            False,
+        ),
+        (
+            "profile_1",
+            "timewindow1",
+            DNS(
+                saddr="192.168.1.5",
+                starttime=1000.0,
+                uid="abc123",
+                daddr="8.8.8.8",
+                query="www.example.com",
+                qclass_name="IN",
+                qtype_name="A",
+                rcode_name="NOERROR",
+                answers=["1.2.3.4", "TXT some text"],
+                TTLs=["3600"],
+            ),
+            [
+                call(
+                    "profile_1",
+                    "timewindow1",
+                    "dstip",
+                    1000.0,
+                    "abc123",
+                    "8.8.8.8",
+                    lookup="www.example.com",
+                ),
+                call(
+                    "profile_1",
+                    "timewindow1",
+                    "dstip",
+                    1000.0,
+                    "abc123",
+                    "8.8.8.8",
+                    lookup="1.2.3.4",
+                    extra_info={
+                        "is_dns_response": True,
+                        "dns_query": "www.example.com",
+                        "domain": "1.2.3.4",
+                    },
+                ),
+            ],
+            True,
+        ),
+    ],
+)
+def test_add_out_dns(
+    profileid, twid, flow, expected_calls, expect_set_dns_resolution
+):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.publish = MagicMock()
     handler.give_threat_intelligence = MagicMock()
     handler.set_dns_resolution = MagicMock()
-    handler.separator = "_"
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    flow = MagicMock()
-    flow.uid = "abc123"
-    flow.type_ = "dns"
-    flow.query = "www.example.com"
-    flow.qclass_name = "IN"
-    flow.qtype_name = "A"
-    flow.rcode_name = "NOERROR"
-    flow.answers = ["1.2.3.4"]
-    flow.TTLs = [3600]
-    flow.starttime = 1000.0
-    flow.daddr = "8.8.8.8"
 
     handler.add_out_dns(profileid, twid, flow)
 
+    handler.publish.assert_called_once_with("new_dns", ANY)
     expected_dns_flow = {
         "profileid": profileid,
         "twid": twid,
-        "flow": json.dumps(
-            {
-                "flow.uid": flow.uid,
-                "type": flow.type_,
-                "query": flow.query,
-                "qclass_name": flow.qclass_name,
-                "flow.qtype_name": flow.qtype_name,
-                "rcode_name": flow.rcode_name,
-                "answers": flow.answers,
-                "ttls": flow.TTLs,
-                "stime": flow.starttime,
-            }
-        ),
-        "stime": flow.starttime,
-        "uid": flow.uid,
-        "rcode_name": flow.rcode_name,
-        "daddr": flow.daddr,
-        "answers": flow.answers,
+        "flow": asdict(flow),
     }
-    handler.publish.assert_called_once_with(
-        "new_dns", json.dumps(expected_dns_flow)
-    )
+    # get the actual dns flow argument passed to publish
+    actual_dns_flow_arg = handler.publish.call_args[0][
+        1
+    ]  # second argument of the first call
+    actual_dns_flow = json.loads(
+        actual_dns_flow_arg
+    )  # parse it as a dictionary
+    assert actual_dns_flow == expected_dns_flow
 
-    handler.set_dns_resolution.assert_called_once_with(
-        flow.query,
-        flow.answers,
-        flow.starttime,
-        flow.uid,
-        flow.qtype_name,
-        profileid.split("_")[1],
-        twid,
-    )
+    if expect_set_dns_resolution:
+        handler.set_dns_resolution.assert_called_once_with(
+            flow.query,
+            flow.answers,
+            flow.starttime,
+            flow.uid,
+            flow.qtype_name,
+            profileid.split("_")[1],
+            twid,
+        )
+    else:
+        handler.set_dns_resolution.assert_not_called()
 
-    handler.give_threat_intelligence.assert_has_calls(
-        [
-            call(
-                "profile_1",
-                "timewindow1",
-                "dstip",
-                1000.0,
-                "abc123",
-                "8.8.8.8",
-                lookup="www.example.com",
-            ),
-            call(
-                "profile_1",
-                "timewindow1",
-                "dstip",
-                1000.0,
-                "abc123",
-                "8.8.8.8",
-                lookup="1.2.3.4",
-                extra_info={
-                    "is_dns_response": True,
-                    "dns_query": "www.example.com",
-                    "domain": "1.2.3.4",
-                },
-            ),
-        ]
-    )
-
-
-def test_add_out_dns_no_answers():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.publish = MagicMock()
-    handler.give_threat_intelligence = MagicMock()
-    handler.set_dns_resolution = MagicMock()
-    handler.separator = "_"
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    flow = MagicMock()
-    flow.uid = "abc123"
-    flow.type_ = "dns"
-    flow.query = "www.example.com"
-    flow.qclass_name = "IN"
-    flow.qtype_name = "A"
-    flow.rcode_name = "NOERROR"
-    flow.answers = []
-    flow.TTLs = [3600]
-    flow.starttime = 1000.0
-    flow.daddr = "8.8.8.8"
-
-    handler.add_out_dns(profileid, twid, flow)
-
-    expected_dns_flow = {
-        "profileid": profileid,
-        "twid": twid,
-        "flow": json.dumps(
-            {
-                "flow.uid": flow.uid,
-                "type": flow.type_,
-                "query": flow.query,
-                "qclass_name": flow.qclass_name,
-                "flow.qtype_name": flow.qtype_name,
-                "rcode_name": flow.rcode_name,
-                "answers": flow.answers,
-                "ttls": flow.TTLs,
-                "stime": flow.starttime,
-            }
-        ),
-        "stime": flow.starttime,
-        "uid": flow.uid,
-        "rcode_name": flow.rcode_name,
-        "daddr": flow.daddr,
-        "answers": flow.answers,
-    }
-    handler.publish.assert_called_once_with(
-        "new_dns", json.dumps(expected_dns_flow)
-    )
-
-    handler.set_dns_resolution.assert_not_called()
-
-    handler.give_threat_intelligence.assert_called_once_with(
-        "profile_1",
-        "timewindow1",
-        "dstip",
-        1000.0,
-        "abc123",
-        "8.8.8.8",
-        lookup="www.example.com",
-    )
-
-
-def test_add_out_dns_answers_hyphen():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.publish = MagicMock()
-    handler.give_threat_intelligence = MagicMock()
-    handler.set_dns_resolution = MagicMock()
-    handler.separator = "_"
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    flow = MagicMock()
-    flow.uid = "abc123"
-    flow.type_ = "dns"
-    flow.query = "www.example.com"
-    flow.qclass_name = "IN"
-    flow.qtype_name = "A"
-    flow.rcode_name = "NOERROR"
-    flow.answers = ["-"]
-    flow.TTLs = [3600]
-    flow.starttime = 1000.0
-    flow.daddr = "8.8.8.8"
-
-    handler.add_out_dns(profileid, twid, flow)
-
-    expected_dns_flow = {
-        "profileid": profileid,
-        "twid": twid,
-        "flow": json.dumps(
-            {
-                "flow.uid": flow.uid,
-                "type": flow.type_,
-                "query": flow.query,
-                "qclass_name": flow.qclass_name,
-                "flow.qtype_name": flow.qtype_name,
-                "rcode_name": flow.rcode_name,
-                "answers": flow.answers,
-                "ttls": flow.TTLs,
-                "stime": flow.starttime,
-            }
-        ),
-        "stime": flow.starttime,
-        "uid": flow.uid,
-        "rcode_name": flow.rcode_name,
-        "daddr": flow.daddr,
-        "answers": flow.answers,
-    }
-    handler.publish.assert_called_once_with(
-        "new_dns", json.dumps(expected_dns_flow)
-    )
-
-    handler.set_dns_resolution.assert_not_called()
-
-    handler.give_threat_intelligence.assert_called_once_with(
-        "profile_1",
-        "timewindow1",
-        "dstip",
-        1000.0,
-        "abc123",
-        "8.8.8.8",
-        lookup="www.example.com",
-    )
-
-
-def test_add_out_dns_answers_with_txt_record():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.publish = MagicMock()
-    handler.give_threat_intelligence = MagicMock()
-    handler.set_dns_resolution = MagicMock()
-    handler.separator = "_"
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    flow = MagicMock()
-    flow.uid = "abc123"
-    flow.type_ = "dns"
-    flow.query = "www.example.com"
-    flow.qclass_name = "IN"
-    flow.qtype_name = "A"
-    flow.rcode_name = "NOERROR"
-    flow.answers = ["1.2.3.4", "TXT some text"]
-    flow.TTLs = [3600]
-    flow.starttime = 1000.0
-    flow.daddr = "8.8.8.8"
-
-    handler.add_out_dns(profileid, twid, flow)
-
-    expected_dns_flow = {
-        "profileid": profileid,
-        "twid": twid,
-        "flow": json.dumps(
-            {
-                "flow.uid": flow.uid,
-                "type": flow.type_,
-                "query": flow.query,
-                "qclass_name": flow.qclass_name,
-                "flow.qtype_name": flow.qtype_name,
-                "rcode_name": flow.rcode_name,
-                "answers": flow.answers,
-                "ttls": flow.TTLs,
-                "stime": flow.starttime,
-            }
-        ),
-        "stime": flow.starttime,
-        "uid": flow.uid,
-        "rcode_name": flow.rcode_name,
-        "daddr": flow.daddr,
-        "answers": flow.answers,
-    }
-    handler.publish.assert_called_once_with(
-        "new_dns", json.dumps(expected_dns_flow)
-    )
-
-    handler.set_dns_resolution.assert_called_once_with(
-        flow.query,
-        flow.answers,
-        flow.starttime,
-        flow.uid,
-        flow.qtype_name,
-        profileid.split("_")[1],
-        twid,
-    )
-
-    handler.give_threat_intelligence.assert_has_calls(
-        [
-            call(
-                "profile_1",
-                "timewindow1",
-                "dstip",
-                1000.0,
-                "abc123",
-                "8.8.8.8",
-                lookup="www.example.com",
-            ),
-            call(
-                "profile_1",
-                "timewindow1",
-                "dstip",
-                1000.0,
-                "abc123",
-                "8.8.8.8",
-                lookup="1.2.3.4",
-                extra_info={
-                    "is_dns_response": True,
-                    "dns_query": "www.example.com",
-                    "domain": "1.2.3.4",
-                },
-            ),
-        ]
-    )
+    handler.give_threat_intelligence.assert_has_calls(expected_calls)
 
 
 @pytest.mark.parametrize(
@@ -2276,7 +2083,7 @@ def test_add_out_dns_answers_with_txt_record():
                     "profile_1",
                     "timewindow1",
                     "dst",
-                    1678886400.0,
+                    "1678886400.0",
                     "abc123",
                     "1.2.3.4",
                     lookup="www.example.com",
@@ -2285,7 +2092,7 @@ def test_add_out_dns_answers_with_txt_record():
                     "profile_1",
                     "timewindow1",
                     "dst",
-                    1678886400.0,
+                    "1678886400.0",
                     "abc123",
                     "1.2.3.4",
                     lookup="http://www.example.com/index.html",
@@ -2301,7 +2108,7 @@ def test_add_out_dns_answers_with_txt_record():
                     "profile_1",
                     "timewindow1",
                     "dstip",
-                    1678886400.0,
+                    "1678886400.0",
                     "abc123",
                     "1.2.3.4",
                     lookup="http://1.2.3.4/index.html",
@@ -2317,7 +2124,7 @@ def test_add_out_dns_answers_with_txt_record():
                     "profile_1",
                     "timewindow1",
                     "dst",
-                    1678886400.0,
+                    "1678886400.0",
                     "abc123",
                     "1.2.3.4",
                     lookup="www.example.com",
@@ -2326,7 +2133,7 @@ def test_add_out_dns_answers_with_txt_record():
                     "profile_1",
                     "timewindow1",
                     "dst",
-                    1678886400.0,
+                    "1678886400.0",
                     "abc123",
                     "1.2.3.4",
                     lookup="http://www.example.com",
@@ -2342,7 +2149,7 @@ def test_add_out_dns_answers_with_txt_record():
                     "profile_1",
                     "timewindow1",
                     "dstip",
-                    1678886400.0,
+                    "1678886400.0",
                     "abc123",
                     "1.2.3.4",
                     lookup="http://1.2.3.4",
@@ -2353,56 +2160,47 @@ def test_add_out_dns_answers_with_txt_record():
 )
 def test_add_out_http(host, uri, expected_give_threat_intelligence_calls):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.publish = MagicMock()
     handler.give_threat_intelligence = MagicMock()
 
     profileid = "profile_1"
     twid = "timewindow1"
-    flow = MagicMock()
-    flow.uid = "abc123"
-    flow.type_ = "http"
-    flow.method = "GET"
-    flow.host = host
-    flow.uri = uri
-    flow.version = "1.1"
-    flow.user_agent = "Mozilla/5.0"
-    flow.request_body_len = 1024
-    flow.response_body_len = 2048
-    flow.status_code = 200
-    flow.status_msg = "OK"
-    flow.resp_mime_types = ["text/html"]
-    flow.resp_fuids = ["def456"]
-    flow.starttime = 1678886400.0
-    flow.daddr = "1.2.3.4"
+    flow = HTTP(
+        starttime="1678886400.0",
+        uid="abc123",
+        saddr="192.168.1.5",
+        daddr="1.2.3.4",
+        method="GET",
+        host=host,
+        uri=uri,
+        version=1,  # convert "1.1" to integer version 1
+        user_agent="Mozilla/5.0",
+        request_body_len=1024,
+        response_body_len=2048,
+        status_code="200",
+        status_msg="OK",
+        resp_mime_types="text/html",
+        resp_fuids="def456",
+        type_="http",
+    )
 
     handler.add_out_http(profileid, twid, flow)
-
-    expected_http_flow_dict = {
-        "uid": flow.uid,
-        "type": flow.type_,
-        "method": flow.method,
-        "host": flow.host,
-        "uri": flow.uri,
-        "version": flow.version,
-        "user_agent": flow.user_agent,
-        "request_body_len": flow.request_body_len,
-        "response_body_len": flow.response_body_len,
-        "status_code": flow.status_code,
-        "status_msg": flow.status_msg,
-        "resp_mime_types": flow.resp_mime_types,
-        "resp_fuids": flow.resp_fuids,
-        "stime": flow.starttime,
-        "daddr": flow.daddr,
-    }
+    handler.publish.assert_any_call("new_http", ANY)
+    handler.publish.assert_any_call("new_url", ANY)
     expected_http_flow = {
         "profileid": profileid,
         "twid": twid,
-        "flow": json.dumps(expected_http_flow_dict),
-        "stime": flow.starttime,
+        "flow": asdict(flow),
     }
-    handler.publish.assert_any_call("new_http", json.dumps(expected_http_flow))
-    handler.publish.assert_any_call("new_url", json.dumps(expected_http_flow))
+    # get the actual dns flow argument passed to publish
+    actual_dns_flow_arg = handler.publish.call_args[0][
+        1
+    ]  # second argument of the first call
+    actual_dns_flow = json.loads(
+        actual_dns_flow_arg
+    )  # parse it as a dictionary
+    assert actual_dns_flow == expected_http_flow
 
     handler.give_threat_intelligence.assert_has_calls(
         expected_give_threat_intelligence_calls
@@ -2419,7 +2217,7 @@ def test_add_out_http(host, uri, expected_give_threat_intelligence_calls):
 )
 def test_get_ipv4_from_profile(hmget_return_value, expected_ipv4):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.hmget.return_value = hmget_return_value
@@ -2431,7 +2229,7 @@ def test_get_ipv4_from_profile(hmget_return_value, expected_ipv4):
 
 def test_get_tw_of_ts():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
     time = 1150.0
 
@@ -2496,7 +2294,7 @@ def test_get_timewindow(
     expected_add_new_tw_call,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.add_new_tw = MagicMock()
     handler.width = width
     handler.r.hget.return_value = hget_return_value
@@ -2518,15 +2316,19 @@ def test_get_timewindow(
         ([], "timewindow1", False),
     ],
 )
-def test_checkBlockedProfTW(profile_tws, twid, expected_result):
+def test_is_blocked_profile_and_tw(profile_tws, twid, expected_result):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.getBlockedProfTW = MagicMock(return_value=profile_tws)
+    handler.get_blocked_timewindows_of_profile = MagicMock(
+        return_value=profile_tws
+    )
 
     profileid = "profile_1"
 
-    result = handler.checkBlockedProfTW(profileid, twid)
+    result = handler.is_blocked_profile_and_tw(profileid, twid)
 
-    handler.getBlockedProfTW.assert_called_once_with(profileid)
+    handler.get_blocked_timewindows_of_profile.assert_called_once_with(
+        profileid
+    )
     assert result == expected_result
 
 
@@ -2551,8 +2353,7 @@ def test_checkBlockedProfTW(profile_tws, twid, expected_result):
 )
 def test_mark_profile_tw_as_modified(timestamp, expected_zadd_call):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     handler.publish = MagicMock()
     handler.check_tw_to_close = MagicMock()
 
@@ -2570,7 +2371,7 @@ def test_mark_profile_tw_as_modified(timestamp, expected_zadd_call):
 
 def test_mark_profile_as_gateway():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.mark_profile_as_gateway(profileid)
@@ -2587,7 +2388,7 @@ def test_mark_profile_as_gateway():
 )
 def test_get_hostname_from_profile(hget_return_value, expected_hostname):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.hget.return_value = hget_return_value
@@ -2600,7 +2401,7 @@ def test_get_hostname_from_profile(hget_return_value, expected_hostname):
 
 def test_add_software_to_profile_no_existing_software():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.get_software_from_profile = MagicMock(return_value={})
 
     profileid = "profile_1"
@@ -2623,7 +2424,7 @@ def test_add_software_to_profile_no_existing_software():
 
 def test_add_software_to_profile_existing_different_software():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.get_software_from_profile = MagicMock(
         return_value={
             "Nginx": {"version-major": 1, "version-minor": 19, "uid": "def456"}
@@ -2650,7 +2451,7 @@ def test_add_software_to_profile_existing_different_software():
 
 def test_add_software_to_profile_existing_same_software():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     handler.get_software_from_profile = MagicMock(
         return_value={
             "Apache": {"version-major": 2, "version-minor": 2, "uid": "ghi789"}
@@ -2671,8 +2472,7 @@ def test_add_software_to_profile_existing_same_software():
 
 def test_add_profile_new_profile():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     handler.set_new_ip = MagicMock()
     handler.publish = MagicMock()
     handler.update_threat_level = MagicMock()
@@ -2683,7 +2483,7 @@ def test_add_profile_new_profile():
 
     handler.r.sismember.return_value = False
 
-    result = handler.add_profile(profileid, starttime, duration)
+    result = handler.add_profile(profileid, starttime)
     assert result is True
 
     handler.r.sadd.assert_called_once_with("profiles", profileid)
@@ -2704,19 +2504,16 @@ def test_add_profile_new_profile():
 
 def test_add_profile_existing_profile():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
-    handler.separator = "_"
+
     handler.set_new_ip = MagicMock()
     handler.publish = MagicMock()
     handler.update_threat_level = MagicMock()
 
     profileid = "profile_1"
     starttime = 1678886400.0
-    duration = 3600.0
-
     handler.r.sismember.return_value = True
 
-    result = handler.add_profile(profileid, starttime, duration)
+    result = handler.add_profile(profileid, starttime)
     assert result is False
 
     handler.r.sadd.assert_not_called()
@@ -2728,7 +2525,7 @@ def test_add_profile_existing_profile():
 
 def test_mark_profile_as_dhcp_profile_not_exist():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.hmget.return_value = None
@@ -2741,7 +2538,7 @@ def test_mark_profile_as_dhcp_profile_not_exist():
 
 def test_mark_profile_as_dhcp_profile_already_dhcp():
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.hmget.return_value = b'{"dhcp": "true"}'
@@ -2762,7 +2559,6 @@ def test_mark_profile_as_dhcp_profile_already_dhcp():
 )
 def test_get_first_flow_time(hget_return_value, expected_first_flow_time):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
 
     handler.r.hget.return_value = hget_return_value
 
@@ -2784,7 +2580,7 @@ def test_get_first_flow_time(hget_return_value, expected_first_flow_time):
 )
 def test_get_ipv6_from_profile(hmget_return_value, expected_ipv6):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.r = MagicMock()
+
     profileid = "profile_1"
 
     handler.r.hmget.return_value = hmget_return_value

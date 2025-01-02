@@ -620,11 +620,6 @@ class ModuleFactory:
         riskiq.db = mock_db
         return riskiq
 
-    def create_alert_handler_obj(self):
-        alert_handler = AlertHandler()
-        alert_handler.constants = Constants()
-        return alert_handler
-
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):
         logger = Mock()
@@ -635,9 +630,17 @@ class ModuleFactory:
         tl.db = mock_db
         return tl
 
+    def create_alert_handler_obj(self):
+        alert_handler = AlertHandler()
+        alert_handler.constants = Constants()
+        return alert_handler
+
     def create_profile_handler_obj(self):
-        logger = MagicMock()
-        handler = ProfileHandler(logger)
-        handler.r = MagicMock()
+        handler = ProfileHandler()
+        handler.constants = Constants()
+        handler.r = Mock()
+        handler.rcache = Mock()
         handler.separator = "_"
+        handler.width = 3600
+        handler.print = Mock()
         return handler
