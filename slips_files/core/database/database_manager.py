@@ -748,7 +748,7 @@ class DBManager:
     def add_profile(self, *args, **kwargs):
         return self.rdb.add_profile(*args, **kwargs)
 
-    def set_profile_module_label(self, *args, **kwargs):
+    def set_module_label_for_profile(self, *args, **kwargs):
         return self.rdb.set_module_label_for_profile(*args, **kwargs)
 
     def check_tw_to_close(self, *args, **kwargs):
@@ -794,7 +794,7 @@ class DBManager:
         # uid isn't in this twid or any of the previous ones
         return {uid: None}
 
-    def get_profile_modules_labels(self, *args, **kwargs):
+    def get_modules_labels_of_a_profile(self, *args, **kwargs):
         return self.rdb.get_modules_labels_of_a_profile(*args, **kwargs)
 
     def add_timeline_line(self, *args, **kwargs):
