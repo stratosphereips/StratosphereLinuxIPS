@@ -344,9 +344,7 @@ def test_update_times_contacted(hget_return_value, expected_hset_call):
     direction = "Dst"
 
     handler.r.hget.return_value = hget_return_value
-
     handler.update_times_contacted(ip, direction, profileid, twid)
-
     handler.r.hset.assert_called_once_with(*expected_hset_call)
 
 
@@ -753,7 +751,6 @@ def test_get_first_twid_for_profile(
     zrange_return_value, expected_twid, expected_starttime_of_tw
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-
     profileid = "profile_1"
 
     handler.r.zrange.return_value = zrange_return_value
@@ -802,7 +799,6 @@ def test_add_new_tw(
     expected_update_threat_level_call,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-
     handler.update_threat_level = MagicMock()
 
     handler.add_new_tw(profileid, timewindow, startoftw)
@@ -849,9 +845,7 @@ def test_get_number_of_tws_with_profileid(
     profileid, zcard_return_value, expected_num_tws
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-
     handler.r.zcard.return_value = zcard_return_value
-
     num_tws = handler.get_number_of_tws(profileid)
 
     handler.r.zcard.assert_called_once_with(f"tws{profileid}")
@@ -860,9 +854,7 @@ def test_get_number_of_tws_with_profileid(
 
 def test_get_number_of_tws_without_profileid():
     handler = ModuleFactory().create_profile_handler_obj()
-
     num_tws = handler.get_number_of_tws(None)
-
     handler.r.zcard.assert_not_called()
     assert num_tws is False
 
@@ -966,9 +958,7 @@ def test_get_modified_tw_since_time(
 )
 def test_get_software_from_profile(hmget_return_value, expected_software):
     handler = ModuleFactory().create_profile_handler_obj()
-
     profileid = "profile_1"
-
     handler.r.hmget.return_value = hmget_return_value
 
     software = handler.get_software_from_profile(profileid)
@@ -1033,7 +1023,6 @@ def test_get_user_agent_from_profile(
     get_first_user_agent_return_value, expected_user_agent
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-
     profileid = "profile_1"
 
     handler.get_first_user_agent = MagicMock(
@@ -1073,13 +1062,13 @@ def test_set_profile_module_label(
 ):
     handler = ModuleFactory().create_profile_handler_obj()
 
-    handler.get_profile_modules_labels = MagicMock(
+    handler.get_modules_labels_of_a_profile = MagicMock(
         return_value=get_profile_modules_labels_return_value
     )
 
     profileid = "profile_1"
 
-    handler.set_profile_module_label(profileid, module, label)
+    handler.set_module_label_for_profile(profileid, module, label)
 
     expected_data_str = json.dumps(expected_data)
     handler.r.hset.assert_called_once_with(
@@ -1087,7 +1076,20 @@ def test_set_profile_module_label(
     )
 
 
-def test_add_tuple_first_time():
+@pytest.mark.parametrize(
+    "prev_symbols, expected_prev_symbols, publish_called",
+    [
+        (None, {"1.2.3.4-80-TCP": ("A", (1.0, 1000.0))}, False),  # first time
+        (
+            b'{"1.2.3.4-80-TCP": ["AB", [0.5, 900.0]]}',
+            # AB are the old ones, A is the new one, so we expect AB then A
+            # (ABA)
+            {"1.2.3.4-80-TCP": ("ABA", (1.0, 1000.0))},
+            True,  # not first time
+        ),
+    ],
+)
+def test_add_tuple(prev_symbols, expected_prev_symbols, publish_called):
     handler = ModuleFactory().create_profile_handler_obj()
 
     handler.publish_new_letter = MagicMock()
@@ -1100,11 +1102,10 @@ def test_add_tuple_first_time():
     role = "Client"
     flow = MagicMock()
 
-    handler.r.hget.return_value = None
+    handler.r.hget.return_value = prev_symbols
 
     handler.add_tuple(profileid, twid, tupleid, symbol, role, flow)
 
-    expected_prev_symbols = {"1.2.3.4-80-TCP": ("A", (1.0, 1000.0))}
     expected_prev_symbols_str = json.dumps(expected_prev_symbols)
     profileid_twid = f"{profileid}{handler.separator}{twid}"
 
@@ -1114,39 +1115,12 @@ def test_add_tuple_first_time():
     handler.mark_profile_tw_as_modified.assert_called_once_with(
         profileid, twid, flow.starttime
     )
-    handler.publish_new_letter.assert_not_called()
-
-
-def test_add_tuple_not_first_time():
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.publish_new_letter = MagicMock()
-    handler.mark_profile_tw_as_modified = MagicMock()
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    tupleid = "1.2.3.4-80-TCP"
-    symbol = ("A", (1.0, 1000.0))
-    role = "Client"
-    flow = MagicMock()
-
-    handler.r.hget.return_value = b'{"1.2.3.4-80-TCP": ["AB", [0.5, 900.0]]}'
-
-    handler.add_tuple(profileid, twid, tupleid, symbol, role, flow)
-
-    expected_prev_symbols = {"1.2.3.4-80-TCP": ("ABA", (1.0, 1000.0))}
-    expected_prev_symbols_str = json.dumps(expected_prev_symbols)
-    profileid_twid = f"{profileid}{handler.separator}{twid}"
-
-    handler.r.hset.assert_called_once_with(
-        profileid_twid, "OutTuples", expected_prev_symbols_str
-    )
-    handler.mark_profile_tw_as_modified.assert_called_once_with(
-        profileid, twid, flow.starttime
-    )
-    handler.publish_new_letter.assert_called_once_with(
-        "ABA", profileid, twid, tupleid, flow
-    )
+    if publish_called:
+        handler.publish_new_letter.assert_called_once_with(
+            "ABA", profileid, twid, tupleid, flow
+        )
+    else:
+        handler.publish_new_letter.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -1182,27 +1156,6 @@ def test_check_tw_to_close(
     handler.check_tw_to_close(close_all=close_all)
 
     handler.mark_profile_tw_as_closed.assert_has_calls(expected_calls)
-
-
-def test_get_tws_to_search_with_none():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.get_equivalent_tws = MagicMock()
-
-    tws_to_search = handler.get_tws_to_search(None)
-
-    assert tws_to_search == float("inf")
-    handler.get_equivalent_tws.assert_not_called()
-
-
-def test_get_tws_to_search_with_value():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.get_equivalent_tws = MagicMock(return_value=10)
-
-    go_back = "5"
-    tws_to_search = handler.get_tws_to_search(go_back)
-
-    assert tws_to_search == 10
-    handler.get_equivalent_tws.assert_called_once_with(float(go_back))
 
 
 @pytest.mark.parametrize(
@@ -1576,6 +1529,9 @@ def test_set_mac_vendor_to_profile_no_existing_vendor_mac_mismatch():
 
 
 def test_add_mac_addr_to_profile_no_existing_mac():
+    """
+    testing when no cached_ips found in the db
+    """
     handler = ModuleFactory().create_profile_handler_obj()
 
     profileid = "profile_192.168.1.100"
@@ -1604,18 +1560,19 @@ def test_add_mac_addr_to_profile_existing_mac():
 
     handler.is_gw_mac = MagicMock(return_value=False)
     handler.get_gateway_ip = MagicMock(return_value="192.168.1.1")
-
+    # mimic having an ip for the given mac
+    # this should make [incoming_ip in cached_ips] True
     handler.r.hmget.return_value = [json.dumps([profileid.split("_")[1]])]
     handler.update_mac_of_profile = MagicMock()
     result = handler.add_mac_addr_to_profile(profileid, mac_addr)
+    assert result is False
 
     handler.r.hmget.assert_called_once_with("MAC", mac_addr)
     handler.r.hset.assert_not_called()
     handler.update_mac_of_profile.assert_not_called()
-    assert result is False
 
 
-def test_add_first_user_agent_to_profile():
+def test_add_user_agent_to_profile_first_one():
     handler = ModuleFactory().create_profile_handler_obj()
 
     profileid = "profile_192.168.1.100"
@@ -1639,7 +1596,7 @@ def test_add_first_user_agent_to_profile():
     )
 
 
-def test_add_new_user_agent_to_existing_profile():
+def test_add_all_user_agent_to_profile_existing_ua():
     handler = ModuleFactory().create_profile_handler_obj()
 
     profileid = "profile_192.168.1.100"
@@ -1674,6 +1631,7 @@ def test_add_existing_user_agent_to_profile():
     handler = ModuleFactory().create_profile_handler_obj()
 
     profileid = "profile_192.168.1.100"
+    # the return of past_user_agents
     user_agent = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -1684,7 +1642,7 @@ def test_add_existing_user_agent_to_profile():
     handler.r.hget.return_value = json.dumps([user_agent]).encode()
 
     handler.add_all_user_agent_to_profile(profileid, user_agent)
-
+    # user_agent not in user_agents
     handler.r.hexists.assert_called_once_with(profileid, "past_user_agents")
     handler.r.hget.assert_called_once_with(profileid, "past_user_agents")
     assert not handler.r.hset.called
@@ -1708,7 +1666,7 @@ def test_get_profile_modules_labels(hget_return_value, expected_data):
 
     handler.r.hget.return_value = hget_return_value
 
-    data = handler.get_profile_modules_labels(profileid)
+    data = handler.get_modules_labels_of_a_profile(profileid)
     handler.r.hget.assert_called_once_with(profileid, "modules_labels")
     assert data == expected_data
 
@@ -2249,23 +2207,21 @@ def test_get_tw_of_ts():
 
 
 @pytest.mark.parametrize(
-    "flowtime, profileid, width, hget_return_value, expected_twid, "
+    "flowtime, width, hget_return_value, expected_twid, "
     "expected_tw_start, expected_add_new_tw_call",
     [
         # Testcase 1: Normal case, existing start time
         (
-            1600000050.0,
-            "profile_1",
-            100.0,
-            "1600000000.0",
-            "timewindow1",
-            1600000000.0,
-            call("profile_1", "timewindow1", 1600000000.0),
+            26,
+            5,
+            "0",
+            "timewindow6",
+            25,
+            call("profile_1", "timewindow6", 25),
         ),
         # Testcase 2: Flow time equals start time of a TW
         (
             1600000100.0,
-            "profile_1",
             100.0,
             "1600000000.0",
             "timewindow2",
@@ -2275,7 +2231,6 @@ def test_get_tw_of_ts():
         # Testcase 3: First timewindow, no existing start time
         (
             1600000050.0,
-            "profile_1",
             100.0,
             None,
             "timewindow1",
@@ -2286,7 +2241,6 @@ def test_get_tw_of_ts():
 )
 def test_get_timewindow(
     flowtime,
-    profileid,
     width,
     hget_return_value,
     expected_twid,
@@ -2294,7 +2248,7 @@ def test_get_timewindow(
     expected_add_new_tw_call,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-
+    profileid = "profile_1"
     handler.add_new_tw = MagicMock()
     handler.width = width
     handler.r.hget.return_value = hget_return_value
@@ -2399,36 +2353,53 @@ def test_get_hostname_from_profile(hget_return_value, expected_hostname):
     assert hostname == expected_hostname
 
 
-def test_add_software_to_profile_no_existing_software():
+@pytest.mark.parametrize(
+    "existing_software, expected_hset_call",
+    [
+        # Test case 1: No existing software
+        (
+            {},  # No software in profile
+            (
+                "profile_1",
+                "used_software",
+                '{"Apache": {"version-major": 2, "version-minor": 4, "uid": "abc123"}}',
+            ),
+        ),
+        # Test case 2: Existing software, different software
+        (
+            {
+                "Nginx": {
+                    "version-major": 1,
+                    "version-minor": 19,
+                    "uid": "def456",
+                }
+            },
+            (
+                "profile_1",
+                "used_software",
+                '{"Nginx": {"version-major": 1, "version-minor": 19, "uid": "def456"}, '
+                '"Apache": {"version-major": 2, "version-minor": 4, "uid": "abc123"}}',
+            ),
+        ),
+        # Test case 3: Existing software, same software with different version
+        (
+            {
+                "Apache": {
+                    "version-major": 2,
+                    "version-minor": 2,
+                    "uid": "ghi789",
+                }
+            },
+            None,  # No hset call because the software is the same
+        ),
+    ],
+)
+def test_add_software_to_profile(existing_software, expected_hset_call):
     handler = ModuleFactory().create_profile_handler_obj()
 
-    handler.get_software_from_profile = MagicMock(return_value={})
-
-    profileid = "profile_1"
-    flow = MagicMock()
-    flow.software = "Apache"
-    flow.version_major = 2
-    flow.version_minor = 4
-    flow.uid = "abc123"
-
-    handler.add_software_to_profile(profileid, flow)
-
-    expected_hset_call = (
-        "profile_1",
-        "used_software",
-        '{"Apache": {"version-major": 2, '
-        '"version-minor": 4, "uid": "abc123"}}',
-    )
-    handler.r.hset.assert_called_once_with(*expected_hset_call)
-
-
-def test_add_software_to_profile_existing_different_software():
-    handler = ModuleFactory().create_profile_handler_obj()
-
+    # Mocking get_software_from_profile to return the provided existing_software
     handler.get_software_from_profile = MagicMock(
-        return_value={
-            "Nginx": {"version-major": 1, "version-minor": 19, "uid": "def456"}
-        }
+        return_value=existing_software
     )
 
     profileid = "profile_1"
@@ -2440,34 +2411,11 @@ def test_add_software_to_profile_existing_different_software():
 
     handler.add_software_to_profile(profileid, flow)
 
-    expected_hset_call = (
-        "profile_1",
-        "used_software",
-        '{"Nginx": {"version-major": 1, "version-minor": 19, "uid": "def456"}, '
-        '"Apache": {"version-major": 2, "version-minor": 4, "uid": "abc123"}}',
-    )
-    handler.r.hset.assert_called_once_with(*expected_hset_call)
-
-
-def test_add_software_to_profile_existing_same_software():
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.get_software_from_profile = MagicMock(
-        return_value={
-            "Apache": {"version-major": 2, "version-minor": 2, "uid": "ghi789"}
-        }
-    )
-
-    profileid = "profile_1"
-    flow = MagicMock()
-    flow.software = "Apache"
-    flow.version_major = 2
-    flow.version_minor = 4
-    flow.uid = "abc123"
-
-    handler.add_software_to_profile(profileid, flow)
-
-    handler.r.hset.assert_not_called()
+    # Check that hset is called with the expected arguments if new software is added
+    if expected_hset_call:
+        handler.r.hset.assert_called_once_with(*expected_hset_call)
+    else:
+        handler.r.hset.assert_not_called()
 
 
 def test_add_profile_new_profile():

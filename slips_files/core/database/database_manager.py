@@ -749,7 +749,7 @@ class DBManager:
         return self.rdb.add_profile(*args, **kwargs)
 
     def set_profile_module_label(self, *args, **kwargs):
-        return self.rdb.set_profile_module_label(*args, **kwargs)
+        return self.rdb.set_module_label_for_profile(*args, **kwargs)
 
     def check_tw_to_close(self, *args, **kwargs):
         return self.rdb.check_tw_to_close(*args, **kwargs)
@@ -773,7 +773,11 @@ class DBManager:
         """
 
         # TODO test this
-        tws_to_search = self.rdb.get_tws_to_search(go_back)
+        # how many tws so search back in?
+        tws_to_search = float("inf")
+        if go_back:
+            hrs_to_search = float(go_back)
+            tws_to_search = self.rdb.get_equivalent_tws(hrs_to_search)
 
         twid_number: int = int(twid.split("timewindow")[-1])
         while twid_number > -1 and tws_to_search > 0:
@@ -791,7 +795,7 @@ class DBManager:
         return {uid: None}
 
     def get_profile_modules_labels(self, *args, **kwargs):
-        return self.rdb.get_profile_modules_labels(*args, **kwargs)
+        return self.rdb.get_modules_labels_of_a_profile(*args, **kwargs)
 
     def add_timeline_line(self, *args, **kwargs):
         return self.rdb.add_timeline_line(*args, **kwargs)
