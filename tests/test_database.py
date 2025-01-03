@@ -153,8 +153,8 @@ def test_profile_moddule_labels():
     db = ModuleFactory().create_db_manager_obj(6387, flush_db=True)
     module_label = "malicious"
     module_name = "test"
-    db.set_profile_module_label(profileid, module_name, module_label)
-    labels = db.get_profile_modules_labels(profileid)
+    db.set_module_label_for_profile(profileid, module_name, module_label)
+    labels = db.get_modules_labels_of_a_profile(profileid)
     assert "test" in labels
     assert labels["test"] == "malicious"
 

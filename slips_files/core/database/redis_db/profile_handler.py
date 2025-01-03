@@ -76,7 +76,7 @@ class ProfileHandler:
             belong to that tw
             if it is == the end of a tw, it will belong to the next one
             for example,
-            a flow with ts = 2 belongs to tw1
+            a flow with ts = 2 belongs to tw2
             a flow with ts = 4 belongs to tw3
 
                tw1   tw2   tw3   tw4
@@ -1178,6 +1178,7 @@ class ProfileHandler:
         time_of_last_modified_tw: float = modified_tws[-1][-1]
 
         # this list will store modified profiles without tws
+        # this is a list of ips. not profileids
         profiles = []
         profiles.extend(
             modified_tw[0].split("_")[1] for modified_tw in modified_tws
@@ -1472,32 +1473,35 @@ class ProfileHandler:
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 
-    def set_profile_module_label(self, profileid, module, label):
+    def set_module_label_for_profile(self, profileid, module, label):
         """
         Set a module label for a profile.
         A module label is a label set by a module, and not
         a groundtruth label
         """
-        data = self.get_profile_modules_labels(profileid)
+        data = self.get_modules_labels_of_a_profile(profileid)
         data[module] = label
         data = json.dumps(data)
         self.r.hset(profileid, "modules_labels", data)
 
     def check_tw_to_close(self, close_all=False):
         """
-        Check if we should close some TW
-        Search in the modifed tw list and compare when they
+        Check if we should close a TW
+        Search in the modified tw list and compare when they
         were modified with the slips internal time
         """
 
         sit = self.get_slips_internal_time()
 
-        # for each modified profile
+        # sit is the ts of the last tw modification detected by slips
+        # so this line means if 1h(width) passed since the last
+        # modification detected, then it's time to close the tw
         modification_time = float(sit) - self.width
         if close_all:
             # close all tws no matter when they were last modified
             modification_time = float("inf")
 
+        # these are the tws that havent been modified in the last 1h
         profiles_tws_to_close = self.r.zrangebyscore(
             self.constants.MODIFIED_TIMEWINDOWS,
             0,
@@ -1675,15 +1679,7 @@ class ProfileHandler:
             )
             self.print(traceback.format_exc(), 0, 1)
 
-    def get_tws_to_search(self, go_back):
-        tws_to_search = float("inf")
-
-        if go_back:
-            hrs_to_search = float(go_back)
-            tws_to_search = self.get_equivalent_tws(hrs_to_search)
-        return tws_to_search
-
-    def get_profile_modules_labels(self, profileid):
+    def get_modules_labels_of_a_profile(self, profileid):
         """
         Get labels set by modules in the profile.
         """
@@ -1710,7 +1706,7 @@ class ProfileHandler:
         key = str(
             profileid + self.separator + twid + self.separator + "timeline"
         )
-        # The the amount of lines in this list
+        # The amount of lines in this list
         last_index = self.r.zcard(key)
         # Get the data in the list from the index asked (first_index) until the last
         data = self.r.zrange(key, first_index, last_index - 1)
