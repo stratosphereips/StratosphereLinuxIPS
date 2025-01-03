@@ -19,6 +19,7 @@ from slips_files.core.database.redis_db.constants import (
     Channels,
 )
 from slips_files.core.evidencehandler import EvidenceHandler
+from modules.rnn_cc_detection.rnn_cc_detection import CCDetection
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
@@ -690,3 +691,18 @@ class ModuleFactory:
             setattr(metadata_manager.main, attr, value)
 
         return metadata_manager
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_rnn_detection_object(self, mock_db):
+        logger = Mock()
+        output_dir = "/tmp"
+        redis_port = 6379
+        termination_event = Mock()
+
+        with patch.object(CCDetection, "__init__", return_value=None):
+            cc_detection = CCDetection(
+                logger, output_dir, redis_port, termination_event
+            )
+            cc_detection.db = mock_db
+            cc_detection.exporter = Mock()
+            return cc_detection
