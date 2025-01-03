@@ -1,6 +1,6 @@
 var annotated_dup =
 [
-    [ "StratosphereLinuxIPS", null, [
+    [ "StratosphereLinuxIPS", "namespace_stratosphere_linux_i_p_s.html", [
       [ "daemon", "namespace_stratosphere_linux_i_p_s_1_1daemon.html", [
         [ "Daemon", "class_stratosphere_linux_i_p_s_1_1daemon_1_1_daemon.html", "class_stratosphere_linux_i_p_s_1_1daemon_1_1_daemon" ]
       ] ],
@@ -20,8 +20,8 @@ var annotated_dup =
             [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t_1_1_module" ]
           ] ],
           [ "warden_client", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client.html", [
-            [ "Error", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error" ],
-            [ "Client", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client" ]
+            [ "Client", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client" ],
+            [ "Error", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error" ]
           ] ]
         ] ],
         [ "ensembling", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1ensembling.html", [
@@ -145,8 +145,8 @@ var annotated_dup =
       [ "slips", "namespace_stratosphere_linux_i_p_s_1_1slips.html", [
         [ "Main", "class_stratosphere_linux_i_p_s_1_1slips_1_1_main.html", "class_stratosphere_linux_i_p_s_1_1slips_1_1_main" ]
       ] ],
-      [ "slips_files", null, [
-        [ "common", null, [
+      [ "slips_files", "namespace_stratosphere_linux_i_p_s_1_1slips__files.html", [
+        [ "common", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1common.html", [
           [ "slips_utils", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils.html", [
             [ "Utils", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils_1_1_utils" ]
           ] ]

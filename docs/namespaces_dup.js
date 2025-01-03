@@ -8,7 +8,7 @@ var namespaces_dup =
       [ "default", "namespacernn__model__training.html#a798e0c7c76e686f6aab8d5572647766b", null ],
       [ "df", "namespacernn__model__training.html#ace3af25fed9e8b41dd93135ee38f0f61", null ],
       [ "epochs", "namespacernn__model__training.html#a26f349a14a02544d87cd1a8336f44ba8", null ],
-      [ "f", "namespacernn__model__training.html#a6987755683f093bdce1e8d9ede7d1d4a", null ],
+      [ "f", "namespacernn__model__training.html#a5a5b62fbbaa9990c2c71bd529f0f409d", null ],
       [ "features_per_sample", "namespacernn__model__training.html#a08b507d75e0f9eb3e1e70c0cb349322e", null ],
       [ "help", "namespacernn__model__training.html#a0d4e425d490ae582b4d02775c77d83c0", null ],
       [ "history", "namespacernn__model__training.html#ad6f76405f1610a50f219507ed6fae7d0", null ],
@@ -16,7 +16,7 @@ var namespaces_dup =
       [ "indexNames", "namespacernn__model__training.html#a3e218727530e6512efe7d3b376823a82", null ],
       [ "inplace", "namespacernn__model__training.html#a211af9bf75a6262e625c2c7bf8abbf50", null ],
       [ "input_shape", "namespacernn__model__training.html#a137a571db1ac215251548c5fc8aafcff", null ],
-      [ "int_of_letters", "namespacernn__model__training.html#a58a9e2de92f6ac6101799e9b579dae66", null ],
+      [ "int_of_letters", "namespacernn__model__training.html#aabc2dffc1dc1d06ec34454325f474021", null ],
       [ "label", "namespacernn__model__training.html#a9a0382508924adaffb439961200baf57", null ],
       [ "loss", "namespacernn__model__training.html#ad821310841f4e4a00fe82f80358f6b11", null ],
       [ "max_length_of_outtupple", "namespacernn__model__training.html#a808cc52d226f0de604aab9138137c1e7", null ],
@@ -40,15 +40,5 @@ var namespaces_dup =
       [ "x_data", "namespacernn__model__training.html#a3349298572630a3a50c6389322005219", null ],
       [ "y_data", "namespacernn__model__training.html#a7db43a2a990a526f07a19355b34c5f2a", null ]
     ] ],
-    [ "StratosphereLinuxIPS", null, [
-      [ "daemon", "namespace_stratosphere_linux_i_p_s_1_1daemon.html", "namespace_stratosphere_linux_i_p_s_1_1daemon" ],
-      [ "modules", "namespace_stratosphere_linux_i_p_s_1_1modules.html", "namespace_stratosphere_linux_i_p_s_1_1modules" ],
-      [ "slips", "namespace_stratosphere_linux_i_p_s_1_1slips.html", "namespace_stratosphere_linux_i_p_s_1_1slips" ],
-      [ "slips_files", null, [
-        [ "common", null, [
-          [ "slips_utils", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils.html", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils" ]
-        ] ],
-        [ "core", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core.html", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core" ]
-      ] ]
-    ] ]
+    [ "StratosphereLinuxIPS", "namespace_stratosphere_linux_i_p_s.html", "namespace_stratosphere_linux_i_p_s" ]
 ];

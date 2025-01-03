@@ -1,0 +1,4 @@
+var update__manager_8py =
+[
+    [ "StratosphereLinuxIPS.modules.update_manager.update_manager.UpdateManager", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__manager_1_1_update_manager.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__manager_1_1_update_manager" ]
+];
