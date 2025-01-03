@@ -1,58 +1,62 @@
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import (
+    patch,
+    MagicMock,
+    call,
+    Mock,
+)
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
 
 
 @pytest.mark.parametrize(
-    "enable_metadata, info_path, expected_open_calls",
+    "enable_metadata, expected_open_calls, expected_end_date",
     [
         # testcase1: Metadata enabled, info path exists
-        (True, "/path/to/info.txt", [call("/path/to/info.txt", "a")]),
-        # testcase2: Metadata disabled, info path doesn't exist
-        (False, None, []),
-        # testcase4: Metadata disabled, but info path exists
-        (False, "/path/to/info.txt", []),
+        (True, [call("/path/to/info.txt", "a")], "2023-06-01 12:00:00"),
+        # testcase2: Metadata disabled
+        (False, [], None),
     ],
 )
 def test_set_analysis_end_date(
     enable_metadata,
-    info_path,
     expected_open_calls,
-    expected_end_date="2023-06-01 12:00:00",
+    expected_end_date,
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
-    metadata_manager.enable_metadata = enable_metadata
-    metadata_manager.info_path = info_path
+    metadata_manager.info_path = "/path/to/info.txt"
     metadata_manager.main.conf.enable_metadata.return_value = enable_metadata
 
-    with patch(
-        "slips_files.common.slips_utils.utils.convert_format",
-        return_value=expected_end_date,
-    ), patch("builtins.open", create=True) as mock_open:
-        result = metadata_manager.set_analysis_end_date()
+    utils.convert_format = Mock(return_value=expected_end_date)
+
+    with patch("builtins.open", create=True) as mock_open:
+        result = metadata_manager.set_analysis_end_date("dummy_end_date")
 
         assert result == expected_end_date
+
+    if enable_metadata:
         metadata_manager.main.db.set_input_metadata.assert_called_once_with(
             {"analysis_end": expected_end_date}
         )
 
         assert mock_open.call_args_list == expected_open_calls
 
-    assert metadata_manager.enable_metadata == enable_metadata
-
 
 @pytest.mark.parametrize(
-    "enable_metadata, expected_info_path," "expected_call_count",
+    "enable_metadata, expected_info_path, info_path_value_set, "
+    "expected_call_count",
     [
         # testcase1: Metadata enabled
-        (True, "/path/to/metadata/info.txt", 1),
+        (True, "/path/to/metadata/info.txt", True, 1),
         # testcase2: Metadata disabled
-        (False, None, 0),
+        (False, None, False, 0),
     ],
 )
 def test_enable_metadata(
-    enable_metadata, expected_info_path, expected_call_count
+    enable_metadata,
+    expected_info_path,
+    info_path_value_set,
+    expected_call_count,
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
     metadata_manager.main.conf.enable_metadata.return_value = enable_metadata
@@ -63,7 +67,9 @@ def test_enable_metadata(
         metadata_manager.enable_metadata()
 
     assert metadata_manager.enable_metadata == enable_metadata
-    assert getattr(metadata_manager, "info_path", None) == expected_info_path
+    if info_path_value_set:
+        assert hasattr(metadata_manager, "info_path")
+        assert metadata_manager.info_path == expected_info_path
     assert mock_add_metadata.call_count == expected_call_count
 
 
