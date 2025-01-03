@@ -7,6 +7,11 @@ import sys
 from pprint import pp
 import contextlib
 
+from slips_files.core.structures.alerts import (
+    Alert,
+    dict_to_alert,
+)
+
 
 class Module(IModule):
     # Name: short name of the module. Do not use spaces
@@ -191,13 +196,10 @@ class Module(IModule):
             return 1
 
         if msg := self.get_msg("new_alert"):
+            alert: dict = json.loads(msg["data"])
+            alert: Alert = dict_to_alert(alert)
             self.print(
                 "Cyst module received a new blocking request . "
                 "sending to CYST ... "
             )
-            alert_info: dict = json.loads(msg["data"])
-            profileid = alert_info["profileid"]
-            # twid = alert_info['twid']
-            # alert_ID is {profileid}_{twid}_{ID}
-            alert_ID = alert_info["alert_ID"]
-            self.send_alert(alert_ID, profileid.split("_")[-1])
+            self.send_alert(alert.id, alert.profile.ip)

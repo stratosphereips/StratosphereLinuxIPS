@@ -4,12 +4,8 @@ repos:
     hooks:
         - id: detect-secrets
           args: ['--baseline', '.secrets.baseline']
-          exclude: .*dataset/.*|
-                  (?x)(
-                         ^config/local_ti_files/own_malicious_JA3.csv$|
-                          .*test.* |
-                         .*\.md$
-                      )
+          exclude: '.*dataset/.*|^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$'
+
 
 -     repo: https://github.com/pre-commit/pre-commit-hooks
       rev: v3.1.0
@@ -21,12 +17,7 @@ repos:
         - id: check-merge-conflict
         - id: end-of-file-fixer
         - id: detect-private-key
-          exclude: .*dataset/.* |
-                (?x)(
-                     ^config/$|
-                      .*test.* |
-                     .*\.md$
-              )
+          exclude: '.*dataset/.*|^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$'
 
 -     repo: https://github.com/astral-sh/ruff-pre-commit
       # Ruff version.
@@ -36,13 +27,19 @@ repos:
         - id: ruff
           args: [ --fix ]
           # excludes formatting slips_files/common/imports.py
-          exclude: imports
+          exclude: (imports|sqlite_db.*)
 
 -     repo: https://github.com/psf/black-pre-commit-mirror
       rev: 24.4.2
       hooks:
         - id: black
           args: ['--line-length' , '79']
-          language_version: python3.10.12
+          language_version: python3.12.3
           # excludes formatting slips_files/common/imports.py
           exclude: imports
+
+-     repo: https://github.com/adrienverge/yamllint.git
+      rev: v1.31.0
+      hooks:
+        - id: yamllint
+          files: "slips.yaml"

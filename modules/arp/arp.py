@@ -59,6 +59,7 @@ class ARP(IModule):
         self.alerted_once_arp_scan = False
         # wait 10s for mmore arp scan evidence to come
         self.time_to_wait = 10
+        self.is_zeek_running: bool = self.is_running_zeek()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -72,6 +73,11 @@ class ARP(IModule):
                 "delete_zeek_files in the config file."
             )
         self.store_zeek_files_copy = conf.store_zeek_files_copy()
+
+    def is_running_zeek(self) -> bool:
+        return (
+            self.db.get_input_type() == "pcap" or self.db.is_running_non_stop()
+        )
 
     def wait_for_arp_scans(self):
         """
@@ -484,11 +490,13 @@ class ARP(IModule):
         ]
 
     def clear_arp_logfile(self):
-        if self.db.get_input_type() not in ("pcap", "interface"):
-            # no arp.log to clear
+        if not self.delete_arp_periodically:
             return
 
-        if not self.delete_arp_periodically:
+        if not self.is_zeek_running:
+            # we only clear arp.log if it's growing, aka zeek is running in
+            # real time and generating logs constantly. like
+            # interfaces/pcaps and growing zeek dirs
             return
 
         if (

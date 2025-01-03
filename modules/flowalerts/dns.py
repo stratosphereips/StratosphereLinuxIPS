@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import ipaddress
 import json
 import math
 from datetime import datetime
@@ -286,12 +287,18 @@ class DNS(IFlowalertsAnalyzer):
         Uses shannon entropy to detect DNS TXT answers
         with encoded/encrypted strings
         """
+        # to avoid FPs when devices announce their presence in the TXT
+        # records of mDNS answers
+        if ipaddress.ip_address(flow.saddr).is_multicast:
+            return
+
         if not flow.answers:
             return
 
         for answer in flow.answers:
             if "TXT" not in answer:
                 continue
+
             entropy = self.estimate_shannon_entropy(answer)
             if entropy >= self.shannon_entropy_threshold:
                 self.set_evidence.suspicious_dns_answer(
@@ -302,17 +309,17 @@ class DNS(IFlowalertsAnalyzer):
                 )
 
     def check_invalid_dns_answers(self, twid, flow):
-        # this function is used to check for certain IP
-        # answers to DNS queries being blocked
-        # (perhaps by ad blockers) and set to the following IP values
-        # currently hardcoding blocked ips
-        invalid_answers = {"127.0.0.1", "0.0.0.0"}
+        """
+        this function is used to check for private IPs in the answers of
+        a dns queries.
+        probably means the queries is being blocked
+        (perhaps by ad blockers) and set to a private IP value
+        """
         if not flow.answers:
             return
 
         for answer in flow.answers:
-            if answer in invalid_answers and flow.query != "localhost":
-                # blocked answer found
+            if utils.is_private_ip(answer) and flow.query != "localhost":
                 self.set_evidence.invalid_dns_answer(twid, flow, answer)
                 # delete answer from redis cache to prevent
                 # associating this dns answer with this domain/query and

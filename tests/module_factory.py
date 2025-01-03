@@ -22,6 +22,7 @@ from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
 from slips_files.core.helpers.symbols_handler import SymbolHandler
+from slips_files.core.database.redis_db.profile_handler import ProfileHandler
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
 from modules.flowalerts.software import Software
@@ -619,11 +620,6 @@ class ModuleFactory:
         riskiq.db = mock_db
         return riskiq
 
-    def create_alert_handler_obj(self):
-        alert_handler = AlertHandler()
-        alert_handler.constants = Constants()
-        return alert_handler
-
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):
         logger = Mock()
@@ -633,3 +629,18 @@ class ModuleFactory:
         tl = Timeline(logger, output_dir, redis_port, termination_event)
         tl.db = mock_db
         return tl
+
+    def create_alert_handler_obj(self):
+        alert_handler = AlertHandler()
+        alert_handler.constants = Constants()
+        return alert_handler
+
+    def create_profile_handler_obj(self):
+        handler = ProfileHandler()
+        handler.constants = Constants()
+        handler.r = Mock()
+        handler.rcache = Mock()
+        handler.separator = "_"
+        handler.width = 3600
+        handler.print = Mock()
+        return handler

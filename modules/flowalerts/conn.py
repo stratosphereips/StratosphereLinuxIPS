@@ -15,6 +15,10 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 
 
+NOT_ESTAB = "Not Established"
+ESTAB = "Established"
+
+
 class Conn(IFlowalertsAnalyzer):
     def init(self):
         # get the default gateway
@@ -37,6 +41,8 @@ class Conn(IFlowalertsAnalyzer):
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
         self.our_ips = utils.get_own_ips()
+        self.input_type: str = self.db.get_input_type()
+        self.multiple_reconnection_attempts_threshold = 5
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -170,7 +176,7 @@ class Conn(IFlowalertsAnalyzer):
         """
         if not flow.dport:
             return
-        if flow.interpreted_state != "Established":
+        if flow.interpreted_state != ESTAB:
             # detect unknown ports on established conns only
             return False
 
@@ -194,6 +200,54 @@ class Conn(IFlowalertsAnalyzer):
             self.set_evidence.unknown_port(twid, flow)
             return True
 
+    def is_telnet(self, flow) -> bool:
+        try:
+            dport = int(flow.dport)
+        except ValueError:
+            # binetflow icmp ports are hex strings
+            return False
+
+        telnet_ports = (23, 2323)
+        return dport in telnet_ports and flow.proto.lower() == "tcp"
+
+    def check_multiple_telnet_reconnection_attempts(
+        self, profileid, twid, flow
+    ):
+        if flow.interpreted_state != NOT_ESTAB:
+            return
+
+        if not self.is_telnet(flow):
+            return
+
+        key = f"{flow.saddr}-{flow.daddr}-telnet"
+        # add this conn to the stored number of reconnections
+        current_reconnections = self.db.get_reconnections_for_tw(
+            profileid, twid
+        )
+        try:
+            reconnections, uids = current_reconnections[key]
+            reconnections += 1
+            uids.append(flow.uid)
+            current_reconnections[key] = (reconnections, uids)
+        except KeyError:
+            current_reconnections[key] = (1, [flow.uid])
+            reconnections = 1
+
+        if reconnections < 4:
+            # update the reconnections ctr in the db
+            self.db.set_reconnections(profileid, twid, current_reconnections)
+            return
+
+        self.set_evidence.multiple_telnet_reconnection_attempts(
+            twid, flow, reconnections, current_reconnections[key][1]
+        )
+
+        # reset the reconnection attempts of this src->dst since an evidence
+        # is set
+        current_reconnections[key] = (0, [])
+
+        self.db.set_reconnections(profileid, twid, current_reconnections)
+
     def check_multiple_reconnection_attempts(self, profileid, twid, flow):
         """
         Alerts when 5+ reconnection attempts from the same source IP to
@@ -213,18 +267,19 @@ class Conn(IFlowalertsAnalyzer):
             reconnections, uids = current_reconnections[key]
             reconnections += 1
             uids.append(flow.uid)
-            current_reconnections[key] = (reconnections, uids)
         except KeyError:
-            current_reconnections[key] = (1, [flow.uid])
+            uids = [flow.uid]
             reconnections = 1
 
-        if reconnections < 5:
+        current_reconnections[key] = (reconnections, uids)
+        if reconnections < self.multiple_reconnection_attempts_threshold:
+            self.db.set_reconnections(profileid, twid, current_reconnections)
             return
 
         self.set_evidence.multiple_reconnection_attempts(
-            twid, flow, reconnections
+            twid, flow, reconnections, uids
         )
-        # reset the reconnection attempts of this src->dst
+        # reset the reconnection counter of this src->dst
         current_reconnections[key] = (0, [])
 
         self.db.set_reconnections(profileid, twid, current_reconnections)
@@ -385,9 +440,9 @@ class Conn(IFlowalertsAnalyzer):
             # from the internet to our ip, the dns res was probably
             # made on their side before connecting to us,
             # so we shouldn't be doing this detection on this ip
-            or flow.daddr in self.client_ips
+            or utils.is_ip_in_client_ips(flow.daddr, self.client_ips)
             # because there's no dns.log to know if the dns was made
-            or self.db.get_input_type() == "zeek_log_file"
+            or self.input_type == "zeek_log_file"
             or self.db.is_doh_server(flow.daddr)
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
@@ -510,7 +565,7 @@ class Conn(IFlowalertsAnalyzer):
         )
 
     def detect_connection_to_multiple_ports(self, profileid, twid, flow):
-        if flow.proto != "tcp" or flow.interpreted_state != "Established":
+        if flow.proto != "tcp" or flow.interpreted_state != ESTAB:
             return
 
         dport_name = flow.appproto
@@ -524,7 +579,7 @@ class Conn(IFlowalertsAnalyzer):
         # Connection to multiple ports to the destination IP
         if profileid.split("_")[1] == flow.saddr:
             direction = "Dst"
-            state = "Established"
+            state = ESTAB
             protocol = "TCP"
             role = "Client"
             type_data = "IPs"
@@ -564,7 +619,7 @@ class Conn(IFlowalertsAnalyzer):
         # Happens in the mode 'all'
         elif profileid.split("_")[-1] == flow.daddr:
             direction = "Src"
-            state = "Established"
+            state = ESTAB
             protocol = "TCP"
             role = "Server"
             type_data = "IPs"
@@ -607,7 +662,7 @@ class Conn(IFlowalertsAnalyzer):
             str(flow.dport) == "80"
             and flow.proto.lower() == "tcp"
             and str(flow.appproto).lower() != "http"
-            and flow.interpreted_state == "Established"
+            and flow.interpreted_state == ESTAB
             and (flow.sbytes + flow.dbytes) != 0
         ):
             self.set_evidence.non_http_port_80_conn(twid, flow)
@@ -733,6 +788,9 @@ class Conn(IFlowalertsAnalyzer):
             self.check_long_connection(twid, flow)
             self.check_unknown_port(profileid, twid, flow)
             self.check_multiple_reconnection_attempts(profileid, twid, flow)
+            self.check_multiple_telnet_reconnection_attempts(
+                profileid, twid, flow
+            )
             self.check_conn_to_port_0(profileid, twid, flow)
             self.check_different_localnet_usage(
                 twid, flow, what_to_check="dstip"

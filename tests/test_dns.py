@@ -361,24 +361,37 @@ def test_check_high_entropy_dns_answers_with_call():
 
 
 @pytest.mark.parametrize(
-    "domain, answers, expected_entropy",
+    "domain, saddr, answers, expected_entropy, "
+    "estimate_shannon_entropy_call_count",
     [
         # Testcase 1: No TXT answer
+        ("example.com", "1.1.1.1", ["A 1.2.3.4", "AAAA 2001:db8::1"], 0, 1),
+        # Testcase 2: Muticast ip
         (
             "example.com",
+            "224.0.0.251",
             ["A 1.2.3.4", "AAAA 2001:db8::1"],
             0,
+            0,
         ),
-        # Testcase 2: TXT answer below entropy threshold
+        # Testcase 3: Muticast ip again
         (
             "example.com",
-            ["A 1.2.3.4", "TXT aaaa"],
-            2.0,
+            "224.0.0.1",
+            ["A 1.2.3.4", "AAAA 2001:db8::1"],
+            0,
+            0,
         ),
+        # Testcase 4: TXT answer below entropy threshold
+        ("example.com", "1.1.1.1", ["A 1.2.3.4", "TXT aaaa"], 2.0, 1),
     ],
 )
 def test_check_high_entropy_dns_answers_no_call(
-    domain, answers, expected_entropy
+    domain,
+    answers,
+    saddr,
+    expected_entropy,
+    estimate_shannon_entropy_call_count,
 ):
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.shannon_entropy_threshold = 4.0
@@ -388,7 +401,7 @@ def test_check_high_entropy_dns_answers_no_call(
     flow = DNS(
         starttime="1726568479.5997488",
         uid="1243",
-        saddr="1.1.1.1",
+        saddr=saddr,
         daddr="192.168.1.5",
         query="example.com",
         qclass_name="",
@@ -400,7 +413,10 @@ def test_check_high_entropy_dns_answers_no_call(
     dns.check_high_entropy_dns_answers(twid, flow)
 
     assert dns.set_evidence.suspicious_dns_answer.call_count == 0
-    assert dns.estimate_shannon_entropy.call_count == 1
+    assert (
+        dns.estimate_shannon_entropy.call_count
+        == estimate_shannon_entropy_call_count
+    )
 
 
 @pytest.mark.parametrize(

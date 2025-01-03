@@ -161,8 +161,14 @@ Evidence Handler is the only process that stops but keeps waiting in memory for 
 Once all modules are done processing, EvidenceHandler is killed by the Process manager.
 
 
-### How the tests work?
+### How does the tests work?
 
 - Running the tests locally should be done using ./tests/run_all_tests.sh
 - It runs the unit tests first, then the integration tests.
 - Please get familiar with pytest first https://docs.pytest.org/en/stable/how-to/output.html
+
+### Where and how do we get the GW info?
+
+Using one of these 3 ways
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/gw_info.jpg"

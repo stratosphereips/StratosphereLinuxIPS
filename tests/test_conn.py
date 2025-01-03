@@ -186,6 +186,78 @@ def test_check_unknown_port_true_case(mocker):
 
 
 @pytest.mark.parametrize(
+    "origstate, saddr, daddr, dport, uids, interpreted_state, expected_calls",
+    [
+        (  # Testcase1:5 rejections, evidence should be set
+            "REJ",
+            "192.168.1.1",
+            "192.168.1.2",
+            23,
+            [f"uid_{i}" for i in range(4)],
+            "Not Established",
+            1,
+        ),
+        (  # Testcase2: Less than 5 rejections, no evidence
+            "RST",
+            "192.168.1.1",
+            "192.168.1.2",
+            2323,
+            [f"uid_{i}" for i in range(4)],
+            "Not Established",
+            1,
+        ),
+        (  # Testcase3: Non-REJ state, no evidence
+            "Established",
+            "192.168.1.1",
+            "192.168.1.2",
+            23,
+            ["uid_1"],
+            "Established",
+            0,
+        ),
+    ],
+)
+def test_check_multiple_telnet_reconnection_attempts(
+    origstate, saddr, daddr, dport, uids, interpreted_state, expected_calls
+):
+    """
+    Tests the check_multiple_telnet_reconnection_attempts function
+    with various scenarios.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.set_evidence.multiple_telnet_reconnection_attempts = Mock()
+    conn.db.get_reconnections_for_tw.return_value = {}
+
+    for uid in uids:
+        flow = Conn(
+            starttime="1726249372.312124",
+            uid=uid,
+            saddr=saddr,
+            daddr=daddr,
+            dur=1,
+            proto="tcp",
+            appproto="",
+            sport="0",
+            dport=dport,
+            spkts=0,
+            dpkts=0,
+            sbytes=0,
+            dbytes=0,
+            smac="",
+            dmac="",
+            state=origstate,
+            history="",
+        )
+        flow.interpreted_state = interpreted_state
+        conn.check_multiple_telnet_reconnection_attempts(profileid, twid, flow)
+
+    assert (
+        conn.set_evidence.multiple_telnet_reconnection_attempts.call_count
+        == expected_calls
+    )
+
+
+@pytest.mark.parametrize(
     "origstate, saddr, daddr, dport, uids, expected_calls",
     [
         (  # Testcase1:5 rejections, evidence should be set

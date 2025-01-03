@@ -21,6 +21,71 @@ class SetEvidnceHelper:
     def __init__(self, db):
         self.db = db
 
+    def cn_url_mismatch(self, twid, cn, flow):
+        twid_number: int = int(twid.replace("timewindow", ""))
+        confidence: float = 0.8
+        description: str = (
+            f"a CN mismatch. The common name (CN) '{cn}' in the SSL "
+            f"certificate for the domain '{flow.server_name}' does not match "
+            f"the server's domain."
+        )
+
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
+        evidence: Evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
+            evidence_type=EvidenceType.CN_URL_MISMATCH,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.DOMAIN,
+                value=flow.server_name,
+            ),
+            threat_level=ThreatLevel.LOW,
+            description=description,
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
+        )
+        self.db.set_evidence(evidence)
+
+        evidence: Evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
+            evidence_type=EvidenceType.CN_URL_MISMATCH,
+            attacker=Attacker(
+                direction=Direction.DST,
+                attacker_type=IoCType.DOMAIN,
+                value=flow.server_name,
+            ),
+            victim=Victim(
+                direction=Direction.SRC,
+                victim_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            threat_level=ThreatLevel.MEDIUM,
+            description=description,
+            profile=ProfileID(ip=flow.daddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
+        )
+
+        self.db.set_evidence(evidence)
+
     def doh(self, twid, flow):
         twid_number: int = int(twid.replace("timewindow", ""))
         description: str = f"using DNS over HTTPs. DNS server: {flow.daddr} "
@@ -879,6 +944,45 @@ class SetEvidnceHelper:
             src_port=flow.sport,
             dst_port=flow.dport,
         )
+        self.db.set_evidence(evidence)
+
+    def multiple_telnet_reconnection_attempts(
+        self, twid, flow, reconnections, uids: List[str]
+    ):
+        """
+        Set evidence for 4+ telnet unsuccessful attempts.
+        """
+        confidence: float = 0.5
+        threat_level: ThreatLevel = ThreatLevel.MEDIUM
+
+        twid: int = int(twid.replace("timewindow", ""))
+
+        description = (
+            f"Multiple Telnet reconnection attempts from IP: {flow.saddr} "
+            f"to Destination IP: {flow.daddr}  "
+            f"reconnections: {reconnections}"
+        )
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
+            ),
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid),
+            uid=uids,
+            timestamp=flow.starttime,
+        )
+
         self.db.set_evidence(evidence)
 
     def multiple_reconnection_attempts(

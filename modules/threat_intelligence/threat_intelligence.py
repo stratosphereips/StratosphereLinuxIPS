@@ -6,7 +6,12 @@ import threading
 import time
 from uuid import uuid4
 import validators
-from typing import Dict, List
+from typing import (
+    Dict,
+    List,
+    Union,
+)
+from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
@@ -114,7 +119,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.path_to_local_ti_files = conf.local_ti_data_path()
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)
-        self.client_ips: List[str] = conf.client_ips()
+        self.client_ips: List[
+            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
+        ]
+        self.client_ips = conf.client_ips()
 
     def set_evidence_malicious_asn(
         self,
@@ -339,52 +347,82 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         twid: str = "",
         ip_state: str = "",
     ):
-        """Records evidence of traffic involving a malicious IP address within a
-        specified time window.
+        # map of ip_state to corresponding methods
+        state_map = {
+            "src": self.set_evidence_conn_from_malicious_ip,
+            "dst": self.set_evidence_conn_to_malicious_ip,
+        }
 
-        Parameters:
-            ip (str): The IP address under scrutiny.
-            uid (str): Unique identifier for the network flow related to this
-            event.
-            daddr (str): Destination IP address of the flow.
-            timestamp (str): Timestamp when the event occurred.
-            ip_info (dict): Contains metadata about the IP such as source,
-            description, and threat level.
-            profileid (str): Identifier for the network profile involved
-            in the event.
-            twid (str): Time window identifier during which the event was
-            observed.
-            ip_state (str): Indicates whether the IP in question was the
-            source or destination.
+        # call the appropriate method based on ip_state
+        for state in state_map:
+            if state in ip_state:
+                state_map[state](
+                    ip, uid, daddr, timestamp, ip_info, profileid, twid
+                )
 
-        This function creates and stores evidence objects for both the
-        source and destination addresses involved in the traffic with the
-        malicious IP, marking them accordingly in the database as part of
-        threat intelligence handling.
-
-        Side Effects:
-            - Two evidence records are created and stored in the database.
-            - The involved IP is marked as malicious in the database.
-        """
+    def set_evidence_conn_from_malicious_ip(
+        self,
+        ip: str,
+        uid: str,
+        daddr: str,
+        timestamp: str,
+        ip_info: dict,
+        profileid: str = "",
+        twid: str = "",
+    ):
         threat_level: float = utils.threat_levels[
             ip_info.get("threat_level", "medium")
         ]
         threat_level: ThreatLevel = ThreatLevel(threat_level)
         saddr = profileid.split("_")[-1]
 
-        if "src" in ip_state:
-            description: str = (
-                f"connection from blacklisted IP: {ip} to {daddr}. "
-            )
-        elif "dst" in ip_state:
-            description: str = (
-                f"connection to blacklisted IP: {ip} from {saddr}. "
-            )
-        else:
-            # ip_state is not specified?
-            return
+        description: str = (
+            f"connection from blacklisted IP: {ip} to {daddr}. "
+            f"Description: {ip_info['description']}. "
+            f"Source: {ip_info['source']}."
+        )
 
-        description += (
+        twid_int = int(twid.replace("timewindow", ""))
+
+        evidence = Evidence(
+            evidence_type=EvidenceType.THREAT_INTELLIGENCE_TO_BLACKLISTED_IP,
+            attacker=Attacker(
+                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            ),
+            victim=Victim(
+                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+            ),
+            threat_level=threat_level,
+            confidence=1.0,
+            description=description,
+            profile=ProfileID(ip=saddr),
+            timewindow=TimeWindow(number=twid_int),
+            uid=[uid],
+            timestamp=utils.convert_format(timestamp, utils.alerts_format),
+        )
+        self.db.set_evidence(evidence)
+        # mark this ip as malicious in our database
+        ip_info = {"threatintelligence": ip_info}
+        self.db.set_ip_info(ip, ip_info)
+
+    def set_evidence_conn_to_malicious_ip(
+        self,
+        ip: str,
+        uid: str,
+        daddr: str,
+        timestamp: str,
+        ip_info: dict,
+        profileid: str = "",
+        twid: str = "",
+    ):
+        threat_level: float = utils.threat_levels[
+            ip_info.get("threat_level", "medium")
+        ]
+        threat_level: ThreatLevel = ThreatLevel(threat_level)
+        saddr = profileid.split("_")[-1]
+
+        description: str = (
+            f"connection to blacklisted IP: {ip} from {saddr}. "
             f"Description: {ip_info['description']}. "
             f"Source: {ip_info['source']}."
         )
@@ -397,7 +435,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         evidence = Evidence(
             id=evidence_id_of_dstip_as_the_attacker,
             rel_id=[evidence_id_of_srcip_as_the_attacker],
-            evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
+            evidence_type=EvidenceType.THREAT_INTELLIGENCE_TO_BLACKLISTED_IP,
             attacker=Attacker(
                 direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
             ),
@@ -417,14 +455,14 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         evidence = Evidence(
             id=evidence_id_of_srcip_as_the_attacker,
             rel_id=[evidence_id_of_dstip_as_the_attacker],
-            evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_IP,
+            evidence_type=EvidenceType.THREAT_INTELLIGENCE_TO_BLACKLISTED_IP,
             attacker=Attacker(
                 direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
             ),
             victim=Victim(
                 direction=Direction.DST, victim_type=IoCType.IP, value=daddr
             ),
-            threat_level=threat_level,
+            threat_level=ThreatLevel.LOW,
             confidence=1.0,
             description=description,
             profile=ProfileID(ip=saddr),
@@ -1151,7 +1189,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             "src" in ip_state
             and ipaddress.ip_address(ip).is_global
             and ip != host_ip
-            and ip not in self.client_ips
+            and not utils.is_ip_in_client_ips(ip, self.client_ips)
         )
 
     def search_online_for_ip(self, ip: str, ip_state: str):
@@ -1355,9 +1393,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
             ip_info = self.search_online_for_ip(ip, ip_state)
-        if not ip_info:
-            # not malicious
-            return False
+            if not ip_info:
+                # not malicious
+                return False
 
         self.db.add_ips_to_ioc({ip: json.dumps(ip_info)})
         if is_dns_response:
@@ -1428,16 +1466,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
     def is_malicious_url(self, url, uid, timestamp, daddr, profileid, twid):
         """Determines if a URL is considered malicious by querying online threat
         intelligence sources.
-
-        Parameters:
-            - url (str): The URL to check.
-            - uid (str): Unique identifier for the network flow.
-            - timestamp (str): Timestamp when the network flow occurred.
-            - daddr (str): Destination IP address in the network flow.
-            - profileid (str): Identifier of the profile associated
-            with the network flow.
-            - twid (str): Time window identifier for when the network
-            flow occurred.
 
         Returns:
             - None: The function does not return a value but triggers
@@ -1633,18 +1661,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         malicious, it records an evidence entry and marks the
         domain in the database.
 
-        Parameters:
-            domain (str): The domain name to be evaluated for
-             malicious activity.
-            uid (str): Unique identifier of the network flow
-            associated with this domain query.
-            timestamp (str): Timestamp when the domain query
-            was observed.
-            profileid (str): Identifier of the network profile
-            that initiated the domain query.
-            twid (str): Time window identifier during which the
-            domain query occurred.
-
         Returns:
             bool: False if the domain is ignored or not found in the
             offline threat intelligence data, indicating no further action
@@ -1758,10 +1774,12 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                 queries_done += 1
 
     def should_lookup(self, ip: str, protocol: str, ip_state: str) -> bool:
-        """Return whether slips should lookup the given ip or notd."""
-        return utils.is_ignored_ip(ip) or self.is_outgoing_icmp_packet(
-            protocol, ip_state
-        )
+        """Return whether slips should lookup the given ip or not."""
+        if utils.is_ignored_ip(ip):
+            return False
+        if self.is_outgoing_icmp_packet(protocol, ip_state):
+            return False
+        return True
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -1804,7 +1822,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             ip_state = data.get("ip_state")
             if type_ == "ip":
                 ip = to_lookup
-                if not self.should_lookup(ip, protocol, ip_state):
+                if self.should_lookup(ip, protocol, ip_state):
                     self.is_malicious_ip(
                         ip,
                         uid,

@@ -131,6 +131,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 )
 
             cls._instances[cls.redis_port] = super().__new__(cls)
+            super().__init__(cls)
+
             # By default the slips internal time is
             # 0 until we receive something
             cls.set_slips_internal_time(0)
@@ -485,7 +487,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         is the ip param src or dst
         """
-        # if the daddr key arg is not given, we know for sure that the ip given is the daddr
+        # if the daddr key arg is not given, we know for sure that the ip
+        # given is the daddr
         daddr = daddr or ip
         data_to_send = self.give_threat_intelligence(
             profileid,
@@ -843,8 +846,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             # we store ALL dns resolutions seen since starting slips
             # store with the IP as the key
             self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
-            # store with the domain as the key:
-            self.r.hset(self.constants.RESOLVED_DOMAINS, domains[0], answer)
             # these ips will be associated with the query in our db
             ips_to_add.append(answer)
 
@@ -868,6 +869,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def set_domain_resolution(self, domain, ips):
         """
         stores all the resolved domains with their ips in the db
+        stored as {Domain: [IP, IP, IP]} in the db
         """
         self.r.hset(self.constants.DOMAINS_RESOLVED, domain, json.dumps(ips))
 
@@ -1538,7 +1540,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         return self.r.incr(self.constants.PROCESSED_FLOWS, 1)
 
     def get_processed_flows_so_far(self) -> int:
-        return int(self.r.get(self.constants.PROCESSED_FLOWS))
+        processed_flows = self.r.get(self.constants.PROCESSED_FLOWS)
+        if not processed_flows:
+            return 0
+        return int(processed_flows)
 
     def store_std_file(self, **kwargs):
         """

@@ -280,12 +280,17 @@ def test_handle_notice(flow):
     flow.note = "Gateway_addr_identified: 192.168.1.1"
     flow.msg = "Gateway_addr_identified: 192.168.1.1"
 
+    flow_handler.db.get_gateway_ip.return_value = False
+    flow_handler.db.get_gateway_mac.return_value = False
+    flow_handler.db.get_mac_addr_from_profile.return_value = "xyz"
+
     flow_handler.handle_notice()
 
     flow_handler.db.add_out_notice.assert_called_with(
         flow_handler.profileid, flow_handler.twid, flow
     )
-    flow_handler.db.set_default_gateway.assert_called_with("IP", "192.168.1.1")
+    flow_handler.db.set_default_gateway.assert_any_call("IP", "192.168.1.1")
+    flow_handler.db.set_default_gateway.assert_any_call("MAC", "xyz")
     flow_handler.db.add_altflow.assert_called_with(
         flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
