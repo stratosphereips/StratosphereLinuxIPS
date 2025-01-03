@@ -45,6 +45,5 @@ def test_load_modules():
 
 
 def test_clear_redis_cache_database():
-    main = ModuleFactory().create_main_obj()
-    redis_manager = ModuleFactory().create_redis_manager_obj(main)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
     assert redis_manager.clear_redis_cache_database()
