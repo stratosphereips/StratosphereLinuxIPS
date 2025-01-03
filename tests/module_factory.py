@@ -343,6 +343,7 @@ class ModuleFactory:
     def create_redis_manager_obj(self, mock_db):
         main = self.create_main_obj()
         main.db = mock_db
+        main.args = Mock()
         return RedisManager(main)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
