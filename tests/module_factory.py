@@ -339,10 +339,17 @@ class ModuleFactory:
         profiler.db = mock_db
         return profiler
 
-    def create_redis_manager_obj(self, main):
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_redis_manager_obj(self, mock_db):
+        main = self.create_main_obj()
+        main.db = mock_db
         return RedisManager(main)
 
-    def create_host_ip_manager_obj(self, main):
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_host_ip_manager_obj(self, mock_db):
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.print = Mock()
         return HostIPManager(main)
 
     def create_utils_obj(self):
@@ -651,8 +658,9 @@ class ModuleFactory:
         main_mock.args = Mock(growing=False, input_module=False, testing=False)
         return ProcessManager(main_mock)
 
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_metadata_manager_obj(self, mock_db):
-        main = self.create_main_obj("dummy_input")
+        main = self.create_main_obj()
         metadata_manager = MetadataManager(main)
 
         mock_attributes = {
@@ -681,7 +689,3 @@ class ModuleFactory:
             setattr(metadata_manager.main, attr, value)
 
         return metadata_manager
-
-    # def create_metadata_manager_obj(self):
-    #     main_mock = MagicMock()
-    #     return MetadataManager(main_mock)

@@ -1,42 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock, call
-import sys
-import redis
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
-
-
-def test_get_host_ip_success():
-    metadata_manager = ModuleFactory().create_metadata_manager_obj()
-    expected_ip = "192.168.1.100"
-
-    with patch("socket.socket") as mock_socket:
-        mock_instance = MagicMock()
-        mock_socket.return_value = mock_instance
-
-        mock_instance.getsockname.return_value = (expected_ip, 80)
-
-        result = metadata_manager.get_host_ip()
-
-        assert result == expected_ip
-        mock_instance.connect.assert_called_once_with(("1.1.1.1", 80))
-        mock_instance.getsockname.assert_called_once()
-
-
-def test_get_host_ip_failure():
-    metadata_manager = ModuleFactory().create_metadata_manager_obj()
-
-    with patch("socket.socket") as mock_socket:
-        mock_instance = MagicMock()
-        mock_socket.return_value = mock_instance
-
-        mock_instance.connect.side_effect = OSError()
-
-        result = metadata_manager.get_host_ip()
-
-        assert result is None
-        mock_instance.connect.assert_called_once_with(("1.1.1.1", 80))
-        mock_instance.getsockname.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -129,44 +94,6 @@ def test_get_pid_using_port(port, connections, expected_pid):
         mock_process.return_value.pid = expected_pid
         result = metadata_manager.get_pid_using_port(port)
         assert result == expected_pid
-
-
-@pytest.mark.parametrize(
-    "running_on_interface, host_ip,"
-    "set_host_ip_side_effect, expected_result",
-    [
-        # testcase1: Running on interface, valid IP
-        (True, "192.168.1.100", None, "192.168.1.100"),
-        # testcase2: Not running on interface
-        (False, "192.168.1.100", None, None),
-        # testcase3: Running on interface, initial DataError then success
-        (
-            True,
-            "192.168.1.100",
-            [redis.exceptions.DataError, None],
-            "192.168.1.100",
-        ),
-    ],
-)
-def test_store_host_ip(
-    running_on_interface,
-    host_ip,
-    set_host_ip_side_effect,
-    expected_result,
-):
-    metadata_manager = ModuleFactory().create_metadata_manager_obj()
-    metadata_manager.main.db.is_growing_zeek_dir.return_value = (
-        running_on_interface
-    )
-    metadata_manager.get_host_ip = MagicMock(return_value=host_ip)
-    metadata_manager.main.db.set_host_ip = MagicMock(
-        side_effect=set_host_ip_side_effect
-    )
-
-    with patch.object(sys, "argv", ["-i"] if running_on_interface else []):
-        with patch("time.sleep"):
-            result = metadata_manager.store_host_ip()
-            assert result == expected_result
 
 
 @pytest.mark.parametrize(
