@@ -5,7 +5,6 @@ from unittest.mock import (
     MagicMock,
     mock_open,
 )
-import sys
 import os
 from multiprocessing import Queue
 
@@ -698,14 +697,11 @@ class ModuleFactory:
         output_dir = "/tmp"
         redis_port = 6379
         termination_event = Mock()
-        
-        with patch.object(CCDetection, '__init__', return_value=None):
-            cc_detection = CCDetection(logger, output_dir, redis_port, termination_event)
+
+        with patch.object(CCDetection, "__init__", return_value=None):
+            cc_detection = CCDetection(
+                logger, output_dir, redis_port, termination_event
+            )
             cc_detection.db = Mock()
             cc_detection.exporter = Mock()
             return cc_detection
-  
-
-
-
-
