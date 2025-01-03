@@ -14,7 +14,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from threading import Lock
-from multiprocessing.connection import Connection
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -45,7 +44,6 @@ class Output(IObserver):
         stderr="output/errors.log",
         slips_logfile="output/slips.log",
         input_type=False,
-        sender_pipe: Connection = None,
         stop_daemon: bool = None,
         stdout="",
     ):

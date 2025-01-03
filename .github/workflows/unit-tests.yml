@@ -72,6 +72,7 @@ jobs:
           - test_database.py
           - test_symbols_handler.py
           - test_profile_handler.py
+          - test_process_manager.py
           - test_metadata_manager.py
 
     steps:

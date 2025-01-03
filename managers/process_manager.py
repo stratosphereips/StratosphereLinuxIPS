@@ -471,7 +471,7 @@ class ProcessManager:
 
     def get_analysis_time(self) -> Tuple[str, str]:
         """
-        Returns how long slips tool to analyze the given file
+        Returns how long slips took to analyze the given file
         returns analysis_time in minutes and slips end_time as a date
         """
         start_time = self.main.db.get_slips_start_time()
@@ -502,9 +502,11 @@ class ProcessManager:
         'stop_slips' msg
         """
         message = self.main.c1.get_message(timeout=0.01)
+        if not message:
+            return False
+
         return (
-            message
-            and utils.is_msg_intended_for(message, "control_channel")
+            utils.is_msg_intended_for(message, "control_channel")
             and message["data"] == "stop_slips"
         )
 

@@ -6,8 +6,10 @@ from unittest.mock import (
     mock_open,
 )
 import os
+from multiprocessing import Queue
 
 from managers.host_ip_manager import HostIPManager
+from managers.metadata_manager import MetadataManager
 from modules.flowalerts.conn import Conn
 from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
@@ -17,7 +19,6 @@ from slips_files.core.database.redis_db.constants import (
     Channels,
 )
 from slips_files.core.evidencehandler import EvidenceHandler
-
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
@@ -50,7 +51,6 @@ from modules.virustotal.virustotal import VT
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
-from multiprocessing import Queue
 from slips_files.core.helpers.flow_handler import FlowHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
@@ -65,7 +65,6 @@ from modules.timeline.timeline import Timeline
 from modules.cesnet.cesnet import CESNET
 from modules.riskiq.riskiq import RiskIQ
 from slips_files.common.markov_chains import Matrix
-from managers.metadata_manager import MetadataManager
 from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
@@ -345,9 +344,6 @@ class ModuleFactory:
 
     def create_host_ip_manager_obj(self, main):
         return HostIPManager(main)
-
-    def create_process_manager_obj(self):
-        return ProcessManager(self.create_main_obj())
 
     def create_utils_obj(self):
         return utils
@@ -645,6 +641,15 @@ class ModuleFactory:
         handler.width = 3600
         handler.print = Mock()
         return handler
+
+    def create_process_manager_obj(self):
+        main_mock = Mock()
+        main_mock.conf.get_disabled_modules.return_value = []
+        main_mock.input_type = "pcap"
+        main_mock.mode = "normal"
+        main_mock.stdout = ""
+        main_mock.args = Mock(growing=False, input_module=False, testing=False)
+        return ProcessManager(main_mock)
 
     def create_metadata_manager_obj(self, mock_db):
         main = self.create_main_obj("dummy_input")
