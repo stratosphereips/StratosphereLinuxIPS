@@ -84,7 +84,6 @@ def test_set_evidence_cc_channel(
     expected_calls,
 ):
     cc_detection = ModuleFactory().create_rnn_detection_object()
-    cc_detection.db = Mock()
     cc_detection.db.get_port_info.return_value = "HTTP"
     cc_detection.db.get_ip_identification.return_value = "Some IP info"
 
@@ -153,7 +152,6 @@ def test_subscribe_to_channels(
     side_effect, expected_c1, expected_c2, expected_channels
 ):
     cc_detection = ModuleFactory().create_rnn_detection_object()
-    cc_detection.db = Mock()
     cc_detection.db.subscribe.side_effect = side_effect
 
     cc_detection.subscribe_to_channels()
@@ -167,7 +165,7 @@ def test_subscribe_to_channels(
 
 def test_handle_new_letters_valid_tcp_high_score():
     cc_detection = ModuleFactory().create_rnn_detection_object()
-    cc_detection.db = Mock()
+
     cc_detection.tcpmodel = Mock()
     cc_detection.set_evidence_cc_channel = Mock()
     cc_detection.print = Mock()
@@ -192,6 +190,7 @@ def test_handle_new_letters_valid_tcp_high_score():
         "convert_input_for_module",
         return_value=np.array([[[0]]]),
     ):
+        # to exceed the 0.99 threshold in the function
         cc_detection.tcpmodel.predict.return_value = np.array([[0.995]])
 
         cc_detection.handle_new_letters({"data": json.dumps(msg_data)})
@@ -202,8 +201,8 @@ def test_handle_new_letters_valid_tcp_high_score():
         cc_detection.tcpmodel.predict.assert_called_once()
         cc_detection.print.assert_called()
         cc_detection.set_evidence_cc_channel.assert_called_once()
-        cc_detection.db.publish.assert_called_once()
 
+        cc_detection.db.publish.assert_called_once()
         call_args = cc_detection.db.publish.call_args
         assert call_args[0][0] == "check_jarm_hash"
         published_data = json.loads(call_args[0][1])
@@ -217,7 +216,7 @@ def test_handle_new_letters_valid_tcp_high_score():
 
 def test_handle_new_letters_valid_tcp_low_score():
     cc_detection = ModuleFactory().create_rnn_detection_object()
-    cc_detection.db = Mock()
+
     cc_detection.tcpmodel = Mock()
     cc_detection.set_evidence_cc_channel = Mock()
     cc_detection.print = Mock()
@@ -240,6 +239,7 @@ def test_handle_new_letters_valid_tcp_low_score():
         "convert_input_for_module",
         return_value=np.array([[[0]]]),
     ):
+        # less than the 0.99 threshold in the function
         cc_detection.tcpmodel.predict.return_value = np.array([[0.5]])
 
         cc_detection.handle_new_letters({"data": json.dumps(msg_data)})
@@ -255,7 +255,7 @@ def test_handle_new_letters_valid_tcp_low_score():
 
 def test_handle_new_letters_udp():
     cc_detection = ModuleFactory().create_rnn_detection_object()
-    cc_detection.db = Mock()
+
     cc_detection.tcpmodel = Mock()
     cc_detection.set_evidence_cc_channel = Mock()
     cc_detection.print = Mock()
@@ -286,7 +286,7 @@ def test_handle_new_letters_udp():
 
 def test_handle_new_letters_tcp_not_established():
     cc_detection = ModuleFactory().create_rnn_detection_object()
-    cc_detection.db = Mock()
+
     cc_detection.tcpmodel = Mock()
     cc_detection.set_evidence_cc_channel = Mock()
     cc_detection.print = Mock()

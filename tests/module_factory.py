@@ -692,7 +692,8 @@ class ModuleFactory:
 
         return metadata_manager
 
-    def create_rnn_detection_object(self):
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_rnn_detection_object(self, mock_db):
         logger = Mock()
         output_dir = "/tmp"
         redis_port = 6379
@@ -702,6 +703,6 @@ class ModuleFactory:
             cc_detection = CCDetection(
                 logger, output_dir, redis_port, termination_event
             )
-            cc_detection.db = Mock()
+            cc_detection.db = mock_db
             cc_detection.exporter = Mock()
             return cc_detection
