@@ -73,6 +73,8 @@ jobs:
           - test_symbols_handler.py
           - test_profile_handler.py
           - test_process_manager.py
+          - test_metadata_manager.py
+          - test_host_ip_manager.py
 
     steps:
     - uses: actions/checkout@v4
