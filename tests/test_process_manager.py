@@ -1,40 +1,8 @@
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from managers.process_manager import ProcessManager
-from datetime import datetime
 from tests.module_factory import ModuleFactory
-
-
-@pytest.mark.parametrize(
-    "input_type, mode, stdout, growing, " "input_module, testing, expected",
-    [
-        # testcase1: pcap input, normal mode, no stdout redirection
-        ("pcap", "normal", "", False, False, False, False),
-        # testcase2: zeek input, normal mode, no stdout redirection
-        ("zeek", "normal", "", False, False, False, True),
-        # testcase3: zeek input, daemonized mode
-        ("zeek", "daemonized", "", False, False, False, False),
-        # testcase4: zeek input, stdout redirected
-        ("zeek", "normal", "output.txt", False, False, False, False),
-        # testcase5: zeek input, growing file
-        ("zeek", "normal", "", True, False, False, False),
-        # testcase6: zeek input, input module specified
-        ("zeek", "normal", "", False, True, False, False),
-        # testcase7: zeek input, testing mode
-        ("zeek", "normal", "", False, False, True, False),
-    ],
-)
-def test_is_pbar_supported(
-    input_type, mode, stdout, growing, input_module, testing, expected
-):
-    process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.main.input_type = input_type
-    process_manager.main.mode = mode
-    process_manager.main.stdout = stdout
-    process_manager.main.args.growing = growing
-    process_manager.main.args.input_module = input_module
-    process_manager.main.args.testing = testing
-    assert process_manager.is_pbar_supported() == expected
+from slips_files.common.slips_utils import utils
 
 
 @pytest.mark.parametrize(
@@ -177,13 +145,13 @@ def test_get_hitlist_in_order(
     process_manager.processes = [
         Mock(pid=1, name="Process1"),
         Mock(pid=2, name="Process2"),
-        Mock(pid=3, name="Evidence"),
+        Mock(pid=3, name="EvidenceHandler"),
         Mock(pid=4, name="Blocking"),
         Mock(pid=5, name="Exporting Alerts"),
     ]
 
     process_manager.main.db.get_pid_of = lambda x: {
-        "Evidence": 3,
+        "EvidenceHandler": 3,
         "Blocking": 4,
         "Exporting Alerts": 5,
     }.get(x)
@@ -210,25 +178,37 @@ def test_get_hitlist_in_order(
 )
 def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
     process_manager = ModuleFactory().create_process_manager_obj()
+
+    # create mock process objects based on the `alive_statuses`
     mock_processes = [
         Mock(name=f"Process{i}") for i in range(len(alive_statuses))
     ]
+
+    # set up the is_alive of each process
+    for i, process in enumerate(mock_processes):
+        process.is_alive.return_value = alive_statuses[i]
 
     with patch("time.time", side_effect=[0, 3.1]):
         with patch.object(
             process_manager, "print_stopped_module"
         ) as mock_print_stopped:
-            for i, proc in enumerate(mock_processes):
-                proc.is_alive.return_value = alive_statuses[i]
-
             alive_processes = process_manager.wait_for_processes_to_finish(
                 mock_processes
             )
 
-    assert len(alive_processes) == expected_alive_count
-    assert (
-        mock_print_stopped.call_count
-        == len(alive_statuses) - expected_alive_count
+    # assertions
+    # verify the number of alive processes matches the expected count
+    assert len(alive_processes) == expected_alive_count, (
+        f"Expected {expected_alive_count} alive processes, but got "
+        f"{len(alive_processes)}"
+    )
+
+    # verify the `print_stopped_module` method is called for all stopped processes
+    expected_stopped_count = len(alive_statuses) - expected_alive_count
+    assert mock_print_stopped.call_count == expected_stopped_count, (
+        f"Expected `print_stopped_module` to be called "
+        f"{expected_stopped_count} times, "
+        f"but it was called {mock_print_stopped.call_count} times"
     )
 
 
@@ -236,94 +216,63 @@ def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
     "end_date_str, start_time_str, expected_analysis_time",
     [
         # Test case 1: Analysis time is 10 minutes
-        ("2023-04-01 10:10:00", "2023-04-01 10:00:00", 10.0),
+        (
+            1680343800,
+            1680343200,
+            10.0,
+        ),  # "2023-04-01 10:10:00", "2023-04-01 10:00:00"
         # Test case 2: Analysis time is 1 hour
-        ("2023-04-01 11:00:00", "2023-04-01 10:00:00", 60.0),
+        (
+            1680346800,
+            1680343200,
+            60.0,
+        ),  # "2023-04-01 11:00:00", "2023-04-01 10:00:00"
         # Test case 3: Analysis time is less than a minute
-        ("2023-04-01 10:00:30", "2023-04-01 10:00:00", 0.5),
+        (
+            1680343230,
+            1680343200,
+            0.5,
+        ),  # "2023-04-01 10:00:30", "2023-04-01 10:00:00"
     ],
 )
 def test_get_analysis_time(
     end_date_str, start_time_str, expected_analysis_time
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.main.metadata_man.set_analysis_end_date.return_value = (
-        datetime.strptime(end_date_str, "%Y-%m-%d %H:%M:%S")
-    )
-    process_manager.main.db.get_slips_start_time.return_value = (
-        datetime.strptime(start_time_str, "%Y-%m-%d %H:%M:%S")
-    )
+    utils.convert_format = Mock(return_value=end_date_str)
+    process_manager.main.db.get_slips_start_time.return_value = start_time_str
 
     analysis_time = process_manager.get_analysis_time()
 
-    assert analysis_time == expected_analysis_time
+    assert analysis_time == (expected_analysis_time, end_date_str)
 
 
 @pytest.mark.parametrize(
-    "should_run_non_stop_return, stop_slips_received_return, "
-    "slips_is_done_receiving_new_flows_return, expected_result",
-    [
-        # Test case 1: should_run_non_stop returns True,
-        # other functions aren't called
-        (True, False, False, False),
-        # Test case 2: should_run_non_stop returns False,
-        # stop_slips_received returns True
-        (False, True, False, True),
-        # Test case 3: should_run_non_stop and stop_slips_received return False,
-        # slips_is_done_receiving_new_flows returns True
-        (False, False, True, True),
-        # Test case 4: All functions return False
-        (False, False, False, False),
-    ],
-)
-def test_stop_slips(
-    should_run_non_stop_return,
-    stop_slips_received_return,
-    slips_is_done_receiving_new_flows_return,
-    expected_result,
-):
-    process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.should_run_non_stop = Mock(
-        return_value=should_run_non_stop_return
-    )
-    process_manager.stop_slips_received = Mock(
-        return_value=stop_slips_received_return
-    )
-    process_manager.slips_is_done_receiving_new_flows = Mock(
-        return_value=slips_is_done_receiving_new_flows_return
-    )
-
-    assert process_manager.stop_slips() == expected_result
-
-
-@pytest.mark.parametrize(
-    "message, expected_result",
+    "message, msg_recvd_in_control_channel, expected_result",
     [
         # Test case 1: Message is None
-        (None, None),
+        (None, True, False),
         # Test case 2: Message doesn't contain "stop_slips"
-        ({"data": "some_other_message"}, None),
+        ({"data": "some_other_message"}, True, False),
         # Test case 3: Message contains
         # "stop_slips" but not intended for control channel
-        ({"data": "stop_slips"}, None),
+        ({"data": "stop_slips"}, False, False),
         # Test case 4: Message contains
         # "stop_slips" and intended for control channel
-        ({"data": "stop_slips"}, True),
+        ({"data": "stop_slips"}, True, True),
     ],
 )
-def test_stop_slips_received(message, expected_result):
+def test_is_stop_msg_received(
+    message, msg_recvd_in_control_channel, expected_result
+):
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.c1.get_message.return_value = message
 
     with patch(
-        "slips_files.common.slips_utils.utils." "is_msg_intended_for"
+        "slips_files.common.slips_utils.utils.is_msg_intended_for"
     ) as mock_is_intended_for:
-        mock_is_intended_for.return_value = (
-            message is not None
-            and message.get("data") == "stop_slips"
-            and expected_result is True
-        )
-        assert process_manager.stop_slips_received() == expected_result
+        mock_is_intended_for.return_value = msg_recvd_in_control_channel
+        assert process_manager.is_stop_msg_received() == expected_result
 
 
 @pytest.mark.parametrize(
@@ -378,19 +327,14 @@ def test_should_run_non_stop(
         (True, True, True),
     ],
 )
-def test_slips_is_done_receiving_new_flows(
+def test_is_done_receiving_new_flows(
     input_acquired, profiler_acquired, expected_result
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.is_input_done = MagicMock()
-    process_manager.is_profiler_done = MagicMock()
-
-    process_manager.is_input_done.acquire.return_value = input_acquired
-    process_manager.is_profiler_done.acquire.return_value = profiler_acquired
-
-    assert (
-        process_manager.slips_is_done_receiving_new_flows() == expected_result
+    process_manager.can_acquire_semaphore = Mock(
+        side_effect=[input_acquired, profiler_acquired]
     )
+    assert process_manager.is_done_receiving_new_flows() == expected_result
 
 
 @pytest.mark.parametrize(
@@ -398,7 +342,7 @@ def test_slips_is_done_receiving_new_flows(
     [  # Test case 1: Daemonized mode
         ("daemonized", "main.daemon.print"),
         # Test case 2: Normal mode
-        ("normal", "main.print"),
+        ("interactive", "main.print"),
     ],
 )
 def test_get_print_function(mode, expected_print_function):
@@ -417,53 +361,6 @@ def test_get_print_function(mode, expected_print_function):
 
     print_function()
     expected_function.assert_called_once()
-
-
-@pytest.mark.parametrize(
-    "mode, output, redis_port, stdout",
-    [
-        # Test case 1: Normal mode, output to file,
-        # default redis port, stdout redirected
-        ("normal", "output.txt", 6379, "output.txt"),
-        # Test case 2: Daemonized mode, output to stdout,
-        # custom redis port, stdout not redirected
-        ("daemonized", "-", 6380, ""),
-        # Test case 3: Testing mode, no output,
-        # default redis port, stdout not redirected
-        ("testing", None, 6379, ""),
-    ],
-)
-def test_start_progress_bar(mode, output, redis_port, stdout):
-    process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.main.mode = mode
-    process_manager.main.args.output = output
-    process_manager.main.redis_port = redis_port
-    process_manager.main.stdout = stdout
-
-    with patch("managers.process_manager.PBar") as mock_pbar:
-        mock_pbar_process = Mock()
-        mock_pbar.return_value = mock_pbar_process
-        mock_pbar_process.pid = 12345
-        mock_pbar_process.name = "PBar"
-
-        result = process_manager.start_progress_bar()
-
-        assert result == mock_pbar_process
-        mock_pbar.assert_called_once_with(
-            process_manager.main.logger,
-            output,
-            redis_port,
-            process_manager.termination_event,
-            stdout=stdout,
-            pipe=process_manager.pbar_recv_pipe,
-            slips_mode=mode,
-            pbar_finished=process_manager.pbar_finished,
-        )
-        mock_pbar_process.start.assert_called_once()
-        process_manager.main.db.store_pid.assert_called_once_with(
-            "PBar", 12345
-        )
-        process_manager.main.print.assert_called_once()
 
 
 def test_print_stopped_module():
@@ -486,17 +383,8 @@ def test_print_stopped_module():
         assert "green_count left" in printed_str
 
 
-@pytest.mark.parametrize(
-    "has_pbar",
-    [  # Test case 1: PBar is supported
-        (True,),
-        # Test case 2: PBar is not supported
-        (False,),
-    ],
-)
-def test_start_profiler_process(has_pbar):
+def test_start_profiler_process():
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.is_pbar_supported = Mock(return_value=has_pbar)
     with patch("managers.process_manager.Profiler") as mock_profiler:
         mock_profiler_process = Mock()
         mock_profiler.return_value = mock_profiler_process
@@ -513,7 +401,6 @@ def test_start_profiler_process(has_pbar):
             is_profiler_done=process_manager.is_profiler_done,
             profiler_queue=process_manager.profiler_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
-            has_pbar=has_pbar,
         )
         mock_profiler_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
@@ -553,7 +440,7 @@ def test_start_evidence_process(output_dir, redis_port):
         mock_evidence_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
         process_manager.main.db.store_pid.assert_called_once_with(
-            "Evidence", 13579
+            "EvidenceHandler", 13579
         )
 
 
@@ -618,58 +505,3 @@ def test_start_update_manager(
     assert mock_update_manager.update_whitelist.called is whitelist_called
     assert mock_update_manager.print.called is print_called
     assert mock_asyncio_run.called is asyncio_called
-
-
-@pytest.mark.parametrize(
-    "verbose, debug, input_type, " "stop_daemon, is_pbar_supported",
-    [
-        # Test case 1: Verbose, debug, pcap input,
-        # stop_daemon, pbar supported
-        (2, True, "pcap", False, True),
-        # Test case 2: Non-verbose, non-debug,
-        # zeek input, no stop_daemon, no pbar
-        (0, False, "zeek", True, False),
-        # Test case 3: Verbose, debug, stdin input,
-        # stop_daemon, pbar supported
-        (1, True, "stdin", False, True),
-    ],
-)
-@patch("managers.process_manager.Output")
-def test_start_output_process(
-    mock_output, verbose, debug, input_type, stop_daemon, is_pbar_supported
-):
-    process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.main.args.verbose = verbose
-    process_manager.main.args.debug = debug
-    process_manager.main.input_type = input_type
-    process_manager.main.args.stopdaemon = stop_daemon
-
-    current_stdout = Mock()
-    stderr = Mock()
-    slips_logfile = "test_logfile.log"
-
-    process_manager.is_pbar_supported = Mock(return_value=is_pbar_supported)
-
-    mock_output_process = Mock()
-    mock_output_process.slips_logfile = "updated_logfile.log"
-    mock_output.return_value = mock_output_process
-
-    result = process_manager.start_output_process(
-        current_stdout, stderr, slips_logfile
-    )
-
-    mock_output.assert_called_once_with(
-        stdout=current_stdout,
-        stderr=stderr,
-        slips_logfile=slips_logfile,
-        verbose=verbose,
-        debug=debug,
-        input_type=input_type,
-        sender_pipe=process_manager.output_send_pipe,
-        has_pbar=is_pbar_supported,
-        pbar_finished=process_manager.pbar_finished,
-        stop_daemon=stop_daemon,
-    )
-
-    assert result == mock_output_process
-    assert process_manager.slips_logfile == "updated_logfile.log"
