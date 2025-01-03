@@ -345,7 +345,6 @@ class ModuleFactory:
     def create_host_ip_manager_obj(self, main):
         return HostIPManager(main)
 
-
     def create_utils_obj(self):
         return utils
 
@@ -646,8 +645,8 @@ class ModuleFactory:
     def create_process_manager_obj(self):
         main_mock = Mock()
         main_mock.conf.get_disabled_modules.return_value = []
-        main_mock.input_type = 'pcap'
-        main_mock.mode = 'normal'
-        main_mock.stdout = ''
+        main_mock.input_type = "pcap"
+        main_mock.mode = "normal"
+        main_mock.stdout = ""
         main_mock.args = Mock(growing=False, input_module=False, testing=False)
         return ProcessManager(main_mock)
