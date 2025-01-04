@@ -446,7 +446,9 @@ class Utils(object):
             ip_obj = ipaddress.ip_address(ip)
         except (ipaddress.AddressValueError, ValueError):
             return True
-
+        # Explicitly ignore 0.0.0.0 and the broadcast address 255.255.255.255
+        if ip == "0.0.0.0" or ip == "255.255.255.255":
+            return True
         # Is the IP multicast, private? (including localhost)
         # The broadcast address 255.255.255.255 is reserved.
         return (
