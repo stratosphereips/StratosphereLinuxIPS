@@ -1,6 +1,3 @@
-from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.module import IModule
-from ..cesnet.warden_client import Client, read_cfg
 import os
 import json
 import time
@@ -8,7 +5,19 @@ import threading
 import queue
 import ipaddress
 import validators
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.abstracts.module import IModule
+from slips_files.core.structures.evidence import (
+    ThreatLevel,
+    Evidence,
+    dict_to_evidence,
+)
+from ..cesnet.warden_client import Client, read_cfg
 from slips_files.common.slips_utils import utils
+from slips_files.common.idea_format import (
+    idea_format,
+)
 
 
 class CESNET(IModule):
@@ -92,34 +101,13 @@ class CESNET(IModule):
         """
         Exports evidence to warden server
         """
-        threat_level = evidence.get("threat_level")
-        if threat_level == "info":
+        evidence: Evidence = dict_to_evidence(evidence)
+        threat_level = evidence.threat_level
+        if threat_level == ThreatLevel.INFO:
             # don't export alerts of type 'info'
             return False
 
-        description = evidence["description"]
-        profileid = evidence["profileid"]
-        srcip = profileid.split("_")[1]
-        evidence_type = evidence["evidence_type"]
-        attacker_direction = evidence["attacker_direction"]
-        attacker = evidence["attacker"]
-        evidence_id = evidence["ID"]
-        confidence = evidence.get("confidence")
-        port = evidence.get("port")
-        proto = evidence.get("proto")
-
-        evidence_in_idea = utils.IDEA_format(
-            srcip,
-            evidence_type,
-            attacker_direction,
-            attacker,
-            description,
-            confidence,
-            port,
-            proto,
-            evidence_id,
-        )
-
+        evidence_in_idea: dict = idea_format(evidence)
         # remove private ips from the alert
         evidence_in_idea = self.remove_private_ips(evidence_in_idea)
 
@@ -178,7 +166,8 @@ class CESNET(IModule):
         tag = []
         notag = []
 
-        # group = ['cz.tul.ward.kippo','cz.vsb.buldog.kippo', 'cz.zcu.civ.afrodita','cz.vutbr.net.bee.hpscan']
+        # group = ['cz.tul.ward.kippo','cz.vsb.buldog.kippo',
+        # 'cz.zcu.civ.afrodita','cz.vutbr.net.bee.hpscan']
         group = []
         nogroup = []
 
