@@ -1,12 +1,9 @@
 import pytest
-from slips_files.core.evidence_structure.evidence import (
+from slips_files.core.structures.evidence import (
     Evidence,
     IoCType,
     EvidenceType,
-)
-from slips_files.core.evidence_structure.evidence import (
     ThreatLevel,
-    IDEACategory,
     Attacker,
     Victim,
     Direction,
@@ -63,7 +60,6 @@ def test_extract_cc_server_ip(evidence_description, expected_result):
         description=evidence_description,
         attacker=None,
         threat_level=None,
-        category=None,
         profile=None,
         timewindow=None,
         uid=[],
@@ -85,12 +81,9 @@ def test_extract_cc_botnet_ip(attacker_ip, expected_result):
     evidence = Evidence(
         evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
         description="Some description",
-        attacker=type(
-            "Attacker", (), {"value": attacker_ip, "attacker_type": IoCType.IP}
-        )(),
-        threat_level=None,
-        category=None,
-        profile=None,
+        attacker=Attacker(value=attacker_ip, attacker_type=IoCType.IP),
+        threat_level=ThreatLevel.INFO,
+        profile=ProfileID(ip=attacker_ip),
         timewindow=None,
         uid=[],
         timestamp=datetime.now().strftime("%Y/%m/%d %H:%M:%S.%f%z"),
@@ -106,24 +99,20 @@ def test_idea_format_command_and_control():
             direction=Direction.SRC, attacker_type=IoCType.IP, value="10.0.0.1"
         ),
         threat_level=ThreatLevel.HIGH,
-        category=IDEACategory.INTRUSION_BOTNET,
         profile=ProfileID(ip="10.0.0.1"),
         timewindow=TimeWindow(number=1),
         uid=["12345"],
         timestamp="2023/08/05 12:00:00.000000+0000",
-        port=8080,
         proto=Proto.TCP,
     )
 
     expected_output = {
         "Format": "IDEA0",
-        "Category": ["Intrusion.Botnet"],
         "Source": [
             {"IP4": ["10.0.0.1"], "Type": ["Botnet"]},
             {
                 "IP4": ["192.168.1.1"],
                 "Type": ["CC"],
-                "Port": [8080],
                 "Proto": ["TCP"],
             },
         ],
@@ -133,7 +122,6 @@ def test_idea_format_command_and_control():
                 "ContentType": "text/plain",
             }
         ],
-        "ConnCount": 1,
     }
 
     result = idea_format(evidence)
@@ -145,7 +133,6 @@ def test_idea_format_command_and_control():
         "ID",
         "DetectTime",
         "EventTime",
-        "Category",
         "Confidence",
         "Source",
         "Attach",
@@ -157,7 +144,6 @@ def test_idea_format_command_and_control():
     assert isinstance(result["ID"], str)
     assert isinstance(result["DetectTime"], str)
     assert isinstance(result["EventTime"], str)
-    assert result["Category"] == expected_output["Category"]
     assert isinstance(result["Confidence"], (int, float))
     assert 0 <= result["Confidence"] <= 1
 
@@ -198,32 +184,28 @@ def test_idea_format_command_and_control():
 def test_idea_format_malicious_downloaded_file():
     evidence = Evidence(
         evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
-        description="Malicious file downloaded. MD5: abc123, "
-        "size: 1024 bytes from 192.168.1.2",
+        description="Malicious downloaded file abc123. "
+        "size: 1024 bytes. "
+        "File was downloaded from server: 5.5.5.5. "
+        "Detected by: blacklist1. "
+        "Confidence: 1. ",
         attacker=Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.MD5, value="abc123"
+            direction=Direction.SRC,
+            attacker_type=IoCType.IP,
+            value="192.168.1.2",
         ),
         threat_level=ThreatLevel.HIGH,
-        category=IDEACategory.MALWARE,
         profile=ProfileID(ip="10.0.0.2"),
         timewindow=TimeWindow(number=2),
         uid=["67890"],
         timestamp="2023/08/05 13:00:00.000000+0000",
-        victim=Victim(
-            direction=Direction.DST,
-            victim_type=IoCType.IP,
-            value="192.168.1.2",
-        ),
     )
 
     expected_output = {
         "Format": "IDEA0",
-        "Category": ["Malware"],
-        "Source": [{"Hash": ["abc123"]}],
-        "Target": [{"IP4": ["192.168.1.2"]}],
+        "Source": [{"IP4": ["192.168.1.2"]}],
         "Attach": [{"Type": ["Malware"], "Hash": ["md5:abc123"]}],
         "Size": 1024,
-        "ConnCount": 1,
     }
 
     result = idea_format(evidence)
@@ -235,7 +217,6 @@ def test_idea_format_malicious_downloaded_file():
         "ID",
         "DetectTime",
         "EventTime",
-        "Category",
         "Confidence",
         "Source",
         "Attach",
@@ -247,7 +228,6 @@ def test_idea_format_malicious_downloaded_file():
     assert isinstance(result["ID"], str)
     assert isinstance(result["DetectTime"], str)
     assert isinstance(result["EventTime"], str)
-    assert result["Category"] == expected_output["Category"]
     assert isinstance(result["Confidence"], (int, float))
     assert 0 <= result["Confidence"] <= 1
 
@@ -264,9 +244,6 @@ def test_idea_format_malicious_downloaded_file():
             ), f"Value mismatch for key '{key}' in Source"
 
     assert result["Attach"] == expected_output["Attach"]
-
-    assert "Target" in result
-    assert result["Target"] == expected_output["Target"]
     assert "Size" in result
     assert result["Size"] == expected_output["Size"]
 
@@ -366,19 +343,6 @@ def test_idea_format_malicious_downloaded_file():
             "victim",
             ("https://example.com/page", "URL"),
         ),
-        # Test case 7: Attacker with MD5
-        (
-            {
-                "attacker": Attacker(
-                    direction=Direction.SRC,
-                    attacker_type=IoCType.MD5,
-                    value="098f6bcd4621d373cade4e832627b4f6",
-                ),
-                "victim": None,
-            },
-            "attacker",
-            ("098f6bcd4621d373cade4e832627b4f6", "Hash"),
-        ),
     ],
 )
 def test_extract_role_type(evidence_data, role, expected_result):
@@ -387,7 +351,6 @@ def test_extract_role_type(evidence_data, role, expected_result):
         description="Test evidence",
         attacker=evidence_data["attacker"],
         threat_level=None,
-        category=None,
         profile=None,
         timewindow=None,
         uid=[],
