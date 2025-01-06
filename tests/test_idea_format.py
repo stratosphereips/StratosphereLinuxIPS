@@ -81,7 +81,11 @@ def test_extract_cc_botnet_ip(attacker_ip, expected_result):
     evidence = Evidence(
         evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
         description="Some description",
-        attacker=Attacker(value=attacker_ip, attacker_type=IoCType.IP),
+        attacker=Attacker(
+            value=attacker_ip,
+            attacker_type=IoCType.IP,
+            direction=Direction.SRC,
+        ),
         threat_level=ThreatLevel.INFO,
         profile=ProfileID(ip=attacker_ip),
         timewindow=None,
