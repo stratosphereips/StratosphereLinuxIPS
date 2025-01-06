@@ -77,6 +77,7 @@ jobs:
           - test_host_ip_manager.py
           - test_host_ip_manager.py
           - test_rnn_cc_detection.py
+          - test_idea_format.py
 
     steps:
     - uses: actions/checkout@v4
