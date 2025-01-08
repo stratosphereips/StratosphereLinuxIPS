@@ -7,6 +7,10 @@ from slips_files.common.abstracts.module import IModule
 from slips_files.common.parsers.config_parser import (
     ConfigParser,
 )
+from slips_files.core.structures.alerts import (
+    dict_to_alert,
+    Alert,
+)
 from ..fidesModule.messaging.message_handler import MessageHandler
 from ..fidesModule.messaging.network_bridge import NetworkBridge
 from ..fidesModule.model.configuration import load_configuration
@@ -72,7 +76,8 @@ class FidesModule(IModule):
         # so it shouldnt be stored in the current output dir, it should be
         # in the main slips dir
         self.sqlite = SQLiteDB(
-            self.logger, os.path.join(os.getcwd(), self.__trust_model_config.database)
+            self.logger,
+            os.path.join(os.getcwd(), self.__trust_model_config.database),
         )
 
     def read_configuration(self):
@@ -189,11 +194,10 @@ class FidesModule(IModule):
             # if there's no string data message we can continue waiting
             if not msg["data"]:
                 return
-            alert_info: dict = json.loads(msg["data"])
-            profileid = alert_info["profileid"]
-            target = profileid.split("_")[-1]
+            alert: dict = json.loads(msg["data"])
+            alert: Alert = dict_to_alert(alert)
             self.__alerts.dispatch_alert(
-                target=target,
+                target=alert.profile.ip,
                 confidence=0.5,
                 score=0.8,
             )
@@ -212,6 +216,7 @@ class FidesModule(IModule):
                 return
             self.__intelligence.request_data(ip)
 
-        # TODO: delete whole if below, exists for testing purposes for tests/integration_tests/test_fides.py
+        # TODO: the code below exists for testing purposes for
+        #  tests/integration_tests/test_fides.py
         self.get_msg("fides2network")
         self.get_msg("fides2slips")
