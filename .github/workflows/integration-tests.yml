@@ -24,6 +24,7 @@ jobs:
           - test_config_files.py
           - test_portscans.py
           - test_dataset.py
+          - test_fides.py
 
     steps:
     - uses: actions/checkout@v4
