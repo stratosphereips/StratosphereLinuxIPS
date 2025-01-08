@@ -99,9 +99,6 @@ class EvidenceHandler(ICore):
         conf = ConfigParser()
         self.width: float = conf.get_tw_width_as_float()
         self.detection_threshold = conf.evidence_detection_threshold()
-        print(
-            f"@@@@@@@@@@@@@@@@ detection_threshold {self.detection_threshold}"
-        )
         self.print(
             f"Detection Threshold: {self.detection_threshold} "
             f"attacks per minute "
