@@ -1,10 +1,15 @@
 from datetime import timedelta
 import sys
 import ipaddress
-from typing import List
+from typing import (
+    List,
+    Union,
+)
+import yaml
+from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
+
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
-import yaml
 
 
 class ConfigParser(object):
@@ -217,17 +222,9 @@ class ConfigParser(object):
         return twid_width
 
     def disabled_detections(self) -> list:
-        disabled_detections = self.read_configuration(
+        return self.read_configuration(
             "DisabledAlerts", "disabled_detections", []
         )
-        if disabled_detections:
-            disabled_detections = (
-                disabled_detections.replace("[", "")
-                .replace("]", "")
-                .replace(",", "")
-                .split()
-            )
-        return disabled_detections
 
     def get_tw_width(self) -> str:
         twid_width = self.get_tw_width_as_float()
@@ -295,14 +292,7 @@ class ConfigParser(object):
         return debug
 
     def export_to(self):
-        return (
-            self.read_configuration("exporting_alerts", "export_to", "[]")
-            .replace("]", "")
-            .replace("[", "")
-            .replace(" ", "")
-            .lower()
-            .split(",")
-        )
+        return self.read_configuration("exporting_alerts", "export_to", [])
 
     def export_strato_letters(self) -> bool:
         return self.read_configuration(
@@ -528,7 +518,20 @@ class ConfigParser(object):
         )
         return utils.sanitize(rotation_period)
 
-    def client_ips(self) -> List[str]:
+    def parse_ip(self, ip: str):
+        """converts the given IP address or CIDR to an obj"""
+        try:
+            return (
+                ipaddress.ip_network(ip, strict=False)
+                if "/" in ip
+                else ipaddress.ip_address(ip)
+            )
+        except ValueError:
+            raise ValueError(f"Invalid IP or CIDR format: {ip}")
+
+    def client_ips(
+        self,
+    ) -> List[Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]]:
         client_ips: str = self.read_configuration(
             "parameters", "client_ips", []
         )
@@ -543,6 +546,8 @@ class ConfigParser(object):
         client_ips: List[str] = [
             client_ip for client_ip in client_ips if client_ip
         ]
+        # convert client ips to ip and network objs
+        client_ips: List = [self.parse_ip(ip) for ip in client_ips]
         return client_ips
 
     def keep_rotated_files_for(self) -> int:

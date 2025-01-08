@@ -1,5 +1,8 @@
 import platform
-from typing import Union
+from typing import (
+    Union,
+    Optional,
+)
 from uuid import uuid4
 import datetime
 import maxminddb
@@ -58,7 +61,6 @@ class IPInfo(AsyncModule):
             "new_dns": self.c3,
             "check_jarm_hash": self.c4,
         }
-        self.is_gw_mac_set = False
         self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.valid_tlds = whois.validTlds()
@@ -175,7 +177,6 @@ class IPInfo(AsyncModule):
         return data
 
     # MAC functions
-
     def get_vendor_online(self, mac_addr):
         # couldn't find vendor using offline db, search online
 
@@ -198,30 +199,33 @@ class IPInfo(AsyncModule):
         ):
             return False
 
+    @staticmethod
     @lru_cache(maxsize=700)
+    def _get_vendor_offline_cached(oui, mac_db_content):
+        """
+        Static helper to perform the actual lookup based on OUI and cached content.
+        """
+        for line in mac_db_content:
+            if oui in line:
+                line = json.loads(line)
+                return line["vendorName"]
+        return False
+
     def get_vendor_offline(self, mac_addr, profileid):
         """
-        Gets vendor from Slips' offline database databases/macaddr-db.json
+        Gets vendor from Slips' offline database at databases/macaddr-db.json.
         """
-        if not hasattr(self, "mac_db"):
+        if not hasattr(self, "mac_db") or self.mac_db is None:
             # when update manager is done updating the mac db, we should ask
             # the db for all these pending queries
             self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
         oui = mac_addr[:8].upper()
-        # parse the mac db and search for this oui
         self.mac_db.seek(0)
-        while True:
-            line = self.mac_db.readline()
-            if line == "":
-                # reached the end of file without finding the vendor
-                # set the vendor to unknown to avoid searching for it again
-                return False
+        mac_db_content = self.mac_db.readlines()
 
-            if oui in line:
-                line = json.loads(line)
-                return line["vendorName"]
+        return self._get_vendor_offline_cached(oui, tuple(mac_db_content))
 
     def get_vendor(self, mac_addr: str, profileid: str) -> dict:
         """
@@ -253,46 +257,60 @@ class IPInfo(AsyncModule):
 
         return mac_info
 
-    # domain info
-    def get_age(self, domain):
-        """
-        Get the age of a domain using whois library
-        """
+    def has_cached_info(self, domain) -> bool:
+        cached_data = self.db.get_domain_data(domain)
+        if cached_data and ("Age" in cached_data and "Org" in cached_data):
+            # we already have info about this domain
+            return True
+        return False
 
+    def is_valid_domain(self, domain: str) -> bool:
         if domain.endswith(".arpa") or domain.endswith(".local"):
             return False
 
         domain_tld: str = self.whitelist.domain_analyzer.get_tld(domain)
         if domain_tld not in self.valid_tlds:
             return False
+        return True
 
-        cached_data = self.db.get_domain_data(domain)
-        if cached_data and "Age" in cached_data:
-            # we already have age info about this domain
-            return False
+    def query_whois(self, domain: str):
+        try:
+            with (
+                open("/dev/null", "w") as f,
+                redirect_stdout(f),
+                redirect_stderr(f),
+            ):
+                return whois.query(domain, timeout=2.0)
+        except Exception:
+            return None
 
-        # whois library doesn't only raise an exception, it prints the error!
-        # the errors are the same exceptions we're handling
-        # so temporarily change stdout to /dev/null
-        with open("/dev/null", "w") as f:
-            with redirect_stdout(f) and redirect_stderr(f):
-                # get registration date
-                try:
-                    creation_date = whois.query(
-                        domain, timeout=2.0
-                    ).creation_date
-                except Exception:
-                    return False
+    def get_domain_info(self, domain):
+        """
+        Gets the age and org of a domain using whois
+        """
+        if not self.is_valid_domain(domain) or self.has_cached_info(domain):
+            return
 
-        if not creation_date:
-            # no creation date was found for this domain
-            return False
+        res = self.query_whois(domain)
+        if res:
+            if res.creation_date:
+                age = utils.get_time_diff(
+                    res.creation_date,
+                    datetime.datetime.now(),
+                    return_type="days",
+                )
+                self.db.set_info_for_domains(domain, {"Age": age})
 
-        today = datetime.datetime.now()
+            if res.registrant:
+                self.db.set_info_for_domains(domain, {"Org": res.registrant})
+                return
 
-        age = utils.get_time_diff(creation_date, today, return_type="days")
-        self.db.set_info_for_domains(domain, {"Age": age})
-        return age
+        # usually support.microsoft.com doesnt have a registrant,
+        # but microsoft.com does
+        sld = utils.extract_hostname(domain)
+        sld_res = self.query_whois(sld)
+        if sld_res and sld_res.registrant:
+            self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
     async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
@@ -304,7 +322,7 @@ class IPInfo(AsyncModule):
         await self.reading_mac_db_task
 
     # GW
-    def get_gateway_ip(self):
+    def get_gateway_ip_if_interface(self):
         """
         Slips tries different ways to get the ip of the default gateway
         this method tries to get the default gateway IP address using ip route
@@ -335,7 +353,7 @@ class IPInfo(AsyncModule):
             gw_ip = route_default_result[2]
         return gw_ip
 
-    def get_gateway_mac(self, gw_ip: str):
+    def get_gateway_mac(self, gw_ip: str) -> Optional[str]:
         """
         Given the gw_ip, this function tries to get the MAC
          from arp.log or from arp tables
@@ -349,6 +367,7 @@ class IPInfo(AsyncModule):
             return gw_mac
 
         if not self.is_running_non_stop:
+            # running on pcap or a given zeek file/dir
             # no MAC in arp.log (in the db) and can't use arp tables,
             # so it's up to the db.is_gw_mac() function to determine the gw mac
             # if it's seen associated with a public IP
@@ -489,8 +508,13 @@ class IPInfo(AsyncModule):
         utils.drop_root_privs()
         self.wait_for_dbs()
         # the following method only works when running on an interface
-        if ip := self.get_gateway_ip():
+        if ip := self.get_gateway_ip_if_interface():
             self.db.set_default_gateway("IP", ip)
+
+            # whether we found the gw ip using dhcp in profiler
+            # or using ip route using self.get_gateway_ip()
+            # now that it's found, get and store the mac addr of it
+            self.get_gateway_mac(ip)
 
     def handle_new_ip(self, ip: str):
         try:
@@ -528,22 +552,12 @@ class IPInfo(AsyncModule):
 
             self.get_vendor(mac_addr, profileid)
             self.check_if_we_have_pending_offline_mac_queries()
-            # set the gw mac and ip if they're not set yet
-            if not self.is_gw_mac_set:
-                # whether we found the gw ip using dhcp in profiler
-                # or using ip route using self.get_gateway_ip()
-                # now that it's found, get and store the mac addr of it
-                if ip := self.db.get_gateway_ip():
-                    # now that we know the GW IP address,
-                    # try to get the MAC of this IP (of the gw)
-                    self.get_gateway_mac(ip)
-                    self.is_gw_mac_set = True
 
         if msg := self.get_msg("new_dns"):
             msg = json.loads(msg["data"])
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             if domain := flow.query:
-                self.get_age(domain)
+                self.get_domain_info(domain)
 
         if msg := self.get_msg("new_ip"):
             ip = msg["data"]

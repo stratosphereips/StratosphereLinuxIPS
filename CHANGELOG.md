@@ -1,3 +1,19 @@
+
+1.1.5 (Jan 3rd, 2025)
+- 200x times speedup of domain lookups in the threat intelligence module.
+- Add a threat level and confidence to each alert.
+- Add evidence for CN and hostname mismatch in SSL flows.
+- Add multiple telnet reconnection attempts detection.
+- Add support to IP ranges as the client_ip in slips.yaml
+- Alert "invalid DNS answer" on all private DNS answers.
+- Don't alert "high entropy TXT answers" for flows from multicast IPs.
+- Fix multiple reconnection attempts detection.
+- Fix problem downloading the latest MAC database from macvendors.com
+- Improve the detection of the Gateway IP and MAC when running on files and PCAPs.
+- Improve unit tests. Special thanks to @Sekhar-Kumar-Dash.
+- Split the "connection to/from blacklisted IPs" detection into two different evidence with different threat levels.
+- Update Slips internal list of Apple known ports.
+
 1.1.4.1 (Dec 3rd, 2024)
 - Fix abstract class starting with the rest of the modules.
 - Fix the updating of the MAC vendors database used in slips.

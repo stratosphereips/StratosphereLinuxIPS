@@ -8,7 +8,10 @@ from typing import (
     Union,
 )
 from slips_files.common.slips_utils import utils
-from slips_files.core.structures.alerts import Alert
+from slips_files.core.structures.alerts import (
+    Alert,
+    alert_to_dict,
+)
 from slips_files.core.structures.evidence import (
     Evidence,
     EvidenceType,
@@ -226,13 +229,7 @@ class AlertHandler:
         # reset the accumulated threat level now that an alert is generated
         self._set_accumulated_threat_level(alert, 0)
         self.mark_profile_as_malicious(alert.profile)
-
-        alert_details = {
-            "alert_ID": alert.id,
-            "profileid": str(alert.profile),
-            "twid": str(alert.timewindow),
-        }
-        self.publish(self.channels.NEW_ALERT, json.dumps(alert_details))
+        self.publish(self.channels.NEW_ALERT, json.dumps(alert_to_dict(alert)))
 
     def init_evidence_number(self):
         """used when the db starts to initialize number of

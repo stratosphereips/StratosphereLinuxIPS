@@ -186,9 +186,9 @@ def test_assert_microseconds(input_value, expected_output):
         # testcase4: Public IPv4 address
         (ipaddress.ip_address("8.8.8.8"), False),
         # testcase5: Special IP address 0.0.0.0
-        (ipaddress.ip_address("0.0.0.0"), False),
+        (ipaddress.ip_address("0.0.0.0"), True),
         # testcase6: Broadcast IP address 255.255.255.255
-        (ipaddress.ip_address("255.255.255.255"), False),
+        (ipaddress.ip_address("255.255.255.255"), True),
     ],
 )
 def test_is_private_ip(ip_address, expected_result):

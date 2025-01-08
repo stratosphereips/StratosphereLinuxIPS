@@ -53,7 +53,9 @@ class Timeline(IModule):
             # slips only detects inbound traffic in the "all" direction
             return False
 
-        return flow.daddr == self.host_ip or flow.daddr in self.client_ips
+        return flow.daddr == self.host_ip or utils.is_ip_in_client_ips(
+            flow.daddr, self.client_ips
+        )
 
     def process_dns_altflow(self, alt_flow: dict):
         answer = alt_flow["answers"]

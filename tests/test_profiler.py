@@ -1,7 +1,6 @@
 """Unit test for slips_files/core/performance_profiler.py"""
 
 from unittest.mock import Mock
-
 from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing
 import subprocess
@@ -643,3 +642,143 @@ def test_notify_observers_with_correct_message():
     test_msg = {"action": "test_action"}
     profiler.notify_observers(test_msg)
     observer_mock.update.assert_called_once_with(test_msg)
+
+
+@patch("slips_files.core.profiler.utils.is_private_ip")
+@patch("slips_files.core.profiler.utils.is_ignored_ip")
+def test_get_gateway_info_sets_mac_and_ip(
+    mock_is_ignored_ip, mock_is_private_ip
+):
+    profiler = ModuleFactory().create_profiler_obj()
+    # mac not detected, ip not detected
+    profiler.is_gw_info_detected = Mock()
+    profiler.is_gw_info_detected.side_effect = [False, False]
+    mock_is_private_ip.return_value = True
+    mock_is_ignored_ip.return_value = False
+    profiler.get_gw_ip_using_gw_mac = Mock()
+    profiler.get_gw_ip_using_gw_mac.return_value = "8.8.8.1"
+    profiler.flow = Conn(
+        "1.0",
+        "1234",
+        "192.168.1.1",
+        "8.8.8.8",
+        5,
+        "TCP",
+        "dhcp",
+        80,
+        88,
+        20,
+        20,
+        20,
+        20,
+        "",
+        "00:11:22:33:44:55",
+        "Established",
+        "",
+    )
+    profiler.get_gateway_info()
+
+    profiler.db.set_default_gateway.assert_any_call("MAC", profiler.flow.dmac)
+    profiler.db.set_default_gateway.assert_any_call("IP", "8.8.8.1")
+
+
+@patch("slips_files.core.profiler.utils.is_private_ip")
+def test_get_gateway_info_no_mac_detected(mock_is_private_ip):
+    profiler = ModuleFactory().create_profiler_obj()
+
+    # mac not detected, ip not detected
+    profiler.is_gw_info_detected = Mock()
+    profiler.is_gw_info_detected.side_effect = [False, False]
+    mock_is_private_ip.return_value = False
+    profiler.flow = Conn(
+        "1.0",
+        "1234",
+        "192.168.1.1",
+        "8.8.8.8",
+        5,
+        "TCP",
+        "dhcp",
+        80,
+        88,
+        20,
+        20,
+        20,
+        20,
+        "",
+        "00:11:22:33:44:55",
+        "Established",
+        "",
+    )
+    profiler.get_gateway_info()
+
+    # mac and ip should not be set
+    profiler.db.set_default_gateway.assert_not_called()
+    profiler.print.assert_not_called()
+
+
+def test_get_gateway_info_mac_detected_but_no_ip():
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.flow = Mock()
+    profiler.flow.dmac = "123"
+    # mac detected, ip not detected
+    profiler.is_gw_info_detected = Mock()
+    profiler.is_gw_info_detected.side_effect = [True, False]
+    profiler.get_gw_ip_using_gw_mac = Mock()
+    profiler.get_gw_ip_using_gw_mac.return_value = None
+
+    profiler.get_gateway_info()
+
+    # assertions for mac
+    profiler.db.set_default_gateway.assert_not_called()
+    profiler.print.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "info_type, attr_name, db_method, db_value",
+    [
+        ("mac", "gw_mac", "get_gateway_mac", "00:1A:2B:3C:4D:5E"),
+        ("ip", "gw_ip", "get_gateway_ip", "192.168.1.1"),
+    ],
+)
+def test_is_gw_info_detected(info_type, attr_name, db_method, db_value):
+    # create a profiler object using the ModuleFactory
+    profiler = ModuleFactory().create_profiler_obj()
+
+    # mock the profiler's database methods and attributes
+    setattr(profiler, attr_name, None)
+    getattr(profiler.db, db_method).return_value = db_value
+
+    # test with info_type
+    result = profiler.is_gw_info_detected(info_type)
+
+    # assertions
+    assert result
+    assert getattr(profiler, attr_name) == db_value
+    getattr(profiler.db, db_method).assert_called_once()
+
+
+def test_is_gw_info_detected_unsupported_info_type():
+    # create a profiler object using the ModuleFactory
+    profiler = ModuleFactory().create_profiler_obj()
+
+    # test with an unsupported info_type
+    with pytest.raises(ValueError) as exc_info:
+        profiler.is_gw_info_detected("unsupported_type")
+
+    # assertion
+    assert str(exc_info.value) == "Unsupported info_type: unsupported_type"
+
+
+def test_is_gw_info_detected_when_attribute_is_already_set():
+    # create a profiler object using the ModuleFactory
+    profiler = ModuleFactory().create_profiler_obj()
+
+    # set gw_mac attribute to a value
+    profiler.gw_mac = "00:1A:2B:3C:4D:5E"
+
+    # test with info_type "mac"
+    result = profiler.is_gw_info_detected("mac")
+
+    # assertions
+    assert result
+    assert profiler.gw_mac == "00:1A:2B:3C:4D:5E"

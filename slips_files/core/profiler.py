@@ -4,6 +4,7 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
+import json
 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,10 +23,12 @@ import pprint
 import multiprocessing
 from typing import (
     List,
+    Union,
+    Optional,
 )
 
 import validators
-
+from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from slips_files.common.abstracts.observer import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -95,6 +98,8 @@ class Profiler(ICore, IObservable):
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
+        self.gw_mac = None
+        self.gw_ip = None
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -103,7 +108,10 @@ class Profiler(ICore, IObservable):
         self.analysis_direction = conf.analysis_direction()
         self.label = conf.label()
         self.width = conf.get_tw_width_as_float()
-        self.client_ips: List[str] = conf.client_ips()
+        self.client_ips: List[
+            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
+        ]
+        self.client_ips = conf.client_ips()
 
     def convert_starttime_to_epoch(self):
         try:
@@ -140,6 +148,94 @@ class Profiler(ICore, IObservable):
         )
         return rev_profileid, rev_twid
 
+    def get_gw_ip_using_gw_mac(self) -> Optional[str]:
+        """
+        gets the ip of the given mac from the db
+        prioritizes returning the ipv4. if not found, the function returns
+        the ipv6. or none if both are not found.
+        """
+        # the db returns a serialized list of IPs belonging to this mac
+        gw_ips: str = self.db.get_ip_of_mac(self.gw_mac)
+
+        if not gw_ips:
+            return
+
+        gw_ips: List[str] = json.loads(gw_ips)
+        # try to get the ipv4 if found in that list
+        for ip in gw_ips:
+            try:
+                ipaddress.IPv4Address(ip)
+                return ip
+            except ipaddress.AddressValueError:
+                continue
+
+        # all of them are ipv6, return the first
+        return gw_ips[0]
+
+    def is_gw_info_detected(self, info_type: str) -> bool:
+        """
+        checks own attributes and the db for the gw mac/ip
+        :param info_type: can be 'mac' or 'ip'
+        """
+        info_mapping = {
+            "mac": ("gw_mac", self.db.get_gateway_mac),
+            "ip": ("gw_ip", self.db.get_gateway_ip),
+        }
+
+        if info_type not in info_mapping:
+            raise ValueError(f"Unsupported info_type: {info_type}")
+
+        attr, check_db_method = info_mapping[info_type]
+
+        if getattr(self, attr):
+            # the reason we don't just check the db is we don't want a db
+            # call per each flow
+            return True
+
+        # did some other module manage to get it?
+        if info := check_db_method():
+            setattr(self, attr, info)
+            return True
+
+        return False
+
+    def get_gateway_info(self):
+        """
+        Gets the IP and MAC of the gateway and stores them in the db
+
+        usually the mac of the flow going from a private ip -> a
+        public ip is the mac of the GW
+        """
+
+        if not hasattr(self.flow, "dmac"):
+            # some suricata flows dont have that, like SuricataFile objs
+            return
+
+        gw_mac_found: bool = self.is_gw_info_detected("mac")
+        if not gw_mac_found:
+            if (
+                utils.is_private_ip(self.flow.saddr)
+                and not utils.is_ignored_ip(self.flow.daddr)
+                and self.flow.dmac
+            ):
+                self.gw_mac: str = self.flow.dmac
+                self.db.set_default_gateway("MAC", self.gw_mac)
+                self.print(
+                    f"MAC address of the gateway detected: "
+                    f"{green(self.gw_mac)}"
+                )
+                gw_mac_found = True
+
+        # we need the mac to be set to be able to find the ip using it
+        if not self.is_gw_info_detected("ip") and gw_mac_found:
+            self.gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac()
+            if self.gw_ip:
+                self.db.set_default_gateway("IP", self.gw_ip)
+                self.print(
+                    f"IP address of the gateway detected: "
+                    f"{green(self.gw_ip)}"
+                )
+
     def add_flow_to_profile(self):
         """
         This is the main function that takes the columns of a flow
@@ -169,6 +265,8 @@ class Profiler(ICore, IObservable):
             if self.flow.type_ not in ("software", "weird"):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
+
+        self.get_gateway_info()
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(self.flow):
@@ -368,14 +466,16 @@ class Profiler(ICore, IObservable):
         """
         return msg == "stop"
 
-    def get_private_client_ips(self) -> List[str]:
+    def get_private_client_ips(
+        self,
+    ) -> List[Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]]:
         """
         returns the private ips found in the client_ips param
         in the config file
         """
         private_clients = []
         for ip in self.client_ips:
-            if utils.is_private_ip(ipaddress.ip_address(ip)):
+            if utils.is_private_ip(ip):
                 private_clients.append(ip)
         return private_clients
 
@@ -387,14 +487,30 @@ class Profiler(ICore, IObservable):
         """
         # For now the local network is only ipv4, but it
         # could be ipv6 in the future. Todo.
-        private_client_ips: List[str] = self.get_private_client_ips()
+        private_client_ips: List[
+            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
+        ]
+        private_client_ips = self.get_private_client_ips()
+
         if private_client_ips:
+            # does the client ip from the config already have the localnet?
+            for range_ in private_client_ips:
+                if isinstance(range_, IPv4Network) or isinstance(
+                    range_, IPv6Network
+                ):
+                    self.is_localnet_set = True
+                    return str(range_)
+
             # all client ips should belong to the same local network,
             # it doesn't make sense to have ips belonging to different
             # networks in the config file!
-            ip = private_client_ips[0]
+            ip: str = str(private_client_ips[0])
         else:
-            ip = self.flow.saddr
+            ip: str = self.flow.saddr
+            # make surethe saddr is a private ip that we can use the range
+            # of. because it may be a flow of ingoing traffic right?
+            if not utils.is_private_ip(ip):
+                return
 
         self.is_localnet_set = True
         return utils.get_cidr_of_private_ip(ip)
@@ -438,7 +554,8 @@ class Profiler(ICore, IObservable):
 
     def pre_main(self):
         utils.drop_root_privs()
-        self.print(f"Used client IPs: {green(str(self.client_ips))}")
+        client_ips = [str(ip) for ip in self.client_ips]
+        self.print(f"Used client IPs: {green(', '.join(client_ips))}")
 
     def main(self):
         while True:
@@ -487,6 +604,7 @@ class Profiler(ICore, IObservable):
                     self.handle_setting_local_net()
                     self.db.increment_processed_flows()
             except Exception as e:
+                self.print_traceback()
                 self.print(
                     f"Problem processing line {line}. " f"Line discarded. {e}",
                     0,

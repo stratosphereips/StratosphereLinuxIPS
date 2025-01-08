@@ -43,7 +43,7 @@ from tests.module_factory import ModuleFactory
 def test_log_redis_server_pid_normal_ports(
     redis_port, redis_pid, is_daemon, save_db, expected_output, mock_db
 ):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.input_information = "input_info"
     redis_manager.main.zeek_dir = "zeek_dir"
     redis_manager.main.args.output = "output_dir"
@@ -75,7 +75,7 @@ def test_log_redis_server_pid_normal_ports(
     ],
 )
 def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.db = db_path
 
     with (
@@ -102,7 +102,7 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
 
 
 def test_load_db_success(mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.db = "/path/to/db.rdb"
     redis_manager.main.db.init_redis_server = Mock()
     redis_manager.main.db.load = Mock(return_value=True)
@@ -129,7 +129,7 @@ def test_load_db_success(mock_db):
 
 
 def test_load_db_failure(mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
     rdb_path = "/path/to/db.rdb"
     redis_manager.main.args.db = rdb_path
     redis_manager.main.db.init_redis_server = Mock()
@@ -182,7 +182,7 @@ def test_load_db_failure(mock_db):
 def test_check_redis_database(
     ping_side_effect, expected_system_calls, expected_result, mock_db
 ):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
     mock_redis = Mock()
     mock_redis.ping.side_effect = ping_side_effect
 
@@ -200,7 +200,7 @@ def test_check_redis_database(
 
 
 def test_check_redis_database_failure(mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     mock_redis = Mock()
     mock_redis.ping.side_effect = redis.exceptions.ConnectionError
@@ -222,7 +222,7 @@ def test_check_redis_database_failure(mock_db):
 
 
 def test_get_random_redis_port_first_available(mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     mock_socket = Mock()
     mock_socket.bind.return_value = None
@@ -236,7 +236,7 @@ def test_get_random_redis_port_first_available(mock_db):
 
 
 def test_get_random_redis_port_some_in_use(mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     mock_socket = Mock()
     mock_socket.bind.side_effect = [OSError] * 32 + [None]
@@ -249,7 +249,7 @@ def test_get_random_redis_port_some_in_use(mock_db):
 
 
 def test_get_random_redis_port_all_in_use(mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     mock_socket = Mock()
     mock_socket.bind.side_effect = OSError
@@ -272,7 +272,7 @@ def test_get_random_redis_port_all_in_use(mock_db):
 
 
 def test_clear_redis_cache_database(mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     with patch("redis.StrictRedis") as mock_redis:
         mock_redis_instance = Mock()
@@ -301,7 +301,7 @@ def test_clear_redis_cache_database(mock_db):
     ],
 )
 def test_print_port_in_use(port, mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     with patch("builtins.print") as mock_print:
         redis_manager.print_port_in_use(port)
@@ -328,7 +328,7 @@ def test_print_port_in_use(port, mock_db):
     ],
 )
 def test_get_pid_of_redis_server(port, cmd_output, expected_pid, mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     with patch("subprocess.Popen") as mock_popen:
         mock_popen.return_value.communicate.return_value = (cmd_output, None)
@@ -352,7 +352,7 @@ def test_get_pid_of_redis_server(port, cmd_output, expected_pid, mock_db):
 def test_remove_old_logline(
     redis_port, file_content, expected_output, mock_db
 ):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     mock_file = mock_open(read_data=file_content)
     with (
@@ -389,7 +389,7 @@ def test_remove_old_logline(
 def test_remove_server_from_log(
     redis_port, file_content, expected_output, mock_db
 ):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
     shutil.move = Mock()
 
     with patch(
@@ -439,7 +439,7 @@ def test_remove_server_from_log(
     ],
 )
 def test_get_open_redis_servers(file_content, expected_output, mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     with patch("builtins.open", mock_open(read_data=file_content)):
         result = redis_manager.get_open_redis_servers()
@@ -465,7 +465,7 @@ def test_get_open_redis_servers(file_content, expected_output, mock_db):
 def test_print_open_redis_servers(
     file_content, expected_output, expected_return, mock_db
 ):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     with (
         patch("builtins.open", mock_open(read_data=file_content)),
@@ -494,7 +494,7 @@ def test_print_open_redis_servers(
     ],
 )
 def test_get_port_of_redis_server(cmd_output, pid, expected_port, mock_db):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     with patch("subprocess.Popen") as mock_popen:
         mock_popen.return_value.communicate.return_value = (cmd_output, None)
@@ -521,7 +521,7 @@ def test_get_port_of_redis_server(cmd_output, pid, expected_port, mock_db):
 def test_kill_redis_server(
     pid, os_kill_side_effect, expected_result, expected_calls, mock_db
 ):
-    redis_manager = ModuleFactory().create_redis_manager_obj(mock_db)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
 
     with patch("os.kill", side_effect=os_kill_side_effect) as mock_kill:
         result = redis_manager.kill_redis_server(pid)
