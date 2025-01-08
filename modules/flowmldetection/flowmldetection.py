@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
@@ -294,12 +296,13 @@ class FlowMLDetection(IModule):
             self.print("Error in process_flow()")
             self.print(traceback.format_exc(), 0, 1)
 
-    def detect(self, x_flow) -> numpy.ndarray:
+    def detect(self, x_flow) -> Optional[numpy.ndarray]:
         """
         Detects the given flow with the current model stored
         and returns the predection array
         """
         try:
+            given_x_flow = x_flow
             # clean the flow
             fields_to_drop = [
                 "label",
@@ -323,7 +326,9 @@ class FlowMLDetection(IModule):
             pred: numpy.ndarray = self.clf.predict(x_flow)
             return pred
         except Exception as e:
-            self.print(f"Error in detect(): {e}")
+            self.print(
+                f"Error in detect() while processing " f"\n{given_x_flow}\n{e}"
+            )
             self.print(traceback.format_exc(), 0, 1)
 
     def store_model(self):
@@ -468,6 +473,10 @@ class FlowMLDetection(IModule):
                 if processed_flow is not None and not processed_flow.empty:
                     # Predict
                     pred: numpy.ndarray = self.detect(processed_flow)
+                    if not pred:
+                        # an error occurred
+                        return
+
                     label = self.flow["label"]
                     if label and label != "unknown" and label != pred[0]:
                         # If the user specified a label in test mode,
