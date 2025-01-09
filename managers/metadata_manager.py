@@ -1,3 +1,5 @@
+import subprocess
+
 import psutil
 import sys
 import os
@@ -15,6 +17,7 @@ from slips_files.common.slips_utils import utils
 class MetadataManager:
     def __init__(self, main):
         self.main = main
+        self.enable_metadata = self.main.conf.enable_metadata()
 
     def get_pid_using_port(self, port):
         """
@@ -27,14 +30,11 @@ class MetadataManager:
                 return psutil.Process(conn.pid).pid  # .name()
         return None
 
-    def add_metadata(self):
+    def _add_metadata(self):
         """
         Create a metadata dir output/metadata/ that has a copy of
         slips.yaml, whitelist.conf, current commit and date
         """
-        if not self.enable_metadata:
-            return
-
         metadata_dir = os.path.join(self.main.args.output, "metadata")
         try:
             os.mkdir(metadata_dir)
@@ -63,6 +63,8 @@ class MetadataManager:
                 f"Command: {cmd}\n"
                 f"Slips start date: {now}\n"
             )
+            if hasattr(self.main, "zeek_bro"):
+                f.write(f"Zeek version: {self.main.db.get_zeek_version()}\n")
 
         self.main.print(f"Metadata added to {metadata_dir}")
         return self.info_path
@@ -72,7 +74,7 @@ class MetadataManager:
         Add the analysis end date to the metadata file and
         the db for the web interface to display
         """
-        if not self.main.conf.enable_metadata():
+        if not self.enable_metadata:
             return
 
         end_date = utils.convert_format(end_date, utils.alerts_format)
@@ -85,6 +87,14 @@ class MetadataManager:
         except (NameError, AttributeError):
             pass
         return end_date
+
+    def get_zeek_version(self) -> str:
+        """
+        Get the version of zeek/bro
+        """
+        cmd = [self.main.zeek_bro, "--version"]
+        version = subprocess.check_output(cmd, timeout=0.5).decode()
+        return version.split("version ")[1]
 
     def set_input_metadata(self):
         """
@@ -106,6 +116,9 @@ class MetadataManager:
 
         if hasattr(self.main, "zeek_dir"):
             info.update({"zeek_dir": self.main.zeek_dir})
+
+        if hasattr(self.main, "zeek_bro"):
+            info.update({"zeek_version": self.get_zeek_version()})
 
         size_in_mb = "-"
         if self.main.args.filepath not in (False, None) and os.path.exists(
@@ -148,8 +161,7 @@ class MetadataManager:
             self.main.db.set_slips_internal_time(last_modified_tw_time)
         return modified_ips_in_the_last_tw, modified_profiles
 
-    def enable_metadata(self):
-        self.enable_metadata = self.main.conf.enable_metadata()
-
-        if self.enable_metadata:
-            self.info_path = self.add_metadata()
+    def add_metadata_if_enabled(self):
+        if not self.enable_metadata:
+            return
+        self.info_path = self._add_metadata()

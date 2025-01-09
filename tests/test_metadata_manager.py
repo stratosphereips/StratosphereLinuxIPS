@@ -25,7 +25,9 @@ def test_set_analysis_end_date(
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
     metadata_manager.info_path = "/path/to/info.txt"
-    metadata_manager.main.conf.enable_metadata.return_value = enable_metadata
+    metadata_manager.main.conf.add_metadata_if_enabled.return_value = (
+        enable_metadata
+    )
 
     utils.convert_format = Mock(return_value=expected_end_date)
 
@@ -59,14 +61,16 @@ def test_enable_metadata(
     expected_call_count,
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
-    metadata_manager.main.conf.enable_metadata.return_value = enable_metadata
+    metadata_manager.main.conf.add_metadata_if_enabled.return_value = (
+        enable_metadata
+    )
 
     with patch.object(
         metadata_manager, "add_metadata", return_value=expected_info_path
     ) as mock_add_metadata:
-        metadata_manager.enable_metadata()
+        metadata_manager.add_metadata_if_enabled()
 
-    assert metadata_manager.enable_metadata == enable_metadata
+    assert metadata_manager.add_metadata_if_enabled == enable_metadata
     if info_path_value_set:
         assert hasattr(metadata_manager, "info_path")
         assert metadata_manager.info_path == expected_info_path
@@ -144,7 +148,7 @@ def test_add_metadata(
     expected_result,
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
-    metadata_manager.enable_metadata = enable_metadata
+    metadata_manager.add_metadata_if_enabled = enable_metadata
     metadata_manager.main.args.output = output_dir
     metadata_manager.main.args.config = config_file
     metadata_manager.main.conf.whitelist_path.return_value = whitelist_path
@@ -158,7 +162,7 @@ def test_add_metadata(
     ), patch.object(
         utils, "convert_format", return_value="2023-01-01 00:00:00"
     ):
-        result = metadata_manager.add_metadata()
+        result = metadata_manager._add_metadata()
         assert result == expected_result
 
 
