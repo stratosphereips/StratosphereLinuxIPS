@@ -274,19 +274,16 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         )
 
         print(f"Output and errors are logged in {output_file}")
+        # these 12s are the time we wait for slips to start all the modules
         countdown(12, "test message")
         message_send(redis_port)
-
+        # these 18s are the time we give slips to process the msg
         countdown(18, "sigterm")
         # send a SIGTERM to the process
         os.kill(process.pid, 15)
         print("SIGTERM sent. killing slips")
         os.kill(process.pid, 9)
 
-    with open(os.path.join(output_dir, "HERE.txt"), "w") as file:
-        file.write("something")
-
-    raise ValueError
     print(f"Slips with PID {process.pid} was killed.")
 
     print("Slip is done, checking for errors in the output dir.")
