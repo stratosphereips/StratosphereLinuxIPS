@@ -70,6 +70,7 @@ Redis >= 7.0.4 for interprocess communication.
 The recommended way to use Slips is on Docker.
 
 #### Linux and Windows hosts
+Do not use --net=host if you want to access the internal container's ports from the host.
 ```
 docker run --rm -it -p 55000:55000  --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
 ```
