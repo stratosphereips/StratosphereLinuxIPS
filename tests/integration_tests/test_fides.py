@@ -20,12 +20,11 @@ import os
 import subprocess
 import time
 import sys
-from modules.fidesModule.persistence.trust_db import SlipsTrustDatabase
 from unittest.mock import Mock
 import modules.fidesModule.model.peer_trust_data as ptd
-import unittest
 
 alerts_file = "alerts.log"
+
 
 def delete_file_if_exists(file_path):
     if os.path.exists(file_path):
@@ -33,6 +32,7 @@ def delete_file_if_exists(file_path):
         print(f"File '{file_path}' has been deleted.")
     else:
         print(f"File '{file_path}' does not exist.")
+
 
 def countdown(seconds, message):
     """
@@ -47,11 +47,12 @@ def countdown(seconds, message):
         seconds -= 1
     sys.stdout.write(f"\rSending {message} now!          \n")
 
+
 def message_send(port):
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host='localhost', port=port, db=0)
+    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
 
-    message  = '''
+    message = """
 {
     "type": "nl2tl_intelligence_response",
     "version": 1,
@@ -90,7 +91,7 @@ def message_send(port):
         }
     ]
 }
-'''
+"""
 
     # publish the message to the "network2fides" channel
     channel = "network2fides"
@@ -98,19 +99,22 @@ def message_send(port):
 
     print(f"Test message published to channel '{channel}'.")
 
+
 def message_receive():
     import redis
     import json
 
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
+    redis_client = redis.StrictRedis(host="localhost", port=6379, db=0)
 
     # define a callback function to handle received messages
     def message_handler(message):
-        if message['type'] == 'message':  # ensure it's a message type
-            data = message['data'].decode('utf-8')  # decode byte data
+        if message["type"] == "message":  # ensure it's a message type
+            data = message["data"].decode("utf-8")  # decode byte data
             print("Received message:")
-            print(json.dumps(json.loads(data), indent=4))  # pretty-print JSON message
+            print(
+                json.dumps(json.loads(data), indent=4)
+            )  # pretty-print JSON message
 
     # subscribe to the "fides2slips" channel
     pubsub = redis_client.pubsub()
@@ -122,6 +126,7 @@ def message_receive():
     for message in pubsub.listen():
         message_handler(message)
         break  # exit after processing one message
+
 
 @pytest.mark.parametrize(
     "path, output_dir, redis_port",
@@ -190,6 +195,7 @@ def test_conf_file2(path, output_dir, redis_port):
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
 
+
 @pytest.mark.parametrize(
     "path, output_dir, redis_port",
     [
@@ -239,19 +245,23 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
     mock_logger = Mock()
     mock_logger.print_line = Mock()
     mock_logger.error = Mock()
-    print(f"Manipulating database")
+    print("Manipulating database")
     fdb = SQLiteDB(mock_logger, "fides_test_db.sqlite")
-    fdb.store_peer_trust_data(ptd.trust_data_prototype(peer=PeerInfo(
-        id="peer1",
-        organisations=["org1", "org2"],
-        ip="192.168.1.1"),
-        has_fixed_trust=False)
+    fdb.store_peer_trust_data(
+        ptd.trust_data_prototype(
+            peer=PeerInfo(
+                id="peer1", organisations=["org1", "org2"], ip="192.168.1.1"
+            ),
+            has_fixed_trust=False,
+        )
     )
-    fdb.store_peer_trust_data(ptd.trust_data_prototype(peer=PeerInfo(
-        id="peer2",
-        organisations=["org2"],
-        ip="192.168.1.2"),
-        has_fixed_trust=True)
+    fdb.store_peer_trust_data(
+        ptd.trust_data_prototype(
+            peer=PeerInfo(
+                id="peer2", organisations=["org2"], ip="192.168.1.2"
+            ),
+            has_fixed_trust=True,
+        )
     )
 
     # Open the log file in write mode
@@ -273,6 +283,10 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         print("SIGTERM sent. killing slips")
         os.kill(process.pid, 9)
 
+    with open(os.path.join(output_dir, "HERE.txt"), "w") as file:
+        file.write("something")
+
+    raise ValueError
     print(f"Slips with PID {process.pid} was killed.")
 
     print("Slip is done, checking for errors in the output dir.")
@@ -284,10 +298,14 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
     assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
 
     print("Checking Fides' data outlets")
-    print(fdb.get_peer_trust_data('peer1').recommendation_history)
-    print(db.get_peer_trust_data('peer1'))
-    print(fdb.get_peer_trust_data('stratosphere.org'))
-    print(db.get_cached_network_opinion('stratosphere.org', 200000000000, 200000000000))
+    print(fdb.get_peer_trust_data("peer1").recommendation_history)
+    print(db.get_peer_trust_data("peer1"))
+    print(fdb.get_peer_trust_data("stratosphere.org"))
+    print(
+        db.get_cached_network_opinion(
+            "stratosphere.org", 200000000000, 200000000000
+        )
+    )
 
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
