@@ -240,7 +240,6 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
     mock_logger.print_line = Mock()
     mock_logger.error = Mock()
     print(f"Manipulating database")
-    #delete_file_if_exists("fides_test_db.sqlite")
     fdb = SQLiteDB(mock_logger, "fides_test_db.sqlite")
     fdb.store_peer_trust_data(ptd.trust_data_prototype(peer=PeerInfo(
         id="peer1",
@@ -283,9 +282,6 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         redis_port, output_dir=output_dir, start_redis_server=False
     )
     assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
-    # assert db.get_msgs_received_at_runtime("Fides")["network2fides"] == "1" -- cannot be tested, because bridge is receiving hte message, not fides module
-
-    dch = db.subscribe("fides2slips")
 
     print("Checking Fides' data outlets")
     print(fdb.get_peer_trust_data('peer1').recommendation_history)

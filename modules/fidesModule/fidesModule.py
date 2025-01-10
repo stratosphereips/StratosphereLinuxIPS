@@ -219,4 +219,3 @@ class FidesModule(IModule):
         # TODO: the code below exists for testing purposes for
         #  tests/integration_tests/test_fides.py
         self.get_msg("fides2network")
-        self.get_msg("fides2slips")
