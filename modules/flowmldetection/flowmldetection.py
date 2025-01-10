@@ -127,7 +127,7 @@ class FlowMLDetection(IModule):
         """
         try:
             # Discard some type of flows that dont have ports
-            to_discard = ["arp", "ARP", "icmp", "igmp", "ipv6-icmp"]
+            to_discard = ["arp", "ARP", "icmp", "igmp", "ipv6-icmp", ""]
             for proto in to_discard:
                 dataset = dataset[dataset.proto != proto]
 
