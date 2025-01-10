@@ -30,7 +30,7 @@ class SQLiteDB:
         """
         self.logger = logger
         self.db_path = db_path
-        with open(self.db_path, 'w') as file:
+        with open(self.db_path, 'a') as file:
             pass  # Just open and close the file
         self.connection: Optional[sqlite3.Connection] = None
         self.__connect()
