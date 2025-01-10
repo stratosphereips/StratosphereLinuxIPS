@@ -123,25 +123,6 @@ def message_receive():
         message_handler(message)
         break  # exit after processing one message
 
-
-class RedisClient:
-    def __init__(self, redis_port):
-        self.r = redis.StrictRedis(host='localhost', port=redis_port, decode_responses=True)
-
-    def get_cached_network_opinion(self, target: str, cache_valid_seconds: int, current_time: float):
-        cache_key = f"fides_cache:{target}"
-        cache_data = self.r.hgetall(cache_key)
-        if not cache_data:
-            return None
-
-        cache_data = {k: v for k, v in cache_data.items()}
-
-        # Return the opinion (excluding the created_seconds field)
-        opinion = {
-            k: v for k, v in cache_data.items() if k != "created_seconds"
-        }
-        return opinion
-
 @pytest.mark.parametrize(
     "path, output_dir, redis_port",
     [
@@ -305,14 +286,12 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
     # assert db.get_msgs_received_at_runtime("Fides")["network2fides"] == "1" -- cannot be tested, because bridge is receiving hte message, not fides module
 
     dch = db.subscribe("fides2slips")
-    rc = RedisClient(redis_port)
 
     print("Checking Fides' data outlets")
     print(fdb.get_peer_trust_data('peer1').recommendation_history)
     print(db.get_peer_trust_data('peer1'))
     print(fdb.get_peer_trust_data('stratosphere.org'))
     print(db.get_cached_network_opinion('stratosphere.org', 200000000000, 200000000000))
-    print(rc.get_cached_network_opinion('stratosphere.org',0,0))
 
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
