@@ -223,7 +223,6 @@ class ProfileHandler:
                 extra_info = {
                     "is_dns_response": True,
                     "dns_query": flow.query,
-                    "domain": answer,
                 }
                 self.give_threat_intelligence(
                     profileid,

@@ -1,5 +1,9 @@
 from dataclasses import dataclass
-from typing import Union
+from typing import (
+    Union,
+    List,
+    Dict,
+)
 
 from slips_files.common.slips_utils import utils
 
@@ -135,7 +139,7 @@ class SuricataDNS:
     query: str
     TTLs: str
     qtype_name: str
-    answers: list
+    answers: List[Dict[str, str]]
 
     # these alues are not present in eve.json
     qclass_name: str = ""

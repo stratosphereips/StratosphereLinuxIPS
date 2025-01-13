@@ -37,7 +37,7 @@ class Suricata(IInputType):
         """Read suricata json input and store it in column_values"""
 
         # convert to dict if it's not a dict already
-        if type(line) == str:
+        if isinstance(line, str):
             line = json.loads(line)
         else:
             # line is a dict with data and type as keys
@@ -120,18 +120,18 @@ class Suricata(IInputType):
         elif event_type == "dns":
             answers: list = self.get_answers(line)
             self.flow: SuricataDNS = SuricataDNS(
-                timestamp,
-                flow_id,
-                saddr,
-                sport,
-                daddr,
-                dport,
-                proto,
-                appproto,
-                get_value_at("dns", "rdata", ""),
-                get_value_at("dns", "ttl", ""),
-                get_value_at("qtype_name", "rrtype", ""),
-                answers,
+                starttime=timestamp,
+                uid=flow_id,
+                saddr=saddr,
+                sport=sport,
+                daddr=daddr,
+                dport=dport,
+                proto=proto,
+                appproto=appproto,
+                query=get_value_at("dns", "rrname", ""),
+                TTLs=get_value_at("dns", "ttl", ""),
+                qtype_name=get_value_at("qtype_name", "rrtype", ""),
+                answers=answers,
             )
 
         elif event_type == "tls":
