@@ -48,6 +48,9 @@ class Conn:
         self.state_hist: str = self.history or self.state
         # AIDs are for conn.log flows only
         self.aid = utils.get_aid(self)
+        # happens in zeek v7.1.0, set it to empty so it doesn't break slips
+        if self.proto == "unknown_transport":
+            self.proto = ""
 
 
 @dataclass

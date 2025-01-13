@@ -24,6 +24,8 @@ jobs:
           - test_config_files.py
           - test_portscans.py
           - test_dataset.py
+          - test_pcap_dataset.py
+          - test_zeek_dataset.py
 
     steps:
     - uses: actions/checkout@v4
@@ -69,6 +71,10 @@ jobs:
 
     - name: Start redis server
       run: redis-server --daemonize yes
+
+    - name: Print zeek version
+      run: (command -v zeek && zeek --version) || (command -v bro && bro --version)
+
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |

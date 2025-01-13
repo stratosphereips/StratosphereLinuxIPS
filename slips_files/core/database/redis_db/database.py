@@ -588,6 +588,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         return self.r.hget(self.constants.ANALYSIS, "commit")
 
+    def get_zeek_version(self):
+        """
+        gets the currently used zeek_version from the db
+        """
+        return self.r.hget(self.constants.ANALYSIS, "zeek_version")
+
     def get_branch(self):
         """
         gets the currently used branch from the db

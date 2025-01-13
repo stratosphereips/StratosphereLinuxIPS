@@ -929,6 +929,9 @@ class DBManager:
     def get_commit(self, *args, **kwargs):
         return self.rdb.get_commit(*args, **kwargs)
 
+    def get_zeek_version(self, *args, **kwargs):
+        return self.rdb.get_zeek_version(*args, **kwargs)
+
     def get_branch(self, *args, **kwargs):
         return self.rdb.get_branch(*args, **kwargs)
 
