@@ -65,7 +65,7 @@ alerts_file = "alerts.log"
         (
             "dataset/test10-mixed-zeek-dir",
             20,
-            "horizontal port scan",
+            "DNS TXT answer with high entropy",
             "test10-mixed-zeek-dir/",
             6660,
         ),
