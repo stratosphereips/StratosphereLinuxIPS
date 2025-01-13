@@ -61,20 +61,15 @@ def test_enable_metadata(
     expected_call_count,
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
-    metadata_manager.main.conf.add_metadata_if_enabled.return_value = (
-        enable_metadata
-    )
+    metadata_manager.enable_metadata = enable_metadata
+    metadata_manager._add_metadata = Mock(return_value=expected_info_path)
 
-    with patch.object(
-        metadata_manager, "add_metadata", return_value=expected_info_path
-    ) as mock_add_metadata:
-        metadata_manager.add_metadata_if_enabled()
+    metadata_manager.add_metadata_if_enabled()
 
-    assert metadata_manager.add_metadata_if_enabled == enable_metadata
     if info_path_value_set:
         assert hasattr(metadata_manager, "info_path")
         assert metadata_manager.info_path == expected_info_path
-    assert mock_add_metadata.call_count == expected_call_count
+    assert metadata_manager._add_metadata.call_count == expected_call_count
 
 
 @pytest.mark.parametrize(
@@ -107,12 +102,10 @@ def test_get_pid_using_port(port, connections, expected_pid):
 
 
 @pytest.mark.parametrize(
-    "enable_metadata, output_dir, config_file, whitelist_path,"
+    "output_dir, config_file, whitelist_path,"
     "version, input_info, branch, commit, expected_result",
     [
-        # testcase1: Metadata enabled, all information available
         (
-            True,
             "/tmp/output",
             "config/slips.yaml",
             "/path/to/whitelist.conf",
@@ -122,22 +115,9 @@ def test_get_pid_using_port(port, connections, expected_pid):
             "abc123",
             "/tmp/output/metadata/info.txt",
         ),
-        # testcase2: Metadata disabled
-        (
-            False,
-            "/tmp/output",
-            "config/slips.yaml",
-            "/path/to/whitelist.conf",
-            "1.0",
-            "test_input",
-            "main",
-            "abc123",
-            None,
-        ),
     ],
 )
 def test_add_metadata(
-    enable_metadata,
     output_dir,
     config_file,
     whitelist_path,
@@ -148,7 +128,6 @@ def test_add_metadata(
     expected_result,
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
-    metadata_manager.add_metadata_if_enabled = enable_metadata
     metadata_manager.main.args.output = output_dir
     metadata_manager.main.args.config = config_file
     metadata_manager.main.conf.whitelist_path.return_value = whitelist_path
