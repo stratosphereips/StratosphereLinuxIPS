@@ -90,10 +90,14 @@ class MetadataManager:
 
     def get_zeek_version(self) -> str:
         """
-        Get the version of zeek/bro
+        Get the version of zeek/bro used if zeek is used. (e.g. in pcaps
+        and interface)
         """
+        if not self.main.zeek_bro:
+            return
+
         cmd = [self.main.zeek_bro, "--version"]
-        version = subprocess.check_output(cmd, timeout=0.5).decode()
+        version = subprocess.check_output(cmd).decode()
         return version.split("version ")[1]
 
     def set_input_metadata(self):
@@ -117,7 +121,7 @@ class MetadataManager:
         if hasattr(self.main, "zeek_dir"):
             info.update({"zeek_dir": self.main.zeek_dir})
 
-        if hasattr(self.main, "zeek_bro"):
+        if hasattr(self.main, "zeek_bro") and self.main.zeek_bro:
             info.update({"zeek_version": self.get_zeek_version()})
 
         size_in_mb = "-"
