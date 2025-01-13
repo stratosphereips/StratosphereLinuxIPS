@@ -37,7 +37,23 @@ class Template(IModule):
         """
         Initializations that run only once before the main() function runs in a loop
         """
-        utils.drop_root_privs()
+        command = [
+            "./peercli",
+            "--conf",
+            "config.yaml",
+        ]
+
+        print("running slips ...")
+        print(output_dir)
+
+        # Open the log file in write mode
+        with open(output_file, "w") as log_file:
+            # Start the subprocess, redirecting stdout and stderr to the same file
+            process = subprocess.Popen(
+                command,  # Replace with your command
+                stdout=log_file,
+                stderr=log_file,
+            )
 
     def main(self):
         """Main loop function"""
