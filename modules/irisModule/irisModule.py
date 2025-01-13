@@ -14,6 +14,11 @@
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
 import json
+from pathlib import PosixPath
+import os
+import subprocess
+import time
+import sys
 
 
 class Template(IModule):
@@ -44,10 +49,9 @@ class Template(IModule):
         ]
 
         print("running slips ...")
-        print(output_dir)
 
         # Open the log file in write mode
-        with open(output_file, "w") as log_file:
+        with open("outputfile.out", "w") as log_file:
             # Start the subprocess, redirecting stdout and stderr to the same file
             process = subprocess.Popen(
                 command,  # Replace with your command
