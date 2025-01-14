@@ -1,11 +1,9 @@
-# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
-# SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
 import multiprocessing
 import os
 import json
 import threading
-import time
+import asyncio
 from uuid import uuid4
 import validators
 from typing import (
@@ -1744,13 +1742,12 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             self.db.set_ti_feed_info(filename, malicious_file_info)
             return True
 
-    def handle_pending_queries(self):
+    async def handle_pending_queries(self):
         """Processes the pending Circl.lu queries stored in the queue.
-        This method runs as a daemon thread, executing a batch of up to 10
-        queries every 2 minutes. After processing a batch, it waits for
-        another 2 minutes before attempting the next batch of queries.
-        This method continuously checks the queue for new items and
-        processes them accordingly.
+        This method runs as an asynchronous coroutine, executing a batch of
+        up to 10 queries at a time. It continuously checks the queue for
+        new items, processes them concurrently, and sleeps for 2 seconds
+        if the queue is empty.
 
         Side Effects:
             - Calls `is_malicious_hash` for each flow information
@@ -1760,20 +1757,20 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         """
         max_queries = 10
         while True:
-            time.sleep(120)
-            try:
-                flow_info = self.pending_queries.get(timeout=0.5)
-            except Exception:
-                # queue is empty wait extra 2 mins
-                continue
+            tasks = []
+            
+            while len(tasks) < max_queries:
+                try:
+                    flow_info = self.pending_queries.get_nowait()
+                    tasks.append(asyncio.create_task(
+                        self.is_malicious_hash(flow_info)))
+                except asyncio.QueueEmpty:
+                    break
 
-            queries_done = 0
-            while (
-                not self.pending_queries.empty()
-                and queries_done <= max_queries
-            ):
-                self.is_malicious_hash(flow_info)
-                queries_done += 1
+            if tasks:
+                await asyncio.gather(*tasks)
+            else:
+                await asyncio.sleep(2)
 
     def should_lookup(self, ip: str, protocol: str, ip_state: str) -> bool:
         """Return whether slips should lookup the given ip or not."""
