@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/flowalerts/conn.py"""
 
 from slips_files.common.slips_utils import utils

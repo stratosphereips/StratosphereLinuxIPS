@@ -1,5 +1,6 @@
 import subprocess
 
+# SPDX-License-Identifier: GPL-2.0-only
 import psutil
 import sys
 import os

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from collections import defaultdict
 from typing import (
     Dict,

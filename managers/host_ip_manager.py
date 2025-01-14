@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import socket
 import time
 from typing import (

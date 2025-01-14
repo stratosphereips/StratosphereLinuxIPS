@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/http_analyzer/http_analyzer.py"""
 
 import json

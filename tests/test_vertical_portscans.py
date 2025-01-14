@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import pytest
 import random
 import binascii

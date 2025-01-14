@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import json
 
 from slips_files.common.abstracts.flowalerts_analyzer import (

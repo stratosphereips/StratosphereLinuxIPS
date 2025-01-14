@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from slack import WebClient
 from slack.errors import SlackApiError
 import datetime

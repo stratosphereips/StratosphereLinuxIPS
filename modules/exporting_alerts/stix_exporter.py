@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from stix2 import Indicator, Bundle
 from cabby import create_client
 import time

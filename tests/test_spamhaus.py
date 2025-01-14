@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/threat_intelligence/spamhaus.py"""
 
 from tests.module_factory import ModuleFactory

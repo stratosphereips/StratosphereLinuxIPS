@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/virustotal/virustotal.py"""
 
 #### NOTE: this file should conjtain as minimum tests as possible due to the 4reqs/minute vt api quota

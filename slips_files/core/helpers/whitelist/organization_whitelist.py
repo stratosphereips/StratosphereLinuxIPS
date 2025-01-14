@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
 import json
 from typing import List, Dict

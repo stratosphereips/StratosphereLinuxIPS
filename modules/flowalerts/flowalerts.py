@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import inspect
 from asyncio import Task

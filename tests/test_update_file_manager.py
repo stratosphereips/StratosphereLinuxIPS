@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/update_manager/update_manager.py"""
 
 from tests.module_factory import ModuleFactory

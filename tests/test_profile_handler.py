@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from dataclasses import asdict
 from unittest.mock import patch, MagicMock, call
 import json

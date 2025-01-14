@@ -1,5 +1,6 @@
 from typing import Optional
 
+# SPDX-License-Identifier: GPL-2.0-only
 import numpy
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler

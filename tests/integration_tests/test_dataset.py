@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file

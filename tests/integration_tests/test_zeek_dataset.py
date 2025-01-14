@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from tests.common_test_utils import (
     run_slips,
     is_evidence_present,

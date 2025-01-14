@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import pytest
 from unittest.mock import Mock, patch
 import numpy as np

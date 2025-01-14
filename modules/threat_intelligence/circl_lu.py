@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import json
 from multiprocessing.queues import Queue
 import requests

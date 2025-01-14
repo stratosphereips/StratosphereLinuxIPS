@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """
 This file tests 2 different config files other than slips' default config/slips.yaml
 test/test.yaml and tests/test2.yaml

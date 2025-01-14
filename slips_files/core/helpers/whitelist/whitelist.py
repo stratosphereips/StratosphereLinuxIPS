@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from typing import Optional, Dict, List
 
 from slips_files.common.printer import Printer

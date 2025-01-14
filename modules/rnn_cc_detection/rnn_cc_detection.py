@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import warnings
 import json
 from typing import Dict

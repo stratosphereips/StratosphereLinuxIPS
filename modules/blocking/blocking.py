@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from slips_files.common.abstracts.module import IModule
 import platform
 import sys

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 # This file is from the Stratosphere Testing Framework
 # See the file 'LICENSE' for copying permission.
 

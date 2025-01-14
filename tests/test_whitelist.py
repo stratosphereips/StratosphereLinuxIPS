@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from tests.module_factory import ModuleFactory
 import pytest
 import json

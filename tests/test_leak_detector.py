@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/leak_detector/leak_detector.py"""
 
 from tests.module_factory import ModuleFactory

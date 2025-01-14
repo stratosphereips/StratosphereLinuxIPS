@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
 # This program is free software; you can redistribute it and/or

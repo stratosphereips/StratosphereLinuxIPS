@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """
 This file will contain the fixtures that are commonly needed by all other test files
 for example: setting up the database, input_queue, output_queue, etc..

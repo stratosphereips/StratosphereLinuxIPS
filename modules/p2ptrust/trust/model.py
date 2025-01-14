@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from modules.p2ptrust.trust.trustdb import TrustDB
 
 

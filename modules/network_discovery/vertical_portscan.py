@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,

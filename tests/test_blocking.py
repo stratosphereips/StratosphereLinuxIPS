@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/blocking/blocking.py
 this file needs sudoroot to run
 """

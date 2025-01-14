@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import pytest
 import os
 from unittest.mock import Mock, patch, call

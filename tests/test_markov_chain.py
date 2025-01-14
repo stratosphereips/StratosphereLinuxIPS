@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import pytest
 from tests.module_factory import ModuleFactory
 from slips_files.common.markov_chains import (

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import MagicMock, mock_open, patch, call as mockedcall
 import pytest
 from tests.module_factory import ModuleFactory

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/flowalerts/download_file.py"""
 
 from dataclasses import asdict

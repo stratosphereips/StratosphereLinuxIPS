@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import patch, Mock
 import pytest
 import requests

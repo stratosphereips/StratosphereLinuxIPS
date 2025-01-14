@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import socket
 from unittest.mock import MagicMock, patch, Mock
 import pytest

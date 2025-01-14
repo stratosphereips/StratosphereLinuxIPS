@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from datetime import timedelta
 import sys
 import ipaddress

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 class Constants:
     LOADED_TI_FILES = "loaded TI files"
     TI_FILES_INFO = "TI_files_info"

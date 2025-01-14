@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import memray
 from termcolor import colored
 import time
@@ -58,8 +59,8 @@ class LiveMultiprocessProfiler:
         while True:
             # check redis channel
             # poll for signal
-            timeout = 0.01
-            msg: str = None
+            # timeout = 0.01
+            # msg: str = None
             pid_to_profile: int = None
             while not self.pid_channel.empty():
                 msg = self.pid_channel.get()

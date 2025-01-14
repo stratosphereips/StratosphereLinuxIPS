@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 # Ths is a template module for you to copy and create your own slips module
 # Instructions
 # 1. Create a new folder on ./modules with the name of your template. Example:

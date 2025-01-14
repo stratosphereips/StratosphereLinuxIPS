@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import pytest
 from unittest.mock import MagicMock
 from tests.module_factory import ModuleFactory

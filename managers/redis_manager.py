@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import contextlib
 import shutil
 from datetime import datetime

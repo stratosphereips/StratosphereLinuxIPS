@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 from typing import Callable
 from slips_files.common.abstracts.module import IModule

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 from abc import ABC, abstractmethod
 
 from modules.flowalerts.set_evidence import SetEvidnceHelper

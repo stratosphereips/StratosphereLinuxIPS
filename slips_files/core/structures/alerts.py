@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """
 Contains alert dataclass that is used in slips
 Every alert should follow this format
