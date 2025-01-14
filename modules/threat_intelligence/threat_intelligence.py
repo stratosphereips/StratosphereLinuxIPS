@@ -66,10 +66,8 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.get_all_blacklisted_ip_ranges()
         self.urlhaus = URLhaus(self.db)
         self.spamhaus = Spamhaus(self.db)
-        self.pending_queries = multiprocessing.Queue()
-        self.pending_circllu_calls_thread = threading.Thread(
-            target=self.handle_pending_queries, daemon=True
-        )
+        self.pending_queries = asyncio.Queue()
+        asyncio.create_task(self.handle_pending_queries())
         self.circllu = Circllu(self.db, self.pending_queries)
 
     def get_all_blacklisted_ip_ranges(self):
