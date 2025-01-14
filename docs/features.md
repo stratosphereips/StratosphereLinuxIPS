@@ -183,9 +183,19 @@ The domains that are excepted are:
 
 ### Connection to unknown ports
 
-Slips has a list of known ports located in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
+Slips has a list of known ports located in ```slips_files/ports_info/services.csv```
 
 It also has a list of ports that belong to a specific organization in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
+
+This function determines that the port belongs to an organization if:
+1. We have its info in `ports_used_by_specific_orgs.csv`.
+
+It considers an IP belongs to an org if:
+
+1. Both `saddr` and `daddr` have the Mac vendor fo this organization (e.g. Apple.)
+2. both `saddr` and `daddr` belong to the range specified in the`ports_used_by_specific_orgs.csv`.
+3. if the SNI, hostname, rDNS, ASN of this ip belong to this organization.
+4. match the IPs to orgs that slips has info about (apple, fb, google,etc.)
 
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
 
