@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 # Ths is a template module for you to copy and create your own slips module
 # Instructions

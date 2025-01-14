@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 """
 This file will contain the fixtures that are commonly needed by all other test files
