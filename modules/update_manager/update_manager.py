@@ -11,6 +11,8 @@ from typing import (
     IO,
     Optional,
     Tuple,
+    Dict,
+    List,
 )
 
 import requests
@@ -130,12 +132,13 @@ class UpdateManager(IModule):
 
     def get_feed_details(self, feeds_path):
         """
-        Parse links, threat level and tags from the feeds_path file and return
+        Parse links, threat level and tags from the given feeds_path file and
+        return
          a dict with feed info
         """
         try:
             with open(feeds_path, "r") as feeds_file:
-                feeds = feeds_file.read()
+                feeds: str = feeds_file.read()
         except FileNotFoundError:
             self.print(
                 f"Error finding {feeds_path}. Feed won't be added to slips."
@@ -201,8 +204,10 @@ class UpdateManager(IModule):
         """
 
         # there are ports that are by default considered unknown to slips,
-        # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
-        # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
+        # but if it's known to be used by a specific organization, slips won't
+        # consider it 'unknown'.
+        # in ports_info_filepath  we have a list of organizations range/ip and
+        # the port it's known to use
         with open(ports_info_filepath, "r") as f:
             line_number = 0
             while True:
@@ -1604,6 +1609,41 @@ class UpdateManager(IModule):
 
         return self.download_mac_db()
 
+    def delete_unused_cached_remote_feeds(self):
+        """
+        Slips caches all the feeds it downloads. If the user deleted any of
+        the feeds used, like literally deleted it (not using ;) the feeds
+        will still be there in the cache. the purpose of this function is
+        to delete these unused feeds from the cache
+        """
+        # get the cached feeds
+        loaded_feeds: Dict[str, Dict[str, str]] = self.db.get_loaded_ti_feeds()
+        # filter remote ones only, bc the loaded feeds have local ones too
+        cached_remote_feeds: List[str] = [
+            feed for feed in loaded_feeds if feed.startswith("http")
+        ]
+
+        # get the remote feeds that should be used from the config file
+        remote_feeds_from_config: List[str] = (
+            list(self.url_feeds.keys())
+            + list(self.ja3_feeds)
+            + list(self.ssl_feeds)
+            + [self.mac_db_link]
+        )
+        for feed in cached_remote_feeds:
+            # check is the feed should be used. is it in the given config
+            # of this run?
+            if feed not in remote_feeds_from_config:
+                # delete the feed from the cache
+                self.db.delete_ti_feed(feed)
+                self.db.delete_feed_entries(feed)
+                self.print(
+                    f"Deleted feed {feed} from cache",
+                    2,
+                    0,
+                    log_to_logfiles_only=True,
+                )
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1636,6 +1676,11 @@ class UpdateManager(IModule):
             files_to_download.update(self.url_feeds)
             files_to_download.update(self.ja3_feeds)
             files_to_download.update(self.ssl_feeds)
+
+            # before updating any feeds, make sure that the cached feeds
+            # are not using any feed that is not given in the config of
+            # this run (self.url_feeds, self.ja3_feeds, self.ssl_feeds)
+            self.delete_unused_cached_remote_feeds()
 
             for file_to_download in files_to_download:
                 if self.should_update(file_to_download, self.update_period):
@@ -1683,7 +1728,7 @@ class UpdateManager(IModule):
         self.update_finished = asyncio.create_task(self.update())
         await self.update_finished
         self.print(
-            f"{self.db.get_loaded_ti_feeds()} "
+            f"{self.db.get_loaded_ti_feeds_number()} "
             f"TI files successfully loaded."
         )
 
