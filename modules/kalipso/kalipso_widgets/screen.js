@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+//SPDX-License-Identifier: GPL-2.0-only
 const { redis, blessed, blessed_contrib } = require("./libraries.js");
 const evidence = require('./evidence.js')
 const timeline = require('./timeline.js')
@@ -242,7 +244,7 @@ class screen {
     main_page_routine(){
       this.activePage.forEach(item => item.hide());
       this.mainPage.forEach(item => item.show());
-      this.focus_widget.focus()      
+      this.focus_widget.focus()
       this.render()
     }
 
@@ -320,7 +322,7 @@ class screen {
         }
         else if(key.name == 'o'){
           this.helpbar.selectTab(0)
-          this.o_hotkey_routine() 
+          this.o_hotkey_routine()
         }
         else if(key.name == 'h'){
           this.helpbar.selectTab(12)

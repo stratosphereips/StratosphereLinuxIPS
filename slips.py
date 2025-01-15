@@ -1,5 +1,6 @@
-# SPDX-License-Identifier: GPL-2.0-only
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
 

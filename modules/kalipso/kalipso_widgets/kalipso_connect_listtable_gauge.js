@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+//SPDX-License-Identifier: GPL-2.0-only
 const { redis, blessed, blessed_contrib, async, sortedArray } = require("./libraries.js");
 
 class combine_Listtable_Gauge{
@@ -272,7 +274,7 @@ class combine_Listtable_Gauge{
         }
         return;
     }
-  
+
 
     /*Initialize first page in widgets listtable and gauge*/
     fake_control(data_est, data_notest, listtable1_column_names, listtable2_column_names){
