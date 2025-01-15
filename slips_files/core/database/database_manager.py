@@ -469,6 +469,9 @@ class DBManager:
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
 
+    def get_loaded_ti_feeds_number(self, *args, **kwargs):
+        return self.rdb.get_loaded_ti_feeds_number(*args, **kwargs)
+
     def get_loaded_ti_feeds(self, *args, **kwargs):
         return self.rdb.get_loaded_ti_feeds(*args, **kwargs)
 
