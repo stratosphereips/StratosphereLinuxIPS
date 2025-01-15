@@ -63,7 +63,7 @@ class IoCHandler:
         """
         self.r.set(self.constants.LOADED_TI_FILES, number_of_loaded_files)
 
-    def get_loaded_ti_feeds(self):
+    def get_loaded_ti_feeds_number(self):
         """
         returns the number of successfully loaded TI files. or 0 if none is loaded
         """
@@ -95,6 +95,12 @@ class IoCHandler:
 
     def delete_ti_feed(self, file):
         self.rcache.hdel(self.constants.TI_FILES_INFO, file)
+
+    def get_loaded_ti_feeds(self):
+        """
+        returns the successfully loaded/cached TI files.
+        """
+        return self.rcache.hgetall(self.constants.TI_FILES_INFO)
 
     def set_feed_last_update_time(self, file: str, time: float):
         """
