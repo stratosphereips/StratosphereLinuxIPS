@@ -1409,20 +1409,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def has_cached_whitelist(self) -> bool:
         return bool(self.r.exists(self.constants.WHITELIST))
 
+    def is_dhcp_server(self, ip: str) -> bool:
+        # make sure it's a valid ip
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            # not a valid ip skip
+            return False
+        dhcp_servers = self.r.lrange(self.constants.DHCP_SERVERS, 0, -1)
+        return ip in dhcp_servers
+
     def store_dhcp_server(self, server_addr):
         """
         Store all seen DHCP servers in the database.
         """
-        # make sure it's a valid ip
-        try:
-            ipaddress.ip_address(server_addr)
-        except ValueError:
-            # not a valid ip skip
-            return False
-        # make sure the server isn't there before adding
-        dhcp_servers = self.r.lrange(self.constants.DHCP_SERVERS, 0, -1)
-        if server_addr not in dhcp_servers:
-            self.r.lpush(self.constants.DHCP_SERVERS, server_addr)
+        if self.is_dhcp_server(server_addr):
+            # already in the db
+            return
+
+        self.r.lpush(self.constants.DHCP_SERVERS, server_addr)
 
     def save(self, backup_file):
         """

@@ -438,6 +438,7 @@ class Conn(IFlowalertsAnalyzer):
             flow.type_ != "conn"
             or flow.appproto in ("dns", "icmp")
             or utils.is_ignored_ip(flow.daddr)
+            or self.db.is_dhcp_server(flow.daddr)
             # if the daddr is a client ip, it means that this is a conn
             # from the internet to our ip, the dns res was probably
             # made on their side before connecting to us,

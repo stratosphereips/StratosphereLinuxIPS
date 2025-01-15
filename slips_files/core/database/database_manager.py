@@ -360,6 +360,9 @@ class DBManager:
     def store_dhcp_server(self, *args, **kwargs):
         return self.rdb.store_dhcp_server(*args, **kwargs)
 
+    def is_dhcp_server(self, *args, **kwargs):
+        return self.rdb.is_dhcp_server(*args, **kwargs)
+
     def save(self, *args, **kwargs):
         return self.rdb.save(*args, **kwargs)
 
