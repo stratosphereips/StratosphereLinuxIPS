@@ -185,23 +185,25 @@ The domains that are excepted are:
 
 Slips has a list of known ports located in ```slips_files/ports_info/services.csv```
 
-It also has a list of ports that belong to a specific organization in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
+and a list of ports that belong to a specific organization in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
 
-This function determines that the port belongs to an organization if:
-1. We have its info in `ports_used_by_specific_orgs.csv`.
+These are the cases where Slips marks the port as known and doesn't trigger an alert
 
-It considers an IP belongs to an org if:
+1. If the port is in the list of well known ports in `services.csv`.
+2. If Slips has that port's info in `ports_used_by_specific_orgs.csv` and the source and destination addresses belong to that organization.
 
-1. Both `saddr` and `daddr` have the Mac vendor fo this organization (e.g. Apple.)
-2. both `saddr` and `daddr` belong to the range specified in the`ports_used_by_specific_orgs.csv`.
-3. if the SNI, hostname, rDNS, ASN of this ip belong to this organization.
-4. match the IPs to orgs that slips has info about (apple, fb, google,etc.)
+
+Slips considers an IP belongs to an org if:
+
+1. Both `saddr` and `daddr` have the organization's name in their MAC vendor (e.g. Apple.)
+2. Both `saddr` and `daddr` belong to the range specified in the`ports_used_by_specific_orgs.csv` for that organization.
+3. If the SNI, hostname, rDNS, ASN of this IP belong to this organization.
+4. If the IP is hardcoded in any of the organizations IPs in `slips_files/organizations_info/`.
+
+Otherwise, Slips triggers and "unknown port" evidence.
 
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
 
-Any port that isn't in the above 2 files is considered unknown to Slips.
-
-Example of Spyware that uses custom ports are [hermit](https://www.lookout.com/blog/hermit-spyware-discovery) using ports 58442/TCP and 8442/TCP.
 
 ### Data exfiltration
 
