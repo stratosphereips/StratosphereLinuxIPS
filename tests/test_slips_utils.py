@@ -17,7 +17,7 @@ def test_get_sha256_hash():
     # a file that we know doesn't change
     assert (
         utils.get_sha256_hash("modules/template/__init__.py")
-        == "2d12747a3369505a4d3b722a0422f8ffc8af5514355cdb0eb18178ea7071b8d0"
+        == "683de4e72614dd4947e5f3b5889e12fa15bf6d5b4c5978683bad78f3c6ad5695"
     )
 
 

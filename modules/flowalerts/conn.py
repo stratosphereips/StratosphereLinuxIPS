@@ -438,6 +438,7 @@ class Conn(IFlowalertsAnalyzer):
             flow.type_ != "conn"
             or flow.appproto in ("dns", "icmp")
             or utils.is_ignored_ip(flow.daddr)
+            or self.db.is_dhcp_server(flow.daddr)
             # if the daddr is a client ip, it means that this is a conn
             # from the internet to our ip, the dns res was probably
             # made on their side before connecting to us,
@@ -495,20 +496,12 @@ class Conn(IFlowalertsAnalyzer):
         self, profileid, twid, flow
     ) -> bool:
         """
-        Checks if there's a flow to a dstip that has no cached DNS answer
+        Checks if there's a connection to a dstip that has no cached DNS
+        answer
         """
-        # The exceptions are:
-        # 1- Do not check for DNS requests
-        # 2- Ignore some IPs like private IPs, multicast, and broadcast
         if self.should_ignore_conn_without_dns(flow):
             return False
 
-        # Ignore some IP
-        ## - All dhcp servers. Since is ok to connect to
-        # them without a DNS request.
-        # We dont have yet the dhcp in the redis, when is there check it
-        # if self.db.get_dhcp_servers(daddr):
-        # continue
         if not self.is_interface_timeout_reached():
             return False
 
@@ -526,7 +519,7 @@ class Conn(IFlowalertsAnalyzer):
             return False
 
         # Reaching here means we already waited 15 seconds for the dns
-        # to arrive after the connection was made, but still no dns
+        # to arrive after the connection was checked, but still no dns
         # resolution for it.
 
         # Sometimes the same computer makes requests using
