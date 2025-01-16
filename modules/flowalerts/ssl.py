@@ -241,12 +241,9 @@ class SSL(IFlowalertsAnalyzer):
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
 
-            task = asyncio.create_task(
-                self.check_pastebin_download(twid, flow)
+            self.flowalerts.create_task(
+                self.check_pastebin_download, twid, flow
             )
-            # to wait for these functions before flowalerts shuts down
-            self.flowalerts.tasks.append(task)
-
             self.check_self_signed_certs(twid, flow)
             self.detect_malicious_ja3(twid, flow)
             self.detect_incompatible_cn(twid, flow)

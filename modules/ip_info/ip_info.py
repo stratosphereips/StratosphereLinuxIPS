@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import platform
+from asyncio import Task
 from typing import (
     Union,
     Optional,
@@ -95,7 +96,7 @@ class IPInfo(AsyncModule):
                 "https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. "
                 "Please note it must be the MaxMind DB version."
             )
-        self.reading_mac_db_task = asyncio.create_task(self.read_mac_db())
+        self.reading_mac_db_task: Task = self.create_task(self.read_mac_db)
 
     async def read_mac_db(self):
         """

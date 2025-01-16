@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import traceback
+from asyncio import Task
 from typing import (
     IO,
     Optional,
@@ -1644,6 +1645,20 @@ class UpdateManager(IModule):
                     log_to_logfiles_only=True,
                 )
 
+    def handle_exception(self, task):
+        """
+        in asyncmodules we use Async.Task to run some of the functions
+        If an exception occurs in a coroutine that was wrapped in a Task
+        (e.g., asyncio.create_task), the exception does not crash the program
+         but remains in the task.
+        This function is used to handle the exception in the task
+        """
+        try:
+            # Access task result to raise the exception if it occurred
+            task.result()
+        except Exception as e:
+            self.print(e, 0, 1)
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1699,6 +1714,7 @@ class UpdateManager(IModule):
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
+                    task.add_done_callback(self.handle_exception)
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
@@ -1725,7 +1741,9 @@ class UpdateManager(IModule):
         """
         # create_task is used to run update() function
         # concurrently instead of serially
-        self.update_finished = asyncio.create_task(self.update())
+        self.update_finished: Task = asyncio.create_task(self.update())
+        self.update_finished.add_done_callback(self.handle_exception)
+
         await self.update_finished
         self.print(
             f"{self.db.get_loaded_ti_feeds_number()} "

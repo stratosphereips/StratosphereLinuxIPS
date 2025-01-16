@@ -793,13 +793,12 @@ class Conn(IFlowalertsAnalyzer):
             self.check_different_localnet_usage(
                 twid, flow, what_to_check="srcip"
             )
-            task = asyncio.create_task(
-                self.check_connection_without_dns_resolution(
-                    profileid, twid, flow
-                )
+            self.flowalerts.create_task(
+                self.check_connection_without_dns_resolution,
+                profileid,
+                twid,
+                flow,
             )
-            # to wait for these functions before flowalerts shuts down
-            self.flowalerts.tasks.append(task)
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
             self.check_non_http_port_80_conns(twid, flow)

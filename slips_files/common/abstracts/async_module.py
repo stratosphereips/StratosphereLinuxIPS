@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
-from typing import Callable
+from asyncio import Task
+from typing import (
+    Callable,
+    List,
+)
 from slips_files.common.abstracts.module import IModule
 
 
@@ -14,8 +18,40 @@ class AsyncModule(IModule):
 
     def __init__(self, *args, **kwargs):
         IModule.__init__(self, *args, **kwargs)
+        # list of async functions to await before flowalerts shuts down
+        self.tasks: List[Task] = []
 
     def init(self, **kwargs): ...
+
+    def create_task(self, func, *args) -> Task:
+        """
+        wrapper for asyncio.create_task
+        The goal here is to add a callback to tasks to be able to handle
+        exceptions. because asyncio Tasks do not raise exceptions
+        """
+        task = asyncio.create_task(func(*args))
+        task.add_done_callback(self.handle_exception)
+
+        # Allow the event loop to run the scheduled task
+        # await asyncio.sleep(0)
+
+        # to wait for these functions before flowalerts shuts down
+        self.tasks.append(task)
+        return task
+
+    def handle_exception(self, task):
+        """
+        in asyncmodules we use Async.Task to run some of the functions
+        If an exception occurs in a coroutine that was wrapped in a Task
+        (e.g., asyncio.create_task), the exception does not crash the program
+         but remains in the task.
+        This function is used to handle the exception in the task
+        """
+        try:
+            # Access task result to raise the exception if it occurred
+            task.result()
+        except Exception as e:
+            self.print(e, 0, 1)
 
     async def main(self): ...
 

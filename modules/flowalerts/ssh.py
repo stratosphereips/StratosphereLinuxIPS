@@ -127,7 +127,6 @@ class SSH(IFlowalertsAnalyzer):
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        task = asyncio.create_task(self.check_successful_ssh(twid, flow))
-        # to wait for these functions before flowalerts shuts down
-        self.flowalerts.tasks.append(task)
+
+        self.flowalerts.create_task(self.check_successful_ssh, twid, flow)
         self.check_ssh_password_guessing(profileid, twid, flow)
