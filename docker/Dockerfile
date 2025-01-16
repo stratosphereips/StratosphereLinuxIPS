@@ -1,3 +1,19 @@
+# Build Iris
+FROM golang:1.17 AS build
+
+ENV IRIS_DIR ./iris
+WORKDIR ${IRIS_DIR}
+
+COPY go.mod ./
+COPY go.sum ./
+
+RUN go mod download
+
+COPY cmd ./cmd
+COPY pkg ./pkg
+
+RUN go build cmd/peercli.go
+
 FROM ubuntu:22.04
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
@@ -70,6 +86,10 @@ RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}
 
+#Retrieve Iris
+COPY --from=build ${IRIS_DIR}/config.yaml ./modules/irisModule
+COPY --from=build ${IRIS_DIR}/peercli ./modules/irisModule
+
 COPY . $SLIPS_DIR
 
 RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
@@ -84,6 +104,8 @@ RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
 RUN cd p2p4slips \
     && go build \
     && export PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/";
+
+
 
 WORKDIR ${SLIPS_DIR}
 
