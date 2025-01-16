@@ -21,11 +21,12 @@ import time
 import sys
 
 
-class Template(IModule):
+class IrisModule(IModule):
     # Name: short name of the module. Do not use spaces
     name = "Iris"
     description = "Global P2P module cooperating with Fides"
     authors = ["David Otta"]
+    process = None
 
     def init(self):
         # To which channels do you want to subscribe? When a message
@@ -44,10 +45,11 @@ class Template(IModule):
         """
 
         iris_exe_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "peercli")
+        iris_conf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
         command = [
             iris_exe_path,
             "--conf",
-            "config.yaml",
+            iris_conf_path,
         ]
 
         command_str = " ".join(
