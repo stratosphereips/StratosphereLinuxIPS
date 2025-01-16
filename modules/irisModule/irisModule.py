@@ -42,22 +42,40 @@ class Template(IModule):
         """
         Initializations that run only once before the main() function runs in a loop
         """
+
+        iris_exe_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "peercli")
         command = [
-            "./peercli",
+            iris_exe_path,
             "--conf",
             "config.yaml",
         ]
 
-        print("running slips ...")
+        command_str = " ".join(
+            f'"{arg}"' if " " in arg or '"' in arg else arg for arg in command
+        )
+        debug_message = {
+                "from": self.name,
+                "txt": f"Running Iris using command: {command_str}",
+            }
+        self.logger.output_line(debug_message)
 
-        # Open the log file in write mode
-        with open("outputfile.out", "w") as log_file:
+        # Open the log file
+        log_file = open("outputfile.out", "w")
+
+        try:
             # Start the subprocess, redirecting stdout and stderr to the same file
-            process = subprocess.Popen(
+            self.process = subprocess.Popen(
                 command,  # Replace with your command
                 stdout=log_file,
                 stderr=log_file,
             )
+        except OSError as e:
+            error_message = {
+                "from": self.name,
+                "txt": str(e)
+            }
+            self.logger.log_error(error_message)
+            log_file.close()
 
     def main(self):
         """Main loop function"""
@@ -66,3 +84,11 @@ class Template(IModule):
             # Database every second
             msg = json.loads(msg["data"])
             #...
+
+    def shutdown_gracefully(self):
+        self.logger.output_line({"from": self.name, "txt":"Iris Module terminating gracefully"})
+        self.process.terminate()
+        self.logger.output_line({"from": self.name, "txt":"Iris Module terminating wait"})
+        self.process.wait()
+        self.logger.output_line({"from": self.name, "txt":"Iris Module terminated gracefully"})
+
