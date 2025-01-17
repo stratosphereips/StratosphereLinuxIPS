@@ -193,6 +193,8 @@ class DNS(IFlowalertsAnalyzer):
         # if so, we extend the flow.asnwers to include
         # these IPs. the goal is to avoid FPs
         flow.answers.extend(self.get_previous_domain_resolutions(flow.query))
+        # remove duplicates
+        flow.answers = list(set(flow.answers))
 
         if flow.answers == ["-"]:
             # If no IPs are in the answer, we can not expect
@@ -203,10 +205,6 @@ class DNS(IFlowalertsAnalyzer):
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
             profileid, twid
         )
-        # If contacted_ips is empty it can be because
-        # we didnt read yet all the flows.
-        # This is automatically captured later in the
-        # for loop and we start a Timer
 
         # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
@@ -223,7 +221,7 @@ class DNS(IFlowalertsAnalyzer):
                 return True
 
         # Check if there was a connection to any of the CNAMEs
-        if self.is_cname_contacted(flow.answers, contacted_ips):
+        if self.is_cname_contacted(flow.answers, contacted_ips, flow):
             # this is not a DNS without resolution
             return True
 
@@ -260,7 +258,6 @@ class DNS(IFlowalertsAnalyzer):
 
         # Found a DNS query and none of its answers were contacted
         await asyncio.sleep(40)
-
         if self.is_any_flow_answer_contacted(profileid, twid, flow):
             return False
 
@@ -437,13 +434,11 @@ class DNS(IFlowalertsAnalyzer):
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        task = asyncio.create_task(
-            self.check_dns_without_connection(profileid, twid, flow)
+
+        self.flowalerts.create_task(
+            self.check_dns_without_connection, profileid, twid, flow
         )
-        # Allow the event loop to run the scheduled task
-        await asyncio.sleep(0)
-        # to wait for these functions before flowalerts shuts down
-        self.flowalerts.tasks.append(task)
+
         self.check_high_entropy_dns_answers(twid, flow)
         self.check_invalid_dns_answers(twid, flow)
         self.detect_dga(profileid, twid, flow)
