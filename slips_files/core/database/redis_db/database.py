@@ -86,6 +86,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
         "network2fides",
         "fides2slips",
         "slips2fides",
+        "tl2nl_alert",
+        "",
     }
     separator = "_"
     normal_label = "benign"

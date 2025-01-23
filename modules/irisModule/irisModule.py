@@ -35,8 +35,11 @@ class IrisModule(IModule):
         # You can find the full list of channels at
         # slips_files/core/database/redis_db/database.py
         self.c1 = self.db.subscribe("new_ip")
+        self.f2n = self.db.subscribe("fides2network")
+        self.n2f = self.db.subscribe("network2fides")
         self.channels = {
-            "new_ip": self.c1,
+            "network2fides": self.n2f,
+            "fides2network": self.f2n,
         }
 
     def pre_main(self):
