@@ -1656,6 +1656,9 @@ class UpdateManager(IModule):
         try:
             # Access task result to raise the exception if it occurred
             task.result()
+        except asyncio.exceptions.CancelledError:
+            # like pressing ctrl+c
+            return
         except Exception as e:
             self.print(e, 0, 1)
 
@@ -1724,7 +1727,7 @@ class UpdateManager(IModule):
             # wait for all TI files to update
             try:
                 await task
-            except UnboundLocalError:
+            except (UnboundLocalError, asyncio.exceptions.CancelledError):
                 # in case all our files are updated, we don't
                 # have task defined, skip
                 pass
