@@ -465,6 +465,17 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
 
     def dns_without_conn(self, twid, flow):
+        # WARNING
+        #  The approach we use to detect "dns without connection" evidence will
+        #  cause the evidence to be set after 30 mins of the dns flow,
+        #  and the timewindow of that evidence may have been closed,
+        #  that would cause us to detect the tw as malicious way after it
+        #  ends.
+        #  but this doesnt matter since the threat level of it is info.
+        #
+        # this will be an issue if we ever decide to increase the threat level
+        # of this evidence
+
         description: str = f"domain {flow.query} resolved with no connection"
         twid_number: int = int(twid.replace("timewindow", ""))
 
