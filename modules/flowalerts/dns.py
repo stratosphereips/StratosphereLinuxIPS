@@ -269,6 +269,44 @@ class DNS(IFlowalertsAnalyzer):
                 profileid, twid, pending_flow, waited_for_the_conn=True
             )
 
+    def get_dns_flow_from_queue(self):
+        """Fetch and parse the DNS message from the queue."""
+        msg: str = self.dns_msgs.get(block=True)
+        msg: dict = json.loads(msg["data"])
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
+        return flow
+
+    def handle_pending_flows(self, flow: Any) -> List[Tuple[str, str, Any]]:
+        """
+        Process all pending DNS flows without connections.
+
+        Calls check_dns_without_connection when 10, 20 and 30 mins (zeek
+        time) pass since the first encounter of the dns flow.
+
+        Returns a list of flows that need to be put back into the queue
+         and checked later.
+        """
+        back_to_queue: List[Tuple[str, str, Any]] = []
+
+        while self.pending_dns_without_conn.qsize() > 0:
+            profileid, twid, pending_flow = self.pending_dns_without_conn.get()
+            diff_in_mins = utils.get_time_diff(
+                pending_flow.starttime, flow.starttime, "minutes"
+            )
+
+            if diff_in_mins >= 30:
+                self.check_dns_without_connection(
+                    profileid, twid, pending_flow, waited_for_the_conn=True
+                )
+            elif 9.5 < diff_in_mins <= 10 or 19.5 < diff_in_mins <= 20:
+                self.check_dns_without_connection(
+                    profileid, twid, pending_flow, waited_for_the_conn=False
+                )
+            else:
+                back_to_queue.append((profileid, twid, pending_flow))
+
+        return back_to_queue
+
     def check_dns_without_connection_timeout(self):
         """
         Waits 30 mins in zeek time for the connection of a dns to arrive
@@ -279,44 +317,33 @@ class DNS(IFlowalertsAnalyzer):
         dns without connection evidence.
         The whole point is to give the connection 30 mins in zeek time to
         arrive before alerting "dns wihtout conn".
-        This function runs in its own thread to avoid blocking the main thread
+
+        - To avoid having thousands of flows in memory for 30 mins. we check
+        every 10 mins for the connections, if not found we put it back to
+        queue, if found we remove that flow from the pending flows
+
+        This function runs in its own thread
         """
-        while not self.flowalerts.should_stop():
-            if self.pending_dns_without_conn.empty():
-                continue
+        try:
+            while not self.flowalerts.should_stop():
+                if self.pending_dns_without_conn.empty():
+                    continue
 
-            msg: str = self.dns_msgs.get(block=True)
-            msg: dict = json.loads(msg["data"])
-            flow = self.classifier.convert_to_flow_obj(msg["flow"])
+                flow = self.get_dns_flow_from_queue()
+                # back_to_queue will be used to store the flows we're
+                # waiting for the conn of temporarily if 30 mins didnt pass
+                # since we saw them.
+                # the goal of this is to not change the queue size in the
+                # below loop
+                back_to_queue = self.handle_pending_flows(flow)
 
-            # will be used to store the flows we're waiting for the conn of
-            # temporarily if 30 mins didnt pass since we saw them.
-            # the goal of this is to not change the queue size in the below
-            # loop
-            back_to_queue: List[Tuple[str, str, Any]] = []
-
-            while self.pending_dns_without_conn.qsize() > 0:
-                # get all the dns flows we're waiting for the conn of
-                # and check if any of them reached the 30 mins timeout
-                profileid, twid, pending_flow = (
-                    self.pending_dns_without_conn.get()
-                )
-
-                diff_in_mins = utils.get_time_diff(
-                    flow.starttime, pending_flow.starttime, "minutes"
-                )
-                if diff_in_mins >= 30:
-                    self.check_dns_without_connection(
-                        profileid, twid, pending_flow, waited_for_the_conn=True
-                    )
-                else:
-                    # put it back in the queue
-                    back_to_queue.put((profileid, twid, pending_flow))
-
-            # put them back to the queue so we can check them later
-            for flow in back_to_queue:
-                flow: Tuple[str, str, Any]
-                self.pending_dns_without_conn.put(flow)
+                # put them back to the queue so we can check them later
+                for flow in back_to_queue:
+                    flow: Tuple[str, str, Any]
+                    self.pending_dns_without_conn.put(flow)
+        except KeyboardInterrupt:
+            # the rest will be handled in shutdown_gracefully
+            return
 
     async def check_dns_without_connection(
         self, profileid, twid, flow, waited_for_the_conn=False
