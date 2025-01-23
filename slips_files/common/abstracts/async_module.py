@@ -50,6 +50,8 @@ class AsyncModule(IModule):
         try:
             # Access task result to raise the exception if it occurred
             task.result()
+        except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
+            pass
         except Exception as e:
             self.print(e, 0, 1)
 
@@ -59,12 +61,14 @@ class AsyncModule(IModule):
         """Implement the async shutdown logic here"""
         pass
 
-    async def run_main(self):
-        return await self.main()
-
-    @staticmethod
-    def run_async_function(func: Callable):
+    def run_async_function(self, func: Callable):
+        """
+        If the func argument is a coroutine object it is implicitly
+        scheduled to run as a asyncio.Task.
+        Returns the Future’s result or raise its exception.
+        """
         loop = asyncio.get_event_loop()
+        loop.set_exception_handler(self.handle_exception)
         return loop.run_until_complete(func())
 
     def run(self):
@@ -91,7 +95,7 @@ class AsyncModule(IModule):
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
-                error: bool = self.run_async_function(self.run_main)
+                error: bool = self.run_async_function(self.main)
                 if error:
                     self.run_async_function(self.shutdown_gracefully)
                     return
@@ -99,7 +103,8 @@ class AsyncModule(IModule):
             except KeyboardInterrupt:
                 self.keyboard_int_ctr += 1
                 if self.keyboard_int_ctr >= 2:
-                    # on the second ctrl+c Slips immediately stop
+                    # on the second ctrl+c Slips immediately stops
+                    loop.close()
                     return True
                 # on the first ctrl + C keep looping until the should_stop()
                 # returns true
@@ -107,3 +112,5 @@ class AsyncModule(IModule):
             except Exception:
                 self.print_traceback()
                 return
+
+        loop.close()
