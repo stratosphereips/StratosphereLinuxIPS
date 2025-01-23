@@ -61,10 +61,11 @@ class FlowAlerts(AsyncModule):
 
     async def shutdown_gracefully(self):
         self.dns.shutdown_gracefully()
-        await asyncio.gather(*self.tasks)
+        await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def pre_main(self):
         utils.drop_root_privs()
+        self.dns.pre_analyze()
         self.analyzers_map = {
             "new_downloaded_file": [self.downloaded_file.analyze],
             "new_notice": [self.notice.analyze],

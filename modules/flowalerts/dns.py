@@ -48,7 +48,7 @@ class DNS(IFlowalertsAnalyzer):
             target=self.check_dns_without_connection_timeout,
             daemon=True,
         )
-        self.dns_without_connection_timeout_checker_thread.start()
+
         # used to pass the msgs this analyzer reciecved, to the
         # dns_without_connection_timeout_checker_thread.
         # the reason why we can just use .get_msg() there is because once
@@ -239,7 +239,7 @@ class DNS(IFlowalertsAnalyzer):
                 return True
 
         # Check if there was a connection to any of the CNAMEs
-        if self.is_cname_contacted(flow.answers, contacted_ips, flow):
+        if self.is_cname_contacted(flow.answers, contacted_ips):
             # this is not a DNS without resolution
             return True
 
@@ -536,6 +536,13 @@ class DNS(IFlowalertsAnalyzer):
 
     def shutdown_gracefully(self):
         self.check_dns_without_connection_of_all_pending_flows()
+
+    def pre_analyze(self):
+        """Code that shouldnt be run in a loop. runs only once in
+        flowalerts' pre_main"""
+        # we didnt put this in __init__ because it uses self.flowalerts
+        # attributes that are not initialized yet in __init__
+        self.dns_without_connection_timeout_checker_thread.start()
 
     async def analyze(self, msg):
         """
