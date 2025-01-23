@@ -57,7 +57,6 @@ SUPPORTED_LOGFILES = (
 )
 
 
-# Input Process
 class Input(ICore):
     """A class process to run the process of the flows"""
 

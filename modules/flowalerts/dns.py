@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import asyncio
 import collections
 import ipaddress
 import json
@@ -260,6 +259,16 @@ class DNS(IFlowalertsAnalyzer):
         # 30 minutes have passed?
         return diff >= self.dns_without_conn_interface_wait_time
 
+    def check_dns_without_connection_of_all_pending_flows(self):
+        """should be called before shutting down, to check all the pending
+        flows in the pending_dns_without_conn queue before stopping slips,
+        doesnt matter if the 30 mins passed or not"""
+        while self.pending_dns_without_conn.qsize() > 0:
+            profileid, twid, pending_flow = self.pending_dns_without_conn.get()
+            self.check_dns_without_connection(
+                profileid, twid, pending_flow, waited_for_the_conn=True
+            )
+
     def check_dns_without_connection_timeout(self):
         """
         Waits 30 mins in zeek time for the connection of a dns to arrive
@@ -310,10 +319,13 @@ class DNS(IFlowalertsAnalyzer):
                 self.pending_dns_without_conn.put(flow)
 
     async def check_dns_without_connection(
-        self, profileid, twid, flow
+        self, profileid, twid, flow, waited_for_the_conn=False
     ) -> bool:
         """
         Makes sure all cached DNS answers are there in contacted_ips
+        :kwarg waited_for_the_conn: if True, it means we already waited 30
+        mins in zeek time for the conn of this dns to arrive, and it didnt.
+        if False, we wait 30 mins zeek time for it to arrive
         """
         if not self.should_detect_dns_without_conn(flow):
             return False
@@ -324,12 +336,12 @@ class DNS(IFlowalertsAnalyzer):
         if self.is_any_flow_answer_contacted(profileid, twid, flow):
             return False
 
-        # Found a DNS query and none of its answers were contacted
-        await asyncio.sleep(40)
-        if self.is_any_flow_answer_contacted(profileid, twid, flow):
+        if not waited_for_the_conn:
+            # wait 30 mins zeek time for the conn of this dns to arrive
+            self.pending_dns_without_conn.put((profileid, twid, flow))
             return False
 
-        # Reaching here means we already waited some time for the connection
+        # Reaching here means we already waited for the connection
         # of this dns to arrive but none was found
         self.set_evidence.dns_without_conn(twid, flow)
         return True
@@ -495,9 +507,18 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_arpa_queries.pop(profileid)
         return True
 
+    def shutdown_gracefully(self):
+        self.check_dns_without_connection_of_all_pending_flows()
+
     async def analyze(self, msg):
+        """
+        is only used by flowalerts.py
+        runs whenever we get a new_dns message
+        """
         if not utils.is_msg_intended_for(msg, "new_dns"):
             return False
+
+        self.dns_msgs.put(msg)
         msg = json.loads(msg["data"])
         profileid = msg["profileid"]
         twid = msg["twid"]

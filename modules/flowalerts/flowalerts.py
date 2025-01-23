@@ -60,6 +60,7 @@ class FlowAlerts(AsyncModule):
             self.channels.update({channel: channel_obj})
 
     async def shutdown_gracefully(self):
+        self.dns.shutdown_gracefully()
         await asyncio.gather(*self.tasks)
 
     def pre_main(self):
@@ -78,6 +79,7 @@ class FlowAlerts(AsyncModule):
         }
 
     async def main(self):
+        """runs in a loop, waiting for messages in subscribed channels"""
         for channel, analyzers in self.analyzers_map.items():
             msg: dict = self.get_msg(channel)
             if not msg:
