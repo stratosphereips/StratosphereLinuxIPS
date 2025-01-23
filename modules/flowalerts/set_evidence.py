@@ -480,7 +480,7 @@ class SetEvidnceHelper:
                 victim_type=IoCType.DOMAIN,
                 value=flow.query,
             ),
-            threat_level=ThreatLevel.LOW,
+            threat_level=ThreatLevel.INFO,
             description=description,
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
