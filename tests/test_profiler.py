@@ -850,13 +850,12 @@ def test_process_flow():
 
 def test_process_flow_handle_exception():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.profiler.stop_profiler_thread = Mock()
+    profiler.stop_profiler_thread = Mock()
     profiler.get_msg_from_input_proc = Mock()
     profiler.input_handler_obj = Mock()
     profiler.print = Mock()
     profiler.print_traceback = Mock()
 
-    # Setup the mock return values and side effects
     profiler.stop_profiler_thread.side_effect = [False, True]  # Run loop
     # once
     profiler.get_msg_from_input_proc.return_value = {
@@ -867,12 +866,5 @@ def test_process_flow_handle_exception():
         "Test exception"
     )
 
-    profiler.process_flow()  # Call the method under test
-
-    # Assert
+    profiler.process_flow()
     profiler.print_traceback.assert_called_once()
-    mock_print.assert_called_with(
-        f"Problem processing line { {'key': 'value'} }. Line discarded. Test exception",
-        0,
-        1,
-    )

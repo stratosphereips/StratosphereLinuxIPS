@@ -621,10 +621,10 @@ class Profiler(ICore, IObservable):
             self.print(f"< Received Line: {line}", 2, 0)
             self.rec_lines += 1
 
-            self.init_input_handlers(line, input_type)
-
             # get the correct input type class and process the line based on it
             try:
+                self.init_input_handlers(line, input_type)
+
                 flow = self.input_handler_obj.process_line(line)
                 if not flow:
                     continue
