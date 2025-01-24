@@ -102,6 +102,16 @@ class Profiler(ICore, IObservable):
         self.gw_mac = None
         self.gw_ip = None
         self.profiler_threads = []
+        # each msg received from inputprocess will be put here, and each one
+        # profiler_threads will retrieve from this queue.
+        # the goal of this is to have main() handle the stop msg.
+        # so without this, only 1 of the 3 threads received the stop msg
+        # and exits, and the rest of the 2 threads AND the main() keep
+        # waiting for new msgs
+        self.flows_to_process_q = multiprocessing.Queue()
+        # that queue will be used in 4 different threads. the 3 profilers
+        # and main().
+        self.pending_flows_queue_lock = threading.Lock()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -432,7 +442,6 @@ class Profiler(ICore, IObservable):
             return input_type
 
     def shutdown_gracefully(self):
-
         # wait for the profiler threads to complete
         for thread in self.profiler_threads:
             thread.join()
@@ -527,16 +536,32 @@ class Profiler(ICore, IObservable):
         self.print(f"Used local network: {green(local_net)}")
         self.db.set_local_network(local_net)
 
-    def get_msg_from_input_proc(self):
+    def get_msg_from_input_proc(
+        self, q: multiprocessing.Queue, thread_safe=False
+    ):
+        """
+        retrieves a msg from the given queue
+        :kwarg thread_safe: set it to true if the queue passed is used by
+        the profiler threads (e.g pending_flows_queue).
+         when set to true, this function uses the pending flows queue lock.
+        """
+        if thread_safe:
+            self.pending_flows_queue_lock.acquire()
         try:
             # this msg can be a str only when it's a 'stop' msg indicating
             # that this module should stop
-            return self.profiler_queue.get(timeout=1, block=False)
+            msg = q.get(timeout=1, block=False)
+            if thread_safe:
+                self.pending_flows_queue_lock.release()
+            return msg
         except queue.Empty:
-            return
+            pass
         except Exception:
             # ValueError is raised when the queue is closed
-            return
+            pass
+
+        if thread_safe:
+            self.pending_flows_queue_lock.release()
 
     def start_profiler_threads(self):
         """starts 3 profiler threads for faster processing of the flows"""
@@ -576,13 +601,6 @@ class Profiler(ICore, IObservable):
                 # wait for msgs
                 continue
 
-            # ALYA, DO NOT REMOVE THIS CHECK
-            # without it, there's no way this module will know it's
-            # time to stop and no new flows are coming
-            if self.is_stop_msg(msg):
-                # 1 indicates an error then shutdown gracefully is called
-                return 1
-
             line: dict = msg["line"]
             input_type: str = msg["input_type"]
 
@@ -603,20 +621,6 @@ class Profiler(ICore, IObservable):
                 )  # process the line
                 if not flow:
                     continue
-                #
-                # if str(flow.starttime) == str(87.143931):
-                #     from datetime import datetime
-                #
-                #     # get the current datetime
-                #     now = datetime.now()
-                #
-                #     # format it as a human-readable string
-                #     formatted_date = now.strftime("%A, %B %d, %Y %I:%M %p")
-                #     #
-                #     # print(
-                #     #     f"@@@@@@@@@@@@@@@@[{formatted_date}] AYo "
-                #     #     f"profiler we just read that linee!! {flow}"
-                #     #     )
 
                 self.add_flow_to_profile(flow)
                 self.handle_setting_local_net(flow)
@@ -636,6 +640,7 @@ class Profiler(ICore, IObservable):
         self.start_profiler_threads()
 
     def main(self):
+        # the only thing that stops this loop is the 'stop' msg
         while True:
             # listen on this channel in case whitelist.conf is changed,
             # we need to process the new changes
@@ -646,3 +651,19 @@ class Profiler(ICore, IObservable):
                 # otherwise this channel will get a msg only when
                 # whitelist.conf is modified and saved to disk
                 self.whitelist.update()
+
+            msg = self.get_msg_from_input_proc(self.profiler_queue)
+            if not msg:
+                # wait for msgs
+                continue
+
+            # ALYA, DO NOT REMOVE THIS CHECK
+            # without it, there's no way this module will know it's
+            # time to stop and no new flows are coming
+            if self.is_stop_msg(msg):
+                self.stop_profiler_threads.set()
+                return 1
+
+            self.pending_flows_queue_lock.acquire()
+            self.flows_to_process_q.put(msg)
+            self.pending_flows_queue_lock.release()
