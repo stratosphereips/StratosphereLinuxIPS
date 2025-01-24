@@ -661,7 +661,9 @@ class Profiler(ICore, IObservable):
 
     def main(self):
         # the only thing that stops this loop is the 'stop' msg
-        while True:
+        # we're using self.should_stop() here instead of while True to be
+        # able to unit test this function:D
+        while not self.should_stop():
             # listen on this channel in case whitelist.conf is changed,
             # we need to process the new changes
             if self.get_msg("reload_whitelist"):

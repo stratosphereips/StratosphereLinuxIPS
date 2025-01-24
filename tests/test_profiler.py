@@ -35,7 +35,7 @@ def test_define_separator_suricata(
     sample_flow = {
         "data": sample_flow,
     }
-    profiler_detected_type: str = profiler.define_separator(
+    profiler_detected_type: str = profiler.get_input_type(
         sample_flow, input_type
     )
     assert profiler_detected_type == expected_value
@@ -61,7 +61,7 @@ def test_define_separator_zeek_tab(
     sample_flow = {
         "data": sample_flow,
     }
-    profiler_detected_type: str = profiler.define_separator(
+    profiler_detected_type: str = profiler.get_input_type(
         sample_flow, input_type
     )
     assert profiler_detected_type == expected_value
@@ -88,7 +88,7 @@ def test_define_separator_zeek_dict(
     sample_flow = {
         "data": sample_flow,
     }
-    profiler_detected_type: str = profiler.define_separator(
+    profiler_detected_type: str = profiler.get_input_type(
         sample_flow, input_type
     )
     assert profiler_detected_type == expected_value
@@ -118,7 +118,7 @@ def test_define_separator_nfdump(
     sample_flow = {
         "data": nfdump_line,
     }
-    profiler_detected_type: str = profiler.define_separator(
+    profiler_detected_type: str = profiler.get_input_type(
         sample_flow, input_type
     )
     assert profiler_detected_type == "nfdump"
@@ -158,6 +158,17 @@ def test_define_separator_nfdump(
 # pcaps are treated as zeek files in slips, no need to test twice
 
 
+# get zeek flow
+def get_zeek_flow(file, flow_type):
+    # returns the first flow in the given file
+    with open(file) as f:
+        sample_flow = f.readline().replace("\n", "")
+
+    sample_flow = json.loads(sample_flow)
+    sample_flow = {"data": sample_flow, "type": flow_type}
+    return sample_flow
+
+
 @pytest.mark.parametrize(
     "file,flow_type",
     [
@@ -183,36 +194,30 @@ def test_process_line(
     # set  the zeek json separator
     profiler.separator = SEPARATORS[profiler.input_type]
 
-    # get zeek flow
-    with open(file) as f:
-        sample_flow = f.readline().replace("\n", "")
+    sample_flow = get_zeek_flow(file, flow_type)
+    # required to get a flow object to call add_flow_to_profile on
+    flow = profiler.input_handler.process_line(sample_flow)
 
-    sample_flow = json.loads(sample_flow)
-    sample_flow = {"data": sample_flow, "type": flow_type}
+    added_to_prof = profiler.add_flow_to_profile(flow)
+    assert added_to_prof
 
-    profiler.flow = profiler.input_handler.process_line(sample_flow)
-    assert profiler.flow is not None
-
-    added_to_prof = profiler.add_flow_to_profile()
-    assert added_to_prof is True
-
-    uid = profiler.flow.uid
-    profileid = profiler.profileid
-    twid = profiler.twid
+    profileid = f"profile_{flow.saddr}"
+    twid = profiler.db.get_timewindow(flow.starttime, profileid)
 
     # make sure it's added
     if flow_type == "conn":
-        added_flow = profiler.db.get_flow(uid, twid=twid)[uid]
+        flow_added = profiler.db.get_flow(flow.uid, twid=twid)[flow.uid]
     else:
-        added_flow = (
-            profiler.db.get_altflow_from_uid(profileid, twid, uid) is not None
+        flow_added = profiler.db.get_altflow_from_uid(
+            profileid, twid, flow.uid
         )
-    assert added_flow is not None
+
+    assert flow_added
 
 
 def test_get_rev_profile():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Conn(
+    flow = Conn(
         "1.0",
         "1234",
         "192.168.1.1",
@@ -233,22 +238,20 @@ def test_get_rev_profile():
     )
     profiler.db.get_profileid_from_ip.return_value = None
     profiler.db.get_timewindow.return_value = "timewindow1"
-    assert profiler.get_rev_profile() == ("profile_8.8.8.8", "timewindow1")
+    assert profiler.get_rev_profile(flow) == ("profile_8.8.8.8", "timewindow1")
 
 
 def test_get_rev_profile_no_daddr(
     flow,
 ):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = flow
-    profiler.flow.daddr = None
-    profiler.daddr_as_obj = None
-    assert profiler.get_rev_profile() == (False, False)
+    flow.daddr = None
+    assert profiler.get_rev_profile(flow) == (False, False)
 
 
 def test_get_rev_profile_existing_profileid():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Conn(
+    flow = Conn(
         "1.0",
         "1234",
         "192.168.1.1",
@@ -269,7 +272,7 @@ def test_get_rev_profile_existing_profileid():
     )
     profiler.db.get_profileid_from_ip.return_value = "existing_profile"
     profiler.db.get_timewindow.return_value = "existing_timewindow"
-    assert profiler.get_rev_profile() == (
+    assert profiler.get_rev_profile(flow) == (
         "existing_profile",
         "existing_timewindow",
     )
@@ -277,7 +280,7 @@ def test_get_rev_profile_existing_profileid():
 
 def test_get_rev_profile_no_timewindow():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Conn(
+    flow = Conn(
         "1.0",
         "1234",
         "192.168.1.1",
@@ -299,7 +302,7 @@ def test_get_rev_profile_no_timewindow():
     profiler.db.get_profileid_from_ip.return_value = "profile_8.8.8.8"
     profiler.db.get_timewindow.return_value = None
 
-    profile_id, tw_id = profiler.get_rev_profile()
+    profile_id, tw_id = profiler.get_rev_profile(flow)
     assert profile_id == "profile_8.8.8.8"
     assert tw_id is None
 
@@ -309,7 +312,7 @@ def test_define_separator_direct_support():
     sample_flow = {"data": "some_data"}
     input_type = "nfdump"
 
-    separator = profiler.define_separator(sample_flow, input_type)
+    separator = profiler.get_input_type(sample_flow, input_type)
     assert separator == "nfdump"
 
 
@@ -340,54 +343,54 @@ def test_get_private_client_ips(client_ips, expected_private_ips, monkeypatch):
 
 def test_convert_starttime_to_epoch():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock()
-    profiler.flow.starttime = "2023-04-04 12:00:00"
+    starttime = "2023-04-04 12:00:00"
 
     with patch(
         "slips_files.core.profiler.utils.convert_format"
     ) as mock_convert_format:
         mock_convert_format.return_value = 1680604800
 
-        profiler.convert_starttime_to_epoch()
+        converted = profiler.convert_starttime_to_epoch(starttime)
 
         mock_convert_format.assert_called_once_with(
             "2023-04-04 12:00:00", "unixtimestamp"
         )
-        assert profiler.flow.starttime == 1680604800
+        assert converted == 1680604800
 
 
 def test_convert_starttime_to_epoch_invalid_format(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock()
-    profiler.flow.starttime = "not a real time"
+    starttime = "not a real time"
     monkeypatch.setattr(
         "slips_files.core.profiler.utils.convert_format",
         Mock(side_effect=ValueError),
     )
-    profiler.convert_starttime_to_epoch()
-    assert profiler.flow.starttime == "not a real time"
+    converted = profiler.convert_starttime_to_epoch(starttime)
+    assert converted == "not a real time"
 
 
-def test_should_set_localnet():
+@pytest.mark.parametrize(
+    "saddr, is_localnet_set, expected_result",
+    [
+        ("192.168.1.1", False, True),
+        ("192.168.1.1", True, False),
+        ("8.8.8.8", False, False),
+    ],
+)
+def test_should_set_localnet(saddr, is_localnet_set, expected_result):
     profiler = ModuleFactory().create_profiler_obj()
+    flow = Mock()
+    flow.saddr = saddr
+    profiler.is_localnet_set = is_localnet_set
 
-    profiler.flow = Mock()
-    profiler.flow.saddr = "192.168.1.1"
-    profiler.is_localnet_set = False
-    assert profiler.should_set_localnet() is True
-
-    profiler.is_localnet_set = True
-    assert profiler.should_set_localnet() is False
-
-    profiler.is_localnet_set = False
-    profiler.flow.saddr = "8.8.8.8"
-    assert profiler.should_set_localnet() is False
+    assert profiler.should_set_localnet(flow) == expected_result
 
 
 def test_should_set_localnet_already_set():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.is_localnet_set = True
-    result = profiler.should_set_localnet()
+    flow = Mock(saddr="1.1.1.1")
+    result = profiler.should_set_localnet(flow)
     assert result is False
 
 
@@ -440,25 +443,27 @@ def test_mark_process_as_done_processing(monkeypatch):
     profiler.is_profiler_done_event.set.assert_called_once()
 
 
-@patch("slips_files.core.profiler.Profiler.add_flow_to_profile")
-@patch("slips_files.core.profiler.Profiler.handle_setting_local_net")
-def test_main(mock_handle_setting_local_net, mock_add_flow_to_profile):
+def test_main():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.profiler_queue = Mock(spec=queue.Queue)
-    profiler.profiler_queue.get.side_effect = [
-        {"line": "sample_line", "input_type": "zeek", "total_flows": 100},
-        "stop",
-    ]
+
+    # to be able to iterate just once
     profiler.should_stop = Mock(side_effect=[False, True])
-    profiler.db.define_separator = Mock()
-    profiler.db.define_separator.return_value = "zeek"
-    profiler.input = Mock()
-    profiler.input.process_line = Mock(return_value="sample_flow")
+
+    profiler.get_msg = Mock(side_effect=[None])
+    msg = {"somemsg": 1}
+    profiler.get_msg_from_input_proc = Mock(side_effect=[msg])
+
+    profiler.pending_flows_queue_lock = Mock()  # Mock the lock
+    profiler.flows_to_process_q = Mock()  # Mock the queue
+
+    # Mock the context manager behavior for the lock
+    profiler.pending_flows_queue_lock.__enter__ = Mock()
+    profiler.pending_flows_queue_lock.__exit__ = Mock()
 
     profiler.main()
-
-    mock_add_flow_to_profile.assert_called_once()
-    mock_handle_setting_local_net.assert_called_once()
+    profiler.flows_to_process_q.put.assert_called_once_with(msg)
+    profiler.pending_flows_queue_lock.acquire.assert_called_once()
+    profiler.pending_flows_queue_lock.release.assert_called_once()
 
 
 @patch("slips_files.core.profiler.ConfigParser")
@@ -487,40 +492,39 @@ def test_read_configuration(
 
 def test_add_flow_to_profile_unsupported_flow():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock()
-    profiler.flow.type_ = "unsupported"
-    profiler.flow_parser = Mock()
-    profiler.flow_parser.is_supported_flow.return_value = False
+    flow = Mock()
+    flow.type_ = "unsupported"
+    flow_parser = Mock()
+    flow_parser.is_supported_flow.return_value = False
 
-    result = profiler.add_flow_to_profile()
+    result = profiler.add_flow_to_profile(flow)
     assert result is False
 
 
-@patch("slips_files.core.profiler.FlowHandler")
+@patch("slips_files.core.helpers.flow_handler")
 def test_store_features_going_out(
     mock_flow_handler,
 ):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock()
-    profiler.flow.type_ = "conn"
-    profiler.flow_parser = mock_flow_handler.return_value
-    profiler.profileid = "profile_test"
-    profiler.twid = "twid_test"
+    flow = Mock()
+    flow.type_ = "conn"
+    flow_parser = mock_flow_handler.return_value
 
-    profiler.store_features_going_out()
+    mock_flow_parser = mock_flow_handler.return_value
+    mock_flow_parser.profileid = "profile_test"
+    mock_flow_parser.twid = "twid_test"
+    mock_flow_parser.db = profiler.db
 
-    profiler.flow_parser.handle_conn.assert_called_once()
+    profiler.store_features_going_out(flow, mock_flow_parser)
+    flow_parser.handle_conn.assert_called_once()
 
 
 def test_store_features_going_in_non_conn_flow():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock(
-        type_="dns", saddr="192.168.1.1", dport=53, proto="UDP"
-    )
-    profiler.saddr_as_obj = ipaddress.ip_address("192.168.1.1")
+    flow = Mock(type_="dns", saddr="192.168.1.1", dport=53, proto="UDP")
     profileid = "profile_test_dns"
     twid = "tw_test_dns"
-    profiler.store_features_going_in(profileid, twid)
+    profiler.store_features_going_in(profileid, twid, flow)
     profiler.db.add_tuple.assert_not_called()
     profiler.db.add_ips.assert_not_called()
     profiler.db.add_port.assert_not_called()
@@ -528,27 +532,35 @@ def test_store_features_going_in_non_conn_flow():
     profiler.db.mark_profile_tw_as_modified.assert_not_called()
 
 
-def test_store_features_going_out_unsupported_type():
+@patch("slips_files.core.helpers.flow_handler")
+def test_store_features_going_out_unsupported_type(mock_flow_handler):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock()
-    profiler.flow.type_ = "unsupported_type"
-    profiler.flow_parser = Mock()
-    result = profiler.store_features_going_out()
-    profiler.flow_parser.handle_conn.assert_not_called()
+    flow = Mock()
+    flow.type_ = "unsupported_type"
+    flow_parser = Mock()
+
+    mock_flow_parser = mock_flow_handler.return_value
+    mock_flow_parser.profileid = "profile_test"
+    mock_flow_parser.twid = "twid_test"
+    mock_flow_parser.db = profiler.db
+
+    result = profiler.store_features_going_out(flow, mock_flow_parser)
+
+    flow_parser.handle_conn.assert_not_called()
     assert result is False
 
 
 def test_handle_in_flows_valid_daddr():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock(type_="conn", daddr="8.8.8.8")
+    flow = Mock(type_="conn", daddr="8.8.8.8")
     profiler.get_rev_profile = Mock(return_value=("rev_profile", "rev_twid"))
     profiler.store_features_going_in = Mock()
 
-    profiler.handle_in_flows()
+    profiler.handle_in_flow(flow)
 
     profiler.get_rev_profile.assert_called_once()
     profiler.store_features_going_in.assert_called_once_with(
-        "rev_profile", "rev_twid"
+        "rev_profile", "rev_twid", flow
     )
 
 
@@ -568,10 +580,10 @@ def test_shutdown_gracefully(monkeypatch):
 
 def test_get_local_net_from_flow(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock()
-    profiler.flow.saddr = "10.0.0.1"
+    flow = Mock()
+    flow.saddr = "10.0.0.1"
     profiler.client_ips = []
-    local_net = profiler.get_local_net()
+    local_net = profiler.get_local_net(flow)
 
     assert local_net == "10.0.0.0/8"
 
@@ -587,24 +599,25 @@ def test_get_local_net_from_flow(monkeypatch):
 def test_get_local_net(client_ips, expected_cidr, monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.client_ips = client_ips
-    profiler.flow = Mock()
-    profiler.flow.saddr = "192.168.1.1"
+    flow = Mock()
+    flow.saddr = "192.168.1.1"
 
-    local_net = profiler.get_local_net()
+    local_net = profiler.get_local_net(flow)
     assert local_net == expected_cidr
 
 
 def test_handle_setting_local_net_when_already_set():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.is_localnet_set = True
-    profiler.handle_setting_local_net()
+    flow = Mock()
+    profiler.handle_setting_local_net(flow)
     profiler.db.set_local_network.assert_not_called()
 
 
 def test_handle_setting_local_net(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock()
-    profiler.flow.saddr = "192.168.1.1"
+    flow = Mock()
+    flow.saddr = "192.168.1.1"
 
     monkeypatch.setattr(
         profiler, "should_set_localnet", Mock(return_value=True)
@@ -614,8 +627,7 @@ def test_handle_setting_local_net(monkeypatch):
         profiler, "get_local_net", Mock(return_value="192.168.1.0/24")
     )
 
-    profiler.handle_setting_local_net()
-
+    profiler.handle_setting_local_net(flow)
     profiler.db.set_local_network.assert_called_once_with("192.168.1.0/24")
 
 
@@ -659,7 +671,7 @@ def test_get_gateway_info_sets_mac_and_ip(
     mock_is_ignored_ip.return_value = False
     profiler.get_gw_ip_using_gw_mac = Mock()
     profiler.get_gw_ip_using_gw_mac.return_value = "8.8.8.1"
-    profiler.flow = Conn(
+    flow = Conn(
         "1.0",
         "1234",
         "192.168.1.1",
@@ -678,9 +690,9 @@ def test_get_gateway_info_sets_mac_and_ip(
         "Established",
         "",
     )
-    profiler.get_gateway_info()
+    profiler.get_gateway_info(flow)
 
-    profiler.db.set_default_gateway.assert_any_call("MAC", profiler.flow.dmac)
+    profiler.db.set_default_gateway.assert_any_call("MAC", flow.dmac)
     profiler.db.set_default_gateway.assert_any_call("IP", "8.8.8.1")
 
 
@@ -692,7 +704,7 @@ def test_get_gateway_info_no_mac_detected(mock_is_private_ip):
     profiler.is_gw_info_detected = Mock()
     profiler.is_gw_info_detected.side_effect = [False, False]
     mock_is_private_ip.return_value = False
-    profiler.flow = Conn(
+    flow = Conn(
         "1.0",
         "1234",
         "192.168.1.1",
@@ -711,7 +723,7 @@ def test_get_gateway_info_no_mac_detected(mock_is_private_ip):
         "Established",
         "",
     )
-    profiler.get_gateway_info()
+    profiler.get_gateway_info(flow)
 
     # mac and ip should not be set
     profiler.db.set_default_gateway.assert_not_called()
@@ -720,15 +732,15 @@ def test_get_gateway_info_no_mac_detected(mock_is_private_ip):
 
 def test_get_gateway_info_mac_detected_but_no_ip():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.flow = Mock()
-    profiler.flow.dmac = "123"
+    flow = Mock()
+    flow.dmac = "123"
     # mac detected, ip not detected
     profiler.is_gw_info_detected = Mock()
     profiler.is_gw_info_detected.side_effect = [True, False]
     profiler.get_gw_ip_using_gw_mac = Mock()
     profiler.get_gw_ip_using_gw_mac.return_value = None
 
-    profiler.get_gateway_info()
+    profiler.get_gateway_info(flow)
 
     # assertions for mac
     profiler.db.set_default_gateway.assert_not_called()
