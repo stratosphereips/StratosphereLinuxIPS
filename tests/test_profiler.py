@@ -3,6 +3,7 @@
 """Unit test for slips_files/core/performance_profiler.py"""
 
 from unittest.mock import Mock
+
 from tests.module_factory import ModuleFactory
 from tests.common_test_utils import do_nothing
 import subprocess
@@ -784,7 +785,6 @@ def test_is_gw_info_detected_unsupported_info_type():
 
 
 def test_is_gw_info_detected_when_attribute_is_already_set():
-    # create a profiler object using the ModuleFactory
     profiler = ModuleFactory().create_profiler_obj()
 
     # set gw_mac attribute to a value
@@ -796,3 +796,83 @@ def test_is_gw_info_detected_when_attribute_is_already_set():
     # assertions
     assert result
     assert profiler.gw_mac == "00:1A:2B:3C:4D:5E"
+
+
+def test_process_flow_no_msg():
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.stop_profiler_thread = Mock()
+    profiler.get_msg_from_input_proc = Mock()
+    profiler.add_flow_to_profile = Mock()
+    profiler.input_handler_obj = Mock()
+    profiler.print = Mock()
+    profiler.init_input_handlers = Mock()
+    profiler.print_traceback = Mock()
+
+    profiler.stop_profiler_thread.side_effect = [False, True]  # Run loop once
+    profiler.get_msg_from_input_proc.return_value = (
+        None  # Empty message (no message in queue)
+    )
+
+    profiler.process_flow()
+
+    profiler.init_input_handlers.assert_not_called()
+    profiler.input_handler_obj.process_line.assert_not_called()
+    profiler.add_flow_to_profile.assert_not_called()
+    profiler.print.assert_not_called()
+
+
+def test_process_flow():
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.stop_profiler_thread = Mock()
+    profiler.get_msg_from_input_proc = Mock()
+    profiler.input_handler_obj = Mock()
+    profiler.add_flow_to_profile = Mock()
+    profiler.handle_setting_local_net = Mock()
+    profiler.print = Mock()
+    profiler.print_traceback = Mock()
+    profiler.init_input_handlers = Mock()
+    profiler.stop_profiler_thread.side_effect = [False, True]  # Run once
+    profiler.get_msg_from_input_proc.return_value = {
+        "line": {"key": "value"},
+        "input_type": "zeek",
+    }
+
+    profiler.input_handler_obj.process_line = Mock(return_value=Mock())
+
+    profiler.process_flow()
+
+    profiler.init_input_handlers.assert_called_once()
+    profiler.input_handler_obj.process_line.assert_called_once()
+    profiler.add_flow_to_profile.assert_called_once()
+    profiler.handle_setting_local_net.assert_called_once()
+    profiler.db.increment_processed_flows.assert_called_once()
+
+
+def test_process_flow_handle_exception():
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.profiler.stop_profiler_thread = Mock()
+    profiler.get_msg_from_input_proc = Mock()
+    profiler.input_handler_obj = Mock()
+    profiler.print = Mock()
+    profiler.print_traceback = Mock()
+
+    # Setup the mock return values and side effects
+    profiler.stop_profiler_thread.side_effect = [False, True]  # Run loop
+    # once
+    profiler.get_msg_from_input_proc.return_value = {
+        "line": {"key": "value"},
+        "input_type": "invalid_type",
+    }
+    profiler.input_handler_obj.process_line.side_effect = Exception(
+        "Test exception"
+    )
+
+    profiler.process_flow()  # Call the method under test
+
+    # Assert
+    profiler.print_traceback.assert_called_once()
+    mock_print.assert_called_with(
+        f"Problem processing line { {'key': 'value'} }. Line discarded. Test exception",
+        0,
+        1,
+    )

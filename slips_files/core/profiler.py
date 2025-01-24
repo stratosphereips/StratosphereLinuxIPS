@@ -589,7 +589,7 @@ class Profiler(ICore, IObservable):
         # only create the input obj once,
         # the rest of the flows will use the same input handler
         if not hasattr(self, "input"):
-            self.input_handler_cls = SUPPORTED_INPUT_TYPES[self.input_type]()
+            self.input_handler_obj = SUPPORTED_INPUT_TYPES[self.input_type]()
 
     def stop_profiler_thread(self) -> bool:
         return (
@@ -625,9 +625,7 @@ class Profiler(ICore, IObservable):
 
             # get the correct input type class and process the line based on it
             try:
-                flow = self.input_handler_cls.process_line(
-                    line
-                )  # process the line
+                flow = self.input_handler_obj.process_line(line)
                 if not flow:
                     continue
 
