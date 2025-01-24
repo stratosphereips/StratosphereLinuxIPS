@@ -102,6 +102,7 @@ class Profiler(ICore, IObservable):
         self.gw_mac = None
         self.gw_ip = None
         self.profiler_threads = []
+        self.stop_profiler_threads = multiprocessing.Event()
         # each msg received from inputprocess will be put here, and each one
         # profiler_threads will retrieve from this queue.
         # the goal of this is to have main() handle the stop msg.
@@ -595,8 +596,10 @@ class Profiler(ICore, IObservable):
         This function runs in 3 parallel threads for faster processing of
         the flows
         """
-        while not self.should_stop():
-            msg = self.get_msg_from_input_proc()
+        while not self.stop_profiler_threads.is_set():
+            msg = self.get_msg_from_input_proc(
+                self.flows_to_process_q, thread_safe=True
+            )
             if not msg:
                 # wait for msgs
                 continue
@@ -632,6 +635,17 @@ class Profiler(ICore, IObservable):
                     0,
                     1,
                 )
+
+    def should_stop(self):
+        """
+        overrides Imodule's should_stop()
+        the common Imodule's should_stop() stop when there's no msg in
+        each channel and the termination event is set
+        since this module is the one responsible for signaling the
+        termination event (via process_manager) then it doesnt make sense
+        to check for it. it will never be set before this module stops.
+        """
+        return False
 
     def pre_main(self):
         utils.drop_root_privs()
