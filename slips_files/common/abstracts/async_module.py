@@ -83,6 +83,10 @@ class AsyncModule(IModule):
         except KeyboardInterrupt:
             self.run_async_function(self.shutdown_gracefully)
             return
+        except RuntimeError as e:
+            if "Event loop stopped before Future completed" in str(e):
+                self.run_async_function(self.shutdown_gracefully)
+                return
         except Exception:
             self.print_traceback()
             return
@@ -104,13 +108,14 @@ class AsyncModule(IModule):
                 self.keyboard_int_ctr += 1
                 if self.keyboard_int_ctr >= 2:
                     # on the second ctrl+c Slips immediately stops
-                    loop.close()
                     return True
                 # on the first ctrl + C keep looping until the should_stop()
                 # returns true
                 continue
+            except RuntimeError as e:
+                if "Event loop stopped before Future completed" in str(e):
+                    self.run_async_function(self.shutdown_gracefully)
+                    return
             except Exception:
                 self.print_traceback()
                 return
-
-        loop.close()
