@@ -591,12 +591,18 @@ class Profiler(ICore, IObservable):
         if not hasattr(self, "input"):
             self.input_handler_cls = SUPPORTED_INPUT_TYPES[self.input_type]()
 
+    def stop_profiler_thread(self) -> bool:
+        return (
+            self.stop_profiler_threads.is_set()
+            and not self.flows_to_process_q.qsize()
+        )
+
     def process_flow(self):
         """
         This function runs in 3 parallel threads for faster processing of
         the flows
         """
-        while not self.stop_profiler_threads.is_set():
+        while not self.stop_profiler_thread():
             msg = self.get_msg_from_input_proc(
                 self.flows_to_process_q, thread_safe=True
             )
