@@ -4,11 +4,15 @@
 
 from dataclasses import asdict
 
+from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import DNS
 from tests.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
 from numpy import arange
-from unittest.mock import patch, Mock
+from unittest.mock import (
+    patch,
+    Mock,
+)
 import pytest
 import json
 
@@ -832,3 +836,51 @@ def test_check_dns_without_connection_timeout_should_stop():
 
     # Assert that the method exits without processing any flows
     dns.get_dns_flow_from_queue.assert_not_called()
+
+
+def test_check_pending_flows_timeout():
+    reference_flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="",
+        daddr="",
+        query="",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers="",
+        TTLs="",
+    )
+
+    # This will be 10 mins after the reference_flow
+    dns_flow_to_check = DNS(
+        starttime="1726570879.5997488",
+        uid="5678",
+        saddr="",
+        daddr="",
+        query="",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers="",
+        TTLs="",
+    )
+    # Simulate 10 minutes difference
+    utils.get_time_diff = Mock(return_value=10)
+
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.check_dns_without_connection = Mock()
+    dns.pending_dns_without_conn.put(
+        ("profile5678", "twid_123", dns_flow_to_check)
+    )
+
+    back_to_queue = dns.check_pending_flows_timeout(reference_flow)
+
+    utils.get_time_diff.assert_called_once_with(
+        dns_flow_to_check.starttime, reference_flow.starttime, "minutes"
+    )
+
+    dns.check_dns_without_connection.assert_called_once_with(
+        "profile5678", "twid_123", dns_flow_to_check, waited_for_the_conn=False
+    )
+    assert back_to_queue == []
