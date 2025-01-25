@@ -692,3 +692,143 @@ def test_detect_dga_special_domains(query, expected_result):
     assert result == expected_result
     assert dns.nxdomains == {}
     dns.set_evidence.dga.assert_not_called()
+
+
+def get_dns_obj():
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.should_detect_dns_without_conn = Mock()
+    dns.is_interface_timeout_reached = Mock()
+    dns.is_any_flow_answer_contacted = Mock()
+    dns.pending_dns_without_conn = Mock()
+    dns.set_evidence = Mock()
+    dns.check_pending_flows_timeout = Mock()
+    dns.flowalerts.should_stop = Mock(side_effect=[False, True])  # to loop
+    # once
+    return dns
+
+
+async def test_check_dns_without_connection_shouldnt_detect():
+    dns = get_dns_obj()
+    # Test when should_detect_dns_without_conn returns False
+    dns.should_detect_dns_without_conn.return_value = False
+    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    assert result is False
+
+
+async def test_check_dns_without_connection_interface_timeout_not_reached():
+    dns = get_dns_obj()
+    # Test when is_interface_timeout_reached returns False
+    dns.should_detect_dns_without_conn.return_value = True
+    dns.is_interface_timeout_reached.return_value = False
+    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    assert result is False
+
+
+async def test_check_dns_without_connection_flow_answer_contacted_true():
+    dns = get_dns_obj()
+    # Test when is_any_flow_answer_contacted returns True
+    dns.should_detect_dns_without_conn.return_value = True
+    dns.is_interface_timeout_reached.return_value = True
+    dns.is_any_flow_answer_contacted.return_value = True
+    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    assert result is False
+
+
+async def test_check_dns_without_connection_waited_for_the_conn_false():
+    dns = get_dns_obj()
+    # Test when waited_for_the_conn is False
+    dns.should_detect_dns_without_conn.return_value = True
+    dns.is_interface_timeout_reached.return_value = True
+    dns.is_any_flow_answer_contacted.return_value = False
+    result = dns.check_dns_without_connection(
+        "profileid", "twid", "flow", waited_for_the_conn=False
+    )
+    assert result is False
+    dns.pending_dns_without_conn.put.assert_called_once_with(
+        ("profileid", "twid", "flow")
+    )
+
+
+async def test_check_dns_without_connection_waited_for_the_conn_true():
+    dns = get_dns_obj()
+    # Test when waited_for_the_conn is True
+    dns.should_detect_dns_without_conn.return_value = True
+    dns.is_interface_timeout_reached.return_value = True
+    dns.is_any_flow_answer_contacted.return_value = False
+    result = dns.check_dns_without_connection(
+        "profileid", "twid", "flow", waited_for_the_conn=True
+    )
+    assert result is True
+    dns.set_evidence.dns_without_conn.assert_called_once_with("twid", "flow")
+
+
+def test_check_dns_without_connection_timeout_empty_queue():
+    """Test that the method does nothing when the queue is empty."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.flowalerts.should_stop = Mock(side_effect=[False, True])  # to loop
+    # once
+    dns.pending_dns_without_conn.empty = Mock(return_value=True)
+    dns.get_dns_flow_from_queue = Mock()
+    dns.check_dns_without_connection_timeout()
+    dns.get_dns_flow_from_queue.assert_not_called()
+
+
+def test_check_dns_without_connection_timeout_flow_processing():
+    """Test that the method processes flows correctly."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.flowalerts.should_stop = Mock(side_effect=[False, True])  # to loop
+    # once
+    mock_flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="",
+        daddr="",
+        query="",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers="",
+        TTLs="",
+    )
+    dns_flow_to_check = DNS(
+        starttime="1726570879.5997488",
+        uid="1234",
+        saddr="",
+        daddr="",
+        query="",
+        qclass_name="",
+        qtype_name="",
+        rcode_name="",
+        answers="",
+        TTLs="",
+    )
+    flow_info_to_check = ("profileid", "twid", dns_flow_to_check)
+
+    dns.pending_dns_without_conn.put(flow_info_to_check)
+    dns.get_dns_flow_from_queue = Mock(return_value=mock_flow)
+
+    dns.check_dns_without_connection_timeout()
+    # since it didnt pass, the flow should be put back to queue
+    assert dns.pending_dns_without_conn.qsize() == 1
+    assert dns.pending_dns_without_conn.get() == flow_info_to_check
+
+
+def test_check_dns_without_connection_timeout_keyboard_interrupt():
+    """Test that the method handles KeyboardInterrupt gracefully."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    # Simulate a KeyboardInterrupt
+    dns.get_dns_flow_from_queue = Mock(side_effect=KeyboardInterrupt)
+    dns.check_dns_without_connection_timeout()
+    # just checking that it doesnt raise an exception
+    assert True
+
+
+def test_check_dns_without_connection_timeout_should_stop():
+    """Test that the method exits when should_stop returns True."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.flowalerts.should_stop = Mock(return_value=True)
+    dns.get_dns_flow_from_queue = Mock()
+    dns.check_dns_without_connection_timeout()
+
+    # Assert that the method exits without processing any flows
+    dns.get_dns_flow_from_queue.assert_not_called()

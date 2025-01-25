@@ -270,19 +270,23 @@ class DNS(IFlowalertsAnalyzer):
             )
 
     def get_dns_flow_from_queue(self):
-        """Fetch and parse the DNS message from the queue."""
+        """Fetch and parse the DNS message from the dns_msgs queue."""
         msg: str = self.dns_msgs.get(block=True)
         msg: dict = json.loads(msg["data"])
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
         return flow
 
-    def handle_pending_flows(self, flow: Any) -> List[Tuple[str, str, Any]]:
+    def check_pending_flows_timeout(
+        self, reference_flow: Any
+    ) -> List[Tuple[str, str, Any]]:
         """
         Process all pending DNS flows without connections.
 
         Calls check_dns_without_connection when 10, 20 and 30 mins (zeek
         time) pass since the first encounter of the dns flow.
-
+        :param reference_flow: the current DNS flow slips is nalayzing.
+        only used to get the timestamp of the zeek now. just to know if 30
+        mins passed in zeek time or not.
         Returns a list of flows that need to be put back into the queue
          and checked later.
         """
@@ -291,7 +295,7 @@ class DNS(IFlowalertsAnalyzer):
         while self.pending_dns_without_conn.qsize() > 0:
             profileid, twid, pending_flow = self.pending_dns_without_conn.get()
             diff_in_mins = utils.get_time_diff(
-                pending_flow.starttime, flow.starttime, "minutes"
+                pending_flow.starttime, reference_flow.starttime, "minutes"
             )
 
             if diff_in_mins >= 30:
@@ -329,18 +333,23 @@ class DNS(IFlowalertsAnalyzer):
                 if self.pending_dns_without_conn.empty():
                     continue
 
-                flow = self.get_dns_flow_from_queue()
+                # we just use it to know the zeek current ts to check if 30
+                # mins zeek time passed or not. we are not going to
+                # analyze it.
+                reference_flow = self.get_dns_flow_from_queue()
                 # back_to_queue will be used to store the flows we're
                 # waiting for the conn of temporarily if 30 mins didnt pass
                 # since we saw them.
                 # the goal of this is to not change the queue size in the
                 # below loop
-                back_to_queue = self.handle_pending_flows(flow)
-
+                back_to_queue = self.check_pending_flows_timeout(
+                    reference_flow
+                )
                 # put them back to the queue so we can check them later
                 for flow in back_to_queue:
                     flow: Tuple[str, str, Any]
                     self.pending_dns_without_conn.put(flow)
+
         except KeyboardInterrupt:
             # the rest will be handled in shutdown_gracefully
             return
