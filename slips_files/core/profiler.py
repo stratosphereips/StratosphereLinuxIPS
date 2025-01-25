@@ -586,9 +586,9 @@ class Profiler(ICore, IObservable):
             self.print("Can't determine input type.")
             return False
 
-        # only create the input obj once,
+        # only create the input_handler_obj once,
         # the rest of the flows will use the same input handler
-        if not hasattr(self, "input"):
+        if not hasattr(self, "input_handler_obj"):
             self.input_handler_obj = SUPPORTED_INPUT_TYPES[self.input_type]()
 
     def stop_profiler_thread(self) -> bool:
