@@ -545,6 +545,7 @@ class DNS(IFlowalertsAnalyzer):
 
     def shutdown_gracefully(self):
         self.check_dns_without_connection_of_all_pending_flows()
+        self.dns_without_connection_timeout_checker_thread.join()
 
     def pre_analyze(self):
         """Code that shouldnt be run in a loop. runs only once in
