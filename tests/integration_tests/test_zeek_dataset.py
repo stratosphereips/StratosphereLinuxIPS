@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
@@ -65,7 +67,7 @@ alerts_file = "alerts.log"
         (
             "dataset/test10-mixed-zeek-dir",
             20,
-            "horizontal port scan",
+            "DNS TXT answer with high entropy",
             "test10-mixed-zeek-dir/",
             6660,
         ),

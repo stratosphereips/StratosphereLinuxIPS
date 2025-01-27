@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 # data for testing message parsing. It is important to know that the json is sent by the go part of the code, so it is
 # not likely to be malicious. The message base64 part, however, comes from another peer and should be handled with care
 

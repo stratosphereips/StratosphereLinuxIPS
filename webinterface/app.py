@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from flask import Flask, render_template, redirect, url_for
 
 from slips_files.common.parsers.config_parser import ConfigParser

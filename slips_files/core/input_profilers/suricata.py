@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import json
 
 from slips_files.common.abstracts.input_type import IInputType
@@ -37,7 +39,7 @@ class Suricata(IInputType):
         """Read suricata json input and store it in column_values"""
 
         # convert to dict if it's not a dict already
-        if type(line) == str:
+        if isinstance(line, str):
             line = json.loads(line)
         else:
             # line is a dict with data and type as keys

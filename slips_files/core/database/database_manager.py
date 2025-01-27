@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from typing import (
     List,
     Dict,
@@ -358,6 +360,9 @@ class DBManager:
     def store_dhcp_server(self, *args, **kwargs):
         return self.rdb.store_dhcp_server(*args, **kwargs)
 
+    def is_dhcp_server(self, *args, **kwargs):
+        return self.rdb.is_dhcp_server(*args, **kwargs)
+
     def save(self, *args, **kwargs):
         return self.rdb.save(*args, **kwargs)
 
@@ -463,6 +468,9 @@ class DBManager:
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
+
+    def get_loaded_ti_feeds_number(self, *args, **kwargs):
+        return self.rdb.get_loaded_ti_feeds_number(*args, **kwargs)
 
     def get_loaded_ti_feeds(self, *args, **kwargs):
         return self.rdb.get_loaded_ti_feeds(*args, **kwargs)
@@ -928,6 +936,9 @@ class DBManager:
 
     def get_commit(self, *args, **kwargs):
         return self.rdb.get_commit(*args, **kwargs)
+
+    def get_zeek_version(self, *args, **kwargs):
+        return self.rdb.get_zeek_version(*args, **kwargs)
 
     def get_branch(self, *args, **kwargs):
         return self.rdb.get_branch(*args, **kwargs)
