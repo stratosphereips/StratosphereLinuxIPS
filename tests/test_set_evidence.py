@@ -572,7 +572,7 @@ def test_dns_without_conn(
     assert evidence.evidence_type == EvidenceType.DNS_WITHOUT_CONNECTION
     assert evidence.attacker.value == expected_attacker
     assert evidence.victim.value == expected_victim
-    assert evidence.threat_level == ThreatLevel.LOW
+    assert evidence.threat_level == ThreatLevel.INFO
     assert evidence.profile.ip == expected_attacker
     assert evidence.timewindow.number == int(twid.replace("timewindow", ""))
     assert evidence.uid == [flow.uid]

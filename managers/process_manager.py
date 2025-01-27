@@ -487,7 +487,8 @@ class ProcessManager:
         """
         determines whether slips should stop
         based on the following:
-        1. is slips still receiving new flows?
+        1. is slips still receiving new flows? (checks input.py and
+        profiler.py)
         2. did slips the control channel recv the stop_slips
         3. is a debugger present?
         """

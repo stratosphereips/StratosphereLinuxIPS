@@ -83,7 +83,7 @@ jobs:
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
-        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
+        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
     - name: Upload Artifacts
       if: success() || failure()

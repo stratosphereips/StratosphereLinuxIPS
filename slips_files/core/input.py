@@ -57,7 +57,6 @@ SUPPORTED_LOGFILES = (
 )
 
 
-# Input Process
 class Input(ICore):
     """A class process to run the process of the flows"""
 
@@ -345,15 +344,6 @@ class Input(ICore):
             self.zeek_files = self.db.get_all_zeek_files()
             return False, False
 
-        # to fix the problem of evidence being generated BEFORE their corresponding flows are added to our db
-        # make sure we read flows in the following order:
-        # dns.log  (make it a priority to avoid FP connection without dns resolution alerts)
-        # conn.log
-        # any other flow
-        # for key in cache_lines:
-        #     if 'dns' in key:
-        #         file_with_earliest_flow = key
-        #         break
         # comes here if we're done with all conn.log flows and it's time to process other files
         earliest_line = self.cache_lines[file_with_earliest_flow]
         return earliest_line, file_with_earliest_flow
@@ -361,6 +351,8 @@ class Input(ICore):
     def read_zeek_files(self) -> int:
         self.zeek_files = self.db.get_all_zeek_files()
         self.open_file_handlers = {}
+        # stores zeek_log_file_name: timestamp of the last flow read from
+        # that file
         self.file_time = {}
         self.cache_lines = {}
         # Try to keep track of when was the last update so we stop this reading
