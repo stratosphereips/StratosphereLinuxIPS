@@ -264,16 +264,14 @@ class DNS(IFlowalertsAnalyzer):
         flows in the pending_dns_without_conn queue before stopping slips,
         doesnt matter if the 30 mins passed or not"""
         while self.pending_dns_without_conn.qsize() > 0:
-            profileid, twid, pending_flow = self.pending_dns_without_conn.get(
-                timeout=4
-            )
+            profileid, twid, pending_flow = self.pending_dns_without_conn.get()
             self.check_dns_without_connection(
                 profileid, twid, pending_flow, waited_for_the_conn=True
             )
 
     def get_dns_flow_from_queue(self):
         """Fetch and parse the DNS message from the dns_msgs queue."""
-        msg: str = self.dns_msgs.get(timeout=4)
+        msg: str = self.dns_msgs.get()
         msg: dict = json.loads(msg["data"])
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
         return flow
