@@ -30,9 +30,6 @@ class Conn(IFlowalertsAnalyzer):
         # slips will alert data upload
         self.flow_upload_threshold = 100
         self.read_configuration()
-        # Cache list of connections that we already checked in the timer
-        # thread (we waited for the dns resolution for these connections)
-        self.connections_checked_in_conn_dns_timer_thread = []
         self.whitelist = self.flowalerts.whitelist
         # how much time to wait when running on interface before reporting
         # connections without DNS? Usually the computer resolved DNS

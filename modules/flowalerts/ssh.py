@@ -13,9 +13,6 @@ from slips_files.common.slips_utils import utils
 
 class SSH(IFlowalertsAnalyzer):
     def init(self):
-        # Cache list of connections that we already checked
-        # in the timer thread for ssh check
-        self.connections_checked_in_ssh_timer_thread = []
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
         self.read_configuration()

@@ -264,14 +264,16 @@ class DNS(IFlowalertsAnalyzer):
         flows in the pending_dns_without_conn queue before stopping slips,
         doesnt matter if the 30 mins passed or not"""
         while self.pending_dns_without_conn.qsize() > 0:
-            profileid, twid, pending_flow = self.pending_dns_without_conn.get()
+            profileid, twid, pending_flow = self.pending_dns_without_conn.get(
+                timeout=4
+            )
             self.check_dns_without_connection(
                 profileid, twid, pending_flow, waited_for_the_conn=True
             )
 
     def get_dns_flow_from_queue(self):
         """Fetch and parse the DNS message from the dns_msgs queue."""
-        msg: str = self.dns_msgs.get(block=True)
+        msg: str = self.dns_msgs.get(timeout=4)
         msg: dict = json.loads(msg["data"])
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
         return flow
@@ -293,7 +295,9 @@ class DNS(IFlowalertsAnalyzer):
         back_to_queue: List[Tuple[str, str, Any]] = []
 
         while self.pending_dns_without_conn.qsize() > 0:
-            profileid, twid, pending_flow = self.pending_dns_without_conn.get()
+            profileid, twid, pending_flow = self.pending_dns_without_conn.get(
+                timeout=4
+            )
             diff_in_mins = utils.get_time_diff(
                 pending_flow.starttime, reference_flow.starttime, "minutes"
             )
@@ -349,7 +353,6 @@ class DNS(IFlowalertsAnalyzer):
                 for flow in back_to_queue:
                     flow: Tuple[str, str, Any]
                     self.pending_dns_without_conn.put(flow)
-
         except KeyboardInterrupt:
             # the rest will be handled in shutdown_gracefully
             return
@@ -546,6 +549,14 @@ class DNS(IFlowalertsAnalyzer):
     def shutdown_gracefully(self):
         self.check_dns_without_connection_of_all_pending_flows()
         self.dns_without_connection_timeout_checker_thread.join()
+        # close the queue
+        # without this, queues are left in memory and flowalerts keeps
+        # waiting for them forever
+        self.dns_msgs.cancel_join_thread()
+        self.dns_msgs.close()
+
+        self.pending_dns_without_conn.cancel_join_thread()
+        self.pending_dns_without_conn.close()
 
     def pre_analyze(self):
         """Code that shouldnt be run in a loop. runs only once in
