@@ -1,18 +1,22 @@
 # Build Iris
 FROM golang:1.17 AS build
 
-ENV IRIS_DIR ./iris
-WORKDIR ${IRIS_DIR}
+# Set Go modules to "on" to avoid issues with GOPATH
+ENV GO111MODULE=on
+ENV GOPATH=""
 
-COPY go.mod ./
-COPY go.sum ./
+ENV IRIS_DIR ./iris
+
+
+COPY iris/go.mod ./
+COPY iris/go.sum ./
 
 RUN go mod download
 
-COPY cmd ./cmd
-COPY pkg ./pkg
+COPY iris/cmd ./cmd
+COPY iris/pkg ./pkg
 
-RUN go build cmd/peercli.go
+RUN go build -o / cmd/peercli.go
 
 FROM ubuntu:22.04
 # To avoid user interaction when installing libraries
@@ -87,8 +91,8 @@ RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
 WORKDIR ${SLIPS_DIR}
 
 #Retrieve Iris
-COPY --from=build ${IRIS_DIR}/config.yaml ./modules/irisModule
-COPY --from=build ${IRIS_DIR}/peercli ./modules/irisModule
+#COPY iris/config.yaml ./modules/irisModule
+COPY --from=build peercli ./modules/irisModule
 
 COPY . $SLIPS_DIR
 
