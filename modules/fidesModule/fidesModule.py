@@ -24,7 +24,7 @@ from ..fidesModule.protocols.threat_intelligence import (
     ThreatIntelligenceProtocol,
 )
 from ..fidesModule.utils.logger import LoggerPrintCallbacks
-from ..fidesModule.messaging.redis_simplex_queue import RedisSimplexQueue
+from ..fidesModule.messaging.redis_simplex_queue import RedisSimplexQueue, RedisDuplexQueue
 from ..fidesModule.persistence.threat_intelligence_db import (
     SlipsThreatIntelligenceDatabase,
 )
@@ -99,10 +99,17 @@ class FidesModule(IModule):
         # create queues
         # TODONE: [S] check if we need to use duplex or simplex queue for
         # communication with network module
-        self.network_fides_queue = RedisSimplexQueue(
+        # self.network_fides_queue = RedisSimplexQueue(
+        #     self.db,
+        #     send_channel="fides2network",
+        #     received_channel="network2fides",
+        #     channels=self.channels,
+        # )
+
+        #iris uses only one channel for communication
+        self.network_fides_queue = RedisDuplexQueue(
             self.db,
-            send_channel="fides2network",
-            received_channel="network2fides",
+            channel="fides2network",
             channels=self.channels,
         )
 
