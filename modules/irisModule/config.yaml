@@ -8,7 +8,8 @@ Server:
 
 Redis:
   Host: 127.0.0.1
-  Tl2NlChannel: gp2p_tl2nl0
+  Port: 6379
+  Tl2NlChannel: fides2network
 
 Organisations:
   Trustworthy:
