@@ -1912,7 +1912,6 @@ def test_add_ips(
                     extra_info={
                         "is_dns_response": True,
                         "dns_query": "www.example.com",
-                        "domain": "1.2.3.4",
                     },
                 ),
             ],
@@ -1982,7 +1981,6 @@ def test_add_ips(
                     extra_info={
                         "is_dns_response": True,
                         "dns_query": "www.example.com",
-                        "domain": "1.2.3.4",
                     },
                 ),
             ],

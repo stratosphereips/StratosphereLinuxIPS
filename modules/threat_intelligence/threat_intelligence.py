@@ -1381,7 +1381,8 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             - is_dns_response (bool, optional): Indicates if the lookup
              is for an IP found in a DNS response.
             - dns_query (str, optional): The DNS query associated with
-            the DNS response containing the IP.
+            the DNS response containing the IP. should be passed if
+            is_dns_response is True
 
         Returns:
             - bool: True if the IP address is found to be malicious,
