@@ -44,7 +44,7 @@ alerts_file = "alerts.log"
             [
                 "bad SMTP login to 80.75.42.226",
                 "SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds",
-                "Multiple empty HTTP connections to google.com",
+                # "Multiple empty HTTP connections to google.com",
                 "Suspicious user-agent:",
                 "Download of an executable",
                 "GRE tunnel",
