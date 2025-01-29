@@ -74,29 +74,41 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         if not parent_domain:
             return False
 
-        if self.is_domain_in_tranco_list(parent_domain):
-            return True
-
         whitelisted_domains: Dict[str, Dict[str, str]]
         whitelisted_domains = self.db.get_whitelist("domains")
 
-        # is domain in whitelisted domains?
-        if parent_domain not in whitelisted_domains:
-            # if the parent domain not in whitelisted domains, then the
-            # child definetely isn't
+        # is the parent domain in any of slips whitelists?? like tranco or
+        # whitelist.conf?
+        # if so we need to get extra info about that domain based on the
+        # whitelist.
+        # e.g  by default slips whitelists all evidence and alerts from and to
+        # tranco domains.
+        # but domains taken from whitelist.conf have their own direction
+        # and type
+        if self.is_domain_in_tranco_list(parent_domain):
+            whitelist_should_ignore = "alerts"
+            dir_from_whitelist = "dst"
+        elif parent_domain in whitelisted_domains:
+            # did the user say slips should ignore flows or alerts in the
+            # config file?
+            whitelist_should_ignore = whitelisted_domains[parent_domain][
+                "what_to_ignore"
+            ]
+            # did the user say slips should ignore flows/alerts  TO or from
+            # that domain in the config file?
+            dir_from_whitelist: str = whitelisted_domains[parent_domain][
+                "from"
+            ]
+        else:
             return False
 
-        # Ignore flows or alerts?
-        whitelist_should_ignore = whitelisted_domains[parent_domain][
-            "what_to_ignore"
-        ]
+        # match the direction and whitelist_Type of the given domain to the
+        # ones we have from the whitelist.
         if not self.match.what_to_ignore(
             should_ignore, whitelist_should_ignore
         ):
             return False
 
-        # Ignore src or dst
-        dir_from_whitelist: str = whitelisted_domains[parent_domain]["from"]
         if not self.match.direction(direction, dir_from_whitelist):
             return False
 
