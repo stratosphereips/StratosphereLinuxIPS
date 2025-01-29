@@ -88,6 +88,21 @@ def message_send(port):
     print(f"Test message published to channel '{channel}'.")
 
 
+message_alert_TL_NL = """{
+    "type": "tl2nl_alert",
+    "version": 1,
+    "data": 
+    "payload": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+}"""
+
+message_alert_NL_S = """{
+    "type": "nl2tl_alert",
+    "version": 1,
+    "data": 
+        "sender": "<Metadata of peer who's alerting>"
+        "payload": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+}"""
+
 @pytest.mark.parametrize(
     "path, output_dir, redis_port",
     [
