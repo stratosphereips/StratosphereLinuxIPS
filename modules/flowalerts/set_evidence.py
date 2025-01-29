@@ -1146,7 +1146,8 @@ class SetEvidnceHelper:
         twid: int = int(twid.replace("timewindow", ""))
 
         description: str = (
-            f"The DNS query {flow.query} was resolved to {invalid_answer}"
+            f"Invalid DNS answer. The DNS query {flow.query} was resolved to "
+            f"the private IP: {invalid_answer}"
         )
 
         evidence: Evidence = Evidence(
