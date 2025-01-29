@@ -1142,7 +1142,7 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
 
     def invalid_dns_answer(self, twid, flow, invalid_answer) -> None:
-        confidence: float = 0.7
+        confidence: float = 0.8
         twid: int = int(twid.replace("timewindow", ""))
 
         description: str = (
@@ -1157,6 +1157,11 @@ class SetEvidnceHelper:
                 attacker_type=IoCType.IP,
                 value=flow.saddr,
             ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.DOMAIN,
+                value=flow.query,
+            ),
             threat_level=ThreatLevel.INFO,
             confidence=confidence,
             description=description,
@@ -1165,7 +1170,6 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
         )
-
         self.db.set_evidence(evidence)
 
     def port_0_connection(
