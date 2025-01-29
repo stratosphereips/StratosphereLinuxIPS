@@ -1023,6 +1023,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             self.constants.TRANCO_WHITELISTED_DOMAINS, domain
         )
 
+    def delete_tranco_whitelist(self):
+        return self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+
     def set_growing_zeek_dir(self):
         """
         Mark a dir as growing so it can be treated like the zeek
