@@ -90,12 +90,12 @@ class SSL(IFlowalertsAnalyzer):
         Detects if a certificate claims that it's CN (common name) belongs
         to an org that the domain doesn't belong to
         """
-        if not flow.issuer:
+        if not flow.subject:
             return False
 
         found_org_in_cn = ""
         for org in utils.supported_orgs:
-            if org not in flow.issuer.lower():
+            if org not in flow.subject.lower():
                 continue
 
             # save the org this domain/ip is claiming to belong to,
@@ -116,6 +116,8 @@ class SSL(IFlowalertsAnalyzer):
                 return False
 
         if not found_org_in_cn:
+            # the certificate doesn't claim to belong to any of slips known
+            # orgs
             return False
 
         # found one of our supported orgs in the cn but
