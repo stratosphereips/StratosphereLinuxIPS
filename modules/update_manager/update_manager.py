@@ -316,7 +316,7 @@ class UpdateManager(IModule):
         ):
             # update period hasnt passed yet
             return False
-
+        print("@@@@@@@@@@@@@@@@ updating online whitelist")
         # update period passed
         # response will be used to get e-tag, and if the file was updated
         # the same response will be used to update the content in our db
@@ -1559,21 +1559,14 @@ class UpdateManager(IModule):
         Updates online tranco whitelist defined in slips.yaml
          online_whitelist key
         """
+        # delete the old ones
+        self.db.delete_tranco_whitelist()
         response = self.responses["tranco_whitelist"]
-        # write to the file so we don't store the 10k domains in memory
-        online_whitelist_download_path = os.path.join(
-            self.path_to_remote_ti_files, "tranco-top-10000-whitelist"
-        )
-        with open(online_whitelist_download_path, "w") as f:
-            f.write(response.text)
+        for line in response.text.splitlines():
+            domain = line.split(",")[1]
+            domain.strip()
+            self.db.store_tranco_whitelisted_domain(domain)
 
-        # parse the downloaded file and store it in the db
-        with open(online_whitelist_download_path, "r") as f:
-            while line := f.readline():
-                domain = line.split(",")[1]
-                self.db.store_tranco_whitelisted_domain(domain)
-
-        os.remove(online_whitelist_download_path)
         self.mark_feed_as_updated("tranco_whitelist")
 
     def download_mac_db(self):
