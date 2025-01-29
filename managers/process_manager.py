@@ -503,6 +503,8 @@ class ProcessManager:
         """
         returns true if the control_channel channel received the
         'stop_slips' msg
+        This control channel is used by CYST or the filemanager to tell
+        slips that zeek terminated (useful when running slips with -g)
         """
         message = self.main.c1.get_message(timeout=0.01)
         if not message:

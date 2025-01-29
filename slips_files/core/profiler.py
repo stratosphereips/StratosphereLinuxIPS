@@ -442,16 +442,10 @@ class Profiler(ICore, IObservable):
             # pcap, binetflow, binetflow tabs, nfdump, etc
             return input_type
 
-    def shutdown_gracefully(self):
+    def join_profiler_threads(self):
         # wait for the profiler threads to complete
         for thread in self.profiler_threads:
             thread.join()
-
-        self.print(
-            f"Stopping. Total lines read: {self.rec_lines}",
-            log_to_logfiles_only=True,
-        )
-        self.mark_process_as_done_processing()
 
     def mark_process_as_done_processing(self):
         """
@@ -546,23 +540,16 @@ class Profiler(ICore, IObservable):
         the profiler threads (e.g pending_flows_queue).
          when set to true, this function uses the pending flows queue lock.
         """
-        if thread_safe:
-            self.pending_flows_queue_lock.acquire()
         try:
-            # this msg can be a str only when it's a 'stop' msg indicating
-            # that this module should stop
-            msg = q.get(timeout=1, block=False)
             if thread_safe:
-                self.pending_flows_queue_lock.release()
-            return msg
+                with self.pending_flows_queue_lock:
+                    return q.get(timeout=1, block=False)
+            else:
+                return q.get(timeout=1, block=False)
         except queue.Empty:
-            pass
+            return None
         except Exception:
-            # ValueError is raised when the queue is closed
-            pass
-
-        if thread_safe:
-            self.pending_flows_queue_lock.release()
+            return None
 
     def start_profiler_threads(self):
         """starts 3 profiler threads for faster processing of the flows"""
@@ -592,6 +579,10 @@ class Profiler(ICore, IObservable):
             self.input_handler_obj = SUPPORTED_INPUT_TYPES[self.input_type]()
 
     def stop_profiler_thread(self) -> bool:
+        # cant use while self.flows_to_process_q.qsize() != 0 only here
+        # because when the thread starts, this qsize is 0, so we need
+        # another indicator that we are at the end of the flows. aka the
+        # stop_profiler_threads event
         return (
             self.stop_profiler_threads.is_set()
             and not self.flows_to_process_q.qsize()
@@ -602,6 +593,7 @@ class Profiler(ICore, IObservable):
         This function runs in 3 parallel threads for faster processing of
         the flows
         """
+
         while not self.stop_profiler_thread():
             msg = self.get_msg_from_input_proc(
                 self.flows_to_process_q, thread_safe=True
@@ -651,6 +643,13 @@ class Profiler(ICore, IObservable):
         """
         return False
 
+    def shutdown_gracefully(self):
+        self.print(
+            f"Stopping. Total lines read: {self.rec_lines}",
+            log_to_logfiles_only=True,
+        )
+        self.mark_process_as_done_processing()
+
     def pre_main(self):
         utils.drop_root_privs()
         client_ips = [str(ip) for ip in self.client_ips]
@@ -681,7 +680,13 @@ class Profiler(ICore, IObservable):
             # without it, there's no way this module will know it's
             # time to stop and no new flows are coming
             if self.is_stop_msg(msg):
+                # DO NOT return/exit this module before all profilers are
+                # done. if you do, the profiler threads will shutdown
+                # before reading all flows as soon as we receive the stop msg.
+                # signal the threads to stop
                 self.stop_profiler_threads.set()
+                # wait for them to finish
+                self.join_profiler_threads()
                 return 1
 
             self.pending_flows_queue_lock.acquire()
