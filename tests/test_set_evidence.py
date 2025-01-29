@@ -1259,16 +1259,18 @@ def test_suspicious_dns_answer(
         (
             "example.com",
             "127.0.0.1",
-            "The DNS query example.com was resolved to 127.0.0.1",
+            "Invalid DNS answer. "
+            "The DNS query example.com was resolved to the private IP: "
+            "127.0.0.1",
         ),
         # Testcase 2: resolution to private IP
         (
             "google.com",
             "192.168.1.1",
-            "The DNS query google.com was resolved to 192.168.1.1",
+            "Invalid DNS answer. "
+            "The DNS query google.com was resolved to the private IP: "
+            "192.168.1.1",
         ),
-        # Testcase 3: empty answer
-        ("test.com", "", "The DNS query test.com was resolved to "),
     ],
 )
 def test_invalid_dns_answer(query, answer, expected_description):
@@ -1298,7 +1300,7 @@ def test_invalid_dns_answer(query, answer, expected_description):
     assert evidence.evidence_type == EvidenceType.INVALID_DNS_RESOLUTION
     assert evidence.attacker.value == flow.saddr
     assert evidence.threat_level == ThreatLevel.INFO
-    assert evidence.confidence == 0.7
+    assert evidence.confidence == 0.8
     assert evidence.profile.ip == flow.saddr
     assert evidence.timewindow.number == 5
     assert evidence.uid == [flow.uid]
