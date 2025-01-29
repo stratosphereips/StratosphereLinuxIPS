@@ -243,6 +243,9 @@ class DBManager:
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
 
+    def delete_tranco_whitelist(self, *args, **kwargs):
+        return self.rdb.delete_tranco_whitelist(*args, **kwargs)
+
     def set_growing_zeek_dir(self, *args, **kwargs):
         return self.rdb.set_growing_zeek_dir(*args, **kwargs)
 
