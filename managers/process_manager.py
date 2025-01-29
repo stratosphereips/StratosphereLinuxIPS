@@ -37,7 +37,7 @@ from slips_files.common.abstracts.module import (
 )
 
 from slips_files.common.style import green
-from slips_files.core.evidencehandler import EvidenceHandler
+from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.input import Input
 from slips_files.core.output import Output
 from slips_files.core.profiler import Profiler
