@@ -66,6 +66,9 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         :param direction: is the given domain src or dst domain?
         :param should_ignore: which whitelist to check? can be flows or alerts
         """
+        # the reason why this function doesnt support the Attacker or
+        # Victim as a parameter directly is that we may call it on other
+        # values. not just attacker and victim domains.
 
         if not isinstance(domain, str):
             return False
@@ -107,7 +110,6 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         The Tranco list contains the top 10k known benign domains
         https://tranco-list.eu/list/X5QNN/1000000
         """
-        # todo the db shouldn't be checking this, we should check it here
         return self.db.is_whitelisted_tranco_domain(domain)
 
     @staticmethod
