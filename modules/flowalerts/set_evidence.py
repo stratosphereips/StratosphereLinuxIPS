@@ -405,8 +405,9 @@ class SetEvidnceHelper:
     def incompatible_cn(self, twid, flow, org: str) -> None:
         confidence: float = 0.9
         description: str = (
-            f"Incompatible certificate CN to IP: {flow.daddr} "
-            f"claiming to belong {org.capitalize()}."
+            f"Incompatible certificate CN to IP: {flow.daddr} domain: "
+            f"{flow.server_name}. The certificate is "
+            f"claiming to belong to {org.capitalize()}."
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
