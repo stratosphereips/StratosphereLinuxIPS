@@ -21,7 +21,9 @@ alerts_file = "alerts.log"
             "dataset/test9-mixed-zeek-dir",
             4,
             [
-                "Malicious JA3: 6734f37431670b3ab4292b8f60f29984",
+                "Malicious JA3s: (possible C&C server): "
+                "49ed2ef3f1321e5f044f1e71b0e6fdd5 to server 23.4.249.223. "
+                "description: TrickBot. tags: ['malicious']",
                 "sending ARP packet to a destination address outside of local network",
                 "broadcasting unsolicited ARP",
             ],
@@ -48,7 +50,8 @@ alerts_file = "alerts.log"
                 "Suspicious user-agent:",
                 "Download of an executable",
                 "GRE tunnel",
-                "Multiple reconnection attempts to Destination IP: 123.22.123.22 from IP: 10.0.2.15",
+                "Multiple reconnection attempts to Destination IP: "
+                "123.22.123.22 from IP: 10.0.2.15",
             ],
             "test14-malicious-zeek-dir/",
             6670,
@@ -61,7 +64,8 @@ alerts_file = "alerts.log"
                 "Incompatible certificate CN to IP: 52.0.131.132 domain: "
                 "netflix.com. The certificate is claiming to belong "
                 "to Google",
-                "Malicious JA3: 6734f37431670b3ab4292b8f60f29984 from source "
+                "Detected Malicious JA3: 6734f37431670b3ab4292b8f60f29984 from"
+                " source address 10.0.2.15. description: Trickbot Malware."
                 "address 10.0.2.15 description:  Trickbot Malware",
             ],
             "test15-malicious-zeek-dir",

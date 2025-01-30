@@ -1229,11 +1229,11 @@ class SetEvidnceHelper:
 
         description = (
             f"Malicious JA3s: (possible C&C server): {flow.ja3s} "
-            f"to server {flow.daddr}"
+            f"to server {flow.daddr}."
         )
         if ja3_description != "None":
-            description += f"description: {ja3_description} "
-        description += f"tags: {tags}"
+            description += f" description: {ja3_description}."
+        description += f" tags: {tags}"
         confidence: float = 1
         twid_number: int = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
@@ -1284,7 +1284,6 @@ class SetEvidnceHelper:
 
     def malicious_ja3(self, twid, flow, malicious_ja3_dict: dict) -> None:
         ja3_info: dict = json.loads(malicious_ja3_dict[flow.ja3])
-
         threat_level: str = ja3_info["threat_level"].upper()
         threat_level: ThreatLevel = ThreatLevel[threat_level]
 
@@ -1292,11 +1291,12 @@ class SetEvidnceHelper:
         ja3_description: str = ja3_info["description"]
 
         description = (
-            f"Malicious JA3: {flow.ja3} from source address {flow.saddr}"
+            f"Malicious JA3: {flow.ja3} from source address {flow.saddr}."
         )
         if ja3_description != "None":
-            description += f" description: {ja3_description} "
-        description += f" tags: {tags}"
+            description += f" description: {ja3_description}."
+        if tags:
+            description += f" tags: {tags}"
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_JA3,
