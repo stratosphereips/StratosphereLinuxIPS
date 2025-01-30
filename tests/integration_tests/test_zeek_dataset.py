@@ -64,9 +64,9 @@ alerts_file = "alerts.log"
                 "Incompatible certificate CN to IP: 52.0.131.132 domain: "
                 "netflix.com. The certificate is claiming to belong "
                 "to Google",
-                "Detected Malicious JA3: 6734f37431670b3ab4292b8f60f29984 from"
-                " source address 10.0.2.15. description: Trickbot Malware."
-                "address 10.0.2.15 description:  Trickbot Malware",
+                "Detected Malicious JA3: 6734f37431670b3ab4292b8f60f29984 "
+                "from source address 10.0.2.15. "
+                "description: Trickbot Malware.",
             ],
             "test15-malicious-zeek-dir",
             2345,
@@ -90,7 +90,10 @@ def test_zeek_dir(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py  -e 1 -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
+    command = (
+        f"./slips.py  -e 1 -t -f {zeek_dir_path}  -o {output_dir}"
+        f" -P {redis_port} > {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
     assert_no_errors(output_dir)
