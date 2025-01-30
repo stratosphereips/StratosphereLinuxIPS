@@ -239,15 +239,16 @@ async def test_check_pastebin_download(
 
 
 @pytest.mark.parametrize(
-    "issuer, expected_call_count",
+    "subject, expected_call_count",
     [
-        # Testcase 1: Issuer contains supported org, but IP/domain not in org.
+        # Testcase 1: subject contains supported org, but IP/domain not in
+        # org.
         (
             "CN=example.com, OU=Google LLC, O=Google LLC,"
             " L=Mountain View, ST=California, C=US",
             1,
         ),
-        # Testcase 2: Issuer does not contain any supported orgs.
+        # Testcase 2: subject does not contain any supported orgs.
         (
             "CN=example.com, OU=Example Inc., "
             "O=Example Inc., L=City, ST=State, C=Country",
@@ -255,7 +256,7 @@ async def test_check_pastebin_download(
         ),
     ],
 )
-def test_detect_incompatible_cn(mocker, issuer, expected_call_count):
+def test_detect_incompatible_cn(mocker, subject, expected_call_count):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence.SetEvidnceHelper.incompatible_cn"
@@ -278,8 +279,8 @@ def test_detect_incompatible_cn(mocker, issuer, expected_call_count):
         established="",
         cert_chain_fuids="",
         client_cert_chain_fuids="",
-        subject="",
-        issuer=issuer,
+        subject=subject,
+        issuer="",
         validation_status="",
         curve="",
         server_name="",

@@ -14,7 +14,7 @@ from unittest.mock import patch
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
 from slips_files.core.flows.zeek import Conn
-
+import logging
 
 # add parent dir to path for imports to work
 current_dir = os.path.dirname(
@@ -22,6 +22,19 @@ current_dir = os.path.dirname(
 )
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
+
+
+# Suppress TensorFlow logs from C++ backend
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 3 = ERROR
+# TensorFlow logs oneDNN messages even with TF_CPP_MIN_LOG_LEVEL=3.
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
+import tensorflow as tf
+
+
+# Suppress Python-based TensorFlow logs
+tf.get_logger().setLevel(logging.ERROR)
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 
 @pytest.fixture
