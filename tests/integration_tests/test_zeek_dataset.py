@@ -22,8 +22,8 @@ alerts_file = "alerts.log"
             4,
             [
                 "Malicious JA3s: (possible C&C server): "
-                "49ed2ef3f1321e5f044f1e71b0e6fdd5 to server 23.4.249.223. "
-                "description: TrickBot. tags: ['malicious']",
+                "e7d705a3286e19ea42f587b344ee6865 to server 123.33.22.11. "
+                "description: Standard tor client.",
                 "sending ARP packet to a destination address outside of "
                 "local network",
                 "broadcasting unsolicited ARP",

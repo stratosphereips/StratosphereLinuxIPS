@@ -1233,7 +1233,9 @@ class SetEvidnceHelper:
         )
         if ja3_description != "None":
             description += f" description: {ja3_description}."
-        description += f" tags: {tags}"
+        if tags:
+            description += f" tags: {tags}"
+
         confidence: float = 1
         twid_number: int = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
