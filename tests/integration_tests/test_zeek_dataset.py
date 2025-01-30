@@ -24,7 +24,8 @@ alerts_file = "alerts.log"
                 "Malicious JA3s: (possible C&C server): "
                 "49ed2ef3f1321e5f044f1e71b0e6fdd5 to server 23.4.249.223. "
                 "description: TrickBot. tags: ['malicious']",
-                "sending ARP packet to a destination address outside of local network",
+                "sending ARP packet to a destination address outside of "
+                "local network",
                 "broadcasting unsolicited ARP",
             ],
             "test9-mixed-zeek-dir/",
@@ -34,7 +35,8 @@ alerts_file = "alerts.log"
             "dataset/test16-malicious-zeek-dir",
             0,
             [
-                "sending ARP packet to a destination address outside of local network",
+                "sending ARP packet to a destination address outside of local"
+                " network",
                 "broadcasting unsolicited ARP",
             ],
             "test16-malicious-zeek-dir/",
