@@ -359,22 +359,22 @@ def test_non_ssl_port_443_conn():
         (
             "example",
             "10.0.0.1",
-            "Incompatible certificate CN to IP: 10.0.0.1"
-            " claiming to belong Example.",
+            "Incompatible certificate CN to IP: 10.0.0.1 domain: x.com. "
+            "The certificate is claiming to belong to Example.",
         ),
         # Testcase 2: Organization name with spaces
         (
             "google llc",
             "8.8.8.8",
-            "Incompatible certificate CN to IP: 8.8.8.8"
-            " claiming to belong Google llc.",
+            "Incompatible certificate CN to IP: 8.8.8.8 domain: x.com. "
+            "The certificate is claiming to belong to Google llc.",
         ),
         # Testcase 3: Empty organization name
         (
             "",
             "192.168.1.1",
-            "Incompatible certificate CN to IP: 192.168.1.1 "
-            "claiming to belong .",
+            "Incompatible certificate CN to IP: 192.168.1.1 domain: x.com. "
+            "The certificate is claiming to belong to .",
         ),
     ],
 )
@@ -382,24 +382,27 @@ def test_incompatible_cn(org, daddr, expected_description):
     """Testing the incompatible_CN method."""
     set_ev = ModuleFactory().create_set_evidence_helper()
     set_ev.db.get_ip_identification.return_value = "- Some Information -"
-    flow = Conn(
-        starttime="1726249372.312124",
+    flow = SSL(
+        starttime="1726593782.8840969",
         uid="123",
-        saddr="192.168.0.1",
+        saddr="192.168.1.5",
         daddr=daddr,
-        dur=1,
-        proto="tcp",
-        appproto="",
-        sport="0",
-        dport="5",
-        spkts=0,
-        dpkts=0,
-        sbytes=0,
-        dbytes=0,
-        smac="",
-        dmac="",
-        state="Established",
-        history="",
+        version="",
+        sport="",
+        dport="",
+        cipher="",
+        resumed="",
+        established="",
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        subject="",
+        issuer="",
+        validation_status="",
+        curve="",
+        server_name="x.com",
+        ja3="",
+        ja3s="",
+        is_DoH="",
     )
     set_ev.incompatible_cn("timewindow1", flow, org)
 
@@ -1514,12 +1517,15 @@ def test_malicious_ja3(attacker_ip, threat_level, description, tags, ja3):
     assert evidence.profile.ip == attacker_ip
     assert evidence.timewindow.number == 10
     assert evidence.uid == [flow.uid]
-    expected_description_with_tags = (
+    expected_description = (
         f"Malicious JA3: {ja3} "
-        f"from source address {attacker_ip} "
-        f"description: {description}  tags: {tags}"
+        f"from source address {attacker_ip}. "
+        f"description: {description}."
     )
-    assert evidence.description == expected_description_with_tags
+    if tags:
+        expected_description += f" tags: {tags}"
+
+    assert evidence.description == expected_description
 
 
 @pytest.mark.parametrize(

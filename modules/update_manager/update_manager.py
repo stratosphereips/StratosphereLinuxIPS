@@ -316,7 +316,7 @@ class UpdateManager(IModule):
         ):
             # update period hasnt passed yet
             return False
-        print("@@@@@@@@@@@@@@@@ updating online whitelist")
+
         # update period passed
         # response will be used to get e-tag, and if the file was updated
         # the same response will be used to update the content in our db
