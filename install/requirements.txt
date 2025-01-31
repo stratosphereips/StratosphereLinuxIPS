@@ -40,3 +40,4 @@ pre-commit==4.0.1
 coverage==7.6.10
 pyyaml
 git+https://github.com/SECEF/python-idmefv2.git
+json
