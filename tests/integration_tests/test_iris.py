@@ -36,50 +36,9 @@ def countdown(seconds, message):
     sys.stdout.write(f"\rSending {message} now!          \n")
 
 
-def message_send(port):
+def message_send(port, message):
     # connect to redis database 0
     redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
-
-    message = """
-{
-    "type": "nl2tl_intelligence_response",
-    "version": 1,
-    "data": [
-        {
-            "sender": {
-                "id": "peer1",
-                "organisations": ["org_123", "org_456"],
-                "ip": "192.168.1.1"
-            },
-            "payload": {
-                "intelligence": {
-                    "target": {"type": "server", "value": "192.168.1.10"},
-                    "confidentiality": {"level": 0.8},
-                    "score": 0.5,
-                    "confidence": 0.95
-                },
-                "target": "stratosphere.org"
-            }
-        },
-        {
-            "sender": {
-                "id": "peer2",
-                "organisations": ["org_789"],
-                "ip": "192.168.1.2"
-            },
-            "payload": {
-                "intelligence": {
-                    "target": {"type": "workstation", "value": "192.168.1.20"},
-                    "confidentiality": {"level": 0.7},
-                    "score": -0.85,
-                    "confidence": 0.92
-                },
-                "target": "stratosphere.org"
-            }
-        }
-    ]
-}
-"""
 
     # publish the message to the "network2fides" channel
     channel = "network2fides"
@@ -115,7 +74,7 @@ message_alert_NL_S = """{
 )
 def test_messaging_1(path, output_dir, redis_port):
     """
-    This test tests Iris' functionality on an integration level.
+    Tests whether Iris properly distributes an alert message from Fides to the network (~other peers)
     """
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
