@@ -45,13 +45,10 @@ class DBManager:
         # the existing one
         self.sqlite = None
         if start_sqlite:
-            self.sqlite = self.create_sqlite_db(output_dir)
+            self.sqlite = SQLiteDB(self.logger, output_dir)
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
-
-    def create_sqlite_db(self, output_dir):
-        return SQLiteDB(self.logger, output_dir)
 
     @classmethod
     def read_configuration(cls):
