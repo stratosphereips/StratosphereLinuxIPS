@@ -47,6 +47,7 @@ class Database(object):
             stdout=os.path.join(output_dir, "slips.log"),
             stderr=os.path.join(output_dir, "errors.log"),
             slips_logfile=os.path.join(output_dir, "slips.log"),
+            create_logfiles=False,
         )
         try:
             return DBManager(
