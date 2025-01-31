@@ -351,7 +351,7 @@ class Input(ICore):
         return earliest_line, file_with_earliest_flow
 
     def read_zeek_files(self) -> int:
-
+        self.zeek_files = self.db.get_all_zeek_files()
         self.open_file_handlers = {}
         # stores zeek_log_file_name: timestamp of the last flow read from
         # that file
