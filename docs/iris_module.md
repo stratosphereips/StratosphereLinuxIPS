@@ -1,13 +1,31 @@
-# Fides module
+# Iris module
 
-Traditional network defense systems depend on centralized threat intelligence, which has limitations like single points of failure, inflexibility, and reliance on trust in centralized authorities. Peer-to-peer networks offer an alternative for sharing threat intelligence but face challenges in verifying the trustworthiness of participants, including potential malicious actors.
+Traditional network defense systems depend on centralized threat intelligence, 
+which has limitations like single points of failure, inflexibility, and 
+reliance on trust in centralized authorities. Peer-to-peer networks offer 
+an alternative for sharing threat intelligence but face challenges in verifying 
+the trustworthiness of participants, including potential malicious actors.
 
-The Iris Module, based on [Master Theses](https://github.com/stratosphereips/iris) on CTU FEL by Martin Řepa. The goal of this module is to provide a tool that meadiates the global connection of peers in the global peer-to-peer network. Iris Module (i.e. Iris) administers organization-membership as well as organisation-membership evaluation. Addressing and reachability of peers is handled by iris as well. Last but not least, sending threat intelligence data including files and alert distribution is handled by the module. All those functionalities are implemented based on Kademlia DHT which serves as a core to the whole application.
+The Iris Module, based on [Master Theses](https://github.com/stratosphereips/iris)
+on CTU FEL by Martin Řepa. The goal of this module is to provide a tool that 
+mediates the global connection of peers in the global peer-to-peer network. Iris 
+Module (i.e. Iris) administers organization-membership as well as 
+organisation-membership evaluation. Addressing and reachability of peers is
+handled by iris as well. Last but not least, sending threat intelligence data 
+including files and alert distribution is handled by the module. 
+All those functionalities are implemented based on Kademlia DHT which serves as
+a core to the whole application.
 
-This readme provides an overview of the code structure, to briefly document the code for future developers. The whole architecture was thoroughly documented in the thesis itself, which can be downloaded from the link above.
+This readme provides an overview of the code structure, to briefly 
+document the code for future developers. The whole architecture was 
+thoroughly documented in the thesis itself, which can be downloaded from the 
+link above.
 
 ## Docker direct use
-You can use Slips with Iris Module, but please keep in mind that Iris Module needs a trust evaluation module as a mediator between Slips and itself. In the original design, this mediation and trust evaluation is provided by Fides Module.
+You cannot use Slips with Iris Module directly, please keep in mind that Iris 
+Module needs a trust evaluation module as a mediator between Slips and itself. 
+In the original design, this mediation and trust evaluation is 
+provided by Fides Module.
 
 ```
 docker pull stratosphereips/slips
