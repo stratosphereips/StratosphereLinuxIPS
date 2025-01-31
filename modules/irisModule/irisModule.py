@@ -14,11 +14,9 @@
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
 import json
-from pathlib import PosixPath
 import os
 import subprocess
-import time
-import sys
+
 
 
 class IrisModule(IModule):
@@ -64,8 +62,11 @@ class IrisModule(IModule):
             }
         self.logger.output_line(debug_message)
 
+        log_dir = "output/iris_module/"
+        os.makedirs(log_dir, exist_ok=True)
         # Open the log file
-        log_file = open("outputfile.out", "w")
+        log_file_path = os.path.join(log_dir, "outputfile.out")
+        log_file = open(log_file_path, "w")
 
         try:
             # Start the subprocess, redirecting stdout and stderr to the same file
@@ -73,6 +74,7 @@ class IrisModule(IModule):
                 command,  # Replace with your command
                 stdout=log_file,
                 stderr=log_file,
+                cwd=log_dir,
             )
         except OSError as e:
             error_message = {
@@ -80,7 +82,7 @@ class IrisModule(IModule):
                 "txt": str(e)
             }
             self.logger.log_error(error_message)
-            log_file.close()
+        log_file.close()
 
     def main(self):
         """Main loop function"""
