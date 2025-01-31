@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import MagicMock, patch, mock_open, Mock
 import pytest
 from tests.module_factory import ModuleFactory
@@ -139,37 +141,6 @@ def test_update_stats(mode, time_diff, expected_calls):
     with patch.object(main, "print") as mock_print:
         main.update_stats()
         assert mock_print.call_count == expected_calls
-
-
-@pytest.mark.parametrize(
-    "is_interface, host_ip, modified_profiles, "
-    "expected_calls, expected_result",
-    [  # Testcase1: Should update host IP
-        (True, "192.168.1.1", set(), 1, "192.168.1.2"),
-        # Testcase2: Shouldn't update host IP
-        (True, "192.168.1.1", {"192.168.1.1"}, 0, "192.168.1.1"),
-        # Testcase3: Shouldn't update host IP (not interface)
-        (False, "192.168.1.1", set(), 0, None),
-    ],
-)
-def test_update_host_ip(
-    is_interface,
-    host_ip,
-    modified_profiles,
-    expected_calls,
-    expected_result,
-):
-    main = ModuleFactory().create_main_obj()
-    main.db = Mock()
-    host_ip_man = ModuleFactory().create_host_ip_manager_obj(main)
-    host_ip_man.main.db.is_running_non_stop.return_value = is_interface
-
-    host_ip_man.get_host_ip = Mock()
-    host_ip_man.get_host_ip.return_value = "192.168.1.2"
-    host_ip_man.main.db.set_host_ip = MagicMock()
-    result = host_ip_man.update_host_ip(host_ip, modified_profiles)
-    assert result == expected_result
-    assert host_ip_man.get_host_ip.call_count == expected_calls
 
 
 @pytest.mark.parametrize(

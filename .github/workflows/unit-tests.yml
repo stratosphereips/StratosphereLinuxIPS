@@ -18,6 +18,11 @@ jobs:
     # make this job depend on the first job
     needs: install-dependencies-using-reusable-workflow
 
+    # suppress tensorflow warnings
+    env:
+      TF_CPP_MIN_LOG_LEVEL: 3
+      TF_ENABLE_ONEDNN_OPTS: 0
+
     strategy:
       matrix:
         test_file:
@@ -72,6 +77,12 @@ jobs:
           - test_database.py
           - test_symbols_handler.py
           - test_profile_handler.py
+          - test_process_manager.py
+          - test_metadata_manager.py
+          - test_host_ip_manager.py
+          - test_host_ip_manager.py
+          - test_rnn_cc_detection.py
+          - test_idea_format.py
 
     steps:
     - uses: actions/checkout@v4
@@ -114,7 +125,7 @@ jobs:
 
     - name: Upload Artifacts
       if: success() || failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test_slips_locally-integration-tests-output
         path: |

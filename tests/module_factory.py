@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import shutil
 from unittest.mock import (
     patch,
@@ -6,8 +8,10 @@ from unittest.mock import (
     mock_open,
 )
 import os
+from multiprocessing import Queue
 
 from managers.host_ip_manager import HostIPManager
+from managers.metadata_manager import MetadataManager
 from modules.flowalerts.conn import Conn
 from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
@@ -16,8 +20,8 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
-from slips_files.core.evidencehandler import EvidenceHandler
-
+from slips_files.core.evidence_handler import EvidenceHandler
+from modules.rnn_cc_detection.rnn_cc_detection import CCDetection
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
@@ -50,7 +54,6 @@ from modules.virustotal.virustotal import VT
 from managers.process_manager import ProcessManager
 from managers.redis_manager import RedisManager
 from modules.ip_info.asn_info import ASN
-from multiprocessing import Queue
 from slips_files.core.helpers.flow_handler import FlowHandler
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.network_discovery import NetworkDiscovery
@@ -339,14 +342,19 @@ class ModuleFactory:
         profiler.db = mock_db
         return profiler
 
-    def create_redis_manager_obj(self, main):
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_redis_manager_obj(self, mock_db):
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.args = Mock()
         return RedisManager(main)
 
-    def create_host_ip_manager_obj(self, main):
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_host_ip_manager_obj(self, mock_db):
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.print = Mock()
         return HostIPManager(main)
-
-    def create_process_manager_obj(self):
-        return ProcessManager(self.create_main_obj())
 
     def create_utils_obj(self):
         return utils
@@ -644,3 +652,59 @@ class ModuleFactory:
         handler.width = 3600
         handler.print = Mock()
         return handler
+
+    def create_process_manager_obj(self):
+        main_mock = Mock()
+        main_mock.conf.get_disabled_modules.return_value = []
+        main_mock.input_type = "pcap"
+        main_mock.mode = "normal"
+        main_mock.stdout = ""
+        main_mock.args = Mock(growing=False, input_module=False, testing=False)
+        return ProcessManager(main_mock)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_metadata_manager_obj(self, mock_db):
+        main = self.create_main_obj()
+        metadata_manager = MetadataManager(main)
+
+        mock_attributes = {
+            "db": mock_db,
+            "print": MagicMock(),
+            "args": MagicMock(
+                output="/tmp/output",
+                config="config/slips.yaml",
+                filepath=MagicMock(),
+            ),
+            "conf": MagicMock(
+                enable_metadata=MagicMock(return_value=True),
+                whitelist_path=MagicMock(
+                    return_value="/path/to/whitelist.conf"
+                ),
+                get_disabled_modules=MagicMock(return_value=[]),
+                evidence_detection_threshold=MagicMock(return_value=0.5),
+            ),
+            "version": "1.0",
+            "input_information": "test_input",
+            "input_type": MagicMock(),
+            "zeek_dir": MagicMock(),
+        }
+
+        for attr, value in mock_attributes.items():
+            setattr(metadata_manager.main, attr, value)
+
+        return metadata_manager
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_rnn_detection_object(self, mock_db):
+        logger = Mock()
+        output_dir = "/tmp"
+        redis_port = 6379
+        termination_event = Mock()
+
+        with patch.object(CCDetection, "__init__", return_value=None):
+            cc_detection = CCDetection(
+                logger, output_dir, redis_port, termination_event
+            )
+            cc_detection.db = mock_db
+            cc_detection.exporter = Mock()
+            return cc_detection

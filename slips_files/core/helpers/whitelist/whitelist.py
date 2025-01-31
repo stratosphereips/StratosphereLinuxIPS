@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from typing import Optional, Dict, List
 
 from slips_files.common.printer import Printer
@@ -171,23 +173,29 @@ class Whitelist:
         if not victim:
             return False
 
+        what_to_ignore = "alerts"
         if self.ip_analyzer.is_whitelisted(
-            victim.value, victim.direction, "alerts"
+            victim.value, victim.direction, what_to_ignore
         ):
             return True
 
         if self.domain_analyzer.is_whitelisted(
-            victim.value, victim.direction, "alerts"
+            victim.value, victim.direction, what_to_ignore
+        ):
+            return True
+
+        if self.domain_analyzer.is_whitelisted(
+            victim.SNI, Direction.DST, what_to_ignore
         ):
             return True
 
         if self.mac_analyzer.profile_has_whitelisted_mac(
-            victim.value, victim.direction, "alerts"
+            victim.value, victim.direction, what_to_ignore
         ):
             return True
 
         if self.org_analyzer.is_part_of_a_whitelisted_org(
-            victim.value, victim.victim_type, victim.direction, "alerts"
+            victim.value, victim.victim_type, victim.direction, what_to_ignore
         ):
             return True
 
@@ -201,18 +209,25 @@ class Whitelist:
         if not attacker:
             return False
 
+        what_to_ignore = "alerts"
+
         if self.domain_analyzer.is_whitelisted(
-            attacker.value, attacker.direction, "alerts"
+            attacker.value, attacker.direction, what_to_ignore
+        ):
+            return True
+
+        if self.domain_analyzer.is_whitelisted(
+            attacker.SNI, Direction.DST, what_to_ignore
         ):
             return True
 
         if self.ip_analyzer.is_whitelisted(
-            attacker.value, attacker.direction, "alerts"
+            attacker.value, attacker.direction, what_to_ignore
         ):
             return True
 
         if self.mac_analyzer.profile_has_whitelisted_mac(
-            attacker.value, attacker.direction, "alerts"
+            attacker.value, attacker.direction, what_to_ignore
         ):
             return True
 
@@ -220,7 +235,7 @@ class Whitelist:
             attacker.value,
             attacker.attacker_type,
             attacker.direction,
-            "alerts",
+            what_to_ignore,
         ):
             return True
 

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import contextlib
 import ipaddress
@@ -28,9 +30,6 @@ class Conn(IFlowalertsAnalyzer):
         # slips will alert data upload
         self.flow_upload_threshold = 100
         self.read_configuration()
-        # Cache list of connections that we already checked in the timer
-        # thread (we waited for the dns resolution for these connections)
-        self.connections_checked_in_conn_dns_timer_thread = []
         self.whitelist = self.flowalerts.whitelist
         # how much time to wait when running on interface before reporting
         # connections without DNS? Usually the computer resolved DNS
@@ -436,6 +435,7 @@ class Conn(IFlowalertsAnalyzer):
             flow.type_ != "conn"
             or flow.appproto in ("dns", "icmp")
             or utils.is_ignored_ip(flow.daddr)
+            or self.db.is_dhcp_server(flow.daddr)
             # if the daddr is a client ip, it means that this is a conn
             # from the internet to our ip, the dns res was probably
             # made on their side before connecting to us,
@@ -493,20 +493,12 @@ class Conn(IFlowalertsAnalyzer):
         self, profileid, twid, flow
     ) -> bool:
         """
-        Checks if there's a flow to a dstip that has no cached DNS answer
+        Checks if there's a connection to a dstip that has no cached DNS
+        answer
         """
-        # The exceptions are:
-        # 1- Do not check for DNS requests
-        # 2- Ignore some IPs like private IPs, multicast, and broadcast
         if self.should_ignore_conn_without_dns(flow):
             return False
 
-        # Ignore some IP
-        ## - All dhcp servers. Since is ok to connect to
-        # them without a DNS request.
-        # We dont have yet the dhcp in the redis, when is there check it
-        # if self.db.get_dhcp_servers(daddr):
-        # continue
         if not self.is_interface_timeout_reached():
             return False
 
@@ -524,7 +516,7 @@ class Conn(IFlowalertsAnalyzer):
             return False
 
         # Reaching here means we already waited 15 seconds for the dns
-        # to arrive after the connection was made, but still no dns
+        # to arrive after the connection was checked, but still no dns
         # resolution for it.
 
         # Sometimes the same computer makes requests using
@@ -798,13 +790,12 @@ class Conn(IFlowalertsAnalyzer):
             self.check_different_localnet_usage(
                 twid, flow, what_to_check="srcip"
             )
-            task = asyncio.create_task(
-                self.check_connection_without_dns_resolution(
-                    profileid, twid, flow
-                )
+            self.flowalerts.create_task(
+                self.check_connection_without_dns_resolution,
+                profileid,
+                twid,
+                flow,
             )
-            # to wait for these functions before flowalerts shuts down
-            self.flowalerts.tasks.append(task)
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
             self.check_non_http_port_80_conns(twid, flow)

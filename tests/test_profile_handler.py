@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from dataclasses import asdict
 from unittest.mock import patch, MagicMock, call
 import json
@@ -1910,7 +1912,6 @@ def test_add_ips(
                     extra_info={
                         "is_dns_response": True,
                         "dns_query": "www.example.com",
-                        "domain": "1.2.3.4",
                     },
                 ),
             ],
@@ -1980,7 +1981,6 @@ def test_add_ips(
                     extra_info={
                         "is_dns_response": True,
                         "dns_query": "www.example.com",
-                        "domain": "1.2.3.4",
                     },
                 ),
             ],

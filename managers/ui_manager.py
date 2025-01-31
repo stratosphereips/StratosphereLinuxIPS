@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 
@@ -22,6 +24,7 @@ class UIManager:
             # to make sure this function is only executed once
             delattr(self, "webinterface_return_value")
             return
+
         if not self.webinterface_return_value.get():
             # to make sure this function is only executed once
             delattr(self, "webinterface_return_value")
@@ -29,7 +32,8 @@ class UIManager:
 
         self.main.print(
             f"Slips {green('web interface')} running on "
-            f"http://localhost:{self.web_interface_port}/\n"
+            f"http://localhost:{self.web_interface_port}/ "
+            f"[PID {green(self.web_interface_pid)}]\n"
             f"The port will stay open after slips is done with the "
             f"analysis unless you manually kill it.\n"
             f"You need to kill it to be able to start the web interface "
@@ -68,6 +72,7 @@ class UIManager:
             )
 
             self.main.db.store_pid("Web Interface", webinterface.pid)
+            self.web_interface_pid = webinterface.pid
             # we'll assume that it started, and if not, the return value will
             # immediately change and this thread will
             # print an error

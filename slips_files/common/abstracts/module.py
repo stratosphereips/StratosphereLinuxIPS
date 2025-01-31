@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import sys
 import traceback
 import warnings
@@ -140,7 +142,7 @@ class IModule(ABC, Process):
 
     def print_traceback(self):
         exception_line = sys.exc_info()[2].tb_lineno
-        self.print(f"Problem in pre_main() line {exception_line}", 0, 1)
+        self.print(f"Problem in line {exception_line}", 0, 1)
         self.print(traceback.format_exc(), 0, 1)
 
     def run(self):
@@ -174,6 +176,7 @@ class IModule(ABC, Process):
                 self.keyboard_int_ctr += 1
                 if self.keyboard_int_ctr >= 2:
                     return
+
                 continue
             except Exception:
                 self.print_traceback()

@@ -1,11 +1,19 @@
-import asyncio
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import collections
 import ipaddress
 import json
 import math
+import queue
 from datetime import datetime
-from typing import List
+from typing import (
+    List,
+    Tuple,
+    Any,
+)
 import validators
+from multiprocessing import Queue
+from threading import Thread
 
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -24,9 +32,6 @@ class DNS(IFlowalertsAnalyzer):
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
-        # Cache list of connections that we already checked in the timer
-        # thread (we waited for the connection of these dns resolutions)
-        self.connections_checked_in_dns_conn_timer_thread = []
         # dict to keep track of arpa queries to check for DNS arpa scans later
         # format {profileid: [ts,ts,...]}
         self.dns_arpa_queries = {}
@@ -36,7 +41,23 @@ class DNS(IFlowalertsAnalyzer):
         self.classifier = FlowClassifier()
         self.our_ips = utils.get_own_ips()
         # In mins
-        self.dns_without_conn_interface_wait_time = 5
+        self.dns_without_conn_interface_wait_time = 30
+        # to store dns queries that we should check later. the purpose of
+        # this is to give the connection some time to arrive
+        self.pending_dns_without_conn = Queue()
+        self.dns_without_connection_timeout_checker_thread = Thread(
+            target=self.check_dns_without_connection_timeout,
+            daemon=True,
+        )
+
+        # used to pass the msgs this analyzer reciecved, to the
+        # dns_without_connection_timeout_checker_thread.
+        # the reason why we can just use .get_msg() there is because once
+        # the msg is handled here, it wont be passed to other analyzers the
+        # should analyze it anymore.
+        # meaning, only flowalerts.py is allowed to do a get_msg because it
+        # manages all the analyzers the msg should be passed to
+        self.dns_msgs = Queue()
 
     def name(self) -> str:
         return "DNS_analyzer"
@@ -191,6 +212,8 @@ class DNS(IFlowalertsAnalyzer):
         # if so, we extend the flow.asnwers to include
         # these IPs. the goal is to avoid FPs
         flow.answers.extend(self.get_previous_domain_resolutions(flow.query))
+        # remove duplicates
+        flow.answers = list(set(flow.answers))
 
         if flow.answers == ["-"]:
             # If no IPs are in the answer, we can not expect
@@ -201,10 +224,6 @@ class DNS(IFlowalertsAnalyzer):
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
             profileid, twid
         )
-        # If contacted_ips is empty it can be because
-        # we didnt read yet all the flows.
-        # This is automatically captured later in the
-        # for loop and we start a Timer
 
         # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
@@ -241,11 +260,132 @@ class DNS(IFlowalertsAnalyzer):
         # 30 minutes have passed?
         return diff >= self.dns_without_conn_interface_wait_time
 
+    def check_dns_without_connection_of_all_pending_flows(self):
+        """should be called before shutting down, to check all the pending
+        flows in the pending_dns_without_conn queue before stopping slips,
+        doesnt matter if the 30 mins passed or not"""
+        while self.pending_dns_without_conn.qsize() > 0:
+            try:
+                # flowalerts is closing here. there's no chance that
+                profileid, twid, pending_flow = (
+                    self.pending_dns_without_conn.get(timeout=5)
+                )
+            except queue.Empty:
+                return
+
+            self.check_dns_without_connection(
+                profileid, twid, pending_flow, waited_for_the_conn=True
+            )
+
+    def get_dns_flow_from_queue(self):
+        """
+        Fetch and parse the DNS message from the dns_msgs queue.
+        Returns None if the queue is empty.
+        """
+        try:
+            msg: str = self.dns_msgs.get(timeout=4)
+        except queue.Empty:
+            return None
+
+        msg: dict = json.loads(msg["data"])
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
+        return flow
+
+    def check_pending_flows_timeout(
+        self, reference_flow: Any
+    ) -> List[Tuple[str, str, Any]]:
+        """
+        Process all pending DNS flows without connections.
+
+        Calls check_dns_without_connection when 10, 20 and 30 mins (zeek
+        time) pass since the first encounter of the dns flow.
+        :param reference_flow: the current DNS flow slips is nalayzing.
+        only used to get the timestamp of the zeek now. just to know if 30
+        mins passed in zeek time or not.
+        Returns a list of flows that need to be put back into the queue
+         and checked later.
+        """
+        back_to_queue: List[Tuple[str, str, Any]] = []
+
+        while self.pending_dns_without_conn.qsize() > 0:
+            try:
+                profileid, twid, pending_flow = (
+                    self.pending_dns_without_conn.get(timeout=5)
+                )
+            except queue.Empty:
+                return back_to_queue
+
+            diff_in_mins = utils.get_time_diff(
+                pending_flow.starttime, reference_flow.starttime, "minutes"
+            )
+
+            if diff_in_mins >= 30:
+                self.check_dns_without_connection(
+                    profileid, twid, pending_flow, waited_for_the_conn=True
+                )
+            elif 9.5 < diff_in_mins <= 10 or 19.5 < diff_in_mins <= 20:
+                self.check_dns_without_connection(
+                    profileid, twid, pending_flow, waited_for_the_conn=False
+                )
+            else:
+                back_to_queue.append((profileid, twid, pending_flow))
+
+        return back_to_queue
+
+    def check_dns_without_connection_timeout(self):
+        """
+        Waits 30 mins in zeek time for the connection of a dns to arrive
+        Does so by receiving every dns msg this analyzer receives. then we
+        compare the ts of it to the ts of the flow we're waiting the 30
+        mins for.
+        once we know the diff between them is >=30 mins we check for the
+        dns without connection evidence.
+        The whole point is to give the connection 30 mins in zeek time to
+        arrive before alerting "dns wihtout conn".
+
+        - To avoid having thousands of flows in memory for 30 mins. we check
+        every 10 mins for the connections, if not found we put it back to
+        queue, if found we remove that flow from the pending flows
+
+        This function runs in its own thread
+        """
+        try:
+            while not self.flowalerts.should_stop():
+                if self.pending_dns_without_conn.empty():
+                    continue
+
+                # we just use it to know the zeek current ts to check if 30
+                # mins zeek time passed or not. we are not going to
+                # analyze it.
+                reference_flow = self.get_dns_flow_from_queue()
+                if not reference_flow:
+                    # ok wait for more dns flows to be read by slips
+                    continue
+
+                # back_to_queue will be used to store the flows we're
+                # waiting for the conn of temporarily if 30 mins didnt pass
+                # since we saw them.
+                # the goal of this is to not change the queue size in the
+                # below loop
+                back_to_queue = self.check_pending_flows_timeout(
+                    reference_flow
+                )
+                # put them back to the queue so we can check them later
+                for flow in back_to_queue:
+                    flow: Tuple[str, str, Any]
+                    self.pending_dns_without_conn.put(flow)
+        except KeyboardInterrupt:
+            # the rest will be handled in shutdown_gracefully
+            return
+
     async def check_dns_without_connection(
-        self, profileid, twid, flow
+        self, profileid, twid, flow, waited_for_the_conn=False
     ) -> bool:
         """
         Makes sure all cached DNS answers are there in contacted_ips
+        :kwarg waited_for_the_conn: if True, it means we already waited 30
+        mins in zeek time for the conn of this dns to arrive, and it didnt.
+        if False, we wait 30 mins zeek time for it to arrive
         """
         if not self.should_detect_dns_without_conn(flow):
             return False
@@ -256,13 +396,12 @@ class DNS(IFlowalertsAnalyzer):
         if self.is_any_flow_answer_contacted(profileid, twid, flow):
             return False
 
-        # Found a DNS query and none of its answers were contacted
-        await asyncio.sleep(40)
-
-        if self.is_any_flow_answer_contacted(profileid, twid, flow):
+        if not waited_for_the_conn:
+            # wait 30 mins zeek time for the conn of this dns to arrive
+            self.pending_dns_without_conn.put((profileid, twid, flow))
             return False
 
-        # Reaching here means we already waited some time for the connection
+        # Reaching here means we already waited for the connection
         # of this dns to arrive but none was found
         self.set_evidence.dns_without_conn(twid, flow)
         return True
@@ -312,8 +451,7 @@ class DNS(IFlowalertsAnalyzer):
         """
         this function is used to check for private IPs in the answers of
         a dns queries.
-        probably means the queries is being blocked
-        (perhaps by ad blockers) and set to a private IP value
+        Can be because of PI holes or DNS rebinding attacks
         """
         if not flow.answers:
             return
@@ -428,20 +566,45 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_arpa_queries.pop(profileid)
         return True
 
+    def shutdown_gracefully(self):
+        self.check_dns_without_connection_of_all_pending_flows()
+        self.dns_without_connection_timeout_checker_thread.join()
+        # close the queue
+        # without this, queues are left in memory and flowalerts keeps
+        # waiting for them forever
+        # to exit the process quickly without blocking on the queue's cleanup
+        self.dns_msgs.cancel_join_thread()
+        self.dns_msgs.close()
+
+        self.pending_dns_without_conn.cancel_join_thread()
+
+        self.pending_dns_without_conn.close()
+
+    def pre_analyze(self):
+        """Code that shouldnt be run in a loop. runs only once in
+        flowalerts' pre_main"""
+        # we didnt put this in __init__ because it uses self.flowalerts
+        # attributes that are not initialized yet in __init__
+        self.dns_without_connection_timeout_checker_thread.start()
+
     async def analyze(self, msg):
+        """
+        is only used by flowalerts.py
+        runs whenever we get a new_dns message
+        """
         if not utils.is_msg_intended_for(msg, "new_dns"):
             return False
+
+        self.dns_msgs.put(msg)
         msg = json.loads(msg["data"])
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        task = asyncio.create_task(
-            self.check_dns_without_connection(profileid, twid, flow)
+
+        self.flowalerts.create_task(
+            self.check_dns_without_connection, profileid, twid, flow
         )
-        # Allow the event loop to run the scheduled task
-        await asyncio.sleep(0)
-        # to wait for these functions before flowalerts shuts down
-        self.flowalerts.tasks.append(task)
+
         self.check_high_entropy_dns_answers(twid, flow)
         self.check_invalid_dns_answers(twid, flow)
         self.detect_dga(profileid, twid, flow)

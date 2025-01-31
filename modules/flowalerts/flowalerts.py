@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import inspect
 from asyncio import Task
@@ -58,10 +60,12 @@ class FlowAlerts(AsyncModule):
             self.channels.update({channel: channel_obj})
 
     async def shutdown_gracefully(self):
-        await asyncio.gather(*self.tasks)
+        self.dns.shutdown_gracefully()
+        await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def pre_main(self):
         utils.drop_root_privs()
+        self.dns.pre_analyze()
         self.analyzers_map = {
             "new_downloaded_file": [self.downloaded_file.analyze],
             "new_notice": [self.notice.analyze],
@@ -76,6 +80,7 @@ class FlowAlerts(AsyncModule):
         }
 
     async def main(self):
+        """runs in a loop, waiting for messages in subscribed channels"""
         for channel, analyzers in self.analyzers_map.items():
             msg: dict = self.get_msg(channel)
             if not msg:
@@ -89,6 +94,8 @@ class FlowAlerts(AsyncModule):
                     # and finish whenever they finish, we'll not wait for them
                     loop = asyncio.get_event_loop()
                     task = loop.create_task(analyzer(msg))
+                    # because Async Tasks swallow exceptions.
+                    task.add_done_callback(self.handle_exception)
                     # to wait for these functions before flowalerts shuts down
                     self.tasks.append(task)
                     # Allow the event loop to run the scheduled task

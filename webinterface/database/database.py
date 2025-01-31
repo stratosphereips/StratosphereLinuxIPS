@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from typing import (
     Dict,
     Optional,
@@ -45,6 +47,7 @@ class Database(object):
             stdout=os.path.join(output_dir, "slips.log"),
             stderr=os.path.join(output_dir, "errors.log"),
             slips_logfile=os.path.join(output_dir, "slips.log"),
+            create_logfiles=False,
         )
         try:
             return DBManager(

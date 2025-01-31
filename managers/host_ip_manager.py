@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import socket
 import time
 from typing import (
@@ -41,7 +43,8 @@ class HostIPManager:
     def store_host_ip(self) -> Optional[str]:
         """
         stores the host ip in the db
-        Retries to get the host IP online every 10s if not connected
+        recursively retries to get the host IP online every 10s if not
+        connected
         """
         if not self.main.db.is_running_non_stop():
             return

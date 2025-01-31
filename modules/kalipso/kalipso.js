@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+//SPDX-License-Identifier: GPL-2.0-only
 
 const { redis } = require("./kalipso_widgets/libraries.js");
 
@@ -35,4 +37,3 @@ const screen = new screen_class(redis_database,limit_letter_outtuple)
 // Register all keypresses in the screen.
 screen.registerEvents()
 screen.update_interface()
-

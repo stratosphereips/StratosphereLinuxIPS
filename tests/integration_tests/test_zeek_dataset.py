@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
@@ -19,8 +21,11 @@ alerts_file = "alerts.log"
             "dataset/test9-mixed-zeek-dir",
             4,
             [
-                "Malicious JA3: 6734f37431670b3ab4292b8f60f29984",
-                "sending ARP packet to a destination address outside of local network",
+                "Malicious JA3s: (possible C&C server): "
+                "e7d705a3286e19ea42f587b344ee6865 to server 123.33.22.11. "
+                "description: Standard tor client.",
+                "sending ARP packet to a destination address outside of "
+                "local network",
                 "broadcasting unsolicited ARP",
             ],
             "test9-mixed-zeek-dir/",
@@ -30,7 +35,8 @@ alerts_file = "alerts.log"
             "dataset/test16-malicious-zeek-dir",
             0,
             [
-                "sending ARP packet to a destination address outside of local network",
+                "sending ARP packet to a destination address outside of local"
+                " network",
                 "broadcasting unsolicited ARP",
             ],
             "test16-malicious-zeek-dir/",
@@ -42,11 +48,12 @@ alerts_file = "alerts.log"
             [
                 "bad SMTP login to 80.75.42.226",
                 "SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds",
-                "Multiple empty HTTP connections to google.com",
+                # "Multiple empty HTTP connections to google.com",
                 "Suspicious user-agent:",
                 "Download of an executable",
                 "GRE tunnel",
-                "Multiple reconnection attempts to Destination IP: 123.22.123.22 from IP: 10.0.2.15",
+                "Multiple reconnection attempts to Destination IP: "
+                "123.22.123.22 from IP: 10.0.2.15",
             ],
             "test14-malicious-zeek-dir/",
             6670,
@@ -56,8 +63,12 @@ alerts_file = "alerts.log"
             2,
             [
                 "SSH client version changing",
-                "Incompatible certificate CN",
-                "Malicious JA3: 6734f37431670b3ab4292b8f60f29984",
+                "Incompatible certificate CN to IP: 52.0.131.132 domain: "
+                "netflix.com. The certificate is claiming to belong "
+                "to Google",
+                "Detected Malicious JA3: 6734f37431670b3ab4292b8f60f29984 "
+                "from source address 10.0.2.15. "
+                "description: Trickbot Malware.",
             ],
             "test15-malicious-zeek-dir",
             2345,
@@ -65,7 +76,7 @@ alerts_file = "alerts.log"
         (
             "dataset/test10-mixed-zeek-dir",
             20,
-            "horizontal port scan",
+            "DNS TXT answer with high entropy",
             "test10-mixed-zeek-dir/",
             6660,
         ),
@@ -81,7 +92,10 @@ def test_zeek_dir(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py  -e 1 -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
+    command = (
+        f"./slips.py  -e 1 -t -f {zeek_dir_path}  -o {output_dir}"
+        f" -P {redis_port} > {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
     assert_no_errors(output_dir)

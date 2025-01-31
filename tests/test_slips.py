@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for ../slips.py"""
 
 from tests.module_factory import ModuleFactory
@@ -45,6 +47,5 @@ def test_load_modules():
 
 
 def test_clear_redis_cache_database():
-    main = ModuleFactory().create_main_obj()
-    redis_manager = ModuleFactory().create_redis_manager_obj(main)
+    redis_manager = ModuleFactory().create_redis_manager_obj()
     assert redis_manager.clear_redis_cache_database()

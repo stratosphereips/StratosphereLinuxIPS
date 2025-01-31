@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
 import json
 import sys
@@ -223,7 +225,6 @@ class ProfileHandler:
                 extra_info = {
                     "is_dns_response": True,
                     "dns_query": flow.query,
-                    "domain": answer,
                 }
                 self.give_threat_intelligence(
                     profileid,

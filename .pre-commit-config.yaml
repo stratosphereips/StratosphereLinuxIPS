@@ -20,14 +20,13 @@ repos:
           exclude: '.*dataset/.*|^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$'
 
 -     repo: https://github.com/astral-sh/ruff-pre-commit
-      # Ruff version.
       rev: v0.3.4
       hooks:
         # Run the linter.
         - id: ruff
           args: [ --fix ]
           # excludes formatting slips_files/common/imports.py
-          exclude: (imports|sqlite_db.*)
+          exclude: (imports|sqlite_db.*|conftest.py)
 
 -     repo: https://github.com/psf/black-pre-commit-mirror
       rev: 24.4.2
@@ -36,7 +35,7 @@ repos:
           args: ['--line-length' , '79']
           language_version: python3.12.3
           # excludes formatting slips_files/common/imports.py
-          exclude: imports
+          exclude: (imports|conftest.py)
 
 -     repo: https://github.com/adrienverge/yamllint.git
       rev: v1.31.0
