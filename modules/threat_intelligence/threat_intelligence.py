@@ -857,7 +857,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                 ja3, threat_level, description = (
                     data[0].strip(),
                     data[1].lower().strip(),
-                    data[2],
+                    data[2].strip(),
                 )
 
                 # validate the threat level taken from the user

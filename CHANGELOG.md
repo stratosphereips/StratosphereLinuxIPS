@@ -1,3 +1,16 @@
+1.1.6 (Jan 31st, 2025)
+* 3x speedup of the profiler process responsible for analyzing the given flows.
+* Fix false positive "connection without DNS" detection.
+* Fix false positive "DNS without connection" detection.
+* Fix problem parsing Suricata DNS flows.
+* Fix problem using threat intelligence feeds from cache even if they are not present in the given config file.
+* Fix regex warning when starting Slips. Special thanks to @Sekhar-Kumar-Dash.
+* Fix Tranco whitelists.
+* Improve "Incompatible CN" detection.
+* Improve "Invalid DNS answer" detection.
+* Improve unit tests. Special thanks to @Sekhar-Kumar-Dash.
+* Improve whitelisting by checking if the SNI of each evidence is whitelisted or not.
+* Update the license used.
 
 1.1.5 (Jan 3rd, 2025)
 - 200x times speedup of domain lookups in the threat intelligence module.

@@ -45,13 +45,10 @@ class DBManager:
         # the existing one
         self.sqlite = None
         if start_sqlite:
-            self.sqlite = self.create_sqlite_db(output_dir)
+            self.sqlite = SQLiteDB(self.logger, output_dir)
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
-
-    def create_sqlite_db(self, output_dir):
-        return SQLiteDB(self.logger, output_dir)
 
     @classmethod
     def read_configuration(cls):
@@ -242,6 +239,9 @@ class DBManager:
 
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
+
+    def delete_tranco_whitelist(self, *args, **kwargs):
+        return self.rdb.delete_tranco_whitelist(*args, **kwargs)
 
     def set_growing_zeek_dir(self, *args, **kwargs):
         return self.rdb.set_growing_zeek_dir(*args, **kwargs)

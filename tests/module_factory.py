@@ -20,7 +20,7 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
-from slips_files.core.evidencehandler import EvidenceHandler
+from slips_files.core.evidence_handler import EvidenceHandler
 from modules.rnn_cc_detection.rnn_cc_detection import CCDetection
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS

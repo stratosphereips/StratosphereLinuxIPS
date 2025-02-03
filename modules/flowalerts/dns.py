@@ -451,8 +451,7 @@ class DNS(IFlowalertsAnalyzer):
         """
         this function is used to check for private IPs in the answers of
         a dns queries.
-        probably means the queries is being blocked
-        (perhaps by ad blockers) and set to a private IP value
+        Can be because of PI holes or DNS rebinding attacks
         """
         if not flow.answers:
             return

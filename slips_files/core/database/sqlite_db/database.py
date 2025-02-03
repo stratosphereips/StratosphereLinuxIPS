@@ -34,7 +34,8 @@ class SQLiteDB:
 
     def connect(self):
         """
-        Creates the db if it doesn't exist and connects to it
+        Creates the db if it doesn't exist and connects to it.
+        OR connects to the existing db if it's there.
         """
         db_newly_created = False
         if not os.path.exists(self._flows_db):

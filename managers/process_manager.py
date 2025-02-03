@@ -37,7 +37,7 @@ from slips_files.common.abstracts.module import (
 )
 
 from slips_files.common.style import green
-from slips_files.core.evidencehandler import EvidenceHandler
+from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.input import Input
 from slips_files.core.output import Output
 from slips_files.core.profiler import Profiler
@@ -86,7 +86,7 @@ class ProcessManager:
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
             input_type=self.main.input_type,
-            stop_daemon=self.main.args.stopdaemon,
+            create_logfiles=False if self.main.args.stopdaemon else True,
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
@@ -503,6 +503,8 @@ class ProcessManager:
         """
         returns true if the control_channel channel received the
         'stop_slips' msg
+        This control channel is used by CYST or the filemanager to tell
+        slips that zeek terminated (useful when running slips with -g)
         """
         message = self.main.c1.get_message(timeout=0.01)
         if not message:

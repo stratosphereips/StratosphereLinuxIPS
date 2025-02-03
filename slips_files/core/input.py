@@ -333,6 +333,7 @@ class Input(ICore):
         """
         # Now read lines in order. The line with the earliest timestamp first
         files_sorted_by_ts = sorted(self.file_time, key=self.file_time.get)
+
         try:
             # get the file that has the earliest flow
             file_with_earliest_flow = files_sorted_by_ts[0]
@@ -344,7 +345,8 @@ class Input(ICore):
             self.zeek_files = self.db.get_all_zeek_files()
             return False, False
 
-        # comes here if we're done with all conn.log flows and it's time to process other files
+        # comes here if we're done with all conn.log flows and it's time to
+        # process other files
         earliest_line = self.cache_lines[file_with_earliest_flow]
         return earliest_line, file_with_earliest_flow
 
@@ -386,6 +388,7 @@ class Input(ICore):
             # Delete this line from the cache and the time list
             del self.cache_lines[file_with_earliest_flow]
             del self.file_time[file_with_earliest_flow]
+
             # Get the new list of files. Since new files may have been created by
             # Zeek while we were processing them.
             self.zeek_files = self.db.get_all_zeek_files()
@@ -432,7 +435,8 @@ class Input(ICore):
         self.bro_timeout = 10
         growing_zeek_dir: bool = self.db.is_growing_zeek_dir()
         if growing_zeek_dir:
-            # slips is given a dir that is growing i.e zeek dir running on an interface
+            # slips is given a dir that is growing i.e zeek dir running on an
+            # interface
             # don't stop zeek or slips
             self.bro_timeout = float("inf")
 
