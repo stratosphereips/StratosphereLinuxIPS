@@ -649,6 +649,11 @@ class ConfigParser(object):
         if not self.reading_flows_from_cyst():
             to_ignore.append("cyst")
 
+        use_fides = self.use_fides()
+        if not (use_fides and ("-i" in sys.argv or "-g" in sys.argv)):
+            to_ignore.append("fidesModule")
+            to_ignore.append("irisModule")
+
         return to_ignore
 
     def get_cpu_profiler_enable(self):
