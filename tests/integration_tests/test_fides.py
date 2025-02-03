@@ -10,6 +10,7 @@ import redis
 
 from modules.fidesModule.model.peer import PeerInfo
 from modules.fidesModule.persistence.sqlite_db import SQLiteDB
+from slips_files.core.database.database_manager import DBManager
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
@@ -50,52 +51,51 @@ def countdown(seconds, message):
 
 def message_send(port):
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
-
+    channel = "fides2network"
     message = """
-{
-    "type": "nl2tl_intelligence_response",
-    "version": 1,
-    "data": [
-        {
-            "sender": {
-                "id": "peer1",
-                "organisations": ["org_123", "org_456"],
-                "ip": "192.168.1.1"
-            },
-            "payload": {
-                "intelligence": {
-                    "target": {"type": "server", "value": "192.168.1.10"},
-                    "confidentiality": {"level": 0.8},
-                    "score": 0.5,
-                    "confidence": 0.95
+    {
+        "type": "nl2tl_intelligence_response",
+        "version": 1,
+        "data": [
+            {
+                "sender": {
+                    "id": "peer1",
+                    "organisations": ["org_123", "org_456"],
+                    "ip": "192.168.1.1"
                 },
-                "target": "stratosphere.org"
-            }
-        },
-        {
-            "sender": {
-                "id": "peer2",
-                "organisations": ["org_789"],
-                "ip": "192.168.1.2"
+                "payload": {
+                    "intelligence": {
+                        "target": {"type": "server", "value": "192.168.1.10"},
+                        "confidentiality": {"level": 0.8},
+                        "score": 0.5,
+                        "confidence": 0.95
+                    },
+                    "target": "stratosphere.org"
+                }
             },
-            "payload": {
-                "intelligence": {
-                    "target": {"type": "workstation", "value": "192.168.1.20"},
-                    "confidentiality": {"level": 0.7},
-                    "score": -0.85,
-                    "confidence": 0.92
+            {
+                "sender": {
+                    "id": "peer2",
+                    "organisations": ["org_789"],
+                    "ip": "192.168.1.2"
                 },
-                "target": "stratosphere.org"
+                "payload": {
+                    "intelligence": {
+                        "target": {"type": "workstation", "value": "192.168.1.20"},
+                        "confidentiality": {"level": 0.7},
+                        "score": -0.85,
+                        "confidence": 0.92
+                    },
+                    "target": "stratosphere.org"
+                }
             }
-        }
-    ]
-}
-"""
-
+        ]
+    }
+    """
+    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
     # publish the message to the "network2fides" channel
-    channel = "network2fides"
     redis_client.publish(channel, message)
+
 
     print(f"Test message published to channel '{channel}'.")
 
@@ -132,7 +132,7 @@ def message_receive():
     "path, output_dir, redis_port",
     [
         (
-            "dataset/test13-malicious-dhcpscan-zeek-dir",
+            "dataset/test15-malicious-dhcpscan-zeek-dir",
             "fides_integration_test/",
             6644,
         )
@@ -275,10 +275,10 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
 
         print(f"Output and errors are logged in {output_file}")
         # these 12s are the time we wait for slips to start all the modules
-        countdown(12, "test message")
+        countdown(18, "test message")
         message_send(redis_port)
         # these 18s are the time we give slips to process the msg
-        countdown(18, "sigterm")
+        countdown(900, "sigterm")
         # send a SIGTERM to the process
         os.kill(process.pid, 15)
         print("SIGTERM sent. killing slips")
@@ -289,9 +289,11 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
     print("Slip is done, checking for errors in the output dir.")
     assert_no_errors(output_dir)
     print("Checking database")
+
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir, start_redis_server=False
     )
+
     assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
 
     print("Checking Fides' data outlets")
