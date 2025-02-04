@@ -148,3 +148,4 @@ trust:
   # Threat Intelligence aggregation strategy
   # valid values - ['average', 'weightedAverage', 'stdevFromScore']
   tiAggregationStrategy: 'average'
+

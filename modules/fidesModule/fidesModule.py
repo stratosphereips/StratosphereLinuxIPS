@@ -1,5 +1,6 @@
 import os
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 from slips_files.common.slips_utils import utils
@@ -11,10 +12,11 @@ from slips_files.core.structures.alerts import (
     dict_to_alert,
     Alert,
 )
+from .messaging.model import NetworkMessage
 from ..fidesModule.messaging.message_handler import MessageHandler
 from ..fidesModule.messaging.network_bridge import NetworkBridge
 from ..fidesModule.model.configuration import load_configuration
-from ..fidesModule.model.threat_intelligence import SlipsThreatIntelligence
+from ..fidesModule.model.threat_intelligence import SlipsThreatIntelligence, ThreatIntelligence
 from ..fidesModule.protocols.alert import AlertProtocol
 from ..fidesModule.protocols.initial_trusl import InitialTrustProtocol
 from ..fidesModule.protocols.opinion import OpinionAggregator
@@ -30,6 +32,8 @@ from ..fidesModule.persistence.threat_intelligence_db import (
 )
 from ..fidesModule.persistence.trust_db import SlipsTrustDatabase
 from ..fidesModule.persistence.sqlite_db import SQLiteDB
+
+from ..fidesModule.model.alert import Alert as FidesAlert
 
 
 class FidesModule(IModule):
@@ -208,6 +212,18 @@ class FidesModule(IModule):
                 confidence=0.5,
                 score=0.8,
             )
+            envelope = NetworkMessage(
+                type="tl2nl_alert",
+                version=self.__bridge.version,
+                data={
+                    "payload": FidesAlert(
+                        target=alert.profile.ip,
+                        score=0.8,
+                        confidence=0.5,
+                    )
+                },
+            )
+            self.db.publish("fides2network", json.dumps(asdict(envelope)))
 
         if msg := self.get_msg("new_ip"):
             # if there's no string data message we can continue waiting
@@ -225,4 +241,5 @@ class FidesModule(IModule):
 
         # TODO: the code below exists for testing purposes for
         #  tests/integration_tests/test_fides.py
-        self.get_msg("fides2network")
+        if msg := self.get_msg("fides2network"):
+            pass

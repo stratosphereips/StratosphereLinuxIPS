@@ -3,7 +3,7 @@ Programmers notes:
 
 Python has None, SQLite has NULL, conversion is automatic in both ways.
 """
-
+import os
 import sqlite3
 from typing import List, Any, Optional
 
@@ -30,8 +30,9 @@ class SQLiteDB:
         """
         self.logger = logger
         self.db_path = db_path
-        with open(self.db_path, 'a') as file:
-            pass  # Just open and close the file
+        with open(self.db_path, "a") as f:
+            f.close()
+        sqlite3.connect(self.db_path).close()
         self.connection: Optional[sqlite3.Connection] = None
         self.__connect()
         self.__create_tables()
@@ -468,6 +469,10 @@ class SQLiteDB:
         """
         self.__slips_log(f"Connecting to SQLite database at {self.db_path}")
         self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
+
+        if self.connection is None:
+            self.__slips_log("Failed to connect to the SQLite database!")
+            raise ConnectionError("SQLite connection failed")
 
     def __execute_query(
         self, query: str, params: Optional[List[Any]] = None

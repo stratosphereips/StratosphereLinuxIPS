@@ -37,6 +37,8 @@ class NetworkBridge:
 
         def message_received(message: str):
             try:
+                # with open("fides_nb.txt", "a") as f:
+                #     f.write(message)
                 logger.debug("New message received! Trying to parse.")
                 parsed = json.loads(message)
                 network_message = from_dict(

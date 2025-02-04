@@ -11,7 +11,7 @@ network:
 my:
   id: myId
   organisations: [ ]
-database: 'fides_test_database.sqlite'
+
 
 # Confidentiality related settings
 confidentiality:

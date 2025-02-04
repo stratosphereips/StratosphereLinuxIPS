@@ -105,7 +105,7 @@ def message_receive():
     import json
 
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host="localhost", port=6379, db=0)
+    redis_client = redis.StrictRedis(host="localhost", port=6644, db=0)
 
     # define a callback function to handle received messages
     def message_handler(message):
@@ -118,9 +118,9 @@ def message_receive():
 
     # subscribe to the "fides2slips" channel
     pubsub = redis_client.pubsub()
-    pubsub.subscribe("fides2slips")
+    pubsub.subscribe("fides2network")
 
-    print("Listening on the 'fides2slips' channel. Waiting for messages...")
+    print("Listening on the 'fides2network' channel. Waiting for messages...")
 
     # process one message
     for message in pubsub.listen():
@@ -132,7 +132,7 @@ def message_receive():
     "path, output_dir, redis_port",
     [
         (
-            "dataset/test15-malicious-dhcpscan-zeek-dir",
+            "dataset/test13-malicious-dhcpscan-zeek-dir",
             "fides_integration_test/",
             6644,
         )
@@ -173,11 +173,13 @@ def test_conf_file2(path, output_dir, redis_port):
         )
 
         print(f"Output and errors are logged in {output_file}")
-        countdown(30, "sigterm")
+        countdown(200, "sigterm")
         # send a SIGTERM to the process
         os.kill(process.pid, 15)
         print("SIGTERM sent. killing slips")
         os.kill(process.pid, 9)
+
+    message_receive()
 
     print(f"Slips with PID {process.pid} was killed.")
 
@@ -190,7 +192,9 @@ def test_conf_file2(path, output_dir, redis_port):
     # t.o.d.o. send() is not implemented
     # iris is supposed to be receiving this msg, that last thing fides does
     # is send a msg to this channel for iris to receive it
-    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+    #assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+    assert db.get_msgs_received_at_runtime("Fides")["new_alert"] == "1"
+    print(db.get_msgs_received_at_runtime("Fides"))
 
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
@@ -200,7 +204,7 @@ def test_conf_file2(path, output_dir, redis_port):
     "path, output_dir, redis_port",
     [
         (
-            "dataset/test13-malicious-dhcpscan-zeek-dir",
+            "dataset/test15-malicious-zeek-dir",
             "fides_integration_test/",
             6644,
         )
@@ -238,73 +242,86 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         "-P",
         str(redis_port),
     ]
+    config_file_path = "modules/fidesModule/config/fides.conf.yml"
+    config_temp_path = "modules/fidesModule/config/fides.conf.yml.bak"
+    config_line = "database: 'fides_test_database.sqlite'\n"
+    shutil.copy(config_file_path, config_temp_path)
+    test_db = "fides_test_database.sqlite"
 
-    print("running slips ...")
-    print(output_dir)
+    try:
+        # Append the new line to the config
+        with open(config_file_path, "a") as file:
+            file.write(config_line)
 
-    mock_logger = Mock()
-    mock_logger.print_line = Mock()
-    mock_logger.error = Mock()
-    print("Manipulating database")
-    fdb = SQLiteDB(mock_logger, "fides_test_db.sqlite")
-    fdb.store_peer_trust_data(
-        ptd.trust_data_prototype(
-            peer=PeerInfo(
-                id="peer1", organisations=["org1", "org2"], ip="192.168.1.1"
-            ),
-            has_fixed_trust=False,
+        print("running slips ...")
+        print(output_dir)
+
+        mock_logger = Mock()
+        mock_logger.print_line = Mock()
+        mock_logger.error = Mock()
+        print("Manipulating database")
+        fdb = SQLiteDB(mock_logger, test_db)
+        fdb.store_peer_trust_data(
+            ptd.trust_data_prototype(
+                peer=PeerInfo(
+                    id="peer1", organisations=["org1", "org2"], ip="192.168.1.1"
+                ),
+                has_fixed_trust=False,
+            )
         )
-    )
-    fdb.store_peer_trust_data(
-        ptd.trust_data_prototype(
-            peer=PeerInfo(
-                id="peer2", organisations=["org2"], ip="192.168.1.2"
-            ),
-            has_fixed_trust=True,
-        )
-    )
-
-    # Open the log file in write mode
-    with open(output_file, "w") as log_file:
-        # Start the subprocess, redirecting stdout and stderr to the same file
-        process = subprocess.Popen(
-            command,  # Replace with your command
-            stdout=log_file,
-            stderr=log_file,
+        fdb.store_peer_trust_data(
+            ptd.trust_data_prototype(
+                peer=PeerInfo(
+                    id="peer2", organisations=["org2"], ip="192.168.1.2"
+                ),
+                has_fixed_trust=True,
+            )
         )
 
-        print(f"Output and errors are logged in {output_file}")
-        # these 12s are the time we wait for slips to start all the modules
-        countdown(18, "test message")
-        message_send(redis_port)
-        # these 18s are the time we give slips to process the msg
-        countdown(900, "sigterm")
-        # send a SIGTERM to the process
-        os.kill(process.pid, 15)
-        print("SIGTERM sent. killing slips")
-        os.kill(process.pid, 9)
+        # Open the log file in write mode
+        with open(output_file, "w") as log_file:
+            # Start the subprocess, redirecting stdout and stderr to the same file
+            process = subprocess.Popen(
+                command,  # Replace with your command
+                stdout=log_file,
+                stderr=log_file,
+            )
 
-    print(f"Slips with PID {process.pid} was killed.")
+            print(f"Output and errors are logged in {output_file}")
+            # these 12s are the time we wait for slips to start all the modules
+            countdown(60, "test message")
+            message_send(redis_port)
+            # these 18s are the time we give slips to process the msg
+            countdown(30, "sigterm")
+            # send a SIGTERM to the process
+            os.kill(process.pid, 15)
+            print("SIGTERM sent. killing slips")
+            os.kill(process.pid, 15)
 
-    print("Slip is done, checking for errors in the output dir.")
-    assert_no_errors(output_dir)
-    print("Checking database")
+        print(f"Slips with PID {process.pid} was killed.")
 
-    db = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir, start_redis_server=False
-    )
+        print("Slip is done, checking for errors in the output dir.")
+        assert_no_errors(output_dir)
+        print("Checking database")
 
-    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
-
-    print("Checking Fides' data outlets")
-    print(fdb.get_peer_trust_data("peer1").recommendation_history)
-    print(db.get_peer_trust_data("peer1"))
-    print(fdb.get_peer_trust_data("stratosphere.org"))
-    print(
-        db.get_cached_network_opinion(
-            "stratosphere.org", 200000000000, 200000000000
+        db = ModuleFactory().create_db_manager_obj(
+            redis_port, output_dir=output_dir, start_redis_server=False
         )
-    )
 
-    print("Deleting the output directory")
-    shutil.rmtree(output_dir)
+        #assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+
+        print("Checking Fides' data outlets")
+        assert fdb.get_peer_trust_data("peer1").service_history != []
+        assert fdb.get_peer_trust_data("peer2").service_history != []
+        assert fdb.get_peer_trust_data("peer1").service_history_size == 1
+        assert fdb.get_peer_trust_data("peer2").service_history_size == 1
+        assert db.get_cached_network_opinion("stratosphere.org", 200000000000, 200000000000) == {'target': 'stratosphere.org', 'score': '0.0', 'confidence': '0.0'}
+
+        print("Deleting the output directory")
+        shutil.rmtree(output_dir)
+    finally:
+        # Restore the original file
+        os.remove(test_db)
+        shutil.move(config_temp_path, config_file_path)
+        print("Config file restored to original state.")
+
