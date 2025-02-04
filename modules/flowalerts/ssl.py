@@ -147,6 +147,24 @@ class SSL(IFlowalertsAnalyzer):
         # domains or ips
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
 
+    def flows_match(self, flow1, flow2) -> bool:
+        """
+        given 2 ssl flows, returns True if the 2 flows
+         share the same src and dst ips and dst ports.
+        """
+        # one of the given flows dst port will always be 443 established
+        # tcp conn :D
+        return (
+            flow1.saddr == flow2.saddr
+            and flow1.daddr == flow2.daddr
+            and flow1.dport == flow2.dport
+            and flow1.state == flow2.state
+            and flow1.proto == flow2.proto
+        )
+
+    def is_ssl_proto_recognized_by_zeek(self, flow) -> bool:
+        return flow.appproto and str(flow.appproto.lower()) == "ssl"
+
     def check_non_ssl_port_443_timeout(self):
         """
         The goal of this thread is to reduce FP non ssl flows in the cases
