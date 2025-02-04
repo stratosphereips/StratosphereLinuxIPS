@@ -39,6 +39,19 @@ class FlowAlerts(AsyncModule):
         self.downloaded_file = DownloadedFile(self.db, flowalerts=self)
         self.tunnel = Tunnel(self.db, flowalerts=self)
         self.conn = Conn(self.db, flowalerts=self)
+        # to be able to call shutdown gracefully of them later. make sure
+        # you put every new analyzer here
+        self.supported_analyzers = {
+            self.dns,
+            self.software,
+            self.notice,
+            self.smtp,
+            self.ssl,
+            self.ssh,
+            self.downloaded_file,
+            self.tunnel,
+            self.conn,
+        }
         # list of async functions to await before flowalerts shuts down
         self.tasks: List[Task] = []
 
@@ -60,7 +73,9 @@ class FlowAlerts(AsyncModule):
             self.channels.update({channel: channel_obj})
 
     async def shutdown_gracefully(self):
-        self.dns.shutdown_gracefully()
+        for analyzer in self.supported_analyzers:
+            analyzer.shutdown_gracefully()
+
         await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def pre_main(self):
