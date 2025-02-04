@@ -165,6 +165,54 @@ class SSL(IFlowalertsAnalyzer):
     def is_ssl_proto_recognized_by_zeek(self, flow) -> bool:
         return flow.appproto and str(flow.appproto.lower()) == "ssl"
 
+    def check_matching_pending_flows(self, new_flow) -> None:
+        """
+        Checks the queue of pending "non ssl port 443 connection" evidence
+        for flows that match the given new_flow.
+        if a match of the given new_flow is found within 5 mins or less,
+        we do not set an evidence.
+        the list of pending "non ssl port 443 connection" evidence is
+        stored in non_ssl_flows_to_check_later_q
+        """
+
+        # the given flow is recognized as ssl by zeek, try to find matches
+        # of it in the pending queue
+        while self.non_ssl_flows_to_check_later_q.qsize() > 0:
+            try:
+                twid, pending_flow = self.non_ssl_flows_to_check_later_q.get(
+                    timeout=5
+                )
+            except queue.Empty:
+                return
+
+            diff_in_mins = utils.get_time_diff(
+                pending_flow.starttime, new_flow.starttime, "minutes"
+            )
+
+            ssl_recognized = self.is_ssl_proto_recognized_by_zeek(new_flow)
+            flows_match = self.flows_match(pending_flow, new_flow)
+            within_time_limit = diff_in_mins <= 5
+
+            if ssl_recognized and flows_match and within_time_limit:
+                # matching flows within 5 mins of each other and one of them
+                # is ssl. this is exactly the false positive we're trying
+                # to avoid.
+                continue
+
+            if within_time_limit:
+                # flows dont match but the last flow that happened (new_flow)
+                # is still within 5 mins of the pending flow.
+                # give the pending flow more time to find an ssl match
+                self.non_ssl_flows_to_check_later_q.put((twid, pending_flow))
+                continue
+
+            # 5 mins passed and either:
+            # 1. no matching ssl flow was found for the pending flow
+            # 2. we found an ssl match but after the timeout, making it useless.
+            self.check_non_ssl_port_443_conns(
+                twid, pending_flow, waited_for_the_flow=True
+            )
+
     def check_non_ssl_port_443_timeout(self):
         """
         The goal of this thread is to reduce FP non ssl flows in the cases
