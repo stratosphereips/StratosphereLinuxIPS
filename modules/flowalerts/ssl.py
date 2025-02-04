@@ -2,7 +2,13 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import json
-from typing import Union, Optional, List
+import queue
+from multiprocessing import Queue
+from typing import (
+    Union,
+    Optional,
+    List,
+)
 import re
 import tldextract
 from slips_files.common.abstracts.flowalerts_analyzer import (
@@ -18,6 +24,17 @@ from slips_files.core.flows.zeek import SSL
 class SSL(IFlowalertsAnalyzer):
     def init(self):
         self.classifier = FlowClassifier()
+        # to store ssl queries that we should check later. the purpose of
+        # this is to give the new ssl flows some time to arrive
+        self.non_ssl_flows_to_check_later_q = Queue()
+        # used to pass the msgs this analyzer reciecves, to the
+        # non_ssl_estsablished_conn_timeout_checker_thread.
+        # the reason why we can just use .get_msg() there is because once
+        # the msg is handled here, it wont be passed to other analyzers the
+        # should analyze it anymore.
+        # meaning, only flowalerts.py is allowed to do a get_msg() because it
+        # manages all the analyzers the msg should be passed to
+        self.new_connections_q = Queue()
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -125,21 +142,60 @@ class SSL(IFlowalertsAnalyzer):
         # domains or ips
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
 
-    def check_non_ssl_port_443_conns(self, twid, flow):
+    def get_flow_from_new_conn_queue(self):
+        """
+        Fetch and parse the ssl message from the ssl_msgs queue.
+        Returns None if the queue is empty.
+        """
+        try:
+            msg: str = self.new_connections_q.get(timeout=4)
+        except queue.Empty:
+            return None
+
+        msg: dict = json.loads(msg["data"])
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
+        return flow
+
+    def should_detect_non_ssl_port_443(self, flow):
+        return (
+            str(flow.dport) == "443"
+            and flow.proto.lower() == "tcp"
+            and flow.state == "Established"
+            and (flow.sbytes + flow.dbytes) != 0
+            and str(flow.appproto).lower() != "ssl"
+        )
+
+    def check_non_ssl_port_443_conns(
+        self, twid, flow, waited_for_the_flow=False
+    ):
         """
         alerts on established connections on port 443 that are not HTTPS (ssl)
+        if the given flow is not recognized as ssl by zeek, we wait for 5
+        mins for a flow with the same src and dst ips + dst port to arrive
+        and recognized as ssl by zeek.
+
+        :kwarg waited_for_the_flow: if True, it means we already waited 5
+        mins in zeek time for a flow with the same src and dst ips + dst
+        port to arrive and recognized as ssl, but it didnt.
+        if False, we wait 5 mins zeek time for it to arrive
         """
         flow.state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
-        if (
-            str(flow.dport) == "443"
-            and flow.proto.lower() == "tcp"
-            and str(flow.appproto).lower() != "ssl"
-            and flow.state == "Established"
-            and (flow.sbytes + flow.dbytes) != 0
-        ):
-            self.set_evidence.non_ssl_port_443_conn(twid, flow)
+
+        # any flow without the below conditions should be waited upon,
+        # may not be tcp, may not be established, etc. so we dont care
+        # about it
+        if not self.should_detect_non_ssl_port_443(flow):
+            return
+
+        if not waited_for_the_flow:
+            self.non_ssl_flows_to_check_later_q.put((twid, flow))
+            return False
+
+        # Reaching here means we already waited for the correctly
+        # recognized ssl flow but it didn't so time to set evidence
+        self.set_evidence.non_ssl_port_443_conn(twid, flow)
 
     def detect_doh(self, twid, flow):
         if not flow.is_DoH:
@@ -257,4 +313,5 @@ class SSL(IFlowalertsAnalyzer):
             twid = msg["twid"]
             flow = msg["flow"]
             flow = self.classifier.convert_to_flow_obj(flow)
+            self.new_connections_q.put(msg)
             self.check_non_ssl_port_443_conns(twid, flow)
