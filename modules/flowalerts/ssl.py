@@ -310,6 +310,21 @@ class SSL(IFlowalertsAnalyzer):
         # recognized ssl flow but it didn't so time to set evidence
         self.set_evidence.non_ssl_port_443_conn(twid, flow)
 
+    def set_evidence_for_all_pending_non_ssl_connections(self):
+        """
+        Sets an evidence for all the pending flows in the
+        non_ssl_flows_to_check_later_q since slips is stopping and still
+        not matching ssl flows were found for them
+        """
+        while self.non_ssl_flows_to_check_later_q.qsize() > 0:
+            try:
+                twid, pending_flow = self.non_ssl_flows_to_check_later_q.get(
+                    timeout=5
+                )
+            except queue.Empty:
+                return
+            self.set_evidence.non_ssl_port_443_conn(twid, pending_flow)
+
     def detect_doh(self, twid, flow):
         if not flow.is_DoH:
             return False
@@ -405,6 +420,9 @@ class SSL(IFlowalertsAnalyzer):
             # we dont have info about one of the domains
             return
         self.set_evidence.cn_url_mismatch(twid, cn, flow)
+
+    def shutdown_gracefully(self):
+        self.set_evidence_for_all_pending_non_ssl_connections()
 
     async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
