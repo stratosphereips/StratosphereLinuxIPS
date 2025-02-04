@@ -103,19 +103,19 @@ class FidesModule(IModule):
         # create queues
         # TODONE: [S] check if we need to use duplex or simplex queue for
         # communication with network module
-        # self.network_fides_queue = RedisSimplexQueue(
-        #     self.db,
-        #     send_channel="fides2network",
-        #     received_channel="network2fides",
-        #     channels=self.channels,
-        # )
-
-        #iris uses only one channel for communication
-        self.network_fides_queue = RedisDuplexQueue(
+        self.network_fides_queue = RedisSimplexQueue(
             self.db,
-            channel="fides2network",
+            send_channel="fides2network",
+            received_channel="network2fides",
             channels=self.channels,
         )
+
+        # #iris uses only one channel for communication
+        # self.network_fides_queue = RedisDuplexQueue(
+        #     self.db,
+        #     channel="fides2network",
+        #     channels=self.channels,
+        # )
 
         bridge = NetworkBridge(self.network_fides_queue)
 
@@ -191,16 +191,6 @@ class FidesModule(IModule):
         utils.drop_root_privs()
 
     def main(self):
-        # if msg := self.get_msg("new_alert"):
-        #     if not msg["data"]:
-        #         return
-        #     data = json.loads(msg["data"])
-        #     self.__alerts.dispatch_alert(
-        #         target=data["ip_to_block"],
-        #         confidence=data["confidence"],
-        #         score=data["score"],
-        #     )
-        #
         if msg := self.get_msg("new_alert"):
             # if there's no string data message we can continue waiting
             if not msg["data"]:
@@ -212,18 +202,18 @@ class FidesModule(IModule):
                 confidence=0.5,
                 score=0.8,
             )
-            envelope = NetworkMessage(
-                type="tl2nl_alert",
-                version=self.__bridge.version,
-                data={
-                    "payload": FidesAlert(
-                        target=alert.profile.ip,
-                        score=0.8,
-                        confidence=0.5,
-                    )
-                },
-            )
-            self.db.publish("fides2network", json.dumps(asdict(envelope)))
+            # envelope = NetworkMessage(
+            #     type="tl2nl_alert",
+            #     version=self.__bridge.version,
+            #     data={
+            #         "payload": FidesAlert(
+            #             target=alert.profile.ip,
+            #             score=0.8,
+            #             confidence=0.5,
+            #         )
+            #     },
+            # )
+            # self.db.publish("fides2network", json.dumps(asdict(envelope)))
 
         if msg := self.get_msg("new_ip"):
             # if there's no string data message we can continue waiting

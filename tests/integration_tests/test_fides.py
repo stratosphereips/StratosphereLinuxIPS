@@ -51,7 +51,8 @@ def countdown(seconds, message):
 
 def message_send(port):
     # connect to redis database 0
-    channel = "fides2network"
+    #channel = "fides2network"
+    channel = "network2fides"
     message = """
     {
         "type": "nl2tl_intelligence_response",
@@ -173,7 +174,7 @@ def test_conf_file2(path, output_dir, redis_port):
         )
 
         print(f"Output and errors are logged in {output_file}")
-        countdown(200, "sigterm")
+        countdown(40, "sigterm")
         # send a SIGTERM to the process
         os.kill(process.pid, 15)
         print("SIGTERM sent. killing slips")
@@ -189,10 +190,9 @@ def test_conf_file2(path, output_dir, redis_port):
     db = ModuleFactory().create_db_manager_obj(
         redis_port, output_dir=output_dir, start_redis_server=False
     )
-    # t.o.d.o. send() is not implemented
     # iris is supposed to be receiving this msg, that last thing fides does
     # is send a msg to this channel for iris to receive it
-    #assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
     assert db.get_msgs_received_at_runtime("Fides")["new_alert"] == "1"
     print(db.get_msgs_received_at_runtime("Fides"))
 
