@@ -4,6 +4,7 @@ import asyncio
 import json
 import queue
 from multiprocessing import Queue
+from threading import Thread
 from typing import (
     Union,
     Optional,
@@ -27,6 +28,10 @@ class SSL(IFlowalertsAnalyzer):
         # to store ssl queries that we should check later. the purpose of
         # this is to give the new ssl flows some time to arrive
         self.non_ssl_flows_to_check_later_q = Queue()
+        self.non_ssl_estsablished_conn_timeout_checker_thread = Thread(
+            target=self.check_non_ssl_port_443_timeout,
+            daemon=True,
+        )
         # used to pass the msgs this analyzer reciecves, to the
         # non_ssl_estsablished_conn_timeout_checker_thread.
         # the reason why we can just use .get_msg() there is because once
@@ -141,6 +146,48 @@ class SSL(IFlowalertsAnalyzer):
         # it doesn't belong to any of this org's
         # domains or ips
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
+
+    def check_non_ssl_port_443_timeout(self):
+        """
+        The goal of this thread is to reduce FP non ssl flows in the cases
+        where we have multiple ssl flows that happened within 5 mins,
+        and one of them is recognized as "ssl" by zeek and the other isn't.
+        We don't want to set an evidence on the other one, Slips considers
+        both "ssl" even if zeek doesn't.
+
+        This function Checks each new ssl flow for a match in the
+        non_ssl_flows_to_check_later_q
+
+        Matching flows are flows that share the same srcip, dst ip and dst
+        port
+
+        IF a match is found within 5 mins (zeek time) and the match
+        protocol is recognized as "ssl" by zeek. we don't alert "non ssl"
+        on the pending flow.
+
+        The whole point is to give the ssl-recognized flow 5 more mins
+        to arrive before alerting "non ssl" because sometimes zeek
+        doesn't recognize a flow as ssl, and recognizes another one
+        (to the same dst ip and port) as "ssl" seconds later.
+        """
+        try:
+            while not self.flowalerts.should_stop():
+                if self.non_ssl_flows_to_check_later_q.empty():
+                    continue
+
+                # this flow is of importance to use ONLY if its from the
+                # same sr -> the same dst on the same DST port and is
+                # recognized as "ssl" by zeek.
+                flow = self.get_flow_from_new_conn_queue()
+                if not flow:
+                    # ok wait for more ssl flows to be read by slips
+                    continue
+
+                self.check_matching_pending_flows(flow)
+
+        except KeyboardInterrupt:
+            # the rest will be handled in shutdown_gracefully
+            return
 
     def get_flow_from_new_conn_queue(self):
         """
