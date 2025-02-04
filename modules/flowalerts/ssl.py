@@ -422,7 +422,16 @@ class SSL(IFlowalertsAnalyzer):
         self.set_evidence.cn_url_mismatch(twid, cn, flow)
 
     def shutdown_gracefully(self):
+        self.non_ssl_estsablished_conn_timeout_checker_thread.join()
         self.set_evidence_for_all_pending_non_ssl_connections()
+        # close the queue
+        # without this, queues are left in memory and flowalerts keeps
+        # waiting for them forever
+        # to exit the process quickly without blocking on the queue's cleanup
+        self.new_connections_q.cancel_join_thread()
+        self.new_connections_q.close()
+        self.non_ssl_flows_to_check_later_q.cancel_join_thread()
+        self.non_ssl_flows_to_check_later_q.close()
 
     async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
