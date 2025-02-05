@@ -10,7 +10,6 @@ import redis
 
 from modules.fidesModule.model.peer import PeerInfo
 from modules.fidesModule.persistence.sqlite_db import SQLiteDB
-from slips_files.core.database.database_manager import DBManager
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
@@ -51,7 +50,7 @@ def countdown(seconds, message):
 
 def message_send(port):
     # connect to redis database 0
-    #channel = "fides2network"
+    # channel = "fides2network"
     channel = "network2fides"
     message = """
     {
@@ -97,16 +96,15 @@ def message_send(port):
     # publish the message to the "network2fides" channel
     redis_client.publish(channel, message)
 
-
     print(f"Test message published to channel '{channel}'.")
 
 
-def message_receive():
+def message_receive(port):
     import redis
     import json
 
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host="localhost", port=6644, db=0)
+    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
 
     # define a callback function to handle received messages
     def message_handler(message):
@@ -134,7 +132,7 @@ def message_receive():
     [
         (
             "dataset/test13-malicious-dhcpscan-zeek-dir",
-            "fides_integration_test/",
+            "fides_test_conf_file2/",
             6644,
         )
     ],
@@ -180,7 +178,7 @@ def test_conf_file2(path, output_dir, redis_port):
         print("SIGTERM sent. killing slips")
         os.kill(process.pid, 9)
 
-    message_receive()
+    message_receive(redis_port)
 
     print(f"Slips with PID {process.pid} was killed.")
 
@@ -205,24 +203,31 @@ def test_conf_file2(path, output_dir, redis_port):
     [
         (
             "dataset/test15-malicious-zeek-dir",
-            "fides_integration_test/",
-            6644,
+            "fides_test_trust_recommendation_response/",
+            6645,
         )
     ],
 )
 def test_trust_recommendation_response(path, output_dir, redis_port):
     """
-    This test simulates a common situation in the global P2P system, where Fides Module wanted to evaluate trust in an unknown peer and asked for the opinion of other peers.
+    This test simulates a common situation in the global P2P system, where
+     Fides Module wanted to evaluate trust in an unknown peer and asked for
+      the opinion of other peers.
     The known peers responded and Fides Module is processing the response.
     Scenario:
-        - Fides did not know a peer whose ID is 'stratosphere.org' and have asked for opinion of known peers: peer1 and peer2
+        - Fides did not know a peer whose ID is 'stratosphere.org' and have
+        asked for opinion of known peers: peer1 and peer2
         - The peers are responding in a message; see message in message_send()
         - The message is processed + THE TEST ITSELF
 
     Preparation:
-        - Have a response to send to a correct channel (it would have been done by Iris, here it is simulated)
-        - Inject peer1 and peer2 into the database - Fides Module must know those peers, NOTE that Fides Module only asks for opinion from known peers
-        - Run Slips (includes Fides Module) in a thread and wait for all modules to start
+        - Have a response to send to a correct channel (it would have been
+         done by Iris, here it is simulated)
+        - Inject peer1 and peer2 into the database - Fides Module must know
+        those peers, NOTE that Fides Module only asks for opinion from known
+         peers
+        - Run Slips (includes Fides Module) in a thread and wait for all
+         modules to start
 
     """
     output_dir: PosixPath = create_output_dir(output_dir)
@@ -264,7 +269,9 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         fdb.store_peer_trust_data(
             ptd.trust_data_prototype(
                 peer=PeerInfo(
-                    id="peer1", organisations=["org1", "org2"], ip="192.168.1.1"
+                    id="peer1",
+                    organisations=["org1", "org2"],
+                    ip="192.168.1.1",
                 ),
                 has_fixed_trust=False,
             )
@@ -308,14 +315,20 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
             redis_port, output_dir=output_dir, start_redis_server=False
         )
 
-        #assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+        # assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
 
         print("Checking Fides' data outlets")
         assert fdb.get_peer_trust_data("peer1").service_history != []
         assert fdb.get_peer_trust_data("peer2").service_history != []
         assert fdb.get_peer_trust_data("peer1").service_history_size == 1
         assert fdb.get_peer_trust_data("peer2").service_history_size == 1
-        assert db.get_cached_network_opinion("stratosphere.org", 200000000000, 200000000000) == {'target': 'stratosphere.org', 'score': '0.0', 'confidence': '0.0'}
+        assert db.get_cached_network_opinion(
+            "stratosphere.org", 200000000000, 200000000000
+        ) == {
+            "target": "stratosphere.org",
+            "score": "0.0",
+            "confidence": "0.0",
+        }
 
         print("Deleting the output directory")
         shutil.rmtree(output_dir)
@@ -324,4 +337,3 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         os.remove(test_db)
         shutil.move(config_temp_path, config_file_path)
         print("Config file restored to original state.")
-
