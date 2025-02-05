@@ -132,7 +132,7 @@ def message_receive(port):
     [
         (
             "dataset/test13-malicious-dhcpscan-zeek-dir",
-            "fides_integration_test/",
+            "fides_test_conf_file2/",
             6644,
         )
     ],
@@ -203,24 +203,31 @@ def test_conf_file2(path, output_dir, redis_port):
     [
         (
             "dataset/test15-malicious-zeek-dir",
-            "fides_integration_test/",
+            "fides_test_trust_recommendation_response/",
             6645,
         )
     ],
 )
 def test_trust_recommendation_response(path, output_dir, redis_port):
     """
-    This test simulates a common situation in the global P2P system, where Fides Module wanted to evaluate trust in an unknown peer and asked for the opinion of other peers.
+    This test simulates a common situation in the global P2P system, where
+     Fides Module wanted to evaluate trust in an unknown peer and asked for
+      the opinion of other peers.
     The known peers responded and Fides Module is processing the response.
     Scenario:
-        - Fides did not know a peer whose ID is 'stratosphere.org' and have asked for opinion of known peers: peer1 and peer2
+        - Fides did not know a peer whose ID is 'stratosphere.org' and have
+        asked for opinion of known peers: peer1 and peer2
         - The peers are responding in a message; see message in message_send()
         - The message is processed + THE TEST ITSELF
 
     Preparation:
-        - Have a response to send to a correct channel (it would have been done by Iris, here it is simulated)
-        - Inject peer1 and peer2 into the database - Fides Module must know those peers, NOTE that Fides Module only asks for opinion from known peers
-        - Run Slips (includes Fides Module) in a thread and wait for all modules to start
+        - Have a response to send to a correct channel (it would have been
+         done by Iris, here it is simulated)
+        - Inject peer1 and peer2 into the database - Fides Module must know
+        those peers, NOTE that Fides Module only asks for opinion from known
+         peers
+        - Run Slips (includes Fides Module) in a thread and wait for all
+         modules to start
 
     """
     output_dir: PosixPath = create_output_dir(output_dir)
