@@ -10,7 +10,6 @@ import redis
 
 from modules.fidesModule.model.peer import PeerInfo
 from modules.fidesModule.persistence.sqlite_db import SQLiteDB
-from slips_files.core.database.database_manager import DBManager
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
@@ -51,7 +50,7 @@ def countdown(seconds, message):
 
 def message_send(port):
     # connect to redis database 0
-    #channel = "fides2network"
+    # channel = "fides2network"
     channel = "network2fides"
     message = """
     {
@@ -96,7 +95,6 @@ def message_send(port):
     redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
     # publish the message to the "network2fides" channel
     redis_client.publish(channel, message)
-
 
     print(f"Test message published to channel '{channel}'.")
 
@@ -264,7 +262,9 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         fdb.store_peer_trust_data(
             ptd.trust_data_prototype(
                 peer=PeerInfo(
-                    id="peer1", organisations=["org1", "org2"], ip="192.168.1.1"
+                    id="peer1",
+                    organisations=["org1", "org2"],
+                    ip="192.168.1.1",
                 ),
                 has_fixed_trust=False,
             )
@@ -308,14 +308,20 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
             redis_port, output_dir=output_dir, start_redis_server=False
         )
 
-        #assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+        # assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
 
         print("Checking Fides' data outlets")
         assert fdb.get_peer_trust_data("peer1").service_history != []
         assert fdb.get_peer_trust_data("peer2").service_history != []
         assert fdb.get_peer_trust_data("peer1").service_history_size == 1
         assert fdb.get_peer_trust_data("peer2").service_history_size == 1
-        assert db.get_cached_network_opinion("stratosphere.org", 200000000000, 200000000000) == {'target': 'stratosphere.org', 'score': '0.0', 'confidence': '0.0'}
+        assert db.get_cached_network_opinion(
+            "stratosphere.org", 200000000000, 200000000000
+        ) == {
+            "target": "stratosphere.org",
+            "score": "0.0",
+            "confidence": "0.0",
+        }
 
         print("Deleting the output directory")
         shutil.rmtree(output_dir)
@@ -324,4 +330,3 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         os.remove(test_db)
         shutil.move(config_temp_path, config_file_path)
         print("Config file restored to original state.")
-
