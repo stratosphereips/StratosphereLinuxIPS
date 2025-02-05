@@ -107,7 +107,8 @@ dispatched to peers, without regard to trust level accumulated on them.
 ## Logs
 
 Slips contains a minimal log file for reports received by other peers and peer updates in
-```output/fidesModule.log```
+```output``` directory if not manually specified using the appropriate slips parameter upon start.
+Custom logger ```modules/fidesModule/utils/logger.py``` is used by Fide Module for internal logging.  Either Slips' logging is used, or the custom logger is defaulted to logging via Python's printing function.
 
 ## Limitations
 
