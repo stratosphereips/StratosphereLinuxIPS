@@ -99,12 +99,12 @@ def message_send(port):
     print(f"Test message published to channel '{channel}'.")
 
 
-def message_receive():
+def message_receive(port):
     import redis
     import json
 
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host="localhost", port=6644, db=0)
+    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
 
     # define a callback function to handle received messages
     def message_handler(message):
@@ -178,7 +178,7 @@ def test_conf_file2(path, output_dir, redis_port):
         print("SIGTERM sent. killing slips")
         os.kill(process.pid, 9)
 
-    message_receive()
+    message_receive(redis_port)
 
     print(f"Slips with PID {process.pid} was killed.")
 
@@ -204,7 +204,7 @@ def test_conf_file2(path, output_dir, redis_port):
         (
             "dataset/test15-malicious-zeek-dir",
             "fides_integration_test/",
-            6644,
+            6645,
         )
     ],
 )
