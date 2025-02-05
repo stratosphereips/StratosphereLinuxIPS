@@ -21,7 +21,6 @@ class IFlowalertsAnalyzer(ABC):
 
     def shutdown_gracefully(self):
         """Exits gracefully"""
-        pass
 
     def read_configuration(self):
         """Reads configuration"""
@@ -35,6 +34,13 @@ class IFlowalertsAnalyzer(ABC):
         this init will have access to all keyword args passes when
         initializing the module
         """
+
+    def pre_analyze(self):
+        """
+        runs once before analyze() is run in a loop
+        triggered by flowalert's pre_main()
+        """
+        pass
 
     @abstractmethod
     def analyze(self, msg: dict) -> bool:
