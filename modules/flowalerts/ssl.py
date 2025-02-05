@@ -2,9 +2,19 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import json
-from typing import Union, Optional, List
+import queue
+from multiprocessing import Queue
+from threading import Thread
+from typing import (
+    Union,
+    Optional,
+    List,
+)
+import time
 import re
 import tldextract
+
+
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -18,6 +28,21 @@ from slips_files.core.flows.zeek import SSL
 class SSL(IFlowalertsAnalyzer):
     def init(self):
         self.classifier = FlowClassifier()
+        # to store ssl queries that we should check later. the purpose of
+        # this is to give the new ssl flows some time to arrive
+        self.non_ssl_flows_to_check_later_q = Queue()
+        self.non_ssl_443_conn_timeout_checker_thread = Thread(
+            target=self.check_non_ssl_port_443_timeout,
+            daemon=True,
+        )
+        # used to pass the msgs this analyzer reciecves, to the
+        # non_ssl_estsablished_conn_timeout_checker_thread.
+        # the reason why we can just use .get_msg() there is because once
+        # the msg is handled here, it wont be passed to other analyzers the
+        # should analyze it anymore.
+        # meaning, only flowalerts.py is allowed to do a get_msg() because it
+        # manages all the analyzers the msg should be passed to
+        self.new_connections_q = Queue()
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -125,21 +150,182 @@ class SSL(IFlowalertsAnalyzer):
         # domains or ips
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
 
-    def check_non_ssl_port_443_conns(self, twid, flow):
+    def flows_match(self, flow1, flow2) -> bool:
+        """
+        given 2 ssl flows, returns True if the 2 flows
+         share the same src and dst ips and dst ports.
+        """
+        # one of the given flows dst port will always be 443 established
+        # tcp conn :D
+        return (
+            flow1.saddr == flow2.saddr
+            and flow1.daddr == flow2.daddr
+            and flow1.dport == flow2.dport
+            and flow1.state == flow2.state
+            and flow1.proto == flow2.proto
+        )
+
+    def is_ssl_proto_recognized_by_zeek(self, flow) -> bool:
+        return flow.appproto and str(flow.appproto.lower()) == "ssl"
+
+    def check_matching_pending_flows(self, new_flow) -> None:
+        """
+        Checks the queue of pending "non ssl port 443 connection" evidence
+        for flows that match the given new_flow.
+        if a match of the given new_flow is found within 5 mins or less,
+        we do not set an evidence.
+        the list of pending "non ssl port 443 connection" evidence is
+        stored in non_ssl_flows_to_check_later_q
+        """
+
+        # the given flow is recognized as ssl by zeek, try to find matches
+        # of it in the pending queue
+        while self.non_ssl_flows_to_check_later_q.qsize() > 0:
+            try:
+                twid, pending_flow = self.non_ssl_flows_to_check_later_q.get(
+                    timeout=5
+                )
+            except queue.Empty:
+                return
+
+            diff_in_mins = utils.get_time_diff(
+                pending_flow.starttime, new_flow.starttime, "minutes"
+            )
+
+            ssl_recognized = self.is_ssl_proto_recognized_by_zeek(new_flow)
+            flows_match = self.flows_match(pending_flow, new_flow)
+            within_time_limit = diff_in_mins <= 5
+
+            if ssl_recognized and flows_match and within_time_limit:
+                # matching flows within 5 mins of each other and one of them
+                # is ssl. this is exactly the false positive we're trying
+                # to avoid.
+                continue
+
+            if within_time_limit:
+                # flows dont match but the last flow that happened (new_flow)
+                # is still within 5 mins of the pending flow.
+                # give the pending flow more time to find an ssl match
+                self.non_ssl_flows_to_check_later_q.put((twid, pending_flow))
+                continue
+
+            # 5 mins passed and either:
+            # 1. no matching ssl flow was found for the pending flow
+            # 2. we found an ssl match but after the timeout, making it useless.
+            self.check_non_ssl_port_443_conns(
+                twid, pending_flow, waited_for_the_flow=True
+            )
+
+    def check_non_ssl_port_443_timeout(self):
+        """
+        The goal of this thread is to reduce FP non ssl flows in the cases
+        where we have multiple ssl flows that happened within 5 mins,
+        and one of them is recognized as "ssl" by zeek and the other isn't.
+        We don't want to set an evidence on the other one, Slips considers
+        both "ssl" even if zeek doesn't.
+
+        This function Checks each new ssl flow for a match in the
+        non_ssl_flows_to_check_later_q
+
+        Matching flows are flows that share the same srcip, dst ip and dst
+        port
+
+        IF a match is found within 5 mins (zeek time) and the match
+        protocol is recognized as "ssl" by zeek. we don't alert "non ssl"
+        on the pending flow.
+
+        The whole point is to give the ssl-recognized flow 5 more mins
+        to arrive before alerting "non ssl" because sometimes zeek
+        doesn't recognize a flow as ssl, and recognizes another one
+        (to the same dst ip and port) as "ssl" seconds later.
+        """
+        try:
+            while not self.flowalerts.should_stop():
+                if self.non_ssl_flows_to_check_later_q.empty():
+                    # to prevent excessive CPU usage.
+                    time.sleep(0.1)
+                    continue
+
+                # this flow is of importance to use ONLY if its from the
+                # same src -> the same dst on the same DST port and is
+                # recognized as "ssl" by zeek.
+                flow = self.get_flow_from_new_conn_queue()
+                if not flow:
+                    # ok wait for more ssl flows to be read by slips
+                    continue
+                self.check_matching_pending_flows(flow)
+
+        except KeyboardInterrupt:
+            # the rest will be handled in shutdown_gracefully
+            return
+
+    def get_flow_from_new_conn_queue(self):
+        """
+        Fetch and parse the ssl message from the ssl_msgs queue.
+        Returns None if the queue is empty.
+        """
+        try:
+            msg: dict = self.new_connections_q.get(timeout=4)
+        except queue.Empty:
+            return None
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
+        return flow
+
+    def should_detect_non_ssl_port_443(self, flow):
+        return (
+            str(flow.dport) == "443"
+            and flow.proto.lower() == "tcp"
+            and flow.state == "Established"
+            and (flow.sbytes + flow.dbytes) != 0
+            and str(flow.appproto).lower() != "ssl"
+        )
+
+    def check_non_ssl_port_443_conns(
+        self, twid, flow, waited_for_the_flow=False
+    ):
         """
         alerts on established connections on port 443 that are not HTTPS (ssl)
+        if the given flow is not recognized as ssl by zeek, we wait for 5
+        mins for a flow with the same src and dst ips + dst port to arrive
+        and recognized as ssl by zeek.
+
+        :kwarg waited_for_the_flow: if True, it means we already waited 5
+        mins in zeek time for a flow with the same src and dst ips + dst
+        port to arrive and recognized as ssl, but it didnt.
+        if False, we wait 5 mins zeek time for it to arrive
         """
         flow.state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
-        if (
-            str(flow.dport) == "443"
-            and flow.proto.lower() == "tcp"
-            and str(flow.appproto).lower() != "ssl"
-            and flow.state == "Established"
-            and (flow.sbytes + flow.dbytes) != 0
-        ):
-            self.set_evidence.non_ssl_port_443_conn(twid, flow)
+
+        # any flow without the below conditions should be waited upon,
+        # may not be tcp, may not be established, etc. so we dont care
+        # about it
+        if not self.should_detect_non_ssl_port_443(flow):
+            return
+
+        if not waited_for_the_flow:
+            self.non_ssl_flows_to_check_later_q.put((twid, flow))
+            return False
+
+        # Reaching here means we already waited for the correctly
+        # recognized ssl flow but it didn't so time to set evidence
+        self.set_evidence.non_ssl_port_443_conn(twid, flow)
+
+    def set_evidence_for_all_pending_non_ssl_connections(self):
+        """
+        Sets an evidence for all the pending flows in the
+        non_ssl_flows_to_check_later_q since slips is stopping and still
+        not matching ssl flows were found for them
+        """
+        while self.non_ssl_flows_to_check_later_q.qsize() > 0:
+            try:
+                twid, pending_flow = self.non_ssl_flows_to_check_later_q.get(
+                    timeout=5
+                )
+            except queue.Empty:
+                return
+            self.set_evidence.non_ssl_port_443_conn(twid, pending_flow)
 
     def detect_doh(self, twid, flow):
         if not flow.is_DoH:
@@ -237,6 +423,26 @@ class SSL(IFlowalertsAnalyzer):
             return
         self.set_evidence.cn_url_mismatch(twid, cn, flow)
 
+    def shutdown_gracefully(self):
+        self.set_evidence_for_all_pending_non_ssl_connections()
+        # close the queue
+        # without this, queues are left in memory and flowalerts keeps
+        # waiting for them forever
+        # to exit the process quickly without blocking on the queue's cleanup
+        self.new_connections_q.cancel_join_thread()
+        self.new_connections_q.close()
+        self.non_ssl_flows_to_check_later_q.cancel_join_thread()
+        self.non_ssl_flows_to_check_later_q.close()
+        if self.non_ssl_443_conn_timeout_checker_thread.is_alive():
+            self.non_ssl_443_conn_timeout_checker_thread.join()
+
+    def pre_analyze(self):
+        """Code that shouldnt be run in a loop. runs only once in
+        flowalerts' pre_main"""
+        # we didnt put this in init because it uses self.flowalerts
+        # attributes that are not initialized yet in init()
+        self.non_ssl_443_conn_timeout_checker_thread.start()
+
     async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
             msg = json.loads(msg["data"])
@@ -257,4 +463,5 @@ class SSL(IFlowalertsAnalyzer):
             twid = msg["twid"]
             flow = msg["flow"]
             flow = self.classifier.convert_to_flow_obj(flow)
+            self.new_connections_q.put(msg)
             self.check_non_ssl_port_443_conns(twid, flow)
