@@ -583,8 +583,8 @@ class DNS(IFlowalertsAnalyzer):
     def pre_analyze(self):
         """Code that shouldnt be run in a loop. runs only once in
         flowalerts' pre_main"""
-        # we didnt put this in __init__ because it uses self.flowalerts
-        # attributes that are not initialized yet in __init__
+        # we didnt put this in init() because it uses self.flowalerts
+        # attributes that are not initialized yet in init()
         self.dns_without_connection_timeout_checker_thread.start()
 
     async def analyze(self, msg):

@@ -41,7 +41,7 @@ class FlowAlerts(AsyncModule):
         self.conn = Conn(self.db, flowalerts=self)
         # to be able to call shutdown gracefully of them later. make sure
         # you put every new analyzer here
-        self.supported_analyzers = {
+        self.supported_analyzers = [
             self.dns,
             self.software,
             self.notice,
@@ -51,7 +51,7 @@ class FlowAlerts(AsyncModule):
             self.downloaded_file,
             self.tunnel,
             self.conn,
-        }
+        ]
         # list of async functions to await before flowalerts shuts down
         self.tasks: List[Task] = []
 
@@ -75,12 +75,14 @@ class FlowAlerts(AsyncModule):
     async def shutdown_gracefully(self):
         for analyzer in self.supported_analyzers:
             analyzer.shutdown_gracefully()
-
         await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def pre_main(self):
         utils.drop_root_privs()
-        self.dns.pre_analyze()
+        # run functions that should run only once in each analyzer but
+        # couldnt be put in init()
+        for analyzer in self.supported_analyzers:
+            analyzer.pre_analyze()
         self.analyzers_map = {
             "new_downloaded_file": [self.downloaded_file.analyze],
             "new_notice": [self.notice.analyze],
