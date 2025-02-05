@@ -3,7 +3,6 @@
 import asyncio
 from asyncio import Task
 from typing import (
-    Callable,
     List,
 )
 from slips_files.common.abstracts.module import IModule
@@ -45,7 +44,8 @@ class AsyncModule(IModule):
         If an exception occurs in a coroutine that was wrapped in a Task
         (e.g., asyncio.create_task), the exception does not crash the program
          but remains in the task.
-        This function is used to handle the exception in the task
+        This function is used to handle the exception in the task aka to
+        not suppress exceptions
         """
         try:
             # Access task result to raise the exception if it occurred
@@ -59,33 +59,41 @@ class AsyncModule(IModule):
 
     async def shutdown_gracefully(self):
         """Implement the async shutdown logic here"""
+        # why do we need this function to be async? because async modules
+        # create Tasks and await them in the shutdown_gracefully function
         pass
 
-    def run_async_function(self, func: Callable):
-        """
-        If the func argument is a coroutine object it is implicitly
-        scheduled to run as a asyncio.Task.
-        Returns the Future’s result or raise its exception.
-        """
+    def _run_blocking_async(self, coro_func):
+        # you may wonder why are all functions here run in a blocking way
+        # yet they are async, it's because inside of them, we create tasks
+        # that run asyncronously. but not the function itself that should
+        # run asyncronously
         loop = asyncio.get_event_loop()
-        loop.set_exception_handler(self.handle_exception)
-        return loop.run_until_complete(func())
+        if not asyncio.iscoroutinefunction(coro_func):
+            raise TypeError(
+                f"Function {coro_func} must be a coroutine function"
+            )
+        # Blocks until func() completes
+        return loop.run_until_complete(coro_func())
 
     def run(self):
+        # create and manage the event loop manually because we're inside a
+        # non-async function
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        loop.set_exception_handler(self.handle_exception)
 
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():
-                self.run_async_function(self.shutdown_gracefully)
+                self._run_blocking_async(self.shutdown_gracefully)
                 return
         except KeyboardInterrupt:
-            self.run_async_function(self.shutdown_gracefully)
+            self._run_blocking_async(self.shutdown_gracefully)
             return
         except RuntimeError as e:
             if "Event loop stopped before Future completed" in str(e):
-                self.run_async_function(self.shutdown_gracefully)
+                self._run_blocking_async(self.shutdown_gracefully)
                 return
         except Exception:
             self.print_traceback()
@@ -94,14 +102,14 @@ class AsyncModule(IModule):
         while True:
             try:
                 if self.should_stop():
-                    self.run_async_function(self.shutdown_gracefully)
+                    self._run_blocking_async(self.shutdown_gracefully)
                     return
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
-                error: bool = self.run_async_function(self.main)
+                error: bool = self._run_blocking_async(self.main)
                 if error:
-                    self.run_async_function(self.shutdown_gracefully)
+                    self._run_blocking_async(self.shutdown_gracefully)
                     return
 
             except KeyboardInterrupt:
@@ -114,7 +122,7 @@ class AsyncModule(IModule):
                 continue
             except RuntimeError as e:
                 if "Event loop stopped before Future completed" in str(e):
-                    self.run_async_function(self.shutdown_gracefully)
+                    self._run_blocking_async(self.shutdown_gracefully)
                     return
             except Exception:
                 self.print_traceback()
