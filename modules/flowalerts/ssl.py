@@ -10,8 +10,11 @@ from typing import (
     Optional,
     List,
 )
+import time
 import re
 import tldextract
+
+
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -28,7 +31,7 @@ class SSL(IFlowalertsAnalyzer):
         # to store ssl queries that we should check later. the purpose of
         # this is to give the new ssl flows some time to arrive
         self.non_ssl_flows_to_check_later_q = Queue()
-        self.non_ssl_estsablished_conn_timeout_checker_thread = Thread(
+        self.non_ssl_443_conn_timeout_checker_thread = Thread(
             target=self.check_non_ssl_port_443_timeout,
             daemon=True,
         )
@@ -239,16 +242,17 @@ class SSL(IFlowalertsAnalyzer):
         try:
             while not self.flowalerts.should_stop():
                 if self.non_ssl_flows_to_check_later_q.empty():
+                    # to prevent excessive CPU usage.
+                    time.sleep(0.1)
                     continue
 
                 # this flow is of importance to use ONLY if its from the
-                # same sr -> the same dst on the same DST port and is
+                # same src -> the same dst on the same DST port and is
                 # recognized as "ssl" by zeek.
                 flow = self.get_flow_from_new_conn_queue()
                 if not flow:
                     # ok wait for more ssl flows to be read by slips
                     continue
-
                 self.check_matching_pending_flows(flow)
 
         except KeyboardInterrupt:
@@ -261,11 +265,9 @@ class SSL(IFlowalertsAnalyzer):
         Returns None if the queue is empty.
         """
         try:
-            msg: str = self.new_connections_q.get(timeout=4)
+            msg: dict = self.new_connections_q.get(timeout=4)
         except queue.Empty:
             return None
-
-        msg: dict = json.loads(msg["data"])
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
         return flow
 
@@ -422,7 +424,6 @@ class SSL(IFlowalertsAnalyzer):
         self.set_evidence.cn_url_mismatch(twid, cn, flow)
 
     def shutdown_gracefully(self):
-        self.non_ssl_estsablished_conn_timeout_checker_thread.join()
         self.set_evidence_for_all_pending_non_ssl_connections()
         # close the queue
         # without this, queues are left in memory and flowalerts keeps
@@ -432,6 +433,15 @@ class SSL(IFlowalertsAnalyzer):
         self.new_connections_q.close()
         self.non_ssl_flows_to_check_later_q.cancel_join_thread()
         self.non_ssl_flows_to_check_later_q.close()
+        if self.non_ssl_443_conn_timeout_checker_thread.is_alive():
+            self.non_ssl_443_conn_timeout_checker_thread.join()
+
+    def pre_analyze(self):
+        """Code that shouldnt be run in a loop. runs only once in
+        flowalerts' pre_main"""
+        # we didnt put this in init because it uses self.flowalerts
+        # attributes that are not initialized yet in init()
+        self.non_ssl_443_conn_timeout_checker_thread.start()
 
     async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
