@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from slips_files.core.structures.evidence import Direction
 
 
@@ -5,8 +7,8 @@ class WhitelistMatcher:
     """
     matches ioc properties to whitelist properties
     for example if in the config file we have
-    facebook, alerts, to
-    this matcher macher when given a fb ip, makes sure we're whitelisting
+    "facebook, alerts, to"
+    this matcher maches when given a fb ip, makes sure we're whitelisting
     an alert, not a flow
     and makes sure we're whitelisting all flows TO fb and not from fb.
     its called like this

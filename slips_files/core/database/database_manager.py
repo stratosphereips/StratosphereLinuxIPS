@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from typing import (
     List,
     Dict,
@@ -43,13 +45,10 @@ class DBManager:
         # the existing one
         self.sqlite = None
         if start_sqlite:
-            self.sqlite = self.create_sqlite_db(output_dir)
+            self.sqlite = SQLiteDB(self.logger, output_dir)
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
-
-    def create_sqlite_db(self, output_dir):
-        return SQLiteDB(self.logger, output_dir)
 
     @classmethod
     def read_configuration(cls):
@@ -241,6 +240,9 @@ class DBManager:
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
 
+    def delete_tranco_whitelist(self, *args, **kwargs):
+        return self.rdb.delete_tranco_whitelist(*args, **kwargs)
+
     def set_growing_zeek_dir(self, *args, **kwargs):
         return self.rdb.set_growing_zeek_dir(*args, **kwargs)
 
@@ -358,6 +360,9 @@ class DBManager:
     def store_dhcp_server(self, *args, **kwargs):
         return self.rdb.store_dhcp_server(*args, **kwargs)
 
+    def is_dhcp_server(self, *args, **kwargs):
+        return self.rdb.is_dhcp_server(*args, **kwargs)
+
     def save(self, *args, **kwargs):
         return self.rdb.save(*args, **kwargs)
 
@@ -463,6 +468,9 @@ class DBManager:
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
+
+    def get_loaded_ti_feeds_number(self, *args, **kwargs):
+        return self.rdb.get_loaded_ti_feeds_number(*args, **kwargs)
 
     def get_loaded_ti_feeds(self, *args, **kwargs):
         return self.rdb.get_loaded_ti_feeds(*args, **kwargs)
@@ -928,6 +936,9 @@ class DBManager:
 
     def get_commit(self, *args, **kwargs):
         return self.rdb.get_commit(*args, **kwargs)
+
+    def get_zeek_version(self, *args, **kwargs):
+        return self.rdb.get_zeek_version(*args, **kwargs)
 
     def get_branch(self, *args, **kwargs):
         return self.rdb.get_branch(*args, **kwargs)

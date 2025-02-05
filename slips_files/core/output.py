@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
 # This program is free software; you can redistribute it and/or
@@ -44,7 +46,7 @@ class Output(IObserver):
         stderr="output/errors.log",
         slips_logfile="output/slips.log",
         input_type=False,
-        stop_daemon: bool = None,
+        create_logfiles: bool = True,
         stdout="",
     ):
         super().__init__()
@@ -54,15 +56,17 @@ class Output(IObserver):
         self.debug = debug
         self.stdout = stdout
         self.input_type = input_type
-        self.stop_daemon = stop_daemon
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
-        # if we're using -S, no need to init all the logfiles
+
+        if self.verbose > 2:
+            print(f"Verbosity: {self.verbose}. Debugging: {self.debug}")
+
+        # when we're using -S, no need to init all the logfiles
         # we just need an instance of this class to be able
         # to start the db from the daemon class
-        if not stop_daemon:
+        if create_logfiles:
             self._read_configuration()
-
             self.create_logfile(self.errors_logfile)
             self.log_branch_info(self.errors_logfile)
             self.create_logfile(self.slips_logfile)
@@ -74,8 +78,6 @@ class Output(IObserver):
             utils.change_logfiles_ownership(
                 self.slips_logfile, self.UID, self.GID
             )
-            if self.verbose > 2:
-                print(f"Verbosity: {self.verbose}. Debugging: {self.debug}")
 
     def _read_configuration(self):
         conf = ConfigParser()

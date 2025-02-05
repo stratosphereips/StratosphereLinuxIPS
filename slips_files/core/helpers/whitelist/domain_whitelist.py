@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from typing import List, Dict
 import tldextract
 
@@ -64,6 +66,9 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         :param direction: is the given domain src or dst domain?
         :param should_ignore: which whitelist to check? can be flows or alerts
         """
+        # the reason why this function doesnt support the Attacker or
+        # Victim as a parameter directly is that we may call it on other
+        # values. not just attacker and victim domains.
 
         if not isinstance(domain, str):
             return False
@@ -72,29 +77,41 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         if not parent_domain:
             return False
 
-        if self.is_domain_in_tranco_list(parent_domain):
-            return True
-
         whitelisted_domains: Dict[str, Dict[str, str]]
         whitelisted_domains = self.db.get_whitelist("domains")
 
-        # is domain in whitelisted domains?
-        if parent_domain not in whitelisted_domains:
-            # if the parent domain not in whitelisted domains, then the
-            # child definetely isn't
+        # is the parent domain in any of slips whitelists?? like tranco or
+        # whitelist.conf?
+        # if so we need to get extra info about that domain based on the
+        # whitelist.
+        # e.g  by default slips whitelists all evidence and alerts from and to
+        # tranco domains.
+        # but domains taken from whitelist.conf have their own direction
+        # and type
+        if self.is_domain_in_tranco_list(parent_domain):
+            whitelist_should_ignore = "alerts"
+            dir_from_whitelist = "dst"
+        elif parent_domain in whitelisted_domains:
+            # did the user say slips should ignore flows or alerts in the
+            # config file?
+            whitelist_should_ignore = whitelisted_domains[parent_domain][
+                "what_to_ignore"
+            ]
+            # did the user say slips should ignore flows/alerts  TO or from
+            # that domain in the config file?
+            dir_from_whitelist: str = whitelisted_domains[parent_domain][
+                "from"
+            ]
+        else:
             return False
 
-        # Ignore flows or alerts?
-        whitelist_should_ignore = whitelisted_domains[parent_domain][
-            "what_to_ignore"
-        ]
+        # match the direction and whitelist_Type of the given domain to the
+        # ones we have from the whitelist.
         if not self.match.what_to_ignore(
             should_ignore, whitelist_should_ignore
         ):
             return False
 
-        # Ignore src or dst
-        dir_from_whitelist: str = whitelisted_domains[parent_domain]["from"]
         if not self.match.direction(direction, dir_from_whitelist):
             return False
 
@@ -105,7 +122,6 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         The Tranco list contains the top 10k known benign domains
         https://tranco-list.eu/list/X5QNN/1000000
         """
-        # todo the db shouldn't be checking this, we should check it here
         return self.db.is_whitelisted_tranco_domain(domain)
 
     @staticmethod

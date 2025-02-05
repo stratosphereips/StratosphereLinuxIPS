@@ -1,4 +1,6 @@
-"""Unit test for modules/threat_intelligence/threat_intelligence_db.py"""
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+"""Unit test for modules/threat_intelligence/threat_intelligence.py"""
 
 from tests.module_factory import ModuleFactory
 import os

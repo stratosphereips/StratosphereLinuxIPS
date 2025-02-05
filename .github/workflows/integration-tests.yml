@@ -18,13 +18,19 @@ jobs:
     # make this job depend on the first job
     needs: install-dependencies-using-reusable-workflow
 
+    # suppress tensorflow warnings
+    env:
+      TF_CPP_MIN_LOG_LEVEL: 3
+      TF_ENABLE_ONEDNN_OPTS: 0
+
     strategy:
       matrix:
         test_file:
           - test_config_files.py
           - test_portscans.py
           - test_dataset.py
-          - test_fides.py
+          - test_pcap_dataset.py
+          - test_zeek_dataset.py
 
     steps:
     - uses: actions/checkout@v4
@@ -71,13 +77,17 @@ jobs:
     - name: Start redis server
       run: redis-server --daemonize yes
 
+    - name: Print zeek version
+      run: (command -v zeek && zeek --version) || (command -v bro && bro --version)
+
+
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
-        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
+        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
     - name: Upload Artifacts
       if: success() || failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test_slips_locally-integration-tests-output
         path: |

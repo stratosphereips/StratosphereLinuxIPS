@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import datetime
 import json
@@ -5,10 +7,13 @@ import os
 import sys
 import time
 import traceback
+from asyncio import Task
 from typing import (
     IO,
     Optional,
     Tuple,
+    Dict,
+    List,
 )
 
 import requests
@@ -128,12 +133,13 @@ class UpdateManager(IModule):
 
     def get_feed_details(self, feeds_path):
         """
-        Parse links, threat level and tags from the feeds_path file and return
+        Parse links, threat level and tags from the given feeds_path file and
+        return
          a dict with feed info
         """
         try:
             with open(feeds_path, "r") as feeds_file:
-                feeds = feeds_file.read()
+                feeds: str = feeds_file.read()
         except FileNotFoundError:
             self.print(
                 f"Error finding {feeds_path}. Feed won't be added to slips."
@@ -199,8 +205,10 @@ class UpdateManager(IModule):
         """
 
         # there are ports that are by default considered unknown to slips,
-        # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
-        # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
+        # but if it's known to be used by a specific organization, slips won't
+        # consider it 'unknown'.
+        # in ports_info_filepath  we have a list of organizations range/ip and
+        # the port it's known to use
         with open(ports_info_filepath, "r") as f:
             line_number = 0
             while True:
@@ -1551,21 +1559,14 @@ class UpdateManager(IModule):
         Updates online tranco whitelist defined in slips.yaml
          online_whitelist key
         """
+        # delete the old ones
+        self.db.delete_tranco_whitelist()
         response = self.responses["tranco_whitelist"]
-        # write to the file so we don't store the 10k domains in memory
-        online_whitelist_download_path = os.path.join(
-            self.path_to_remote_ti_files, "tranco-top-10000-whitelist"
-        )
-        with open(online_whitelist_download_path, "w") as f:
-            f.write(response.text)
+        for line in response.text.splitlines():
+            domain = line.split(",")[1]
+            domain.strip()
+            self.db.store_tranco_whitelisted_domain(domain)
 
-        # parse the downloaded file and store it in the db
-        with open(online_whitelist_download_path, "r") as f:
-            while line := f.readline():
-                domain = line.split(",")[1]
-                self.db.store_tranco_whitelisted_domain(domain)
-
-        os.remove(online_whitelist_download_path)
         self.mark_feed_as_updated("tranco_whitelist")
 
     def download_mac_db(self):
@@ -1602,6 +1603,58 @@ class UpdateManager(IModule):
 
         return self.download_mac_db()
 
+    def delete_unused_cached_remote_feeds(self):
+        """
+        Slips caches all the feeds it downloads. If the user deleted any of
+        the feeds used, like literally deleted it (not using ;) the feeds
+        will still be there in the cache. the purpose of this function is
+        to delete these unused feeds from the cache
+        """
+        # get the cached feeds
+        loaded_feeds: Dict[str, Dict[str, str]] = self.db.get_loaded_ti_feeds()
+        # filter remote ones only, bc the loaded feeds have local ones too
+        cached_remote_feeds: List[str] = [
+            feed for feed in loaded_feeds if feed.startswith("http")
+        ]
+
+        # get the remote feeds that should be used from the config file
+        remote_feeds_from_config: List[str] = (
+            list(self.url_feeds.keys())
+            + list(self.ja3_feeds)
+            + list(self.ssl_feeds)
+            + [self.mac_db_link]
+        )
+        for feed in cached_remote_feeds:
+            # check is the feed should be used. is it in the given config
+            # of this run?
+            if feed not in remote_feeds_from_config:
+                # delete the feed from the cache
+                self.db.delete_ti_feed(feed)
+                self.db.delete_feed_entries(feed)
+                self.print(
+                    f"Deleted feed {feed} from cache",
+                    2,
+                    0,
+                    log_to_logfiles_only=True,
+                )
+
+    def handle_exception(self, task):
+        """
+        in asyncmodules we use Async.Task to run some of the functions
+        If an exception occurs in a coroutine that was wrapped in a Task
+        (e.g., asyncio.create_task), the exception does not crash the program
+         but remains in the task.
+        This function is used to handle the exception in the task
+        """
+        try:
+            # Access task result to raise the exception if it occurred
+            task.result()
+        except asyncio.exceptions.CancelledError:
+            # like pressing ctrl+c
+            return
+        except Exception as e:
+            self.print(e, 0, 1)
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1635,6 +1688,11 @@ class UpdateManager(IModule):
             files_to_download.update(self.ja3_feeds)
             files_to_download.update(self.ssl_feeds)
 
+            # before updating any feeds, make sure that the cached feeds
+            # are not using any feed that is not given in the config of
+            # this run (self.url_feeds, self.ja3_feeds, self.ssl_feeds)
+            self.delete_unused_cached_remote_feeds()
+
             for file_to_download in files_to_download:
                 if self.should_update(file_to_download, self.update_period):
                     # failed to get the response, either a server problem
@@ -1652,6 +1710,7 @@ class UpdateManager(IModule):
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
+                    task.add_done_callback(self.handle_exception)
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
@@ -1661,7 +1720,7 @@ class UpdateManager(IModule):
             # wait for all TI files to update
             try:
                 await task
-            except UnboundLocalError:
+            except (UnboundLocalError, asyncio.exceptions.CancelledError):
                 # in case all our files are updated, we don't
                 # have task defined, skip
                 pass
@@ -1678,10 +1737,12 @@ class UpdateManager(IModule):
         """
         # create_task is used to run update() function
         # concurrently instead of serially
-        self.update_finished = asyncio.create_task(self.update())
+        self.update_finished: Task = asyncio.create_task(self.update())
+        self.update_finished.add_done_callback(self.handle_exception)
+
         await self.update_finished
         self.print(
-            f"{self.db.get_loaded_ti_feeds()} "
+            f"{self.db.get_loaded_ti_feeds_number()} "
             f"TI files successfully loaded."
         )
 

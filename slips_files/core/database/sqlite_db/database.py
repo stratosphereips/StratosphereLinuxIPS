@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from datetime import datetime
 from typing import List, Dict
 import os.path
@@ -32,7 +34,8 @@ class SQLiteDB:
 
     def connect(self):
         """
-        Creates the db if it doesn't exist and connects to it
+        Creates the db if it doesn't exist and connects to it.
+        OR connects to the existing db if it's there.
         """
         db_newly_created = False
         if not os.path.exists(self._flows_db):

@@ -22,7 +22,7 @@
 ## Steps you followed to test the changes purposed in this PR:
 
 
-* 
+*
 *
 
 
@@ -35,6 +35,7 @@
 - [ ] All new and existing tests passed.
 - [ ] This PR does not contain plagiarized content.
 - [ ] The title of my pull request is a short description of the requested changes.
+- [ ] My PR is based on develop branch. (mandatory)
 
 ## Screenshots
 

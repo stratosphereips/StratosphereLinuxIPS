@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import contextlib
 import json
 import multiprocessing
@@ -40,8 +42,8 @@ class Main:
         # objects to manage various functionality
         self.checker = Checker(self)
         self.redis_man = RedisManager(self)
-        self.metadata_man = MetadataManager(self)
         self.conf = ConfigParser()
+        self.metadata_man = MetadataManager(self)
         self.ui_man = UIManager(self)
         self.profilers_manager = ProfilersManager(self)
         self.version = utils.get_slips_version()
@@ -326,7 +328,7 @@ class Main:
 
                     # zeek tab files are separated by several spaces or tabs
                     sequential_spaces_found = re.search(
-                        "\s{1,}-\s{1,}", first_line
+                        r"\s{1,}-\s{1,}", first_line
                     )
                     tabs_found = re.search("\t{1,}", first_line)
                     commas_found = re.search(",{1,}", first_line)
@@ -576,7 +578,7 @@ class Main:
 
             self.c1 = self.db.subscribe("control_channel")
 
-            self.metadata_man.enable_metadata()
+            self.metadata_man.add_metadata_if_enabled()
 
             self.input_process = self.proc_man.start_input_process()
 

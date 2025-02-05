@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import json
 
@@ -11,9 +13,6 @@ from slips_files.common.slips_utils import utils
 
 class SSH(IFlowalertsAnalyzer):
     def init(self):
-        # Cache list of connections that we already checked
-        # in the timer thread for ssh check
-        self.connections_checked_in_ssh_timer_thread = []
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
         self.read_configuration()
@@ -125,7 +124,6 @@ class SSH(IFlowalertsAnalyzer):
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        task = asyncio.create_task(self.check_successful_ssh(twid, flow))
-        # to wait for these functions before flowalerts shuts down
-        self.flowalerts.tasks.append(task)
+
+        self.flowalerts.create_task(self.check_successful_ssh, twid, flow)
         self.check_ssh_password_guessing(profileid, twid, flow)
