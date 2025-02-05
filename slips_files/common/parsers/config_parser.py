@@ -187,7 +187,9 @@ class ConfigParser(object):
         return self.read_configuration("modes", "stderr", "errors.log")
 
     def create_p2p_logfile(self):
-        return self.read_configuration("P2P", "create_p2p_logfile", False)
+        return self.read_configuration(
+            "local_p2p", "create_p2p_logfile", False
+        )
 
     def ts_format(self):
         return self.read_configuration("timestamp", "format", None)
@@ -249,8 +251,11 @@ class ConfigParser(object):
     def enable_metadata(self):
         return self.read_configuration("parameters", "metadata_dir", False)
 
-    def use_p2p(self):
-        return self.read_configuration("P2P", "use_p2p", False)
+    def use_local_p2p(self):
+        return self.read_configuration("local_p2p", "use_p2p", False)
+
+    def use_fides(self):
+        return self.read_configuration("global_p2p", "use_fides", False)
 
     def cesnet_conf_file(self):
         return self.read_configuration("CESNET", "configuration_file", False)
@@ -626,9 +631,13 @@ class ConfigParser(object):
         if "stix" not in export_to and "slack" not in export_to:
             to_ignore.append("exporting_alerts")
 
-        use_p2p = self.use_p2p()
-        if not use_p2p or "-i" not in sys.argv:
+        use_p2p = self.use_local_p2p()
+        if not (use_p2p and "-i" in sys.argv):
             to_ignore.append("p2ptrust")
+
+        use_fides = self.use_fides()
+        if not (use_fides and ("-i" in sys.argv or "-g" in sys.argv)):
+            to_ignore.append("fidesModule")
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.yaml

@@ -78,13 +78,13 @@ parameters:
   # zeek breaks the connection into smaller connections
   tcp_inactivity_timeout: 60
   # Should we delete the previously stored data in the DB when we start?
-  # By default False. Meaning we don't DELETE the DB by default.
+  # By default false. Meaning we don't DELETE the DB by default.
   deletePrevdb: true
   # You can remember the data in all the previous runs of the DB if
-  # you put False.
+  # you put false.
   # Redis will remember as long as the redis server is not down.
   # The persistence is in memory, not disk.
-  # deletePrevdb : False
+  # deletePrevdb : false
   # Set the label for all the flows that are being read.
   # For now only normal and malware directly. No option for setting labels
   # with a filter
@@ -154,7 +154,7 @@ detection:
   #        May lead to false negatives
   evidence_detection_threshold: 0.25
   # Slips can show a popup/notification with every alert.
-  popup_alerts: False
+  popup_alerts: false
 #############################
 modules:
   # List of modules to ignore. By default we always ignore the template!
@@ -198,7 +198,7 @@ threatintelligence:
   # and all TI files are loaded successfully
   # this is usefull if you want to ensure that slips doesn't miss the
   # detection of any blacklisted IPs
-  wait_for_TI_to_finish: False
+  wait_for_TI_to_finish: false
   # Default Path to the folder with files holding malcious IPs
   # All the files in this folder are read and the IPs are considered malicious
   # The format of the files must be, per line: "Number","IP address","Rating",
@@ -275,7 +275,7 @@ exporting_alerts:
   # if your TAXII server is a remote server,
   # you can set the port to 443 or 80.
   port: 1234
-  use_https: False
+  use_https: false
   discovery_path: /services/discovery-a
   inbox_path: /services/inbox-a
   # Collection on the server you want to push stix data to
@@ -299,8 +299,8 @@ exporting_alerts:
 CESNET:
   # Slips supports exporting and importing evidence in the IDEA format to/from
   # warden servers.
-  send_alerts: False
-  receive_alerts: False
+  send_alerts: false
+  receive_alerts: false
   # warden configuration file. For format instructions check
   # yamllint disable-line rule:line-length
   # https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html?highlight=exporting# cesnet-sharing
@@ -346,7 +346,7 @@ Docker:
 Profiling:
   # [11] CPU profiling
   # enable cpu profiling [yes,no]
-  cpu_profiler_enable: False
+  cpu_profiler_enable: false
   # Available options are [dev,live]
   # dev for deterministic profiling. this will give precise information
   # about the CPU usage
@@ -363,7 +363,7 @@ Profiling:
   # set the wait time between sampling sequences in seconds (live mode only)
   cpu_profiler_sampling_interval: 20
   # enable memory profiling [yes,no]
-  memory_profiler_enable: False
+  memory_profiler_enable: false
   # set profiling mode [dev,live]
   memory_profiler_mode: live
   # profile all subprocesses [yes,no]
@@ -371,8 +371,15 @@ Profiling:
 #############################
 web_interface:
   port: 55000
+
+#############################
+global_p2p:
+  # this is the global p2p's trust model. can only be enabled when
+  # running slips on an interface
+  use_fides: false
+
 #############################
 P2P:
   # create p2p.log with additional info about peer communications?
-  create_p2p_logfile: False
-  use_p2p: False
+  create_p2p_logfile: false
+  use_p2p: false
