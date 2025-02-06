@@ -32,12 +32,13 @@ class IrisModule(IModule):
 
         # You can find the full list of channels at
         # slips_files/core/database/redis_db/database.py
-        self.c1 = self.db.subscribe("new_ip")
         self.f2n = self.db.subscribe("fides2network")
         self.n2f = self.db.subscribe("network2fides")
+        self.fi = self.db.subscribe("iris_internal")
         self.channels = {
             "network2fides": self.n2f,
             "fides2network": self.f2n,
+            "iris_internal": self.fi,
         }
 
     def pre_main(self):
@@ -84,13 +85,27 @@ class IrisModule(IModule):
             self.logger.log_error(error_message)
         log_file.close()
 
+    def simplex_duplex_translator(self):
+        self.db.publish("network2fides", self.n2f)
+
+        if msg := self.get_msg("fides2network"):
+            # Fides send something to the network (Iris)
+            # FORWARD to Iris
+            self.db.publish("iris_internal", msg["data"])
+
+        if msg := self.get_msg("iris_internal"):
+            # Message on Iris duplex channel
+            # Get the message
+            msg = json.loads(msg["data"])
+            if "nl2tl" in msg["type"]:
+                # Message is from Iris addressed to Fides Module
+                # FORWARD to Fides Module
+                self.db.publish("network2fides", msg["data"])
+            # else: pass, message was just an echo from F -> I forwarding
+
     def main(self):
         """Main loop function"""
-        if msg := self.get_msg("new_ip"):
-            # Example of printing the number of profiles in the
-            # Database every second
-            msg = json.loads(msg["data"])
-            #...
+        self.simplex_duplex_translator()
 
     def shutdown_gracefully(self):
         self.logger.output_line({"from": self.name, "txt":"Iris Module terminating gracefully"})
