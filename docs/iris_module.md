@@ -104,6 +104,8 @@ Unit tests for Iris Module have been added to the own repository of Iris. This p
 Slips is written in Python in its entirety, while Iris is based in Go. And following the best practices of
 unit testing in Go leads to including the unit tests into the Iris repository itself.
 
+Please take the following into account. At the time of unit test development,
+Go is yet to support mocking as known in Python, Java and many other languages.
 It has been decided by the development team of Slips that running the unit test of Iris 
 will be left upon the future developers.
 
