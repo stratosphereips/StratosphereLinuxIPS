@@ -30,9 +30,6 @@ class Conn(IFlowalertsAnalyzer):
         # slips will alert data upload
         self.flow_upload_threshold = 100
         self.read_configuration()
-        # Cache list of connections that we already checked in the timer
-        # thread (we waited for the dns resolution for these connections)
-        self.connections_checked_in_conn_dns_timer_thread = []
         self.whitelist = self.flowalerts.whitelist
         # how much time to wait when running on interface before reporting
         # connections without DNS? Usually the computer resolved DNS
@@ -793,13 +790,12 @@ class Conn(IFlowalertsAnalyzer):
             self.check_different_localnet_usage(
                 twid, flow, what_to_check="srcip"
             )
-            task = asyncio.create_task(
-                self.check_connection_without_dns_resolution(
-                    profileid, twid, flow
-                )
+            self.flowalerts.create_task(
+                self.check_connection_without_dns_resolution,
+                profileid,
+                twid,
+                flow,
             )
-            # to wait for these functions before flowalerts shuts down
-            self.flowalerts.tasks.append(task)
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
             self.check_non_http_port_80_conns(twid, flow)

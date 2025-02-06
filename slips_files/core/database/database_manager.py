@@ -45,13 +45,10 @@ class DBManager:
         # the existing one
         self.sqlite = None
         if start_sqlite:
-            self.sqlite = self.create_sqlite_db(output_dir)
+            self.sqlite = SQLiteDB(self.logger, output_dir)
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
-
-    def create_sqlite_db(self, output_dir):
-        return SQLiteDB(self.logger, output_dir)
 
     @classmethod
     def read_configuration(cls):
@@ -242,6 +239,9 @@ class DBManager:
 
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
+
+    def delete_tranco_whitelist(self, *args, **kwargs):
+        return self.rdb.delete_tranco_whitelist(*args, **kwargs)
 
     def set_growing_zeek_dir(self, *args, **kwargs):
         return self.rdb.set_growing_zeek_dir(*args, **kwargs)
@@ -952,3 +952,34 @@ class DBManager:
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
+
+    def get_fides_ti(self, target: str):
+        return self.rdb.get_fides_ti(target)
+
+    def save_fides_ti(self, target: str, STI: str):
+        self.rdb.save_fides_ti(target, STI)
+
+    def store_connected_peers(self, peers: List[str]):
+        self.rdb.store_connected_peers(peers)
+
+    def get_connected_peers(self):
+        return self.rdb.get_connected_peers()  # no data -> []
+
+    def store_peer_trust_data(self, id: str, td: str):
+        self.rdb.update_peer_td(id, td)
+
+    def get_peer_trust_data(self, id: str):
+        return self.rdb.get_peer_td(id)
+
+    def get_all_peers_trust_data(self):
+        return self.rdb.get_all_peers_td()
+
+    def cache_network_opinion(self, target: str, opinion: dict, time: float):
+        self.rdb.cache_network_opinion(target, opinion, time)
+
+    def get_cached_network_opinion(
+        self, target: str, cache_valid_seconds: int, current_time: float
+    ):
+        return self.rdb.get_cached_network_opinion(
+            target, cache_valid_seconds, current_time
+        )

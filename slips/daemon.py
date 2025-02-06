@@ -42,7 +42,7 @@ class Daemon:
         except (IOError, FileNotFoundError):
             return None
 
-    def print(self, text):
+    def print(self, text, **kwargs):
         """Prints output to logsfile specified in slips.yaml"""
         with open(self.logsfile, "a") as f:
             f.write(f"{text}\n")

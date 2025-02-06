@@ -62,14 +62,20 @@ This detection will ignore certain IP addresses for which a connection without D
 
 DNS resolutions of well known orgs might be done using DoH, in this case, slips
 doesn't know about the DNS resolution because the resolved domain won't be in dns.log
-so we simply ignore alerts of this type when connected to well known organizations. In particular Facebook, Apple, Google, Twitter, and Microsoft.
+so we simply ignore alerts of this type when connected to well known organizations.
+In particular Facebook, Apple, Google, Twitter, and Microsoft.
 
-Slips uses it's own lists of organizations and information about them (IPs, IP ranges, domains, and ASNs). They are stored in ```slips_files/organizations_info``` and they are used to check whether the IP/domain of each flow belong to a known org or not.
+Slips uses it's own lists of organizations and information about them (IPs, IP ranges, domains, and ASNs).
+They are stored in ```slips_files/organizations_info``` and they are used to check whether the IP/domain
+of each flow belong to a known org or not.
+
+Slips also doesn't detect connection without DNS to any domain in the tranco whitelist.
 
 Slips doesn't detect 'connection without DNS' when running
-on an interface except for when it's done by this instance's own IP and only after 30 minutes has passed to avoid false positives (assuming the DNS resolution of these connections did happen before slips started).
+on an interface except for when it's done by this instance's own IP and only after 30 minutes has passed
+to avoid false positives (assuming the DNS resolution of these connections did happen before slips started).
 
-check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh)
+check the [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh)
 of the docs for info on how slips detects DoH.
 
 
@@ -81,7 +87,8 @@ Slips detects successful SSH connections using 2 ways
 2. If all bytes sent in a SSH connection is more than 4290 bytes
 
 ## DNS resolutions without a connection
-This will detect DNS resolutions for which no further connection was done. A resolution without a usage is slightly suspicious.
+This will detect DNS resolutions for which no further connection was done.
+A resolution without a usage is slightly suspicious.
 
 The domains that are excepted are:
 
@@ -93,8 +100,19 @@ The domains that are excepted are:
 - Ignore domains without a TLD such as the Chrome test domains.
 
 Slips doesn't detect 'DNS resolutions without a connection' when running
-on an interface except for when it's done by this instance's own IP and only after 5 minutes has passed to avoid false positives (assuming the connection did happen and yet to be logged).
+on an interface except for when it's done by this instance's own IP and only after 30 minutes has passed to
+avoid false positives (assuming the connection did happen and yet to be logged).
 
+
+When running on interface and files. For each DNS flow found, slips waits 30 mins zeek time
+for the connection to be found before setting an evidence.
+
+This is done by comparing each ts of every new dns flow to the pending detection, once 30 mins difference between the 2
+flows is detected, slips sets the evidence.
+
+To avoid accumulating so many pending DNS flows for 30 mins, slips checks if the connection of the pending DNS flows
+arrived every 10 and 20 mins too, if not found, slips waits extra 10 mins (so that would be 30 mins total) and sets the
+evidence.
 
 ## Connection to unknown ports
 

@@ -10,7 +10,7 @@ from slips_files.core.database.redis_db.constants import (
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
-#from slips_files.core.database.redis_db.p2p_handler import P2PHandler
+from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 
 import os
 import signal
@@ -31,7 +31,7 @@ from typing import (
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
-class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
+class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
     _obj = None
@@ -88,8 +88,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
         "network2fides",
         "fides2slips",
         "slips2fides",
-        "tl2nl_alert",
-        "",
     }
     separator = "_"
     normal_label = "benign"
@@ -162,13 +160,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
         Updates the default slips options based on the -s param,
         writes the new configs to cls._conf_file
         """
+        # to fix redis.exceptions.ResponseError MISCONF Redis is
+        # configured to save RDB snapshots
+        # configure redis to stop writing to dump.rdb when an error
+        # occurs without throwing errors in slips
         cls._options = {
             "daemonize": "yes",
             "stop-writes-on-bgsave-error": "no",
             "save": '""',
             "appendonly": "no",
         }
-
+        # -s for saving the db
         if "-s" not in sys.argv:
             return
 
@@ -196,6 +198,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
     @classmethod
     def _read_configuration(cls):
         conf = ConfigParser()
+        # Should we delete the previously stored data in the DB when we start?
+        # By default False. Meaning we don't DELETE the DB by default.
         cls.deletePrevdb: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.width = conf.get_tw_width_as_float()
@@ -235,6 +239,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
             if not connected:
                 return False, err
 
+            # these are the cases that we DO NOT flush the db when we
+            # connect to it, because we need to use it
+            # -d means Read an analysed file (rdb) from disk.
+            # -S stop daemon
+            # -cb clears the blocking chain
             if (
                 cls.deletePrevdb
                 and not (
@@ -245,6 +254,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
                 # when stopping the daemon, don't flush bc we need to get
                 # the PIDS to close slips files
                 cls.r.flushdb()
+                cls.r.delete(cls.constants.ZEEK_FILES)
 
             # Set the memory limits of the output buffer,
             # For normal clients: no limits
@@ -253,12 +263,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
             cls.change_redis_limits(cls.r)
             cls.change_redis_limits(cls.rcache)
 
-            # to fix redis.exceptions.ResponseError MISCONF Redis is
-            # configured to save RDB snapshots
-            # configure redis to stop writing to dump.rdb when an error
-            # occurs without throwing errors in slips
-            # Even if the DB is not deleted. We need to delete some temp data
-            cls.r.delete(cls.constants.ZEEK_FILES)
             return True, ""
         except RuntimeError as err:
             return False, str(err)
@@ -1030,6 +1034,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler): #, P2PHandler):
         return self.rcache.sismember(
             self.constants.TRANCO_WHITELISTED_DOMAINS, domain
         )
+
+    def delete_tranco_whitelist(self):
+        return self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
 
     def set_growing_zeek_dir(self):
         """

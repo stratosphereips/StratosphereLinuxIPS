@@ -31,6 +31,7 @@ jobs:
           - test_dataset.py
           - test_pcap_dataset.py
           - test_zeek_dataset.py
+          - test_fides.py
 
     steps:
     - uses: actions/checkout@v4
@@ -83,11 +84,11 @@ jobs:
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
-        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
+        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
     - name: Upload Artifacts
       if: success() || failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test_slips_locally-integration-tests-output
         path: |

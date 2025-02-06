@@ -83,6 +83,8 @@ jobs:
           - test_host_ip_manager.py
           - test_rnn_cc_detection.py
           - test_idea_format.py
+          - test_fides_sqlite_db.py
+          - test_fides_module.py
 
     steps:
     - uses: actions/checkout@v4
@@ -125,7 +127,7 @@ jobs:
 
     - name: Upload Artifacts
       if: success() || failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test_slips_locally-integration-tests-output
         path: |

@@ -20,7 +20,7 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
-from slips_files.core.evidencehandler import EvidenceHandler
+from slips_files.core.evidence_handler import EvidenceHandler
 from modules.rnn_cc_detection.rnn_cc_detection import CCDetection
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
@@ -78,6 +78,7 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
     Victim,
 )
+from modules.fidesModule.fidesModule import FidesModule
 
 
 def read_configuration():
@@ -161,6 +162,19 @@ class ModuleFactory:
         # override the self.print function to avoid broken pipes
         http_analyzer.print = Mock()
         return http_analyzer
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_fidesModule_obj(self, mock_db):
+        fm = FidesModule(
+            self.logger,
+            "dummy_output_dir",
+            6379,
+            Mock(),
+        )
+
+        # override the self.print function
+        fm.print = Mock()
+        return fm
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_virustotal_obj(self, mock_db):

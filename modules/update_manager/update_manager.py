@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import traceback
+from asyncio import Task
 from typing import (
     IO,
     Optional,
@@ -1558,21 +1559,14 @@ class UpdateManager(IModule):
         Updates online tranco whitelist defined in slips.yaml
          online_whitelist key
         """
+        # delete the old ones
+        self.db.delete_tranco_whitelist()
         response = self.responses["tranco_whitelist"]
-        # write to the file so we don't store the 10k domains in memory
-        online_whitelist_download_path = os.path.join(
-            self.path_to_remote_ti_files, "tranco-top-10000-whitelist"
-        )
-        with open(online_whitelist_download_path, "w") as f:
-            f.write(response.text)
+        for line in response.text.splitlines():
+            domain = line.split(",")[1]
+            domain.strip()
+            self.db.store_tranco_whitelisted_domain(domain)
 
-        # parse the downloaded file and store it in the db
-        with open(online_whitelist_download_path, "r") as f:
-            while line := f.readline():
-                domain = line.split(",")[1]
-                self.db.store_tranco_whitelisted_domain(domain)
-
-        os.remove(online_whitelist_download_path)
         self.mark_feed_as_updated("tranco_whitelist")
 
     def download_mac_db(self):
@@ -1644,6 +1638,23 @@ class UpdateManager(IModule):
                     log_to_logfiles_only=True,
                 )
 
+    def handle_exception(self, task):
+        """
+        in asyncmodules we use Async.Task to run some of the functions
+        If an exception occurs in a coroutine that was wrapped in a Task
+        (e.g., asyncio.create_task), the exception does not crash the program
+         but remains in the task.
+        This function is used to handle the exception in the task
+        """
+        try:
+            # Access task result to raise the exception if it occurred
+            task.result()
+        except asyncio.exceptions.CancelledError:
+            # like pressing ctrl+c
+            return
+        except Exception as e:
+            self.print(e, 0, 1)
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1699,6 +1710,7 @@ class UpdateManager(IModule):
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
+                    task.add_done_callback(self.handle_exception)
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
@@ -1708,7 +1720,7 @@ class UpdateManager(IModule):
             # wait for all TI files to update
             try:
                 await task
-            except UnboundLocalError:
+            except (UnboundLocalError, asyncio.exceptions.CancelledError):
                 # in case all our files are updated, we don't
                 # have task defined, skip
                 pass
@@ -1725,7 +1737,9 @@ class UpdateManager(IModule):
         """
         # create_task is used to run update() function
         # concurrently instead of serially
-        self.update_finished = asyncio.create_task(self.update())
+        self.update_finished: Task = asyncio.create_task(self.update())
+        self.update_finished.add_done_callback(self.handle_exception)
+
         await self.update_finished
         self.print(
             f"{self.db.get_loaded_ti_feeds_number()} "
