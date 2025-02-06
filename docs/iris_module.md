@@ -97,6 +97,22 @@ dispatched to peers, without regard to trust level accumulated on them.
 
 ### Answering and receiving requests form global P2P network 
 
+## Testing
+
+### Unit tests
+Unit tests for Iris Module have been added to the own repository of Iris. This procedure was selected because 
+Slips is written in Python in its entirety, while Iris is based in Go. And following the best practices of
+unit testing in Go leads to including the unit tests into the Iris repository itself.
+
+It has been decided by the development team of Slips that running the unit test of Iris 
+will be left upon the future developers.
+
+### Running the tests
+* The unit tests run best with ```go v1.17```.
+* Go to the directory containing Iris code.
+* ```cd pkg```
+* ```go test ./...```
+
 ## Logs
 
 Slips contains a minimal log file for reports received by other peers and peer updates in
@@ -108,7 +124,7 @@ The main limitation of Iris is that it is the responsibility of the organisation
 identifiers to users.
 
 ## Implementation notes and credit
-The go code was written by Martin Řepa as part of his theses and can be accessed [here](https://github.com/stratosphereips/iris/tree/main).
+The go code was written by Martin Řepa as part of his thesis and can be accessed [here](https://github.com/stratosphereips/iris/tree/main).
 
 
 ## TLDR;
