@@ -638,6 +638,7 @@ class ConfigParser(object):
         use_fides = self.use_fides()
         if not (use_fides and ("-i" in sys.argv or "-g" in sys.argv)):
             to_ignore.append("fidesModule")
+            to_ignore.append("irisModule")
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.yaml
