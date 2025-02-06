@@ -5,6 +5,7 @@ import json
 from typing import Union, Optional, List, Dict, Tuple
 import re
 import bisect
+from time import sleep
 import tldextract
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -157,6 +158,65 @@ class SSL(IFlowalertsAnalyzer):
         right = bisect.bisect_left(sorted_timestamps_of_past_ssl_flows, end)
 
         return sorted_timestamps_of_past_ssl_flows[left:right]
+
+    def check_non_ssl_port_443_conns(self, twid, flow, timeout_reached=False):
+        """
+        alerts on established connections on port 443 that are not HTTPS (ssl)
+        This is how we do the detection.
+        for every detected non ssl flow, we check 5 mins back for
+        matching flows that were detected as ssl by zeek. if found,
+        we discard the
+        evidence. if not found, we check for futute 5 mins of matching zeek
+        flows  that were detected as ssl by zeek. if found, we dont set an
+        evidence, if not found, we set an evidence
+        :kwarg timeout_reached: did we wait 5 mins in future and in the
+        past for the ssl of the given flow to arrive or not?
+        """
+        if not self.is_tcp_established_443_non_empty_flow(flow):
+            # we're not interested inthat flow
+            return False
+        # in seconds
+        five_mins = 5 * 60
+        # for looking up matching ssl flows in ssl_recognized_flows
+        key = (flow.saddr, flow.daddr)
+        if self.is_ssl_proto_recognized_by_zeek(flow):
+            # Keep track of it
+            try:
+                ts_list = self.ssl_recognized_flows[key]
+                # to store the ts sorted for faster lookups
+                bisect.insort(ts_list, flow.starttime)
+            except KeyError:
+                self.ssl_recognized_flows[key] = [flow.starttime]
+        else:
+            # Check the dict of SSL for flows that happened in the past
+            # 5 mins zeek time
+            timestamps_in_the_past_5_mins: List[float] = (
+                self.search_ssl_recognized_flows_for_ts_range(
+                    flow, flow.starttime - five_mins, flow.starttime
+                )
+            )
+            if timestamps_in_the_past_5_mins:
+                # awesome! discard evidence. FP dodged.
+                # clear these timestamps as we wouldnt need them
+                # self.ssl_recognized_flows[]
+                # TODO garabage collection??? expire old entries????
+                pass
+            else:
+                # reaching here means we looked in the past 5 mins and
+                # found nothing, did we look in the future 5 mins?
+                if timeout_reached:
+                    # yes we did. set an evidence
+                    self.set_evidence.non_ssl_port_443_conn(twid, flow)
+                else:
+                    # wait 5 mins real-time (to give slips time to
+                    # read more flows) maybe the recognized ssl arrives
+                    # within that time?
+                    # todo this is blocking!
+                    sleep(five_mins)
+                    self.check_non_ssl_port_443_conns(
+                        twid, flow, timeout_reached=True
+                    )
+        return False
 
     def detect_doh(self, twid, flow):
         if not flow.is_DoH:
