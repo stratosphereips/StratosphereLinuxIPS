@@ -5,7 +5,6 @@ import json
 from typing import Union, Optional, List, Dict, Tuple
 import re
 import bisect
-from time import sleep
 import tldextract
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -142,7 +141,9 @@ class SSL(IFlowalertsAnalyzer):
         # appproto should be 'ssl'
         return flow.appproto and str(flow.appproto.lower()) == "ssl"
 
-    def search_ssl_recognized_flows_for_ts_range(self, flow, start, end):
+    def search_ssl_recognized_flows_for_ts_range(
+        self, flow, start, end
+    ) -> List[float]:
         """
         Searched for matching Ssl flows in the given timestamp
         given the start and end time, return the timestamps within that
@@ -159,7 +160,7 @@ class SSL(IFlowalertsAnalyzer):
 
         return sorted_timestamps_of_past_ssl_flows[left:right]
 
-    def keep_track_of_ssl_flow(self, flow, key):
+    def keep_track_of_ssl_flow(self, flow, key) -> None:
         """keeps track of the given ssl flow in ssl_recognized_flows"""
         try:
             ts_list = self.ssl_recognized_flows[key]
@@ -168,7 +169,9 @@ class SSL(IFlowalertsAnalyzer):
         except KeyError:
             self.ssl_recognized_flows[key] = [flow.starttime]
 
-    def check_non_ssl_port_443_conns(self, twid, flow, timeout_reached=False):
+    async def check_non_ssl_port_443_conns(
+        self, twid, flow, timeout_reached=False
+    ):
         """
         alerts on established connections on port 443 that are not HTTPS (ssl)
         This is how we do the detection.
@@ -196,27 +199,26 @@ class SSL(IFlowalertsAnalyzer):
         # in seconds
         five_mins = 5 * 60
 
-        # Check the dict of SSL for flows that happened in the past
-        # 5 mins zeek time
-        if not timeout_reached:
-            # look in the past
-            matching_ssl_flows: List[float] = (
-                self.search_ssl_recognized_flows_for_ts_range(
-                    flow, flow.starttime - five_mins, flow.starttime
-                )
-            )
-        else:
+        # timeout reached indicates that we did search in the past once,
+        # we need to srch in the future now
+        if timeout_reached:
             # look in the future
             matching_ssl_flows: List[float] = (
                 self.search_ssl_recognized_flows_for_ts_range(
                     flow, flow.starttime, flow.starttime + five_mins
                 )
             )
+        else:
+            # look in the past
+            matching_ssl_flows: List[float] = (
+                self.search_ssl_recognized_flows_for_ts_range(
+                    flow, flow.starttime - five_mins, flow.starttime
+                )
+            )
 
         if matching_ssl_flows:
             # awesome! discard evidence. FP dodged.
-            # clear these timestamps as we wouldnt need them
-            # self.ssl_recognized_flows[]
+            # clear these timestamps as we dont need them anymore?
             # TODO garabage collection??? expire old entries????
             return False
 
@@ -231,9 +233,13 @@ class SSL(IFlowalertsAnalyzer):
         # wait 5 mins real-time (to give slips time to
         # read more flows) maybe the recognized ssl arrives
         # within that time?
-        # todo this is blocking!
-        sleep(five_mins)
-        self.check_non_ssl_port_443_conns(twid, flow, timeout_reached=True)
+        await asyncio.sleep(five_mins)
+        # we can safely await here without blocking the main thread because
+        # once the timeout is reached, this function will neve sleep again,
+        # it'll either set the evidence r discard it
+        await self.check_non_ssl_port_443_conns(
+            twid, flow, timeout_reached=True
+        )
         return False
 
     def detect_doh(self, twid, flow):
@@ -352,4 +358,6 @@ class SSL(IFlowalertsAnalyzer):
             twid = msg["twid"]
             flow = msg["flow"]
             flow = self.classifier.convert_to_flow_obj(flow)
-            self.check_non_ssl_port_443_conns(twid, flow)
+            self.flowalerts.create_task(
+                self.check_non_ssl_port_443_conns, twid, flow
+            )
