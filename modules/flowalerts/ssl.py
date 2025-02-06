@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import json
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Dict, Tuple
 import re
+import bisect
 import tldextract
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -18,6 +19,7 @@ from slips_files.core.flows.zeek import SSL
 class SSL(IFlowalertsAnalyzer):
     def init(self):
         self.classifier = FlowClassifier()
+        self.ssl_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -125,24 +127,36 @@ class SSL(IFlowalertsAnalyzer):
         # domains or ips
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
 
-    def should_detect_non_ssl_port_443(self, flow):
+    def is_tcp_established_443_non_empty_flow(self, flow) -> bool:
         flow.state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
         return (
             str(flow.dport) == "443"
             and flow.proto.lower() == "tcp"
             and flow.state == "Established"
             and (flow.sbytes + flow.dbytes) != 0
-            and str(flow.appproto).lower() != "ssl"
         )
 
-    def check_non_ssl_port_443_conns(self, twid, flow):
-        """
-        alerts on established connections on port 443 that are not HTTPS (ssl)
-        """
+    def is_ssl_proto_recognized_by_zeek(self, flow) -> bool:
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
-        if self.should_detect_non_ssl_port_443(flow):
-            self.set_evidence.non_ssl_port_443_conn(twid, flow)
+        return flow.appproto and str(flow.appproto.lower()) == "ssl"
+
+    def search_ssl_recognized_flows_for_ts_range(self, flow, start, end):
+        """
+        Searched for matching Ssl flows in the given timestamp
+        given the start and end time, return the timestamps within that
+        range using the flow src and dst ips as the key.
+        2 flows match if they share the src and dst IPs
+        """
+        sorted_timestamps_of_past_ssl_flows = self.ssl_recognized_flows[
+            (flow.saddr, flow.daddr)
+        ]
+
+        # Find the left and right boundaries
+        left = bisect.bisect_right(sorted_timestamps_of_past_ssl_flows, start)
+        right = bisect.bisect_left(sorted_timestamps_of_past_ssl_flows, end)
+
+        return sorted_timestamps_of_past_ssl_flows[left:right]
 
     def detect_doh(self, twid, flow):
         if not flow.is_DoH:
