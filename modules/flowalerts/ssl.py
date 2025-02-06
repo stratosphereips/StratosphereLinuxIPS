@@ -125,20 +125,23 @@ class SSL(IFlowalertsAnalyzer):
         # domains or ips
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
 
+    def should_detect_non_ssl_port_443(self, flow):
+        flow.state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
+        return (
+            str(flow.dport) == "443"
+            and flow.proto.lower() == "tcp"
+            and flow.state == "Established"
+            and (flow.sbytes + flow.dbytes) != 0
+            and str(flow.appproto).lower() != "ssl"
+        )
+
     def check_non_ssl_port_443_conns(self, twid, flow):
         """
         alerts on established connections on port 443 that are not HTTPS (ssl)
         """
-        flow.state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
         # if it was a valid ssl conn, the 'service' field aka
         # appproto should be 'ssl'
-        if (
-            str(flow.dport) == "443"
-            and flow.proto.lower() == "tcp"
-            and str(flow.appproto).lower() != "ssl"
-            and flow.state == "Established"
-            and (flow.sbytes + flow.dbytes) != 0
-        ):
+        if self.should_detect_non_ssl_port_443(flow):
             self.set_evidence.non_ssl_port_443_conn(twid, flow)
 
     def detect_doh(self, twid, flow):
