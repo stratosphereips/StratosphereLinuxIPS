@@ -5,6 +5,7 @@ import json
 from typing import Union, Optional, List, Dict, Tuple
 import re
 import bisect
+import time
 import tldextract
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -20,6 +21,7 @@ class SSL(IFlowalertsAnalyzer):
     def init(self):
         self.classifier = FlowClassifier()
         self.ssl_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
+        self.last_gc_ts = time.time()
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -145,14 +147,23 @@ class SSL(IFlowalertsAnalyzer):
         self, flow, start, end
     ) -> List[float]:
         """
-        Searched for matching Ssl flows in the given timestamp
-        given the start and end time, return the timestamps within that
-        range using the flow src and dst ips as the key.
+        Searches for a flow that matches the given flow in
+        self.ssl_recognized_flows.
+
+        given the start and end time, returns the timestamps within that
+        range.
+
         2 flows match if they share the src and dst IPs
         """
-        sorted_timestamps_of_past_ssl_flows = self.ssl_recognized_flows[
-            (flow.saddr, flow.daddr)
-        ]
+        # TODO that end may not be there!!
+
+        # Handle the case where the key might not exist
+        try:
+            sorted_timestamps_of_past_ssl_flows = self.ssl_recognized_flows[
+                (flow.saddr, flow.daddr)
+            ]
+        except KeyError:
+            return []
 
         # Find the left and right boundaries
         left = bisect.bisect_right(sorted_timestamps_of_past_ssl_flows, start)
@@ -338,6 +349,37 @@ class SSL(IFlowalertsAnalyzer):
             return
         self.set_evidence.cn_url_mismatch(twid, cn, flow)
 
+    def remove_old_entries_from_ssl_recognized_flows(self):
+        """
+        the goal of this is to not have the ssl_recognized_flows dict
+        growing forever, so here we remove all timestamps older than the last
+        one-5 mins (zeek time)
+        meaning, it ensures that all lists have max 5 ts
+        changes the ssl_recognized_flows to the cleaned one
+        """
+
+        # Runs every 5 mins real time, to reduce unnecessary cleanups every
+        # 1s
+        if utils.get_time_diff(time.time(), self.last_gc_ts, "minutes") < 5:
+            return
+
+        clean_ssl_recognized_flows = {}
+        for ips, timestamps in self.ssl_recognized_flows:
+            ips: Tuple[str, str]
+            timestamps: List[float]
+
+            end = timestamps[-1]
+            start = end - 5 * 60
+
+            left = bisect.bisect_right(timestamps, start)
+            right = bisect.bisect_left(timestamps, end)
+            # thats the range we wanna remove from the list bc it's too old
+            garbage = timestamps[left:right]
+            clean_ssl_recognized_flows[ips] = timestamps - garbage
+
+        self.ssl_recognized_flows = clean_ssl_recognized_flows
+        self.last_gc_ts = time.time()
+
     async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
             msg = json.loads(msg["data"])
@@ -358,6 +400,7 @@ class SSL(IFlowalertsAnalyzer):
             twid = msg["twid"]
             flow = msg["flow"]
             flow = self.classifier.convert_to_flow_obj(flow)
+            self.remove_old_entries_from_ssl_recognized_flows()
             self.flowalerts.create_task(
                 self.check_non_ssl_port_443_conns, twid, flow
             )
