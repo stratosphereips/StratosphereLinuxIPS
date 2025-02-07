@@ -182,9 +182,10 @@ class SSL(IFlowalertsAnalyzer):
         try:
             ts_list = self.ssl_recognized_flows[key]
             # to store the ts sorted for faster lookups
-            bisect.insort(ts_list, flow.starttime)
+            bisect.insort(ts_list, float(flow.starttime))
         except KeyError:
-            self.ssl_recognized_flows[key] = [flow.starttime]
+            self.ssl_recognized_flows[key] = [float(flow.starttime)]
+
         self.ssl_recognized_flows_lock.release()
 
     async def check_non_ssl_port_443_conns(
@@ -237,7 +238,6 @@ class SSL(IFlowalertsAnalyzer):
         if matching_ssl_flows:
             # awesome! discard evidence. FP dodged.
             # clear these timestamps as we dont need them anymore?
-            # TODO garabage collection??? expire old entries????
             return False
 
         # reaching here means we looked in the past 5 mins and
@@ -356,19 +356,20 @@ class SSL(IFlowalertsAnalyzer):
             return
         self.set_evidence.cn_url_mismatch(twid, cn, flow)
 
-    def remove_old_entries_from_ssl_recognized_flows(self):
+    def remove_old_entries_from_ssl_recognized_flows(self) -> None:
         """
         the goal of this is to not have the ssl_recognized_flows dict
         growing forever, so here we remove all timestamps older than the last
         one-5 mins (zeek time)
-        meaning, it ensures that all lists have max 5 ts
+        meaning, it ensures that all lists have max 5mins worth of timestamps
         changes the ssl_recognized_flows to the cleaned one
         """
         # Runs every 5 mins real time, to reduce unnecessary cleanups every
         # 1s
+        now = time.time()
         time_since_last_cleanup = utils.get_time_diff(
-            time.time(),
             self.ts_of_last_ssl_recognized_flows_cleanup,
+            now,
             "minutes",
         )
 
@@ -376,24 +377,25 @@ class SSL(IFlowalertsAnalyzer):
             return
 
         clean_ssl_recognized_flows = {}
-        for ips, timestamps in self.ssl_recognized_flows:
+        for ips, timestamps in self.ssl_recognized_flows.items():
             ips: Tuple[str, str]
             timestamps: List[float]
 
-            end = timestamps[-1]
+            end: float = float(timestamps[-1])
             start = end - 5 * 60
 
             left = bisect.bisect_right(timestamps, start)
             right = bisect.bisect_left(timestamps, end)
             # thats the range we wanna remove from the list bc it's too old
             garbage = timestamps[left:right]
-            clean_ssl_recognized_flows[ips] = timestamps - garbage
+            clean_ssl_recognized_flows[ips] = [
+                ts for ts in timestamps if ts not in garbage
+            ]
 
         self.ssl_recognized_flows_lock.acquire()
         self.ssl_recognized_flows = clean_ssl_recognized_flows
         self.ssl_recognized_flows_lock.release()
-
-        self.ts_of_last_ssl_recognized_flows_cleanup = time.time()
+        self.ts_of_last_ssl_recognized_flows_cleanup = now
 
     async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
