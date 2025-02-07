@@ -6,6 +6,7 @@ from typing import Union, Optional, List, Dict, Tuple
 import re
 import bisect
 import time
+from multiprocessing import Lock
 import tldextract
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -21,7 +22,8 @@ class SSL(IFlowalertsAnalyzer):
     def init(self):
         self.classifier = FlowClassifier()
         self.ssl_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
-        self.last_gc_ts = time.time()
+        self.ts_of_last_ssl_recognized_flows_cleanup = time.time()
+        self.ssl_recognized_flows_lock = Lock()
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -173,12 +175,17 @@ class SSL(IFlowalertsAnalyzer):
 
     def keep_track_of_ssl_flow(self, flow, key) -> None:
         """keeps track of the given ssl flow in ssl_recognized_flows"""
+        # we're using locks here because this is a part of an asyncio
+        # function and there's another garbage collector that may be
+        # modifying the dict at the same time.
+        self.ssl_recognized_flows_lock.acquire()
         try:
             ts_list = self.ssl_recognized_flows[key]
             # to store the ts sorted for faster lookups
             bisect.insort(ts_list, flow.starttime)
         except KeyError:
             self.ssl_recognized_flows[key] = [flow.starttime]
+        self.ssl_recognized_flows_lock.release()
 
     async def check_non_ssl_port_443_conns(
         self, twid, flow, timeout_reached=False
@@ -357,10 +364,15 @@ class SSL(IFlowalertsAnalyzer):
         meaning, it ensures that all lists have max 5 ts
         changes the ssl_recognized_flows to the cleaned one
         """
-
         # Runs every 5 mins real time, to reduce unnecessary cleanups every
         # 1s
-        if utils.get_time_diff(time.time(), self.last_gc_ts, "minutes") < 5:
+        time_since_last_cleanup = utils.get_time_diff(
+            time.time(),
+            self.ts_of_last_ssl_recognized_flows_cleanup,
+            "minutes",
+        )
+
+        if time_since_last_cleanup < 5:
             return
 
         clean_ssl_recognized_flows = {}
@@ -377,8 +389,11 @@ class SSL(IFlowalertsAnalyzer):
             garbage = timestamps[left:right]
             clean_ssl_recognized_flows[ips] = timestamps - garbage
 
+        self.ssl_recognized_flows_lock.acquire()
         self.ssl_recognized_flows = clean_ssl_recognized_flows
-        self.last_gc_ts = time.time()
+        self.ssl_recognized_flows_lock.release()
+
+        self.ts_of_last_ssl_recognized_flows_cleanup = time.time()
 
     async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
