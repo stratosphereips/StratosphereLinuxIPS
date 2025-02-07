@@ -132,11 +132,11 @@ class SSL(IFlowalertsAnalyzer):
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
 
     def is_tcp_established_443_non_empty_flow(self, flow) -> bool:
-        flow.state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
+        state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
         return (
             str(flow.dport) == "443"
             and flow.proto.lower() == "tcp"
-            and flow.state == "Established"
+            and state == "Established"
             and (flow.sbytes + flow.dbytes) != 0
         )
 

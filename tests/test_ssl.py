@@ -584,3 +584,38 @@ async def test_check_non_ssl_port_443_conns_no_matching_ssl_no_timeout(
     assert result is False
     mock_sleep.assert_called_once()
     ssl.set_evidence.non_ssl_port_443_conn.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "dport, proto, sbytes, dbytes, final_state, expected",
+    [
+        # ("443", "tcp", 100, 200, "Established", True),
+        # ("80", "tcp", 100, 200, "Established", False),
+        # ("443", "udp", 100, 200, "Established", False),
+        # ("443", "tcp", 100, 200, "Established", False),
+        ("443", "tcp", 0, 0, "Established", False),
+    ],
+)
+def test_is_tcp_established_443_non_empty_flow(
+    dport,
+    proto,
+    sbytes,
+    dbytes,
+    final_state,
+    expected,
+):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    flow = Mock(
+        dport=dport,
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        pkts=80,
+        proto=proto,
+        sbytes=sbytes,
+        dbytes=dbytes,
+    )
+
+    ssl.db.get_final_state_from_flags.return_value = final_state
+
+    result = ssl.is_tcp_established_443_non_empty_flow(flow)
+    assert result == expected
