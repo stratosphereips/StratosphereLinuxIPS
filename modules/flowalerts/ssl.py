@@ -168,10 +168,14 @@ class SSL(IFlowalertsAnalyzer):
             return []
 
         # Find the left and right boundaries
-        left = bisect.bisect_right(sorted_timestamps_of_past_ssl_flows, start)
-        right = bisect.bisect_left(sorted_timestamps_of_past_ssl_flows, end)
+        left_idx = bisect.bisect_left(
+            sorted_timestamps_of_past_ssl_flows, start
+        )
+        right_idx = bisect.bisect_right(
+            sorted_timestamps_of_past_ssl_flows, end
+        )
 
-        return sorted_timestamps_of_past_ssl_flows[left:right]
+        return sorted_timestamps_of_past_ssl_flows[left_idx:right_idx]
 
     def keep_track_of_ssl_flow(self, flow, key) -> None:
         """keeps track of the given ssl flow in ssl_recognized_flows"""

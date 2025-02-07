@@ -619,3 +619,50 @@ def test_is_tcp_established_443_non_empty_flow(
 
     result = ssl.is_tcp_established_443_non_empty_flow(flow)
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "ssl_recognized_flows, flow, start, end, expected",
+    [
+        # case: matching timestamps within the range
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0, 4.0, 5.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            2.0,
+            4.0,
+            [2.0, 3.0, 4.0],
+        ),
+        # case: no matching timestamps (empty result)
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            4.0,
+            5.0,
+            [],
+        ),
+        # case: flow does not exist in ssl_recognized_flows
+        (
+            {("192.168.1.2", "10.0.0.2"): [1.0, 2.0, 3.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            1.0,
+            3.0,
+            [],
+        ),
+        # case: start and end cover all timestamps
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0, 4.0, 5.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            1.0,
+            5.0,
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+        ),
+    ],
+)
+def test_search_ssl_recognized_flows_for_ts_range(
+    ssl_recognized_flows, flow, start, end, expected
+):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.ssl_recognized_flows = ssl_recognized_flows
+    flow = Mock(saddr=flow["saddr"], daddr=flow["daddr"])
+    result = ssl.search_ssl_recognized_flows_for_ts_range(flow, start, end)
+    assert result == expected
