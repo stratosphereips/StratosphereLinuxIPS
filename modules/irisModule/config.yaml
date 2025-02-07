@@ -9,7 +9,7 @@ Server:
 Redis:
   Host: 127.0.0.1
   Port: 6379
-  Tl2NlChannel: fides2network
+  Tl2NlChannel: iris_internal
 
 Organisations:
   Trustworthy:

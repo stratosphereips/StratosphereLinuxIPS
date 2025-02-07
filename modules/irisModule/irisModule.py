@@ -63,18 +63,23 @@ class IrisModule(IModule):
             }
         self.logger.output_line(debug_message)
 
-        log_dir = "output/iris_module/"
+        log_dir = "output_iris/"
         os.makedirs(log_dir, exist_ok=True)
         # Open the log file
-        log_file_path = os.path.join(log_dir, "outputfile.out")
-        log_file = open(log_file_path, "w")
+        log_file_path = os.path.join(log_dir, "iris_logs.txt")
+        self.log_file = open(log_file_path, "w")
+        self.log_file.write(json.dumps(debug_message))
+        # self.logger.output_line({"from": self.name,
+        #         "txt": "Hello, Iris!"})
+        # with open("sadfdasfdasfsafadsfsafasfasdfsadfsda.txt", "w") as f:
+        #     f.write("Hello files!!!")
 
         try:
             # Start the subprocess, redirecting stdout and stderr to the same file
             self.process = subprocess.Popen(
                 command,  # Replace with your command
-                stdout=log_file,
-                stderr=log_file,
+                stdout=self.log_file,
+                stderr=self.log_file,
                 cwd=log_dir,
             )
         except OSError as e:
@@ -83,11 +88,8 @@ class IrisModule(IModule):
                 "txt": str(e)
             }
             self.logger.log_error(error_message)
-        log_file.close()
 
     def simplex_duplex_translator(self):
-        self.db.publish("network2fides", self.n2f)
-
         if msg := self.get_msg("fides2network"):
             # Fides send something to the network (Iris)
             # FORWARD to Iris
@@ -96,8 +98,9 @@ class IrisModule(IModule):
         if msg := self.get_msg("iris_internal"):
             # Message on Iris duplex channel
             # Get the message
-            msg = json.loads(msg["data"])
-            if "nl2tl" in msg["type"]:
+            print(msg)
+            type = json.loads(msg["data"])["type"]
+            if "nl2tl" in type:
                 # Message is from Iris addressed to Fides Module
                 # FORWARD to Fides Module
                 self.db.publish("network2fides", msg["data"])
@@ -110,6 +113,7 @@ class IrisModule(IModule):
     def shutdown_gracefully(self):
         self.logger.output_line({"from": self.name, "txt":"Iris Module terminating gracefully"})
         self.process.terminate()
+        self.log_file.close()
         self.logger.output_line({"from": self.name, "txt":"Iris Module terminating wait"})
         self.process.wait()
         self.logger.output_line({"from": self.name, "txt":"Iris Module terminated gracefully"})
