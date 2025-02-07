@@ -186,7 +186,7 @@ class Output(IObserver):
         verbose = msg.get("verbose", self.verbose)
         debug = msg.get("debug", self.debug)
         end = msg.get("end", "\n")
-        sender, txt = msg["from"], msg["txt"]
+        sender, txt = msg["from"], str(msg["txt"])
 
         # if debug level is 3 make it red
         if debug == 3:

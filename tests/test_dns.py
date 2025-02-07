@@ -715,7 +715,9 @@ async def test_check_dns_without_connection_shouldnt_detect():
     dns = get_dns_obj()
     # Test when should_detect_dns_without_conn returns False
     dns.should_detect_dns_without_conn.return_value = False
-    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    result = await dns.check_dns_without_connection(
+        "profileid", "twid", "flow"
+    )
     assert result is False
 
 
@@ -724,7 +726,9 @@ async def test_check_dns_without_connection_interface_timeout_not_reached():
     # Test when is_interface_timeout_reached returns False
     dns.should_detect_dns_without_conn.return_value = True
     dns.is_interface_timeout_reached.return_value = False
-    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    result = await dns.check_dns_without_connection(
+        "profileid", "twid", "flow"
+    )
     assert result is False
 
 
@@ -734,7 +738,9 @@ async def test_check_dns_without_connection_flow_answer_contacted_true():
     dns.should_detect_dns_without_conn.return_value = True
     dns.is_interface_timeout_reached.return_value = True
     dns.is_any_flow_answer_contacted.return_value = True
-    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    result = await dns.check_dns_without_connection(
+        "profileid", "twid", "flow"
+    )
     assert result is False
 
 
@@ -744,7 +750,7 @@ async def test_check_dns_without_connection_waited_for_the_conn_false():
     dns.should_detect_dns_without_conn.return_value = True
     dns.is_interface_timeout_reached.return_value = True
     dns.is_any_flow_answer_contacted.return_value = False
-    result = dns.check_dns_without_connection(
+    result = await dns.check_dns_without_connection(
         "profileid", "twid", "flow", waited_for_the_conn=False
     )
     assert result is False
@@ -759,7 +765,7 @@ async def test_check_dns_without_connection_waited_for_the_conn_true():
     dns.should_detect_dns_without_conn.return_value = True
     dns.is_interface_timeout_reached.return_value = True
     dns.is_any_flow_answer_contacted.return_value = False
-    result = dns.check_dns_without_connection(
+    result = await dns.check_dns_without_connection(
         "profileid", "twid", "flow", waited_for_the_conn=True
     )
     assert result is True

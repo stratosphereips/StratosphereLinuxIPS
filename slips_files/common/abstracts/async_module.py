@@ -52,8 +52,8 @@ class AsyncModule(IModule):
             task.result()
         except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
             pass
-        except Exception as e:
-            self.print(e, 0, 1)
+        except Exception:
+            self.print_traceback()
 
     async def main(self): ...
 

@@ -582,11 +582,7 @@ class Utils(object):
         remove the milliseconds from the given ts
         :param ts: time in unix format
         """
-        ts = str(ts)
-        if "." not in ts:
-            return ts
-
-        return ts.split(".")[0]
+        return str(ts).split(".")[0]
 
     def assert_microseconds(self, ts: str):
         """
