@@ -7,6 +7,13 @@ from slips_files.core.database.database_manager import DBManager
 
 
 class IFlowalertsAnalyzer(ABC):
+    """
+    keep in mind that every class that implements this interface MUST be
+    registered in flowalerts.py
+    must by started, controlled, and terminated by it. msgs from the
+    appropriate channels should be passed to that class using flowalerts too.
+    """
+
     def __init__(self, db: DBManager, flowalerts=None, **kwargs):
         self.db = db
         self.flowalerts = flowalerts
