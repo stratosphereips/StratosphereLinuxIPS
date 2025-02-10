@@ -47,7 +47,7 @@ def test_check_self_signed_certs(
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
-        "SetEvidnceHelper.self_signed_certificates"
+        "SetEvidenceHelper.self_signed_certificates"
     )
     flow = SSL(
         starttime="1726593782.8840969",
@@ -98,10 +98,10 @@ def test_detect_malicious_ja3(
 ):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_ja3 = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.malicious_ja3"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.malicious_ja3"
     )
     mock_set_evidence_ja3s = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.malicious_ja3s"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.malicious_ja3s"
     )
 
     ssl.db.get_all_blacklisted_ja3.return_value = {
@@ -149,7 +149,7 @@ def test_detect_malicious_ja3(
 def test_detect_doh(mocker, is_doh, expected_calls):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_doh = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.doh"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.doh"
     )
     ssl.db.set_ip_info = Mock()
     flow = SSL(
@@ -202,7 +202,7 @@ async def test_check_pastebin_download(
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     ssl.pastebin_downloads_threshold = 12000
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.pastebin_download"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.pastebin_download"
     )
 
     flow = SSL(
@@ -258,7 +258,7 @@ async def test_check_pastebin_download(
 def test_detect_incompatible_cn(mocker, subject, expected_call_count):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.incompatible_cn"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.incompatible_cn"
     )
 
     ssl.db.whitelist.organization_whitelist.is_ip_in_org.return_value = False
