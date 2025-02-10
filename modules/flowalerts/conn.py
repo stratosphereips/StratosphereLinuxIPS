@@ -19,6 +19,7 @@ from slips_files.common.flow_classifier import FlowClassifier
 
 NOT_ESTAB = "Not Established"
 ESTAB = "Established"
+SPECIAL_IPV6 = ("0.0.0.0", "255.255.255.255")
 
 
 class Conn(IFlowalertsAnalyzer):
@@ -361,10 +362,7 @@ class Conn(IFlowalertsAnalyzer):
         """Devices send flow as/to these ips all the time, the're not
         suspicious not need to detect them."""
         # its ok to change ips from a link local ip to another private ip
-        return (
-            ip in ("0.0.0.0", "255.255.255.255")
-            or ipaddress.ip_address(ip).is_link_local
-        )
+        return ip in SPECIAL_IPV6 or ipaddress.ip_address(ip).is_link_local
 
     def check_device_changing_ips(self, twid, flow):
         """
@@ -720,6 +718,13 @@ class Conn(IFlowalertsAnalyzer):
                     return True
             return False
 
+    def _is_ok_to_connect_to_ip(self, ip: str):
+        """
+        returns true if it's ok to connect to the given IP even if it's
+        "outside the given local network"
+        """
+        return ip in SPECIAL_IPV6 or utils.is_localhost(ip)
+
     def check_different_localnet_usage(
         self,
         twid,
@@ -734,17 +739,21 @@ class Conn(IFlowalertsAnalyzer):
         coming from/to 10.0.0.0/8
         :param what_to_check: can be 'srcip' or 'dstip'
         """
+        if self._is_ok_to_connect_to_ip(
+            flow.saddr
+        ) or self._is_ok_to_connect_to_ip(flow.daddr):
+            return
+
         ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
         ip_obj = ipaddress.ip_address(ip_to_check)
-        own_local_network = self.db.get_local_network()
+        if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
+            return
 
+        own_local_network = self.db.get_local_network()
         if not own_local_network:
             # the current local network wasn't set in the db yet
             # it's impossible to get here becaus ethe localnet is set before
             # any msg is published in the new_flow channel
-            return
-
-        if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
             return
 
         # if it's a private ipv4 addr, it should belong to our local network
