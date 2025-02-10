@@ -29,6 +29,8 @@ from slips_files.core.structures.evidence import (
     Direction,
 )
 
+ESTAB = "Established"
+
 
 class HTTPAnalyzer(IModule):
     # Name: short name of the module. Do not use spaces
@@ -39,7 +41,12 @@ class HTTPAnalyzer(IModule):
     def init(self):
         self.c1 = self.db.subscribe("new_http")
         self.c2 = self.db.subscribe("new_weird")
-        self.channels = {"new_http": self.c1, "new_weird": self.c2}
+        self.c3 = self.db.subscribe("new_flow")
+        self.channels = {
+            "new_http": self.c1,
+            "new_weird": self.c2,
+            "new_flow": self.c3,
+        }
         self.connections_counter = {}
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware
@@ -649,6 +656,21 @@ class HTTPAnalyzer(IModule):
 
         self.set_evidence_weird_http_method(twid, flow, conn_log_flow)
 
+    def check_non_http_port_80_conns(self, twid, flow):
+        """
+        alerts on established connections on port 80 that are not HTTP
+        """
+        # if it was a valid http conn, the 'service' field aka
+        # appproto should be 'http'
+        if (
+            str(flow.dport) == "80"
+            and flow.proto.lower() == "tcp"
+            and str(flow.appproto).lower() != "http"
+            and flow.interpreted_state == ESTAB
+            and (flow.sbytes + flow.dbytes) != 0
+        ):
+            self.set_evidence.non_http_port_80_conn(twid, flow)
+
     def pre_main(self):
         utils.drop_root_privs()
 
@@ -688,3 +710,9 @@ class HTTPAnalyzer(IModule):
         if msg := self.get_msg("new_weird"):
             msg = json.loads(msg["data"])
             self.check_weird_http_method(msg)
+
+        if msg := self.get_msg("new_flow"):
+            msg = json.loads(msg["data"])
+            twid = msg["twid"]
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
+            self.check_non_http_port_80_conns(twid, flow)

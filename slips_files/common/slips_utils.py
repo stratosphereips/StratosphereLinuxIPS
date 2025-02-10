@@ -504,8 +504,10 @@ class Utils(object):
 
     def change_logfiles_ownership(self, file: str, UID, GID):
         """
-        if slips is running in docker, the owner of the alerts log files is always root
-        this function changes it to the user ID and GID in slips.yaml to be able to
+        if slips is running in docker, the owner of the alerts log files
+        is always root
+        this function changes it to the user ID and GID in slips.yaml to be
+         able to
         rwx the files from outside of docker
         """
         if not (IS_IN_A_DOCKER_CONTAINER and UID and GID):

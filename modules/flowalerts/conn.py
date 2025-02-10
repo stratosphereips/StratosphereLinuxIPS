@@ -660,21 +660,6 @@ class Conn(IFlowalertsAnalyzer):
                 uids,
             )
 
-    def check_non_http_port_80_conns(self, twid, flow):
-        """
-        alerts on established connections on port 80 that are not HTTP
-        """
-        # if it was a valid http conn, the 'service' field aka
-        # appproto should be 'http'
-        if (
-            str(flow.dport) == "80"
-            and flow.proto.lower() == "tcp"
-            and str(flow.appproto).lower() != "http"
-            and flow.interpreted_state == ESTAB
-            and (flow.sbytes + flow.dbytes) != 0
-        ):
-            self.set_evidence.non_http_port_80_conn(twid, flow)
-
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
         to a well-known org"""
@@ -825,7 +810,7 @@ class Conn(IFlowalertsAnalyzer):
             )
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
-            self.check_non_http_port_80_conns(twid, flow)
+
             self.check_connection_to_local_ip(twid, flow)
             self.check_device_changing_ips(twid, flow)
 
