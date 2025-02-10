@@ -2,14 +2,13 @@ Identity:
   GenerateNewKey: true
 
 Server:
-  port: 9001
+  port: 9006
   Host: 127.0.0.1
   DhtServerMode: true
 
 Redis:
   Host: 127.0.0.1
-  Port: 6379
-  Tl2NlChannel: iris_internal
+  Tl2NlChannel: gp2p_tl2nl0
 
 Organisations:
   Trustworthy:
@@ -18,4 +17,4 @@ Organisations:
 PeerDiscovery:
   DisableBootstrappingNodes: true
   ListOfMultiAddresses:
-   - '/ip4/127.0.0.1/udp/9007/quic 12D3KooWLDCxxP6PAKG6NUYWs16VbSZhQNHY361otSmauvVnXV4g'
+   - '/ip4/127.0.0.1/udp/9006/quic 12D3KooWLDCxxP6PAKG6NUYWs16VbSZhQNHY361otSmauvVnXV4g'

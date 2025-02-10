@@ -79,6 +79,7 @@ def test_messaging_1(path, output_dir, redis_port):
     """
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
+    iris_output_file = os.path.join(output_dir, "iris_output.txt")
     command = [
         "./slips.py",
         "-t",
@@ -95,16 +96,27 @@ def test_messaging_1(path, output_dir, redis_port):
         str(redis_port),
     ]
 
+    iris_command = [
+        "./modules/irisModule/peercli",
+        "--conf",
+        "tests/integration_tests/config/iris_peer_config.yaml",
+    ]
+
     print("running slips ...")
     print(output_dir)
 
     # Open the log file in write mode
     with open(output_file, "w") as log_file:
+        with open(iris_output_file, "w") as iris_log_file:
         # Start the subprocess, redirecting stdout and stderr to the same file
         process = subprocess.Popen(
             command,  # Replace with your command
             stdout=log_file,
             stderr=log_file,
+        )
+
+        Iprocess = subprocess.Popen(
+            iris_command, stdout=iris_log_file, stderr=iris_log_file,
         )
 
         print(f"Output and errors are logged in {output_file}")
@@ -114,8 +126,10 @@ def test_messaging_1(path, output_dir, redis_port):
         countdown(300, "sigterm")
         # send a SIGTERM to the process
         os.kill(process.pid, 15)
-        print("SIGTERM sent. killing slips")
+        os.kill(Iprocess.pid, 15)
+        print("SIGTERM sent. killing slips + iris")
         os.kill(process.pid, 9)
+        os.kill(Iprocess.pid, 9)
 
     print(f"Slips with PID {process.pid} was killed.")
 
