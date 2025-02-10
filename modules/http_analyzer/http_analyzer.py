@@ -719,6 +719,69 @@ class HTTPAnalyzer(AsyncModule):
 
         return sorted_timestamps_of_past_http_flows[left_idx:right_idx]
 
+    def set_evidence_non_http_port_80_conn(self, twid, flow) -> None:
+        description: str = (
+            f"non-HTTP established connection to port 80. "
+            f"destination IP: {flow.daddr}"
+        )
+
+        twid_number: int = int(twid.replace("timewindow", ""))
+        # to add a correlation between the 2 evidence in alerts.json
+        evidence_id_of_dstip_as_the_attacker = str(uuid4())
+        evidence_id_of_srcip_as_the_attacker = str(uuid4())
+        evidence: Evidence = Evidence(
+            id=evidence_id_of_srcip_as_the_attacker,
+            rel_id=[evidence_id_of_dstip_as_the_attacker],
+            evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
+            ),
+            threat_level=ThreatLevel.LOW,
+            description=description,
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=0.8,
+            src_port=flow.sport,
+            dst_port=flow.dport,
+        )
+        self.db.set_evidence(evidence)
+
+        evidence: Evidence = Evidence(
+            id=evidence_id_of_dstip_as_the_attacker,
+            rel_id=[evidence_id_of_srcip_as_the_attacker],
+            evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
+            attacker=Attacker(
+                direction=Direction.DST,
+                attacker_type=IoCType.IP,
+                value=flow.daddr,
+            ),
+            victim=Victim(
+                direction=Direction.SRC,
+                victim_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            threat_level=ThreatLevel.MEDIUM,
+            description=description,
+            profile=ProfileID(ip=flow.daddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=0.8,
+            src_port=flow.sport,
+            dst_port=flow.dport,
+        )
+
+        self.db.set_evidence(evidence)
+
     async def check_non_http_port_80_conns(
         self, twid, flow, timeout_reached=False
     ):
@@ -774,7 +837,7 @@ class HTTPAnalyzer(AsyncModule):
         # found no timestamps, did we look in the future 5 mins?
         if timeout_reached:
             # yes we did. set an evidence
-            self.set_evidence.non_http_port_80_conn(twid, flow)
+            self.set_evidence_non_http_port_80_conn(twid, flow)
             return True
 
         # ts not reached
