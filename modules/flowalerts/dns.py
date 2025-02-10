@@ -457,7 +457,11 @@ class DNS(IFlowalertsAnalyzer):
             return
 
         for answer in flow.answers:
-            if utils.is_private_ip(answer) and flow.query != "localhost":
+            if (
+                utils.is_private_ip(answer)
+                and flow.query != "localhost"
+                and not flow.query.endswith(".local")
+            ):
                 self.set_evidence.invalid_dns_answer(twid, flow, answer)
                 # delete answer from redis cache to prevent
                 # associating this dns answer with this domain/query and
