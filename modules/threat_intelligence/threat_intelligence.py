@@ -377,11 +377,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         ]
         threat_level: ThreatLevel = ThreatLevel(threat_level)
         saddr = profileid.split("_")[-1]
-
         description: str = (
             f"connection from blacklisted IP: {ip} to {daddr}. "
             f"Description: {ip_info['description']}. "
-            f"Source: {ip_info['source']}."
+            f"Source: {ip_info['source'].strip()}."
         )
 
         twid_int = int(twid.replace("timewindow", ""))
