@@ -15,7 +15,6 @@ from .smtp import SMTP
 from .software import Software
 from .ssh import SSH
 from .ssl import SSL
-from .http import HTTP
 from .tunnel import Tunnel
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
@@ -40,7 +39,6 @@ class FlowAlerts(AsyncModule):
         self.downloaded_file = DownloadedFile(self.db, flowalerts=self)
         self.tunnel = Tunnel(self.db, flowalerts=self)
         self.conn = Conn(self.db, flowalerts=self)
-        self.http = HTTP(self.db, flowalerts=self)
         # list of async functions to await before flowalerts shuts down
         self.tasks: List[Task] = []
 
@@ -69,20 +67,19 @@ class FlowAlerts(AsyncModule):
         utils.drop_root_privs()
         self.dns.pre_analyze()
         self.analyzers_map = {
-            "new_downloaded_file": [self.downloaded_file.analyze],
-            "new_notice": [self.notice.analyze],
-            "new_smtp": [self.smtp.analyze],
+            "new_downloaded_file": [self.downloaded_file],
+            "new_notice": [self.notice],
+            "new_smtp": [self.smtp],
             "new_flow": [
-                self.conn.analyze,
-                self.ssl.analyze,
-                self.http.analyze,
+                self.conn,
+                self.ssl,
             ],
-            "new_dns": [self.dns.analyze],
-            "tw_closed": [self.conn.analyze],
-            "new_ssh": [self.ssh.analyze],
-            "new_software": [self.software.analyze],
-            "new_tunnel": [self.tunnel.analyze],
-            "new_ssl": [self.ssl.analyze],
+            "new_dns": [self.dns],
+            "tw_closed": [self.conn],
+            "new_ssh": [self.ssh],
+            "new_software": [self.software],
+            "new_tunnel": [self.tunnel],
+            "new_ssl": [self.ssl],
         }
 
     async def main(self):
@@ -99,7 +96,7 @@ class FlowAlerts(AsyncModule):
                     # tasks inside this analyzer will run asynchrously,
                     # and finish whenever they finish, we'll not wait for them
                     loop = asyncio.get_event_loop()
-                    task = loop.create_task(analyzer(msg))
+                    task = loop.create_task(analyzer.analyze(msg))
                     # because Async Tasks swallow exceptions.
                     task.add_done_callback(self.handle_exception)
                     # to wait for these functions before flowalerts shuts down
@@ -107,4 +104,4 @@ class FlowAlerts(AsyncModule):
                     # Allow the event loop to run the scheduled task
                     await asyncio.sleep(0)
                 else:
-                    analyzer(msg)
+                    analyzer.analyze(msg)
