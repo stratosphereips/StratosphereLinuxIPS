@@ -8,7 +8,6 @@ from sklearn.preprocessing import StandardScaler
 import pickle
 import pandas as pd
 import json
-import datetime
 import traceback
 import warnings
 
@@ -382,10 +381,6 @@ class FlowMLDetection(IModule):
             f" {flow['saddr']}:{flow['sport']} to "
             f"{flow['daddr']}:{flow['dport']}"
         )
-
-        timestamp = utils.convert_format(
-            datetime.datetime.now(), utils.alerts_format
-        )
         twid_number = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_FLOW,
@@ -405,7 +400,7 @@ class FlowMLDetection(IModule):
             profile=ProfileID(ip=flow["saddr"]),
             timewindow=TimeWindow(twid_number),
             uid=[flow["uid"]],
-            timestamp=timestamp,
+            timestamp=flow["starttime"],
             method=Method.AI,
             src_port=flow["sport"],
             dst_port=flow["dport"],
