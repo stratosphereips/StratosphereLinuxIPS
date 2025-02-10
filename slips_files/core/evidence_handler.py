@@ -520,15 +520,16 @@ class EvidenceHandler(ICore):
 
     def get_attacker_and_victim_info(self, evidence: Evidence) -> str:
         """
-        Processes the evidence to retrieve both attacker and victim
-        information.
+        Checks for IPs in the attacker and victim fields of the given
+        evidence and returns both attacker and victim
+        ip_identification from the database.
         """
         res = ""
 
         if evidence.attacker.attacker_type == IoCType.IP.name:
             info = self.db.get_ip_identification(evidence.attacker.value)
             if info:
-                res += f"IP {evidence.attacker.value} {info}\n"
+                res += f"IP {evidence.attacker.value} {info}"
 
         if evidence.victim and evidence.victim.victim_type == IoCType.IP.name:
             info = self.db.get_ip_identification(evidence.victim.value)
