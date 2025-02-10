@@ -101,6 +101,13 @@ class Utils(object):
         parsed_url = tldextract.extract(url)
         return f"{parsed_url.domain}.{parsed_url.suffix}"
 
+    def is_localhost(self, ip: str) -> bool:
+        try:
+            return ipaddress.ip_address(ip).is_loopback
+        except ValueError:
+            # Invalid IP address
+            return False
+
     def get_cidr_of_private_ip(self, ip):
         """
         returns the cidr/range of the given private ip
