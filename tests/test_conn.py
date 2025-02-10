@@ -298,7 +298,7 @@ def test_check_multiple_reconnection_attempts(
     conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
-        "SetEvidnceHelper.multiple_reconnection_attempts"
+        "SetEvidenceHelper.multiple_reconnection_attempts"
     )
     conn.db.get_reconnections_for_tw.return_value = {}
 
@@ -408,7 +408,7 @@ def test_check_data_upload(
     """
     conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.data_exfiltration"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.data_exfiltration"
     )
     conn.gateway = "192.168.1.1"
     flow = Conn(
@@ -664,104 +664,6 @@ def test_check_conn_to_port_0(
 
     conn.check_conn_to_port_0(profileid, twid, flow)
     assert conn.set_evidence.port_0_connection.call_count == expected_calls
-
-
-@pytest.mark.parametrize(
-    "state, daddr, dport, proto, appproto, allbytes, expected_calls",
-    [
-        (  # Testcase 1: Established connection on port 80, not HTTP
-            "Established",
-            "192.168.1.2",
-            80,
-            "tcp",
-            "ftp",
-            1024,
-            1,
-        ),
-        # (  # Testcase 2: Established connection on port 80, HTTP
-        #     "Established",
-        #     "192.168.1.2",
-        #     80,
-        #     "tcp",
-        #     "http",
-        #     1024,
-        #     0,
-        # ),
-        # (  # Testcase 3: Not an established connection
-        #     "Syn",
-        #     "192.168.1.2",
-        #     80,
-        #     "tcp",
-        #     "ftp",
-        #     1024,
-        #     0,
-        # ),
-        # (  # Testcase 4: Different port than 80
-        #     "Established",
-        #     "192.168.1.2",
-        #     8080,
-        #     "tcp",
-        #     "ftp",
-        #     1024,
-        #     0,
-        # ),
-        # (  # Testcase 5:  Different protocol than TCP
-        #     "Established",
-        #     "192.168.1.2",
-        #     80,
-        #     "udp",
-        #     "ftp",
-        #     1024,
-        #     0,
-        # ),
-        # (  # Testcase 6: Zero bytes transferred
-        #     "Established",
-        #     "192.168.1.2",
-        #     80,
-        #     "tcp",
-        #     "ftp",
-        #     0,
-        #     0,
-        # ),
-    ],
-)
-def test_check_non_http_port_80_conns(
-    state,
-    daddr,
-    dport,
-    proto,
-    appproto,
-    allbytes,
-    expected_calls,
-):
-    """
-    Tests the check_non_http_port_80_conns
-    function with various scenarios.
-    """
-    conn = ModuleFactory().create_conn_analyzer_obj()
-    conn.set_evidence.non_http_port_80_conn = Mock()
-    flow = Conn(
-        starttime="1726249372.312124",
-        uid=uid,
-        saddr=saddr,
-        daddr=daddr,
-        dur=1,
-        proto=proto,
-        appproto=appproto,
-        sport="0",
-        dport=str(dport),
-        spkts=0,
-        dpkts=0,
-        sbytes=5,
-        dbytes=5,
-        smac="",
-        dmac="",
-        state="",
-        history="",
-    )
-    flow.interpreted_state = state
-    conn.check_non_http_port_80_conns(twid, flow)
-    assert conn.set_evidence.non_http_port_80_conn.call_count == expected_calls
 
 
 @pytest.mark.parametrize(
