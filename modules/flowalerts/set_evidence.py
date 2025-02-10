@@ -19,7 +19,7 @@ from slips_files.core.structures.evidence import (
 )
 
 
-class SetEvidnceHelper:
+class SetEvidenceHelper:
     def __init__(self, db):
         self.db = db
 
