@@ -6,16 +6,14 @@ import urllib
 from uuid import uuid4
 
 import requests
-from typing import (
-    Union,
-    Dict,
-    Optional,
-)
-
+from typing import Union, Dict, Optional, List, Tuple
+import time
+import bisect
+from multiprocessing import Lock
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.async_module import AsyncModule
 from slips_files.core.flows.zeek import Weird
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -32,7 +30,7 @@ from slips_files.core.structures.evidence import (
 ESTAB = "Established"
 
 
-class HTTPAnalyzer(IModule):
+class HTTPAnalyzer(AsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "HTTP Analyzer"
     description = "Analyze HTTP flows"
@@ -74,6 +72,9 @@ class HTTPAnalyzer(IModule):
             "application/x-dosexec",
         ]
         self.classifier = FlowClassifier()
+        self.http_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
+        self.ts_of_last_cleanup_of_http_recognized_flows = time.time()
+        self.http_recognized_flows_lock = Lock()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -656,25 +657,188 @@ class HTTPAnalyzer(IModule):
 
         self.set_evidence_weird_http_method(twid, flow, conn_log_flow)
 
-    def check_non_http_port_80_conns(self, twid, flow):
+    def keep_track_of_http_flow(self, flow, key) -> None:
+        """keeps track of the given http flow in http_recognized_flows"""
+        # we're using locks here because this is a part of an asyncio
+        # function and there's another garbage collector that may be
+        # modifying the dict at the same time.
+        self.http_recognized_flows_lock.acquire()
+        try:
+            ts_list = self.http_recognized_flows[key]
+            # to store the ts sorted for faster lookups
+            bisect.insort(ts_list, float(flow.starttime))
+        except KeyError:
+            self.http_recognized_flows[key] = [float(flow.starttime)]
+
+        self.http_recognized_flows_lock.release()
+
+    def is_http_proto_recognized_by_zeek(self, flow) -> bool:
         """
-        alerts on established connections on port 80 that are not HTTP
+        if the conn was an http conn recognized by zeek, the 'service'
+        field aka appproto should be 'http'
         """
-        # if it was a valid http conn, the 'service' field aka
-        # appproto should be 'http'
-        if (
+        return flow.appproto and str(flow.appproto.lower()) == "http"
+
+    def is_tcp_established_port_80_non_empty_flow(self, flow) -> bool:
+        state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
+        return (
             str(flow.dport) == "80"
             and flow.proto.lower() == "tcp"
-            and str(flow.appproto).lower() != "http"
-            and flow.interpreted_state == ESTAB
+            and state == ESTAB
             and (flow.sbytes + flow.dbytes) != 0
-        ):
+        )
+
+    def search_http_recognized_flows_for_ts_range(
+        self, flow, start, end
+    ) -> List[float]:
+        """
+        Searches for a flow that matches the given flow in
+        self.http_recognized_flows.
+
+        given the start and end time, returns the timestamps within that
+        range.
+
+        2 flows match if they share the src and dst IPs
+        """
+
+        # Handle the case where the key might not exist
+        try:
+            sorted_timestamps_of_past_http_flows = self.http_recognized_flows[
+                (flow.saddr, flow.daddr)
+            ]
+        except KeyError:
+            return []
+
+        # Find the left and right boundaries
+        left_idx = bisect.bisect_left(
+            sorted_timestamps_of_past_http_flows, start
+        )
+        right_idx = bisect.bisect_right(
+            sorted_timestamps_of_past_http_flows, end
+        )
+
+        return sorted_timestamps_of_past_http_flows[left_idx:right_idx]
+
+    async def check_non_http_port_80_conns(
+        self, twid, flow, timeout_reached=False
+    ):
+        """
+        alerts on established connections on port 80 that are not http
+        This is how we do the detection.
+        for every detected non http flow, we check 5 mins back for
+        matching flows that were detected as http by zeek. if found,
+        we discard the evidence. if not found, we check for future 5 mins
+        of matching zeek flows that were detected as http by zeek.
+         if found, we dont set an evidence, if not found, we set an evidence
+        :kwarg timeout_reached: did we wait 5 mins in future and in the
+        past for the http of the given flow to arrive or not?
+        """
+        if not self.is_tcp_established_port_80_non_empty_flow(flow):
+            # we're not interested in that flow
+            return False
+
+        # key for looking up matching http flows in http_recognized_flows
+        key = (flow.saddr, flow.daddr)
+
+        if self.is_http_proto_recognized_by_zeek(flow):
+            # not a fp, thats a recognized http flow
+            self.keep_track_of_http_flow(flow, key)
+            return False
+
+        # in seconds
+        five_mins = 5 * 60
+
+        # timeout reached indicates that we did search in the past once,
+        # we need to srch in the future now
+        if timeout_reached:
+            # look in the future
+            matching_http_flows: List[float] = (
+                self.search_http_recognized_flows_for_ts_range(
+                    flow, flow.starttime, flow.starttime + five_mins
+                )
+            )
+        else:
+            # look in the past
+            matching_http_flows: List[float] = (
+                self.search_http_recognized_flows_for_ts_range(
+                    flow, flow.starttime - five_mins, flow.starttime
+                )
+            )
+
+        if matching_http_flows:
+            # awesome! discard evidence. FP dodged.
+            # clear these timestamps as we dont need them anymore?
+            return False
+
+        # reaching here means we looked in the past 5 mins and
+        # found no timestamps, did we look in the future 5 mins?
+        if timeout_reached:
+            # yes we did. set an evidence
             self.set_evidence.non_http_port_80_conn(twid, flow)
+            return True
+
+        # ts not reached
+        # wait 5 mins real-time (to give slips time to
+        # read more flows) maybe the recognized http arrives
+        # within that time?
+        await asyncio.sleep(five_mins)
+        # we can safely await here without blocking the main thread because
+        # once the above await returns, this function will never sleep
+        # again, it'll either set the evidence or discard it
+        await self.check_non_http_port_80_conns(
+            twid, flow, timeout_reached=True
+        )
+        return False
+
+    def remove_old_entries_from_http_recognized_flows(self) -> None:
+        """
+        the goal of this is to not have the http_recognized_flows dict
+        growing forever, so here we remove all timestamps older than the last
+        one-5 mins (zeek time)
+        meaning, it ensures that all lists have max 5mins worth of timestamps
+        changes the http_recognized_flows to the cleaned one
+        """
+        # Runs every 5 mins real time, to reduce unnecessary cleanups every
+        # 1s
+        now = time.time()
+        time_since_last_cleanup = utils.get_time_diff(
+            self.ts_of_last_cleanup_of_http_recognized_flows,
+            now,
+            "minutes",
+        )
+
+        if time_since_last_cleanup < 5:
+            return
+
+        clean_http_recognized_flows = {}
+        for ips, timestamps in self.http_recognized_flows.items():
+            ips: Tuple[str, str]
+            timestamps: List[float]
+
+            end: float = float(timestamps[-1])
+            start = end - 5 * 60
+
+            left = bisect.bisect_right(timestamps, start)
+            right = bisect.bisect_left(timestamps, end)
+            # thats the range we wanna remove from the list bc it's too old
+            garbage = timestamps[left:right]
+            clean_http_recognized_flows[ips] = [
+                ts for ts in timestamps if ts not in garbage
+            ]
+
+        self.http_recognized_flows_lock.acquire()
+        self.http_recognized_flows = clean_http_recognized_flows
+        self.http_recognized_flows_lock.release()
+        self.ts_of_last_cleanup_of_http_recognized_flows = now
+
+    async def shutdown_gracefully(self):
+        """wait for all the tasks created by self.create_task()"""
+        await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def pre_main(self):
         utils.drop_root_privs()
 
-    def main(self):
+    async def main(self):
         if msg := self.get_msg("new_http"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
@@ -715,4 +879,4 @@ class HTTPAnalyzer(IModule):
             msg = json.loads(msg["data"])
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            self.check_non_http_port_80_conns(twid, flow)
+            self.create_task(self.check_non_http_port_80_conns, twid, flow)

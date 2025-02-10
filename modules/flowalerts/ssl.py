@@ -1,4 +1,5 @@
-# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia
+# <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import json
@@ -141,8 +142,10 @@ class SSL(IFlowalertsAnalyzer):
         )
 
     def is_ssl_proto_recognized_by_zeek(self, flow) -> bool:
-        # if it was a valid ssl conn, the 'service' field aka
-        # appproto should be 'ssl'
+        """
+        if the conn was an ssl conn recognized by zeek, the 'service'
+        field aka appproto should be 'ssl''
+        """
         return flow.appproto and str(flow.appproto.lower()) == "ssl"
 
     def search_ssl_recognized_flows_for_ts_range(
@@ -157,7 +160,6 @@ class SSL(IFlowalertsAnalyzer):
 
         2 flows match if they share the src and dst IPs
         """
-        # TODO that end may not be there!!
 
         # Handle the case where the key might not exist
         try:
@@ -257,8 +259,8 @@ class SSL(IFlowalertsAnalyzer):
         # within that time?
         await asyncio.sleep(five_mins)
         # we can safely await here without blocking the main thread because
-        # once the timeout is reached, this function will neve sleep again,
-        # it'll either set the evidence r discard it
+        # once the timeout is reached, this function will never sleep again,
+        # it'll either set the evidence or discard it
         await self.check_non_ssl_port_443_conns(
             twid, flow, timeout_reached=True
         )
