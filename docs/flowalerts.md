@@ -27,7 +27,6 @@ The detection techniques are:
 - CN URL Mismatch
 - Weird HTTP methods
 - Non-SSL connections on port 443
-- Non-HTTP connections on port 80
 - Connection to private IPs
 - Connection to private IPs outside the current local network
 - High entropy DNS TXT answers
@@ -333,13 +332,6 @@ Here's how it works
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_non_ssl_evidence_works.png.png" >
 
 
-## Non-HTTP connections on port 80.
-
-Slips detects established connections on port 80 that are not using SSL
-using zeek's conn.log flows
-
-if slips finds a flow using destination port 80 and the 'service' field
-in conn.log isn't set to 'http', it alerts
 
 ## Connection to private IPs
 

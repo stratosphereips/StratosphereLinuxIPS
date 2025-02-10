@@ -650,6 +650,17 @@ Available detection are:
 - Multiple user agents
 - Pastebin downloads
 - Unencrypted HTTP traffic
+- Non-HTTP connections on port 80.
+
+Slips detects established connections on port 80 that are not using SSL
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 80 and the 'service' field
+in conn.log isn't set to 'http', if means zeek didnt recognize that flow as http.
+Slips makes sure no matching flows were detected as HTTP by zeek
+within 5 mins before or after the given flow. if not, slips sets an evidence saying
+"non http established conn on port 80"
+
 
 ### Multiple empty connections
 
