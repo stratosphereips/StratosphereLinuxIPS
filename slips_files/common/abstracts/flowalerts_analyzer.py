@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from abc import ABC, abstractmethod
 
-from modules.flowalerts.set_evidence import SetEvidnceHelper
+from modules.flowalerts.set_evidence import SetEvidenceHelper
 from slips_files.core.database.database_manager import DBManager
 
 
@@ -18,7 +18,7 @@ class IFlowalertsAnalyzer(ABC):
         self.db = db
         self.flowalerts = flowalerts
         self.whitelist = self.flowalerts.whitelist
-        self.set_evidence = SetEvidnceHelper(self.db)
+        self.set_evidence = SetEvidenceHelper(self.db)
         self.init(**kwargs)
 
     @property
