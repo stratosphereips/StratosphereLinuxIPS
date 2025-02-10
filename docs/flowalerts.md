@@ -322,7 +322,16 @@ Slips detects established connections on port 443 that are not using HTTP
 using zeek's conn.log flows
 
 if slips finds a flow using destination port 443 and the 'service' field
-in conn.log isn't set to 'ssl', it alerts
+in conn.log isn't set to 'ssl', it alerts.
+
+Sometimes zeek detects a connection from a source to a destination IP on port 443 as SSL, and another connection within
+5 minutes later as non-SSL. Slips detects that and does not set an evidence for any of them.
+
+Here's how it works
+
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_non_ssl_evidence_works.png.png" >
+
 
 ## Non-HTTP connections on port 80.
 
