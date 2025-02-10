@@ -15,6 +15,7 @@ from .smtp import SMTP
 from .software import Software
 from .ssh import SSH
 from .ssl import SSL
+from .http import HTTP
 from .tunnel import Tunnel
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
@@ -39,6 +40,7 @@ class FlowAlerts(AsyncModule):
         self.downloaded_file = DownloadedFile(self.db, flowalerts=self)
         self.tunnel = Tunnel(self.db, flowalerts=self)
         self.conn = Conn(self.db, flowalerts=self)
+        self.http = HTTP(self.db, flowalerts=self)
         # list of async functions to await before flowalerts shuts down
         self.tasks: List[Task] = []
 
@@ -70,7 +72,11 @@ class FlowAlerts(AsyncModule):
             "new_downloaded_file": [self.downloaded_file.analyze],
             "new_notice": [self.notice.analyze],
             "new_smtp": [self.smtp.analyze],
-            "new_flow": [self.conn.analyze, self.ssl.analyze],
+            "new_flow": [
+                self.conn.analyze,
+                self.ssl.analyze,
+                self.http.analyze,
+            ],
             "new_dns": [self.dns.analyze],
             "tw_closed": [self.conn.analyze],
             "new_ssh": [self.ssh.analyze],
