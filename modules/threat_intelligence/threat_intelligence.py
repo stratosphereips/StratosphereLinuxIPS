@@ -1793,8 +1793,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         for local_file in local_files:
             self.update_local_file(local_file)
 
-        self.pending_circllu_calls_thread.start()
-
     def main(self):
         # The channel can receive an IP address or a domain name
         if msg := self.get_msg("give_threat_intelligence"):
