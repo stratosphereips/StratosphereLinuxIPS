@@ -91,7 +91,7 @@ class FlowAlerts(AsyncModule):
 
             for analyzer in analyzers:
                 # some analyzers are async functions
-                if inspect.iscoroutinefunction(analyzer):
+                if inspect.iscoroutinefunction(analyzer.analyze):
                     # analyzer will run normally, until it finishes.
                     # tasks inside this analyzer will run asynchrously,
                     # and finish whenever they finish, we'll not wait for them
