@@ -222,9 +222,6 @@ class DBManager:
     def mark_srcip_as_seen_in_connlog(self, *args, **kwargs):
         return self.rdb.mark_srcip_as_seen_in_connlog(*args, **kwargs)
 
-    def is_gw_mac(self, *args, **kwargs):
-        return self.rdb.is_gw_mac(*args, **kwargs)
-
     def get_ip_of_mac(self, *args, **kwargs):
         return self.rdb.get_ip_of_mac(*args, **kwargs)
 

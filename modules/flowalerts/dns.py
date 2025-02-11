@@ -457,7 +457,15 @@ class DNS(IFlowalertsAnalyzer):
             return
 
         for answer in flow.answers:
-            if utils.is_private_ip(answer) and flow.query != "localhost":
+            if (
+                utils.is_private_ip(answer)
+                and flow.query != "localhost"
+                # mDNS
+                and not flow.query.endswith(".local")
+                # arpa queries are rDNS of ipv6 queries. they may return
+                # private IPs in Dual-Stack (IPv4 + IPv6) Networks
+                and not flow.query.endswith(".arpa")
+            ):
                 self.set_evidence.invalid_dns_answer(twid, flow, answer)
                 # delete answer from redis cache to prevent
                 # associating this dns answer with this domain/query and
