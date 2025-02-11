@@ -1539,7 +1539,7 @@ def test_add_mac_addr_to_profile_no_existing_mac():
     profileid = "profile_192.168.1.100"
     mac_addr = "00:11:22:33:44:55"
 
-    handler.is_gw_mac = MagicMock(return_value=False)
+    handler._is_gw_mac = MagicMock(return_value=False)
     handler.get_gateway_ip = MagicMock(return_value="192.168.1.1")
 
     handler.r.hmget.return_value = [None]
@@ -1560,7 +1560,7 @@ def test_add_mac_addr_to_profile_existing_mac():
     profileid = "profile_192.168.1.100"
     mac_addr = "00:11:22:33:44:55"
 
-    handler.is_gw_mac = MagicMock(return_value=False)
+    handler._is_gw_mac = MagicMock(return_value=False)
     handler.get_gateway_ip = MagicMock(return_value="192.168.1.1")
     # mimic having an ip for the given mac
     # this should make [incoming_ip in cached_ips] True
