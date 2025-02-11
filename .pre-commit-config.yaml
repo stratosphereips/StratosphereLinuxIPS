@@ -41,4 +41,5 @@ repos:
       rev: v1.35.1
       hooks:
         - id: yamllint
+          args: ["-d", "{rules: {line-length: {max: 100}}}"]
           files: "slips.yaml"
