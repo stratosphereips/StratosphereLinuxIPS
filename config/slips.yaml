@@ -102,7 +102,7 @@ parameters:
   # detections and TI information.
   # Redis will keep the data as long as it is not stopped.
   # The persistence is in memory, not disk.
-  # deletePrevdb : False
+  # deletePrevdb : false
   deletePrevdb: true
 
   # Set the label for all the flows that are being read.
@@ -195,7 +195,7 @@ detection:
   evidence_detection_threshold: 0.25
 
   # Make Slips pop up alerts? Both Linux and Macos
-  popup_alerts: False
+  popup_alerts: false
 
 #############################
 modules:
@@ -209,8 +209,8 @@ modules:
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However
-  # by setting this variable to "True" value the time will be human readable.
-  timeline_human_timestamp: True
+  # by setting this variable to "true" value the time will be human readable.
+  timeline_human_timestamp: true
 
 #############################
 flowmldetection:
@@ -253,7 +253,7 @@ threatintelligence:
   # new detections are done.
   # So no detection will be missied, just it will take longer to start if
   # you use true.
-  wait_for_TI_to_finish: False
+  wait_for_TI_to_finish: false
 
   # Default path to the folder with files holding malcious IPs as defined
   # locally by the user. So the user can define its own malicious TI.
@@ -366,7 +366,7 @@ exporting_alerts:
   port: 1234
 
   # For Stix, if Slips should use TLS
-  use_https: False
+  use_https: false
 
   # TAXII
   discovery_path: /services/discovery-a
@@ -397,8 +397,8 @@ exporting_alerts:
 CESNET:
   # Slips also supports exporting and importing evidence in the IDEA format to/from
   # warden servers of CESNET organization in Czech Republic.
-  send_alerts: False
-  receive_alerts: False
+  send_alerts: false
+  receive_alerts: false
 
   # Warden configuration file. For format instructions check
   # yamllint disable-line rule:line-length
@@ -450,7 +450,7 @@ Docker:
 Profiling:
   # CPU profiling
   # enable cpu profiling [yes,no]
-  cpu_profiler_enable: False
+  cpu_profiler_enable: false
 
   # Available options are [dev,live]
   # dev for deterministic profiling. this will give precise information
@@ -461,7 +461,7 @@ Profiling:
   cpu_profiler_mode: dev
 
   # profile all subprocesses in dev mode [yes,no].
-  cpu_profiler_multiprocess: True
+  cpu_profiler_multiprocess: true
 
   # set number of tracer entries (dev mode only)
   cpu_profiler_dev_mode_entries: 1000000
@@ -473,13 +473,13 @@ Profiling:
   cpu_profiler_sampling_interval: 20
 
   # enable memory profiling [yes,no]
-  memory_profiler_enable: False
+  memory_profiler_enable: false
 
   # set profiling mode [dev,live]
   memory_profiler_mode: live
 
   # profile all subprocesses [yes,no]
-  memory_profiler_multiprocess: True
+  memory_profiler_multiprocess: true
 
 #############################
 web_interface:
@@ -492,6 +492,6 @@ P2P:
   # Slips can use a local network P2P protocol to find other Slips
   # and share alerts.
   # Should slips create a log file for P2P?
-  create_p2p_logfile: False
+  create_p2p_logfile: false
   # Should Slips use P2P?
-  use_p2p: False
+  use_p2p: false
