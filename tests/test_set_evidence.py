@@ -1810,7 +1810,8 @@ def test_doh(attacker_ip, victim_ip, profile_ip):
 
 def test_non_http_port_80_conn():
     """Testing the non_http_port_80_conn method."""
-    set_ev = ModuleFactory().create_set_evidence_helper()
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    set_evidence = http_analyzer.set_evidence
     flow = Conn(
         starttime="1726249372.312124",
         uid="123",
@@ -1830,10 +1831,10 @@ def test_non_http_port_80_conn():
         state="Established",
         history="",
     )
-    set_ev.non_http_port_80_conn(twid="timewindow2", flow=flow)
+    set_evidence.non_http_port_80_conn(twid="timewindow2", flow=flow)
 
-    assert set_ev.db.set_evidence.call_count == 2
-    args, _ = set_ev.db.set_evidence.call_args_list[0]
+    assert set_evidence.db.set_evidence.call_count == 2
+    args, _ = set_evidence.db.set_evidence.call_args_list[0]
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.NON_HTTP_PORT_80_CONNECTION
     assert evidence.attacker.value == flow.saddr
@@ -1843,7 +1844,7 @@ def test_non_http_port_80_conn():
     assert evidence.timewindow.number == 2
     assert evidence.uid == [flow.uid]
 
-    args, _ = set_ev.db.set_evidence.call_args_list[1]
+    args, _ = set_evidence.db.set_evidence.call_args_list[1]
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.NON_HTTP_PORT_80_CONNECTION
     assert evidence.attacker.value == "10.0.0.1"

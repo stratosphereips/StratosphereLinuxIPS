@@ -33,7 +33,6 @@ The detection techniques are:
 - Incompatible CN
 - Weird HTTP methods
 - Non-SSL connections on port 443
-- Non-HTTP connections on port 80
 - Connection to private IPs
 - Connection to private IPs outside the current local network
 - High entropy DNS TXT answers
