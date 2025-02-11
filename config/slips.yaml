@@ -157,7 +157,7 @@ parameters:
 
   # Flows are labeled to normal/malicious by Slips and added to the sqlite
   # db in the output dir.
-  export_labeled_flows: true
+  export_labeled_flows: false
 
   # Which format to use for the exported flows
   # Export_format can be tsv or json. this parameter is ignored if
