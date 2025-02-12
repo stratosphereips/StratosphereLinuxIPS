@@ -176,11 +176,9 @@ def test_is_whitelisted_evidence(
     is_whitelisted_victim, is_whitelisted_attacker, expected_result
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.is_whitelisted_attacker = Mock()
-    whitelist.is_whitelisted_attacker.return_value = is_whitelisted_attacker
-
-    whitelist.is_whitelisted_victim = Mock()
-    whitelist.is_whitelisted_victim.return_value = is_whitelisted_victim
+    whitelist._is_whitelisted_entity = Mock(
+        side_effect=[is_whitelisted_victim, is_whitelisted_attacker]
+    )
 
     mock_evidence = Mock()
     assert whitelist.is_whitelisted_evidence(mock_evidence) == expected_result
@@ -407,7 +405,7 @@ def test_ip_analyzer_is_whitelisted(ip, what_to_ignore, expected_result):
         (False, False, False),
     ],
 )
-def test_is_whitelisted_attacker_domain(
+def test_is_whitelisted_entity_attacker(
     is_whitelisted_domain, is_whitelisted_org, expected_result
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
@@ -430,7 +428,10 @@ def test_is_whitelisted_attacker_domain(
         value="google.com",
         direction=Direction.SRC,
     )
-    assert whitelist.is_whitelisted_attacker(evidence) == expected_result
+    assert (
+        whitelist._is_whitelisted_entity(evidence, "attacker")
+        == expected_result
+    )
 
 
 @pytest.mark.parametrize(
@@ -444,7 +445,7 @@ def test_is_whitelisted_attacker_domain(
         (False, False, False, False, False),
     ],
 )
-def test_is_whitelisted_victim(
+def test_is_whitelisted_entity_victim(
     is_whitelisted_domain,
     is_whitelisted_ip,
     is_whitelisted_mac,
@@ -471,12 +472,14 @@ def test_is_whitelisted_victim(
     whitelist.db.is_whitelisted_tranco_domain.return_value = False
 
     evidence = Mock()
-    evidence.attacker = Victim(
+    evidence.victim = Victim(
         ioc_type=IoCType.IP,
         value="1.2.3.4",
         direction=Direction.SRC,
     )
-    assert whitelist.is_whitelisted_victim(evidence) == expected_result
+    assert (
+        whitelist._is_whitelisted_entity(evidence, "victim") == expected_result
+    )
 
 
 @pytest.mark.parametrize(
