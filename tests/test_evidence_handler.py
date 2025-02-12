@@ -255,9 +255,7 @@ def test_show_popup():
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.notify = Mock()
     alert = Mock(spec=Alert)
-    evidence_handler.get_alert_time_description = Mock(
-        return_value="alert_time_desc"
-    )
+    evidence_handler.get_printable_alert = Mock(return_value="alert_time_desc")
 
     evidence_handler.show_popup(alert)
 
@@ -348,7 +346,7 @@ def test_get_alert_time_description(
     ) as mock_convert_format:
         mock_convert_format.return_value = "converted_time"
 
-        result = evidence_handler.get_alert_time_description(alert)
+        result = evidence_handler.get_printable_alert(alert)
 
         print(f"Expected: {expected_output}")
         print(f"Actual: {result}")
