@@ -530,19 +530,26 @@ class EvidenceHandler(ICore):
         evidence and returns both attacker and victim
         ip_identification from the database.
         """
-        res = ""
+        results = []
 
-        if evidence.attacker.ioc_type == IoCType.IP.name:
-            info = self.db.get_ip_identification(evidence.attacker.value)
-            if info:
-                res += f"IP {evidence.attacker.value} {info}"
+        for entity_name in ("attacker", "victim"):
+            entity = getattr(evidence, entity_name, None)
+            if not entity or entity.ioc_type != IoCType.IP.name:
+                continue
 
-        if evidence.victim and evidence.victim.ioc_type == IoCType.IP.name:
-            info = self.db.get_ip_identification(evidence.victim.value)
-            if info:
-                res += f"IP {evidence.victim.value} {info}"
+            cached_info = self.db.get_ip_identification(entity.value) or {}
+            info_parts = []
+            for info_type, info in cached_info.items():
+                if not info:
+                    continue
 
-        return res
+                cleaned_type = info_type.replace("_", " ")
+                info_parts.append(f"{cleaned_type}: {info}")
+
+            if info_parts:
+                results.append(f"IP {entity.value}: " + ", ".join(info_parts))
+
+        return ", ".join(results)
 
     def get_profile_info(self, evidence: Evidence) -> str:
         """
