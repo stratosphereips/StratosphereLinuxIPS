@@ -1082,7 +1082,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         sni = sni[0] if isinstance(sni, list) else sni
         return sni.get("server_name")
 
-    def get_ip_identification(self, ip: str, get_ti_data=True) -> str:
+    def get_ip_identification(
+        self, ip: str, get_ti_data=True
+    ) -> Dict[str, str]:
         """
         Return the identification of this IP based
         on the AS, rDNS, and SNI of the IP.
@@ -1092,28 +1094,43 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
-        ip_info = self.get_ip_info(ip)
-        id = ""
-        if not ip_info:
+        cached_info: Optional[Dict[str, str]] = self.get_ip_info(ip)
+        id = {}
+        if not cached_info:
             return id
 
-        if asn := self.get_asn_info(ip):
-            asn_org = asn.get("org", "")
-            asn_number = asn.get("number", "")
-            id += f" AS: {asn_org} {asn_number}"
+        sni = cached_info.get("SNI")
+        if sni:
+            sni = sni[0] if isinstance(sni, list) else sni
+            sni = sni.get("server_name")
 
-        if sni := self.get_sni_info(ip):
-            id += f" SNI: {sni}, "
-
-        if rdns := self.get_rdns_info(ip):
-            id += f" rDNS: {rdns}, "
-
-        threat_intel = ip_info.get("threatintelligence", "")
-        if threat_intel and get_ti_data:
-            id += f" appears in blacklist: {threat_intel['source']}."
-
-        id = id.rstrip(", ")
+        id = {
+            "AS": cached_info.get("asn"),
+            "rDNS": cached_info.get("reverse_dns"),
+            "SNI": sni,
+        }
+        if get_ti_data:
+            id.update(
+                {"TI": cached_info.get("threatintelligence", {}).get("source")}
+            )
         return id
+        # # if asn := self.get_asn_info(ip):
+        # #     asn_org = asn.get("org", "")
+        # #     asn_number = asn.get("number", "")
+        # #     id += f" AS: {asn_org} {asn_number}"
+        # #
+        # # if sni := self.get_sni_info(ip):
+        # #     id += f" SNI: {sni}, "
+        # #
+        # # if rdns := self.get_rdns_info(ip):
+        # #     id += f" rDNS: {rdns}, "
+        # #
+        # #
+        # #     if threat_intel:= ip_info.get("threatintelligence", ""):
+        # #         id += f" appears in blacklist: {threat_intel['source']}."
+        #
+        # id = id.rstrip(", ")
+        # return id
 
     def get_multiaddr(self):
         """
