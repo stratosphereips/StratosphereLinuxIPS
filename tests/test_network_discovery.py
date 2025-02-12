@@ -273,7 +273,7 @@ def test_check_dhcp_scan_with_evidence():
             Victim(
                 value="192.168.1.1",
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
             ),
         ),
         # Testcase 2: Multiple IP scan, high packet count
@@ -307,7 +307,7 @@ def test_check_dhcp_scan_with_evidence():
             Victim(
                 value="172.16.0.1",
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
             ),
         ),
     ],

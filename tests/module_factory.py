@@ -455,7 +455,7 @@ class ModuleFactory:
         attacker_type=IoCType.IP,
     ):
         return Attacker(
-            direction=direction, attacker_type=attacker_type, value=value
+            direction=direction, ioc_type=attacker_type, value=value
         )
 
     def create_victim_obj(
@@ -464,9 +464,7 @@ class ModuleFactory:
         direction=Direction.DST,
         victim_type=IoCType.IP,
     ):
-        return Victim(
-            direction=direction, victim_type=victim_type, value=value
-        )
+        return Victim(direction=direction, ioc_type=victim_type, value=value)
 
     def create_profileid_obj(self, ip="192.168.1.3"):
         return ProfileID(ip=ip)

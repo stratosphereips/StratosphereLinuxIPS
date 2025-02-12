@@ -426,7 +426,7 @@ def test_is_whitelisted_attacker_domain(
 
     evidence = Mock()
     evidence.attacker = Attacker(
-        attacker_type=IoCType.DOMAIN,
+        ioc_type=IoCType.DOMAIN,
         value="google.com",
         direction=Direction.SRC,
     )
@@ -472,7 +472,7 @@ def test_is_whitelisted_victim(
 
     evidence = Mock()
     evidence.attacker = Victim(
-        victim_type=IoCType.IP,
+        ioc_type=IoCType.IP,
         value="1.2.3.4",
         direction=Direction.SRC,
     )

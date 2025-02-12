@@ -195,7 +195,7 @@ class Whitelist:
             return True
 
         if self.org_analyzer.is_part_of_a_whitelisted_org(
-            victim.value, victim.victim_type, victim.direction, what_to_ignore
+            victim.value, victim.ioc_type, victim.direction, what_to_ignore
         ):
             return True
 
@@ -233,8 +233,52 @@ class Whitelist:
 
         if self.org_analyzer.is_part_of_a_whitelisted_org(
             attacker.value,
-            attacker.attacker_type,
+            attacker.ioc_type,
             attacker.direction,
+            what_to_ignore,
+        ):
+            return True
+
+        return False
+
+    def is_whitelisted_entity(
+        self, evidence: Evidence, entity_type: str
+    ) -> bool:
+        entity = getattr(evidence, entity_type, None)
+        if not entity:
+            return False
+
+        what_to_ignore = "alerts"
+
+        if self.ip_analyzer.is_whitelisted(
+            entity.value, entity.direction, what_to_ignore
+        ):
+            return True
+
+        if self.domain_analyzer.is_whitelisted(
+            entity.value, entity.direction, what_to_ignore
+        ):
+            return True
+
+        if self.domain_analyzer.is_whitelisted(
+            entity.SNI, Direction.DST, what_to_ignore
+        ):
+            return True
+
+        if self.mac_analyzer.profile_has_whitelisted_mac(
+            entity.value, entity.direction, what_to_ignore
+        ):
+            return True
+
+        org_check_method = self.org_analyzer.is_part_of_a_whitelisted_org
+        entity_type_attr = (
+            "victim_type" if entity_type == "victim" else "attacker_type"
+        )
+
+        if org_check_method(
+            entity.value,
+            getattr(entity, entity_type_attr),
+            entity.direction,
             what_to_ignore,
         ):
             return True

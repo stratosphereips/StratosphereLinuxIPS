@@ -516,7 +516,7 @@ class GoDirector:
         evidence = Evidence(
             evidence_type=EvidenceType.P2P_REPORT,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=ip
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=ip
             ),
             threat_level=threat_level,
             confidence=confidence,

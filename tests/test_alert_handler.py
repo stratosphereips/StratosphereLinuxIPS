@@ -133,7 +133,7 @@ def test_set_evidence_causing_alert(
             description="ARP scan detected",
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value="192.168.1.20",
             ),
             threat_level=ThreatLevel.INFO,
@@ -188,7 +188,7 @@ def test_set_accumulated_threat_level(
             description="ARP scan detected",
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value="192.168.1.20",
             ),
             threat_level=ThreatLevel.INFO,

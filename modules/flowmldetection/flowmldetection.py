@@ -386,12 +386,12 @@ class FlowMLDetection(IModule):
             evidence_type=EvidenceType.MALICIOUS_FLOW,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow["saddr"],
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow["daddr"],
             ),
             threat_level=ThreatLevel.LOW,
