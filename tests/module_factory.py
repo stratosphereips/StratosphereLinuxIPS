@@ -79,6 +79,7 @@ from slips_files.core.structures.evidence import (
     Victim,
 )
 from modules.fidesModule.fidesModule import FidesModule
+from slips_files.core.text_formatters.evidence import EvidenceFormatter
 
 
 def read_configuration():
@@ -621,6 +622,10 @@ class ModuleFactory:
         )
         handler.db = mock_db
         return handler
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_evidence_formatter_obj(self, mock_db):
+        return EvidenceFormatter(mock_db)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_symbol_handler_obj(self, mock_db):
