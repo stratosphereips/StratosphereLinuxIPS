@@ -157,7 +157,9 @@ class Victim:
     SNI: str = field(default=None)
     # if the victim is an IP address and has a corresponding domain,
     # this would be the domain used in the dns query that resolved the IP
-    DNS_resolution: [str] = field(default=None)
+    DNS_resolution: List[str] = field(default=None)
+    # useful if the victim is a domain
+    CNAME: List[str] = field(default=None)
 
     def __post_init__(self):
         if self.ioc_type == IoCType.IP:
@@ -192,7 +194,9 @@ class Attacker:
     SNI: str = field(default=None)
     # if the attacker is an IP address and has a corresponding domain,
     # this would be the domain used in the dns query that resolved the IP
-    DNS_resolution: str = field(default=None)
+    DNS_resolution: List[str] = field(default=None)
+    # useful if the attacker is a domain
+    CNAME: List[str] = field(default=None)
 
     def __post_init__(self):
         if self.ioc_type == IoCType.IP:
