@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 
 from slips_files.common.printer import Printer
 from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
@@ -16,6 +16,7 @@ from slips_files.core.structures.evidence import (
     Evidence,
     Direction,
     Attacker,
+    Victim,
 )
 
 
@@ -158,92 +159,17 @@ class Whitelist:
         """
         Checks if an evidence is whitelisted
         """
-        if self.is_whitelisted_attacker(evidence):
+        if self.is_whitelisted_entity(evidence, "attacker"):
             return True
 
-        if self.is_whitelisted_victim(evidence):
+        if self.is_whitelisted_entity(evidence, "victim"):
             return True
-        return False
-
-    def is_whitelisted_victim(self, evidence: Evidence) -> bool:
-        if not hasattr(evidence, "victim"):
-            return False
-
-        victim = evidence.victim
-        if not victim:
-            return False
-
-        what_to_ignore = "alerts"
-        if self.ip_analyzer.is_whitelisted(
-            victim.value, victim.direction, what_to_ignore
-        ):
-            return True
-
-        if self.domain_analyzer.is_whitelisted(
-            victim.value, victim.direction, what_to_ignore
-        ):
-            return True
-
-        if self.domain_analyzer.is_whitelisted(
-            victim.SNI, Direction.DST, what_to_ignore
-        ):
-            return True
-
-        if self.mac_analyzer.profile_has_whitelisted_mac(
-            victim.value, victim.direction, what_to_ignore
-        ):
-            return True
-
-        if self.org_analyzer.is_part_of_a_whitelisted_org(
-            victim.value, victim.ioc_type, victim.direction, what_to_ignore
-        ):
-            return True
-
-        return False
-
-    def is_whitelisted_attacker(self, evidence: Evidence) -> bool:
-        if not hasattr(evidence, "attacker"):
-            return False
-
-        attacker: Attacker = evidence.attacker
-        if not attacker:
-            return False
-
-        what_to_ignore = "alerts"
-
-        if self.domain_analyzer.is_whitelisted(
-            attacker.value, attacker.direction, what_to_ignore
-        ):
-            return True
-
-        if self.domain_analyzer.is_whitelisted(
-            attacker.SNI, Direction.DST, what_to_ignore
-        ):
-            return True
-
-        if self.ip_analyzer.is_whitelisted(
-            attacker.value, attacker.direction, what_to_ignore
-        ):
-            return True
-
-        if self.mac_analyzer.profile_has_whitelisted_mac(
-            attacker.value, attacker.direction, what_to_ignore
-        ):
-            return True
-
-        if self.org_analyzer.is_part_of_a_whitelisted_org(
-            attacker.value,
-            attacker.ioc_type,
-            attacker.direction,
-            what_to_ignore,
-        ):
-            return True
-
         return False
 
     def is_whitelisted_entity(
         self, evidence: Evidence, entity_type: str
     ) -> bool:
+        entity: Union[Attacker, Victim]
         entity = getattr(evidence, entity_type, None)
         if not entity:
             return False
@@ -271,13 +197,9 @@ class Whitelist:
             return True
 
         org_check_method = self.org_analyzer.is_part_of_a_whitelisted_org
-        entity_type_attr = (
-            "victim_type" if entity_type == "victim" else "attacker_type"
-        )
-
         if org_check_method(
             entity.value,
-            getattr(entity, entity_type_attr),
+            entity.ioc_type,
             entity.direction,
             what_to_ignore,
         ):
