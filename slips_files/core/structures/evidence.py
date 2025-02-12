@@ -155,6 +155,9 @@ class Victim:
     AS: Dict[str, str] = field(default=None)
     rDNS: str = field(default=None)
     SNI: str = field(default=None)
+    # if the victim is an IP address and has a corresponding domain,
+    # this would be the domain used in the dns query that resolved the IP
+    DNS_resolution: [str] = field(default=None)
 
     def __post_init__(self):
         if self.ioc_type == IoCType.IP:
@@ -187,6 +190,9 @@ class Attacker:
     AS: Dict[str, str] = field(default=None)
     rDNS: str = field(default=None)
     SNI: str = field(default=None)
+    # if the attacker is an IP address and has a corresponding domain,
+    # this would be the domain used in the dns query that resolved the IP
+    DNS_resolution: str = field(default=None)
 
     def __post_init__(self):
         if self.ioc_type == IoCType.IP:

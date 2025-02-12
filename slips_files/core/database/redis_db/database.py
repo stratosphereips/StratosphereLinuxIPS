@@ -728,7 +728,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             self.constants.P2P_REPORTS, ip, json.dumps(report_data)
         )
 
-    def get_dns_resolution(self, ip):
+    def get_dns_resolution(self, ip: str):
         """
         IF this IP was resolved by slips
         returns a dict with {ts: .. ,
@@ -859,7 +859,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 # we'll be appending the current answer
                 # to these cached domains
                 domains = ip_info_from_db.get("domains", [])
-
             # if the domain(query) we have isn't already in
             # DNSresolution in the db, add it
             if query not in domains:
@@ -1099,6 +1098,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         if not cached_info:
             return id
 
+        for key in cached_info.keys():
+            if key in (
+                "score",
+                "confidence",
+                "is_doh_server",
+                "threatintelligence",
+            ):
+                continue
+            print(f"@@@@@@@@@@@@@@@@ cached_info {cached_info}")
+            break
+
         sni = cached_info.get("SNI")
         if sni:
             sni = sni[0] if isinstance(sni, list) else sni
@@ -1113,6 +1123,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             id.update(
                 {"TI": cached_info.get("threatintelligence", {}).get("source")}
             )
+
+        if dns_resolution := self.get_dns_resolution(ip).get("domains"):
+            dns_resolution: List[str]
+            id.update({"DNS_resolution": dns_resolution})
+
         return id
         # # if asn := self.get_asn_info(ip):
         # #     asn_org = asn.get("org", "")
