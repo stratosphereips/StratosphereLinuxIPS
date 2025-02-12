@@ -620,18 +620,22 @@ class EvidenceHandler(ICore):
                 # some evidence may not have a victim
                 continue
             if entity.ioc_type != IoCType.IP.name:
-                continue
-            # todo is there something to fetch about domains??
-            # check if the SNI, hostname, rDNS of this ip belong to org_name
-            ip_identification: Dict[str, str]
-            ip_identification: Dict[str, str] = self.db.get_ip_identification(
-                entity.value
-            )
-            entity.AS = ip_identification.get("AS")
-            entity.TI = ip_identification.get("TI")
-            entity.rDNS = ip_identification.get("rDNS")
-            entity.SNI = ip_identification.get("SNI")
-            entity.DNS_resolution = ip_identification.get("DNS_resolution")
+                # todo is there something to fetch about domains??
+                # check if the SNI, hostname, rDNS of this ip belong to org_name
+                ip_identification: Dict[str, str]
+                ip_identification = self.db.get_ip_identification(entity.value)
+                entity.AS = ip_identification.get("AS")
+                entity.TI = ip_identification.get("TI")
+                entity.rDNS = ip_identification.get("rDNS")
+                entity.SNI = ip_identification.get("SNI")
+                entity.DNS_resolution = ip_identification.get("DNS_resolution")
+            elif entity.ioc_type != IoCType.DOMAIN.name:
+                domain_info: Dict[str, str] = self.db.get_domain_data(
+                    entity.value
+                )
+                if not domain_info:
+                    return
+                entity.CNAME = domain_info.get("CNAME", [])
 
     def pre_main(self):
         self.print(f"Using threshold: {green(self.detection_threshold)}")
