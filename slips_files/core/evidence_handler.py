@@ -526,12 +526,12 @@ class EvidenceHandler(ICore):
         """
         res = ""
 
-        if evidence.attacker.attacker_type == IoCType.IP.name:
+        if evidence.attacker.ioc_type == IoCType.IP.name:
             info = self.db.get_ip_identification(evidence.attacker.value)
             if info:
                 res += f"IP {evidence.attacker.value} {info}"
 
-        if evidence.victim and evidence.victim.victim_type == IoCType.IP.name:
+        if evidence.victim and evidence.victim.ioc_type == IoCType.IP.name:
             info = self.db.get_ip_identification(evidence.victim.value)
             if info:
                 res += f"IP {evidence.victim.value} {info}"

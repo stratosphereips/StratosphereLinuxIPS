@@ -53,10 +53,10 @@ def extract_role_type(evidence: Evidence, role=None) -> str:
     """
     if role == "attacker":
         ioc = evidence.attacker.value
-        ioc_type = evidence.attacker.attacker_type
+        ioc_type = evidence.attacker.ioc_type
     elif role == "victim":
         ioc = evidence.victim.value
-        ioc_type = evidence.victim.victim_type
+        ioc_type = evidence.victim.ioc_type
 
     if ioc_type == IoCType.IP:
         return ioc, get_ip_version(ioc)

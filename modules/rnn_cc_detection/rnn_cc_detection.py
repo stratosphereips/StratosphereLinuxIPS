@@ -84,10 +84,10 @@ class CCDetection(IModule):
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=dstip
+                direction=Direction.DST, ioc_type=IoCType.IP, value=dstip
             ),
             threat_level=ThreatLevel.HIGH,
             confidence=confidence,
@@ -107,10 +107,10 @@ class CCDetection(IModule):
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=dstip
+                direction=Direction.DST, ioc_type=IoCType.IP, value=dstip
             ),
             victim=Victim(
-                direction=Direction.SRC, victim_type=IoCType.IP, value=srcip
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
             ),
             threat_level=ThreatLevel.HIGH,
             confidence=confidence,

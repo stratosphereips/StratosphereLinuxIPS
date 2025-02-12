@@ -163,7 +163,7 @@ class HorizontalPortscan:
         srcip = evidence["profileid"].split("_")[-1]
 
         attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
         )
         portproto = f'{evidence["dport"]}/{evidence["protocol"]}'
         port_info = self.db.get_port_info(portproto) or ""

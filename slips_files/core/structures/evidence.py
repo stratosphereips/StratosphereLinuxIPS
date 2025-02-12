@@ -146,7 +146,7 @@ class Proto(Enum):
 @dataclass
 class Victim:
     direction: Direction
-    victim_type: IoCType
+    ioc_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
     # if the victim is part of a TI feed that slips knows  about,
     # the feed name goes here
@@ -157,7 +157,7 @@ class Victim:
     SNI: str = field(default=None)
 
     def __post_init__(self):
-        if self.victim_type == IoCType.IP:
+        if self.ioc_type == IoCType.IP:
             validate_ip(self.value)
 
 
@@ -177,7 +177,7 @@ class ProfileID:
 @dataclass
 class Attacker:
     direction: Direction
-    attacker_type: IoCType
+    ioc_type: IoCType
     value: str  # like the actual ip/domain/url check if value is reserved
     profile: ProfileID = ""
     # if the victim is part of a TI feed that slips knows  about,
@@ -189,10 +189,10 @@ class Attacker:
     SNI: str = field(default=None)
 
     def __post_init__(self):
-        if self.attacker_type == IoCType.IP:
+        if self.ioc_type == IoCType.IP:
             validate_ip(self.value)
         # each attacker should have a profile if it's an IP
-        if self.attacker_type == IoCType.IP:
+        if self.ioc_type == IoCType.IP:
             self.profile = ProfileID(ip=self.value)
 
 

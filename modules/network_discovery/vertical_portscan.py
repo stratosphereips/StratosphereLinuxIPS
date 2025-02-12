@@ -67,11 +67,11 @@ class VerticalPortscan:
         )
 
         attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
         )
         victim = Victim(
             direction=Direction.DST,
-            victim_type=IoCType.IP,
+            ioc_type=IoCType.IP,
             value=evidence["dstip"],
         )
         twid = int(evidence["twid"].replace("timewindow", ""))

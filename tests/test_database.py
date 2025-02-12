@@ -102,7 +102,7 @@ def test_add_port():
 def test_set_evidence():
     db = ModuleFactory().create_db_manager_obj(6384, flush_db=True)
     attacker: Attacker = Attacker(
-        direction=Direction.SRC, attacker_type=IoCType.IP, value=test_ip
+        direction=Direction.SRC, ioc_type=IoCType.IP, value=test_ip
     )
     threat_level: ThreatLevel = ThreatLevel.INFO
     confidence = 0.8
@@ -110,7 +110,7 @@ def test_set_evidence():
     timestamp = time.time()
     uid = ["123"]
     victim: Victim = Victim(
-        direction=Direction.DST, victim_type=IoCType.IP, value="8.8.8.8"
+        direction=Direction.DST, ioc_type=IoCType.IP, value="8.8.8.8"
     )
     evidence: Evidence = Evidence(
         evidence_type=EvidenceType.SSH_SUCCESSFUL,
@@ -147,7 +147,7 @@ def test_subscribe():
     # invalid channel
     assert db.subscribe("invalid_channel") is False
     # valid channel, shoud return a pubsub object
-    assert type(db.subscribe("tw_modified")) == redis.client.PubSub
+    assert isinstance(db.subscribe("tw_modified"), redis.client.PubSub)
 
 
 def test_profile_moddule_labels():

@@ -230,7 +230,7 @@ def test_add_alert_to_json_log_file(
             description="ARP scan detected",
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value="192.168.1.20",
             ),
             threat_level=ThreatLevel.INFO,
@@ -366,7 +366,7 @@ def test_get_alert_time_description(
                 description="ARP scan detected",
                 attacker=Attacker(
                     direction="SRC",
-                    attacker_type="IP",
+                    ioc_type="IP",
                     value="192.168.1.100",
                     profile=ProfileID("192.168.1.100"),
                 ),
@@ -391,7 +391,7 @@ def test_get_alert_time_description(
                 description="DNS query without connection",
                 attacker=Attacker(
                     direction="SRC",
-                    attacker_type="IP",
+                    ioc_type="IP",
                     value="10.0.0.100",
                     profile=ProfileID("10.0.0.100"),
                 ),
@@ -424,7 +424,7 @@ def test_get_evidence_to_log(evidence, flow_datetime, expected_output):
         # testcase1: Basic case
         (
             "192.168.1.100",
-            Victim(direction="DST", victim_type=IoCType.IP, value="10.0.0.1"),
+            Victim(direction="DST", ioc_type=IoCType.IP, value="10.0.0.1"),
             EvidenceType.ARP_SCAN,
         ),
         # testcase2: Different IP and evidence type
@@ -432,7 +432,7 @@ def test_get_evidence_to_log(evidence, flow_datetime, expected_output):
             "10.0.0.100",
             Victim(
                 direction="DST",
-                victim_type=IoCType.DOMAIN,
+                ioc_type=IoCType.DOMAIN,
                 value="example.com",
             ),
             EvidenceType.DNS_WITHOUT_CONNECTION,
@@ -460,7 +460,7 @@ def test_send_to_exporting_module():
             description="ARP scan detected",
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value="192.168.1.1",
             ),
             threat_level=ThreatLevel.MEDIUM,
@@ -474,7 +474,7 @@ def test_send_to_exporting_module():
             description="DNS query without connection",
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value="192.168.1.2",
             ),
             threat_level=ThreatLevel.LOW,
@@ -527,7 +527,7 @@ def test_is_blocking_module_enabled(
                 description="",
                 attacker=Attacker(
                     direction="SRC",
-                    attacker_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value="192.168.1.1",
                 ),
                 threat_level=ThreatLevel.INFO,
@@ -547,7 +547,7 @@ def test_is_blocking_module_enabled(
                 description="",
                 attacker=Attacker(
                     direction="SRC",
-                    attacker_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value="192.168.1.1",
                 ),
                 threat_level=ThreatLevel.INFO,
@@ -568,7 +568,7 @@ def test_is_blocking_module_enabled(
                 description="",
                 attacker=Attacker(
                     direction="DST",
-                    attacker_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value="192.168.1.1",
                 ),
                 threat_level=ThreatLevel.INFO,

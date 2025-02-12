@@ -97,10 +97,10 @@ class IDMEFv2:
         """
         if role == "attacker":
             ioc = evidence.attacker.value
-            ioc_type = evidence.attacker.attacker_type
+            ioc_type = evidence.attacker.ioc_type
         elif role == "victim":
             ioc = evidence.victim.value
-            ioc_type = evidence.victim.victim_type
+            ioc_type = evidence.victim.ioc_type
 
         # map of slips victim types to IDMEF supported types
         type_ = {
@@ -267,7 +267,7 @@ class IDMEFv2:
             if (
                 evidence.evidence_type
                 == EvidenceType.MALICIOUS_DOWNLOADED_FILE
-                and evidence.attacker.attacker_type == IoCType.MD5
+                and evidence.attacker.ioc_type == IoCType.MD5
             ):
                 msg["Attachment"] = [
                     {
