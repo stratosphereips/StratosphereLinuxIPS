@@ -159,14 +159,14 @@ class Whitelist:
         """
         Checks if an evidence is whitelisted
         """
-        if self.is_whitelisted_entity(evidence, "attacker"):
+        if self._is_whitelisted_entity(evidence, "attacker"):
             return True
 
-        if self.is_whitelisted_entity(evidence, "victim"):
+        if self._is_whitelisted_entity(evidence, "victim"):
             return True
         return False
 
-    def is_whitelisted_entity(
+    def _is_whitelisted_entity(
         self, evidence: Evidence, entity_type: str
     ) -> bool:
         entity: Union[Attacker, Victim]

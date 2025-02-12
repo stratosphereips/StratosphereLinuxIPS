@@ -647,8 +647,6 @@ class EvidenceHandler(ICore):
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
 
-                # get the rest of info about the given evidence, like SNI,
-                # rDNS, etc.
                 self.get_more_info_about_evidence(evidence)
 
                 # FP whitelisted alerts happen when the db returns an evidence
