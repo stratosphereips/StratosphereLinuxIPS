@@ -19,7 +19,7 @@ from slips_files.core.structures.evidence import (
 )
 
 
-class SetEvidnceHelper:
+class SetEvidenceHelper:
     def __init__(self, db):
         self.db = db
 
@@ -301,69 +301,6 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
-        )
-
-        self.db.set_evidence(evidence)
-
-    def non_http_port_80_conn(self, twid, flow) -> None:
-        description: str = (
-            f"non-HTTP established connection to port 80. "
-            f"destination IP: {flow.daddr}"
-        )
-
-        twid_number: int = int(twid.replace("timewindow", ""))
-        # to add a correlation between the 2 evidence in alerts.json
-        evidence_id_of_dstip_as_the_attacker = str(uuid4())
-        evidence_id_of_srcip_as_the_attacker = str(uuid4())
-        evidence: Evidence = Evidence(
-            id=evidence_id_of_srcip_as_the_attacker,
-            rel_id=[evidence_id_of_dstip_as_the_attacker],
-            evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
-            attacker=Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=flow.saddr,
-            ),
-            victim=Victim(
-                direction=Direction.DST,
-                victim_type=IoCType.IP,
-                value=flow.daddr,
-            ),
-            threat_level=ThreatLevel.LOW,
-            description=description,
-            profile=ProfileID(ip=flow.saddr),
-            timewindow=TimeWindow(number=twid_number),
-            uid=[flow.uid],
-            timestamp=flow.starttime,
-            confidence=0.8,
-            src_port=flow.sport,
-            dst_port=flow.dport,
-        )
-        self.db.set_evidence(evidence)
-
-        evidence: Evidence = Evidence(
-            id=evidence_id_of_dstip_as_the_attacker,
-            rel_id=[evidence_id_of_srcip_as_the_attacker],
-            evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
-            attacker=Attacker(
-                direction=Direction.DST,
-                attacker_type=IoCType.IP,
-                value=flow.daddr,
-            ),
-            victim=Victim(
-                direction=Direction.SRC,
-                victim_type=IoCType.IP,
-                value=flow.saddr,
-            ),
-            threat_level=ThreatLevel.MEDIUM,
-            description=description,
-            profile=ProfileID(ip=flow.daddr),
-            timewindow=TimeWindow(number=twid_number),
-            uid=[flow.uid],
-            timestamp=flow.starttime,
-            confidence=0.8,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)

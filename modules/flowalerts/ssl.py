@@ -1,9 +1,13 @@
-# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia
+# <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import json
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Dict, Tuple
 import re
+import bisect
+import time
+from multiprocessing import Lock
 import tldextract
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -18,6 +22,9 @@ from slips_files.core.flows.zeek import SSL
 class SSL(IFlowalertsAnalyzer):
     def init(self):
         self.classifier = FlowClassifier()
+        self.ssl_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
+        self.ts_of_last_ssl_recognized_flows_cleanup = time.time()
+        self.ssl_recognized_flows_lock = Lock()
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -125,21 +132,139 @@ class SSL(IFlowalertsAnalyzer):
         # domains or ips
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
 
-    def check_non_ssl_port_443_conns(self, twid, flow):
-        """
-        alerts on established connections on port 443 that are not HTTPS (ssl)
-        """
-        flow.state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
-        # if it was a valid ssl conn, the 'service' field aka
-        # appproto should be 'ssl'
-        if (
+    def is_tcp_established_443_non_empty_flow(self, flow) -> bool:
+        state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
+        return (
             str(flow.dport) == "443"
             and flow.proto.lower() == "tcp"
-            and str(flow.appproto).lower() != "ssl"
-            and flow.state == "Established"
+            and state == "Established"
             and (flow.sbytes + flow.dbytes) != 0
-        ):
+        )
+
+    def is_ssl_proto_recognized_by_zeek(self, flow) -> bool:
+        """
+        if the conn was an ssl conn recognized by zeek, the 'service'
+        field aka appproto should be 'ssl''
+        """
+        return flow.appproto and str(flow.appproto.lower()) == "ssl"
+
+    def search_ssl_recognized_flows_for_ts_range(
+        self, flow, start, end
+    ) -> List[float]:
+        """
+        Searches for a flow that matches the given flow in
+        self.ssl_recognized_flows.
+
+        given the start and end time, returns the timestamps within that
+        range.
+
+        2 flows match if they share the src and dst IPs
+        """
+
+        # Handle the case where the key might not exist
+        try:
+            sorted_timestamps_of_past_ssl_flows = self.ssl_recognized_flows[
+                (flow.saddr, flow.daddr)
+            ]
+        except KeyError:
+            return []
+
+        # Find the left and right boundaries
+        left_idx = bisect.bisect_left(
+            sorted_timestamps_of_past_ssl_flows, start
+        )
+        right_idx = bisect.bisect_right(
+            sorted_timestamps_of_past_ssl_flows, end
+        )
+
+        return sorted_timestamps_of_past_ssl_flows[left_idx:right_idx]
+
+    def keep_track_of_ssl_flow(self, flow, key) -> None:
+        """keeps track of the given ssl flow in ssl_recognized_flows"""
+        # we're using locks here because this is a part of an asyncio
+        # function and there's another garbage collector that may be
+        # modifying the dict at the same time.
+        self.ssl_recognized_flows_lock.acquire()
+        try:
+            ts_list = self.ssl_recognized_flows[key]
+            # to store the ts sorted for faster lookups
+            bisect.insort(ts_list, float(flow.starttime))
+        except KeyError:
+            self.ssl_recognized_flows[key] = [float(flow.starttime)]
+
+        self.ssl_recognized_flows_lock.release()
+
+    async def check_non_ssl_port_443_conns(
+        self, twid, flow, timeout_reached=False
+    ):
+        """
+        alerts on established connections on port 443 that are not HTTPS (ssl)
+        This is how we do the detection.
+        for every detected non ssl flow, we check 5 mins back for
+        matching flows that were detected as ssl by zeek. if found,
+        we discard the
+        evidence. if not found, we check for future 5 mins of matching zeek
+        flows  that were detected as ssl by zeek. if found, we dont set an
+        evidence, if not found, we set an evidence
+        :kwarg timeout_reached: did we wait 5 mins in future and in the
+        past for the ssl of the given flow to arrive or not?
+        """
+        if not self.is_tcp_established_443_non_empty_flow(flow):
+            # we're not interested in that flow
+            return False
+
+        # key for looking up matching ssl flows in ssl_recognized_flows
+        key = (flow.saddr, flow.daddr)
+
+        if self.is_ssl_proto_recognized_by_zeek(flow):
+            # not a fp, thats a recognized ssl flow
+            self.keep_track_of_ssl_flow(flow, key)
+            return False
+
+        # in seconds
+        five_mins = 5 * 60
+
+        # timeout reached indicates that we did search in the past once,
+        # we need to srch in the future now
+        if timeout_reached:
+            # look in the future
+            matching_ssl_flows: List[float] = (
+                self.search_ssl_recognized_flows_for_ts_range(
+                    flow, flow.starttime, flow.starttime + five_mins
+                )
+            )
+        else:
+            # look in the past
+            matching_ssl_flows: List[float] = (
+                self.search_ssl_recognized_flows_for_ts_range(
+                    flow, flow.starttime - five_mins, flow.starttime
+                )
+            )
+
+        if matching_ssl_flows:
+            # awesome! discard evidence. FP dodged.
+            # clear these timestamps as we dont need them anymore?
+            return False
+
+        # reaching here means we looked in the past 5 mins and
+        # found no timestamps, did we look in the future 5 mins?
+        if timeout_reached:
+            # yes we did. set an evidence
             self.set_evidence.non_ssl_port_443_conn(twid, flow)
+            return True
+
+        # ts not reached
+        # wait 5 mins real-time (to give slips time to
+        # read more flows) maybe the recognized ssl arrives
+        # within that time?
+        await asyncio.sleep(five_mins)
+        # we can safely await here without blocking the main thread because
+        # once the timeout is reached, this function will never sleep again,
+        # it'll either set the evidence or discard it
+        await self.check_non_ssl_port_443_conns(
+            twid, flow, timeout_reached=True
+        )
+        return False
 
     def detect_doh(self, twid, flow):
         if not flow.is_DoH:
@@ -237,6 +362,47 @@ class SSL(IFlowalertsAnalyzer):
             return
         self.set_evidence.cn_url_mismatch(twid, cn, flow)
 
+    def remove_old_entries_from_ssl_recognized_flows(self) -> None:
+        """
+        the goal of this is to not have the ssl_recognized_flows dict
+        growing forever, so here we remove all timestamps older than the last
+        one-5 mins (zeek time)
+        meaning, it ensures that all lists have max 5mins worth of timestamps
+        changes the ssl_recognized_flows to the cleaned one
+        """
+        # Runs every 5 mins real time, to reduce unnecessary cleanups every
+        # 1s
+        now = time.time()
+        time_since_last_cleanup = utils.get_time_diff(
+            self.ts_of_last_ssl_recognized_flows_cleanup,
+            now,
+            "minutes",
+        )
+
+        if time_since_last_cleanup < 5:
+            return
+
+        clean_ssl_recognized_flows = {}
+        for ips, timestamps in self.ssl_recognized_flows.items():
+            ips: Tuple[str, str]
+            timestamps: List[float]
+
+            end: float = float(timestamps[-1])
+            start = end - 5 * 60
+
+            left = bisect.bisect_right(timestamps, start)
+            right = bisect.bisect_left(timestamps, end)
+            # thats the range we wanna remove from the list bc it's too old
+            garbage = timestamps[left:right]
+            clean_ssl_recognized_flows[ips] = [
+                ts for ts in timestamps if ts not in garbage
+            ]
+
+        self.ssl_recognized_flows_lock.acquire()
+        self.ssl_recognized_flows = clean_ssl_recognized_flows
+        self.ssl_recognized_flows_lock.release()
+        self.ts_of_last_ssl_recognized_flows_cleanup = now
+
     async def analyze(self, msg: dict):
         if utils.is_msg_intended_for(msg, "new_ssl"):
             msg = json.loads(msg["data"])
@@ -257,4 +423,7 @@ class SSL(IFlowalertsAnalyzer):
             twid = msg["twid"]
             flow = msg["flow"]
             flow = self.classifier.convert_to_flow_obj(flow)
-            self.check_non_ssl_port_443_conns(twid, flow)
+            self.remove_old_entries_from_ssl_recognized_flows()
+            self.flowalerts.create_task(
+                self.check_non_ssl_port_443_conns, twid, flow
+            )

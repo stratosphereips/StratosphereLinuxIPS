@@ -43,7 +43,7 @@ from slips_files.core.output import Output
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 from modules.threat_intelligence.urlhaus import URLhaus
 from modules.flowalerts.flowalerts import FlowAlerts
-from modules.flowalerts.set_evidence import SetEvidnceHelper
+from modules.flowalerts.set_evidence import SetEvidenceHelper
 from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
@@ -442,7 +442,7 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_set_evidence_helper(self, mock_db):
         """Create an instance of SetEvidenceHelper."""
-        set_evidence_helper = SetEvidnceHelper(mock_db)
+        set_evidence_helper = SetEvidenceHelper(mock_db)
         return set_evidence_helper
 
     def create_output_obj(self):

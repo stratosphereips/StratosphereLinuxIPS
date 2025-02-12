@@ -30,7 +30,7 @@ def test_check_gre_tunnel(mocker, tunnel_type, expected_call_count):
     """
     tunnel = ModuleFactory().create_tunnel_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.gre_tunnel"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.gre_tunnel"
     )
     flow = Tunnel(
         starttime="1726655400.0",

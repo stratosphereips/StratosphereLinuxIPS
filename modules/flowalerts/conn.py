@@ -19,6 +19,7 @@ from slips_files.common.flow_classifier import FlowClassifier
 
 NOT_ESTAB = "Not Established"
 ESTAB = "Established"
+SPECIAL_IPV6 = ("0.0.0.0", "255.255.255.255")
 
 
 class Conn(IFlowalertsAnalyzer):
@@ -356,12 +357,19 @@ class Conn(IFlowalertsAnalyzer):
                 ip, mbs_uploaded, profileid, twid, uids, ts
             )
 
+    @staticmethod
+    def _is_it_ok_for_ip_to_change(ip) -> bool:
+        """Devices send flow as/to these ips all the time, the're not
+        suspicious not need to detect them."""
+        # its ok to change ips from a link local ip to another private ip
+        return ip in SPECIAL_IPV6 or ipaddress.ip_address(ip).is_link_local
+
     def check_device_changing_ips(self, twid, flow):
         """
         Every time we have a flow for a new ip
             (an ip that we're seeing for the first time)
         we check if the MAC of this srcip was associated with another ip
-        this check is only done once for each source ip slips sees
+        this check is only done once for each private source ip slips sees
         """
         if "conn" not in flow.type_:
             return
@@ -369,25 +377,33 @@ class Conn(IFlowalertsAnalyzer):
         if not flow.smac:
             return
 
+        saddr_obj = ipaddress.ip_address(flow.saddr)
         if not (
-            validators.ipv4(flow.saddr)
-            and utils.is_private_ip(ipaddress.ip_address(flow.saddr))
+            validators.ipv4(flow.saddr) and utils.is_private_ip(saddr_obj)
         ):
+            return
+
+        if self._is_it_ok_for_ip_to_change(flow.saddr):
             return
 
         if self.db.was_ip_seen_in_connlog_before(flow.saddr):
             # we should only check once for the first
             # time we're seeing this flow
             return
+
         self.db.mark_srcip_as_seen_in_connlog(flow.saddr)
 
         if old_ip_list := self.db.get_ip_of_mac(flow.smac):
             # old_ip is a list that may contain the ipv6 of this MAC
             # this ipv6 may be of the same device that
             # has the given saddr and MAC
-            # so this would be fp. so, make sure we're dealing with ipv4 only
+            # so this would be fp. so, make sure we're checking the ipv4 only
             for ip in json.loads(old_ip_list):
-                if validators.ipv4(ip):
+                if validators.ipv4(ip) and not self._is_it_ok_for_ip_to_change(
+                    ip
+                ):
+                    # found an ipv4 associated previously with the flow's smac
+                    # is it the same as the flow's srcip?
                     old_ip = ip
                     break
             else:
@@ -644,21 +660,6 @@ class Conn(IFlowalertsAnalyzer):
                 uids,
             )
 
-    def check_non_http_port_80_conns(self, twid, flow):
-        """
-        alerts on established connections on port 80 that are not HTTP
-        """
-        # if it was a valid http conn, the 'service' field aka
-        # appproto should be 'http'
-        if (
-            str(flow.dport) == "80"
-            and flow.proto.lower() == "tcp"
-            and str(flow.appproto).lower() != "http"
-            and flow.interpreted_state == ESTAB
-            and (flow.sbytes + flow.dbytes) != 0
-        ):
-            self.set_evidence.non_http_port_80_conn(twid, flow)
-
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
         to a well-known org"""
@@ -702,6 +703,13 @@ class Conn(IFlowalertsAnalyzer):
                     return True
             return False
 
+    def _is_ok_to_connect_to_ip(self, ip: str):
+        """
+        returns true if it's ok to connect to the given IP even if it's
+        "outside the given local network"
+        """
+        return ip in SPECIAL_IPV6 or utils.is_localhost(ip)
+
     def check_different_localnet_usage(
         self,
         twid,
@@ -716,17 +724,21 @@ class Conn(IFlowalertsAnalyzer):
         coming from/to 10.0.0.0/8
         :param what_to_check: can be 'srcip' or 'dstip'
         """
+        if self._is_ok_to_connect_to_ip(
+            flow.saddr
+        ) or self._is_ok_to_connect_to_ip(flow.daddr):
+            return
+
         ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
         ip_obj = ipaddress.ip_address(ip_to_check)
-        own_local_network = self.db.get_local_network()
+        if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
+            return
 
+        own_local_network = self.db.get_local_network()
         if not own_local_network:
             # the current local network wasn't set in the db yet
             # it's impossible to get here becaus ethe localnet is set before
             # any msg is published in the new_flow channel
-            return
-
-        if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
             return
 
         # if it's a private ipv4 addr, it should belong to our local network
@@ -798,7 +810,7 @@ class Conn(IFlowalertsAnalyzer):
             )
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
-            self.check_non_http_port_80_conns(twid, flow)
+
             self.check_connection_to_local_ip(twid, flow)
             self.check_device_changing_ips(twid, flow)
 

@@ -977,7 +977,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         self.r.sadd(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
 
-    def is_gw_mac(self, mac_addr: str, ip: str) -> bool:
+    def _is_gw_mac(self, mac_addr: str) -> bool:
         """
         Detects the MAC of the gateway if 1 mac is seen
         assigned to 1 public destination IP
@@ -991,18 +991,26 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # gateway MAC already set using this function
             return self.get_gateway_mac() == mac_addr
 
+    def _determine_gw_mac(self, ip, mac):
+        """
+        sets the gw mac if the given ip is public and is assigned a mc
+        """
+        if self._gateway_MAC_found:
+            return False
         # since we don't have a mac gw in the db, see if
         # this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
         if not utils.is_private_ip(ip_obj):
-            # now we're given a public ip and a MAC that's supposedly belongs to it
+            # now we're given a public ip and a MAC that's supposedly
+            # belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db
-            self.set_default_gateway(self.constants.MAC, mac_addr)
+            self.set_default_gateway(self.constants.MAC, mac)
 
             # mark the gw mac as found so we don't look for it again
             self._gateway_MAC_found = True
             return True
+        return False
 
     def get_ip_of_mac(self, MAC):
         """

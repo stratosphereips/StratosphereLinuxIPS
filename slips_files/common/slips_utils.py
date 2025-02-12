@@ -101,6 +101,13 @@ class Utils(object):
         parsed_url = tldextract.extract(url)
         return f"{parsed_url.domain}.{parsed_url.suffix}"
 
+    def is_localhost(self, ip: str) -> bool:
+        try:
+            return ipaddress.ip_address(ip).is_loopback
+        except ValueError:
+            # Invalid IP address
+            return False
+
     def get_cidr_of_private_ip(self, ip):
         """
         returns the cidr/range of the given private ip
@@ -497,8 +504,10 @@ class Utils(object):
 
     def change_logfiles_ownership(self, file: str, UID, GID):
         """
-        if slips is running in docker, the owner of the alerts log files is always root
-        this function changes it to the user ID and GID in slips.yaml to be able to
+        if slips is running in docker, the owner of the alerts log files
+        is always root
+        this function changes it to the user ID and GID in slips.yaml to be
+         able to
         rwx the files from outside of docker
         """
         if not (IS_IN_A_DOCKER_CONTAINER and UID and GID):
@@ -582,11 +591,7 @@ class Utils(object):
         remove the milliseconds from the given ts
         :param ts: time in unix format
         """
-        ts = str(ts)
-        if "." not in ts:
-            return ts
-
-        return ts.split(".")[0]
+        return str(ts).split(".")[0]
 
     def assert_microseconds(self, ts: str):
         """
