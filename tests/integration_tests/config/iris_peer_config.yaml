@@ -10,11 +10,5 @@ Redis:
   Host: 127.0.0.1
   Tl2NlChannel: gp2p_tl2nl0
 
-Organisations:
-  Trustworthy:
-    - "12D3KooWErR8ZLhjAWYw4oj7gWLRPp99aupNU5HbFfVN9U12NBFZ"
-
 PeerDiscovery:
   DisableBootstrappingNodes: true
-  ListOfMultiAddresses:
-   - '/ip4/127.0.0.1/udp/9006/quic 12D3KooWLDCxxP6PAKG6NUYWs16VbSZhQNHY361otSmauvVnXV4g'

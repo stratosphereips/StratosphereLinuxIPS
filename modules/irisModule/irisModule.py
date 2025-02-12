@@ -9,7 +9,8 @@
 # 4. Change the name of the class, the module name, description and author in the variables
 # 5. The file name of the python file (local_connection_detector.py) MUST be the same as the name of the folder (template)
 # 6. The variable 'name' MUST have the public name of this module. This is used to be able to disable the module later
-
+import signal
+from asyncio import wait_for
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
@@ -113,6 +114,13 @@ class IrisModule(IModule):
     def shutdown_gracefully(self):
         self.logger.output_line({"from": self.name, "txt":"Iris Module terminating gracefully"})
         self.process.terminate()
+        try:
+            # Wait for the process to finish with a timeout of 5 seconds
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            print("Iris (peercli) process did not terminate gracefully within the timeout, killing it.")
+            self.process.kill()
+            os.kill(self.process.pid, signal.SIGTERM)
         self.log_file.close()
         self.logger.output_line({"from": self.name, "txt":"Iris Module terminating wait"})
         self.process.wait()
