@@ -108,28 +108,28 @@ def test_messaging_1(path, output_dir, redis_port):
     # Open the log file in write mode
     with open(output_file, "w") as log_file:
         with open(iris_output_file, "w") as iris_log_file:
-        # Start the subprocess, redirecting stdout and stderr to the same file
-        process = subprocess.Popen(
-            command,  # Replace with your command
-            stdout=log_file,
-            stderr=log_file,
-        )
+            # Start the subprocess, redirecting stdout and stderr to the same file
+            process = subprocess.Popen(
+                command,  # Replace with your command
+                stdout=log_file,
+                stderr=log_file,
+            )
 
-        Iprocess = subprocess.Popen(
-            iris_command, stdout=iris_log_file, stderr=iris_log_file,
-        )
+            Iprocess = subprocess.Popen(
+                iris_command, stdout=iris_log_file, stderr=iris_log_file,
+            )
 
-        print(f"Output and errors are logged in {output_file}")
-        countdown(60, "sigterm")
-        message_send(redis_port, message=message_alert_TL_NL, channel="fides2network")
-        # these seconds are the time we give slips to process the msg
-        countdown(300, "sigterm")
-        # send a SIGTERM to the process
-        os.kill(process.pid, 15)
-        os.kill(Iprocess.pid, 15)
-        print("SIGTERM sent. killing slips + iris")
-        os.kill(process.pid, 9)
-        os.kill(Iprocess.pid, 9)
+            print(f"Output and errors are logged in {output_file}")
+            countdown(60, "sigterm")
+            message_send(redis_port, message=message_alert_TL_NL, channel="fides2network")
+            # these seconds are the time we give slips to process the msg
+            countdown(30, "sigterm")
+            # send a SIGTERM to the process
+            os.kill(process.pid, 15)
+            os.kill(Iprocess.pid, 15)
+            print("SIGTERM sent. killing slips + iris")
+            os.kill(process.pid, 9)
+            os.kill(Iprocess.pid, 9)
 
     print(f"Slips with PID {process.pid} was killed.")
 
