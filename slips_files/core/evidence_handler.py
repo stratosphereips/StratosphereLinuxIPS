@@ -21,7 +21,12 @@
 # stratosphere@aic.fel.cvut.cz
 
 import json
-from typing import List, Dict, Optional
+from typing import (
+    List,
+    Dict,
+    Optional,
+    Union,
+)
 from datetime import datetime
 from os import path
 import sys
@@ -46,6 +51,7 @@ from slips_files.core.structures.evidence import (
     Victim,
     EvidenceType,
     IoCType,
+    Attacker,
 )
 from slips_files.core.structures.alerts import (
     Alert,
@@ -594,6 +600,39 @@ class EvidenceHandler(ICore):
         )
         return evidence
 
+    def get_more_info_about_evidence(self, evidence):
+        """
+        sets the SNI, rDNS, TI, AS of the given evidence's attacker and
+        victim IPs
+        Why are we doing this here?
+        1. because we need to do it before checking if the evidence is
+        whitelisted.
+        2. because when setting an evidence, it would be duplicate code in
+        every module to fetch the above info about the attacker and victim.
+        so its better to do it in one place.
+        i wanted to put that logic in the Attacker and Victim Class,
+        but they dont have access to the db to fetch that info.
+        """
+        for entity_type in ("victim", "attacker"):
+            entity: Union[Attacker, Victim]
+            entity = getattr(evidence, entity_type, None)
+            if not entity:
+                # some evidence may not have a victim
+                continue
+            if entity.ioc_type != IoCType.IP:
+                continue
+            # todo is there something to fetch about domains??
+            # check if the SNI, hostname, rDNS of this ip belong to org_name
+            ip_identification: Dict[str, str]
+            ip_identification: Dict[str, str] = self.db.get_ip_identification(
+                entity.value
+            )
+
+            entity.AS = ip_identification["AS"]
+            entity.TI = ip_identification["TI"]
+            entity.rDNS = ip_identification["rDNS"]
+            entity.SNI = ip_identification["SNI"]
+
     def pre_main(self):
         self.print(f"Using threshold: {green(self.detection_threshold)}")
 
@@ -607,6 +646,10 @@ class EvidenceHandler(ICore):
                 twid: str = str(evidence.timewindow)
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
+
+                # get the rest of info about the given evidence, like SNI,
+                # rDNS, etc.
+                self.get_more_info_about_evidence(evidence)
 
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence
