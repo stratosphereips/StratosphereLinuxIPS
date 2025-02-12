@@ -893,7 +893,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             except NameError:
                 # no CNAME came with this query
                 pass
-
             self.set_info_for_domains(query, domaindata, mode="add")
             self.set_domain_resolution(query, ips_to_add)
 
@@ -1106,7 +1105,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 "threatintelligence",
             ):
                 continue
-            print(f"@@@@@@@@@@@@@@@@ cached_info {cached_info}")
             break
 
         sni = cached_info.get("SNI")
