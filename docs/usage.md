@@ -419,7 +419,8 @@ Slips uses Tranco whitelist which contains a research-oriented top sites
 ranking hardened against manipulation here https://tranco-list.eu/
 
 Slips download the top 10k domains from this list and by default and
-whitelists all evidence and alerts from and to these domains. Slips still shows the flows to and from these IoC.
+whitelists all evidence and alerts from and to these domains.
+Slips still shows the flows to and from these IoC.
 
 
 The tranco list is updated daily by default in Slips, but you can change how often to update it using the

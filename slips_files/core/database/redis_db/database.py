@@ -154,13 +154,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         Updates the default slips options based on the -s param,
         writes the new configs to cls._conf_file
         """
+        # to fix redis.exceptions.ResponseError MISCONF Redis is
+        # configured to save RDB snapshots
+        # configure redis to stop writing to dump.rdb when an error
+        # occurs without throwing errors in slips
         cls._options = {
             "daemonize": "yes",
             "stop-writes-on-bgsave-error": "no",
             "save": '""',
             "appendonly": "no",
         }
-
+        # -s for saving the db
         if "-s" not in sys.argv:
             return
 
@@ -188,6 +192,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     @classmethod
     def _read_configuration(cls):
         conf = ConfigParser()
+        # Should we delete the previously stored data in the DB when we start?
+        # By default False. Meaning we don't DELETE the DB by default.
         cls.deletePrevdb: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.width = conf.get_tw_width_as_float()
@@ -227,6 +233,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             if not connected:
                 return False, err
 
+            # these are the cases that we DO NOT flush the db when we
+            # connect to it, because we need to use it
+            # -d means Read an analysed file (rdb) from disk.
+            # -S stop daemon
+            # -cb clears the blocking chain
             if (
                 cls.deletePrevdb
                 and not (
@@ -237,6 +248,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 # when stopping the daemon, don't flush bc we need to get
                 # the PIDS to close slips files
                 cls.r.flushdb()
+                cls.r.delete(cls.constants.ZEEK_FILES)
 
             # Set the memory limits of the output buffer,
             # For normal clients: no limits
@@ -245,12 +257,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             cls.change_redis_limits(cls.r)
             cls.change_redis_limits(cls.rcache)
 
-            # to fix redis.exceptions.ResponseError MISCONF Redis is
-            # configured to save RDB snapshots
-            # configure redis to stop writing to dump.rdb when an error
-            # occurs without throwing errors in slips
-            # Even if the DB is not deleted. We need to delete some temp data
-            cls.r.delete(cls.constants.ZEEK_FILES)
             return True, ""
         except RuntimeError as err:
             return False, str(err)
@@ -725,6 +731,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                             'resolved-by':.. }
         If not resolved, returns {}
         this function is called for every IP in the timeline of kalipso
+        checks for the reolution in self.constants.DNS_RESOLUTION
         """
         if ip_info := self.r.hget(self.constants.DNS_RESOLUTION, ip):
             ip_info = json.loads(ip_info)
@@ -734,6 +741,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
     def is_ip_resolved(self, ip, hrs):
         """
+        checks self.constants.DNS_RESOLUTION for the ip's resolutions
         :param hrs: float, how many hours to look back for resolutions
         """
         ip_info = self.get_dns_resolution(ip)
@@ -756,7 +764,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
     def should_store_resolution(
         self, query: str, answers: list, qtype_name: str
-    ):
+    ) -> bool:
+        """
+        only stores queries of type A or AAAA
+        """
         # don't store queries ending with arpa as dns resolutions,
         # they're reverse dns
         # only store type A and AAAA for ipv4 and ipv6
@@ -777,6 +788,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
         return True
 
+    def is_cname(self, answer) -> bool:
+        """checks if the given answer is a CNAME"""
+        return (
+            not validators.ipv6(answer)
+            and not validators.ipv4(answer)
+            and not self.is_txt_record(answer)
+        )
+
+    def is_txt_record(self, answer):
+        return "TXT" in answer
+
     def set_dns_resolution(
         self,
         query: str,
@@ -788,7 +810,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         twid: str,
     ):
         """
-        Cache DNS answers
+        Cache DNS answers of type A and AAAA
         1- For each ip in the answer, store the domain
            in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
         2- For each CNAME, store the ip
@@ -797,29 +819,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         if not self.should_store_resolution(query, answers, qtype_name):
             return
-        # Also store these IPs inside the domain
+        # List of IPs to associate with the given domain
         ips_to_add = []
-        CNAMEs = []
-        profileid_twid = f"profile_{srcip}_{twid}"
+        cnames = []
 
         for answer in answers:
-            # Make sure it's an ip not a CNAME
-            if not validators.ipv6(answer) and not validators.ipv4(answer):
-                if "TXT" in answer:
-                    continue
-                # now this is not an ip, it's a CNAME or a TXT
-                # it's a CNAME
-                CNAMEs.append(answer)
+            if self.is_txt_record(answer):
+                continue
+
+            if self.is_cname(answer):
+                cnames.append(answer)
                 continue
 
             # get stored DNS resolution from our db
             ip_info_from_db = self.get_dns_resolution(answer)
             if ip_info_from_db == {}:
-                # if the domain(query) we have isn't already in
-                # DNSresolution in the db
                 resolved_by = [srcip]
+                # list of cached domains in the db, in this case theres none
                 domains = []
-                timewindows = [profileid_twid]
+                timewindows = [twid]
             else:
                 # we have info about this domain in DNSresolution in the db
                 # keep track of all srcips that resolved this domain
@@ -829,8 +847,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
 
                 # timewindows in which this odmain was resolved
                 timewindows = ip_info_from_db.get("timewindows", [])
-                if profileid_twid not in timewindows:
-                    timewindows.append(profileid_twid)
+                if twid not in timewindows:
+                    timewindows.append(twid)
 
                 # we'll be appending the current answer
                 # to these cached domains
@@ -842,7 +860,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 domains.append(query)
 
             # domains should be a list, not a string!,
-            # so don't use json.dumps here
+            # so don't use json.dumps(domains) here
             ip_info = {
                 "ts": ts,
                 "uid": uid,
@@ -866,7 +884,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             # if an ip came in the DNS answer along with the last seen CNAME
             try:
                 # store this CNAME in the db
-                domaindata["CNAME"] = CNAMEs
+                domaindata["CNAME"] = cnames
             except NameError:
                 # no CNAME came with this query
                 pass
@@ -1010,6 +1028,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         return self.rcache.sismember(
             self.constants.TRANCO_WHITELISTED_DOMAINS, domain
         )
+
+    def delete_tranco_whitelist(self):
+        return self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
 
     def set_growing_zeek_dir(self):
         """
@@ -1397,20 +1418,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     def has_cached_whitelist(self) -> bool:
         return bool(self.r.exists(self.constants.WHITELIST))
 
+    def is_dhcp_server(self, ip: str) -> bool:
+        # make sure it's a valid ip
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            # not a valid ip skip
+            return False
+        dhcp_servers = self.r.lrange(self.constants.DHCP_SERVERS, 0, -1)
+        return ip in dhcp_servers
+
     def store_dhcp_server(self, server_addr):
         """
         Store all seen DHCP servers in the database.
         """
-        # make sure it's a valid ip
-        try:
-            ipaddress.ip_address(server_addr)
-        except ValueError:
-            # not a valid ip skip
-            return False
-        # make sure the server isn't there before adding
-        dhcp_servers = self.r.lrange(self.constants.DHCP_SERVERS, 0, -1)
-        if server_addr not in dhcp_servers:
-            self.r.lpush(self.constants.DHCP_SERVERS, server_addr)
+        if self.is_dhcp_server(server_addr):
+            # already in the db
+            return
+
+        self.r.lpush(self.constants.DHCP_SERVERS, server_addr)
 
     def save(self, backup_file):
         """

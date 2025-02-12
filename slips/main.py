@@ -328,7 +328,7 @@ class Main:
 
                     # zeek tab files are separated by several spaces or tabs
                     sequential_spaces_found = re.search(
-                        "\s{1,}-\s{1,}", first_line
+                        r"\s{1,}-\s{1,}", first_line
                     )
                     tabs_found = re.search("\t{1,}", first_line)
                     commas_found = re.search(",{1,}", first_line)

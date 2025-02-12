@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 class Constants:
-    LOADED_TI_FILES = "loaded TI files"
+    LOADED_TI_FILES = "loaded_TI_files_number"
     TI_FILES_INFO = "TI_files_info"
     GIVE_TI = "give_threat_intelligence"
     # all keys starting with IoC_* are used for storing IoCs read from
