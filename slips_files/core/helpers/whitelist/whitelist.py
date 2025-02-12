@@ -193,7 +193,8 @@ class Whitelist:
 
         # check the rest of the domains that belong to this domain/IP
         resolutions = entity.DNS_resolution if entity.DNS_resolution else []
-        for domain in [entity.SNI] + resolutions:
+        cnames = entity.CNAME if entity.CNAME else []
+        for domain in [entity.SNI] + resolutions + cnames:
             if self.domain_analyzer.is_whitelisted(
                 domain, Direction.DST, what_to_ignore
             ):
