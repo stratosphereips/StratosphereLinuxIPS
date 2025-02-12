@@ -516,6 +516,20 @@ class Utils(object):
 
         os.system(f"chown {UID}:{GID} {file}")
 
+    def get_ip_identification_as_str(self, ip_identification: dict) -> str:
+        id = ""
+        if "DNS_resolution" in ip_identification:
+            resolutions = ip_identification.get("DNS_resolution", [])
+            for domain in resolutions:
+                id += f"{domain}, "
+            ip_identification.pop("DNS_resolution")
+
+        for piece_of_info in ip_identification.values():
+            if not piece_of_info:
+                continue
+            id += f"{piece_of_info}, "
+        return id
+
     def get_branch_info(self):
         """
         Returns a tuple containing (commit,branch)

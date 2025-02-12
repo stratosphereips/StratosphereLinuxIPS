@@ -619,7 +619,7 @@ class EvidenceHandler(ICore):
             if not entity:
                 # some evidence may not have a victim
                 continue
-            if entity.ioc_type != IoCType.IP:
+            if entity.ioc_type != IoCType.IP.name:
                 continue
             # todo is there something to fetch about domains??
             # check if the SNI, hostname, rDNS of this ip belong to org_name
@@ -627,11 +627,11 @@ class EvidenceHandler(ICore):
             ip_identification: Dict[str, str] = self.db.get_ip_identification(
                 entity.value
             )
-
-            entity.AS = ip_identification["AS"]
-            entity.TI = ip_identification["TI"]
-            entity.rDNS = ip_identification["rDNS"]
-            entity.SNI = ip_identification["SNI"]
+            entity.AS = ip_identification.get("AS")
+            entity.TI = ip_identification.get("TI")
+            entity.rDNS = ip_identification.get("rDNS")
+            entity.SNI = ip_identification.get("SNI")
+            entity.DNS_resolution = ip_identification.get("DNS_resolution")
 
     def pre_main(self):
         self.print(f"Using threshold: {green(self.detection_threshold)}")
@@ -648,7 +648,6 @@ class EvidenceHandler(ICore):
                 timestamp: str = evidence.timestamp
 
                 self.get_more_info_about_evidence(evidence)
-
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence
                 # below.
