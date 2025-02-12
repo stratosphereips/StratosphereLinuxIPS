@@ -374,19 +374,15 @@ class HTTPAnalyzer(AsyncModule):
         except ValueError:
             return False
 
-        pastebin_found = False
-        ip_identification: Dict[str, str]
         ip_identification: Dict[str, str] = self.db.get_ip_identification(
-            flow.daddr
+            flow.daddr, get_ti_data=False
         )
-        for piece_of_info in ip_identification.values():
-            piece_of_info: str
-            if "pastebin" in piece_of_info.lower():
-                pastebin_found = True
-                break
+        ip_identification = utils.get_ip_identification_as_str(
+            ip_identification
+        )
 
         if not (
-            pastebin_found
+            "pastebin" in ip_identification.lower()
             and response_body_len > self.pastebin_downloads_threshold
             and flow.method == "GET"
         ):

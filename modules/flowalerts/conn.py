@@ -159,14 +159,14 @@ class Conn(IFlowalertsAnalyzer):
                 return True
 
             # check if the SNI, hostname, rDNS of this ip belong to org_name
-            ip_identification: Dict[str, str]
             ip_identification: Dict[str, str] = self.db.get_ip_identification(
                 daddr, get_ti_data=False
             )
-            for piece_of_info in ip_identification.values():
-                piece_of_info: str
-                if org_name in piece_of_info.lower():
-                    return True
+            ip_identification = utils.get_ip_identification_as_str(
+                ip_identification
+            )
+            if org_name in ip_identification.lower():
+                return True
 
             # if it's an org that slips has info about (apple, fb, google,etc.),
             # check if the daddr belongs to it
