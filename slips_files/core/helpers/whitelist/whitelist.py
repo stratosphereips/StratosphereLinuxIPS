@@ -169,6 +169,11 @@ class Whitelist:
     def _is_whitelisted_entity(
         self, evidence: Evidence, entity_type: str
     ) -> bool:
+        """
+        checks the attacker or victim entities of the given evidence for
+        whitelisted ips/domains/SNIs etc.
+        :param entity_type: either 'victim' or 'attacker'
+        """
         entity: Union[Attacker, Victim]
         entity = getattr(evidence, entity_type, None)
         if not entity:
@@ -186,10 +191,13 @@ class Whitelist:
         ):
             return True
 
-        if self.domain_analyzer.is_whitelisted(
-            entity.SNI, Direction.DST, what_to_ignore
-        ):
-            return True
+        # check the rest of the domains that belong to this domain/IP
+        resolutions = entity.DNS_resolution if entity.DNS_resolution else []
+        for domain in [entity.SNI] + resolutions:
+            if self.domain_analyzer.is_whitelisted(
+                domain, Direction.DST, what_to_ignore
+            ):
+                return True
 
         if self.mac_analyzer.profile_has_whitelisted_mac(
             entity.value, entity.direction, what_to_ignore
