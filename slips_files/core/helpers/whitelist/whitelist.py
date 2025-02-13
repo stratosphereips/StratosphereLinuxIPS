@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from typing import Optional, Dict, List, Union
 
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
 from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
@@ -33,6 +34,11 @@ class Whitelist:
         self.domain_analyzer = DomainAnalyzer(self.db, whitelist_manager=self)
         self.mac_analyzer = MACAnalyzer(self.db, whitelist_manager=self)
         self.org_analyzer = OrgAnalyzer(self.db, whitelist_manager=self)
+        self.read_configuration()
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
     def update(self):
         """
@@ -113,7 +119,6 @@ class Whitelist:
         Checks if the src IP, dst IP, domain, dns answer, or organization
          of this flow is whitelisted.
         """
-
         if self._check_if_whitelisted_domains_of_flow(flow):
             return True
 
