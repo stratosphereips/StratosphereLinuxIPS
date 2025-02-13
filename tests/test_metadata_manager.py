@@ -132,7 +132,9 @@ def test_add_metadata(
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
     metadata_manager.main.args.output = output_dir
     metadata_manager.main.args.config = config_file
-    metadata_manager.main.conf.whitelist_path.return_value = whitelist_path
+    metadata_manager.main.conf.local_whitelist_path.return_value = (
+        whitelist_path
+    )
     metadata_manager.main.version = version
     metadata_manager.main.input_information = input_info
     metadata_manager.main.db.get_branch.return_value = branch

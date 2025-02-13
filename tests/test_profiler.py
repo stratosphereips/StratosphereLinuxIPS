@@ -95,7 +95,7 @@ def test_define_separator_zeek_dict(
     assert profiler_detected_type == expected_value
 
 
-@pytest.mark.parametrize("nfdump_file", [("dataset/test1-normal.nfdump")])
+@pytest.mark.parametrize("nfdump_file", ["dataset/test1-normal.nfdump"])
 def test_define_separator_nfdump(
     nfdump_file,
 ):
@@ -474,7 +474,7 @@ def test_read_configuration(
     profiler = ModuleFactory().create_profiler_obj()
     mock_conf = mock_config_parser.return_value
 
-    mock_conf.whitelist_path.return_value = "path/to/whitelist"
+    mock_conf.local_whitelist_path.return_value = "path/to/whitelist"
     mock_conf.ts_format.return_value = "unixtimestamp"
     mock_conf.analysis_direction.return_value = "all"
     mock_conf.label.return_value = "malicious"
@@ -483,7 +483,7 @@ def test_read_configuration(
 
     profiler.read_configuration()
 
-    assert profiler.whitelist_path == "path/to/whitelist"
+    assert profiler.local_whitelist_path == "path/to/whitelist"
     assert profiler.timeformat == "unixtimestamp"
     assert profiler.analysis_direction == "all"
     assert profiler.label == "malicious"

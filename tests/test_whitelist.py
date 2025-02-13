@@ -370,7 +370,7 @@ def test_read_configuration(
     whitelist = ModuleFactory().create_whitelist_obj()
     mock_config_parser.return_value = "config_whitelist_path"
     whitelist.parser.read_configuration()
-    assert whitelist.parser.whitelist_path == "config_whitelist_path"
+    assert whitelist.parser.local_whitelist_path == "config_whitelist_path"
 
 
 @pytest.mark.parametrize(

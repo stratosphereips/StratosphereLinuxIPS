@@ -170,9 +170,19 @@ class ConfigParser(object):
             "parameters", "store_a_copy_of_zeek_files", False
         )
 
-    def whitelist_path(self):
+    def local_whitelist_path(self):
         return self.read_configuration(
             "whitelists", "local_whitelist_path", "config/whitelist.conf"
+        )
+
+    def enable_online_whitelist(self):
+        return self.read_configuration(
+            "whitelists", "enable_online_whitelist", True
+        )
+
+    def enable_local_whitelist(self):
+        return self.read_configuration(
+            "whitelists", "enable_local_whitelist", True
         )
 
     def logsfile(self):

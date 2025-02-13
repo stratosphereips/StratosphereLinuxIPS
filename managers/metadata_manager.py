@@ -48,7 +48,7 @@ class MetadataManager:
         shutil.copy(config_file, metadata_dir)
 
         # Add a copy of whitelist.conf
-        whitelist = self.main.conf.whitelist_path()
+        whitelist = self.main.conf.local_whitelist_path()
         shutil.copy(whitelist, metadata_dir)
 
         now = datetime.now()
