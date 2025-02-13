@@ -182,6 +182,25 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test2.conf
     """
+    config_file = "tests/integration_tests/test2.yaml"
+    modify_yaml_config(
+        output_filename=config_file,
+        changes={
+            "detection": {"evidence_detection_threshold": 0.1},
+            "parameters": {
+                "metadata_dir": False,
+                "store_zeek_files_in_the_output_dir": False,
+            },
+            "modules": {
+                "disable": [
+                    "template",
+                    "ensembling",
+                    "Flow ML Detection",
+                    "Update Manager",
+                ]
+            },
+        },
+    )
 
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
@@ -190,7 +209,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t  -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c tests/integration_tests/test2.yaml "
+        f"-c {config_file} "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
@@ -200,4 +219,4 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     assert_no_errors(output_dir)
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
-    # os.remove(config_file)
+    os.remove(config_file)
