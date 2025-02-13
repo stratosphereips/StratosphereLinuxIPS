@@ -816,6 +816,9 @@ We consider this type of behaviour suspicious activity that shouldn't happen
 
 We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com' etc.
 
+If Google is whitelisted in `whitelist.conf`, this detection will be suppressed.
+
+
 #### Suspicious user agents
 
 Slips has a list of suspicious user agents, whenever one of them is found in the traffic, slips generates
