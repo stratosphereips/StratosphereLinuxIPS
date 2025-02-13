@@ -96,7 +96,8 @@ Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
 
 Slips detects when a private IP is connected to another private IP with threat level info.
 
-But it skips this alert when it's a DNS connection on port 53 UDP to the gateway
+But it skips this alert when it's a DNS connection on port
+53, 67 or 68 UDP to the gateway IP.
 
 ### Connection to private IPs outside the current local network
 

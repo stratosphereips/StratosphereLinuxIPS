@@ -770,10 +770,19 @@ class Conn(IFlowalertsAnalyzer):
                 and flow.daddr == self.db.get_gateway_ip()
             )
 
+        def is_dhcp_conn(flow):
+            # Bootstrap protocol server. Used by DHCP servers to communicate
+            # addressing information to remote DHCP clients
+            return (
+                (flow.dport == 67 or flow.dport == 68)
+                and flow.proto.lower() == "udp"
+                and flow.daddr == self.db.get_gateway_ip()
+            )
+
         with contextlib.suppress(ValueError):
             flow.dport = int(flow.dport)
 
-        if is_dns_conn(flow):
+        if is_dns_conn(flow) or is_dhcp_conn(flow):
             # skip DNS conns to the gw to avoid having tons of this evidence
             return
 
