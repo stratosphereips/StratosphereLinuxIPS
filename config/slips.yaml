@@ -91,9 +91,6 @@ parameters:
   # label : malicious
   # label : unknown
   label: normal
-  # The default path of whitelist.conf, either specify a file in slips main
-  # working dir, or an absolute path
-  whitelist_path: config/whitelist.conf
   # zeek rotation is enabled by default when using an interface,
   # which means slips will delete all zeek log
   # files after 1 day of running, so that zeek doesn't use too much disk space
@@ -212,14 +209,7 @@ threatintelligence:
   # The expected value in seconds.
   # 1 day = 86400 seconds
   TI_files_update_period: 86400
-  # Update period of tranco online whitelist. How often should we re-download \
-  # and update the list?
-  # The expected value in seconds.
-  # 1 day = 86400 seconds
-  # 1 week = 604800 seconds
-  # 2 weeks = 1209600 seconds
-  online_whitelist_update_period: 86400
-  online_whitelist: https://tranco-list.eu/download/X5QNN/10000
+
   # Update period of mac db. How often should we update the db?
   # The expected value in seconds.
   # 1 week = 604800 seconds
@@ -243,6 +233,21 @@ threatintelligence:
   # user check your quota limit before changing this value
   # 1 week = 604800 second
   update_period: 604800
+
+#############################
+whitelists:
+  # Update period of tranco online whitelist. How often should we re-download \
+  # and update the list?
+  # The expected value in seconds.
+  # 1 day = 86400 seconds
+  # 1 week = 604800 seconds
+  # 2 weeks = 1209600 seconds
+  online_whitelist_update_period: 86400
+  online_whitelist: https://tranco-list.eu/download/X5QNN/10000
+  # The default path of whitelist.conf, either specify a file in slips main
+  # working dir, or an absolute path
+  local_whitelist_path: config/whitelist.conf
+
 #############################
 flowalerts:
   # we need a thrshold to determine a long connection. in slips by default is.

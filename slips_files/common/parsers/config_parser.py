@@ -122,9 +122,7 @@ class ConfigParser(object):
         return self.read_configuration("parameters", "pcapfilter", False)
 
     def online_whitelist(self):
-        return self.read_configuration(
-            "threatintelligence", "online_whitelist", False
-        )
+        return self.read_configuration("whitelists", "online_whitelist", False)
 
     def tcp_inactivity_timeout(self):
         timeout = self.read_configuration(
@@ -138,7 +136,7 @@ class ConfigParser(object):
 
     def online_whitelist_update_period(self):
         update_period = self.read_configuration(
-            "threatintelligence", "online_whitelist_update_period", 604800
+            "whitelists", "online_whitelist_update_period", 604800
         )
         try:
             update_period = int(update_period)
@@ -174,7 +172,7 @@ class ConfigParser(object):
 
     def whitelist_path(self):
         return self.read_configuration(
-            "parameters", "whitelist_path", "config/whitelist.conf"
+            "whitelists", "local_whitelist_path", "config/whitelist.conf"
         )
 
     def logsfile(self):

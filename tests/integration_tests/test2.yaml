@@ -98,7 +98,7 @@ parameters:
 
 
    # The default path of whitelist.conf, either specify a file in slips main working dir, or an absolute path
-   whitelist_path : config/whitelist.conf
+   local_whitelist_path : config/whitelist.conf
 
 
    # zeek rotation is enabled by default when using an interface,
