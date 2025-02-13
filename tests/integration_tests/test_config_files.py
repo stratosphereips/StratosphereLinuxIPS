@@ -16,9 +16,45 @@ from tests.module_factory import ModuleFactory
 import pytest
 import shutil
 import os
-
+import yaml
+from pathlib import Path
 
 alerts_file = "alerts.log"
+
+
+def modify_yaml_config(
+    input_path="config/slips.yaml",
+    output_filename="updated_slips.yaml",
+    changes=None,
+):
+    """
+    Reads a YAML config file, modifies specified values, and writes the new
+     config to the current directory.
+
+    :param input_path: path to the input yaml file
+    :param output_filename: name of the output yaml file
+    :param changes: dictionary containing keys to update and their new values
+    """
+    input_file = Path(input_path)
+    output_file = Path.cwd() / output_filename
+
+    if not input_file.exists():
+        raise FileNotFoundError(f"YAML config file not found: {input_path}")
+
+    with input_file.open("r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    if changes:
+        for key, value in changes.items():
+            key: str
+            value: dict
+            if key in config:
+                config[key].update(value)
+
+    with output_file.open("w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+    return output_file
 
 
 def create_Main_instance(input_information):
@@ -45,6 +81,32 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test.conf
     """
+    config_file = "tests/integration_tests/test.yaml"
+    modify_yaml_config(
+        output_filename=config_file,
+        changes={
+            "DisabledAlerts": {
+                "disabled_detections": ["ConnectionWithoutDNS"]
+            },
+            "detection": {"evidence_detection_threshold": 0.1},
+            "parameters": {
+                "analysis_direction": "all",
+                "delete_zeek_files": True,
+                "store_zeek_files_in_the_output_dir": False,
+                "label": "malicious",
+                "time_window_width": "only_one_tw",
+                "store_a_copy_of_zeek_files": True,
+            },
+            "modules": {
+                "disable": [
+                    "template",
+                    "ensembling",
+                    "Flow ML Detection",
+                    "Update Manager",
+                ]
+            },
+        },
+    )
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = (
@@ -52,7 +114,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c tests/integration_tests/test.yaml "
+        f"-c {config_file} "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
@@ -102,6 +164,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         assert module in database.get_disabled_modules()
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
+    os.remove(config_file)
 
 
 @pytest.mark.parametrize(
@@ -137,3 +200,4 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     assert_no_errors(output_dir)
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
+    # os.remove(config_file)
