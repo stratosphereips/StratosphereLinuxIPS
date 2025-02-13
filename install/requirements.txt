@@ -37,7 +37,7 @@ aid_hash
 black==24.10.0
 ruff==0.9.6
 pre-commit==4.0.1
-coverage==7.6.11
+coverage==7.6.12
 pyyaml
 pytest-asyncio
 git+https://github.com/SECEF/python-idmefv2.git
