@@ -36,8 +36,8 @@ class Whitelist:
 
     def update(self):
         """
-        parses the whitelist specified in the slips.yaml and stores the
-        parsed results in the db
+        parses the local whitelist specified in the slips.yaml
+        and stores the parsed results in the db
         """
         self.parser.parse()
         self.db.set_whitelist("IPs", self.parser.whitelisted_ips)

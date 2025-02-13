@@ -236,6 +236,8 @@ threatintelligence:
 
 #############################
 whitelists:
+  # Used to enable/disable the tranco whitelist https://tranco-list.eu/
+  enable_online_whitelist: True
   # Update period of tranco online whitelist. How often should we re-download \
   # and update the list?
   # The expected value in seconds.
@@ -244,6 +246,10 @@ whitelists:
   # 2 weeks = 1209600 seconds
   online_whitelist_update_period: 86400
   online_whitelist: https://tranco-list.eu/download/X5QNN/10000
+
+  # if this parameter is set to false, Slips runs with no whitelists at all.
+  # May cause a lot of false positives
+  enable_local_whitelist: True
   # The default path of whitelist.conf, either specify a file in slips main
   # working dir, or an absolute path
   local_whitelist_path: config/whitelist.conf
