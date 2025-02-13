@@ -353,7 +353,7 @@ class ModuleFactory:
         )
         # override the self.print function to avoid broken pipes
         profiler.print = Mock()
-        profiler.whitelist_path = "tests/test_whitelist.conf"
+        profiler.local_whitelist_path = "tests/test_whitelist.conf"
         profiler.db = mock_db
         return profiler
 
