@@ -363,7 +363,10 @@ def test_is_whitelisted_domain_not_found():
     )
 
 
-@patch("slips_files.common.parsers.config_parser.ConfigParser.whitelist_path")
+@patch(
+    "slips_files.common.parsers.config_parser.ConfigParser"
+    ".local_whitelist_path"
+)
 def test_read_configuration(
     mock_config_parser,
 ):
