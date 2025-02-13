@@ -36,7 +36,7 @@ pytest-sugar==1.0.0
 aid_hash
 black==24.10.0
 ruff==0.9.6
-pre-commit==4.0.1
+pre-commit==4.1.0
 coverage==7.6.12
 pyyaml
 pytest-asyncio
