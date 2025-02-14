@@ -18,6 +18,8 @@ from slips_files.core.structures.evidence import (
     Direction,
 )
 
+ESTAB = "Established"
+
 
 class SetEvidenceHelper:
     def __init__(self, db):
@@ -551,6 +553,10 @@ class SetEvidenceHelper:
             f"Connection to unknown destination port {flow.dport}/"
             f"{flow.proto.upper()} destination IP {flow.daddr}."
         )
+        if flow.interpreted_state == ESTAB:
+            threat_level = ThreatLevel.HIGH
+        else:
+            threat_level = ThreatLevel.MEDIUM
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.UNKNOWN_PORT,
@@ -564,7 +570,7 @@ class SetEvidenceHelper:
                 ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
-            threat_level=ThreatLevel.HIGH,
+            threat_level=threat_level,
             description=description,
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -692,7 +698,7 @@ class SetEvidenceHelper:
 
     def gre_tunnel(self, twid, flow) -> None:
         confidence: float = 1.0
-        threat_level: ThreatLevel = ThreatLevel.INFO
+        threat_level: ThreatLevel = ThreatLevel.LOW
         twid_number: int = int(twid.replace("timewindow", ""))
 
         description: str = (
@@ -702,6 +708,39 @@ class SetEvidenceHelper:
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.GRE_TUNNEL,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            victim=Victim(
+                direction=Direction.DST,
+                ioc_type=IoCType.IP,
+                value=flow.daddr,
+            ),
+            threat_level=threat_level,
+            description=description,
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=confidence,
+        )
+
+        self.db.set_evidence(evidence)
+
+    def gre_scan(self, twid, flow) -> None:
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.LOW
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        description: str = (
+            f"GRE scan from {flow.saddr} "
+            f"to {flow.daddr} tunnel action: {flow.action}"
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.GRE_SCAN,
             attacker=Attacker(
                 direction=Direction.SRC,
                 ioc_type=IoCType.IP,

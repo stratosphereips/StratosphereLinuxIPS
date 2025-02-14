@@ -377,7 +377,7 @@ class FlowMLDetection(IModule):
     def set_evidence_malicious_flow(self, flow: dict, twid: str):
         confidence: float = 0.1
         description = (
-            f"Malicious flow by ML. Src IP"
+            f"Flow with malicious characteristics by ML. Src IP"
             f" {flow['saddr']}:{flow['sport']} to "
             f"{flow['daddr']}:{flow['dport']}"
         )

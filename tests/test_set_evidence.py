@@ -660,35 +660,43 @@ def test_conn_without_dns(time_difference_hours, expected_confidence):
 
 
 @pytest.mark.parametrize(
-    "daddr, dport, proto, expected_description",
+    "state, daddr, dport, proto, expected_threat_level, expected_description",
     [
         # Testcase 1: Standard TCP connection to an unknown port
         (
+            "Established",
             "10.0.0.1",
             12345,
             "tcp",
+            ThreatLevel.HIGH,
             "Connection to unknown destination port 12345/TCP "
             "destination IP 10.0.0.1.",
         ),
         # Testcase 2: UDP connection to an unknown port
         (
+            "Established",
             "192.168.1.100",
             56789,
             "udp",
+            ThreatLevel.HIGH,
             "Connection to unknown destination port 56789/UDP "
             "destination IP 192.168.1.100.",
         ),
         # Testcase 3:  Edge case with port 0
         (
+            "not Established",
             "10.0.0.1",
             0,
             "tcp",
+            ThreatLevel.MEDIUM,
             "Connection to unknown destination port 0/TCP "
             "destination IP 10.0.0.1.",
         ),
     ],
 )
-def test_unknown_port(daddr, dport, proto, expected_description):
+def test_unknown_port(
+    state, daddr, dport, proto, expected_threat_level, expected_description
+):
     """Testing the unknown_port method."""
     set_ev = ModuleFactory().create_set_evidence_helper()
     set_ev.db.get_ip_identification.return_value = ""
@@ -708,9 +716,10 @@ def test_unknown_port(daddr, dport, proto, expected_description):
         dbytes=0,
         smac="",
         dmac="",
-        state="Established",
+        state=state,
         history="",
     )
+    flow.interpreted_state = flow.state
     set_ev.unknown_port("timewindow1", flow)
     assert set_ev.db.set_evidence.call_count == 1
     args, _ = set_ev.db.set_evidence.call_args
@@ -718,7 +727,7 @@ def test_unknown_port(daddr, dport, proto, expected_description):
     assert evidence.evidence_type == EvidenceType.UNKNOWN_PORT
     assert evidence.attacker.value == flow.saddr
     assert evidence.victim.value == daddr
-    assert evidence.threat_level == ThreatLevel.HIGH
+    assert evidence.threat_level == expected_threat_level
     assert evidence.profile.ip == flow.saddr
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]
@@ -879,7 +888,7 @@ def test_gre_tunnel():
     assert evidence.evidence_type == EvidenceType.GRE_TUNNEL
     assert evidence.attacker.value == flow.saddr
     assert evidence.victim.value == "10.0.0.1"
-    assert evidence.threat_level == ThreatLevel.INFO
+    assert evidence.threat_level == ThreatLevel.LOW
     assert evidence.profile.ip == flow.saddr
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]

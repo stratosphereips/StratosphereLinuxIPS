@@ -85,6 +85,7 @@ class DNS(IFlowalertsAnalyzer):
         if (
             "arpa" in flow.query
             or ".local" in flow.query
+            or flow.qtype_name not in ["AAAA", "A"]
             or "*" in flow.query
             or ".cymru.com" in flow.query[-10:]
             or len(flow.query.split(".")) == 1

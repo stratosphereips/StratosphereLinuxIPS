@@ -501,7 +501,7 @@ class ConfigParser(object):
 
     def riskiq_update_period(self):
         update_period = self.read_configuration(
-            "threatintelligence", "update_period", 604800
+            "threatintelligence", "riskiq_update_period", 604800
         )
         try:
             update_period = float(update_period)

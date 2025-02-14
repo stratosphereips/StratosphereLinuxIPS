@@ -46,7 +46,7 @@ def test_should_detect_dns_without_conn(domain, rcode_name, expected_result):
         daddr="",
         query=domain,
         qclass_name="",
-        qtype_name="",
+        qtype_name="AAAA",
         rcode_name=rcode_name,
         answers="",
         TTLs="",
