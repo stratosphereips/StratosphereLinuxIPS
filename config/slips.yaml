@@ -293,7 +293,7 @@ threatintelligence:
   # Update period for RisqIQ is set to 1 week by default, if you're not a premium riskIQ
   # user check your quota limit before changing this value
   # 1 week = 604800 second
-  update_period: 604800
+  riskiq_update_period: 604800
 
 #############################
 whitelists:
