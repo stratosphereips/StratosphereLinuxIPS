@@ -182,9 +182,6 @@ class Conn(IFlowalertsAnalyzer):
         """
         if not flow.dport:
             return
-        if flow.interpreted_state != ESTAB:
-            # detect unknown ports on established conns only
-            return False
 
         portproto = f"{flow.dport}/{flow.proto}"
         if self.db.get_port_info(portproto):
