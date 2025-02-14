@@ -34,7 +34,7 @@ class Tunnel(IFlowalertsAnalyzer):
         if flow.tunnel_type != "Tunnel::GRE":
             return
         if flow.action == "Tunnel::DISCOVER":
-            self.set_evidence.gre_tunnel_scan(twid, flow)
+            self.set_evidence.gre_scan(twid, flow)
 
     def analyze(self, msg):
         if utils.is_msg_intended_for(msg, "new_tunnel"):

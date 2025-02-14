@@ -723,7 +723,7 @@ class SetEvidenceHelper:
 
         self.db.set_evidence(evidence)
 
-    def gre_tunnel_scan(self, twid, flow) -> None:
+    def gre_scan(self, twid, flow) -> None:
         confidence: float = 1.0
         threat_level: ThreatLevel = ThreatLevel.LOW
         twid_number: int = int(twid.replace("timewindow", ""))
