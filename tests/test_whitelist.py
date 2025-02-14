@@ -243,7 +243,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
     [
         (
             {
-                "mock_ioc": IoCType.IP.name,
+                "ioc_type": IoCType.IP.name,
                 "value": "1.2.3.4",
                 "direction": Direction.SRC,
             },
@@ -251,7 +251,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
         ),
         (
             {
-                "mock_ioc": IoCType.DOMAIN.name,
+                "ioc_type": IoCType.DOMAIN.name,
                 "value": "example.com",
                 "direction": Direction.DST,
             },
@@ -259,7 +259,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
         ),
         (
             {
-                "mock_ioc": IoCType.IP.name,
+                "ioc_type": IoCType.IP.name,
                 "value": "8.8.8.8",
                 "direction": Direction.SRC,
             },
@@ -278,7 +278,7 @@ def test_is_part_of_a_whitelisted_org(
     whitelist.db.get_org_info.return_value = json.dumps(["1.2.3.4/32"])
     whitelist.db.get_ip_info.return_value = {"asn": {"asnorg": "Google"}}
     whitelist.db.get_org_info.return_value = json.dumps(["example.com"])
-
+    # we're mocking either an attacker or a  victim obj
     mock_ioc = MagicMock()
     mock_ioc.value = ioc_data["value"]
     mock_ioc.direction = ioc_data["direction"]
