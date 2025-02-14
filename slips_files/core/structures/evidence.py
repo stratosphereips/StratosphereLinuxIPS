@@ -69,6 +69,7 @@ class EvidenceType(Enum):
     HORIZONTAL_PORT_SCAN = auto()
     CONNECTION_TO_PRIVATE_IP = auto()
     GRE_TUNNEL = auto()
+    GRE_TUNNEL_SCAN = auto()
     VERTICAL_PORT_SCAN = auto()
     SSH_SUCCESSFUL = auto()
     LONG_CONNECTION = auto()
