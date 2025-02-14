@@ -5,6 +5,7 @@ import json
 from typing import List, Dict
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     IoCType,
@@ -31,6 +32,11 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         self.ip_analyzer = IPAnalyzer(self.db)
         self.domain_analyzer = DomainAnalyzer(self.db)
         self.org_info_path = "slips_files/organizations_info/"
+        self.read_configuration()
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
     def is_domain_in_org(self, domain: str, org: str):
         """
@@ -112,6 +118,10 @@ class OrgAnalyzer(IWhitelistAnalyzer):
 
     def is_whitelisted(self, flow) -> bool:
         """checks if the given flow is whitelisted"""
+
+        if not self.enable_local_whitelist:
+            return False
+
         flow_dns_answers: List[str] = self.ip_analyzer.extract_dns_answers(
             flow
         )

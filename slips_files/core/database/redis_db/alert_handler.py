@@ -151,10 +151,10 @@ class AlertHandler:
         if the victim/attacker's ip/domain was part of a ti feed,
         this function returns the name of the feed
         """
-        if type(to_lookup) == Victim:
-            ioc_type = to_lookup.victim_type.name
+        if isinstance(to_lookup, Victim):
+            ioc_type = to_lookup.ioc_type.name
         else:
-            ioc_type = to_lookup.attacker_type.name
+            ioc_type = to_lookup.ioc_type.name
 
         cases = {
             IoCType.IP.name: self.is_blacklisted_ip,

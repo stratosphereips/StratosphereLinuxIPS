@@ -79,6 +79,7 @@ from slips_files.core.structures.evidence import (
     Victim,
 )
 from modules.fidesModule.fidesModule import FidesModule
+from slips_files.core.text_formatters.evidence import EvidenceFormatter
 
 
 def read_configuration():
@@ -352,7 +353,7 @@ class ModuleFactory:
         )
         # override the self.print function to avoid broken pipes
         profiler.print = Mock()
-        profiler.whitelist_path = "tests/test_whitelist.conf"
+        profiler.local_whitelist_path = "tests/test_whitelist.conf"
         profiler.db = mock_db
         return profiler
 
@@ -452,21 +453,17 @@ class ModuleFactory:
         self,
         value="192.168.1.1",
         direction=Direction.SRC,
-        attacker_type=IoCType.IP,
+        ioc_type=IoCType.IP,
     ):
-        return Attacker(
-            direction=direction, attacker_type=attacker_type, value=value
-        )
+        return Attacker(direction=direction, ioc_type=ioc_type, value=value)
 
     def create_victim_obj(
         self,
         value="192.168.1.2",
         direction=Direction.DST,
-        victim_type=IoCType.IP,
+        ioc_type=IoCType.IP,
     ):
-        return Victim(
-            direction=direction, victim_type=victim_type, value=value
-        )
+        return Victim(direction=direction, ioc_type=ioc_type, value=value)
 
     def create_profileid_obj(self, ip="192.168.1.3"):
         return ProfileID(ip=ip)
@@ -623,6 +620,10 @@ class ModuleFactory:
         )
         handler.db = mock_db
         return handler
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_evidence_formatter_obj(self, mock_db):
+        return EvidenceFormatter(mock_db)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_symbol_handler_obj(self, mock_db):

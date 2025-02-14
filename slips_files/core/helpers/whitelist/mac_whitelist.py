@@ -5,6 +5,7 @@ from typing import Dict
 import validators
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.structures.evidence import (
     Direction,
 )
@@ -18,6 +19,11 @@ class MACAnalyzer(IWhitelistAnalyzer):
 
     def init(self):
         self.ip_analyzer = IPAnalyzer(self.db)
+        self.read_configuration()
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
     @staticmethod
     def is_valid_mac(mac: str) -> bool:
@@ -53,6 +59,9 @@ class MACAnalyzer(IWhitelistAnalyzer):
         :param direction: is the given mac a src or a dst mac
         :param what_to_ignore: can be flows or alerts
         """
+        if not self.enable_local_whitelist:
+            return False
+
         if not self.is_valid_mac(mac):
             return False
 

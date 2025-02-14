@@ -103,8 +103,8 @@ class Conn(IFlowalertsAnalyzer):
     def port_belongs_to_an_org(self, daddr, portproto, profileid):
         """
         Checks whether the given port and daddr are known to be used by a
-        specific organization or not, and returns true if the daddr belongs to the
-        same org as the port
+        specific organization or not, and returns true if the daddr belongs
+        to the same org as the port
         This function says that the port belongs to an org if:
         1. we have its info in ports_used_by_specific_orgs.csv
         and considers the IP belongs to an org if:
@@ -136,7 +136,8 @@ class Conn(IFlowalertsAnalyzer):
         for ip in org_ips:
             # is any of them a range?
             with contextlib.suppress(ValueError):
-                # we have the org range in our database, check if the daddr belongs to this range
+                # we have the org range in our database, check if the daddr
+                # belongs to this range
                 if ipaddress.ip_address(daddr) in ipaddress.ip_network(ip):
                     # it does, consider the port as known
                     return True
@@ -158,7 +159,12 @@ class Conn(IFlowalertsAnalyzer):
                 return True
 
             # check if the SNI, hostname, rDNS of this ip belong to org_name
-            ip_identification = self.db.get_ip_identification(daddr)
+            ip_identification: Dict[str, str] = self.db.get_ip_identification(
+                daddr, get_ti_data=False
+            )
+            ip_identification = utils.get_ip_identification_as_str(
+                ip_identification
+            )
             if org_name in ip_identification.lower():
                 return True
 
@@ -764,10 +770,19 @@ class Conn(IFlowalertsAnalyzer):
                 and flow.daddr == self.db.get_gateway_ip()
             )
 
+        def is_dhcp_conn(flow):
+            # Bootstrap protocol server. Used by DHCP servers to communicate
+            # addressing information to remote DHCP clients
+            return (
+                (flow.dport == 67 or flow.dport == 68)
+                and flow.proto.lower() == "udp"
+                and flow.daddr == self.db.get_gateway_ip()
+            )
+
         with contextlib.suppress(ValueError):
             flow.dport = int(flow.dport)
 
-        if is_dns_conn(flow):
+        if is_dns_conn(flow) or is_dhcp_conn(flow):
             # skip DNS conns to the gw to avoid having tons of this evidence
             return
 

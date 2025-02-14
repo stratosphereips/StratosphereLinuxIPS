@@ -130,6 +130,8 @@ class UpdateManager(IModule):
             conf.online_whitelist_update_period()
         )
         self.online_whitelist = conf.online_whitelist()
+        self.enable_online_whitelist: bool = conf.enable_online_whitelist()
+        self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
     def get_feed_details(self, feeds_path):
         """
@@ -311,6 +313,9 @@ class UpdateManager(IModule):
         Decides whether to update or not based on the update period
         Used for online whitelist specified in slips.conf
         """
+        if not self.enable_online_whitelist:
+            return False
+
         if not self.did_update_period_pass(
             self.online_whitelist_update_period, "tranco_whitelist"
         ):
@@ -1462,12 +1467,13 @@ class UpdateManager(IModule):
         whitelisted_orgs: list = list(whitelisted_orgs.keys())
         return whitelisted_orgs
 
-    def update_whitelist(self):
+    def update_local_whitelist(self):
         """
-        parses the whitelist using the whitelist
+        parses the local whitelist using the whitelist
          parser and stores it in the db
         """
-        self.whitelist.update()
+        if self.enable_local_whitelist:
+            self.whitelist.update()
 
     def update_org_files(self):
         for org in utils.supported_orgs:

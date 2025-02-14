@@ -346,7 +346,8 @@ class ProcessManager:
          module unless this functionis done
         :kwarg local_files: if true, updates the local ports and
                 org files from disk
-        :kwarg TI_feeds: if true, updates the remote TI feeds, this takes time
+        :kwarg ti_feeds: if true, updates the remote TI feeds.
+            PS: this takes time.
         """
         try:
             # only one instance of slips should be able to update ports
@@ -366,7 +367,7 @@ class ProcessManager:
                 if local_files:
                     update_manager.update_ports_info()
                     update_manager.update_org_files()
-                    update_manager.update_whitelist()
+                    update_manager.update_local_whitelist()
 
                 if ti_feeds:
                     update_manager.print("Updating TI feeds")
@@ -443,7 +444,7 @@ class ProcessManager:
                 # skips the context manager of output.py, will close
                 # it manually later
                 # once all processes are closed
-                if type(process) == multiprocessing.context.ForkProcess:
+                if isinstance(process, multiprocessing.context.ForkProcess):
                     continue
                 to_kill_first.append(process)
 
