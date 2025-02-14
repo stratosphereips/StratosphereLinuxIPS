@@ -3,6 +3,7 @@
 """Unit test for modules/threat_intelligence/threat_intelligence.py"""
 
 from tests.module_factory import ModuleFactory
+import asyncio
 import os
 import pytest
 import json
@@ -13,8 +14,8 @@ from unittest.mock import (
 import ipaddress
 from slips_files.core.structures.evidence import ThreatLevel
 
-
-def test_parse_local_ti_file():
+@pytest.mark.asyncio
+async def test_parse_local_ti_file():
     """
     Test parsing of a local threat intelligence file.
 
@@ -27,8 +28,8 @@ def test_parse_local_ti_file():
     local_ti_file = os.path.join(local_ti_files_dir, "own_malicious_iocs.csv")
     assert threatintel.parse_local_ti_file(local_ti_file) is True
 
-
-def test_parse_ja3_file():
+@pytest.mark.asyncio
+async def test_parse_ja3_file():
     """
     Test parsing of a JA3 hash file.
 
@@ -42,8 +43,8 @@ def test_parse_ja3_file():
 
     assert threatintel.parse_ja3_file(local_ja3_file) is True
 
-
-def test_parse_jarm_file():
+@pytest.mark.asyncio
+async def test_parse_jarm_file():
     """
     Test parsing of a JARM hash file.
 
@@ -68,7 +69,8 @@ def test_parse_jarm_file():
         (False, "222", False),
     ],
 )
-def test_check_local_ti_files_for_update(
+@pytest.mark.asyncio
+async def test_check_local_ti_files_for_update(
     current_hash, old_hash, expected_return, mocker
 ):
     """
@@ -156,7 +158,8 @@ def test_check_local_ti_files_for_update(
         ),
     ],
 )
-def test_get_malicious_ip_ranges(
+@pytest.mark.asyncio
+async def test_get_malicious_ip_ranges(
     mock_ip_ranges, expected_ipv4_ranges, expected_ipv6_ranges
 ):
     """
@@ -237,7 +240,8 @@ def test_get_malicious_ip_ranges(
         ),
     ],
 )
-def test_set_evidence_malicious_asn(
+@pytest.mark.asyncio
+async def test_set_evidence_malicious_asn(
     daddr,
     uid,
     timestamp,
@@ -320,7 +324,8 @@ def test_set_evidence_malicious_asn(
         ),
     ],
 )
-def test_set_evidence_malicious_ip(
+@pytest.mark.asyncio
+async def test_set_evidence_malicious_ip(
     ip,
     uid,
     daddr,
@@ -361,7 +366,8 @@ def test_set_evidence_malicious_ip(
         ("invalid", False),
     ],
 )
-def test_is_valid_threat_level(threat_level, expected):
+@pytest.mark.asyncio
+async def test_is_valid_threat_level(threat_level, expected):
     """Test `is_valid_threat_level` for recognizing valid threat levels."""
     threatintel = ModuleFactory().create_threatintel_obj()
     assert threatintel.is_valid_threat_level(threat_level) is expected
@@ -375,7 +381,8 @@ def test_is_valid_threat_level(threat_level, expected):
         ("ICMP", "srcip", False),
     ],
 )
-def test_is_outgoing_icmp_packet(protocol, ip_address, expected):
+@pytest.mark.asyncio
+async def test_is_outgoing_icmp_packet(protocol, ip_address, expected):
     """Test `is_outgoing_icmp_packet` for identifying outbound ICMP packets."""
     threatintel = ModuleFactory().create_threatintel_obj()
     assert (
@@ -407,7 +414,8 @@ def test_is_outgoing_icmp_packet(protocol, ip_address, expected):
         ),
     ],
 )
-def test_delete_old_source_ips_with_deletions(
+@pytest.mark.asyncio
+async def test_delete_old_source_ips_with_deletions(
     mock_ioc_data, file_to_delete, expected_deleted_ips
 ):
     """
@@ -435,7 +443,8 @@ def test_delete_old_source_ips_with_deletions(
         ({}, "old_file.txt"),
     ],
 )
-def test_delete_old_source_ips_no_deletions(mock_ioc_data, file_to_delete):
+@pytest.mark.asyncio
+async def test_delete_old_source_ips_no_deletions(mock_ioc_data, file_to_delete):
     """
     Test `__delete_old_source_ips` when there are no IPs to delete.
     """
@@ -478,7 +487,8 @@ def test_delete_old_source_ips_no_deletions(mock_ioc_data, file_to_delete):
         ),
     ],
 )
-def test_delete_old_source_domains(
+@pytest.mark.asyncio
+async def test_delete_old_source_domains(
     domains_in_ioc, file_to_delete, expected_calls
 ):
     """
@@ -549,7 +559,8 @@ def test_delete_old_source_domains(
         ),
     ],
 )
-def test_delete_old_source_data_from_database(
+@pytest.mark.asyncio
+async def test_delete_old_source_data_from_database(
     data_file,
     mock_ips_ioc,
     mock_domains_ioc,
@@ -586,7 +597,8 @@ def test_delete_old_source_data_from_database(
         (False, "222", False),
     ],
 )
-def test_should_update_local_ti_file(
+@pytest.mark.asyncio
+async def test_should_update_local_ti_file(
     current_hash,
     old_hash,
     expected_return,
@@ -620,7 +632,8 @@ def test_should_update_local_ti_file(
         ("malicious.com", None),
     ],
 )
-def test_is_ignored_domain(domain, expected):
+@pytest.mark.asyncio
+async def test_is_ignored_domain(domain, expected):
     """Test `is_ignored_domain` for filtering out irrelevant domains."""
     threatintel = ModuleFactory().create_threatintel_obj()
     assert threatintel.is_ignored_domain(domain) is expected
@@ -681,7 +694,8 @@ def test_is_ignored_domain(domain, expected):
         ),
     ],
 )
-def test_set_evidence_malicious_hash(
+@pytest.mark.asyncio
+async def test_set_evidence_malicious_hash(
     file_info,
     expected_description,
     expected_threat_level,
@@ -723,7 +737,8 @@ def test_set_evidence_malicious_hash(
         (None, None, None),
     ],
 )
-def test_search_online_for_hash(
+@pytest.mark.asyncio
+async def test_search_online_for_hash(
     mocker, circl_lu_return, urlhaus_lookup_return, expected_result
 ):
     """
@@ -754,7 +769,8 @@ def test_search_online_for_hash(
         ("10.0.0.1", None, None),
     ],
 )
-def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
+@pytest.mark.asyncio
+async def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
     """Test `search_offline_for_ip` for querying local
     threat intelligence data."""
     threatintel = ModuleFactory().create_threatintel_obj()
@@ -780,7 +796,8 @@ def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
         ("10.0.0.21", "invalid", False, False),
     ],
 )
-def test_ip_belongs_to_blacklisted_range(
+@pytest.mark.asyncio
+async def test_ip_belongs_to_blacklisted_range(
     mocker, ip, ip_type, in_blacklist, expected_result
 ):
     """Test `ip_belongs_to_blacklisted_range`
@@ -834,7 +851,8 @@ def test_ip_belongs_to_blacklisted_range(
         ("https://safe.com", None, None),
     ],
 )
-def test_search_online_for_url(
+@pytest.mark.asyncio
+async def test_search_online_for_url(
     mocker, url, mock_return_value, expected_result
 ):
     """Test `search_online_for_url` for
@@ -857,7 +875,8 @@ def test_search_online_for_url(
         ("safe.com", ({}, False), (False, False)),
     ],
 )
-def test_search_offline_for_domain(
+@pytest.mark.asyncio
+async def test_search_offline_for_domain(
     mocker, domain, mock_return_value, expected_result
 ):
     """Test `search_offline_for_domain` for checking domain blacklisting."""
@@ -909,7 +928,8 @@ def test_search_offline_for_domain(
         ("noinfo.com", "example.com", False, None, 0, 1.0, None),
     ],
 )
-def test_set_evidence_malicious_cname_in_dns_response(
+@pytest.mark.asyncio
+async def test_set_evidence_malicious_cname_in_dns_response(
     cname,
     dns_query,
     is_subdomain,
@@ -940,8 +960,8 @@ def test_set_evidence_malicious_cname_in_dns_response(
         assert call_args.description == expected_description
         assert call_args.confidence == expected_confidence
 
-
-def test_pre_main(mocker):
+@pytest.mark.asyncio
+async def test_pre_main(mocker):
     """Test `pre_main` for initializing the module."""
     threatintel = ModuleFactory().create_threatintel_obj()
     mocker.patch.object(threatintel, "update_local_file")
@@ -968,7 +988,8 @@ def test_pre_main(mocker):
         ("192.168.1.1", "ICMP", "srcip", False),
     ],
 )
-def test_should_lookup(ip, protocol, ip_state, expected_result):
+@pytest.mark.asyncio
+async def test_should_lookup(ip, protocol, ip_state, expected_result):
     """
     Test `should_lookup` for various IP addresses, protocols, and states.
     """
@@ -988,7 +1009,8 @@ def test_should_lookup(ip, protocol, ip_state, expected_result):
         ("safe.com", False, False),
     ],
 )
-def test_is_malicious_cname(
+@pytest.mark.asyncio
+async def test_is_malicious_cname(
     mocker, cname, is_domain_malicious_return, expected_result
 ):
     """
@@ -1019,7 +1041,8 @@ def test_is_malicious_cname(
         "another_ignored.com",
     ],
 )
-def test_is_malicious_cname_ignored_cname(mocker, cname):
+@pytest.mark.asyncio
+async def test_is_malicious_cname_ignored_cname(mocker, cname):
     """
     Test `is_malicious_cname` for ignored CNAME scenarios.
     """
@@ -1055,7 +1078,8 @@ def test_is_malicious_cname_ignored_cname(mocker, cname):
         (None, None, False),
     ],
 )
-def test_is_malicious_ip(offline_result, online_result, expected_result):
+@pytest.mark.asyncio
+async def test_is_malicious_ip(offline_result, online_result, expected_result):
     """Test `is_malicious_ip` for checking IP blacklisting."""
     threatintel = ModuleFactory().create_threatintel_obj()
     with patch(
@@ -1085,7 +1109,8 @@ def test_is_malicious_ip(offline_result, online_result, expected_result):
     ],
 )
 @patch("modules.threat_intelligence.spamhaus.Spamhaus.query")
-def test_search_online_for_ip(
+@pytest.mark.asyncio
+async def test_search_online_for_ip(
     mock_spamhaus, ip_address, mock_return_value, expected_result
 ):
     """Test `search_online_for_ip` for querying online threat intelligence sources."""
@@ -1116,7 +1141,8 @@ def mock_is_global(self, ip: str):
         #         # not inboud
     ],
 )
-def test_is_inbound_traffic(ip, ip_state, is_global, expected):
+@pytest.mark.asyncio
+async def test_is_inbound_traffic(ip, ip_state, is_global, expected):
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.get_host_ip = Mock(return_value="192.168.1.1")
     client_ips = ["192.168.1.10", "10.0.0.1"]
@@ -1137,7 +1163,8 @@ def test_is_inbound_traffic(ip, ip_state, is_global, expected):
         ("safe.com", None, False),
     ],
 )
-def test_is_malicious_domain(domain, result, is_malicious, mocker):
+@pytest.mark.asyncio
+async def test_is_malicious_domain(domain, result, is_malicious, mocker):
     """
     Test `is_malicious_domain` for identifying
     and recording evidence of malicious domains.
@@ -1181,7 +1208,8 @@ def test_is_malicious_domain(domain, result, is_malicious, mocker):
         (None, False),
     ],
 )
-def test_is_malicious_hash(
+@pytest.mark.asyncio
+async def test_is_malicious_hash(
     mocker, search_online_result, expected_set_evidence_call
 ):
     """
@@ -1213,8 +1241,8 @@ def test_is_malicious_hash(
 
     assert threatintel.db.set_evidence.called == expected_set_evidence_call
 
-
-def test_is_malicious_hash_known_fp_md5():
+@pytest.mark.asyncio
+async def test_is_malicious_hash_known_fp_md5():
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.is_known_fp_md5_hash.return_value = True
     flow = {"flow": {"md5": "c0eec84d09bbb7f4cd1a8896f9dff718"}}
@@ -1228,7 +1256,8 @@ def test_is_malicious_hash_known_fp_md5():
         ("http://safe.com", None, False),
     ],
 )
-def test_is_malicious_url(url, result, is_malicious, mocker):
+@pytest.mark.asyncio
+async def test_is_malicious_url(url, result, is_malicious, mocker):
     """
     Test `is_malicious_url` for correctly handling
     both malicious and non-malicious URLs.
@@ -1292,7 +1321,8 @@ def test_is_malicious_url(url, result, is_malicious, mocker):
         ),
     ],
 )
-def test_main_domain_lookup(mocker, msg_data, expected_call):
+@pytest.mark.asyncio
+async def test_main_domain_lookup(mocker, msg_data, expected_call):
     """
     Test the `main` function's handling of domain name lookups,
     covering scenarios with DNS responses and direct domain queries.
@@ -1306,8 +1336,8 @@ def test_main_domain_lookup(mocker, msg_data, expected_call):
 
     mock_call.assert_called_once()
 
-
-def test_main_empty_message(mocker):
+@pytest.mark.asyncio
+async def test_main_empty_message(mocker):
     """
     Test the `main` function's behavior when receiving an empty message,
     """
@@ -1316,8 +1346,8 @@ def test_main_empty_message(mocker):
     mock_get_msg.return_value = None
     threatintel.main()
 
-
-def test_main_file_hash_lookup(mocker):
+@pytest.mark.asyncio
+async def test_main_file_hash_lookup(mocker):
     """
     Test the `main` function's handling of file hash lookups,
     verifying it calls the appropriate malicious hash checks.
@@ -1386,7 +1416,8 @@ def test_main_file_hash_lookup(mocker):
         ),
     ],
 )
-def test_main_ip_lookup(
+@pytest.mark.asyncio
+async def test_main_ip_lookup(
     mocker,
     ip_address,
     is_malicious,
@@ -1449,7 +1480,8 @@ def test_main_ip_lookup(
         ("own_malicious_iocs.csv", "parse_local_ti_file"),
     ],
 )
-def test_update_local_file_parse_function(
+@pytest.mark.asyncio
+async def test_update_local_file_parse_function(
     filename, expected_parse_function, mocker
 ):
     """
@@ -1489,7 +1521,8 @@ def test_update_local_file_parse_function(
         ("8.8.8.8", "15169", None, 0),
     ],
 )
-def test_ip_has_blacklisted_asn(
+@pytest.mark.asyncio
+async def test_ip_has_blacklisted_asn(
     ip_address, asn, asn_info, expected_call_count
 ):
     """
@@ -1570,7 +1603,8 @@ def test_ip_has_blacklisted_asn(
         ),
     ],
 )
-def test_set_evidence_malicious_domain(
+@pytest.mark.asyncio
+async def test_set_evidence_malicious_domain(
     domain,
     uid,
     timestamp,
@@ -1666,7 +1700,8 @@ def test_set_evidence_malicious_domain(
         ),
     ],
 )
-def test_set_evidence_malicious_ip_in_dns_response(
+@pytest.mark.asyncio
+async def test_set_evidence_malicious_ip_in_dns_response(
     ip,
     uid,
     timestamp,
@@ -1702,8 +1737,8 @@ def test_set_evidence_malicious_ip_in_dns_response(
 
     assert threatintel.db.set_ip_info.call_count == 1
 
-
-def test_read_configuration(mocker):
+@pytest.mark.asyncio
+async def test_read_configuration(mocker):
     """
     Test `__read_configuration` to verify it correctly
     reads configuration settings.
