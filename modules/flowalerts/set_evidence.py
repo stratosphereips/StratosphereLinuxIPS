@@ -756,6 +756,39 @@ class SetEvidenceHelper:
 
         self.db.set_evidence(evidence)
 
+    def gre_scan(self, twid, flow) -> None:
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.LOW
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        description: str = (
+            f"GRE scan from {flow.saddr} "
+            f"to {flow.daddr} tunnel action: {flow.action}"
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.GRE_TUNNEL_SCAN,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                attacker_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            victim=Victim(
+                direction=Direction.DST,
+                victim_type=IoCType.IP,
+                value=flow.daddr,
+            ),
+            threat_level=threat_level,
+            description=description,
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=confidence,
+        )
+
+        self.db.set_evidence(evidence)
+
     def vertical_portscan(self, twid, flow) -> None:
         # confidence = 1 because this detection is coming
         # from a Zeek file so we're sure it's accurate
