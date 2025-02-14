@@ -1643,6 +1643,7 @@ class UpdateManager(IModule):
                     0,
                     log_to_logfiles_only=True,
                 )
+        self.loaded_ti_files -= 1
 
     def handle_exception(self, task):
         """
