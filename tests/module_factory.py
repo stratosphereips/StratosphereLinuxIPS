@@ -453,19 +453,17 @@ class ModuleFactory:
         self,
         value="192.168.1.1",
         direction=Direction.SRC,
-        attacker_type=IoCType.IP,
+        ioc_type=IoCType.IP,
     ):
-        return Attacker(
-            direction=direction, ioc_type=attacker_type, value=value
-        )
+        return Attacker(direction=direction, ioc_type=ioc_type, value=value)
 
     def create_victim_obj(
         self,
         value="192.168.1.2",
         direction=Direction.DST,
-        victim_type=IoCType.IP,
+        ioc_type=IoCType.IP,
     ):
-        return Victim(direction=direction, ioc_type=victim_type, value=value)
+        return Victim(direction=direction, ioc_type=ioc_type, value=value)
 
     def create_profileid_obj(self, ip="192.168.1.3"):
         return ProfileID(ip=ip)

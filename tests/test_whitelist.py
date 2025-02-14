@@ -243,7 +243,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
     [
         (
             {
-                "attacker_type": IoCType.IP.name,
+                "mock_ioc": IoCType.IP.name,
                 "value": "1.2.3.4",
                 "direction": Direction.SRC,
             },
@@ -251,7 +251,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
         ),
         (
             {
-                "victim_type": IoCType.DOMAIN.name,
+                "mock_ioc": IoCType.DOMAIN.name,
                 "value": "example.com",
                 "direction": Direction.DST,
             },
@@ -259,7 +259,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
         ),
         (
             {
-                "attacker_type": IoCType.IP.name,
+                "mock_ioc": IoCType.IP.name,
                 "value": "8.8.8.8",
                 "direction": Direction.SRC,
             },
@@ -282,17 +282,11 @@ def test_is_part_of_a_whitelisted_org(
     mock_ioc = MagicMock()
     mock_ioc.value = ioc_data["value"]
     mock_ioc.direction = ioc_data["direction"]
-    # setup the Attacker or Victim object
-    if "attacker_type" in ioc_data:
-        mock_ioc.attacker_type = ioc_data["attacker_type"]
-        ioc_type = mock_ioc.attacker_type
-    else:
-        mock_ioc.victim_type = ioc_data["victim_type"]
-        ioc_type = mock_ioc.victim_type
+    mock_ioc.ioc_type = ioc_data["ioc_type"]
 
     assert (
         whitelist.org_analyzer.is_part_of_a_whitelisted_org(
-            mock_ioc.value, ioc_type, mock_ioc.direction, "both"
+            mock_ioc.value, mock_ioc.ioc_type, mock_ioc.direction, "both"
         )
         == expected_result
     )
