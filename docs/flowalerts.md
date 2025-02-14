@@ -380,8 +380,14 @@ If so, it alerts "Device changing IPs".
 
 ## GRE tunnels
 
-Slips uses zeek tunnel.log to alert on GRE tunnels when found.
-evidence of this type are just informational.
+Slips uses zeek tunnel.log to alert on GRE tunnels when found. Whenever one is found, slips sets an evidence
+with threat level low
+
+## GRE tunnel scans
+
+Slips uses zeek tunnel.log to alert on GRE tunnels with DISCOVER actions when found.
+The threat level of this evidence is low.
+
 
 ## Invalid DNS resolutions
 
