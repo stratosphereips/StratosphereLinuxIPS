@@ -41,4 +41,3 @@ coverage==7.6.12
 pyyaml
 pytest-asyncio
 git+https://github.com/SECEF/python-idmefv2.git
-json
