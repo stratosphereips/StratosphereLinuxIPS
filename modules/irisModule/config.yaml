@@ -1,8 +1,9 @@
 Identity:
-  GenerateNewKey: true
+  GenerateNewKey: False
+  LoadKeyFromFile: keyfile.priv
 
 Server:
-  port: 9008
+  port: 9010
   Host: 127.0.0.1
   DhtServerMode: true
 

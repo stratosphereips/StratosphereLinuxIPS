@@ -495,3 +495,5 @@ P2P:
   create_p2p_logfile: false
   # Should Slips use P2P?
   use_p2p: false
+  # Configuration file of Iris, used in Iris Module (modules/irisModule)
+  iris_conf: modules/irisModule/config.yaml

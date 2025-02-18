@@ -12,6 +12,7 @@
 import signal
 from asyncio import wait_for
 
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
 import json
@@ -42,18 +43,34 @@ class IrisModule(IModule):
             "iris_internal": self.fi,
         }
 
+    def log_line(self, txt: str):
+        self.logger.log_line({"from": self.name, "txt":txt})
+
+    def make_relative_path(self, executable_path, config_file_path):
+        # Get the directory of the executable
+        executable_dir = os.path.dirname(executable_path)
+
+        # Calculate the relative path from executable directory to the config file
+        relative_path = os.path.relpath(config_file_path, executable_dir)
+
+        return relative_path
+
     def pre_main(self):
         """
         Initializations that run only once before the main() function runs in a loop
         """
 
         iris_exe_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "peercli")
-        iris_conf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
+        #iris_conf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
+        conf = ConfigParser()
+        iris_conf_path = self.make_relative_path(iris_exe_path, conf.get_iris_config_location())
+
         command = [
             iris_exe_path,
             "--conf",
             iris_conf_path,
         ]
+        self.log_line(f'Initializing IRIS module with {command}')
 
         command_str = " ".join(
             f'"{arg}"' if " " in arg or '"' in arg else arg for arg in command
@@ -64,7 +81,7 @@ class IrisModule(IModule):
             }
         self.logger.output_line(debug_message)
 
-        log_dir = "output_iris/"
+        log_dir = conf.get_iris_logging_dir()
         os.makedirs(log_dir, exist_ok=True)
         # Open the log file
         log_file_path = os.path.join(log_dir, "iris_logs.txt")
@@ -75,13 +92,17 @@ class IrisModule(IModule):
         # with open("sadfdasfdasfsafadsfsafasfasdfsadfsda.txt", "w") as f:
         #     f.write("Hello files!!!")
 
+        base_dir = os.getcwd()
+        relative_cwd = os.path.join('modules', 'irisModule')
+        full_cwd = os.path.join(base_dir, relative_cwd)
+
         try:
             # Start the subprocess, redirecting stdout and stderr to the same file
             self.process = subprocess.Popen(
                 command,  # Replace with your command
                 stdout=self.log_file,
                 stderr=self.log_file,
-                cwd=log_dir,
+                cwd=full_cwd,
             )
         except OSError as e:
             error_message = {
