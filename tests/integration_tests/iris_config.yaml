@@ -429,4 +429,4 @@ local_p2p:
    create_p2p_logfile : False
    use_p2p : False
    iris_conf: tests/integration_tests/config/iris_peer_config.yaml
-   iris_log_dir: output_iris_peer
+   iris_log_dir: output/iris_peer

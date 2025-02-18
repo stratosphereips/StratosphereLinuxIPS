@@ -1,6 +1,6 @@
 Identity:
   GenerateNewKey: true
-  SaveKeyToFile: secondKeyFile.priv
+  #SaveKeyToFile: secondKeyFile.priv
 
 Server:
   port: 9006
@@ -15,4 +15,3 @@ Redis:
 PeerDiscovery:
   DisableBootstrappingNodes: true
   ListOfMultiAddresses:
-    - /ip4/127.0.0.1/udp/9010/quic 12D3KooWPSAmxp7PW9VZRujrhQE6kxbhQvCnZ6ppZjTmxGNEP7oa

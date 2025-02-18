@@ -70,7 +70,7 @@ class IrisModule(IModule):
             "--conf",
             iris_conf_path,
         ]
-        self.log_line(f'Initializing IRIS module with {command}')
+        #self.log_line(f'Initializing IRIS module with {command}')
 
         command_str = " ".join(
             f'"{arg}"' if " " in arg or '"' in arg else arg for arg in command

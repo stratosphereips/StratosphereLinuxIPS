@@ -1,0 +1,16 @@
+Identity:
+  GenerateNewKey: true
+  SaveKeyToFile: keyfile.priv
+
+Server:
+  port: 9002
+  Host: 127.0.0.1
+  DhtServerMode: true
+
+Redis:
+  Host: 127.0.0.1
+  Port: 6633
+  Tl2NlChannel: iris_internal
+
+PeerDiscovery:
+  DisableBootstrappingNodes: true
