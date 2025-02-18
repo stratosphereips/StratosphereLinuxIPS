@@ -64,23 +64,24 @@ message_alert_NL_S = """{
 }"""
 
 @pytest.mark.parametrize(
-    "path, output_dir, peer_output_dir, redis_port",
+    "path, output_dir, peer_output_dir, redis_port, peer_redis_port",
     [
         (
             "dataset/test13-malicious-dhcpscan-zeek-dir",
             "iris_integration_test/",
             "iris_integration_test_peer",
             6644,
+            6655,
         )
     ],
 )
-def test_messaging_1(path, output_dir, peer_output_dir, redis_port):
+def test_messaging_1(path, output_dir, peer_output_dir, redis_port, peer_redis_port):
     """
     Tests whether Iris properly distributes an alert message from Fides to the network (~other peers)
     """
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
-    iris_output_file = os.path.join(output_dir, "iris_output.txt")
+    iris_output_file = os.path.join(output_dir, "slips_iris-peer_output.txt")
 
     command = [
         "./slips.py",
@@ -111,7 +112,7 @@ def test_messaging_1(path, output_dir, peer_output_dir, redis_port):
         "-c",
         "tests/integration_tests/iris_config.yaml",
         "-P",
-        str(redis_port),
+        str(peer_redis_port),
     ]
 
     print("running slips ...")
@@ -127,7 +128,7 @@ def test_messaging_1(path, output_dir, peer_output_dir, redis_port):
                 stderr=log_file,
             )
 
-            Iprocess = subprocess.Popen(iris_command, stdout=iris_log_file, stderr=iris_log_file, cwd=full_cwd,)
+            Pprocess = subprocess.Popen(peer_command, stdout=iris_log_file, stderr=iris_log_file)
 
             print(f"Output and errors are logged in {output_file}")
             countdown(60, "sigterm")
@@ -136,16 +137,19 @@ def test_messaging_1(path, output_dir, peer_output_dir, redis_port):
             countdown(30, "sigterm")
             # send a SIGTERM to the process
             os.kill(process.pid, 15)
-            os.kill(Iprocess.pid, 15)
+            os.kill(Pprocess.pid, 15)
             print("SIGTERM sent. killing slips + iris")
             os.kill(process.pid, 9)
-            os.kill(Iprocess.pid, 9)
+            os.kill(Pprocess.pid, 9)
 
     print(f"Slips with PID {process.pid} was killed.")
+    print(f"Slips peer with PID {Pprocess.pid} was killed.")
 
     print("Slip is done, checking for errors in the output dir.")
     assert_no_errors(output_dir)
+    assert_no_errors(peer_output_dir)
     print("Checking")
 
     print("Deleting the output directory")
-    shutil.rmtree(output_dir)
+    # shutil.rmtree(output_dir)
+    # shutil.rmtree(peer_output_dir)
