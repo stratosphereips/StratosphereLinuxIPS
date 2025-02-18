@@ -544,11 +544,11 @@ def test_check_pastebin_downloads(
         resp_fuids="",
     )
     if host != "pastebin.com":
-        http_analyzer.db.get_ip_identification.return_value = (
-            "Not a Pastebin domain"
-        )
+        http_analyzer.db.get_ip_identification.return_value = {}
     else:
-        http_analyzer.db.get_ip_identification.return_value = "pastebin.com"
+        http_analyzer.db.get_ip_identification.return_value = {
+            "SNI": "pastebin.com"
+        }
         http_analyzer.pastebin_downloads_threshold = 1024
     result = http_analyzer.check_pastebin_downloads(twid, flow)
     assert result == expected_result

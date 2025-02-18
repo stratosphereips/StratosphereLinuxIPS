@@ -122,9 +122,7 @@ class ConfigParser(object):
         return self.read_configuration("parameters", "pcapfilter", False)
 
     def online_whitelist(self):
-        return self.read_configuration(
-            "threatintelligence", "online_whitelist", False
-        )
+        return self.read_configuration("whitelists", "online_whitelist", False)
 
     def tcp_inactivity_timeout(self):
         timeout = self.read_configuration(
@@ -138,7 +136,7 @@ class ConfigParser(object):
 
     def online_whitelist_update_period(self):
         update_period = self.read_configuration(
-            "threatintelligence", "online_whitelist_update_period", 604800
+            "whitelists", "online_whitelist_update_period", 604800
         )
         try:
             update_period = int(update_period)
@@ -172,9 +170,19 @@ class ConfigParser(object):
             "parameters", "store_a_copy_of_zeek_files", False
         )
 
-    def whitelist_path(self):
+    def local_whitelist_path(self):
         return self.read_configuration(
-            "parameters", "whitelist_path", "config/whitelist.conf"
+            "whitelists", "local_whitelist_path", "config/whitelist.conf"
+        )
+
+    def enable_online_whitelist(self):
+        return self.read_configuration(
+            "whitelists", "enable_online_whitelist", True
+        )
+
+    def enable_local_whitelist(self):
+        return self.read_configuration(
+            "whitelists", "enable_local_whitelist", True
         )
 
     def logsfile(self):
@@ -493,7 +501,7 @@ class ConfigParser(object):
 
     def riskiq_update_period(self):
         update_period = self.read_configuration(
-            "threatintelligence", "update_period", 604800
+            "threatintelligence", "riskiq_update_period", 604800
         )
         try:
             update_period = float(update_period)

@@ -85,7 +85,7 @@ def test_extract_cc_botnet_ip(attacker_ip, expected_result):
         description="Some description",
         attacker=Attacker(
             value=attacker_ip,
-            attacker_type=IoCType.IP,
+            ioc_type=IoCType.IP,
             direction=Direction.SRC,
         ),
         threat_level=ThreatLevel.INFO,
@@ -102,7 +102,7 @@ def test_idea_format_command_and_control():
         evidence_type=EvidenceType.COMMAND_AND_CONTROL_CHANNEL,
         description="Detected CC server IP: 192.168.1.1 on port 8080",
         attacker=Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value="10.0.0.1"
+            direction=Direction.SRC, ioc_type=IoCType.IP, value="10.0.0.1"
         ),
         threat_level=ThreatLevel.HIGH,
         profile=ProfileID(ip="10.0.0.1"),
@@ -197,7 +197,7 @@ def test_idea_format_malicious_downloaded_file():
         "Confidence: 1. ",
         attacker=Attacker(
             direction=Direction.SRC,
-            attacker_type=IoCType.IP,
+            ioc_type=IoCType.IP,
             value="192.168.1.2",
         ),
         threat_level=ThreatLevel.HIGH,
@@ -276,7 +276,7 @@ def test_idea_format_malicious_downloaded_file():
             {
                 "attacker": Attacker(
                     direction=Direction.SRC,
-                    attacker_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value="192.168.1.100",
                 ),
                 "victim": None,
@@ -289,7 +289,7 @@ def test_idea_format_malicious_downloaded_file():
             {
                 "attacker": Attacker(
                     direction=Direction.SRC,
-                    attacker_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value="2001:db8::1",
                 ),
                 "victim": None,
@@ -303,7 +303,7 @@ def test_idea_format_malicious_downloaded_file():
                 "attacker": None,
                 "victim": Victim(
                     direction=Direction.DST,
-                    victim_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value="10.0.0.1",
                 ),
             },
@@ -316,7 +316,7 @@ def test_idea_format_malicious_downloaded_file():
                 "attacker": None,
                 "victim": Victim(
                     direction=Direction.DST,
-                    victim_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value="2001:db8::2",
                 ),
             },
@@ -328,7 +328,7 @@ def test_idea_format_malicious_downloaded_file():
             {
                 "attacker": Attacker(
                     direction=Direction.SRC,
-                    attacker_type=IoCType.DOMAIN,
+                    ioc_type=IoCType.DOMAIN,
                     value="example.com",
                 ),
                 "victim": None,
@@ -342,7 +342,7 @@ def test_idea_format_malicious_downloaded_file():
                 "attacker": None,
                 "victim": Victim(
                     direction=Direction.DST,
-                    victim_type=IoCType.URL,
+                    ioc_type=IoCType.URL,
                     value="https://example.com/page",
                 ),
             },

@@ -70,6 +70,7 @@ jobs:
           - test_spamhaus.py
           - test_circllu.py
           - test_evidence_handler.py
+          - test_evidence_formatter.py
           - test_alert_handler.py
           - test_redis_manager.py
           - test_ioc_handler.py

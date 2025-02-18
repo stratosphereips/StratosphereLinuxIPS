@@ -305,7 +305,7 @@ class Trust(IModule):
             # we shouldn't re-share evidence reported by other peers
             return False
 
-        if evidence.attacker.attacker_type != IoCType.IP.name:
+        if evidence.attacker.ioc_type != IoCType.IP.name:
             # we only share ips with other peers.
             return False
 
@@ -452,7 +452,7 @@ class Trust(IModule):
             evidence = Evidence(
                 evidence_type=EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
                 attacker=Attacker(
-                    direction=Direction.SRC, attacker_type=IoCType.IP, value=ip
+                    direction=Direction.SRC, ioc_type=IoCType.IP, value=ip
                 ),
                 threat_level=threat_level,
                 confidence=confidence,

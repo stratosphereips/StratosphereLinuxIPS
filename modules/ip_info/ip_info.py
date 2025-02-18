@@ -473,7 +473,7 @@ class IPInfo(AsyncModule):
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_JARM,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=dstip
+                direction=Direction.DST, ioc_type=IoCType.IP, value=dstip
             ),
             threat_level=ThreatLevel.MEDIUM,
             confidence=0.7,
@@ -492,7 +492,7 @@ class IPInfo(AsyncModule):
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_JARM,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.LOW,
             confidence=0.7,

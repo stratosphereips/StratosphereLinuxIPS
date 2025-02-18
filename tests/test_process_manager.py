@@ -504,6 +504,8 @@ def test_start_update_manager(
 
     assert mock_update_manager.update_ports_info.called is ports_called
     assert mock_update_manager.update_org_files.called is orgs_called
-    assert mock_update_manager.update_whitelist.called is whitelist_called
+    assert (
+        mock_update_manager.update_local_whitelist.called is whitelist_called
+    )
     assert mock_update_manager.print.called is print_called
     assert mock_asyncio_run.called is asyncio_called

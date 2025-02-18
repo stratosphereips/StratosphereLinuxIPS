@@ -87,7 +87,7 @@ class NetworkDiscovery(IModule):
             evidence_type=evidence_type,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
@@ -262,7 +262,7 @@ class NetworkDiscovery(IModule):
                 victim = Victim(
                     value=scanned_ip,
                     direction=Direction.DST,  #  TODO is it?
-                    victim_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                 )
         else:
             # not a single victim, there are many
@@ -275,7 +275,7 @@ class NetworkDiscovery(IModule):
             )
 
         attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
         )
 
         evidence = Evidence(
@@ -308,7 +308,7 @@ class NetworkDiscovery(IModule):
         evidence = Evidence(
             evidence_type=EvidenceType.DHCP_SCAN,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
             ),
             threat_level=ThreatLevel.MEDIUM,
             confidence=confidence,

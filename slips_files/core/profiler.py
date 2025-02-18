@@ -116,7 +116,7 @@ class Profiler(ICore, IObservable):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.whitelist_path = conf.whitelist_path()
+        self.local_whitelist_path = conf.local_whitelist_path()
         self.timeformat = conf.ts_format()
         self.analysis_direction = conf.analysis_direction()
         self.label = conf.label()

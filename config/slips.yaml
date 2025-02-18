@@ -113,21 +113,11 @@ parameters:
   # label: malicious
   # label: unknown
   label: normal
-
-  # The default path of whitelist.conf,
-  # This file is where the user defines what to whitelist or not.
-  # It works with
-  # IPs, domains, MAC
-  # It also works with Organizations such as Microsoft, Twitter, etc.
-  # It works by searching the official list of ASN, domains and IPs
-  # of those organizations.
-  whitelist_path: config/whitelist.conf
-
   # If Zeek files are rotated or not to avoid running out of disk.
   # Zeek rotation is enabled by default when using an interface,
   # which means Slips will delete all Zeek log files after 1 day
   # of running
-  # rotation :false
+  # rotation : false
   rotation: true
 
   # How often to rotate and delete Zeek files if rotation is enabled.
@@ -273,17 +263,8 @@ threatintelligence:
   # 1 day = 86400 seconds
   TI_files_update_period: 86400
 
-  # Update period of tranco online whitelist. How often should Slips re-download
-  # and update the list?
-  # The expected value is in seconds.
-  # 1 day = 86400 seconds
-  # 1 week = 604800 seconds
-  # 2 weeks = 1209600 seconds
-  online_whitelist_update_period: 86400
-  online_whitelist: https://tranco-list.eu/download/X5QNN/10000
-
-  # Update period of MAC addreses db. How often should we update the db?
-  # The expected value is in seconds.
+  # Update period of mac db. How often should we update the db?
+  # The expected value in seconds.
   # 1 week = 604800 seconds
   # 2 weeks = 1209600 seconds
   mac_db_update: 1209600
@@ -312,7 +293,32 @@ threatintelligence:
   # Update period for RisqIQ is set to 1 week by default, if you're not a premium riskIQ
   # user check your quota limit before changing this value
   # 1 week = 604800 second
-  update_period: 604800
+  riskiq_update_period: 604800
+
+#############################
+whitelists:
+  # Used to enable/disable the tranco whitelist https://tranco-list.eu/
+  enable_online_whitelist: True
+  # Update period of tranco online whitelist. How often should we re-download \
+  # and update the list?
+  # The expected value is in seconds.
+  # 1 day = 86400 seconds
+  # 1 week = 604800 seconds
+  # 2 weeks = 1209600 seconds
+  online_whitelist_update_period: 86400
+  online_whitelist: https://tranco-list.eu/download/X5QNN/10000
+
+  # if this parameter is set to false, Slips runs with no whitelists at all.
+  # May cause a lot of false positives
+  enable_local_whitelist: True
+  # The default path of whitelist.conf,
+  # This file is where the user defines what to whitelist or not.
+  # It works with
+  # IPs, domains, MAC
+  # It also works with Organizations such as Microsoft, Twitter, etc.
+  # It works by searching the official list of ASN, domains and IPs
+  # of those organizations.
+  local_whitelist_path: config/whitelist.conf
 
 #############################
 flowalerts:

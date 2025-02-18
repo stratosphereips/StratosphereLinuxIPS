@@ -4,6 +4,7 @@ from typing import List, Dict
 import tldextract
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Direction,
@@ -18,6 +19,12 @@ class DomainAnalyzer(IWhitelistAnalyzer):
 
     def init(self):
         self.ip_analyzer = IPAnalyzer(self.db)
+        self.read_configuration()
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.enable_online_whitelist: bool = conf.enable_online_whitelist()
+        self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
     def get_domains_of_ip(self, ip: str) -> List[str]:
         """
@@ -89,9 +96,17 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         # but domains taken from whitelist.conf have their own direction
         # and type
         if self.is_domain_in_tranco_list(parent_domain):
+            if not self.enable_online_whitelist:
+                # domain is in the tranco whitelist, but the it's whitelist
+                # not enabled
+                return False
             whitelist_should_ignore = "alerts"
             dir_from_whitelist = "dst"
         elif parent_domain in whitelisted_domains:
+            if not self.enable_local_whitelist:
+                # domain is in the local whitelist, but the local whitelist
+                # not enabled
+                return False
             # did the user say slips should ignore flows or alerts in the
             # config file?
             whitelist_should_ignore = whitelisted_domains[parent_domain][

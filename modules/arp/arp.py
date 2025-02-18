@@ -230,7 +230,7 @@ class ARP(IModule):
 
         description: str = f"performing an arp scan. Confidence {confidence}."
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
         )
 
         evidence: Evidence = Evidence(
@@ -290,12 +290,12 @@ class ARP(IModule):
 
             attacker: Attacker = Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             )
             victim = Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             )
 
@@ -337,7 +337,7 @@ class ARP(IModule):
 
             attacker = Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             )
 
@@ -427,13 +427,13 @@ class ARP(IModule):
 
             attacker: Attacker = Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=attackers_ip,
             )
 
             victim = Victim(
                 direction=Direction.DST,  #  TODO not really dst
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=victims_ip,
             )
 

@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
 from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
@@ -16,6 +17,7 @@ from slips_files.core.structures.evidence import (
     Evidence,
     Direction,
     Attacker,
+    Victim,
 )
 
 
@@ -32,11 +34,16 @@ class Whitelist:
         self.domain_analyzer = DomainAnalyzer(self.db, whitelist_manager=self)
         self.mac_analyzer = MACAnalyzer(self.db, whitelist_manager=self)
         self.org_analyzer = OrgAnalyzer(self.db, whitelist_manager=self)
+        self.read_configuration()
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
     def update(self):
         """
-        parses the whitelist specified in the slips.yaml and stores the
-        parsed results in the db
+        parses the local whitelist specified in the slips.yaml
+        and stores the parsed results in the db
         """
         self.parser.parse()
         self.db.set_whitelist("IPs", self.parser.whitelisted_ips)
@@ -112,7 +119,6 @@ class Whitelist:
         Checks if the src IP, dst IP, domain, dns answer, or organization
          of this flow is whitelisted.
         """
-
         if self._check_if_whitelisted_domains_of_flow(flow):
             return True
 
@@ -158,83 +164,57 @@ class Whitelist:
         """
         Checks if an evidence is whitelisted
         """
-        if self.is_whitelisted_attacker(evidence):
+        if self._is_whitelisted_entity(evidence, "attacker"):
             return True
 
-        if self.is_whitelisted_victim(evidence):
+        if self._is_whitelisted_entity(evidence, "victim"):
             return True
         return False
 
-    def is_whitelisted_victim(self, evidence: Evidence) -> bool:
-        if not hasattr(evidence, "victim"):
-            return False
-
-        victim = evidence.victim
-        if not victim:
-            return False
-
-        what_to_ignore = "alerts"
-        if self.ip_analyzer.is_whitelisted(
-            victim.value, victim.direction, what_to_ignore
-        ):
-            return True
-
-        if self.domain_analyzer.is_whitelisted(
-            victim.value, victim.direction, what_to_ignore
-        ):
-            return True
-
-        if self.domain_analyzer.is_whitelisted(
-            victim.SNI, Direction.DST, what_to_ignore
-        ):
-            return True
-
-        if self.mac_analyzer.profile_has_whitelisted_mac(
-            victim.value, victim.direction, what_to_ignore
-        ):
-            return True
-
-        if self.org_analyzer.is_part_of_a_whitelisted_org(
-            victim.value, victim.victim_type, victim.direction, what_to_ignore
-        ):
-            return True
-
-        return False
-
-    def is_whitelisted_attacker(self, evidence: Evidence) -> bool:
-        if not hasattr(evidence, "attacker"):
-            return False
-
-        attacker: Attacker = evidence.attacker
-        if not attacker:
+    def _is_whitelisted_entity(
+        self, evidence: Evidence, entity_type: str
+    ) -> bool:
+        """
+        checks the attacker or victim entities of the given evidence for
+        whitelisted ips/domains/SNIs etc.
+        :param entity_type: either 'victim' or 'attacker'
+        """
+        entity: Union[Attacker, Victim]
+        entity = getattr(evidence, entity_type, None)
+        if not entity:
             return False
 
         what_to_ignore = "alerts"
 
-        if self.domain_analyzer.is_whitelisted(
-            attacker.value, attacker.direction, what_to_ignore
-        ):
-            return True
-
-        if self.domain_analyzer.is_whitelisted(
-            attacker.SNI, Direction.DST, what_to_ignore
-        ):
-            return True
-
         if self.ip_analyzer.is_whitelisted(
-            attacker.value, attacker.direction, what_to_ignore
+            entity.value, entity.direction, what_to_ignore
         ):
             return True
+
+        if self.domain_analyzer.is_whitelisted(
+            entity.value, entity.direction, what_to_ignore
+        ):
+            return True
+
+        # check the rest of the domains that belong to this domain/IP
+        resolutions = entity.DNS_resolution if entity.DNS_resolution else []
+        cnames = entity.CNAME if entity.CNAME else []
+        for domain in [entity.SNI] + resolutions + cnames:
+            if self.domain_analyzer.is_whitelisted(
+                domain, Direction.DST, what_to_ignore
+            ):
+                return True
 
         if self.mac_analyzer.profile_has_whitelisted_mac(
-            attacker.value, attacker.direction, what_to_ignore
+            entity.value, entity.direction, what_to_ignore
         ):
             return True
 
-        if self.org_analyzer.is_part_of_a_whitelisted_org(
-            attacker.value,
-            attacker.attacker_type,
-            attacker.direction,
+        org_check_method = self.org_analyzer.is_part_of_a_whitelisted_org
+        if org_check_method(
+            entity.value,
+            entity.ioc_type,
+            entity.direction,
             what_to_ignore,
         ):
             return True

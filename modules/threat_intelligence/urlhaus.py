@@ -206,7 +206,7 @@ class URLhaus:
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=threat_level,
             confidence=confidence,
@@ -224,7 +224,7 @@ class URLhaus:
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             threat_level=threat_level,
             confidence=confidence,
@@ -275,7 +275,7 @@ class URLhaus:
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=threat_level,
             confidence=0.7,
@@ -292,7 +292,7 @@ class URLhaus:
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_MALICIOUS_URL,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             threat_level=threat_level,
             confidence=0.7,

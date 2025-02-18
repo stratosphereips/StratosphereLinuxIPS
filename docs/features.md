@@ -36,7 +36,9 @@ The detection techniques are:
 - Connection to private IPs
 - Connection to private IPs outside the current local network
 - High entropy DNS TXT answers
-- Devices changeing IPs
+- Devices changing IPs
+- GRE tunnels
+- GRE tunnel scan
 - SSH version changing
 
 The details of each detection follows.
@@ -86,6 +88,16 @@ Then for every source address in conn.log, slips checks if the MAC of it was use
 
 If so, it alerts "Device changing IPs".
 
+## GRE tunnels
+
+Slips uses zeek tunnel.log to alert on GRE tunnels when found. Whenever one is found, slips sets an evidence
+with threat level low
+
+## GRE tunnel scans
+
+Slips uses zeek tunnel.log to alert on GRE tunnels with DISCOVER actions when found.
+The threat level of this evidence is low.
+
 
 ### SMTP login bruteforce
 
@@ -96,7 +108,8 @@ Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
 
 Slips detects when a private IP is connected to another private IP with threat level info.
 
-But it skips this alert when it's a DNS connection on port 53 UDP to the gateway
+But it skips this alert when it's a DNS connection on port
+53, 67 or 68 UDP to the gateway IP.
 
 ### Connection to private IPs outside the current local network
 
@@ -815,6 +828,9 @@ Due to the usage of empty connections to popular site by malware to check for in
 We consider this type of behaviour suspicious activity that shouldn't happen
 
 We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com' etc.
+
+If Google is whitelisted in `whitelist.conf`, this detection will be suppressed.
+
 
 #### Suspicious user agents
 

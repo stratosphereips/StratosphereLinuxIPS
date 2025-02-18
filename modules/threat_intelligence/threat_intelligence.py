@@ -201,10 +201,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_ASN,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             threat_level=threat_level,
             confidence=confidence,
@@ -221,10 +221,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_ASN,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             victim=Victim(
-                direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=threat_level,
             confidence=confidence,
@@ -297,10 +297,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=ip
+                direction=Direction.DST, ioc_type=IoCType.IP, value=ip
             ),
             victim=Victim(
-                direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=threat_level,
             confidence=1.0,
@@ -318,10 +318,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=ip
+                direction=Direction.DST, ioc_type=IoCType.IP, value=ip
             ),
             threat_level=threat_level,
             confidence=1.0,
@@ -388,10 +388,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         evidence = Evidence(
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_TO_BLACKLISTED_IP,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             threat_level=threat_level,
             confidence=1.0,
@@ -438,10 +438,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_TO_BLACKLISTED_IP,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             victim=Victim(
-                direction=Direction.SRC, victim_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=threat_level,
             confidence=1.0,
@@ -458,10 +458,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_TO_BLACKLISTED_IP,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             victim=Victim(
-                direction=Direction.DST, victim_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             threat_level=ThreatLevel.LOW,
             confidence=1.0,
@@ -550,11 +550,11 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.DOMAIN,
+                ioc_type=IoCType.DOMAIN,
                 value=domain,
             ),
             threat_level=threat_level,
@@ -576,12 +576,12 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                 evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN,
                 attacker=Attacker(
                     direction=Direction.DST,
-                    attacker_type=IoCType.DOMAIN,
+                    ioc_type=IoCType.DOMAIN,
                     value=domain,
                 ),
                 victim=Victim(
                     direction=Direction.SRC,
-                    victim_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value=srcip,
                 ),
                 threat_level=threat_level,
@@ -1096,7 +1096,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
             ),
             threat_level=threat_level,
             confidence=confidence,
@@ -1114,10 +1114,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.MALICIOUS_DOWNLOADED_FILE,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             victim=Victim(
-                direction=Direction.SRC, victim_type=IoCType.IP, value=srcip
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
             ),
             threat_level=threat_level,
             confidence=confidence,
@@ -1554,10 +1554,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         evidence = Evidence(
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=srcip
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
             ),
             victim=Victim(
-                victim_type=IoCType.DOMAIN,
+                ioc_type=IoCType.DOMAIN,
                 direction=Direction.DST,
                 value=dns_query,
             ),
