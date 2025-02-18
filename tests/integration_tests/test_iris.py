@@ -64,22 +64,24 @@ message_alert_NL_S = """{
 }"""
 
 @pytest.mark.parametrize(
-    "path, output_dir, redis_port",
+    "path, output_dir, peer_output_dir, redis_port",
     [
         (
             "dataset/test13-malicious-dhcpscan-zeek-dir",
             "iris_integration_test/",
+            "iris_integration_test_peer",
             6644,
         )
     ],
 )
-def test_messaging_1(path, output_dir, redis_port):
+def test_messaging_1(path, output_dir, peer_output_dir, redis_port):
     """
     Tests whether Iris properly distributes an alert message from Fides to the network (~other peers)
     """
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
     iris_output_file = os.path.join(output_dir, "iris_output.txt")
+
     command = [
         "./slips.py",
         "-t",
@@ -96,10 +98,20 @@ def test_messaging_1(path, output_dir, redis_port):
         str(redis_port),
     ]
 
-    iris_command = [
-        "./modules/irisModule/peercli",
-        "--conf",
-        "tests/integration_tests/config/iris_peer_config.yaml",
+    peer_command = [
+        "./slips.py",
+        "-t",
+        "-g",
+        "-e",
+        "1",
+        "-f",
+        str(path),
+        "-o",
+        str(peer_output_dir),
+        "-c",
+        "tests/integration_tests/iris_config.yaml",
+        "-P",
+        str(redis_port),
     ]
 
     print("running slips ...")
@@ -115,13 +127,11 @@ def test_messaging_1(path, output_dir, redis_port):
                 stderr=log_file,
             )
 
-            Iprocess = subprocess.Popen(
-                iris_command, stdout=iris_log_file, stderr=iris_log_file,
-            )
+            Iprocess = subprocess.Popen(iris_command, stdout=iris_log_file, stderr=iris_log_file, cwd=full_cwd,)
 
             print(f"Output and errors are logged in {output_file}")
             countdown(60, "sigterm")
-            message_send(redis_port, message=message_alert_TL_NL, channel="fides2network")
+            message_send(redis_port, message=message_alert_TL_NL, channel="fides2network",)
             # these seconds are the time we give slips to process the msg
             countdown(30, "sigterm")
             # send a SIGTERM to the process

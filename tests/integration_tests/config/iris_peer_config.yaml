@@ -1,5 +1,6 @@
 Identity:
   GenerateNewKey: true
+  SaveKeyToFile: secondKeyFile.priv
 
 Server:
   port: 9006
@@ -8,7 +9,10 @@ Server:
 
 Redis:
   Host: 127.0.0.1
-  Tl2NlChannel: gp2p_tl2nl0
+  Port: 6644
+  Tl2NlChannel: iris_test_pair
 
 PeerDiscovery:
   DisableBootstrappingNodes: true
+  ListOfMultiAddresses:
+    - /ip4/127.0.0.1/udp/9010/quic 12D3KooWPSAmxp7PW9VZRujrhQE6kxbhQvCnZ6ppZjTmxGNEP7oa
