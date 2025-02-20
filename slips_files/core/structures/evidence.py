@@ -153,6 +153,7 @@ class Victim:
     # the feed name goes here
     TI: str = field(default=None)
     # autonomous system
+    # has {"org": org, "number": number}
     AS: Dict[str, str] = field(default=None)
     rDNS: str = field(default=None)
     SNI: str = field(default=None)
@@ -193,6 +194,7 @@ class Attacker:
     # the feed name goes here
     TI: str = field(default=None)
     # autonomous system
+    # has {"org": org, "number": number}
     AS: Dict[str, str] = field(default=None)
     rDNS: str = field(default=None)
     SNI: str = field(default=None)

@@ -1120,23 +1120,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             id.update({"queries": domains})
 
         return id
-        # # if asn := self.get_asn_info(ip):
-        # #     asn_org = asn.get("org", "")
-        # #     asn_number = asn.get("number", "")
-        # #     id += f" AS: {asn_org} {asn_number}"
-        # #
-        # # if sni := self.get_sni_info(ip):
-        # #     id += f" SNI: {sni}, "
-        # #
-        # # if rdns := self.get_rdns_info(ip):
-        # #     id += f" rDNS: {rdns}, "
-        # #
-        # #
-        # #     if threat_intel:= ip_info.get("threatintelligence", ""):
-        # #         id += f" appears in blacklist: {threat_intel['source']}."
-        #
-        # id = id.rstrip(", ")
-        # return id
 
     def get_multiaddr(self):
         """

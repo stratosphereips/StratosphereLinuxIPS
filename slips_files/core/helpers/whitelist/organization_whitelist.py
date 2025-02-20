@@ -115,14 +115,21 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         except KeyError:
             return
 
-        if not (ip_asn and ip_asn != "Unknown"):
-            return False
+        return self._is_asn_in_org(ip_asn, org)
 
+    def _is_asn_in_org(self, asn: str, org: str) -> bool:
+        """
+        returns true if the given ASN is listed in the ASNs of the given org
+        """
+        if not (asn and asn != "Unknown"):
+            return False
         # because all ASN stored in slips organization_info/ are uppercase
-        ip_asn: str = ip_asn.upper()
+        asn: str = asn.upper()
+        if org.upper() in asn:
+            return True
 
         org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
-        return org.upper() in ip_asn or ip_asn in org_asn
+        return asn in org_asn
 
     def is_whitelisted(self, flow) -> bool:
         """checks if the given -flow- is whitelisted. not evidence/alerts."""
@@ -244,5 +251,13 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                     "alerts",
                 ):
                     return True
+
+            if entity.AS:
+                for org in utils.supported_orgs:
+                    if org.lower() in entity.AS.get("org", "").lower():
+                        return True
+
+                    if self._is_asn_in_org(entity.AS.get("number", ""), org):
+                        return True
 
         return False
