@@ -18,6 +18,7 @@ from slips_files.core.structures.evidence import (
     Direction,
     Attacker,
     Victim,
+    IoCType,
 )
 
 
@@ -186,21 +187,28 @@ class Whitelist:
 
         what_to_ignore = "alerts"
 
-        if self.ip_analyzer.is_whitelisted(
-            entity.value, entity.direction, what_to_ignore
-        ):
-            return True
-
-        if self.domain_analyzer.is_whitelisted(
-            entity.value, entity.direction, what_to_ignore
-        ):
-            return True
+        # check the IPs that belong to this domain
+        entity_ip = [entity.value] if entity.ioc_type == IoCType.IP else []
+        resolutions: List[str] = (
+            [entity.DNS_resolution] if (entity.DNS_resolution) else []
+        )
+        unique_ips = set(entity_ip + resolutions)
+        for ip in unique_ips:
+            if self.ip_analyzer.is_whitelisted(
+                ip, entity.direction, what_to_ignore
+            ):
+                return True
 
         # check the rest of the domains that belong to this domain/IP
-        resolutions = entity.DNS_resolution if entity.DNS_resolution else []
+        queries = entity.queries if entity.queries else []
+        # entities of type ips and domains both can have cnames
         cnames = entity.CNAME if entity.CNAME else []
         sni = [entity.SNI] if entity.SNI else []
-        for domain in sni + resolutions + cnames:
+        entity_domain = (
+            [entity.value] if entity.ioc_type == IoCType.DOMAIN else []
+        )
+        unique_domains = set(sni + queries + cnames + entity_domain)
+        for domain in unique_domains:
             if self.domain_analyzer.is_whitelisted(
                 domain, Direction.DST, what_to_ignore
             ):
@@ -211,8 +219,7 @@ class Whitelist:
         ):
             return True
 
-        org_check_method = self.org_analyzer.is_part_of_a_whitelisted_org
-        if org_check_method(
+        if self.org_analyzer.is_part_of_a_whitelisted_org(
             entity.value,
             entity.ioc_type,
             entity.direction,

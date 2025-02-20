@@ -12,6 +12,8 @@ from typing import (
     Dict,
     List,
     Union,
+    Tuple,
+    Optional,
 )
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
@@ -1324,7 +1326,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                 return True
         return False
 
-    def search_offline_for_domain(self, domain):
+    def search_offline_for_domain(
+        self, domain
+    ) -> Tuple[Optional[Dict[str, str]], bool]:
         """Checks if the provided domain name is listed in the
         local threat intelligence
         as malicious.
@@ -1338,7 +1342,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
              threat intelligence, and `is_subdomain` is a boolean
              indicating whether the domain
             is a subdomain of a known malicious domain.
-            Returns (False, False) if the domain is not found or not malicious.
+            Returns (None, None) if the domain is not found or not malicious.
 
         This function queries the local threat intelligence database for
         the provided domain name and determines if it is considered malicious.
@@ -1349,7 +1353,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         domain_info, is_subdomain = self.db.is_blacklisted_domain(domain)
         if domain_info:
             return domain_info, is_subdomain
-        return False, False
+        return None, False
 
     def search_online_for_url(self, url):
         return self.urlhaus.lookup(url, "url")
