@@ -285,7 +285,7 @@ def test_is_part_of_a_whitelisted_org(
     mock_ioc.ioc_type = ioc_data["ioc_type"]
 
     assert (
-        whitelist.org_analyzer.is_part_of_a_whitelisted_org(
+        whitelist.org_analyzer._is_part_of_a_whitelisted_org(
             mock_ioc.value, mock_ioc.ioc_type, mock_ioc.direction, "both"
         )
         == expected_result
@@ -412,8 +412,8 @@ def test_is_whitelisted_entity_attacker(
         is_whitelisted_domain
     )
 
-    whitelist.org_analyzer.is_part_of_a_whitelisted_org = Mock()
-    whitelist.org_analyzer.is_part_of_a_whitelisted_org.return_value = (
+    whitelist.org_analyzer._is_part_of_a_whitelisted_org = Mock()
+    whitelist.org_analyzer._is_part_of_a_whitelisted_org.return_value = (
         is_whitelisted_org
     )
 
@@ -461,8 +461,8 @@ def test_is_whitelisted_entity_victim(
         is_whitelisted_mac
     )
 
-    whitelist.org_analyzer.is_part_of_a_whitelisted_org = Mock()
-    whitelist.org_analyzer.is_part_of_a_whitelisted_org.return_value = (
+    whitelist.org_analyzer._is_part_of_a_whitelisted_org = Mock()
+    whitelist.org_analyzer._is_part_of_a_whitelisted_org.return_value = (
         is_whitelisted_org
     )
 
