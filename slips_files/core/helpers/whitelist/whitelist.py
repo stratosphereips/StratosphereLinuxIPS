@@ -183,7 +183,9 @@ class Whitelist:
     ) -> Set[str]:
         """extracts all the ips it can from the given attacker/victim"""
         # check the IPs that belong to this domain
-        entity_ip = [entity.value] if entity.ioc_type == IoCType.IP else []
+        entity_ip = (
+            [entity.value] if entity.ioc_type == IoCType.IP.name else []
+        )
         resolutions: List[str] = (
             entity.DNS_resolution if entity.DNS_resolution else []
         )
@@ -200,7 +202,7 @@ class Whitelist:
         cnames = entity.CNAME if entity.CNAME else []
         sni = [entity.SNI] if entity.SNI else []
         entity_domain = (
-            [entity.value] if entity.ioc_type == IoCType.DOMAIN else []
+            [entity.value] if entity.ioc_type == IoCType.DOMAIN.name else []
         )
         unique_domains = set(sni + queries + cnames + entity_domain)
         return unique_domains

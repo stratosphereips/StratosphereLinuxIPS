@@ -180,13 +180,14 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         """
         Handles the checking of whitelisted evidence or alerts
         :param ioc: can be an ip or a domain
-        :param ioc_type: type of the given ioc
+        :param ioc_type: type of the given ioc, "DOMAIN" or "IP"
         :param direction: direction of the given ioc, src or dst?
-        :param what_to_ignore: can be flows or alerts or both
+        :param what_to_ignore: can be "flows" or "alerts" or "both"
         """
 
-        if ioc_type == "IP" and self.ip_analyzer.is_private_ip(ioc):
-            return False
+        if ioc_type == IoCType.IP:
+            if utils.is_private_ip(ioc):
+                return False
 
         whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
             "organizations"
@@ -206,8 +207,8 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 continue
 
             cases = {
-                IoCType.DOMAIN.name: self.is_domain_in_org,
-                IoCType.IP.name: self.is_ip_part_of_a_whitelisted_org,
+                IoCType.DOMAIN: self.is_domain_in_org,
+                IoCType.IP: self.is_ip_part_of_a_whitelisted_org,
             }
             if cases[ioc_type](ioc, org):
                 return True
@@ -229,18 +230,18 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 # an evidence without an attacker or victim?
                 return False
 
+            for ip in self.manager.extract_ips_from_entity(entity):
+                if self._is_part_of_a_whitelisted_org(
+                    ip, IoCType.IP, entity.direction, "alerts"
+                ):
+                    return True
+
             for domain in self.manager.extract_domains_from_entity(entity):
                 if self._is_part_of_a_whitelisted_org(
                     domain,
                     IoCType.DOMAIN,
                     Direction.DST,  # domains are always dst
-                    "evidence",
-                ):
-                    return True
-
-            for ip in self.manager.extract_ips_from_entity(entity):
-                if self._is_part_of_a_whitelisted_org(
-                    ip, IoCType.IP, entity.direction, "evidence"
+                    "alerts",
                 ):
                     return True
 
