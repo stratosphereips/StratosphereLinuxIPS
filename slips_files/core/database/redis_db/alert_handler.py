@@ -225,9 +225,7 @@ class AlertHandler:
             return False
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
-        print(f"@@@@@@@@@@@@@@@@ b5 {evidence}")
         evidence = self._get_more_info_about_evidence(evidence)
-        print(f"@@@@@@@@@@@@@@@@ after {evidence}")
 
         evidence_to_send: dict = utils.to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)

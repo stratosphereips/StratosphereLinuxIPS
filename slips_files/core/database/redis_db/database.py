@@ -879,7 +879,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
             self.set_ip_info(answer, {"DNS_resolution": domains})
             # these ips will be associated with the query in our db
-            ips_to_add.append(answer)
+            if not utils.is_ignored_ip(answer):
+                ips_to_add.append(answer)
 
         # For each CNAME in the answer
         # store it in DomainsInfo in the cache db (used for kalipso)
@@ -1116,7 +1117,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         if domains := cached_info.get("DNS_resolution", []):
             domains: List[str]
-            id.update({"DNS_resolution": domains})
+            id.update({"queries": domains})
 
         return id
         # # if asn := self.get_asn_info(ip):
