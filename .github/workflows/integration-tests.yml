@@ -32,6 +32,7 @@ jobs:
           - test_pcap_dataset.py
           - test_zeek_dataset.py
           - test_fides.py
+          - test_iris.py
 
     steps:
     - uses: actions/checkout@v4
