@@ -877,6 +877,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # we store ALL dns resolutions seen since starting slips
             # store with the IP as the key
             self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
+            self.set_ip_info(answer, {"DNS_resolution": domains})
             # these ips will be associated with the query in our db
             ips_to_add.append(answer)
 
@@ -1097,16 +1098,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         if not cached_info:
             return id
 
-        for key in cached_info.keys():
-            if key in (
-                "score",
-                "confidence",
-                "is_doh_server",
-                "threatintelligence",
-            ):
-                continue
-            break
-
         sni = cached_info.get("SNI")
         if sni:
             sni = sni[0] if isinstance(sni, list) else sni
@@ -1117,14 +1108,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             "rDNS": cached_info.get("reverse_dns"),
             "SNI": sni,
         }
+
         if get_ti_data:
             id.update(
                 {"TI": cached_info.get("threatintelligence", {}).get("source")}
             )
 
-        if dns_resolution := self.get_dns_resolution(ip).get("domains"):
-            dns_resolution: List[str]
-            id.update({"DNS_resolution": dns_resolution})
+        if domains := cached_info.get("DNS_resolution", []):
+            domains: List[str]
+            id.update({"DNS_resolution": domains})
 
         return id
         # # if asn := self.get_asn_info(ip):

@@ -297,7 +297,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DNS_ANSWER,
             attacker=Attacker(
-                direction=Direction.DST, ioc_type=IoCType.IP, value=ip
+                direction=Direction.DST,
+                ioc_type=IoCType.IP,
+                value=ip,
             ),
             victim=Victim(
                 direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
@@ -321,7 +323,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                 direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             victim=Victim(
-                direction=Direction.DST, ioc_type=IoCType.IP, value=ip
+                direction=Direction.DST,
+                ioc_type=IoCType.IP,
+                value=ip,
             ),
             threat_level=threat_level,
             confidence=1.0,
