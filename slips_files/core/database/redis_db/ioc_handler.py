@@ -435,7 +435,7 @@ class IoCHandler:
         {'geocountry': 'rumania'} that we are going to store for this domain
         :param mode: defines how to deal with the new data
         - to 'overwrite' the data with the new data
-        - to 'add' the data to the new data
+        - to 'add' the old data to the new data
         - to 'leave' the past data untouched
         """
 
@@ -480,7 +480,8 @@ class IoCHandler:
                         prev_info.extend(data_to_store)
                         domain_data[key] = list(set(prev_info))
                     elif isinstance(prev_info, str):
-                        # previous info about this domain is a str, we should make it a list and extend
+                        # previous info about this domain is a str, we should
+                        # make it a list and extend
                         prev_info = [prev_info]
                         # add the new data_to_store to our prev_info
                         domain_data[key] = prev_info.extend(data_to_store)

@@ -467,7 +467,6 @@ class EvidenceHandler(ICore):
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
 
-                self.formatter.get_more_info_about_evidence(evidence)
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence
                 # below.
