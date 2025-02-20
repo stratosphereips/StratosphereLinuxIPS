@@ -185,7 +185,7 @@ class Whitelist:
         # check the IPs that belong to this domain
         entity_ip = [entity.value] if entity.ioc_type == IoCType.IP else []
         resolutions: List[str] = (
-            [entity.DNS_resolution] if entity.DNS_resolution else []
+            entity.DNS_resolution if entity.DNS_resolution else []
         )
         unique_ips = set(entity_ip + resolutions)
         return unique_ips
