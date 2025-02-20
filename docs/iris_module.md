@@ -95,11 +95,11 @@ Trust evaluation may require interaction with other peers. Iris Module provides 
 If a threat so great it may impact whole network, one or more organisations, threat alert is
 dispatched to peers, without regard to trust level accumulated on them.
 
-### Answering and receiving requests form global P2P network 
-
+<!--### Answering and receiving requests form global P2P network 
+-->
 ## Testing
 
-### Unit tests
+### Unit Tests
 Unit tests for Iris Module have been added to the own repository of Iris. This procedure was selected because 
 Slips is written in Python in its entirety, while Iris is based in Go. And following the best practices of
 unit testing in Go leads to including the unit tests into the Iris repository itself.
@@ -109,11 +109,64 @@ Go is yet to support mocking as known in Python, Java and many other languages.
 It has been decided by the development team of Slips that running the unit test of Iris 
 will be left upon the future developers.
 
-### Running the tests
+#### Running the Tests
 * The unit tests run best with ```go v1.17```.
 * Go to the directory containing Iris code.
 * ```cd pkg```
 * ```go test ./...```
+
+### Integration Testing
+Integration tests are located in ```tests/integration_tests/test_iris.py```.
+
+#### Countdown Function
+
+The countdown(seconds, message) function provides a countdown mechanism, displaying a message every second until it reaches zero. It is used to introduce delays before executing critical commands to ensure proper synchronization.
+
+#### Message Sending
+
+The message_send(port, channel, message) function connects to a Redis instance running on the specified port and publishes a given message to the specified channel.
+
+#### Checking Strings in Log Files
+
+The check_strings_in_file(string_list, file_path) function verifies whether a given list of strings is present within a specified file. It ensures that expected log entries appear in test output files.
+
+#### Configuration Preparation
+
+The prepare_configuration(cleanup=False) function is responsible for modifying the configuration file before running tests and restoring it afterward. It extracts the connection string from a log file, modifies it for testing, and updates the configuration file. It also ensures the proper placement of key files required for testing.
+
+#### Test: test_messaging_1
+
+The test_messaging_1 function is the primary integration test, verifying the message distribution functionality. The test workflow includes:
+
+1. Creating required output directories.
+
+2. Starting a Redis server instance.
+
+3. Running the Iris key creator process.
+
+4. Modifying configuration settings.
+
+5. Running two instances of Slips:
+
+   - One instance acting as a bootstrap node.
+
+   - A second instance joining the network as a normal peer.
+
+6. Sending an alert message via Redis.
+
+7. Validating that expected log entries appear in the output logs.
+
+8. Cleaning up by stopping processes and restoring configurations.
+
+Throughout the test, countdown delays are used to ensure proper initialization and message processing times before terminating the test instances.
+
+#### Error Handling & Assertions
+
+- The test verifies that no errors appear in the output directories.
+
+- It checks for the presence of expected log entries to confirm that the alert messages were successfully distributed.
+
+- The test includes mechanisms to safely terminate and clean up running processes to prevent resource leaks.
 
 ## Logs
 
