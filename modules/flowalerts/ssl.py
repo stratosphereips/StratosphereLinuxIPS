@@ -85,7 +85,10 @@ class SSL(IFlowalertsAnalyzer):
 
         # get the dict of malicious ja3 stored in our db
         malicious_ja3_dict = self.db.get_all_blacklisted_ja3()
-
+        self.print(
+            f"@@@@@@@@@@@@@@@@ checking {flow.ja3} in malicious_ja3_dict"
+            f" {malicious_ja3_dict}"
+        )
         if flow.ja3 in malicious_ja3_dict:
             self.set_evidence.malicious_ja3(twid, flow, malicious_ja3_dict)
 
