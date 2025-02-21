@@ -16,7 +16,7 @@ RUN go mod download
 COPY iris/cmd ./cmd
 COPY iris/pkg ./pkg
 
-RUN go build -o / cmd/peercli.go
+RUN go build -o /iris cmd/peercli.go
 
 FROM ubuntu:22.04
 # To avoid user interaction when installing libraries
@@ -92,7 +92,7 @@ WORKDIR ${SLIPS_DIR}
 
 #Retrieve Iris
 #COPY iris/config.yaml ./modules/irisModule
-COPY --from=build peercli ./modules/irisModule
+COPY --from=build iris ./modules/irisModule
 
 COPY . $SLIPS_DIR
 

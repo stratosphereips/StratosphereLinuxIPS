@@ -58,7 +58,7 @@ class IrisModule(IModule):
         """
 
         iris_exe_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "peercli"
+            os.path.dirname(os.path.abspath(__file__)), "iris"
         )
         conf = ConfigParser()
         iris_conf_path = self.make_relative_path(
