@@ -9,7 +9,7 @@ Server:
 
 Redis:
   Host: 127.0.0.1
-  Port: 6633
+  Port: 6622
   Tl2NlChannel: iris_internal
 
 PeerDiscovery:

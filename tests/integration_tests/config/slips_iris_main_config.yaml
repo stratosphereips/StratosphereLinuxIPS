@@ -422,8 +422,8 @@ global_p2p:
    # this is the global p2p's trust model. can only be enabled when
    # running slips on an interface
    use_fides: True
-   iris_conf: tests/integration_tests/config/iris_peer_config.yaml
-   iris_log_dir: "output/iris_peer"
+   iris_conf: tests/integration_tests/config/iris_main_config.yaml
+   iris_log_dir: output/iris_main
 
 #############################
 local_p2p:
