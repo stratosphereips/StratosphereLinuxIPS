@@ -12,7 +12,6 @@ from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
-    Evidence,
     Direction,
     Attacker,
     Victim,
@@ -222,42 +221,32 @@ class OrgAnalyzer(IWhitelistAnalyzer):
 
         return False
 
-    def is_whitelisted_evidence(self, evidence: Evidence) -> bool:
+    def is_whitelisted_entity(self, entity: Union[Attacker, Victim]) -> bool:
         """
-        Checks if the given evidence is whitelisted
+        Checks if the given attacker/victim has an ip, domain or an ASN that
+        belongs to a whitelisted org
         """
-        if not self.enable_local_whitelist:
-            return False
+        for ip in self.manager.extract_ips_from_entity(entity):
+            if self._is_part_of_a_whitelisted_org(
+                ip, IoCType.IP, entity.direction, "alerts"
+            ):
+                return True
 
-        for entity_type in ["attacker", "victim"]:
-            entity: Union[Attacker, Victim] = getattr(
-                evidence, entity_type, None
-            )
-            if not entity:
-                # an evidence without an attacker or victim?
-                return False
+        for domain in self.manager.extract_domains_from_entity(entity):
+            if self._is_part_of_a_whitelisted_org(
+                domain,
+                IoCType.DOMAIN,
+                Direction.DST,  # domains are always dst
+                "alerts",
+            ):
+                return True
 
-            for ip in self.manager.extract_ips_from_entity(entity):
-                if self._is_part_of_a_whitelisted_org(
-                    ip, IoCType.IP, entity.direction, "alerts"
-                ):
+        if entity.AS:
+            for org in utils.supported_orgs:
+                if org.lower() in entity.AS.get("org", "").lower():
                     return True
 
-            for domain in self.manager.extract_domains_from_entity(entity):
-                if self._is_part_of_a_whitelisted_org(
-                    domain,
-                    IoCType.DOMAIN,
-                    Direction.DST,  # domains are always dst
-                    "alerts",
-                ):
+                if self._is_asn_in_org(entity.AS.get("number", ""), org):
                     return True
-
-            if entity.AS:
-                for org in utils.supported_orgs:
-                    if org.lower() in entity.AS.get("org", "").lower():
-                        return True
-
-                    if self._is_asn_in_org(entity.AS.get("number", ""), org):
-                        return True
 
         return False

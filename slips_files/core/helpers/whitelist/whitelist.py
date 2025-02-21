@@ -239,7 +239,7 @@ class Whitelist:
         ):
             return True
 
-        if self.org_analyzer.is_whitelisted_evidence(evidence):
+        if self.org_analyzer.is_whitelisted_entity(entity):
             return True
 
         return False
