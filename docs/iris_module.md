@@ -118,55 +118,21 @@ will be left upon the future developers.
 ### Integration Testing
 Integration tests are located in ```tests/integration_tests/test_iris.py```.
 
-#### Countdown Function
+### Test Messaging
+The scenario that was modeled in this test refers to a common use case.
 
-The countdown(seconds, message) function provides a countdown mechanism, displaying a message every second until it reaches zero. It is used to introduce delays before executing critical commands to ensure proper synchronization.
+The first node (called main) under a Slips instance is created and puts its
+connection string that contains its identity/public key and details of how to reach it
+in the P2P network.
 
-#### Message Sending
+The user would then distribute the connection string to other users so they can connect to main
+and start forming a network. The distribution is simulated by automatically extracting the connection
+string and adding it into a configuration file of the second peer.
 
-The message_send(port, channel, message) function connects to a Redis instance running on the specified port and publishes a given message to the specified channel.
+Second peer is started shortly after the second one and forms a connection. First peer
+discovers an alert-worthy information and tries to inform its peers (the second node).
 
-#### Checking Strings in Log Files
-
-The check_strings_in_file(string_list, file_path) function verifies whether a given list of strings is present within a specified file. It ensures that expected log entries appear in test output files.
-
-#### Configuration Preparation
-
-The prepare_configuration(cleanup=False) function is responsible for modifying the configuration file before running tests and restoring it afterward. It extracts the connection string from a log file, modifies it for testing, and updates the configuration file. It also ensures the proper placement of key files required for testing.
-
-#### Test: test_messaging_1
-
-The test_messaging_1 function is the primary integration test, verifying the message distribution functionality. The test workflow includes:
-
-1. Creating required output directories.
-
-2. Starting a Redis server instance.
-
-3. Running the Iris key creator process.
-
-4. Modifying configuration settings.
-
-5. Running two instances of Slips:
-
-   - One instance acting as a bootstrap node.
-
-   - A second instance joining the network as a normal peer.
-
-6. Sending an alert message via Redis.
-
-7. Validating that expected log entries appear in the output logs.
-
-8. Cleaning up by stopping processes and restoring configurations.
-
-Throughout the test, countdown delays are used to ensure proper initialization and message processing times before terminating the test instances.
-
-#### Error Handling & Assertions
-
-- The test verifies that no errors appear in the output directories.
-
-- It checks for the presence of expected log entries to confirm that the alert messages were successfully distributed.
-
-- The test includes mechanisms to safely terminate and clean up running processes to prevent resource leaks.
+Peers receive the message and the test is considered successful.
 
 ## Logs
 
