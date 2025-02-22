@@ -1,4 +1,5 @@
 import signal
+from pathlib import Path
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.module import IModule
@@ -64,26 +65,17 @@ class IrisModule(IModule):
         command_str = " ".join(
             f'"{arg}"' if " " in arg or '"' in arg else arg for arg in command
         )
-        debug_message = {
-            "from": self.name,
-            "txt": f"Running Iris using command: {command_str}",
-        }
-        self.logger.output_line(debug_message)
 
-        log_dir = conf.get_iris_logging_dir()
+        self.print(f"Running Iris using command: {command_str}")
+
+        log_dir = os.path.join(self.output_dir, "iris")
         os.makedirs(log_dir, exist_ok=True)
         # Open the log file
         log_file_path = os.path.join(log_dir, "iris_logs.txt")
         self.log_file = open(log_file_path, "w")
-        self.log_file.write(json.dumps(debug_message))
-        # self.logger.output_line({"from": self.name,
-        #         "txt": "Hello, Iris!"})
-        # with open("sadfdasfdasfsafadsfsafasfasdfsadfsda.txt", "w") as f:
-        #     f.write("Hello files!!!")
+        self.log_file.write(f"Running Iris using command: {command_str}")
 
-        base_dir = os.getcwd()
-        relative_cwd = os.path.join("modules", "irisModule")
-        full_cwd = os.path.join(base_dir, relative_cwd)
+        full_cwd = Path.cwd() / "modules" / "irisModule"
 
         try:
             # Start the subprocess, redirecting stdout and stderr to the same file
@@ -118,9 +110,7 @@ class IrisModule(IModule):
         self.simplex_duplex_translator()
 
     def shutdown_gracefully(self):
-        self.logger.output_line(
-            {"from": self.name, "txt": "Iris Module terminating gracefully"}
-        )
+        self.print("Iris Module terminating gracefully")
         self.process.terminate()
         try:
             # Wait for the process to finish with a timeout of 5 seconds
@@ -134,5 +124,6 @@ class IrisModule(IModule):
             os.kill(self.process.pid, signal.SIGTERM)
         self.log_file.close()
         self.print("Iris Module terminating wait")
-        self.process.wait()
+        if self.process.poll() is None:
+            self.process.wait()
         self.print("Iris Module terminated gracefully")

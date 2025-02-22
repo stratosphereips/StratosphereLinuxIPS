@@ -727,8 +727,3 @@ class ConfigParser(object):
         return self.read_configuration(
             "global_p2p", "iris_conf", "modules/irisModule/config.yaml"
         )
-
-    def get_iris_logging_dir(self) -> str:
-        return self.read_configuration(
-            "global_p2p", "iris_log_dir", "output/iris"
-        )

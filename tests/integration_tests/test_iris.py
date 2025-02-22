@@ -123,7 +123,7 @@ def test_messaging(
     # - backup of the original iris configuration file
     #   - ensures reproducibility of the test
     # - extraction of the connection string form the logs of iris running under the main Slips
-    log_file_first_iris = "output/iris/iris_logs.txt"
+    log_file_first_iris = "output/integration_tests/iris_integration_test/iris/iris_logs.txt"
     config_file = "tests/integration_tests/config/iris_peer_config.yaml"
     backup_file = config_file + ".bak"
 
@@ -240,7 +240,7 @@ def test_messaging(
             "INFO	iris	protocols/alert.go:111	received p2p alert message"
         ]
         assert check_strings_in_file(
-            expected_log_entry, "output/iris_peer/iris_logs.txt"
+            expected_log_entry, "output/integration_tests/peer_iris_integration_test/iris/iris_logs.txt"
         )
 
         print("Deleting the output directories")
