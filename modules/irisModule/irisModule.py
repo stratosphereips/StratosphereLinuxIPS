@@ -1,14 +1,3 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/local_connection_detector.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the class, the module name, description and author in the variables
-# 5. The file name of the python file (local_connection_detector.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to be able to disable the module later
 import signal
 
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -117,7 +106,6 @@ class IrisModule(IModule):
         if msg := self.get_msg("iris_internal"):
             # Message on Iris duplex channel
             # Get the message
-            print(msg)
             type = json.loads(msg["data"])["type"]
             if "nl2tl" in type:
                 # Message is from Iris addressed to Fides Module
@@ -144,10 +132,6 @@ class IrisModule(IModule):
             self.process.kill()
             os.kill(self.process.pid, signal.SIGTERM)
         self.log_file.close()
-        self.logger.output_line(
-            {"from": self.name, "txt": "Iris Module terminating wait"}
-        )
+        self.print("Iris Module terminating wait")
         self.process.wait()
-        self.logger.output_line(
-            {"from": self.name, "txt": "Iris Module terminated gracefully"}
-        )
+        self.print("Iris Module terminated gracefully")
