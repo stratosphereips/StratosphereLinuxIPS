@@ -126,8 +126,9 @@ class IrisModule(IModule):
             # Wait for the process to finish with a timeout of 5 seconds
             self.process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            print(
-                "Iris (peercli) process did not terminate gracefully within the timeout, killing it."
+            self.print(
+                "Iris (peercli) process did not terminate gracefully within the timeout, killing it.",
+                verbose=1, debug=1
             )
             self.process.kill()
             os.kill(self.process.pid, signal.SIGTERM)
