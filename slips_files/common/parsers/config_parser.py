@@ -667,11 +667,6 @@ class ConfigParser(object):
         if not self.reading_flows_from_cyst():
             to_ignore.append("cyst")
 
-        use_global_p2p = self.use_global_p2p()
-        if not (use_global_p2p and ("-i" in sys.argv or "-g" in sys.argv)):
-            to_ignore.append("fidesModule")
-            to_ignore.append("irisModule")
-
         return to_ignore
 
     def get_cpu_profiler_enable(self):

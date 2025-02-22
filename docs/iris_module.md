@@ -34,11 +34,16 @@ docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips
 
 For the Fides Module enabled on top of the Iris module you should use ```--cap-add=NET_ADMIN```
 
+Both Fides Module and Iris Module can be enabled in Slips' configuration file by adding:
+
+    global_p2p:
+        use_global_p2p: True
+
 ## Installation
 
 ```
 docker pull stratosphereips/slips
-docker run -it --rm --net=host --use_fides=True stratosphereips/slips
+docker run -it --rm --net=host --interface=<select_interface_to_run_on> stratosphereips/slips
 ```
 ***NOTE***
 
@@ -50,10 +55,15 @@ Identity, trusted organisations, peer discovery and other configuration is locat
 
 ## Usage in Slips
 
-Iris will be inactive be default, because Fides is inactive by default in Spips.
+Iris will be inactive be default, because Fides is inactive by default in Slips.
 
 Please run Fides Module or other trust evaluation module when running Iris.
 
+Iris Module and Fides Module have been designed to cooperate and 
+therefore can be both enabled in the configuration file of Slips by adding:
+
+    global_p2p:
+        use_global_p2p: True
 
 ### **Communication & Messages**
 
@@ -136,8 +146,8 @@ Peers receive the message and the test is considered successful.
 
 ## Logs
 
-Slips contains a minimal log file for reports received by other peers and peer updates in
-```output/irisModule.log```
+Slips contains a log file for reports received by other peers and peer updates of Iris Module in
+```output/<path_to_a_Slips_output_folder>/iris/iris_logs.txt```
 
 ## Limitations
 
