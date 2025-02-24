@@ -67,7 +67,7 @@ alerts_file = "alerts.log"
                 "netflix.com. The certificate is claiming to belong "
                 "to Google",
                 "Detected Malicious JA3: 6734f37431670b3ab4292b8f60f29984 "
-                "from source address 10.0.2.15 to 22.22.33.22. "
+                "from source address 10.0.2.15 to 22.33.22.33. "
                 "description: Trickbot Malware.",
             ],
             "test15-malicious-zeek-dir",
