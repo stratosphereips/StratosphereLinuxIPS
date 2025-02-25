@@ -1,4 +1,5 @@
 import signal
+from logging import debug
 from pathlib import Path
 
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -29,9 +30,6 @@ class IrisModule(IModule):
             "fides2network": self.f2n,
             "iris_internal": self.fi,
         }
-
-    def log_line(self, txt: str):
-        self.logger.log_line({"from": self.name, "txt": txt})
 
     def make_relative_path(self, executable_path, config_file_path):
         # Get the directory of the executable
@@ -87,7 +85,8 @@ class IrisModule(IModule):
             )
         except OSError as e:
             error_message = {"from": self.name, "txt": str(e)}
-            self.logger.log_error(error_message)
+            #self . logger.log_error(error_message)
+            self.print(f"Iris Module failed to start Iris (peercli/iris) using command: {command_str}, generating: {str(e)}", verbose=1, debug=3)
 
     def simplex_duplex_translator(self):
         if msg := self.get_msg("fides2network"):
