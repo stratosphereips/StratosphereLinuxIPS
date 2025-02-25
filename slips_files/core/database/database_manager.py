@@ -312,6 +312,12 @@ class DBManager:
     def get_host_ip(self, *args, **kwargs):
         return self.rdb.get_host_ip(*args, **kwargs)
 
+    def set_new_incoming_flows(self, *args, **kwargs):
+        return self.rdb.set_new_incoming_flows(*args, **kwargs)
+
+    def get_new_incoming_flows(self, *args, **kwargs):
+        return self.rdb.get_new_incoming_flows(*args, **kwargs)
+
     def set_host_ip(self, *args, **kwargs):
         return self.rdb.set_host_ip(*args, **kwargs)
 

@@ -644,6 +644,7 @@ class Profiler(ICore, IObservable):
         return False
 
     def shutdown_gracefully(self):
+        self.db.set_new_incoming_flows(False)
         self.print(
             f"Stopping. Total lines read: {self.rec_lines}",
             log_to_logfiles_only=True,
