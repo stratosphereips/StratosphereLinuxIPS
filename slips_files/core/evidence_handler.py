@@ -98,6 +98,10 @@ class EvidenceHandler(ICore):
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_ips()
         self.formatter = EvidenceFormatter(self.db)
+        # thats just a tmp value, this variable will be set and used when
+        # the
+        # module is stopping.
+        self.last_msg_received_time = float("inf")
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -452,6 +456,29 @@ class EvidenceHandler(ICore):
     def show_popup(self, alert: Alert):
         alert_description: str = self.formatter.get_printable_alert(alert)
         self.notify.show_popup(alert_description)
+
+    def should_stop(self) -> bool:
+        """
+        Overrides imodule's should_stop() to make sure thi smodule only
+        stops after 1 minute of the last received evidence.
+        """
+        if not self.termination_event.is_set():
+            return False
+
+        if self.is_msg_received_in_any_channel():
+            self.last_msg_received_time = time.time()
+            return False
+
+        # no new msgs are received in any of the channels here
+        # wait an extra 1 minute for new evidence to arrive
+        # without this, slips has problems processing the last evidence
+        # set by some of the modules.
+        if time.time() - self.last_msg_received_time < 60:
+            # one minute didnt pass yet
+            return False
+
+        # 1 min passed since the last evidence
+        return True
 
     def pre_main(self):
         self.print(f"Using threshold: {green(self.detection_threshold)}")

@@ -122,7 +122,8 @@ def test_zeek_dir(
         (
             "dataset/test9-mixed-zeek-dir/conn.log",
             4,
-            "non-HTTP established connection",  # the flows with uid
+            "non-HTTP established connection to port 80. "
+            "destination IP: 194.132.197.198",  # the flows with uid
             # CAwUdr34dVnyOwbUuj should trigger this
             "test9-conn_log_only/",
             6659,
@@ -146,7 +147,10 @@ def test_zeek_conn_log(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = f"./slips.py  -e 1 -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1"
+    command = (
+        f"./slips.py  -e 1 -t -f {conn_log_path}  -o {output_dir}  "
+        f"-P {redis_port} > {output_file} 2>&1"
+    )
     # this function returns when slips is done
     run_slips(command)
     assert_no_errors(output_dir)
