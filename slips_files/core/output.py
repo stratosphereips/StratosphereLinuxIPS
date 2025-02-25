@@ -128,8 +128,7 @@ class Output(IObserver):
 
         sender, msg = msg["from"], msg["txt"]
 
-        date_time = datetime.now()
-        date_time = utils.convert_format(date_time, utils.alerts_format)
+        date_time = utils.get_human_readable_datetime()
 
         self.slips_logfile_lock.acquire()
         with open(self.slips_logfile, "a") as slips_logfile:
@@ -158,8 +157,7 @@ class Output(IObserver):
         """
         Log error line to errors.log
         """
-        date_time = datetime.now()
-        date_time = utils.convert_format(date_time, utils.alerts_format)
+        date_time = utils.get_human_readable_datetime()
 
         self.errors_logfile_lock.acquire()
         with open(self.errors_logfile, "a") as errors_logfile:

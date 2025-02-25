@@ -212,8 +212,7 @@ class EvidenceHandler(ICore):
                 we should say so in alerts.log, if not, we should say that
                 we generated an alert
         """
-        now = datetime.now()
-        now = utils.convert_format(now, utils.alerts_format)
+        now = utils.get_human_readable_datetime()
 
         alert_description = (
             f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
