@@ -315,8 +315,8 @@ class DBManager:
     def set_new_incoming_flows(self, *args, **kwargs):
         return self.rdb.set_new_incoming_flows(*args, **kwargs)
 
-    def get_new_incoming_flows(self, *args, **kwargs):
-        return self.rdb.get_new_incoming_flows(*args, **kwargs)
+    def will_slips_have_new_incoming_flows(self, *args, **kwargs):
+        return self.rdb.will_slips_have_new_incoming_flows(*args, **kwargs)
 
     def set_host_ip(self, *args, **kwargs):
         return self.rdb.set_host_ip(*args, **kwargs)

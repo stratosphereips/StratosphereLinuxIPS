@@ -38,15 +38,17 @@ class ProfileHandler:
     def set_new_incoming_flows(self, will_slips_have_more_flows: bool):
         """A flag indicating if slips is still receiving new flows from
         input an profiler or not"""
-        self.r.set(
-            self.constants.WILL_SLIPS_HAVE_MORE_FLOWS,
-            will_slips_have_more_flows,
-        )
+        if not will_slips_have_more_flows:
 
-    def get_new_incoming_flows(self):
+            self.r.set(
+                self.constants.WILL_SLIPS_HAVE_MORE_FLOWS,
+                "no",
+            )
+
+    def will_slips_have_new_incoming_flows(self):
         """A flag indicating if slips is still receiving new flows from
         input an profiler or not"""
-        return self.r.get(self.constants.WILL_SLIPS_HAVE_MORE_FLOWS)
+        return self.r.get(self.constants.WILL_SLIPS_HAVE_MORE_FLOWS) == "yes"
 
     def get_intuples_from_profile_tw(self, profileid, twid):
         """Get the in tuples"""
