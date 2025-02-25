@@ -1,5 +1,4 @@
 import signal
-from logging import debug
 from pathlib import Path
 
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -84,9 +83,12 @@ class IrisModule(IModule):
                 cwd=full_cwd,
             )
         except OSError as e:
-            error_message = {"from": self.name, "txt": str(e)}
-            #self . logger.log_error(error_message)
-            self.print(f"Iris Module failed to start Iris (peercli/iris) using command: {command_str}, generating: {str(e)}", verbose=1, debug=3)
+            self.print(
+                f"Iris Module failed to start Iris (peercli/iris) "
+                f"using command: {command_str}, generating: {str(e)}",
+                verbose=1,
+                debug=3,
+            )
 
     def simplex_duplex_translator(self):
         if msg := self.get_msg("fides2network"):
@@ -117,12 +119,11 @@ class IrisModule(IModule):
         except subprocess.TimeoutExpired:
             self.print(
                 "Iris (peercli) process did not terminate gracefully within the timeout, killing it.",
-                verbose=1, debug=1
+                verbose=1,
+                debug=1,
             )
             self.process.kill()
             os.kill(self.process.pid, signal.SIGTERM)
         self.log_file.close()
-        self.print("Iris Module terminating wait")
         if self.process.poll() is None:
             self.process.wait()
-        self.print("Iris Module terminated gracefully")

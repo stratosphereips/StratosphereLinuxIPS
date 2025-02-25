@@ -720,5 +720,5 @@ class ConfigParser(object):
 
     def get_iris_config_location(self) -> str:
         return self.read_configuration(
-            "global_p2p", "iris_conf", "modules/irisModule/config.yaml"
+            "global_p2p", "iris_conf", "config/iris_config.yaml"
         )
