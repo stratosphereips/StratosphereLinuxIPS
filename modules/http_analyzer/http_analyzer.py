@@ -65,6 +65,7 @@ class HTTPAnalyzer(AsyncModule):
         self.http_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
         self.ts_of_last_cleanup_of_http_recognized_flows = time.time()
         self.http_recognized_flows_lock = Lock()
+        self.condition = asyncio.Condition()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -535,7 +536,7 @@ class HTTPAnalyzer(AsyncModule):
         # wait 5 mins real-time (to give slips time to
         # read more flows) maybe the recognized http arrives
         # within that time?
-        await asyncio.sleep(five_mins)
+        await self.wait_for_new_flows_or_timeout(five_mins)
         # we can safely await here without blocking the main thread because
         # once the above await returns, this function will never sleep
         # again, it'll either set the evidence or discard it
@@ -543,6 +544,41 @@ class HTTPAnalyzer(AsyncModule):
             twid, flow, timeout_reached=True
         )
         return False
+
+    async def wait_for_new_flows_or_timeout(self, timeout: float):
+        """
+        waits for new incoming flows, but interrupts the wait if profiler
+        stop sending new flows within within the timeout period.
+
+        :param timeout: the maximum time to wait before resuming execution.
+        """
+
+        # repeatedly check if slips is no longer receiving new flows
+        async def will_slips_have_new_incoming_flows():
+            """if slips will have no incoming flows, aka profiler stopped.
+            this function will return False immediately"""
+            while self.db.will_slips_have_new_incoming_flows():
+                await asyncio.sleep(1)  # sleep to avoid busy looping
+            return False
+
+        try:
+            # wait until either:
+            # - will_slips_have_new_incoming_flows() returns False (no new flows)
+            # - timeout is reached (5 minutes)
+            await asyncio.wait_for(
+                will_slips_have_new_incoming_flows(), timeout
+            )
+
+        except asyncio.TimeoutError:
+            pass  # timeout reached
+
+    async def update_flows_status(self):
+        """
+        notifies waiting tasks that the status of incoming flows has changed.
+        should be called whenever new flows are processed.
+        """
+        async with self.condition:
+            self.condition.notify_all()
 
     def remove_old_entries_from_http_recognized_flows(self) -> None:
         """

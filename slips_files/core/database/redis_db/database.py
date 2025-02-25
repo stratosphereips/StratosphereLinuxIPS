@@ -146,13 +146,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             cls.set_slips_internal_time(0)
             if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
+
             # useful for debugging using 'CLIENT LIST' redis cmd
             cls.r.client_setname("Slips-DB")
 
         return cls._instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
-        pass
+        self.set_new_incoming_flows(True)
 
     @classmethod
     def _set_redis_options(cls):
