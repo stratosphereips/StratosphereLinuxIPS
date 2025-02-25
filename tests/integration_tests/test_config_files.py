@@ -11,53 +11,17 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     check_for_text,
+    modify_yaml_config,
 )
 from tests.module_factory import ModuleFactory
 import pytest
 import shutil
 import os
-import yaml
-from pathlib import Path
 
 alerts_file = "alerts.log"
 
 
-def modify_yaml_config(
-    input_path="config/slips.yaml",
-    output_filename="updated_slips.yaml",
-    changes=None,
-):
-    """
-    Reads a YAML config file, modifies specified values, and writes the new
-     config to the current directory.
-
-    :param input_path: path to the input yaml file
-    :param output_filename: name of the output yaml file
-    :param changes: dictionary containing keys to update and their new values
-    """
-    input_file = Path(input_path)
-    output_file = Path.cwd() / output_filename
-
-    if not input_file.exists():
-        raise FileNotFoundError(f"YAML config file not found: {input_path}")
-
-    with input_file.open("r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-
-    if changes:
-        for key, value in changes.items():
-            key: str
-            value: dict
-            if key in config:
-                config[key].update(value)
-
-    with output_file.open("w", encoding="utf-8") as f:
-        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
-
-    return output_file
-
-
-def create_Main_instance(input_information):
+def create_main_instance(input_information):
     """returns an instance of Main() class in slips.py"""
     main = Main(testing=True)
     main.input_information = input_information
@@ -84,6 +48,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     config_file = "tests/integration_tests/test.yaml"
     modify_yaml_config(
         output_filename=config_file,
+        output_dir=os.getcwd(),
         changes={
             "DisabledAlerts": {
                 "disabled_detections": ["ConnectionWithoutDNS"]
@@ -185,6 +150,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     config_file = "tests/integration_tests/test2.yaml"
     modify_yaml_config(
         output_filename=config_file,
+        output_dir=os.getcwd(),
         changes={
             "detection": {"evidence_detection_threshold": 0.1},
             "parameters": {
