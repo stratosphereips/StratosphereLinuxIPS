@@ -1528,7 +1528,7 @@ def test_malicious_ja3(attacker_ip, threat_level, description, tags, ja3):
     assert evidence.uid == [flow.uid]
     expected_description = (
         f"Malicious JA3: {ja3} "
-        f"from source address {attacker_ip}. "
+        f"from source address {attacker_ip} to {flow.daddr}. "
         f"description: {description}."
     )
     if tags:

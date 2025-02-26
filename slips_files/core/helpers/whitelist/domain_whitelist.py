@@ -84,9 +84,6 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         if not parent_domain:
             return False
 
-        whitelisted_domains: Dict[str, Dict[str, str]]
-        whitelisted_domains = self.db.get_whitelist("domains")
-
         # is the parent domain in any of slips whitelists?? like tranco or
         # whitelist.conf?
         # if so we need to get extra info about that domain based on the
@@ -102,23 +99,26 @@ class DomainAnalyzer(IWhitelistAnalyzer):
                 return False
             whitelist_should_ignore = "alerts"
             dir_from_whitelist = "dst"
-        elif parent_domain in whitelisted_domains:
+        else:
             if not self.enable_local_whitelist:
                 # domain is in the local whitelist, but the local whitelist
                 # not enabled
                 return False
-            # did the user say slips should ignore flows or alerts in the
-            # config file?
-            whitelist_should_ignore = whitelisted_domains[parent_domain][
-                "what_to_ignore"
-            ]
-            # did the user say slips should ignore flows/alerts  TO or from
-            # that domain in the config file?
-            dir_from_whitelist: str = whitelisted_domains[parent_domain][
-                "from"
-            ]
-        else:
-            return False
+            whitelisted_domains: Dict[str, Dict[str, str]]
+            whitelisted_domains = self.db.get_whitelist("domains")
+            if parent_domain in whitelisted_domains:
+                # did the user say slips should ignore flows or alerts in the
+                # config file?
+                whitelist_should_ignore = whitelisted_domains[parent_domain][
+                    "what_to_ignore"
+                ]
+                # did the user say slips should ignore flows/alerts  TO or from
+                # that domain in the config file?
+                dir_from_whitelist: str = whitelisted_domains[parent_domain][
+                    "from"
+                ]
+            else:
+                return False
 
         # match the direction and whitelist_Type of the given domain to the
         # ones we have from the whitelist.

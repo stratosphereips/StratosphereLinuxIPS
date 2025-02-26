@@ -1269,7 +1269,8 @@ class SetEvidenceHelper:
         ja3_description: str = ja3_info["description"]
 
         description = (
-            f"Malicious JA3: {flow.ja3} from source address {flow.saddr}."
+            f"Malicious JA3: {flow.ja3} from source address {flow.saddr} "
+            f"to {flow.daddr}."
         )
         if ja3_description != "None":
             description += f" description: {ja3_description}."
