@@ -581,7 +581,7 @@ class ProcessManager:
             # update the list of processes to kill last with only the ones
             # that are still alive
             to_kill_last: List[Process] = alive_processes
-            self.print(
+            print(
                 f"@@@@@@@@@@@@@@@@@@@ "
                 f"{utils.get_human_readable_datetime()} not all modules finished. "
                 f"alive_processes: {alive_processes} "
