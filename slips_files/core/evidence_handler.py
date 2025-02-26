@@ -101,7 +101,7 @@ class EvidenceHandler(ICore):
         # thats just a tmp value, this variable will be set and used when
         # the
         # module is stopping.
-        self.last_msg_received_time = float("inf")
+        self.last_msg_received_time = time.time()
 
     def read_configuration(self):
         conf = ConfigParser()
