@@ -464,18 +464,42 @@ class EvidenceHandler(ICore):
         if not self.termination_event.is_set():
             return False
 
+        print(
+            f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+            f"evidencehandler:  received termination event, checking for msgs"
+        )
+
         if self.is_msg_received_in_any_channel():
             self.last_msg_received_time = time.time()
+            print(
+                f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+                f"evidencehandler:  still recving msgs"
+            )
             return False
 
+        print(
+            f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+            f"evidencehandler:  DONE recving msgs"
+        )
         # no new msgs are received in any of the channels here
         # wait an extra 1 minute for new evidence to arrive
         # without this, slips has problems processing the last evidence
         # set by some of the modules.
         if time.time() - self.last_msg_received_time < 60:
+            print(
+                f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+                f"evidencehandler: "
+                f"{time.time() - self.last_msg_received_time} passed since "
+                f"lasg msg!"
+            )
             # one minute didnt pass yet
             return False
-
+        print(
+            f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+            f"evidencehandler: "
+            f"1 mins passed since "
+            f"lasg msg! stoppinnnnggg"
+        )
         # 1 min passed since the last evidence
         return True
 

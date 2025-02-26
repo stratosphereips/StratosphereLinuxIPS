@@ -556,11 +556,23 @@ class ProcessManager:
             # the 2 lists combined are all the children that are still alive
             # here to_kill_last are considered alive because we haven't tried
             # to join() em yet
+            self.print(
+                f"@@@@@@@@@@@@@@@@@@@ "
+                f"{ utils.get_human_readable_datetime() } not all "
+                f"modules finished. "
+                f"alive_processes: {alive_processes} "
+                f"to_kill_first: {to_kill_first} to_kill_last:"
+                f" {to_kill_last} "
+            )
             self.warn_about_pending_modules(alive_processes + to_kill_last)
             return to_kill_first, to_kill_last
         else:
             # all of them are killed
             to_kill_first = []
+            print(
+                f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+                f"sending termination event to evidencehandler"
+            )
             # tell evidence to stop since all the modules are done
             self.evidence_handler_termination_event.set()
 
@@ -569,7 +581,13 @@ class ProcessManager:
             # update the list of processes to kill last with only the ones
             # that are still alive
             to_kill_last: List[Process] = alive_processes
-
+            self.print(
+                f"@@@@@@@@@@@@@@@@@@@ "
+                f"{utils.get_human_readable_datetime()} not all modules finished. "
+                f"alive_processes: {alive_processes} "
+                f"to_kill_first: {to_kill_first} to_kill_last:"
+                f" {to_kill_last} "
+            )
             # the 2 lists combined are all the children that are still alive
             self.warn_about_pending_modules(alive_processes)
             return to_kill_first, to_kill_last

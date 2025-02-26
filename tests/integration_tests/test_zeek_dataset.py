@@ -148,7 +148,7 @@ def test_zeek_conn_log(
 
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = (
-        f"./slips.py  -e 1 -t -f {conn_log_path}  -o {output_dir}  "
+        f"./slips.py -e 1 -t -f {conn_log_path} -o {output_dir} "
         f"-P {redis_port} > {output_file} 2>&1"
     )
     # this function returns when slips is done
