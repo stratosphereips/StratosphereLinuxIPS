@@ -523,20 +523,12 @@ class HTTPAnalyzer(AsyncModule):
         if matching_http_flows:
             # awesome! discard evidence. FP dodged.
             # clear these timestamps as we dont need them anymore?
-            print(
-                f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} http:"
-                f" {flow} .. has matching http flows {matching_http_flows}"
-            )
             return False
 
         # reaching here means we looked in the past 5 mins and
         # found no timestamps, did we look in the future 5 mins?
         if timeout_reached:
             # yes we did. set an evidence
-            print(
-                f"@@@@@@@@@@@@@@@@  {utils.get_human_readable_datetime()}  "
-                f"setting evidence for {flow} .."
-            )
             self.set_evidence.non_http_port_80_conn(twid, flow)
             return True
 
@@ -544,18 +536,10 @@ class HTTPAnalyzer(AsyncModule):
         # wait 5 mins real-time (to give slips time to
         # read more flows) maybe the recognized http arrives
         # within that time?
-        print(
-            f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
-            f"Evidence: waiting for flow {flow} for 5 mins!"
-        )
         await self.wait_for_new_flows_or_timeout(five_mins)
         # we can safely await here without blocking the main thread because
         # once the above await returns, this function will never sleep
         # again, it'll either set the evidence or discard it
-        print(
-            f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} http:"
-            f" {flow} .. calling check again but timeout reached this time"
-        )
         await self.check_non_http_port_80_conns(
             twid, flow, timeout_reached=True
         )
@@ -584,18 +568,6 @@ class HTTPAnalyzer(AsyncModule):
             await asyncio.wait_for(
                 will_slips_have_new_incoming_flows(), timeout
             )
-            if will_slips_have_new_incoming_flows():
-                print(
-                    f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
-                    f"evidence: will_slips_have_new_incoming_flows "
-                    f"returned True. cancelling the wwait"
-                )
-            else:
-                print(
-                    f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
-                    f"evidence: timeout reached"
-                )
-
         except asyncio.TimeoutError:
             pass  # timeout reached
 
