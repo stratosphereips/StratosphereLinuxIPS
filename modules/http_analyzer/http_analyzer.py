@@ -523,6 +523,10 @@ class HTTPAnalyzer(AsyncModule):
         if matching_http_flows:
             # awesome! discard evidence. FP dodged.
             # clear these timestamps as we dont need them anymore?
+            print(
+                f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} http:"
+                f" {flow} .. has matching http flows {matching_http_flows}"
+            )
             return False
 
         # reaching here means we looked in the past 5 mins and
@@ -548,6 +552,10 @@ class HTTPAnalyzer(AsyncModule):
         # we can safely await here without blocking the main thread because
         # once the above await returns, this function will never sleep
         # again, it'll either set the evidence or discard it
+        print(
+            f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} http:"
+            f" {flow} .. calling check again but timeout reached this time"
+        )
         await self.check_non_http_port_80_conns(
             twid, flow, timeout_reached=True
         )

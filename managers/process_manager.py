@@ -556,7 +556,7 @@ class ProcessManager:
             # the 2 lists combined are all the children that are still alive
             # here to_kill_last are considered alive because we haven't tried
             # to join() em yet
-            self.print(
+            print(
                 f"@@@@@@@@@@@@@@@@@@@ "
                 f"{ utils.get_human_readable_datetime() } not all "
                 f"modules finished. "
