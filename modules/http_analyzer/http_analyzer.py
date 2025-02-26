@@ -568,6 +568,17 @@ class HTTPAnalyzer(AsyncModule):
             await asyncio.wait_for(
                 will_slips_have_new_incoming_flows(), timeout
             )
+            if will_slips_have_new_incoming_flows():
+                print(
+                    f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+                    f"evidence: will_slips_have_new_incoming_flows "
+                    f"returned True. cancelling the wwait"
+                )
+            else:
+                print(
+                    f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+                    f"evidence: timeout reached"
+                )
 
         except asyncio.TimeoutError:
             pass  # timeout reached
