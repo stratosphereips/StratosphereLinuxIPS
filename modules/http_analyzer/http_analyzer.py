@@ -529,6 +529,10 @@ class HTTPAnalyzer(AsyncModule):
         # found no timestamps, did we look in the future 5 mins?
         if timeout_reached:
             # yes we did. set an evidence
+            print(
+                f"@@@@@@@@@@@@@@@@  {utils.get_human_readable_datetime()}  "
+                f"setting evidence for {flow} .."
+            )
             self.set_evidence.non_http_port_80_conn(twid, flow)
             return True
 
@@ -536,6 +540,10 @@ class HTTPAnalyzer(AsyncModule):
         # wait 5 mins real-time (to give slips time to
         # read more flows) maybe the recognized http arrives
         # within that time?
+        print(
+            f"@@@@@@@@@@@@@@@@ {utils.get_human_readable_datetime()} "
+            f"Evidence: waiting for flow {flow} for 5 mins!"
+        )
         await self.wait_for_new_flows_or_timeout(five_mins)
         # we can safely await here without blocking the main thread because
         # once the above await returns, this function will never sleep
