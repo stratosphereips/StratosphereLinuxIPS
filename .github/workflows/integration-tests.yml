@@ -90,6 +90,6 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test_slips_locally-integration-tests-output
+        name: ${{ matrix.test_file }}-integration-tests-output
         path: |
           output/integration_tests
