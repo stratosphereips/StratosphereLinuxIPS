@@ -72,14 +72,14 @@ class FlowAlerts(AsyncModule):
             "new_smtp": [self.smtp],
             "new_flow": [
                 self.conn,
-                self.ssl,
+                # self.ssl,
             ],
             "new_dns": [self.dns],
             "tw_closed": [self.conn],
             "new_ssh": [self.ssh],
             "new_software": [self.software],
             "new_tunnel": [self.tunnel],
-            "new_ssl": [self.ssl],
+            # "new_ssl": [self.ssl],
         }
 
     async def main(self):
