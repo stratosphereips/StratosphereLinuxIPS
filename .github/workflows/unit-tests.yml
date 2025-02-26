@@ -127,7 +127,7 @@ jobs:
         python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
 
     - name: Upload Artifacts
-      if: success() || failure()
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: test_slips_locally-integration-tests-output
