@@ -5,6 +5,7 @@ from logging import debug
 from pathlib import Path
 
 import psutil
+from fontTools.varLib.plot import stops
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.module import IModule
@@ -13,27 +14,7 @@ import os
 import subprocess
 import yaml
 
-def _iris_configurator(config_path : str, redis_port : int):
-    # Read the YAML configuration
-    with open(config_path, "r") as file:
-        config = yaml.safe_load(file)
 
-    # Ensure the Redis section exists and update the port
-    if "Redis" in config:
-        config["Redis"]["Port"] = redis_port
-        config["Redis"]["Host"] = "127.0.0.1"
-        config["Redis"]["Tl2NlChannel"] = "iris_internal"
-    else:
-        config["Redis"] = {
-            "Host": "127.0.0.1",
-            "Port": redis_port,
-            "Tl2NlChannel": "iris_internal"
-        }
-
-    # Write the updated configuration back to the file
-    with open(config_path, "w") as file:
-        yaml.dump(config, file, default_flow_style=False, sort_keys=False)
-    return config["Server"]["port"]
 
 class IrisModule(IModule):
     # Name: short name of the module. Do not use spaces
@@ -41,6 +22,7 @@ class IrisModule(IModule):
     description = "Global P2P module cooperating with Fides"
     authors = ["David Otta"]
     process = None
+    stopFlag= False
 
     def init(self):
         # To which channels do you want to subscribe? When a message
@@ -66,6 +48,42 @@ class IrisModule(IModule):
 
         return relative_path
 
+    def _iris_configurator(self, config_path: str, redis_port: int):
+        try:
+            # Read the YAML configuration
+            with open(config_path, "r") as file:
+                config = yaml.safe_load(file)
+
+            # Ensure the Redis section exists and update the port
+            if "Redis" in config:
+                config["Redis"]["Port"] = redis_port
+                config["Redis"]["Host"] = "127.0.0.1"
+                config["Redis"]["Tl2NlChannel"] = "iris_internal"
+            else:
+                config["Redis"] = {
+                    "Host": "127.0.0.1",
+                    "Port": redis_port,
+                    "Tl2NlChannel": "iris_internal"
+                }
+
+            # Write the updated configuration back to the file
+            with open(config_path, "w") as file:
+                yaml.dump(config, file, default_flow_style=False, sort_keys=False)
+
+        except FileNotFoundError:
+            # Handle the case when the file doesn't exist
+            self.print("The file was not found.")
+            return None
+        except IOError:
+            # Handle other I/O related errors (e.g., permissions issues)
+            self.print("An error occurred while reading the file.")
+            return None
+        except Exception as e:
+            # Catch any other unexpected errors
+            self.print(f"An unexpected error occurred: {e}")
+            return None
+        return config["Server"]["port"]
+
     def pre_main(self):
         """
         Initializations that run only once before the main() function runs in a loop
@@ -79,7 +97,10 @@ class IrisModule(IModule):
             iris_exe_path, conf.get_iris_config_location()
         )
 
-        self.irip = _iris_configurator(conf.get_iris_config_location(), self.redis_port)
+        self.irip = self._iris_configurator(conf.get_iris_config_location(), self.redis_port)
+        if self.irip is None:
+            self.stopFlag = True
+            return
 
         command = [
             iris_exe_path,
@@ -97,8 +118,8 @@ class IrisModule(IModule):
         log_dir = os.path.join(self.output_dir, "iris")
         os.makedirs(log_dir, exist_ok=True)
         # Open the log file
-        log_file_path = os.path.join(log_dir, "iris_logs.txt")
-        self.log_file = open(log_file_path, "w")
+        self.log_file_path = os.path.join(log_dir, "iris_logs.txt")
+        self.log_file = open(self.log_file_path, "w")
         self.log_file.write(f"Running Iris using command: {command_str}")
 
         full_cwd = Path.cwd() / "modules" / "irisModule"
@@ -112,10 +133,10 @@ class IrisModule(IModule):
                 cwd=full_cwd,
             )
             self.print(f"Running Iris with PID: {self.process.pid}")
-            self.iris_log_reader = open(log_file_path, "r")
-            self.iris_log_reader.seek(0, 2)
         except OSError as e:
             self.print(f"Iris Module failed to start Iris (peercli/iris) using command: {command_str}, generating: {str(e)}", verbose=1, debug=3)
+            self.stopFlag = True
+            return
 
 
     def _simplex_duplex_translator(self):
@@ -136,39 +157,38 @@ class IrisModule(IModule):
                 self.print(f"iris_internal: {msg}")
             # else: pass, message was just an echo from F -> I forwarding
 
-    def _follow_file(self):
-        ret = True
+    def _check_iris_status(self):
+        if self.process.poll() is None:
+            return True
+        self.log_file.close()
+        self.iris_log_reader = open(self.log_file_path, "r")
         keywords = {"ERROR", "FATAL", "PANIC"}
-        line = self.iris_log_reader.readline()
-        i = 0 # protections against getting stuck in this function in case of high activity in Iris, QOS stile
-        while line and i < 10:
+        for line in self.iris_log_reader:
             if any(keyword in line for keyword in keywords):
                 self.print(f"Iris says: {line}")
-                ret = False
-            i+=1
-            line = self.iris_log_reader.readline()
-        self.iris_log_reader.seek(0, 2) # part of the QOS assurance
+        return False
 
     def main(self):
         """Main loop function"""
+        if self.stopFlag:
+            return True
         try:
             self._simplex_duplex_translator()
-            if not self._follow_file(): # Iris needs attention, canceled, crashing, ...
-                self.print("Iris in a critical state, stopping!", verbose=1, debug=3)
-                return True
+            if not self._check_iris_status(): # Iris needs attention, canceled, crashing, ...
+                 self.print(f"Iris in a critical state, stopping! \n\t For more infor than above, please access the logs in {self.log_file_path}", verbose=1, debug=3)
+                 return True
         except KeyboardInterrupt:
             return True
 
     def shutdown_gracefully(self):
         self.print("Iris Module terminating gracefully")
-        #self.__sigterminantor()
-        self.send_sigterm(self.process.pid)
-        os.kill(self.process.pid, signal.SIGTERM)
-        self.log_file.close()
-        self.iris_log_reader.close()
-        self.print("Iris Module terminating wait")
-        if self.process.poll() is None:
-            self.process.wait()
+        if self.process is not None:
+            self.send_sigterm(self.process.pid)
+            if self.process.poll() is None:
+                self.print("Iris Module terminating wait")
+                self.process.wait()
+        if self.log_file is not None:
+            self.log_file.close()
         self.print("Iris Module terminated gracefully")
 
     def send_sigterm(self, pid):
