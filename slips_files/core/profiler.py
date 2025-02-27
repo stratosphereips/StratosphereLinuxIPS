@@ -395,12 +395,34 @@ class Profiler(ICore, IObservable):
         rev_profileid, rev_twid = self.get_rev_profile(flow)
         self.store_features_going_in(rev_profileid, rev_twid, flow)
 
+    def is_ignored_ip(self, ip: str) -> bool:
+        """
+        This function checks if an IP is a special list of IPs that
+        should not be alerted for different reasons
+        """
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except (ipaddress.AddressValueError, ValueError):
+            return True
+
+        # Is the IP multicast, private? (including localhost)
+        # The broadcast address 255.255.255.255 is reserved.
+        return (
+            ip_obj.is_multicast
+            or ip_obj.is_link_local
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
+        )
+
     def should_set_localnet(self, flow) -> bool:
         """
         returns true only if the saddr of the current flow is ipv4, private
         and we don't have the local_net set already
         """
         if self.is_localnet_set:
+            return False
+
+        if flow.saddr == "0.0.0.0":
             return False
 
         if self.get_private_client_ips():
@@ -411,9 +433,11 @@ class Profiler(ICore, IObservable):
         if not validators.ipv4(flow.saddr):
             return False
 
+        if self.is_ignored_ip(flow.saddr):
+            return False
+
         saddr_obj: ipaddress = ipaddress.ip_address(flow.saddr)
-        is_private_ip = utils.is_private_ip(saddr_obj)
-        if not is_private_ip:
+        if not utils.is_private_ip(saddr_obj):
             return False
 
         return True
@@ -512,10 +536,6 @@ class Profiler(ICore, IObservable):
             ip: str = str(private_client_ips[0])
         else:
             ip: str = flow.saddr
-            # make surethe saddr is a private ip that we can use the range
-            # of. because it may be a flow of ingoing traffic right?
-            if not utils.is_private_ip(ip):
-                return
 
         self.is_localnet_set = True
         return utils.get_cidr_of_private_ip(ip)
