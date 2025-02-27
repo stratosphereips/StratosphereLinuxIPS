@@ -112,39 +112,13 @@ class IrisModule(IModule):
                 cwd=full_cwd,
             )
             self.print(f"Running Iris with PID: {self.process.pid}")
+            self.iris_log_reader = open(log_file_path, "r")
+            self.iris_log_reader.seek(0, 2)
         except OSError as e:
-            error_message = {"from": self.name, "txt": str(e)}
-            #self . logger.log_error(error_message)
             self.print(f"Iris Module failed to start Iris (peercli/iris) using command: {command_str}, generating: {str(e)}", verbose=1, debug=3)
 
-    def __sigterminantor(self, port):
-        # Get the current operating system
-        current_os = platform.system()
 
-        try:
-            # Find the process ID by port number
-            for proc in psutil.process_iter(['pid', 'name', 'connections']):
-                # Check if the process has a connection listening on the given port
-                for conn in proc.info['connections']:
-                    if conn.laddr.port == port:
-                        pid = proc.info['pid']
-                        self.print(f"Process found: {proc.info['name']} (PID: {pid}) is listening on port {port}")
-
-                        if current_os == "Windows":
-                            # Windows doesn't support SIGTERM directly, use terminate() method
-                            proc.terminate()
-                            self.print(f"Terminated process with PID {pid} on Windows.")
-                        else:
-                            # On Linux/macOS, send SIGTERM
-                            os.kill(pid, signal.SIGTERM)
-                            self.print(f"Sent SIGTERM to process with PID {pid}.")
-                        return
-            self.print(f"No process found listening on port {port}.")
-
-        except Exception as e:
-            print(f"Error occurred: {e}")
-
-    def simplex_duplex_translator(self):
+    def _simplex_duplex_translator(self):
         if msg := self.get_msg("fides2network"):
             # Fides send something to the network (Iris)
             # FORWARD to Iris
@@ -162,10 +136,22 @@ class IrisModule(IModule):
                 self.print(f"iris_internal: {msg}")
             # else: pass, message was just an echo from F -> I forwarding
 
+    def _follow_file(self):
+        keywords = {"ERROR", "FATAL", "PANIC"}
+        line = self.iris_log_reader.readline()
+        i = 0 # protections against getting stuck in this function in case of high activity in Iris, QOS stile
+        while line and i < 10:
+            if any(keyword in line for keyword in keywords):
+                self.print(f"Iris says: {line}")
+            i+=1
+            line = self.iris_log_reader.readline()
+        self.iris_log_reader.seek(0, 2) # part of the QOS assurance
+
     def main(self):
         """Main loop function"""
         try:
-            self.simplex_duplex_translator()
+            self._simplex_duplex_translator()
+            self._follow_file()
         except KeyboardInterrupt:
             return True
 

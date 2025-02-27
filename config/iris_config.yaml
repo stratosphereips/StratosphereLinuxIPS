@@ -6,7 +6,7 @@ Server:
   DhtServerMode: true
 Redis:
   Host: 127.0.0.1
-  Port: 6379
+  Port: 6644
   Tl2NlChannel: iris_internal
 PeerDiscovery:
   DisableBootstrappingNodes: true
