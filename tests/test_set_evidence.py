@@ -186,7 +186,7 @@ def test_multiple_ssh_versions(
             Direction.SRC,
             Direction.DST,
             ThreatLevel.LOW,
-            "A connection from a private IP (192.168.0.1) "
+            "A connection from a private IP (192.168.0.1) on port 80/udp "
             "outside of the used local network 192.168.0.0/16."
             " To IP: 10.0.0.1 ",
         ),
@@ -199,9 +199,9 @@ def test_multiple_ssh_versions(
             Direction.DST,
             Direction.SRC,
             ThreatLevel.HIGH,
-            "A connection to a private IP "
-            "(192.168.1.1) outside of the used local network 192.168.0.0/16. "
-            "From IP: 192.168.0.1 using ARP",
+            "A connection to a private IP (192.168.1.1) on port 0/arp "
+            "outside of the used "
+            "local network 192.168.0.0/16. From IP: 192.168.0.1 using ARP",
         ),
         # Testcase 3: dst IP outside localnet, using port
         (
@@ -212,7 +212,7 @@ def test_multiple_ssh_versions(
             Direction.DST,
             Direction.SRC,
             ThreatLevel.HIGH,
-            "A connection to a private IP (192.168.1.2)"
+            "A connection to a private IP (192.168.1.2) on port 443/tcp"
             " outside of the used local network 192.168.0.0/16."
             " From IP: 192.168.0.1 on destination port: 443/TCP",
         ),
@@ -1243,6 +1243,9 @@ def test_suspicious_dns_answer(
         daddr=daddr,
         query=query,
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers=answer,
@@ -1308,6 +1311,9 @@ def test_invalid_dns_answer(query, answer, expected_description):
         query=query,
         qclass_name="",
         qtype_name="",
+        dport="",
+        sport="",
+        proto="",
         rcode_name="",
         answers=answer,
         TTLs="",
