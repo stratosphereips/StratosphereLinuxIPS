@@ -137,12 +137,14 @@ class IrisModule(IModule):
             # else: pass, message was just an echo from F -> I forwarding
 
     def _follow_file(self):
+        ret = True
         keywords = {"ERROR", "FATAL", "PANIC"}
         line = self.iris_log_reader.readline()
         i = 0 # protections against getting stuck in this function in case of high activity in Iris, QOS stile
         while line and i < 10:
             if any(keyword in line for keyword in keywords):
                 self.print(f"Iris says: {line}")
+                ret = False
             i+=1
             line = self.iris_log_reader.readline()
         self.iris_log_reader.seek(0, 2) # part of the QOS assurance
@@ -151,7 +153,9 @@ class IrisModule(IModule):
         """Main loop function"""
         try:
             self._simplex_duplex_translator()
-            self._follow_file()
+            if not self._follow_file(): # Iris needs attention, canceled, crashing, ...
+                self._follow_file("Iris in a critical state, stopping!", verbose=1, debug=3)
+                return True
         except KeyboardInterrupt:
             return True
 
