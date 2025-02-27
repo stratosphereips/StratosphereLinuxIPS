@@ -1,11 +1,7 @@
 import platform
 import signal
-import time
-from logging import debug
 from pathlib import Path
 
-import psutil
-from fontTools.varLib.plot import stops
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.module import IModule
@@ -15,14 +11,13 @@ import subprocess
 import yaml
 
 
-
 class IrisModule(IModule):
     # Name: short name of the module. Do not use spaces
     name = "Iris"
     description = "Global P2P module cooperating with Fides"
     authors = ["David Otta"]
     process = None
-    stopFlag= False
+    stopFlag = False
 
     def init(self):
         # To which channels do you want to subscribe? When a message
@@ -63,12 +58,14 @@ class IrisModule(IModule):
                 config["Redis"] = {
                     "Host": "127.0.0.1",
                     "Port": redis_port,
-                    "Tl2NlChannel": "iris_internal"
+                    "Tl2NlChannel": "iris_internal",
                 }
 
             # Write the updated configuration back to the file
             with open(config_path, "w") as file:
-                yaml.dump(config, file, default_flow_style=False, sort_keys=False)
+                yaml.dump(
+                    config, file, default_flow_style=False, sort_keys=False
+                )
 
         except FileNotFoundError:
             # Handle the case when the file doesn't exist
@@ -97,7 +94,9 @@ class IrisModule(IModule):
             iris_exe_path, conf.get_iris_config_location()
         )
 
-        self.irip = self._iris_configurator(conf.get_iris_config_location(), self.redis_port)
+        self.irip = self._iris_configurator(
+            conf.get_iris_config_location(), self.redis_port
+        )
         if self.irip is None:
             self.stopFlag = True
             return
@@ -127,17 +126,22 @@ class IrisModule(IModule):
         try:
             # Start the subprocess, redirecting stdout and stderr to the same file
             self.process = subprocess.Popen(
-                command,  # Replace with your command
+                command,
                 stdout=self.log_file,
                 stderr=self.log_file,
                 cwd=full_cwd,
             )
             self.print(f"Running Iris with PID: {self.process.pid}")
         except OSError as e:
-            self.print(f"Iris Module failed to start Iris (peercli/iris) using command: {command_str}, generating: {str(e)}", verbose=1, debug=3)
+            self.print(
+                f"Iris Module failed to start Iris "
+                f"(peercli/iris) using command: {command_str}, "
+                f"generating: {e}",
+                verbose=1,
+                debug=3,
+            )
             self.stopFlag = True
             return
-
 
     def _simplex_duplex_translator(self):
         if msg := self.get_msg("fides2network"):
@@ -174,30 +178,45 @@ class IrisModule(IModule):
             return True
         try:
             self._simplex_duplex_translator()
-            if not self._check_iris_status(): # Iris needs attention, canceled, crashing, ...
-                 self.print(f"Iris in a critical state, stopping! \n\t For more infor than above, please access the logs in {self.log_file_path}", verbose=1, debug=3)
-                 return True
+            if (
+                not self._check_iris_status()
+            ):  # Iris needs attention, canceled, crashing, ...
+                self.print(
+                    f"Iris in a critical state, stopping! \n\t "
+                    f"For more info than above, please access the "
+                    f"logs in {self.log_file_path}",
+                    verbose=1,
+                    debug=3,
+                )
+                return True
         except KeyboardInterrupt:
+            # the only way to stop this module is by using the ctrl+c
+            # so we're returning true so that Imodule wouold to call
+            # shutdown_gracefully()
             return True
 
     def shutdown_gracefully(self):
         self.print("Iris Module terminating gracefully")
-        if self.process is not None:
+        if self.process and self.process.poll() is None:
+            # process is running, killit
             self.send_sigterm(self.process.pid)
+
             if self.process.poll() is None:
-                self.print("Iris Module terminating wait")
+                self.print("Iris Module terminating. wait")
                 self.process.wait()
+
         if self.log_file is not None:
             self.log_file.close()
+
         self.print("Iris Module terminated gracefully")
 
     def send_sigterm(self, pid):
         current_platform = platform.system()
 
-        if current_platform == 'Windows':
+        if current_platform == "Windows":
             # Windows: Using taskkill to terminate a process
             try:
-                subprocess.run(['taskkill', '/PID', str(pid)], check=True)
+                subprocess.run(["taskkill", "/PID", str(pid)], check=True)
                 self.print(f"Sent SIGTERM to process {pid} on Windows")
             except subprocess.CalledProcessError as e:
                 self.print(f"Failed to kill process {pid}: {e}")
@@ -205,10 +224,14 @@ class IrisModule(IModule):
             # Unix-like systems: Sending SIGTERM signal
             try:
                 os.kill(pid, signal.SIGTERM)
-                self.print(f"Sent SIGTERM to process {pid} on {current_platform}")
+                self.print(
+                    f"Sent SIGTERM to process {pid} on {current_platform}"
+                )
             except ProcessLookupError:
                 self.print(f"Process {pid} not found.")
             except PermissionError:
-                self.print(f"Permission denied when trying to kill process {pid}.")
+                self.print(
+                    f"Permission denied when trying to kill process {pid}."
+                )
             except Exception as e:
                 self.print(f"An error occurred: {e}")
