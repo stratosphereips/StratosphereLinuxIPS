@@ -43,6 +43,8 @@ class Conn(IFlowalertsAnalyzer):
         self.our_ips = utils.get_own_ips()
         self.input_type: str = self.db.get_input_type()
         self.multiple_reconnection_attempts_threshold = 5
+        # we use this to try to detect if there's dns server that has a
+        # private ip outside of localnet
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -706,12 +708,15 @@ class Conn(IFlowalertsAnalyzer):
                     return True
             return False
 
-    def _is_ok_to_connect_to_ip(self, ip: str):
+    def _is_ok_to_connect_to_ip(self, ip: str) -> bool:
         """
         returns true if it's ok to connect to the given IP even if it's
         "outside the given local network"
         """
         return ip in SPECIAL_IPV6 or utils.is_localhost(ip)
+
+    def _is_dns(self, flow) -> bool:
+        return str(flow.dport) == "53" and flow.proto.lower() == "udp"
 
     def check_different_localnet_usage(
         self,
@@ -727,12 +732,17 @@ class Conn(IFlowalertsAnalyzer):
         coming from/to 10.0.0.0/8
         :param what_to_check: can be 'srcip' or 'dstip'
         """
+        if self._is_dns(flow):
+            # dns flows are checked fot this same detection in dns.py
+            return
+
         if self._is_ok_to_connect_to_ip(
             flow.saddr
         ) or self._is_ok_to_connect_to_ip(flow.daddr):
             return
 
         ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
+
         ip_obj = ipaddress.ip_address(ip_to_check)
         if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
             return

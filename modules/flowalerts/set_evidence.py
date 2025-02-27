@@ -230,7 +230,8 @@ class SetEvidenceHelper:
             )
             threat_level = ThreatLevel.LOW
             description = (
-                f"A connection from a private IP ({flow.saddr}) "
+                f"A connection from a private IP ({flow.saddr}) on port "
+                f"{flow.dport}/{flow.proto} "
                 f"outside of the used local network "
                 f"{self.db.get_local_network()}. To IP: {flow.daddr} "
             )
@@ -247,7 +248,8 @@ class SetEvidenceHelper:
             )
             threat_level = ThreatLevel.HIGH
             description = (
-                f"A connection to a private IP ({flow.daddr}) "
+                f"A connection to a private IP ({flow.daddr}) on port"
+                f" {flow.dport}/{flow.proto} "
                 f"outside of the used local network "
                 f"{self.db.get_local_network()}. "
                 f"From IP: {flow.saddr} "
