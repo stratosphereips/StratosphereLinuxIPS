@@ -359,6 +359,9 @@ This threat level of this detection is low if the source ip is the one outside o
 because it's unlikely.
 and high if the destination ip is the one outside of local network.
 
+Slips ignores evidence of this type when the destination IP is a private IP outside of local network and is
+communicating on port 53/UDP. Slips marks that destination address as the DNS server when 5 flows are seen using port
+53/udp while having DNS answers. this is likely a DNS misconfiguration hence a FP.
 
 ## High entropy DNS TXT answers
 
