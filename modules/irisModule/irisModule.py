@@ -1,13 +1,39 @@
+import platform
 import signal
+import time
 from logging import debug
 from pathlib import Path
+
+import psutil
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.module import IModule
 import json
 import os
 import subprocess
+import yaml
 
+def _iris_configurator(config_path : str, redis_port : int):
+    # Read the YAML configuration
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+
+    # Ensure the Redis section exists and update the port
+    if "Redis" in config:
+        config["Redis"]["Port"] = redis_port
+        config["Redis"]["Host"] = "127.0.0.1"
+        config["Redis"]["Tl2NlChannel"] = "iris_internal"
+    else:
+        config["Redis"] = {
+            "Host": "127.0.0.1",
+            "Port": redis_port,
+            "Tl2NlChannel": "iris_internal"
+        }
+
+    # Write the updated configuration back to the file
+    with open(config_path, "w") as file:
+        yaml.dump(config, file, default_flow_style=False, sort_keys=False)
+    return config["Server"]["port"]
 
 class IrisModule(IModule):
     # Name: short name of the module. Do not use spaces
@@ -53,6 +79,8 @@ class IrisModule(IModule):
             iris_exe_path, conf.get_iris_config_location()
         )
 
+        self.irip = _iris_configurator(conf.get_iris_config_location(), self.redis_port)
+
         command = [
             iris_exe_path,
             "--conf",
@@ -83,16 +111,45 @@ class IrisModule(IModule):
                 stderr=self.log_file,
                 cwd=full_cwd,
             )
+            self.print(f"Running Iris with PID: {self.process.pid}")
         except OSError as e:
             error_message = {"from": self.name, "txt": str(e)}
             #self . logger.log_error(error_message)
             self.print(f"Iris Module failed to start Iris (peercli/iris) using command: {command_str}, generating: {str(e)}", verbose=1, debug=3)
+
+    def __sigterminantor(self, port):
+        # Get the current operating system
+        current_os = platform.system()
+
+        try:
+            # Find the process ID by port number
+            for proc in psutil.process_iter(['pid', 'name', 'connections']):
+                # Check if the process has a connection listening on the given port
+                for conn in proc.info['connections']:
+                    if conn.laddr.port == port:
+                        pid = proc.info['pid']
+                        self.print(f"Process found: {proc.info['name']} (PID: {pid}) is listening on port {port}")
+
+                        if current_os == "Windows":
+                            # Windows doesn't support SIGTERM directly, use terminate() method
+                            proc.terminate()
+                            self.print(f"Terminated process with PID {pid} on Windows.")
+                        else:
+                            # On Linux/macOS, send SIGTERM
+                            os.kill(pid, signal.SIGTERM)
+                            self.print(f"Sent SIGTERM to process with PID {pid}.")
+                        return
+            self.print(f"No process found listening on port {port}.")
+
+        except Exception as e:
+            print(f"Error occurred: {e}")
 
     def simplex_duplex_translator(self):
         if msg := self.get_msg("fides2network"):
             # Fides send something to the network (Iris)
             # FORWARD to Iris
             self.db.publish("iris_internal", msg["data"])
+            self.print(f"fides2network: {msg}")
 
         if msg := self.get_msg("iris_internal"):
             # Message on Iris duplex channel
@@ -102,27 +159,45 @@ class IrisModule(IModule):
                 # Message is from Iris addressed to Fides Module
                 # FORWARD to Fides Module
                 self.db.publish("network2fides", msg["data"])
+                self.print(f"iris_internal: {msg}")
             # else: pass, message was just an echo from F -> I forwarding
 
     def main(self):
         """Main loop function"""
-        self.simplex_duplex_translator()
+        try:
+            self.simplex_duplex_translator()
+        except KeyboardInterrupt:
+            return True
 
     def shutdown_gracefully(self):
         self.print("Iris Module terminating gracefully")
-        self.process.terminate()
-        try:
-            # Wait for the process to finish with a timeout of 5 seconds
-            self.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.print(
-                "Iris (peercli) process did not terminate gracefully within the timeout, killing it.",
-                verbose=1, debug=1
-            )
-            self.process.kill()
-            os.kill(self.process.pid, signal.SIGTERM)
+        #self.__sigterminantor()
+        self.send_sigterm(self.process.pid)
+        os.kill(self.process.pid, signal.SIGTERM)
         self.log_file.close()
         self.print("Iris Module terminating wait")
         if self.process.poll() is None:
             self.process.wait()
         self.print("Iris Module terminated gracefully")
+
+    def send_sigterm(self, pid):
+        current_platform = platform.system()
+
+        if current_platform == 'Windows':
+            # Windows: Using taskkill to terminate a process
+            try:
+                subprocess.run(['taskkill', '/PID', str(pid)], check=True)
+                self.print(f"Sent SIGTERM to process {pid} on Windows")
+            except subprocess.CalledProcessError as e:
+                self.print(f"Failed to kill process {pid}: {e}")
+        else:
+            # Unix-like systems: Sending SIGTERM signal
+            try:
+                os.kill(pid, signal.SIGTERM)
+                self.print(f"Sent SIGTERM to process {pid} on {current_platform}")
+            except ProcessLookupError:
+                self.print(f"Process {pid} not found.")
+            except PermissionError:
+                self.print(f"Permission denied when trying to kill process {pid}.")
+            except Exception as e:
+                self.print(f"An error occurred: {e}")

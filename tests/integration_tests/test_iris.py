@@ -244,8 +244,8 @@ def test_messaging(
         )
 
         print("Deleting the output directories")
-        shutil.rmtree(output_dir)
-        shutil.rmtree(output_dir_peer)
+        #shutil.rmtree(output_dir)
+        #shutil.rmtree(output_dir_peer)
     finally:
         # This resets peer's (second Slips instance) configurations file.
         # Reproducibility of this whole test is ensured by this.
