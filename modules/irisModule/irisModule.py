@@ -165,7 +165,7 @@ class IrisModule(IModule):
         keywords = {"ERROR", "FATAL", "PANIC"}
         for line in self.iris_log_reader:
             if any(keyword in line for keyword in keywords):
-                self.print(f"Iris says: {line}")
+                self.print(f"Iris says: {line}", verbose=0, debug=1)
         return False
 
     def main(self):
