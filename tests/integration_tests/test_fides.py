@@ -201,7 +201,7 @@ def test_conf_file2(path, output_dir, redis_port):
     print(db.get_msgs_received_at_runtime("Fides"))
 
     print("Deleting the output directory")
-    shutil.rmtree(output_dir)
+    shutil.rmtree(output_dir, ignore_errors=True)
 
 
 @pytest.mark.parametrize(
