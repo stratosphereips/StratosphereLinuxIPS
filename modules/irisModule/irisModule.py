@@ -154,7 +154,7 @@ class IrisModule(IModule):
         try:
             self._simplex_duplex_translator()
             if not self._follow_file(): # Iris needs attention, canceled, crashing, ...
-                self._follow_file("Iris in a critical state, stopping!", verbose=1, debug=3)
+                self.print("Iris in a critical state, stopping!", verbose=1, debug=3)
                 return True
         except KeyboardInterrupt:
             return True
@@ -165,6 +165,7 @@ class IrisModule(IModule):
         self.send_sigterm(self.process.pid)
         os.kill(self.process.pid, signal.SIGTERM)
         self.log_file.close()
+        self.iris_log_reader.close()
         self.print("Iris Module terminating wait")
         if self.process.poll() is None:
             self.process.wait()
