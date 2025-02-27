@@ -23,6 +23,12 @@ import sys
 from unittest.mock import Mock
 import modules.fidesModule.model.peer_trust_data as ptd
 
+# TODO
+# from tests.common_test_utils import (
+#     modify_yaml_config,
+# )
+
+
 alerts_file = "alerts.log"
 
 
@@ -195,7 +201,7 @@ def test_conf_file2(path, output_dir, redis_port):
     print(db.get_msgs_received_at_runtime("Fides"))
 
     print("Deleting the output directory")
-    shutil.rmtree(output_dir)
+    shutil.rmtree(output_dir, ignore_errors=True)
 
 
 @pytest.mark.parametrize(

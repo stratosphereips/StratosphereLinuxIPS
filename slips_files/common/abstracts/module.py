@@ -172,6 +172,8 @@ class IModule(ABC, Process):
                 error: bool = self.main()
                 if error:
                     self.shutdown_gracefully()
+                    return
+
             except KeyboardInterrupt:
                 self.keyboard_int_ctr += 1
                 if self.keyboard_int_ctr >= 2:

@@ -421,10 +421,12 @@ web_interface:
 global_p2p:
    # this is the global p2p's trust model. can only be enabled when
    # running slips on an interface
-   use_fides: True
+   use_global_p2p: True
+   iris_conf: config/iris_config.yaml
 
 #############################
 local_p2p:
    # create p2p.log with additional info about peer communications?
    create_p2p_logfile : False
    use_p2p : False
+

@@ -262,8 +262,8 @@ class ConfigParser(object):
     def use_local_p2p(self):
         return self.read_configuration("local_p2p", "use_p2p", False)
 
-    def use_fides(self):
-        return self.read_configuration("global_p2p", "use_fides", False)
+    def use_global_p2p(self):
+        return self.read_configuration("global_p2p", "use_global_p2p", False)
 
     def cesnet_conf_file(self):
         return self.read_configuration("CESNET", "configuration_file", False)
@@ -643,9 +643,10 @@ class ConfigParser(object):
         if not (use_p2p and "-i" in sys.argv):
             to_ignore.append("p2ptrust")
 
-        use_fides = self.use_fides()
-        if not (use_fides and ("-i" in sys.argv or "-g" in sys.argv)):
+        use_global_p2p = self.use_global_p2p()
+        if not (use_global_p2p and ("-i" in sys.argv or "-g" in sys.argv)):
             to_ignore.append("fidesModule")
+            to_ignore.append("irisModule")
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.yaml
@@ -715,4 +716,9 @@ class ConfigParser(object):
     def get_memory_profiler_multiprocess(self):
         return self.read_configuration(
             "Profiling", "memory_profiler_multiprocess", True
+        )
+
+    def get_iris_config_location(self) -> str:
+        return self.read_configuration(
+            "global_p2p", "iris_conf", "config/iris_config.yaml"
         )
