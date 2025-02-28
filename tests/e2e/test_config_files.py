@@ -5,7 +5,6 @@ This file tests 2 different config files other than slips' default config/slips.
 test/test.yaml and tests/test2.yaml
 """
 
-from slips.main import Main
 from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
@@ -19,15 +18,6 @@ import shutil
 import os
 
 alerts_file = "alerts.log"
-
-
-def create_main_instance(input_information):
-    """returns an instance of Main() class in slips.py"""
-    main = Main(testing=True)
-    main.input_information = input_information
-    main.input_type = "pcap"
-    main.line_type = False
-    return main
 
 
 @pytest.mark.parametrize(
