@@ -80,11 +80,11 @@ RUN pip3 install --no-cache-dir --upgrade pip
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}
 
+COPY . $SLIPS_DIR
+
 # Retrieve Iris
-#COPY iris/config.yaml ./modules/irisModule
 COPY --from=build /iris/iris ./modules/irisModule
 
-COPY . $SLIPS_DIR
 
 RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
