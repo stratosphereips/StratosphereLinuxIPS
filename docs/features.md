@@ -40,6 +40,7 @@ The detection techniques are:
 - GRE tunnels
 - GRE tunnel scan
 - SSH version changing
+- Invalid DNS resolutions
 
 The details of each detection follows.
 
@@ -88,15 +89,19 @@ Then for every source address in conn.log, slips checks if the MAC of it was use
 
 If so, it alerts "Device changing IPs".
 
+
 ## GRE tunnels
 
-Slips uses zeek tunnel.log to alert on GRE tunnels when found. Whenever one is found, slips sets an evidence
+Slips uses zeek tunnel.log to alert on GRE tunnels when found. Whenever one
+any action other than "Tunnel::DISCOVER" is found, slips sets an evidence
 with threat level low
 
 ## GRE tunnel scans
 
-Slips uses zeek tunnel.log to alert on GRE tunnels with DISCOVER actions when found.
+Slips uses zeek tunnel.log to alert on GRE tunnels scan. Slips considers any log with "Tunnel::DISCOVER" action a GRE scan.
+
 The threat level of this evidence is low.
+
 
 
 ### SMTP login bruteforce
@@ -106,10 +111,12 @@ Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
 
 ### Connection to private IPs
 
+
 Slips detects when a private IP is connected to another private IP with threat level info.
 
-But it skips this alert when it's a DNS connection on port
+But it skips this alert when it's a DNS or a DHCP connection on port
 53, 67 or 68 UDP to the gateway IP.
+
 
 ### Connection to private IPs outside the current local network
 
@@ -144,19 +151,31 @@ When there's a weird HTTP method, slips detects it as well.
 
 ### Non-SSL connections on port 443
 
-Slips detects established connections on port 443 that are not using HTTP
+Slips detects established connections on port 443 that are not using SSL
 using zeek's conn.log flows
 
 if slips finds a flow using destination port 443 and the 'service' field
-in conn.log isn't set to 'ssl', it alerts
+in conn.log isn't set to 'ssl', it alerts.
+
+Sometimes zeek detects a connection from a source to a destination IP on port 443 as SSL, and another connection within
+5 minutes later as non-SSL. Slips detects that and does not set an evidence for any of them.
+
+Here's how it works
+
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_non_ssl_evidence_works.png.png" >
 
 ## Non-HTTP connections on port 80.
 
 Slips detects established connections on port 80 that are not using SSL
-using zeek's conn.log flows
+using zeek's conn.log flows.
 
 if slips finds a flow using destination port 80 and the 'service' field
-in conn.log isn't set to 'http', it alerts
+in conn.log isn't set to 'http', it sets and evidence.
+
+If a flow without http as a service is found, slips first checks past and future flows from the
+same src ip + dst ip + port to see if there's a flow with http as a service, if there is, slips ignores the alert.
+This is done to avoid FPs coming from zeek.
 
 
 ### Connections without DNS resolution
@@ -197,7 +216,9 @@ Slips detects successful SSH connections using 2 ways
 2. if all bytes sent in a SSH connection is more than 4290 bytes
 
 ### DNS resolutions without a connection
-This will detect DNS resolutions for which no further connection was done. A resolution without a usage is slightly suspicious.
+
+This will detect DNS resolutions for which no further connection was done.
+A resolution without a usage is slightly suspicious.
 
 The domains that are excepted are:
 
@@ -205,9 +226,24 @@ The domains that are excepted are:
 - All .local domains
 - The wild card domain *
 - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
-- Ignore WPAD domain from Windows
-- Ignore domains without a TLD such as the Chrome test domains.
+- WPAD domain from Windows
+- domains without a TLD such as the Chrome test domains.
+- DNS resolutions of any type other than AAAA and A
 
+Slips doesn't detect 'DNS resolutions without a connection' when running
+on an interface except for when it's done by this instance's own IP and only after 30 minutes has passed to
+avoid false positives (assuming the connection did happen and yet to be logged).
+
+
+When running on interface and files. For each DNS flow found, slips waits 30 mins zeek time
+for the connection to be found before setting an evidence.
+
+This is done by comparing each ts of every new dns flow to the pending detection, once 30 mins difference between the 2
+flows is detected, slips sets the evidence.
+
+To avoid accumulating so many pending DNS flows for 30 mins, slips checks if the connection of the pending DNS flows
+arrived every 10 and 20 mins too, if not found, slips waits extra 10 mins (so that would be 30 mins total) and sets the
+evidence.
 
 ### Connection to unknown ports
 
@@ -232,6 +268,7 @@ Otherwise, Slips triggers and "unknown port" evidence.
 
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
 
+The threat level of this evidence depends on the state of hte flow. established connections have higher threat levels.
 
 ### Data exfiltration
 
@@ -364,6 +401,13 @@ When slips detects an SSH client or an SSH server, it stores it with the IP and 
 Then whenever slips sees the same IP using another SSH version, it compares the stored SSH versions with the current SSH versions
 
 If they are different, slips generates an alert
+
+## Invalid DNS resolutions
+
+Some DNS resolvers answer the DNS query to adservers with 0.0.0.0 or 127.0.0.1 as the ip of the domain to block the domain.
+Slips detects this and sets an informational evidence.
+
+This detection doesn't apply to queries ending with ".arpa" or ".local"
 
 
 ## Detection modules
