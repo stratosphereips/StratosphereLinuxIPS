@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from slack import WebClient
 from slack.errors import SlackApiError
-import datetime
-
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.exporter import IExporter
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -45,19 +43,15 @@ class SlackExporter(IExporter):
         self.sensor_name = conf.sensor_name()
         return True
 
-    def get_human_readable_datetime(self) -> str:
-        date_time = datetime.datetime.now()
-        return utils.convert_format(date_time, utils.alerts_format)
-
     def send_init_msg(self):
         self.export(
-            f"{self.get_human_readable_datetime()}: "
+            f"{utils.get_human_readable_datetime()}: "
             f"Slips started on sensor: {self.sensor_name}."
         )
 
     def send_stop_msg(self):
         self.export(
-            f"{self.get_human_readable_datetime()}: "
+            f"{utils.get_human_readable_datetime()}: "
             f"Slips stopped on sensor: {self.sensor_name}."
         )
 

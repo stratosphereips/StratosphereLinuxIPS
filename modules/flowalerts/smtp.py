@@ -43,7 +43,7 @@ class SMTP(IFlowalertsAnalyzer):
         timestamps = self.smtp_bruteforce_cache[profileid][0]
         uids = self.smtp_bruteforce_cache[profileid][1]
 
-        # check if 3 bad login attemps happened within 10 seconds or less
+        # check if 3 bad login attempts happened within 10 seconds or less
         if len(timestamps) != self.smtp_bruteforce_threshold:
             return
 

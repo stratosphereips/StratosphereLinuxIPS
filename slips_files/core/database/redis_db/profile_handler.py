@@ -35,6 +35,19 @@ class ProfileHandler:
         """Get the out tuples"""
         return self.r.hget(profileid + self.separator + twid, "OutTuples")
 
+    def set_new_incoming_flows(self, will_slips_have_more_flows: bool):
+        """A flag indicating if slips is still receiving new flows from
+        input an profiler or not"""
+        self.r.set(
+            self.constants.WILL_SLIPS_HAVE_MORE_FLOWS,
+            "yes" if will_slips_have_more_flows else "no",
+        )
+
+    def will_slips_have_new_incoming_flows(self):
+        """A flag indicating if slips is still receiving new flows from
+        input an profiler or not"""
+        return self.r.get(self.constants.WILL_SLIPS_HAVE_MORE_FLOWS) == "yes"
+
     def get_intuples_from_profile_tw(self, profileid, twid):
         """Get the in tuples"""
         return self.r.hget(profileid + self.separator + twid, "InTuples")
@@ -1236,6 +1249,21 @@ class ProfileHandler:
         """Add the MAC addr to the given profileid key"""
         self.r.hset(profileid, self.constants.MAC, mac)
 
+    def _should_associate_this_mac_with_this_ip(self, ip, mac) -> bool:
+        return not (
+            ip == "0.0.0.0"
+            or not mac
+            # sometimes we create profiles with the mac address.
+            # don't save that in MAC hash
+            or validators.mac_address(ip)
+            or self._is_gw_mac(mac)
+            # we're trying to assign the gw mac to
+            # an ip that isn't the gateway's
+            # this happens bc any public IP probably has the gw MAC
+            # in the zeek logs, so skip
+            or ip == self.get_gateway_ip()
+        )
+
     def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
         """
         Used to associate the given profile with the given MAC addr.
@@ -1247,25 +1275,15 @@ class ProfileHandler:
         dhcp.log, conn.log, arp.log etc.
         PS: it doesn't deal with the MAC vendor
         """
-        if not mac_addr or "0.0.0.0" in profileid:
-            return False
-
         incoming_ip: str = profileid.split("_")[1]
 
-        # sometimes we create profiles with the mac address.
-        # don't save that in MAC hash
-        if validators.mac_address(incoming_ip):
+        if not self._should_associate_this_mac_with_this_ip(
+            incoming_ip, mac_addr
+        ):
             return False
 
-        if (
-            self.is_gw_mac(mac_addr, incoming_ip)
-            and incoming_ip != self.get_gateway_ip()
-        ):
-            # we're trying to assign the gw mac to
-            # an ip that isn't the gateway's
-            # this happens bc any public IP probably has the gw MAC
-            # in the zeek logs, so skip
-            return False
+        # see if this is the gw mac
+        self._determine_gw_mac(incoming_ip, mac_addr)
 
         # get the ips that belong to this mac
         cached_ips: Optional[List] = self.r.hmget(

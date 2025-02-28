@@ -1,0 +1,151 @@
+# This is main configuration file for the trust model
+# NOTE: if you update this file' structure, you need to update fides.model.configuration.py parsing as well
+
+# Settings related to running inside slips
+slips:
+
+# settings related to network protocol
+network:
+
+# Values that define this instance of Fides
+my:
+  id: myId
+  organisations: [ ]
+
+
+# Confidentiality related settings
+confidentiality:
+  # possible levels of data that are labeled by Slips
+  # the value defines how secret the data are where 0 (can be shared
+  # with anybody) and 1 (can not be shared at all)
+  #
+  # the checks are: if(entity.confidentiality_level >= data.confidentiality_level) allowData()
+  # see https://www.cisa.gov/tlp
+  levels:
+    # share all data
+    - name: WHITE # name of the level, used mainly for debugging purposes
+      value: 0    # value that is used during computation
+    - name: GREEN
+      value: 0.2
+    - name: AMBER
+      value: 0.5
+    - name: RED
+      value: 0.7
+    # do not share anything ever
+    - name: PRIVATE
+      value: 1.1 # never meets condition peer.privacyLevel >= data.level as peer.privacyLevel <0, 1>
+
+  # if some data are not labeled, what value should we use
+  defaultLevel: 0
+
+  # rules that apply when the model is filtering data for peers
+  thresholds:
+    - level: 0.2          # for this level (and all levels > this) require
+      requiredTrust: 0.2  # this trust
+    - level: 0.5
+      requiredTrust: 0.5
+    - level: 0.7
+      requiredTrust: 0.8
+    - level: 1
+      requiredTrust: 1
+
+# Trust model related settings
+trust:
+  # service trust evaluation
+  service:
+    # initial reputation that is assigned for every peer when there's new encounter
+    initialReputation: 0.5
+
+    # maximal size of Service History, sh_max
+    historyMaxSize: 100
+
+  # settings for recommendations
+  recommendations:
+    # if the recommendation protocol should be executed
+    enabled: True
+    # when selecting recommenders, use only the ones that are currently connected
+    useOnlyConnected: False
+    # if true, protocol will only ask pre-trusted peers / organisations for recommendations
+    useOnlyPreconfigured: False
+    # require minimal number of trusted connected peers before running recommendations
+    # valid only if trust.recommendations.useOnlyPreconfigured == False
+    requiredTrustedPeersCount: 1
+    # minimal trust for trusted peer
+    # valid only if trust.recommendations.useOnlyPreconfigured == False
+    trustedPeerThreshold: 0.8
+    # maximal count of peers that are asked to give recommendations on a peer, η_max
+    peersMaxCount: 100
+    # maximal size of Recommendation History, rh_max
+    historyMaxSize: 100
+
+  # alert protocol
+  alert:
+    # how much should we trust an alert that was sent by peer we don't know anything about
+    defaultTrust: 0.5
+
+  # trust these organisations with given trust by default
+  organisations:
+    - id: org1                  # public key of the organisation
+      name: Organisation \#1    # name
+      trust: 0.1                # how much should the model trust peers from this org
+      enforceTrust: True        # whether to allow (if false) changing trust during runtime (when we received more data from org)
+      confidentialityLevel: 0.7 # what level of data should be shared with peers from this org, see privacy.levels
+
+    - id: org2
+      name: Organisation \#2
+      trust: 0.9
+      enforceTrust: False
+      confidentialityLevel: 0.9
+
+  # trust these peers with given trust by default
+  # see doc for trust.organisations
+  peers:
+    - id: peer1
+      name: Peer \#1
+      trust: 0.1
+      enforceTrust: True
+      confidentialityLevel: 0.7
+
+    - id: peer2
+      name: Peer \#2
+      trust: 0.9
+      enforceTrust: False
+      confidentialityLevel: 0.9
+
+  # how many minutes is network opinion considered valid
+  networkOpinionCacheValidSeconds: 3600
+
+  # which strategy should be used to evaluate interaction when peer provided threat intelligence on a target
+  # see fides.evaluation.ti_evaluation.py for options
+  # options: ['even', 'distance', 'localDistance', 'threshold', 'maxConfidence', 'weighedDistance']
+  interactionEvaluationStrategies:
+    used: 'threshold'
+    # these are configuration for the strategies, content will be passed as a **kwargs to the instance
+    # even strategy uses the same satisfaction value for every interaction
+    even:
+      # value used as a default satisfaction for all peers
+      satisfaction: 1
+    # distance measures distance between aggregated network intelligence and each intelligence from the peers
+    distance:
+    # localDistance measures distance between each peer's intelligence to local threat intelligence by Slips
+    localDistance:
+    # weighedDistance combines distance and localDistance with given weight
+    weighedDistance:
+      # weight of the local TI to TI aggregated from the network
+      localWeight: 0.4
+    # maxConfidence uses combination of distance, localDistance and even - utilizes their confidence to
+    # make decisions with the highest possible confidence
+    maxConfidence:
+    # threshold employs 'lower' value strategy when the confidence of the aggregated TI is lower than 'threshold',
+    # otherwise it uses 'higher' - 'even' and 'distance' strategies work best with this
+    threshold:
+      # minimal confidence level
+      threshold: 0.7
+      # this strategy is used when the aggregated confidence is lower than the threshold
+      lower: 'even'
+      # and this one when it is higher
+      higher: 'distance'
+
+  # Threat Intelligence aggregation strategy
+  # valid values - ['average', 'weightedAverage', 'stdevFromScore']
+  tiAggregationStrategy: 'average'

@@ -346,7 +346,8 @@ class ProcessManager:
          module unless this functionis done
         :kwarg local_files: if true, updates the local ports and
                 org files from disk
-        :kwarg TI_feeds: if true, updates the remote TI feeds, this takes time
+        :kwarg ti_feeds: if true, updates the remote TI feeds.
+            PS: this takes time.
         """
         try:
             # only one instance of slips should be able to update ports
@@ -366,7 +367,7 @@ class ProcessManager:
                 if local_files:
                     update_manager.update_ports_info()
                     update_manager.update_org_files()
-                    update_manager.update_whitelist()
+                    update_manager.update_local_whitelist()
 
                 if ti_feeds:
                     update_manager.print("Updating TI feeds")
@@ -429,7 +430,8 @@ class ProcessManager:
                 self.main.db.get_pid_of("Exporting Alerts")
             )
 
-        # remove all None PIDs
+        # remove all None PIDs. this happens when a module in that list
+        # isnt started in the current run.
         pids_to_kill_last: List[int] = [
             pid for pid in pids_to_kill_last if pid is not None
         ]
@@ -443,23 +445,23 @@ class ProcessManager:
                 # skips the context manager of output.py, will close
                 # it manually later
                 # once all processes are closed
-                if type(process) == multiprocessing.context.ForkProcess:
+                if isinstance(process, multiprocessing.context.ForkProcess):
                     continue
                 to_kill_first.append(process)
 
         return to_kill_first, to_kill_last
 
     def wait_for_processes_to_finish(
-        self, pids_to_kill: List[Process]
+        self, processes_to_wait_for: List[Process]
     ) -> List[Process]:
         """
-        :param pids_to_kill: list of PIDs to wait for
+        :param processes_to_wait_for: list of PIDs to wait for
         :return: list of PIDs that still are not done yet
         """
         alive_processes: List[Process] = []
         # go through all processes to kill and see which
         # of them still need time
-        for process in pids_to_kill:
+        for process in processes_to_wait_for:
             # wait 3s for it to stop
             process.join(3)
 
@@ -567,10 +569,10 @@ class ProcessManager:
             # update the list of processes to kill last with only the ones
             # that are still alive
             to_kill_last: List[Process] = alive_processes
-
             # the 2 lists combined are all the children that are still alive
             self.warn_about_pending_modules(alive_processes)
             return to_kill_first, to_kill_last
+
         # all of them are killed
         return None, None
 

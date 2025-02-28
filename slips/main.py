@@ -509,9 +509,12 @@ class Main:
             if self.args.growing:
                 if self.input_type != "zeek_folder":
                     self.print(
-                        f"Parameter -g should be using with "
-                        f"-f <dirname> not a {self.input_type}. "
-                        f"Ignoring -g"
+                        f"Parameter -g should be used with "
+                        f"-f <dirname> not a {self.input_type} file. "
+                        f"Ignoring -g. Analyzing {self.input_information} "
+                        f"instead.",
+                        verbose=1,
+                        debug=3,
                     )
                 else:
                     self.print(
@@ -584,12 +587,6 @@ class Main:
 
             self.db.store_pid("slips.py", int(self.pid))
             self.metadata_man.set_input_metadata()
-
-            if self.conf.use_p2p() and not self.args.interface:
-                self.print(
-                    "Warning: P2P is only supported using "
-                    "an interface. Disabled P2P."
-                )
 
             # warn about unused open redis servers
             open_servers = len(self.redis_man.get_open_redis_servers())

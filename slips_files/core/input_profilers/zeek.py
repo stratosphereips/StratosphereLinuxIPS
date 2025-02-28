@@ -77,16 +77,19 @@ class ZeekJSON(IInputType):
 
         elif "dns" in file_type:
             self.flow: DNS = DNS(
-                starttime,
-                line.get("uid", False),
-                line.get("id.orig_h", ""),
-                line.get("id.resp_h", ""),
-                line.get("query", ""),
-                line.get("qclass_name", ""),
-                line.get("qtype_name", ""),
-                line.get("rcode_name", ""),
-                line.get("answers", ""),
-                line.get("TTLs", ""),
+                starttime=starttime,
+                uid=line.get("uid", False),
+                saddr=line.get("id.orig_h", ""),
+                daddr=line.get("id.resp_h", ""),
+                dport=line.get("id.resp_p", ""),
+                sport=line.get("id.orig_p", ""),
+                proto=line.get("proto", ""),
+                query=line.get("query", ""),
+                qclass_name=line.get("qclass_name", ""),
+                qtype_name=line.get("qtype_name", ""),
+                rcode_name=line.get("rcode_name", ""),
+                answers=line.get("answers", ""),
+                TTLs=line.get("TTLs", ""),
             )
 
         elif "http" in file_type:
@@ -318,16 +321,19 @@ class ZeekTabs(IInputType):
 
         elif "dns.log" in new_line["type"]:
             self.flow: DNS = DNS(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(2),
-                get_value_at(4),
-                get_value_at(9),
-                get_value_at(11),
-                get_value_at(13),
-                get_value_at(15),
-                get_value_at(21),
-                get_value_at(22),
+                starttime=starttime,
+                uid=get_value_at(1, False),
+                saddr=get_value_at(2),
+                sport=get_value_at(3),
+                daddr=get_value_at(4),
+                dport=get_value_at(5),
+                proto=get_value_at(6),
+                query=get_value_at(9),
+                qclass_name=get_value_at(11),
+                qtype_name=get_value_at(13),
+                rcode_name=get_value_at(15),
+                answers=get_value_at(21),
+                TTLs=get_value_at(22),
             )
 
         elif "http.log" in new_line["type"]:

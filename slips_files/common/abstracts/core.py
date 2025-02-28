@@ -35,13 +35,15 @@ class ICore(IModule, Process):
             self.pre_main()
             # this should be defined in every core file
             # this won't run in a loop because it's not a module
-            error: bool = self.main()
-            if error or self.should_stop():
-                # finished with some error
-                self.shutdown_gracefully()
+            self.main()
+            self.shutdown_gracefully()
 
         except KeyboardInterrupt:
+            self.keyboard_int_ctr += 1
+            if self.keyboard_int_ctr >= 2:
+                return
             self.shutdown_gracefully()
+
         except Exception:
             self.print(f"Problem in {self.name}", 0, 1)
             self.print(traceback.format_exc(), 0, 1)

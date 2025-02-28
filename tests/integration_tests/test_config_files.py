@@ -11,17 +11,17 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     check_for_text,
+    modify_yaml_config,
 )
 from tests.module_factory import ModuleFactory
 import pytest
 import shutil
 import os
 
-
 alerts_file = "alerts.log"
 
 
-def create_Main_instance(input_information):
+def create_main_instance(input_information):
     """returns an instance of Main() class in slips.py"""
     main = Main(testing=True)
     main.input_information = input_information
@@ -45,6 +45,33 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test.conf
     """
+    config_file = "tests/integration_tests/test.yaml"
+    modify_yaml_config(
+        output_filename=config_file,
+        output_dir=os.getcwd(),
+        changes={
+            "DisabledAlerts": {
+                "disabled_detections": ["ConnectionWithoutDNS"]
+            },
+            "detection": {"evidence_detection_threshold": 0.1},
+            "parameters": {
+                "analysis_direction": "all",
+                "delete_zeek_files": True,
+                "store_zeek_files_in_the_output_dir": False,
+                "label": "malicious",
+                "time_window_width": "only_one_tw",
+                "store_a_copy_of_zeek_files": True,
+            },
+            "modules": {
+                "disable": [
+                    "template",
+                    "ensembling",
+                    "Flow ML Detection",
+                    "Update Manager",
+                ]
+            },
+        },
+    )
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = (
@@ -52,7 +79,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c tests/integration_tests/test.yaml "
+        f"-c {config_file} "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
@@ -102,6 +129,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         assert module in database.get_disabled_modules()
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
+    os.remove(config_file)
 
 
 @pytest.mark.parametrize(
@@ -119,6 +147,26 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test2.conf
     """
+    config_file = "tests/integration_tests/test2.yaml"
+    modify_yaml_config(
+        output_filename=config_file,
+        output_dir=os.getcwd(),
+        changes={
+            "detection": {"evidence_detection_threshold": 0.1},
+            "parameters": {
+                "metadata_dir": False,
+                "store_zeek_files_in_the_output_dir": False,
+            },
+            "modules": {
+                "disable": [
+                    "template",
+                    "ensembling",
+                    "Flow ML Detection",
+                    "Update Manager",
+                ]
+            },
+        },
+    )
 
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
@@ -127,7 +175,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
         f"-t  -e 1 "
         f"-f {pcap_path} "
         f"-o {output_dir} "
-        f"-c tests/integration_tests/test2.yaml "
+        f"-c {config_file} "
         f"-P {redis_port} "
         f"> {output_file} 2>&1"
     )
@@ -137,3 +185,4 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     assert_no_errors(output_dir)
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
+    os.remove(config_file)

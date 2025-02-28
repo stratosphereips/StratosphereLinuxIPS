@@ -101,6 +101,13 @@ class Utils(object):
         parsed_url = tldextract.extract(url)
         return f"{parsed_url.domain}.{parsed_url.suffix}"
 
+    def is_localhost(self, ip: str) -> bool:
+        try:
+            return ipaddress.ip_address(ip).is_loopback
+        except ValueError:
+            # Invalid IP address
+            return False
+
     def get_cidr_of_private_ip(self, ip):
         """
         returns the cidr/range of the given private ip
@@ -365,6 +372,9 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
+    def get_human_readable_datetime(self) -> str:
+        return utils.convert_format(datetime.now(), self.alerts_format)
+
     def get_own_ips(self) -> list:
         """
         Returns a list of our local and public IPs
@@ -497,8 +507,10 @@ class Utils(object):
 
     def change_logfiles_ownership(self, file: str, UID, GID):
         """
-        if slips is running in docker, the owner of the alerts log files is always root
-        this function changes it to the user ID and GID in slips.yaml to be able to
+        if slips is running in docker, the owner of the alerts log files
+        is always root
+        this function changes it to the user ID and GID in slips.yaml to be
+         able to
         rwx the files from outside of docker
         """
         if not (IS_IN_A_DOCKER_CONTAINER and UID and GID):
@@ -506,6 +518,20 @@ class Utils(object):
             return
 
         os.system(f"chown {UID}:{GID} {file}")
+
+    def get_ip_identification_as_str(self, ip_identification: dict) -> str:
+        id = ""
+        if "DNS_resolution" in ip_identification:
+            resolutions = ip_identification.get("DNS_resolution", [])
+            for domain in resolutions:
+                id += f"{domain}, "
+            ip_identification.pop("DNS_resolution")
+
+        for piece_of_info in ip_identification.values():
+            if not piece_of_info:
+                continue
+            id += f"{piece_of_info}, "
+        return id
 
     def get_branch_info(self):
         """
@@ -582,11 +608,7 @@ class Utils(object):
         remove the milliseconds from the given ts
         :param ts: time in unix format
         """
-        ts = str(ts)
-        if "." not in ts:
-            return ts
-
-        return ts.split(".")[0]
+        return str(ts).split(".")[0]
 
     def assert_microseconds(self, ts: str):
         """

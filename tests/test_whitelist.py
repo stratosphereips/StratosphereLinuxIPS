@@ -162,11 +162,7 @@ def test_is_domain_in_org(
 @pytest.mark.parametrize(
     "is_whitelisted_victim, is_whitelisted_attacker, expected_result",
     [
-        (
-            True,
-            True,
-            True,
-        ),
+        (True, True, True),
         (False, True, True),
         (True, False, True),
         (False, False, False),
@@ -176,11 +172,9 @@ def test_is_whitelisted_evidence(
     is_whitelisted_victim, is_whitelisted_attacker, expected_result
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.is_whitelisted_attacker = Mock()
-    whitelist.is_whitelisted_attacker.return_value = is_whitelisted_attacker
-
-    whitelist.is_whitelisted_victim = Mock()
-    whitelist.is_whitelisted_victim.return_value = is_whitelisted_victim
+    whitelist._is_whitelisted_entity = Mock(
+        side_effect=[is_whitelisted_victim, is_whitelisted_attacker]
+    )
 
     mock_evidence = Mock()
     assert whitelist.is_whitelisted_evidence(mock_evidence) == expected_result
@@ -245,7 +239,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
     [
         (
             {
-                "attacker_type": IoCType.IP.name,
+                "ioc_type": IoCType.IP,
                 "value": "1.2.3.4",
                 "direction": Direction.SRC,
             },
@@ -253,7 +247,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
         ),
         (
             {
-                "victim_type": IoCType.DOMAIN.name,
+                "ioc_type": IoCType.DOMAIN,
                 "value": "example.com",
                 "direction": Direction.DST,
             },
@@ -261,7 +255,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
         ),
         (
             {
-                "attacker_type": IoCType.IP.name,
+                "ioc_type": IoCType.IP,
                 "value": "8.8.8.8",
                 "direction": Direction.SRC,
             },
@@ -280,21 +274,15 @@ def test_is_part_of_a_whitelisted_org(
     whitelist.db.get_org_info.return_value = json.dumps(["1.2.3.4/32"])
     whitelist.db.get_ip_info.return_value = {"asn": {"asnorg": "Google"}}
     whitelist.db.get_org_info.return_value = json.dumps(["example.com"])
-
+    # we're mocking either an attacker or a  victim obj
     mock_ioc = MagicMock()
     mock_ioc.value = ioc_data["value"]
     mock_ioc.direction = ioc_data["direction"]
-    # setup the Attacker or Victim object
-    if "attacker_type" in ioc_data:
-        mock_ioc.attacker_type = ioc_data["attacker_type"]
-        ioc_type = mock_ioc.attacker_type
-    else:
-        mock_ioc.victim_type = ioc_data["victim_type"]
-        ioc_type = mock_ioc.victim_type
+    mock_ioc.ioc_type = ioc_data["ioc_type"]
 
     assert (
-        whitelist.org_analyzer.is_part_of_a_whitelisted_org(
-            mock_ioc.value, ioc_type, mock_ioc.direction, "both"
+        whitelist.org_analyzer._is_part_of_a_whitelisted_org(
+            mock_ioc.value, mock_ioc.ioc_type, mock_ioc.direction, "both"
         )
         == expected_result
     )
@@ -365,14 +353,17 @@ def test_is_whitelisted_domain_not_found():
     )
 
 
-@patch("slips_files.common.parsers.config_parser.ConfigParser.whitelist_path")
+@patch(
+    "slips_files.common.parsers.config_parser.ConfigParser"
+    ".local_whitelist_path"
+)
 def test_read_configuration(
     mock_config_parser,
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
     mock_config_parser.return_value = "config_whitelist_path"
     whitelist.parser.read_configuration()
-    assert whitelist.parser.whitelist_path == "config_whitelist_path"
+    assert whitelist.parser.local_whitelist_path == "config_whitelist_path"
 
 
 @pytest.mark.parametrize(
@@ -407,30 +398,37 @@ def test_ip_analyzer_is_whitelisted(ip, what_to_ignore, expected_result):
         (False, False, False),
     ],
 )
-def test_is_whitelisted_attacker_domain(
+def test_is_whitelisted_entity_attacker(
     is_whitelisted_domain, is_whitelisted_org, expected_result
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
+    evidence = Mock()
+    evidence.attacker = Attacker(
+        ioc_type=IoCType.DOMAIN,
+        value="google.com",
+        direction=Direction.SRC,
+        AS={},
+    )
+
+    whitelist.extract_ips_from_entity = Mock(return_value=[])
+    whitelist.extract_domains_from_entity = Mock(
+        return_value=[evidence.attacker.value]
+    )
 
     whitelist.domain_analyzer.is_whitelisted = Mock()
     whitelist.domain_analyzer.is_whitelisted.return_value = (
         is_whitelisted_domain
     )
 
-    whitelist.org_analyzer.is_part_of_a_whitelisted_org = Mock()
-    whitelist.org_analyzer.is_part_of_a_whitelisted_org.return_value = (
+    whitelist.org_analyzer.is_whitelisted_entity = Mock()
+    whitelist.org_analyzer.is_whitelisted_entity.return_value = (
         is_whitelisted_org
     )
 
-    whitelist.db.is_whitelisted_tranco_domain.return_value = False
-
-    evidence = Mock()
-    evidence.attacker = Attacker(
-        attacker_type=IoCType.DOMAIN,
-        value="google.com",
-        direction=Direction.SRC,
+    assert (
+        whitelist._is_whitelisted_entity(evidence, "attacker")
+        == expected_result
     )
-    assert whitelist.is_whitelisted_attacker(evidence) == expected_result
 
 
 @pytest.mark.parametrize(
@@ -444,7 +442,7 @@ def test_is_whitelisted_attacker_domain(
         (False, False, False, False, False),
     ],
 )
-def test_is_whitelisted_victim(
+def test_is_whitelisted_entity_victim(
     is_whitelisted_domain,
     is_whitelisted_ip,
     is_whitelisted_mac,
@@ -452,31 +450,38 @@ def test_is_whitelisted_victim(
     expected_result,
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
+    evidence = Mock()
+    evidence.victim = Victim(
+        ioc_type=IoCType.IP,
+        value="1.2.3.4",
+        direction=Direction.SRC,
+    )
+
+    whitelist.extract_ips_from_entity = Mock(
+        return_value=[evidence.victim.value]
+    )
+    whitelist.extract_domains_from_entity = Mock(return_value=["google.com"])
+
     whitelist.domain_analyzer.is_whitelisted = Mock()
     whitelist.domain_analyzer.is_whitelisted.return_value = (
         is_whitelisted_domain
     )
+
     whitelist.ip_analyzer.is_whitelisted = Mock()
     whitelist.ip_analyzer.is_whitelisted.return_value = is_whitelisted_ip
+
     whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock()
     whitelist.mac_analyzer.profile_has_whitelisted_mac.return_value = (
         is_whitelisted_mac
     )
 
-    whitelist.org_analyzer.is_part_of_a_whitelisted_org = Mock()
-    whitelist.org_analyzer.is_part_of_a_whitelisted_org.return_value = (
+    whitelist.org_analyzer.is_whitelisted_entity = Mock()
+    whitelist.org_analyzer.is_whitelisted_entity.return_value = (
         is_whitelisted_org
     )
-
-    whitelist.db.is_whitelisted_tranco_domain.return_value = False
-
-    evidence = Mock()
-    evidence.attacker = Victim(
-        victim_type=IoCType.IP,
-        value="1.2.3.4",
-        direction=Direction.SRC,
+    assert (
+        whitelist._is_whitelisted_entity(evidence, "victim") == expected_result
     )
-    assert whitelist.is_whitelisted_victim(evidence) == expected_result
 
 
 @pytest.mark.parametrize(

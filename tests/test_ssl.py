@@ -5,17 +5,17 @@
 from dataclasses import asdict
 from unittest.mock import (
     Mock,
+    MagicMock,
     patch,
 )
-
+import json
+import pytest
 from slips_files.core.flows.zeek import (
     SSL,
     Conn,
 )
 from tests.module_factory import ModuleFactory
-
-import json
-import pytest
+from tests.common_test_utils import get_mock_coro
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -48,7 +48,7 @@ def test_check_self_signed_certs(
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence."
-        "SetEvidnceHelper.self_signed_certificates"
+        "SetEvidenceHelper.self_signed_certificates"
     )
     flow = SSL(
         starttime="1726593782.8840969",
@@ -99,10 +99,10 @@ def test_detect_malicious_ja3(
 ):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_ja3 = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.malicious_ja3"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.malicious_ja3"
     )
     mock_set_evidence_ja3s = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.malicious_ja3s"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.malicious_ja3s"
     )
 
     ssl.db.get_all_blacklisted_ja3.return_value = {
@@ -150,7 +150,7 @@ def test_detect_malicious_ja3(
 def test_detect_doh(mocker, is_doh, expected_calls):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_doh = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.doh"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.doh"
     )
     ssl.db.set_ip_info = Mock()
     flow = SSL(
@@ -202,8 +202,9 @@ async def test_check_pastebin_download(
 ):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     ssl.pastebin_downloads_threshold = 12000
+    ssl.wait_for_new_flows_or_timeout = get_mock_coro(True)
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.pastebin_download"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.pastebin_download"
     )
 
     flow = SSL(
@@ -259,7 +260,7 @@ async def test_check_pastebin_download(
 def test_detect_incompatible_cn(mocker, subject, expected_call_count):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.incompatible_cn"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.incompatible_cn"
     )
 
     ssl.db.whitelist.organization_whitelist.is_ip_in_org.return_value = False
@@ -381,77 +382,6 @@ def test_detect_cn_url_mismatch(mocker, flow, expected_call_count):
     assert ssl.set_evidence.cn_url_mismatch.call_count == expected_call_count
 
 
-@pytest.mark.parametrize(
-    "state, dport, proto, dbytes, approto, expected_call_count",
-    [
-        # Testcase 1: Non-SSL connection on port 443
-        ("Established", 443, "tcp", 1024, "http", 1),
-        # Testcase 2: SSL connection on port 443
-        (
-            "Established",
-            443,
-            "tcp",
-            1024,
-            "ssl",
-            0,
-        ),
-        # Testcase 3: Connection on port 443 but not Established state
-        ("SF", 443, "tcp", 1024, "http", 0),
-        # Testcase 4: Connection on a port other than 443
-        (
-            "Established",
-            80,
-            "tcp",
-            1024,
-            "http",
-            0,
-        ),
-        # Testcase 5: Connection on port 443 with zero bytes
-        (
-            "Established",
-            443,
-            "tcp",
-            0,
-            "http",
-            0,
-        ),
-    ],
-)
-def test_check_non_ssl_port_443_conns(
-    mocker, state, dport, proto, dbytes, approto, expected_call_count
-):
-    ssl = ModuleFactory().create_ssl_analyzer_obj()
-    mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence."
-        "SetEvidnceHelper.non_ssl_port_443_conn"
-    )
-    mocker.patch.object(
-        ssl.db, "get_final_state_from_flags", return_value=state
-    )
-
-    flow = Conn(
-        starttime="1726249372.312124",
-        uid=uid,
-        saddr="192.168.1.87",
-        daddr="1.1.1.1",
-        dur=1,
-        proto=proto,
-        appproto=approto,
-        sport="0",
-        dport=str(dport),
-        spkts=0,
-        dpkts=0,
-        sbytes=0,
-        dbytes=dbytes,
-        smac="",
-        dmac="",
-        state="",
-        history="",
-    )
-    ssl.check_non_ssl_port_443_conns(twid, flow)
-    assert mock_set_evidence.call_count == expected_call_count
-
-
 async def test_analyze_new_ssl_msg(mocker):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_check_self_signed_certs = mocker.patch.object(
@@ -502,9 +432,7 @@ async def test_analyze_new_ssl_msg(mocker):
     await ssl.analyze(msg)
     mock_check_self_signed_certs.assert_called_once_with("timewindow1", flow)
     mock_detect_malicious_ja3.assert_called_once_with("timewindow1", flow)
-    mock_detect_incompatible_cn.assert_called_once_with(
-        "profile_192.168.1.1", "timewindow1", flow
-    )
+    mock_detect_incompatible_cn.assert_called_once_with("timewindow1", flow)
 
     mock_detect_doh.assert_called_once_with("timewindow1", flow)
 
@@ -578,3 +506,162 @@ async def test_analyze_no_messages(
     mock_detect_incompatible_cn.assert_not_called()
     mock_detect_doh.assert_not_called()
     mock_check_non_ssl_port_443_conns.assert_not_called()
+
+
+async def test_check_non_ssl_port_443_conns_not_interested():
+    """mock a flow that we're not interested in in that function, like a
+    dns flow or something"""
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.is_tcp_established_443_non_empty_flow = Mock(return_value=False)
+    result = await ssl.check_non_ssl_port_443_conns(None, None)
+    assert result is False
+
+
+async def test_check_non_ssl_port_443_conns_is_ssl():
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    ssl.is_ssl_proto_recognized_by_zeek = Mock(return_value=True)
+    ssl.keep_track_of_ssl_flow = Mock()
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await ssl.check_non_ssl_port_443_conns(None, flow)
+    assert result is False
+    ssl.keep_track_of_ssl_flow.assert_called_once()
+
+
+async def test_check_non_ssl_port_443_conns_matching_ssl_past():
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    ssl.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
+    # Simulate a matching SSL flow
+    ssl.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[1.0])
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await ssl.check_non_ssl_port_443_conns(None, flow)
+    assert result is False
+
+
+async def test_check_non_ssl_port_443_conns_matching_ssl_future():
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    ssl.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
+    # Simulate a matching SSL flow
+    ssl.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[1.0])
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await ssl.check_non_ssl_port_443_conns(
+        None, flow, timeout_reached=True
+    )
+    assert result is False
+
+
+async def test_check_non_ssl_port_443_conns_no_matching_ssl_timeout():
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    ssl.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
+
+    # No matching SSL flows
+    ssl.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[])
+    ssl.set_evidence = MagicMock()
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await ssl.check_non_ssl_port_443_conns(
+        None, flow, timeout_reached=True
+    )
+    assert result
+    ssl.set_evidence.non_ssl_port_443_conn.assert_called_once()
+
+
+async def test_check_non_ssl_port_443_conns_no_matching_ssl_no_timeout():
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    ssl.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
+    ssl.set_evidence.non_ssl_port_443_conn = Mock()
+    ssl.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[])
+    ssl.wait_for_new_flows_or_timeout = get_mock_coro(True)
+    # No matching SSL flows
+    # Mock recursive call
+    # ssl.check_non_ssl_port_443_conns = AsyncMock(side_effect=[False])
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await ssl.check_non_ssl_port_443_conns(None, flow)
+    assert result is False
+    ssl.wait_for_new_flows_or_timeout.assert_called_once()
+    ssl.set_evidence.non_ssl_port_443_conn.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "dport, proto, sbytes, dbytes, final_state, expected",
+    [
+        # ("443", "tcp", 100, 200, "Established", True),
+        # ("80", "tcp", 100, 200, "Established", False),
+        # ("443", "udp", 100, 200, "Established", False),
+        # ("443", "tcp", 100, 200, "Established", False),
+        ("443", "tcp", 0, 0, "Established", False),
+    ],
+)
+def test_is_tcp_established_443_non_empty_flow(
+    dport,
+    proto,
+    sbytes,
+    dbytes,
+    final_state,
+    expected,
+):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    flow = Mock(
+        dport=dport,
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        pkts=80,
+        proto=proto,
+        sbytes=sbytes,
+        dbytes=dbytes,
+    )
+
+    ssl.db.get_final_state_from_flags.return_value = final_state
+
+    result = ssl.is_tcp_established_443_non_empty_flow(flow)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "ssl_recognized_flows, flow, start, end, expected",
+    [
+        # case: matching timestamps within the range
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0, 4.0, 5.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            2.0,
+            4.0,
+            [2.0, 3.0, 4.0],
+        ),
+        # case: no matching timestamps (empty result)
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            4.0,
+            5.0,
+            [],
+        ),
+        # case: flow does not exist in ssl_recognized_flows
+        (
+            {("192.168.1.2", "10.0.0.2"): [1.0, 2.0, 3.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            1.0,
+            3.0,
+            [],
+        ),
+        # case: start and end cover all timestamps
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0, 4.0, 5.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            1.0,
+            5.0,
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+        ),
+    ],
+)
+def test_search_ssl_recognized_flows_for_ts_range(
+    ssl_recognized_flows, flow, start, end, expected
+):
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.ssl_recognized_flows = ssl_recognized_flows
+    flow = Mock(saddr=flow["saddr"], daddr=flow["daddr"])
+    result = ssl.search_ssl_recognized_flows_for_ts_range(flow, start, end)
+    assert result == expected

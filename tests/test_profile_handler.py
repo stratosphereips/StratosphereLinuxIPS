@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from dataclasses import asdict
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock, call, Mock
 import json
 from tests.module_factory import ModuleFactory
 from slips_files.core.flows.zeek import HTTP, DNS, Conn
@@ -1538,8 +1538,8 @@ def test_add_mac_addr_to_profile_no_existing_mac():
 
     profileid = "profile_192.168.1.100"
     mac_addr = "00:11:22:33:44:55"
-
-    handler.is_gw_mac = MagicMock(return_value=False)
+    handler._determine_gw_mac = Mock()
+    handler._is_gw_mac = MagicMock(return_value=False)
     handler.get_gateway_ip = MagicMock(return_value="192.168.1.1")
 
     handler.r.hmget.return_value = [None]
@@ -1559,8 +1559,8 @@ def test_add_mac_addr_to_profile_existing_mac():
 
     profileid = "profile_192.168.1.100"
     mac_addr = "00:11:22:33:44:55"
-
-    handler.is_gw_mac = MagicMock(return_value=False)
+    handler._determine_gw_mac = Mock()
+    handler._is_gw_mac = MagicMock(return_value=False)
     handler.get_gateway_ip = MagicMock(return_value="192.168.1.1")
     # mimic having an ip for the given mac
     # this should make [incoming_ip in cached_ips] True
@@ -1884,6 +1884,9 @@ def test_add_ips(
                 starttime=1000.0,
                 uid="abc123",
                 daddr="8.8.8.8",
+                dport="",
+                sport="",
+                proto="",
                 query="www.example.com",
                 qclass_name="IN",
                 qtype_name="A",
@@ -1926,6 +1929,9 @@ def test_add_ips(
                 uid="abc123",
                 daddr="8.8.8.8",
                 query="www.example.com",
+                dport="",
+                sport="",
+                proto="",
                 qclass_name="IN",
                 qtype_name="A",
                 rcode_name="NOERROR",
@@ -1956,6 +1962,9 @@ def test_add_ips(
                 query="www.example.com",
                 qclass_name="IN",
                 qtype_name="A",
+                dport="",
+                sport="",
+                proto="",
                 rcode_name="NOERROR",
                 answers=["1.2.3.4", "TXT some text"],
                 TTLs=["3600"],

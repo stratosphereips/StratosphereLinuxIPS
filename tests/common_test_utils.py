@@ -10,7 +10,9 @@ from typing import (
     Dict,
     Optional,
 )
+from pathlib import PosixPath
 from unittest.mock import Mock
+import yaml
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -21,6 +23,48 @@ alerts_file = "alerts.log"
 if not os.path.exists(integration_tests_dir):
     path = Path(integration_tests_dir)
     path.mkdir(parents=True, exist_ok=True)
+
+
+def modify_yaml_config(
+    input_path="config/slips.yaml",
+    output_filename="updated_slips.yaml",
+    output_dir=None,
+    changes=None,
+):
+    """
+    Reads a YAML config file, modifies specified values, and writes the new
+     config to the current directory.
+
+    :param input_path: path to the input yaml file
+    :param output_filename: name of the output yaml file
+    :param output_dir: name of the output directory wher eyou want your
+    generated yaml file to be. if none, the generated yaml file will be in
+    the cwd
+    :param changes: dictionary containing keys to update and their new values
+    """
+    input_file = Path(input_path)
+    if output_dir:
+        output_file = Path(output_dir) / output_filename
+    else:
+        output_file = Path.cwd() / output_filename
+
+    if not input_file.exists():
+        raise FileNotFoundError(f"YAML config file not found: {input_path}")
+
+    with input_file.open("r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    if changes:
+        for key, value in changes.items():
+            key: str
+            value: dict
+            if key in config:
+                config[key].update(value)
+
+    with output_file.open("w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+    return output_file
 
 
 def get_mock_coro(return_value):
@@ -66,7 +110,7 @@ def is_evidence_present(log_file, expected_evidence):
         return False
 
 
-def create_output_dir(dirname):
+def create_output_dir(dirname) -> PosixPath:
     """
     creates this output dir inside output/integration_tests/
     returns a full path to the created output dir
@@ -176,6 +220,6 @@ def assert_no_errors(output_dir):
                 # reading large files
                 # the goal of this is to be able to view the error from CI
                 # without having to download the artifacts
-                assert not has_error_keywords(line), (
-                    read_file_if_small(file) or line
-                )
+                assert not has_error_keywords(
+                    line
+                ), f"file: {file} {read_file_if_small(file) or line}"

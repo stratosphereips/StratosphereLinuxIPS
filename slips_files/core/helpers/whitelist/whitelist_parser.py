@@ -54,14 +54,15 @@ class WhitelistParser:
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.whitelist_path = conf.whitelist_path()
+        self.local_whitelist_path = conf.local_whitelist_path()
 
     def open_whitelist_for_reading(self) -> TextIO:
         try:
-            return open(self.whitelist_path)
+            return open(self.local_whitelist_path)
         except FileNotFoundError:
             self.manager.print(
-                f"Can't find {self.whitelist_path}, whitelisting disabled."
+                f"Can't find {self.local_whitelist_path}. "
+                f"Local whitelist disabled."
             )
 
     def remove_entry_from_cache_db(

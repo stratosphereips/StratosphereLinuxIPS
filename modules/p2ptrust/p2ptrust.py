@@ -9,7 +9,6 @@ import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import json
-import sys
 import socket
 
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -158,9 +157,6 @@ class Trust(IModule):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
 
-    def get_used_interface(self):
-        return sys.argv[sys.argv.index("-i") + 1]
-
     def get_local_IP(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
@@ -233,11 +229,13 @@ class Trust(IModule):
             # else:
             host_param = ["-host", self.host]
             self.print(
-                f"P2p is listening on {self.host} port {self.port} determined by p2p module"
+                f"P2p is listening on {self.host} port {self.port} determined "
+                f"by p2p module"
             )
 
             keyfile_param = ["-key-file", self.pigeon_key_file]
-            # rename_with_port_param = ["-rename-with-port", str(self.rename_with_port).lower()]
+            # rename_with_port_param = ["-rename-with-port",
+            # str(self.rename_with_port).lower()]
             pygo_channel_param = ["-redis-channel-pygo", self.pygo_channel_raw]
             gopy_channel_param = ["-redis-channel-gopy", self.gopy_channel_raw]
             executable.extend(port_param)
@@ -307,7 +305,7 @@ class Trust(IModule):
             # we shouldn't re-share evidence reported by other peers
             return False
 
-        if evidence.attacker.attacker_type != IoCType.IP.name:
+        if evidence.attacker.ioc_type != IoCType.IP.name:
             # we only share ips with other peers.
             return False
 
@@ -454,7 +452,7 @@ class Trust(IModule):
             evidence = Evidence(
                 evidence_type=EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
                 attacker=Attacker(
-                    direction=Direction.SRC, attacker_type=IoCType.IP, value=ip
+                    direction=Direction.SRC, ioc_type=IoCType.IP, value=ip
                 ),
                 threat_level=threat_level,
                 confidence=confidence,
@@ -666,7 +664,8 @@ class Trust(IModule):
             self.gopy_callback(msg)
 
         ret_code = self.pigeon.poll()
-        if ret_code is not None:
+        if ret_code not in (None, 0):
+            # The pigeon stopped with some error
             self.print(
                 f"Pigeon process suddenly terminated with "
                 f"return code {ret_code}. Stopping module."
