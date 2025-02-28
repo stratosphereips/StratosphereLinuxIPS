@@ -131,9 +131,7 @@ def test_messaging(
     log_file_second_iris = output_dir_peer / "iris/iris_logs.txt"
 
     # generate config of first peer
-    slips_iris_main_config_file = (
-        "tests/integration_tests/config/slips_iris_main.yaml"
-    )
+    slips_iris_main_config_file = "tests/e2e/config/slips_iris_main.yaml"
     modify_yaml_config(
         input_path="config/slips.yaml",
         output_dir=os.path.dirname(slips_iris_main_config_file),
@@ -146,12 +144,10 @@ def test_messaging(
 
     # that config file will be generated later to be able to add the first
     # peer's id to it
-    iris_peer_config_file = (
-        "tests/integration_tests/config/iris_peer_config.yaml"
-    )
+    iris_peer_config_file = "tests/e2e/config/iris_peer_config.yaml"
 
     # generate config of second peer
-    iris_config_file = "tests/integration_tests/config/iris_config.yaml"
+    iris_config_file = "tests/e2e/config/iris_config.yaml"
     modify_yaml_config(
         input_path="config/slips.yaml",
         output_dir=os.path.dirname(iris_config_file),

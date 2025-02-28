@@ -22,9 +22,9 @@ printf "0" | ./slips.py -k
 # command before running the dataset tests
 # distribute on 3 workers only because every worker will be spawning 10+ processes
 
-python3 -m pytest -s tests/integration_tests/test_portscans.py  -p no:warnings -vv
-python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
-python3 -m pytest -s tests/integration_tests/test_config_files.py  -p no:warnings -vv
+python3 -m pytest -s tests/e2e/test_portscans.py  -p no:warnings -vv
+python3 -m pytest -s tests/e2e/test_dataset.py -p no:warnings -vv
+python3 -m pytest -s tests/e2e/test_config_files.py  -p no:warnings -vv
 
 printf "0" | ./slips.py -k
 

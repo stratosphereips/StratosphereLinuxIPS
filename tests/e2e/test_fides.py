@@ -160,7 +160,7 @@ def test_conf_file2(path, output_dir, redis_port):
         "-o",
         str(output_dir),
         "-c",
-        "tests/integration_tests/fides_config.yaml",
+        "tests/e2e/fides_config.yaml",
         "-P",
         str(redis_port),
     ]
@@ -249,7 +249,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         "-o",
         str(output_dir),
         "-c",
-        "tests/integration_tests/fides_config.yaml",
+        "tests/e2e/fides_config.yaml",
         "-P",
         str(redis_port),
     ]

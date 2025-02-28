@@ -105,10 +105,4 @@ if __name__ == "__main__":
         except redis.exceptions.ConnectionError:
             continue
 
-    print(f"Closed {closed_servers} unused redis-servers")
-
-    zeek_tmp_dir = os.path.join(os.getcwd(), "zeek_dir_for_testing")
-    try:
-        os.rmdir(zeek_tmp_dir)
-    except (FileNotFoundError, OSError):
-        pass
+    print(f"Closed {closed_servers} redis servers")
