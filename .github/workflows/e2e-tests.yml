@@ -12,7 +12,7 @@ jobs:
     uses: ./.github/workflows/install-slips-dependencies.yml
 
 
-  integration-tests:
+  e2e-tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 1800
     # make this job depend on the first job
@@ -83,14 +83,14 @@ jobs:
       run: (command -v zeek && zeek --version) || (command -v bro && bro --version)
 
 
-    - name: Run Integration Tests for ${{ matrix.test_file }}
+    - name: Run e2e Tests for ${{ matrix.test_file }}
       run: |
-        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
+        python3 -m pytest tests/e2e/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
     - name: Upload Artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.test_file }}-integration-tests-output
+        name: ${{ matrix.test_file }}-e2e-tests-output
         path: |
           output/integration_tests

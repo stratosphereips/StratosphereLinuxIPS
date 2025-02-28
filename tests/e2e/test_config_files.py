@@ -5,7 +5,6 @@ This file tests 2 different config files other than slips' default config/slips.
 test/test.yaml and tests/test2.yaml
 """
 
-from slips.main import Main
 from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
@@ -19,15 +18,6 @@ import shutil
 import os
 
 alerts_file = "alerts.log"
-
-
-def create_main_instance(input_information):
-    """returns an instance of Main() class in slips.py"""
-    main = Main(testing=True)
-    main.input_information = input_information
-    main.input_type = "pcap"
-    main.line_type = False
-    return main
 
 
 @pytest.mark.parametrize(
@@ -45,7 +35,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test.conf
     """
-    config_file = "tests/integration_tests/test.yaml"
+    config_file = "tests/e2e/test.yaml"
     modify_yaml_config(
         output_filename=config_file,
         output_dir=os.getcwd(),
@@ -147,7 +137,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test2.conf
     """
-    config_file = "tests/integration_tests/test2.yaml"
+    config_file = "tests/e2e/test2.yaml"
     modify_yaml_config(
         output_filename=config_file,
         output_dir=os.getcwd(),

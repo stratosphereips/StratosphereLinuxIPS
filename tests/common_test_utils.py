@@ -112,7 +112,7 @@ def is_evidence_present(log_file, expected_evidence):
 
 def create_output_dir(dirname) -> PosixPath:
     """
-    creates this output dir inside output/integration_tests/
+    creates this output dir inside output/e2e/
     returns a full path to the created output dir
     """
 

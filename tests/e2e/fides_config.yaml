@@ -429,4 +429,3 @@ local_p2p:
    # create p2p.log with additional info about peer communications?
    create_p2p_logfile : False
    use_p2p : False
-
