@@ -225,6 +225,7 @@ def test_messaging(
                     "PeerDiscovery": {
                         "ListOfMultiAddresses": [original_conn_string]
                     },
+                    "Identity": {"KeyFile": "second.priv"}
                 },
             )
             # generate a second command for the second peer
@@ -292,5 +293,5 @@ def test_messaging(
     assert check_strings_in_file(expected_log_entry, log_file_second_iris)
 
     print("Deleting the output directories")
-    shutil.rmtree(output_dir)
-    shutil.rmtree(output_dir_peer)
+    #shutil.rmtree(output_dir)
+    #shutil.rmtree(output_dir_peer)
