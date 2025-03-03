@@ -647,7 +647,8 @@ class Profiler(ICore, IObservable):
             except Exception as e:
                 self.print_traceback()
                 self.print(
-                    f"Problem processing line {line}. " f"Line discarded. {e}",
+                    f"Problem processing line {line}. "
+                    f"Line discarded. Error: {e}",
                     0,
                     1,
                 )

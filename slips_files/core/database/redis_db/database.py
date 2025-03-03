@@ -87,7 +87,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "network2fides",
         "fides2slips",
         "slips2fides",
-        "iris_internal"
+        "iris_internal",
     }
     separator = "_"
     normal_label = "benign"
@@ -118,7 +118,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         cls, logger, redis_port, start_redis_server=True, flush_db=True
     ):
         """
-        treat the db as a singelton per port
+        treat the db as a singleton per port
         meaning every port will have exactly 1 single obj of this db
         at any given time
         """
