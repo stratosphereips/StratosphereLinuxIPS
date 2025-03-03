@@ -436,6 +436,9 @@ class SQLiteDB:
                 self.print(
                     f"Re-trying to execute query ({query} - {params}). "
                     f"Trial number: {self.execute_failed_trials}. "
-                    f"Reason: {e}"
+                    f"Reason: {e}",
+                    0,
+                    1,
+                    log_to_logfiles_only=True,
                 )
                 self.execute(query, params=params)
