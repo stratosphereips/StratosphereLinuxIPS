@@ -401,7 +401,12 @@ class SQLiteDB:
 
         except sqlite3.Error as e:
             self.cursor_lock.release()
-            self.conn.rollback()
+            # check if a transaction is active before rolling back
+            # a tx may not be active if the error occured white executing
+            # the 'BEGIN' above
+            if self.conn.in_transaction:
+                self.conn.rollback()
+
             if self.trial >= 2:
                 # tried 2 times to exec a query and it's still failing
                 self.trial = 0
