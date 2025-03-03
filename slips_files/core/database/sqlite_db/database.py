@@ -25,7 +25,7 @@ class SQLiteDB:
     name = "SQLiteDB"
     # used to lock each call to commit()
     cursor_lock = Lock()
-    trial = 0
+    execute_failed_trials = 0
 
     def __init__(self, logger: Output, output_dir: str):
         self.printer = Printer(logger, self.name)
@@ -378,52 +378,64 @@ class SQLiteDB:
 
     def execute(self, query, params=None):
         """
-        wrapper for sqlite execute() To avoid 'Recursive use of cursors not allowed' error
-        and to be able to use a Lock()
+        wrapper for sqlite execute() To avoid
+         'Recursive use of cursors not allowed' error
+         and to be able to use a Lock()
         since sqlite is terrible with multi-process applications
         this should be used instead of all calls to commit() and execute()
+        Each call to this function results in 1 sqlite transaction
         """
         try:
-            self.cursor_lock.acquire(True)
-            # start a transaction
-            self.cursor.execute("BEGIN")
+            with self.cursor_lock:
+                # start a transaction
+                if not self.conn.in_transaction:
+                    self.cursor.execute("BEGIN")
 
-            if not params:
-                self.cursor.execute(query)
-            else:
-                self.cursor.execute(query, params)
+                if not params:
+                    self.cursor.execute(query)
+                else:
+                    self.cursor.execute(query, params)
 
-            self.conn.commit()
+            # aka END TRANSACTION
+            if self.conn.in_transaction:
+                self.conn.commit()
 
-            self.cursor_lock.release()
-            # counter for the number of times we tried executing a tx and failed
-            self.trial = 0
+            self.execute_failed_trials = 0
 
         except sqlite3.Error as e:
-            self.cursor_lock.release()
-            self.conn.rollback()
-            if self.trial >= 2:
-                # tried 2 times to exec a query and it's still failing
-                self.trial = 0
+            # check if a transaction is active before rolling back
+            # a tx may not be active if the error occurred white executing
+            # the 'BEGIN' above
+            if self.conn.in_transaction:
+                self.conn.rollback()
+
+            if self.execute_failed_trials >= 3:
+                # tried 3 times to exec a query and it's still failing
+                self.execute_failed_trials = 0
                 # discard query
                 self.print(
-                    f"Error executing query: {query} {params}- {e}. "
-                    f"Query discarded",
+                    f"Error executing query: ({query} {params})- {e}. "
+                    f"Retried executing {self.execute_failed_trials} times "
+                    f"but failed. Query discarded. ",
                     0,
                     1,
                 )
 
             elif "database is locked" in str(e):
                 # keep track of failed trials
-                self.trial += 1
+                self.execute_failed_trials += 1
 
                 # Retry after a short delay
-                sleep(5)
+                # Exponential backoff, max 5s
+                delay = min(2**self.execute_failed_trials, 5)
+                sleep(delay)
                 self.execute(query, params=params)
             else:
-                # An error occurred during execution
-                self.conn.rollback()
-                # print(f"Re-trying to execute query ({query}). reason: {e}")
                 # keep track of failed trials
-                self.trial += 1
+                self.execute_failed_trials += 1
+                self.print(
+                    f"Re-trying to execute query ({query} - {params}). "
+                    f"Trial number: {self.execute_failed_trials}. "
+                    f"Reason: {e}"
+                )
                 self.execute(query, params=params)
