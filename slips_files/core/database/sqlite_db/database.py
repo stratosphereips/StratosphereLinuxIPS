@@ -386,31 +386,31 @@ class SQLiteDB:
         Each call to this function results in 1 sqlite transaction
         """
         try:
-            self.cursor_lock.acquire(True)
-            # start a transaction
-            if not self.conn.in_transaction:
-                self.cursor.execute("BEGIN")
+            with self.cursor_lock:
+                # start a transaction
+                if not self.conn.in_transaction:
+                    self.cursor.execute("BEGIN")
 
-            if not params:
-                self.cursor.execute(query)
-            else:
-                self.cursor.execute(query, params)
+                if not params:
+                    self.cursor.execute(query)
+                else:
+                    self.cursor.execute(query, params)
 
-            self.cursor_lock.release()
             # aka END TRANSACTION
-            self.conn.commit()
+            if self.conn.in_transaction:
+                self.conn.commit()
+
             self.execute_failed_trials = 0
 
         except sqlite3.Error as e:
-            self.cursor_lock.release()
             # check if a transaction is active before rolling back
             # a tx may not be active if the error occurred white executing
             # the 'BEGIN' above
             if self.conn.in_transaction:
                 self.conn.rollback()
 
-            if self.execute_failed_trials >= 2:
-                # tried 2 times to exec a query and it's still failing
+            if self.execute_failed_trials >= 3:
+                # tried 3 times to exec a query and it's still failing
                 self.execute_failed_trials = 0
                 # discard query
                 self.print(
@@ -433,7 +433,7 @@ class SQLiteDB:
             else:
                 # keep track of failed trials
                 self.execute_failed_trials += 1
-                print(
+                self.print(
                     f"Re-trying to execute query ({query} - {params}). "
                     f"Trial number: {self.execute_failed_trials}. "
                     f"Reason: {e}"
