@@ -411,12 +411,8 @@ class SQLiteDB:
                 return
 
             except sqlite3.Error as err:
-                # check if a transaction is active before rolling back
-                # a tx may not be active if the error occurred white executing
-                # the 'BEGIN' above
-                if self.conn.in_transaction:
-                    self.conn.rollback()
-
+                # no need to manually rollback here
+                # sqlite automatically rolls back the tx if an error occurs
                 trial += 1
 
                 if trial >= max_trials:
