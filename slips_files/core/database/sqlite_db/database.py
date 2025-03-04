@@ -409,7 +409,7 @@ class SQLiteDB:
             if self.conn.in_transaction:
                 self.conn.rollback()
 
-            if self.execute_failed_trials >= 3:
+            if self.execute_failed_trials >= 2:
                 # tried 3 times to exec a query and it's still failing
                 self.execute_failed_trials = 0
                 # discard query
@@ -419,6 +419,7 @@ class SQLiteDB:
                     f"but failed. Query discarded. ",
                     0,
                     1,
+                    log_to_logfiles_only=True,
                 )
 
             elif "database is locked" in str(e):
@@ -426,9 +427,7 @@ class SQLiteDB:
                 self.execute_failed_trials += 1
 
                 # Retry after a short delay
-                # Exponential backoff, max 5s
-                delay = min(2**self.execute_failed_trials, 5)
-                sleep(delay)
+                sleep(5)
                 self.execute(query, params=params)
             else:
                 # keep track of failed trials
