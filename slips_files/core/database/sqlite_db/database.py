@@ -23,7 +23,7 @@ class SQLiteDB:
     """
 
     name = "SQLiteDB"
-    # used to lock each call to commit()
+    # used to lock operations using the self.cursor
     cursor_lock = Lock()
 
     def __init__(self, logger: Output, output_dir: str):
@@ -361,21 +361,19 @@ class SQLiteDB:
         """
         wrapper for sqlite fetchall to be able to use a lock
         """
-        self.cursor_lock.acquire(True)
-        res = self.cursor.fetchall()
-        self.cursor_lock.release()
+        with self.cursor_lock:
+            res = self.cursor.fetchall()
         return res
 
     def fetchone(self):
         """
         wrapper for sqlite fetchone to be able to use a lock
         """
-        self.cursor_lock.acquire(True)
-        res = self.cursor.fetchone()
-        self.cursor_lock.release()
+        with self.cursor_lock:
+            res = self.cursor.fetchone()
         return res
 
-    def execute(self, query, params=None):
+    def execute(self, query: str, params=None) -> None:
         """
         wrapper for sqlite execute() To avoid
          'Recursive use of cursors not allowed' error
