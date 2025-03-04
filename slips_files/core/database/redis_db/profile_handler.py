@@ -1508,6 +1508,7 @@ class ProfileHandler:
         Check if we should close a TW
         Search in the modified tw list and compare when they
         were modified with the slips internal time
+        :param close_all: close all tws no matter when they were last modified
         """
 
         sit = self.get_slips_internal_time()
