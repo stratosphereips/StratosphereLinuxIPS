@@ -23,7 +23,7 @@ class SQLiteDB:
     """
 
     name = "SQLiteDB"
-    # used to lock each call to commit()
+    # used to lock operations using the self.cursor
     cursor_lock = Lock()
     execute_failed_trials = 0
 
@@ -47,7 +47,10 @@ class SQLiteDB:
         # you can get multithreaded access on a single pysqlite connection by
         # passing "check_same_thread=False"
         self.conn = sqlite3.connect(
-            self._flows_db, check_same_thread=False, timeout=20
+            self._flows_db,
+            check_same_thread=False,
+            timeout=20,
+            autocommit=True,
         )
 
         self.cursor = self.conn.cursor()
@@ -362,21 +365,19 @@ class SQLiteDB:
         """
         wrapper for sqlite fetchall to be able to use a lock
         """
-        self.cursor_lock.acquire(True)
-        res = self.cursor.fetchall()
-        self.cursor_lock.release()
+        with self.cursor_lock:
+            res = self.cursor.fetchall()
         return res
 
     def fetchone(self):
         """
         wrapper for sqlite fetchone to be able to use a lock
         """
-        self.cursor_lock.acquire(True)
-        res = self.cursor.fetchone()
-        self.cursor_lock.release()
+        with self.cursor_lock:
+            res = self.cursor.fetchone()
         return res
 
-    def execute(self, query, params=None):
+    def execute(self, query: str, params=None) -> None:
         """
         wrapper for sqlite execute() To avoid
          'Recursive use of cursors not allowed' error
@@ -387,34 +388,20 @@ class SQLiteDB:
         """
         try:
             with self.cursor_lock:
-                # start a transaction
-                if not self.conn.in_transaction:
-                    self.cursor.execute("BEGIN")
-
                 if not params:
                     self.cursor.execute(query)
                 else:
                     self.cursor.execute(query, params)
 
-            # aka END TRANSACTION
-            if self.conn.in_transaction:
-                self.conn.commit()
-
             self.execute_failed_trials = 0
 
-        except sqlite3.Error as e:
-            # check if a transaction is active before rolling back
-            # a tx may not be active if the error occurred white executing
-            # the 'BEGIN' above
-            if self.conn.in_transaction:
-                self.conn.rollback()
-
+        except sqlite3.Error as err:
             if self.execute_failed_trials >= 2:
                 # tried 3 times to exec a query and it's still failing
                 self.execute_failed_trials = 0
                 # discard query
                 self.print(
-                    f"Error executing query: ({query} {params})- {e}. "
+                    f"Error executing query: ({query} {params})- {err}. "
                     f"Retried executing {self.execute_failed_trials} times "
                     f"but failed. Query discarded. ",
                     0,
@@ -422,7 +409,7 @@ class SQLiteDB:
                     log_to_logfiles_only=True,
                 )
 
-            elif "database is locked" in str(e):
+            elif "database is locked" in str(err):
                 # keep track of failed trials
                 self.execute_failed_trials += 1
 
@@ -435,7 +422,7 @@ class SQLiteDB:
                 self.print(
                     f"Re-trying to execute query ({query} - {params}). "
                     f"Trial number: {self.execute_failed_trials}. "
-                    f"Reason: {e}",
+                    f"Reason: {err}",
                     0,
                     1,
                     log_to_logfiles_only=True,
