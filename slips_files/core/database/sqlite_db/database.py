@@ -25,7 +25,6 @@ class SQLiteDB:
     name = "SQLiteDB"
     # used to lock each call to commit()
     cursor_lock = Lock()
-    execute_failed_trials = 0
 
     def __init__(self, logger: Output, output_dir: str):
         self.printer = Printer(logger, self.name)
@@ -381,63 +380,67 @@ class SQLiteDB:
         wrapper for sqlite execute() To avoid
          'Recursive use of cursors not allowed' error
          and to be able to use a Lock()
+
         since sqlite is terrible with multi-process applications
-        this should be used instead of all calls to commit() and execute()
+        this function should be used instead of all calls to commit() and
+        execute()
+
+        using transactions here is a must.
+        Since slips uses python3.10, we can't use autocommit here. we have
+        to do it manually
+        any conn other than the current one will not see the changes this
+        conn did unless they're committed.
+
         Each call to this function results in 1 sqlite transaction
         """
-        try:
-            with self.cursor_lock:
-                # start a transaction
-                if not self.conn.in_transaction:
-                    self.cursor.execute("BEGIN")
+        trial = 0
+        max_trials = 3
+        while trial < max_trials:
+            try:
+                with self.cursor_lock:
+                    if self.conn.in_transaction is False:
+                        self.cursor.execute("BEGIN")
 
-                if not params:
-                    self.cursor.execute(query)
+                    if params is None:
+                        self.cursor.execute(query)
+                    else:
+                        self.cursor.execute(query, params)
+
+                # aka END TRANSACTION
+                if self.conn.in_transaction:
+                    self.conn.commit()
+
+                return
+
+            except sqlite3.Error as err:
+                # check if a transaction is active before rolling back
+                # a tx may not be active if the error occurred white executing
+                # the 'BEGIN' above
+                if self.conn.in_transaction:
+                    self.conn.rollback()
+
+                trial += 1
+
+                if trial >= max_trials:
+                    self.print(
+                        f"Error executing query: "
+                        f"({query} {params}) - {err}. "
+                        f"Retried executing {trial} times but failed. "
+                        f"Query discarded.",
+                        0,
+                        1,
+                        log_to_logfiles_only=True,
+                    )
+                    return
+
+                elif "database is locked" in str(err):
+                    sleep(5)
                 else:
-                    self.cursor.execute(query, params)
-
-            # aka END TRANSACTION
-            if self.conn.in_transaction:
-                self.conn.commit()
-
-            self.execute_failed_trials = 0
-
-        except sqlite3.Error as e:
-            # check if a transaction is active before rolling back
-            # a tx may not be active if the error occurred white executing
-            # the 'BEGIN' above
-            if self.conn.in_transaction:
-                self.conn.rollback()
-
-            if self.execute_failed_trials >= 2:
-                # tried 3 times to exec a query and it's still failing
-                self.execute_failed_trials = 0
-                # discard query
-                self.print(
-                    f"Error executing query: ({query} {params})- {e}. "
-                    f"Retried executing {self.execute_failed_trials} times "
-                    f"but failed. Query discarded. ",
-                    0,
-                    1,
-                    log_to_logfiles_only=True,
-                )
-
-            elif "database is locked" in str(e):
-                # keep track of failed trials
-                self.execute_failed_trials += 1
-
-                # Retry after a short delay
-                sleep(5)
-                self.execute(query, params=params)
-            else:
-                # keep track of failed trials
-                self.execute_failed_trials += 1
-                self.print(
-                    f"Re-trying to execute query ({query} - {params}). "
-                    f"Trial number: {self.execute_failed_trials}. "
-                    f"Reason: {e}",
-                    0,
-                    1,
-                    log_to_logfiles_only=True,
-                )
-                self.execute(query, params=params)
+                    self.print(
+                        f"Re-trying to execute query "
+                        f"({query} - {params}) - {err}. "
+                        f"Trial number: {trial}.",
+                        0,
+                        1,
+                        log_to_logfiles_only=True,
+                    )
