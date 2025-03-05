@@ -62,6 +62,10 @@ class DNS:
     saddr: str
     daddr: str
 
+    sport: str
+    dport: str
+    proto: str
+
     query: str
 
     qclass_name: str

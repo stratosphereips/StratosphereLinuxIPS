@@ -5,7 +5,6 @@ from typing import List, Dict
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Direction,
 )
@@ -69,8 +68,3 @@ class IPAnalyzer(IWhitelistAnalyzer):
         if not self.match.what_to_ignore(what_to_ignore, ignore):
             return False
         return True
-
-    @staticmethod
-    def is_private_ip(ip: str) -> bool:
-        ip_obj = ipaddress.ip_address(ip)
-        return utils.is_private_ip(ip_obj)

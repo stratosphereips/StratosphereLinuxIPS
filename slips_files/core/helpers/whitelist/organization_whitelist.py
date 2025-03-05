@@ -2,15 +2,22 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
 import json
-from typing import List, Dict
+from typing import (
+    Dict,
+    List,
+    Union,
+)
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
-    IoCType,
     Direction,
+    Attacker,
+    Victim,
+    IoCType,
 )
+
 from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
 from slips_files.core.helpers.whitelist.ip_whitelist import IPAnalyzer
 
@@ -107,17 +114,24 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         except KeyError:
             return
 
-        if not (ip_asn and ip_asn != "Unknown"):
-            return False
+        return self._is_asn_in_org(ip_asn, org)
 
+    def _is_asn_in_org(self, asn: str, org: str) -> bool:
+        """
+        returns true if the given ASN is listed in the ASNs of the given org
+        """
+        if not (asn and asn != "Unknown"):
+            return False
         # because all ASN stored in slips organization_info/ are uppercase
-        ip_asn: str = ip_asn.upper()
+        asn: str = asn.upper()
+        if org.upper() in asn:
+            return True
 
         org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
-        return org.upper() in ip_asn or ip_asn in org_asn
+        return asn in org_asn
 
     def is_whitelisted(self, flow) -> bool:
-        """checks if the given flow is whitelisted"""
+        """checks if the given -flow- is whitelisted. not evidence/alerts."""
 
         if not self.enable_local_whitelist:
             return False
@@ -127,24 +141,24 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         )
 
         for domain in self.domain_analyzer.get_dst_domains_of_flow(flow):
-            if self.is_part_of_a_whitelisted_org(
+            if self._is_part_of_a_whitelisted_org(
                 domain, IoCType.DOMAIN, Direction.DST, "flows"
             ):
                 return True
 
         for domain in self.domain_analyzer.get_src_domains_of_flow(flow):
-            if self.is_part_of_a_whitelisted_org(
+            if self._is_part_of_a_whitelisted_org(
                 domain, IoCType.DOMAIN, Direction.SRC, "flows"
             ):
                 return True
 
-        if self.is_part_of_a_whitelisted_org(
+        if self._is_part_of_a_whitelisted_org(
             flow.saddr, IoCType.IP, Direction.SRC, "flows"
         ):
             return True
 
         for ip in [flow.daddr] + flow_dns_answers:
-            if self.is_part_of_a_whitelisted_org(
+            if self._is_part_of_a_whitelisted_org(
                 ip, IoCType.IP, Direction.DST, "flows"
             ):
                 return True
@@ -162,7 +176,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         # search in the list of organization IPs
         return self.is_ip_in_org(ip, org)
 
-    def is_part_of_a_whitelisted_org(
+    def _is_part_of_a_whitelisted_org(
         self,
         ioc: str,
         ioc_type: IoCType,
@@ -172,13 +186,14 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         """
         Handles the checking of whitelisted evidence or alerts
         :param ioc: can be an ip or a domain
-        :param ioc_type: type of the given ioc
+        :param ioc_type: type of the given ioc, "DOMAIN" or "IP"
         :param direction: direction of the given ioc, src or dst?
-        :param what_to_ignore: can be flows or alerts or both
+        :param what_to_ignore: can be "flows" or "alerts" or "both"
         """
 
-        if ioc_type == "IP" and self.ip_analyzer.is_private_ip(ioc):
-            return False
+        if ioc_type == IoCType.IP:
+            if utils.is_private_ip(ioc):
+                return False
 
         whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
             "organizations"
@@ -198,10 +213,40 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 continue
 
             cases = {
-                IoCType.DOMAIN.name: self.is_domain_in_org,
-                IoCType.IP.name: self.is_ip_part_of_a_whitelisted_org,
+                IoCType.DOMAIN: self.is_domain_in_org,
+                IoCType.IP: self.is_ip_part_of_a_whitelisted_org,
             }
             if cases[ioc_type](ioc, org):
                 return True
+
+        return False
+
+    def is_whitelisted_entity(self, entity: Union[Attacker, Victim]) -> bool:
+        """
+        Checks if the given attacker/victim has an ip, domain or an ASN that
+        belongs to a whitelisted org
+        """
+        for ip in self.manager.extract_ips_from_entity(entity):
+            if self._is_part_of_a_whitelisted_org(
+                ip, IoCType.IP, entity.direction, "alerts"
+            ):
+                return True
+
+        for domain in self.manager.extract_domains_from_entity(entity):
+            if self._is_part_of_a_whitelisted_org(
+                domain,
+                IoCType.DOMAIN,
+                Direction.DST,  # domains are always dst
+                "alerts",
+            ):
+                return True
+
+        if entity.AS:
+            for org in utils.supported_orgs:
+                if org.lower() in entity.AS.get("org", "").lower():
+                    return True
+
+                if self._is_asn_in_org(entity.AS.get("number", ""), org):
+                    return True
 
         return False

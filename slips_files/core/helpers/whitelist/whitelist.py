@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from typing import Optional, Dict, List, Union
+from typing import (
+    Optional,
+    Dict,
+    List,
+    Union,
+    Set,
+)
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
@@ -18,6 +24,7 @@ from slips_files.core.structures.evidence import (
     Direction,
     Attacker,
     Victim,
+    IoCType,
 )
 
 
@@ -171,6 +178,35 @@ class Whitelist:
             return True
         return False
 
+    def extract_ips_from_entity(
+        self, entity: Union[Attacker, Victim]
+    ) -> Set[str]:
+        """extracts all the ips it can from the given attacker/victim"""
+        # check the IPs that belong to this domain
+        entity_ip = (
+            [entity.value] if entity.ioc_type == IoCType.IP.name else []
+        )
+        resolutions: List[str] = (
+            entity.DNS_resolution if entity.DNS_resolution else []
+        )
+        unique_ips = set(entity_ip + resolutions)
+        return unique_ips
+
+    def extract_domains_from_entity(
+        self, entity: Union[Attacker, Victim]
+    ) -> Set[str]:
+        """extracts all the domains it can from the given attacker/victim"""
+        # check the rest of the domains that belong to this domain/IP
+        queries = entity.queries if entity.queries else []
+        # entities of type ips and domains both can have cnames
+        cnames = entity.CNAME if entity.CNAME else []
+        sni = [entity.SNI] if entity.SNI else []
+        entity_domain = (
+            [entity.value] if entity.ioc_type == IoCType.DOMAIN.name else []
+        )
+        unique_domains = set(sni + queries + cnames + entity_domain)
+        return unique_domains
+
     def _is_whitelisted_entity(
         self, evidence: Evidence, entity_type: str
     ) -> bool:
@@ -186,20 +222,13 @@ class Whitelist:
 
         what_to_ignore = "alerts"
 
-        if self.ip_analyzer.is_whitelisted(
-            entity.value, entity.direction, what_to_ignore
-        ):
-            return True
+        for ip in self.extract_ips_from_entity(entity):
+            if self.ip_analyzer.is_whitelisted(
+                ip, entity.direction, what_to_ignore
+            ):
+                return True
 
-        if self.domain_analyzer.is_whitelisted(
-            entity.value, entity.direction, what_to_ignore
-        ):
-            return True
-
-        # check the rest of the domains that belong to this domain/IP
-        resolutions = entity.DNS_resolution if entity.DNS_resolution else []
-        cnames = entity.CNAME if entity.CNAME else []
-        for domain in [entity.SNI] + resolutions + cnames:
+        for domain in self.extract_domains_from_entity(entity):
             if self.domain_analyzer.is_whitelisted(
                 domain, Direction.DST, what_to_ignore
             ):
@@ -210,13 +239,7 @@ class Whitelist:
         ):
             return True
 
-        org_check_method = self.org_analyzer.is_part_of_a_whitelisted_org
-        if org_check_method(
-            entity.value,
-            entity.ioc_type,
-            entity.direction,
-            what_to_ignore,
-        ):
+        if self.org_analyzer.is_whitelisted_entity(entity):
             return True
 
         return False

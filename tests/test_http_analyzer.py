@@ -17,6 +17,7 @@ from slips_files.core.flows.zeek import (
     Weird,
     Conn,
 )
+from tests.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
 from modules.http_analyzer.http_analyzer import utils
 
@@ -654,10 +655,7 @@ async def test_check_non_http_port_80_conns_no_matching_http_timeout():
     )
 
 
-@patch("modules.flowalerts.ssl.asyncio.sleep")
-async def test_check_non_http_port_80_conns_no_matching_http_no_timeout(
-    mock_sleep,
-):
+async def test_check_non_http_port_80_conns_no_matching_http_no_timeout():
     # simulate no matching http flows when timeout has not been reached yet.
     # the function should sleep for 5 mins (patched to return immediately),
     # then recursively call itself with timeout_reached true
@@ -670,14 +668,14 @@ async def test_check_non_http_port_80_conns_no_matching_http_no_timeout(
     analyzer.search_http_recognized_flows_for_ts_range = Mock(return_value=[])
     analyzer.set_evidence.non_http_port_80_conn = MagicMock()
     # patch asyncio.sleep so that we do not really wait
-    mock_sleep.return_value = None
+    analyzer.wait_for_new_flows_or_timeout = get_mock_coro(True)
 
     flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
     result = await analyzer.check_non_http_port_80_conns(None, flow)
     # even though the recursive call returns true (after setting evidence),
     # the original call always returns false
     assert result is False
-    mock_sleep.assert_called_once()
+    analyzer.wait_for_new_flows_or_timeout.assert_called_once()
     analyzer.set_evidence.non_http_port_80_conn.assert_called_once_with(
         None, flow
     )

@@ -372,6 +372,9 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
+    def get_human_readable_datetime(self) -> str:
+        return utils.convert_format(datetime.now(), self.alerts_format)
+
     def get_own_ips(self) -> list:
         """
         Returns a list of our local and public IPs

@@ -80,6 +80,9 @@ def test_young_domain(
         query=domain,
         qclass_name="",
         qtype_name="",
+        dport="",
+        sport="",
+        proto="",
         rcode_name="NXDOMAIN",
         answers=answers,
         TTLs="",
@@ -183,7 +186,7 @@ def test_multiple_ssh_versions(
             Direction.SRC,
             Direction.DST,
             ThreatLevel.LOW,
-            "A connection from a private IP (192.168.0.1) "
+            "A connection from a private IP (192.168.0.1) on port 80/udp "
             "outside of the used local network 192.168.0.0/16."
             " To IP: 10.0.0.1 ",
         ),
@@ -196,9 +199,9 @@ def test_multiple_ssh_versions(
             Direction.DST,
             Direction.SRC,
             ThreatLevel.HIGH,
-            "A connection to a private IP "
-            "(192.168.1.1) outside of the used local network 192.168.0.0/16. "
-            "From IP: 192.168.0.1 using ARP",
+            "A connection to a private IP (192.168.1.1) on port 0/arp "
+            "outside of the used "
+            "local network 192.168.0.0/16. From IP: 192.168.0.1 using ARP",
         ),
         # Testcase 3: dst IP outside localnet, using port
         (
@@ -209,7 +212,7 @@ def test_multiple_ssh_versions(
             Direction.DST,
             Direction.SRC,
             ThreatLevel.HIGH,
-            "A connection to a private IP (192.168.1.2)"
+            "A connection to a private IP (192.168.1.2) on port 443/tcp"
             " outside of the used local network 192.168.0.0/16."
             " From IP: 192.168.0.1 on destination port: 443/TCP",
         ),
@@ -442,6 +445,9 @@ def test_dga(nxdomains, expected_confidence):
         daddr="1.1.1.1",
         query="google.com",
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers=["1.1.11.1"],
@@ -559,6 +565,9 @@ def test_dns_without_conn(
         starttime="1726568479.5997488",
         uid="1234",
         saddr=expected_attacker,
+        dport="",
+        sport="",
+        proto="",
         daddr=expected_victim,
         query=domain,
         qclass_name="",
@@ -590,6 +599,9 @@ def test_dns_arpa_scan():
         uid="1234",
         saddr="192.168.0.1",
         daddr="192.168.5.70",
+        dport="",
+        sport="",
+        proto="",
         query="",
         qclass_name="",
         qtype_name="",
@@ -1231,6 +1243,9 @@ def test_suspicious_dns_answer(
         daddr=daddr,
         query=query,
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers=answer,
@@ -1296,6 +1311,9 @@ def test_invalid_dns_answer(query, answer, expected_description):
         query=query,
         qclass_name="",
         qtype_name="",
+        dport="",
+        sport="",
+        proto="",
         rcode_name="",
         answers=answer,
         TTLs="",
@@ -1528,7 +1546,7 @@ def test_malicious_ja3(attacker_ip, threat_level, description, tags, ja3):
     assert evidence.uid == [flow.uid]
     expected_description = (
         f"Malicious JA3: {ja3} "
-        f"from source address {attacker_ip}. "
+        f"from source address {attacker_ip} to {flow.daddr}. "
         f"description: {description}."
     )
     if tags:

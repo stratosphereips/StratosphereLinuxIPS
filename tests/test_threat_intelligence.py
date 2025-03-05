@@ -854,7 +854,7 @@ def test_search_online_for_url(
             ({"description": "Malicious domain"}, False),
             ({"description": "Malicious domain"}, False),
         ),
-        ("safe.com", ({}, False), (False, False)),
+        ("safe.com", ({}, False), (None, False)),
     ],
 )
 def test_search_offline_for_domain(

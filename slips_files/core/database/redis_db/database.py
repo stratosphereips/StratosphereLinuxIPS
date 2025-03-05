@@ -87,7 +87,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "network2fides",
         "fides2slips",
         "slips2fides",
-        "iris_internal"
+        "iris_internal",
     }
     separator = "_"
     normal_label = "benign"
@@ -118,7 +118,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         cls, logger, redis_port, start_redis_server=True, flush_db=True
     ):
         """
-        treat the db as a singelton per port
+        treat the db as a singleton per port
         meaning every port will have exactly 1 single obj of this db
         at any given time
         """
@@ -146,13 +146,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             cls.set_slips_internal_time(0)
             if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
+
             # useful for debugging using 'CLIENT LIST' redis cmd
             cls.r.client_setname("Slips-DB")
 
         return cls._instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
-        pass
+        self.set_new_incoming_flows(True)
 
     @classmethod
     def _set_redis_options(cls):
@@ -877,8 +878,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # we store ALL dns resolutions seen since starting slips
             # store with the IP as the key
             self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
+            self.set_ip_info(answer, {"DNS_resolution": domains})
             # these ips will be associated with the query in our db
-            ips_to_add.append(answer)
+            if not utils.is_ignored_ip(answer):
+                ips_to_add.append(answer)
 
         # For each CNAME in the answer
         # store it in DomainsInfo in the cache db (used for kalipso)
@@ -1097,16 +1100,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         if not cached_info:
             return id
 
-        for key in cached_info.keys():
-            if key in (
-                "score",
-                "confidence",
-                "is_doh_server",
-                "threatintelligence",
-            ):
-                continue
-            break
-
         sni = cached_info.get("SNI")
         if sni:
             sni = sni[0] if isinstance(sni, list) else sni
@@ -1117,33 +1110,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             "rDNS": cached_info.get("reverse_dns"),
             "SNI": sni,
         }
+
         if get_ti_data:
             id.update(
                 {"TI": cached_info.get("threatintelligence", {}).get("source")}
             )
 
-        if dns_resolution := self.get_dns_resolution(ip).get("domains"):
-            dns_resolution: List[str]
-            id.update({"DNS_resolution": dns_resolution})
+        if domains := cached_info.get("DNS_resolution", []):
+            domains: List[str]
+            id.update({"queries": domains})
 
         return id
-        # # if asn := self.get_asn_info(ip):
-        # #     asn_org = asn.get("org", "")
-        # #     asn_number = asn.get("number", "")
-        # #     id += f" AS: {asn_org} {asn_number}"
-        # #
-        # # if sni := self.get_sni_info(ip):
-        # #     id += f" SNI: {sni}, "
-        # #
-        # # if rdns := self.get_rdns_info(ip):
-        # #     id += f" rDNS: {rdns}, "
-        # #
-        # #
-        # #     if threat_intel:= ip_info.get("threatintelligence", ""):
-        # #         id += f" appears in blacklist: {threat_intel['source']}."
-        #
-        # id = id.rstrip(", ")
-        # return id
 
     def get_multiaddr(self):
         """

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import contextlib
 import shutil
-from datetime import datetime
 import redis
 import os
 import time
@@ -28,7 +27,7 @@ class RedisManager:
         return self.start_port
 
     def log_redis_server_pid(self, redis_port: int, redis_pid: int):
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
+        now = utils.get_human_readable_datetime()
         try:
             # used in case we need to remove the line using 6379 from running
             # logfile

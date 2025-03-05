@@ -1,3 +1,20 @@
+1.1.7 (Feb 28th, 2025)
+- Add global P2P support. Thanks to @d-strat
+- Add new "GRE tunnel scan" detections.
+- Add the option to enable/disable local and online whitelists from slips.yaml.
+- Fix false positive "Connection to a private IP outside of local network" detection. Slips now doesn't alert on DNS servers outside of local network.
+- Fix false positive "Connection to a private IP" detection when the connection is DHCP.
+- Fix false positive "Device changing IP" detection alerting about special IPs.
+- Fix false positive "Invalid DNS answer" detection alerting about .arpa domains.
+- Fix false positive "non-HTTP established connection on port 80".
+- Fix false positive "non-SSL established connection on port 443".
+- Improve "Connection to unknown port" detections. Now the threat level depends on the flow state.
+- Improve "DNS without connection" evidence. Slips now only detects when the query type is A or AAAA.
+- Improve the description of malicious flow by MLflowdetection module.
+- Improve the detections of the MLflowdetection module.
+- Improve the existing "GRE tunnel" detections.
+- Improve whitelists: Slips is now whitelisting CNAME, SNI, related queries, and DNS resolutions of attackers and victims.
+
 1.1.6 (Jan 31st, 2025)
 * 3x speedup of the profiler process responsible for analyzing the given flows.
 * Fix false positive "connection without DNS" detection.
