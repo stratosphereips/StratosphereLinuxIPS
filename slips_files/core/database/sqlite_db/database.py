@@ -395,6 +395,11 @@ class SQLiteDB:
         max_trials = 3
         while trial < max_trials:
             try:
+                # note that self.conn.in_transaction is not reliable
+                # sqlite may change the state internally, on errors for
+                # example.
+                # if no errors occur, this will be the only transaction in
+                # the conn
                 with self.cursor_lock:
                     if self.conn.in_transaction is False:
                         self.cursor.execute("BEGIN")
