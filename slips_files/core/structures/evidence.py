@@ -153,12 +153,16 @@ class Victim:
     # the feed name goes here
     TI: str = field(default=None)
     # autonomous system
+    # has {"org": org, "number": number}
     AS: Dict[str, str] = field(default=None)
     rDNS: str = field(default=None)
     SNI: str = field(default=None)
-    # if the victim is an IP address and has a corresponding domain,
-    # this would be the domain used in the dns query that resolved the IP
+    # if the attacker  is a domain, and that domain was found in any queyr,
+    # this would be the answers to that query
     DNS_resolution: List[str] = field(default=None)
+    # if the attacker is an IP, and that IP was found as an answer to any
+    # query this would be that query
+    queries: List[str] = field(default=None)
     # useful if the victim is a domain
     CNAME: List[str] = field(default=None)
 
@@ -190,12 +194,16 @@ class Attacker:
     # the feed name goes here
     TI: str = field(default=None)
     # autonomous system
+    # has {"org": org, "number": number}
     AS: Dict[str, str] = field(default=None)
     rDNS: str = field(default=None)
     SNI: str = field(default=None)
-    # if the attacker is an IP address and has a corresponding domain,
-    # this would be the domain used in the dns query that resolved the IP
+    # if the attacker is a domain, and that domain was found in any query,
+    # this would be the answers to that query
     DNS_resolution: List[str] = field(default=None)
+    # if the attacker is an IP, and that IP was found as an answer to any
+    # query this would be that query
+    queries: List[str] = field(default=None)
     # useful if the attacker is a domain
     CNAME: List[str] = field(default=None)
 

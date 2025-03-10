@@ -165,6 +165,49 @@ class AlertHandler:
         except (KeyError, TypeError):
             return
 
+    def _get_more_info_about_evidence(self, evidence) -> Evidence:
+        """
+        sets the SNI, rDNS, TI, AS of the given evidence's attacker and
+        victim IPs
+        """
+        for entity_type in ("victim", "attacker"):
+            entity: Union[Attacker, Victim]
+            entity = getattr(evidence, entity_type, None)
+            if not entity:
+                # some evidence may not have a victim
+                continue
+
+            if entity.ioc_type == IoCType.IP:
+                ip_identification: Dict[str, str]
+                ip_identification = self.get_ip_identification(entity.value)
+                entity.AS = ip_identification.get("AS")
+                entity.TI = ip_identification.get("TI")
+                entity.rDNS = ip_identification.get("rDNS")
+                entity.SNI = ip_identification.get("SNI")
+                # queries resolved to that ip
+                entity.queries = ip_identification.get("queries")
+
+            elif entity.ioc_type == IoCType.DOMAIN:
+                domain_info: Dict[str, str]
+                domain_info = self.get_domain_data(entity.value)
+                if not domain_info:
+                    continue
+
+                entity.CNAME = domain_info.get("CNAME", [])
+                entity.DNS_resolution = domain_info.get("IPs", [])
+                entity.TI = domain_info.get("threatintelligence", {}).get(
+                    "source"
+                )
+                # if any of the domain's ips have an asn, set it here to
+                # check if it's whitelisted later
+                for ip in entity.DNS_resolution:
+                    entity.AS = self.get_asn_info(ip)
+                    break
+
+            setattr(evidence, entity_type, entity)
+
+        return evidence
+
     def set_evidence(self, evidence: Evidence):
         """
         Set the evidence for this Profile and Timewindow.
@@ -182,16 +225,7 @@ class AlertHandler:
             return False
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
-
-        evidence.attacker.TI = self.get_ti(evidence.attacker)
-        evidence.attacker.AS = self.get_asn_info(evidence.attacker.value)
-        evidence.attacker.rDNS = self.get_rdns_info(evidence.attacker.value)
-        evidence.attacker.SNI = self.get_sni_info(evidence.attacker.value)
-        if hasattr(evidence, "victim") and evidence.victim:
-            evidence.victim.TI = self.get_ti(evidence.victim)
-            evidence.victim.AS = self.get_asn_info(evidence.victim.value)
-            evidence.victim.rDNS = self.get_rdns_info(evidence.victim.value)
-            evidence.victim.SNI = self.get_sni_info(evidence.victim.value)
+        evidence = self._get_more_info_about_evidence(evidence)
 
         evidence_to_send: dict = utils.to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)

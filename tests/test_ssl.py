@@ -15,6 +15,7 @@ from slips_files.core.flows.zeek import (
     Conn,
 )
 from tests.module_factory import ModuleFactory
+from tests.common_test_utils import get_mock_coro
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -201,6 +202,7 @@ async def test_check_pastebin_download(
 ):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     ssl.pastebin_downloads_threshold = 12000
+    ssl.wait_for_new_flows_or_timeout = get_mock_coro(True)
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence.SetEvidenceHelper.pastebin_download"
     )
@@ -566,23 +568,20 @@ async def test_check_non_ssl_port_443_conns_no_matching_ssl_timeout():
     ssl.set_evidence.non_ssl_port_443_conn.assert_called_once()
 
 
-@patch("modules.flowalerts.ssl.asyncio.sleep")
-async def test_check_non_ssl_port_443_conns_no_matching_ssl_no_timeout(
-    mock_sleep,
-):
+async def test_check_non_ssl_port_443_conns_no_matching_ssl_no_timeout():
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     ssl.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
     ssl.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
     ssl.set_evidence.non_ssl_port_443_conn = Mock()
     ssl.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[])
-    mock_sleep.return_value = None
+    ssl.wait_for_new_flows_or_timeout = get_mock_coro(True)
     # No matching SSL flows
     # Mock recursive call
     # ssl.check_non_ssl_port_443_conns = AsyncMock(side_effect=[False])
     flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
     result = await ssl.check_non_ssl_port_443_conns(None, flow)
     assert result is False
-    mock_sleep.assert_called_once()
+    ssl.wait_for_new_flows_or_timeout.assert_called_once()
     ssl.set_evidence.non_ssl_port_443_conn.assert_called_once()
 
 

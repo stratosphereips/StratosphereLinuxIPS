@@ -50,7 +50,7 @@ class SSL(IFlowalertsAnalyzer):
 
         conn_log_flow = utils.get_original_conn_flow(ssl_flow, self.db)
         if not conn_log_flow:
-            await asyncio.sleep(40)
+            await self.wait_for_new_flows_or_timeout(40)
             conn_log_flow = utils.get_original_conn_flow(ssl_flow, self.db)
             if not conn_log_flow:
                 return False
@@ -85,7 +85,6 @@ class SSL(IFlowalertsAnalyzer):
 
         # get the dict of malicious ja3 stored in our db
         malicious_ja3_dict = self.db.get_all_blacklisted_ja3()
-
         if flow.ja3 in malicious_ja3_dict:
             self.set_evidence.malicious_ja3(twid, flow, malicious_ja3_dict)
 
@@ -257,7 +256,7 @@ class SSL(IFlowalertsAnalyzer):
         # wait 5 mins real-time (to give slips time to
         # read more flows) maybe the recognized ssl arrives
         # within that time?
-        await asyncio.sleep(five_mins)
+        await self.wait_for_new_flows_or_timeout(five_mins)
         # we can safely await here without blocking the main thread because
         # once the timeout is reached, this function will never sleep again,
         # it'll either set the evidence or discard it
@@ -265,6 +264,33 @@ class SSL(IFlowalertsAnalyzer):
             twid, flow, timeout_reached=True
         )
         return False
+
+    async def wait_for_new_flows_or_timeout(self, timeout: float):
+        """
+        waits for new incoming flows, but interrupts the wait if the
+        profiler process stops sending new flows within the timeout period.
+
+        :param timeout: the maximum time to wait before resuming execution.
+        """
+
+        # repeatedly check if slips is no longer receiving new flows
+        async def will_slips_have_new_incoming_flows():
+            """if slips will have no incoming flows, aka profiler stopped.
+            this function will return False immediately"""
+            while self.db.will_slips_have_new_incoming_flows():
+                await asyncio.sleep(1)  # sleep to avoid busy looping
+            return False
+
+        try:
+            # wait until either:
+            # - will_slips_have_new_incoming_flows() returns False (no new flows)
+            # - timeout is reached (5 minutes)
+            await asyncio.wait_for(
+                will_slips_have_new_incoming_flows(), timeout
+            )
+
+        except asyncio.TimeoutError:
+            pass  # timeout reached
 
     def detect_doh(self, twid, flow):
         if not flow.is_DoH:

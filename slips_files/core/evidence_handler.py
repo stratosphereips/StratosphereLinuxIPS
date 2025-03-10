@@ -98,6 +98,10 @@ class EvidenceHandler(ICore):
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_ips()
         self.formatter = EvidenceFormatter(self.db)
+        # thats just a tmp value, this variable will be set and used when
+        # the
+        # module is stopping.
+        self.last_msg_received_time = time.time()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -208,8 +212,7 @@ class EvidenceHandler(ICore):
                 we should say so in alerts.log, if not, we should say that
                 we generated an alert
         """
-        now = datetime.now()
-        now = utils.convert_format(now, utils.alerts_format)
+        now = utils.get_human_readable_datetime()
 
         alert_description = (
             f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
@@ -453,6 +456,28 @@ class EvidenceHandler(ICore):
         alert_description: str = self.formatter.get_printable_alert(alert)
         self.notify.show_popup(alert_description)
 
+    def should_stop(self) -> bool:
+        """
+        Overrides imodule's should_stop() to make sure thi smodule only
+        stops after 1 minute of the last received evidence.
+        """
+        if not self.termination_event.is_set():
+            return False
+
+        if self.is_msg_received_in_any_channel():
+            self.last_msg_received_time = time.time()
+            return False
+
+        # no new msgs are received in any of the channels here
+        # wait an extra 1 minute for new evidence to arrive
+        # without this, slips has problems processing the last evidence
+        # set by some of the modules.
+        if time.time() - self.last_msg_received_time < 60:
+            # one minute didnt pass yet
+            return False
+        # 1 min passed since the last evidence
+        return True
+
     def pre_main(self):
         self.print(f"Using threshold: {green(self.detection_threshold)}")
 
@@ -467,7 +492,6 @@ class EvidenceHandler(ICore):
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
 
-                self.formatter.get_more_info_about_evidence(evidence)
                 # FP whitelisted alerts happen when the db returns an evidence
                 # that isn't processed in this channel, in the tw_evidence
                 # below.

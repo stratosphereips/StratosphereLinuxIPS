@@ -35,6 +35,19 @@ class ProfileHandler:
         """Get the out tuples"""
         return self.r.hget(profileid + self.separator + twid, "OutTuples")
 
+    def set_new_incoming_flows(self, will_slips_have_more_flows: bool):
+        """A flag indicating if slips is still receiving new flows from
+        input an profiler or not"""
+        self.r.set(
+            self.constants.WILL_SLIPS_HAVE_MORE_FLOWS,
+            "yes" if will_slips_have_more_flows else "no",
+        )
+
+    def will_slips_have_new_incoming_flows(self):
+        """A flag indicating if slips is still receiving new flows from
+        input an profiler or not"""
+        return self.r.get(self.constants.WILL_SLIPS_HAVE_MORE_FLOWS) == "yes"
+
     def get_intuples_from_profile_tw(self, profileid, twid):
         """Get the in tuples"""
         return self.r.hget(profileid + self.separator + twid, "InTuples")

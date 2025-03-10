@@ -5,7 +5,6 @@ contains functions used to format the evidence for logging/logging
 from typing import (
     Dict,
     Optional,
-    Union,
 )
 from slips_files.common.style import (
     red,
@@ -14,9 +13,7 @@ from slips_files.common.style import (
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
-    Victim,
     IoCType,
-    Attacker,
 )
 from slips_files.core.structures.alerts import (
     Alert,
@@ -159,42 +156,6 @@ class EvidenceFormatter:
                 results.append(f"IP {entity.value}: " + ", ".join(info_parts))
 
         return ", ".join(results)
-
-    def get_more_info_about_evidence(self, evidence):
-        """
-        sets the SNI, rDNS, TI, AS of the given evidence's attacker and
-        victim IPs
-        Why are we doing this here?
-        1. because we need to do it before checking if the evidence is
-        whitelisted.
-        2. because when setting an evidence, it would be duplicate code in
-        every module to fetch the above info about the attacker and victim.
-        so its better to do it in one place.
-        i wanted to put that logic in the Attacker and Victim Class,
-        but they dont have access to the db to fetch that info.
-        """
-        for entity_type in ("victim", "attacker"):
-            entity: Union[Attacker, Victim]
-            entity = getattr(evidence, entity_type, None)
-            if not entity:
-                # some evidence may not have a victim
-                continue
-            if entity.ioc_type != IoCType.IP.name:
-                # check if the SNI, hostname, rDNS of this ip belong to org_name
-                ip_identification: Dict[str, str]
-                ip_identification = self.db.get_ip_identification(entity.value)
-                entity.AS = ip_identification.get("AS")
-                entity.TI = ip_identification.get("TI")
-                entity.rDNS = ip_identification.get("rDNS")
-                entity.SNI = ip_identification.get("SNI")
-                entity.DNS_resolution = ip_identification.get("DNS_resolution")
-            elif entity.ioc_type != IoCType.DOMAIN.name:
-                domain_info: Dict[str, str] = self.db.get_domain_data(
-                    entity.value
-                )
-                if not domain_info:
-                    return
-                entity.CNAME = domain_info.get("CNAME", [])
 
     def line_wrap(self, txt):
         """

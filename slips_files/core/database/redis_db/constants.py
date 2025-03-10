@@ -65,6 +65,7 @@ class Constants:
     PROFILES = "profiles"
     NUMBER_OF_ALERTS = "number_of_alerts"
     KNOWN_FPS = "known_fps"
+    WILL_SLIPS_HAVE_MORE_FLOWS = "will_slips_have_more_flows"
 
 
 class Channels:

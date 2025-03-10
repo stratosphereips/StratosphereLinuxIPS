@@ -158,11 +158,6 @@ class SetEvidenceHelper:
         self.db.set_evidence(evidence)
 
     def non_http_port_80_conn(self, twid, flow) -> None:
-        description: str = (
-            f"non-HTTP established connection to port 80. "
-            f"destination IP: {flow.daddr}"
-        )
-
         twid_number: int = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
         evidence_id_of_dstip_as_the_attacker = str(uuid4())
@@ -182,7 +177,10 @@ class SetEvidenceHelper:
                 value=flow.daddr,
             ),
             threat_level=ThreatLevel.LOW,
-            description=description,
+            description=(
+                f"non-HTTP established connection to port 80. "
+                f"destination IP: {flow.daddr}"
+            ),
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
@@ -208,7 +206,10 @@ class SetEvidenceHelper:
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
-            description=description,
+            description=(
+                f"non-HTTP established connection to port 80. "
+                f"from IP: {flow.saddr}"
+            ),
             profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],

@@ -120,6 +120,22 @@ For example if the currently used local network is: 192.168.1.0/24
 
 and slips sees a forged packet going from 192.168.1.2 to 10.0.0.1, it will alert
 
+Slips detects the current local network by using the local network of the private
+ips specified in ```client_ips``` parameter in ```slips.yaml```
+
+If no IPs are specified, slips uses the local network of the first private source ip
+found in the traffic.
+
+This threat level of this detection is low if the source ip is the one outside of local network
+because it's unlikely.
+and high if the destination ip is the one outside of local network.
+
+
+Slips ignores evidence of this type when the destination IP is a private IP outside of local network and is
+communicating on port 53/UDP. Slips marks that destination address as the DNS server when 5 flows are seen using port
+53/udp while having DNS answers. this is likely a DNS misconfiguration hence a FP.
+
+
 ### Weird HTTP methods
 
 Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
