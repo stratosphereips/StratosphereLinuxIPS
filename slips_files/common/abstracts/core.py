@@ -39,7 +39,11 @@ class ICore(IModule, Process):
             self.shutdown_gracefully()
 
         except KeyboardInterrupt:
+            self.keyboard_int_ctr += 1
+            if self.keyboard_int_ctr >= 2:
+                return
             self.shutdown_gracefully()
+
         except Exception:
             self.print(f"Problem in {self.name}", 0, 1)
             self.print(traceback.format_exc(), 0, 1)

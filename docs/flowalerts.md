@@ -7,7 +7,7 @@ The detection techniques are:
 - Long connections
 - Successful SSH connections
 - Connections without DNS resolution
-- DNS resolutions to IPs that were never used
+- DNS resolutions without a connection
 - Connections to unknown ports
 - Data exfiltration
 - Malicious JA3 hashes
@@ -32,6 +32,7 @@ The detection techniques are:
 - High entropy DNS TXT answers
 - Devices changing IPs
 - GRE tunnels
+- GRE tunnel scan
 - Invalid DNS answers
 The details of each detection follows.
 
@@ -86,6 +87,7 @@ Slips detects successful SSH connections using 2 ways
 2. If all bytes sent in a SSH connection is more than 4290 bytes
 
 ## DNS resolutions without a connection
+
 This will detect DNS resolutions for which no further connection was done.
 A resolution without a usage is slightly suspicious.
 
@@ -95,8 +97,9 @@ The domains that are excepted are:
 - All .local domains
 - The wild card domain *
 - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
-- Ignore WPAD domain from Windows
-- Ignore domains without a TLD such as the Chrome test domains.
+- WPAD domain from Windows
+- domains without a TLD such as the Chrome test domains.
+- DNS resolutions of any type other than AAAA and A
 
 Slips doesn't detect 'DNS resolutions without a connection' when running
 on an interface except for when it's done by this instance's own IP and only after 30 minutes has passed to
@@ -113,21 +116,33 @@ To avoid accumulating so many pending DNS flows for 30 mins, slips checks if the
 arrived every 10 and 20 mins too, if not found, slips waits extra 10 mins (so that would be 30 mins total) and sets the
 evidence.
 
+
+
 ## Connection to unknown ports
 
-Slips has a list of known ports located in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
+Slips has a list of known ports located in ```slips_files/ports_info/services.csv```
 
-It also has a list of ports that belong to a specific organization in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
+and a list of ports that belong to a specific organization in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
+
+These are the cases where Slips marks the port as known and doesn't trigger an alert
+
+1. If the port is in the list of well known ports in `services.csv`.
+2. If Slips has that port's info in `ports_used_by_specific_orgs.csv` and the source and destination addresses belong to that organization.
+
+
+Slips considers an IP belongs to an org if:
+
+1. Both `saddr` and `daddr` have the organization's name in their MAC vendor (e.g. Apple.)
+2. Both `saddr` and `daddr` belong to the range specified in the`ports_used_by_specific_orgs.csv` for that organization.
+3. If the SNI, hostname, rDNS, ASN of this IP belong to this organization.
+4. If the IP is hardcoded in any of the organizations IPs in `slips_files/organizations_info/`.
+
+Otherwise, Slips triggers and "unknown port" evidence.
 
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
 
-any port that isn't in the above 2 files is considered unknown to Slips.
+The threat level of this evidence depends on the state of hte flow. established connections have higher threat levels.
 
-Slips will detect established connections only to unknown ports.
-
-Rejected connections (not established) are detected as 'Multiple reconnection attempts'. for more details check
-[Multiple reconnections](https://stratospherelinuxips.readthedocs.io/en/develop/flowalerts.html#multiple-reconnection-attempts)
-below
 
 ## Data Upload
 
@@ -317,7 +332,7 @@ When there's a weird HTTP method, slips detects it as well.
 
 ## Non-SSL connections on port 443
 
-Slips detects established connections on port 443 that are not using HTTP
+Slips detects established connections on port 443 that are not using SSL
 using zeek's conn.log flows
 
 if slips finds a flow using destination port 443 and the 'service' field
@@ -337,7 +352,7 @@ Here's how it works
 
 Slips detects when a private IP is connected to another private IP with threat level info.
 
-But it skips this alert when it's a DNS connection on port
+But it skips this alert when it's a DNS or a DHCP connection on port
 53, 67 or 68 UDP to the gateway IP.
 
 ## Connection to private IPs outside the current local network
@@ -383,12 +398,14 @@ If so, it alerts "Device changing IPs".
 
 ## GRE tunnels
 
-Slips uses zeek tunnel.log to alert on GRE tunnels when found. Whenever one is found, slips sets an evidence
+Slips uses zeek tunnel.log to alert on GRE tunnels when found. Whenever one
+any action other than "Tunnel::DISCOVER" is found, slips sets an evidence
 with threat level low
 
 ## GRE tunnel scans
 
-Slips uses zeek tunnel.log to alert on GRE tunnels with DISCOVER actions when found.
+Slips uses zeek tunnel.log to alert on GRE tunnels scan. Slips considers any log with "Tunnel::DISCOVER" action a GRE scan.
+
 The threat level of this evidence is low.
 
 
@@ -396,3 +413,5 @@ The threat level of this evidence is low.
 
 Some DNS resolvers answer the DNS query to adservers with 0.0.0.0 or 127.0.0.1 as the ip of the domain to block the domain.
 Slips detects this and sets an informational evidence.
+
+This detection doesn't apply to queries ending with ".arpa" or ".local"

@@ -374,6 +374,9 @@ contains that ioc. For example, if you whitelist the flow of the domain slack.co
 request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 
+This whitelist can be enabled or disabled by changing the ```enable_local_whitelist``` key in `config/slips.yaml`.
+
+The attacker and victim of every evidence are checked against the whitelist. In addition to all the related IPs, DNS resolutions, SNI, and CNAMEs of the attacker and teh victim. If any of them are whitelisted, the flow/evidence is discarded.
 
 ### Flows Whitelist
 If you whitelist an IP address, Slips will check all flows and see if you are whitelisting to them or from them.
@@ -426,7 +429,7 @@ Slips still shows the flows to and from these IoC.
 The tranco list is updated daily by default in Slips, but you can change how often to update it using the
 ```online_whitelist_update_period``` key in config/slips.yaml.
 
-
+Tranco whitelist can be enabled or disabled by changing the ```enable_online_whitelist``` key in `config/slips.yaml`.
 
 ### Whitelisting Example
 You can modify the file ```config/whitelist.conf``` file with this content:

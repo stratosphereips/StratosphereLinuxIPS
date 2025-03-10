@@ -81,7 +81,7 @@ class Profiler(ICore, IObservable):
         # the input process signals the rest of the modules to stop
         self.done_processing: multiprocessing.Semaphore = is_profiler_done
         # every line put in this queue should be profiled
-        self.profiler_queue = profiler_queue
+        self.profiler_queue: multiprocessing.Queue = profiler_queue
         self.timeformat = None
         self.input_type = False
         self.rec_lines = 0
@@ -230,10 +230,10 @@ class Profiler(ICore, IObservable):
             ):
                 self.gw_mac: str = flow.dmac
                 self.db.set_default_gateway("MAC", self.gw_mac)
-                self.print(
-                    f"MAC address of the gateway detected: "
-                    f"{green(self.gw_mac)}"
-                )
+                # self.print(
+                #     f"MAC address of the gateway detected: "
+                #     f"{green(self.gw_mac)}"
+                # )
                 gw_mac_found = True
 
         # we need the mac to be set to be able to find the ip using it
@@ -647,7 +647,8 @@ class Profiler(ICore, IObservable):
             except Exception as e:
                 self.print_traceback()
                 self.print(
-                    f"Problem processing line {line}. " f"Line discarded. {e}",
+                    f"Problem processing line {line}. "
+                    f"Line discarded. Error: {e}",
                     0,
                     1,
                 )
@@ -664,6 +665,14 @@ class Profiler(ICore, IObservable):
         return False
 
     def shutdown_gracefully(self):
+        self.stop_profiler_threads.set()
+        # wait for all flows to be processed by the profiler threads.
+        self.join_profiler_threads()
+        # close the queues to avoid deadlocks.
+        # this step SHOULD NEVER be done before closing the threads
+        self.flows_to_process_q.close()
+        self.profiler_queue.close()
+
         self.db.set_new_incoming_flows(False)
         self.print(
             f"Stopping. Total lines read: {self.rec_lines}",
@@ -701,13 +710,8 @@ class Profiler(ICore, IObservable):
             # without it, there's no way this module will know it's
             # time to stop and no new flows are coming
             if self.is_stop_msg(msg):
-                # DO NOT return/exit this module before all profilers are
-                # done. if you do, the profiler threads will shutdown
-                # before reading all flows as soon as we receive the stop msg.
-                # signal the threads to stop
-                self.stop_profiler_threads.set()
-                # wait for them to finish
-                self.join_profiler_threads()
+                # shutdown gracefully will be called by icore once this
+                # function returns
                 return 1
 
             self.pending_flows_queue_lock.acquire()

@@ -23,9 +23,8 @@ class SQLiteDB:
     """
 
     name = "SQLiteDB"
-    # used to lock each call to commit()
+    # used to lock operations using the self.cursor
     cursor_lock = Lock()
-    trial = 0
 
     def __init__(self, logger: Output, output_dir: str):
         self.printer = Printer(logger, self.name)
@@ -362,68 +361,80 @@ class SQLiteDB:
         """
         wrapper for sqlite fetchall to be able to use a lock
         """
-        self.cursor_lock.acquire(True)
-        res = self.cursor.fetchall()
-        self.cursor_lock.release()
+        with self.cursor_lock:
+            res = self.cursor.fetchall()
         return res
 
     def fetchone(self):
         """
         wrapper for sqlite fetchone to be able to use a lock
         """
-        self.cursor_lock.acquire(True)
-        res = self.cursor.fetchone()
-        self.cursor_lock.release()
+        with self.cursor_lock:
+            res = self.cursor.fetchone()
         return res
 
-    def execute(self, query, params=None):
+    def execute(self, query: str, params=None) -> None:
         """
-        wrapper for sqlite execute() To avoid 'Recursive use of cursors not allowed' error
-        and to be able to use a Lock()
+        wrapper for sqlite execute() To avoid
+         'Recursive use of cursors not allowed' error
+         and to be able to use a Lock()
+
         since sqlite is terrible with multi-process applications
-        this should be used instead of all calls to commit() and execute()
+        this function should be used instead of all calls to commit() and
+        execute()
+
+        using transactions here is a must.
+        Since slips uses python3.10, we can't use autocommit here. we have
+        to do it manually
+        any conn other than the current one will not see the changes this
+        conn did unless they're committed.
+
+        Each call to this function results in 1 sqlite transaction
         """
-        try:
-            self.cursor_lock.acquire(True)
-            # start a transaction
-            self.cursor.execute("BEGIN")
+        trial = 0
+        max_trials = 3
+        while trial < max_trials:
+            try:
+                with self.cursor_lock:
+                    if self.conn.in_transaction is False:
+                        self.cursor.execute("BEGIN")
 
-            if not params:
-                self.cursor.execute(query)
-            else:
-                self.cursor.execute(query, params)
+                    if params is None:
+                        self.cursor.execute(query)
+                    else:
+                        self.cursor.execute(query, params)
 
-            self.conn.commit()
+                # aka END TRANSACTION
+                if self.conn.in_transaction:
+                    self.conn.commit()
 
-            self.cursor_lock.release()
-            # counter for the number of times we tried executing a tx and failed
-            self.trial = 0
+                return
 
-        except sqlite3.Error as e:
-            self.cursor_lock.release()
-            self.conn.rollback()
-            if self.trial >= 2:
-                # tried 2 times to exec a query and it's still failing
-                self.trial = 0
-                # discard query
-                self.print(
-                    f"Error executing query: {query} {params}- {e}. "
-                    f"Query discarded",
-                    0,
-                    1,
-                )
+            except sqlite3.Error as err:
+                # no need to manually rollback here
+                # sqlite automatically rolls back the tx if an error occurs
+                trial += 1
 
-            elif "database is locked" in str(e):
-                # keep track of failed trials
-                self.trial += 1
+                if trial >= max_trials:
+                    self.print(
+                        f"Error executing query: "
+                        f"({query} {params}) - {err}. "
+                        f"Retried executing {trial} times but failed. "
+                        f"Query discarded.",
+                        0,
+                        1,
+                        log_to_logfiles_only=True,
+                    )
+                    return
 
-                # Retry after a short delay
-                sleep(5)
-                self.execute(query, params=params)
-            else:
-                # An error occurred during execution
-                self.conn.rollback()
-                # print(f"Re-trying to execute query ({query}). reason: {e}")
-                # keep track of failed trials
-                self.trial += 1
-                self.execute(query, params=params)
+                elif "database is locked" in str(err):
+                    sleep(5)
+                else:
+                    self.print(
+                        f"Re-trying to execute query "
+                        f"({query} - {params}) - {err}. "
+                        f"Trial number: {trial}.",
+                        0,
+                        1,
+                        log_to_logfiles_only=True,
+                    )
