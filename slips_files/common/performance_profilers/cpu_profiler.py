@@ -66,7 +66,8 @@ class DevProfiler(IPerformanceProfiler):
 
     def print(self):
         """
-        Save the profiling result to slips output directory
+        Prints the profiling result to cpu_profiling_result in slips output
+        directory
         """
         result_path = os.path.join(self.output, "cpu_profiling_result.json")
         self.profiler.save(output_file=result_path)

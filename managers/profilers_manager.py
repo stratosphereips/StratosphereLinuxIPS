@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+from slips_files.common.style import green
 
 
 class ProfilersManager:
@@ -62,7 +63,7 @@ class ProfilersManager:
                         "--tracer_entries",
                         tracer_entries,
                         "--max_stack_depth",
-                        "10",
+                        "5",
                         "-o",
                         output_file,
                         # viztracer takes -- as a separator between arguments
@@ -75,12 +76,13 @@ class ProfilersManager:
                     viz_args.append("--no-recurse")
                     print(
                         f"Starting multiprocess profiling recursive "
-                        f"subprocess: {' '.join(viz_args)}"
+                        f"subprocess using command: "
+                        f"{green(' '.join(viz_args))}"
                     )
                     subprocess.run(viz_args)
                     exit(0)
             else:
-                # reaching here means slips is statrted via the vistracer
+                # reaching here means slips is now running using the vistracer
                 # command
                 self.cpu_profiler = CPUProfiler(
                     db=self.main.db,
