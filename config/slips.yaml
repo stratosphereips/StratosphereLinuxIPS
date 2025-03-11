@@ -498,7 +498,7 @@ global_p2p:
    # this is the global p2p's trust model + global P2P
    # network handler combination. can only be enabled when
    # running slips on an interface
-   use_global_p2p: False
+   use_global_p2p: True
    iris_conf: config/iris_config.yaml
 
 #############################
