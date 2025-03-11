@@ -8,6 +8,7 @@ import sys
 class ProfilersManager:
     def __init__(self, main):
         self.main = main
+        self.args = self.main.args
         self.read_configurations()
 
     def read_configurations(self):
@@ -50,6 +51,12 @@ class ProfilersManager:
                 args = sys.argv
                 if args[-1] != "--no-recurse":
                     tracer_entries = str(self.cpu_profiler_dev_mode_entries)
+                    output_file = str(
+                        os.path.join(
+                            self.args.output,
+                            "cpu_profiling_result.json",
+                        )
+                    )
                     viz_args = [
                         "viztracer",
                         "--tracer_entries",
@@ -57,21 +64,24 @@ class ProfilersManager:
                         "--max_stack_depth",
                         "10",
                         "-o",
-                        str(
-                            os.path.join(
-                                self.args.output,
-                                "cpu_profiling_result.json",
-                            )
-                        ),
+                        output_file,
+                        # viztracer takes -- as a separator between arguments
+                        # to viztracer and positional arguments to your script.
+                        "--",
                     ]
+                    # add slips args
                     viz_args.extend(args)
+                    # add --no-recurse to avoid infinite recursion
                     viz_args.append("--no-recurse")
                     print(
-                        "Starting multiprocess profiling recursive subprocess"
+                        f"Starting multiprocess profiling recursive "
+                        f"subprocess: {' '.join(viz_args)}"
                     )
                     subprocess.run(viz_args)
                     exit(0)
             else:
+                # reaching here means slips is statrted via the vistracer
+                # command
                 self.cpu_profiler = CPUProfiler(
                     db=self.main.db,
                     output=self.args.output,

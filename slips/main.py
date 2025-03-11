@@ -45,7 +45,6 @@ class Main:
         self.conf = ConfigParser()
         self.metadata_man = MetadataManager(self)
         self.ui_man = UIManager(self)
-        self.profilers_manager = ProfilersManager(self)
         self.version = utils.get_slips_version()
         # will be filled later
         self.commit = "None"
@@ -57,6 +56,7 @@ class Main:
         # TODO use mocks instead of this testing param
         if not testing:
             self.args = self.conf.get_args()
+            self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
             self.checker.check_given_flags()
 
