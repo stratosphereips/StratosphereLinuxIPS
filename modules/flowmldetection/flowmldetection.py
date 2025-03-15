@@ -154,7 +154,7 @@ class FlowMLDetection(IModule):
             # 'Not Established', it is still 'S0' and others
             # So transform here
             dataset["state"] = dataset.apply(
-                lambda row: get_final_state_from_flags(
+                lambda row: self.db.get_final_state_from_flags(
                     row["state"], row["pkts"]
                 ),
                 axis=1,
