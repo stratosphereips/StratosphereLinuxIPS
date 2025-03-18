@@ -423,6 +423,7 @@ class ProfileHandler:
                     return "Established"
 
                 # For Argus
+                # In some flows the state is a nan
                 try:
                     suf = state.split("_")[1]
                 except AttributeError:
