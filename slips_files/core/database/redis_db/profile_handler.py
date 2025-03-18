@@ -395,7 +395,12 @@ class ProfileHandler:
         We receive the pakets to distinguish some Reset connections
         """
         try:
-            pre = state.split("_")[0]
+            # In some flows the state is a nan
+            try:
+                pre = state.split("_")[0]
+            except AttributeError:
+                pre = ''
+
             try:
                 # Try suricata states
                 """
@@ -417,7 +422,11 @@ class ProfileHandler:
                     return "Established"
 
                 # For Argus
-                suf = state.split("_")[1]
+            # In some flows the state is a nan
+                try:
+                    suf = state.split("_")[1]
+                except AttributeError:
+                    suf = ''
                 if "S" in pre and "A" in pre and "S" in suf and "A" in suf:
                     """
                     Examples:
@@ -518,7 +527,7 @@ class ProfileHandler:
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getFinalStateFromFlags() in database.py line {exception_line}",
+                f"Error in get_final_state_from_flags() in profile_handler.py line {exception_line}",
                 0,
                 1,
             )
