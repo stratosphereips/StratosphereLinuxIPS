@@ -135,6 +135,11 @@ class FlowMLDetection(IModule):
             for proto in to_discard:
                 dataset = dataset[dataset.proto != proto]
 
+            # If te proto is in the list to delete and there is only one flow, then the dataset will be empty
+            if dataset.empty:
+                # DataFrame is empty now, so return empty
+                return dataset
+
             # For now, discard these
             to_drop = [
                 "appproto",
