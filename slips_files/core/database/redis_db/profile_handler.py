@@ -409,9 +409,10 @@ class ProfileHandler:
                 these are: New, Established and Closed,for UDP only new and established.
                 For each of these states Suricata can employ different timeouts.
                 """
-                if "new" in state or "established" in state:
+                # This is controversial, but if we dont have a good state, we consider it not established for now
+                if "new" in state or state.lower() == "established":
                     return "Established"
-                elif "closed" in state:
+                elif "closed" in state or state.lower() == 'not established':
                     return "Not Established"
 
                 # We have varius type of states depending on the type of flow.
@@ -422,7 +423,6 @@ class ProfileHandler:
                     return "Established"
 
                 # For Argus
-            # In some flows the state is a nan
                 try:
                     suf = state.split("_")[1]
                 except AttributeError:
