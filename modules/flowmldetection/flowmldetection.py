@@ -318,6 +318,8 @@ class FlowMLDetection(IModule):
             # Convert the flow to a pandas dataframe
             raw_flow = pd.DataFrame(flow_to_process, index=[0])
             dflow = self.process_features(raw_flow)
+            if dflow.empty:
+                return None
             # Update the flow to the processed version
             return dflow
         except Exception:
