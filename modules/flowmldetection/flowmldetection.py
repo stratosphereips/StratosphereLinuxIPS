@@ -343,6 +343,23 @@ class FlowMLDetection(IModule):
                 "endtime",
                 "flow_source",
             ]
+            # For argus binetflows this fails because ther is a field calle bytes that was not in other flows. It should be called allbytes.
+            # Error
+            ''' [Flow ML Detection] Error in detect() while processing                                                                                                                                                                                                                         
+            dur proto  sport dport  state  pkts  spkts  dpkts  bytes  sbytes  dbytes  allbytes                                                                                                                                                                                    
+            0  63.822830     0  56119   981    0.0    15     15      0   8764    1887       0      1887                                                                                                                                                                                    
+            The feature names should match those that were passed during fit.                                                                                                                                                                                                              
+            Feature names unseen at fit time:                                                                                                                                                                                                                                              
+            - bytes     
+            '''
+
+            # IF we delete here the filed bytes the error is
+            # [Flow ML Detection] Error in detect() while processing 
+            # dur proto sport dport  state  pkts  spkts  dpkts  sbytes  dbytes allbytes                                                                                                                                                             
+            # 0  63.822830     0  56120   980    0.0    15     15      0    1887       0      1887                                                                                                                                                             
+            # The feature names should match those that were passed during fit.                                                                                                                                                                                
+            # Feature names must be in the same order as they were in fit.                                                                                                                                                                                     
+                                                                                                                                                                                                                                                 
             for field in fields_to_drop:
                 try:
                     x_flow = x_flow.drop(field, axis=1)
