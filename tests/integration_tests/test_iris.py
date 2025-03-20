@@ -293,5 +293,17 @@ def test_messaging(
     assert check_strings_in_file(expected_log_entry, log_file_second_iris)
 
     print("Deleting the output directories")
-    #shutil.rmtree(output_dir)
-    #shutil.rmtree(output_dir_peer)
+    shutil.rmtree(output_dir)
+    shutil.rmtree(output_dir_peer)
+    os.remove("modules/irisModule/second.priv")
+    modify_yaml_config(
+        input_path="config/iris_config.yaml",
+        output_dir=os.path.dirname(iris_peer_config_file),
+        output_filename=os.path.basename(iris_peer_config_file),
+        changes={
+            "Redis": {"Port": 6644},
+            "Server": {"Port": 9010},
+            "PeerDiscovery": {},
+            "Identity": {"KeyFile": "private.key"}
+        },
+    )

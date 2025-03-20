@@ -61,12 +61,12 @@ class IrisModule(IModule):
                     "Tl2NlChannel": "iris_internal",
                 }
             if "Server" in config:
-                config["Server"]["Port"] = 9010
+                #config["Server"]["Port"] = 9010
                 config["Server"]["Host"] = self.db.get_host_ip()
                 config["Server"]["DhtServerMode"] = "true"
             else:
                 config["Redis"] = {
-                    "Port": 9010,
+                    "Port": 6644,
                     "Host": self.db.get_host_ip(),
                     "DhtServerMode": "true",
                 }
