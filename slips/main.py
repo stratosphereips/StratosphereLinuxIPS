@@ -22,6 +22,9 @@ from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.performance_profilers.cpu_percentage_logger import (
+    CPUUsageTracker,
+)
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
@@ -70,6 +73,9 @@ class Main:
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
+                self.cpu_usage_tracker = CPUUsageTracker(
+                    output_dir=self.args.output, slips_pid=os.getpid()
+                )
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
@@ -448,6 +454,7 @@ class Main:
     def start(self):
         """Main Slips Function"""
         try:
+            self.cpu_usage_tracker.get_cpu_percentage()
             self.print_version()
             print("https://stratosphereips.org")
             print("-" * 27)
@@ -610,7 +617,7 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
-
+                self.cpu_usage_tracker.run()
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return
                 # value very quickly before

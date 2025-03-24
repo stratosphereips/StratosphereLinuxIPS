@@ -752,6 +752,7 @@ class ProcessManager:
                     f"shutdown gracefully - {reason}\n",
                     log_to_logfiles_only=True,
                 )
+            self.main.cpu_usage_tracker.get_cpu_percentage()
 
         except KeyboardInterrupt:
             return False
