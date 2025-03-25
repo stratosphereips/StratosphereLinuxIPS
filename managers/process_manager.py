@@ -79,7 +79,9 @@ class ProcessManager:
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
             self.main.input_type
         )
-        self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
+        self.bootstrap_p2p =  self.main.conf.is_bootstrapping_module()
+        self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
+        #self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(

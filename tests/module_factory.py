@@ -672,6 +672,8 @@ class ModuleFactory:
         main_mock = Mock()
         main_mock.conf.get_disabled_modules.return_value = []
         main_mock.conf.get_bootstrapping_setting.return_value = (False, [])
+        main_mock.conf.is_bootstrapping_node.return_value = False
+        main_mock.conf.get_bootstrapping_modules.return_value = ["fidesModule", "irisModule"]
         main_mock.input_type = "pcap"
         main_mock.mode = "normal"
         main_mock.stdout = ""
