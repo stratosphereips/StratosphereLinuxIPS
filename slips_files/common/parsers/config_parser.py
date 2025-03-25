@@ -724,6 +724,6 @@ class ConfigParser(object):
         )
 
     def get_bootstrapping_setting(self) -> (bool, list):
-        return self.read_configuration("global_p2p", "bootstrapping_node", False) \
+        return (self.read_configuration("global_p2p", "bootstrapping_node", False) \
             and self.read_configuration("global_p2p", "use_global_p2p", False) \
-            and ("-i" in sys.argv or "-g" in sys.argv), ["fidesModule", "irisModule"]
+            and ("-i" in sys.argv or "-g" in sys.argv), ["fidesModule", "irisModule"])
