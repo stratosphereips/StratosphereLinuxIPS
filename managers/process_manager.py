@@ -29,6 +29,8 @@ from exclusiveprocess import (
 )
 import multiprocessing
 
+from scipy.stats import bootstrap
+
 import modules
 from modules.update_manager.update_manager import UpdateManager
 from slips_files.common.slips_utils import utils
@@ -77,6 +79,7 @@ class ProcessManager:
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
             self.main.input_type
         )
+        self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
@@ -210,6 +213,25 @@ class ProcessManager:
                 return True
         return False
 
+    def is_bootstrapping_module(self, module_name: str) -> bool:
+        m1 = (
+            module_name.replace(" ", "")
+            .replace("_", "")
+            .replace("-", "")
+            .lower()
+        )
+        for bootstrap_module in self.boootstrapping_modules:
+            m2 = (
+                bootstrap_module.replace(" ", "")
+                .replace("_", "")
+                .replace("-", "")
+                .lower()
+            )
+
+            if m1.__contains__(m2):
+                return True
+        return False
+
     def is_abstract_module(self, obj) -> bool:
         return obj.name in ("IModule", "AsyncModule")
 
@@ -241,8 +263,12 @@ class ProcessManager:
             if dir_name != file_name:
                 continue
 
-            if self.is_ignored_module(module_name):
-                continue
+            if self.bootstrap_p2p:   # if bootstrapping the p2p network
+                if not self.is_bootstrapping_module(module_name): # keep only the bootstrapping-necessary modules
+                    continue
+            else: # if not bootstrappig mode
+                if self.is_ignored_module(module_name): # ignore blacklisted modules
+                    continue
 
             # Try to import the module, otherwise skip.
             try:
