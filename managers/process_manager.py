@@ -79,7 +79,7 @@ class ProcessManager:
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
             self.main.input_type
         )
-        self.bootstrap_p2p =  self.main.conf.is_bootstrapping_module()
+        self.bootstrap_p2p =  self.main.conf.is_bootstrapping_node()
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
         #self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
 
