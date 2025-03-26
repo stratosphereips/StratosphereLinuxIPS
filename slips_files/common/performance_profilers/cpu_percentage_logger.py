@@ -38,7 +38,7 @@ class CPUUsageTracker:
 
     def is_time_to_log_cpu_usage(self):
         """should return True every 5 mins"""
-        return time.time() - self.cpu_profiler_time >= 5 * 60 * 60
+        return time.time() - self.cpu_profiler_time >= 5 * 60
 
     def run(self):
         """captures cpu usage every 5 mins and logs the result to
