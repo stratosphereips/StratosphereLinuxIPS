@@ -15,6 +15,9 @@ from slips_files.common.abstracts.performance_profiler import (
 
 class CPUProfiler(IPerformanceProfiler):
     def __init__(self, db, output, mode="dev", limit=20, interval=20):
+        """
+        :param output: the currently used slips output directory
+        """
         valid_modes = ["dev", "live"]
         if mode not in valid_modes:
             print(
@@ -46,6 +49,9 @@ class CPUProfiler(IPerformanceProfiler):
 
 class DevProfiler(IPerformanceProfiler):
     def __init__(self, output):
+        """
+        :param output: the currently used slips output directory
+        """
         self.profiler = self._create_profiler()
         self.output = output
 
@@ -59,8 +65,12 @@ class DevProfiler(IPerformanceProfiler):
         self.profiler.stop()
 
     def print(self):
+        """
+        Prints the profiling result to cpu_profiling_result in slips output
+        directory
+        """
         result_path = os.path.join(self.output, "cpu_profiling_result.json")
-        self.profiler.save(result_path)
+        self.profiler.save(output_file=result_path)
 
 
 class LiveProfiler(IPerformanceProfiler):

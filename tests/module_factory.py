@@ -12,6 +12,7 @@ from multiprocessing import Queue
 
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
+from managers.profilers_manager import ProfilersManager
 from modules.flowalerts.conn import Conn
 from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
@@ -363,6 +364,13 @@ class ModuleFactory:
         main.db = mock_db
         main.args = Mock()
         return RedisManager(main)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_profilers_manager_obj(self, mock_db):
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.args = Mock()
+        return ProfilersManager(main)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_host_ip_manager_obj(self, mock_db):

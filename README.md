@@ -23,6 +23,7 @@ Slips v1.1.7
 [![License](https://img.shields.io/badge/Blog-Stratosphere-cyan)](https://www.stratosphereips.org/blog/tag/slips)
 [![Discord](https://img.shields.io/discord/761894295376494603?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/zu5HwMFy5C)
 ![Twitter Follow](https://img.shields.io/twitter/follow/StratosphereIPS?style=social)
+
 <hr>
 
 
