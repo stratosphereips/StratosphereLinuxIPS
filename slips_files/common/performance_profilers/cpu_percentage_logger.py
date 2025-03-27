@@ -16,9 +16,17 @@ class CPUUsageTracker:
 
         # to get the cpu stats for slips only
         self.slips_main_proc = psutil.Process(slips_pid)
+
+        # this interval specifies how long psutil should wait before
+        # computing the CPU usage. During that time, psutil compares CPU times
+        # from the start and end of the interval to determine how much CPU
+        # time was consumed
+        self.cpu_accum_interval = 5
+
         # this is the reference time. used to tell psutil to start tracking
         # cpu usage from now.
-        self.slips_main_proc.cpu_percent(interval=0.1)
+        self.slips_main_proc.cpu_percent(interval=self.cpu_accum_interval)
+
         # This is the time when the cpu profiler was started.
         # every x mins we'll be noting the cpu percentage.
         self.cpu_profiler_time = time.time()
@@ -29,10 +37,25 @@ class CPUUsageTracker:
         """
         # get the parent process cpu usage
         # this is the percentage since last call
-        cpu_usage = self.slips_main_proc.cpu_percent(interval=None)
+        cpu_usage = self.slips_main_proc.cpu_percent(
+            interval=self.cpu_accum_interval
+        )
+        # this line doesnt recognize ALL the grandchilds:D
+        # so we'll be looping through the grandchildren later
+        slips_main_children = self.slips_main_proc.children(recursive=True)
 
-        for child in self.slips_main_proc.children(recursive=True):
-            cpu_usage += child.cpu_percent(interval=None)
+        # print(f"@@@@@@@@@@@@@@@@ slips children :")
+        # pprint.pp(slips_main_children)
+        # print()
+
+        for child in slips_main_children:
+            try:
+                cpu_usage += child.cpu_percent(
+                    interval=self.cpu_accum_interval
+                )
+            except psutil.NoSuchProcess:
+                # some module may have terminated
+                pass
 
         return cpu_usage
 
@@ -47,6 +70,7 @@ class CPUUsageTracker:
         elapsed_time = round(elapsed_time, 2)
         with open(self.log_file_path, "a") as logger:
             logger.write(f"{elapsed_time}, {percentage}\n")
+        # print(f"{elapsed_time}, {percentage}\n")
 
     def is_time_to_log_cpu_usage(self):
         """should return True every 5 mins"""
