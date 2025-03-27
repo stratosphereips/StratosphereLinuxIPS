@@ -434,12 +434,3 @@ class SQLiteDB:
 
                 elif "database is locked" in str(err):
                     sleep(5)
-                else:
-                    self.print(
-                        f"Re-trying to execute query "
-                        f"({query} - {params}) - {err}. "
-                        f"Trial number: {trial}.",
-                        0,
-                        1,
-                        log_to_logfiles_only=True,
-                    )
