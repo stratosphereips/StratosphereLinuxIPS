@@ -15,17 +15,29 @@ class CPUUsageTracker:
             logger.write("'Time Elapsed (minutes)', 'CPU Percentage'\n")
 
         # to get the cpu stats for slips only
-        self.psutil_process = psutil.Process(slips_pid)
+        self.slips_main_proc = psutil.Process(slips_pid)
         # this is the reference time. used to tell psutil to start tracking
         # cpu usage from now.
-        self.psutil_process.cpu_percent(interval=0.1)
+        self.slips_main_proc.cpu_percent(interval=0.1)
         # This is the time when the cpu profiler was started.
         # every x mins we'll be noting the cpu percentage.
         self.cpu_profiler_time = time.time()
 
+    def get_cpu_usage_with_children(self):
+        """
+        Returns the cpu usage of the main slips proc and all of its children
+        """
+        # get the parent process cpu usage
+        # this is the percentage since last call
+        cpu_usage = self.slips_main_proc.cpu_percent(interval=None)
+
+        for child in self.slips_main_proc.children(recursive=True):
+            cpu_usage += child.cpu_percent(interval=None)
+
+        return cpu_usage
+
     def get_cpu_percentage(self):
-        # percentage since last call
-        percentage = self.psutil_process.cpu_percent(interval=None)
+        percentage = self.get_cpu_usage_with_children()
         now = time.time()
         self.cpu_profiler_time = now
         # since slips started
