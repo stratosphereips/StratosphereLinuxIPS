@@ -28,7 +28,7 @@ from slips_files.common.style import green
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
 from slips_files.common.performance_profilers.ram_usage_tracker import (
-    RamUsageTracker,
+    RAMUsageTracker,
 )
 
 logging.basicConfig(level=logging.WARNING)
@@ -72,7 +72,7 @@ class Main:
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
-                self.ram_usage_tracker = RamUsageTracker(
+                self.ram_usage_tracker = RAMUsageTracker(
                     self.args.output, os.getpid()
                 )
                 # this is the zeek dir slips will be using
