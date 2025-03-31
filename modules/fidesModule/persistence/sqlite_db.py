@@ -3,6 +3,7 @@ Programmers notes:
 
 Python has None, SQLite has NULL, conversion is automatic in both ways.
 """
+
 import os
 import sqlite3
 from typing import List, Any, Optional
@@ -38,7 +39,7 @@ class SQLiteDB:
         self.__create_tables()
 
     def __slips_log(self, txt: str) -> None:
-        self.logger.output_line(
+        self.logger.output_line_to_cli_and_logfiles(
             {"verbose": 2, "debug": 0, "from": self.name, "txt": txt}
         )
 
@@ -468,7 +469,9 @@ class SQLiteDB:
         Establishes a connection to the SQLite database.
         """
         self.__slips_log(f"Connecting to SQLite database at {self.db_path}")
-        self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.connection = sqlite3.connect(
+            self.db_path, check_same_thread=False
+        )
 
         if self.connection is None:
             self.__slips_log("Failed to connect to the SQLite database!")

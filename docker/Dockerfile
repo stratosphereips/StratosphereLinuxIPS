@@ -30,7 +30,6 @@ ENV NVM_DIR=/root/.nvm
 SHELL ["/bin/bash", "-c"]
 
 
-# Install wget and add Zeek and redis repositories to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
     ca-certificates \
