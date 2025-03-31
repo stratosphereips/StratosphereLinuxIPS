@@ -117,7 +117,7 @@ def test_output_line_all_outputs(mock_log_error, mock_log_line, mock_print):
         "debug": 1,
     }
 
-    output.output_line(msg)
+    output.output_line_to_cli_and_logfiles(msg)
 
     mock_print.assert_called_with(msg["from"], msg["txt"], end="\n")
     mock_log_line.assert_called_with(msg)
@@ -143,7 +143,7 @@ def test_output_line_no_outputs(mock_log_error, mock_log_line, mock_print):
         "debug": 0,
     }
 
-    output.output_line(msg)
+    output.output_line_to_cli_and_logfiles(msg)
 
     mock_print.assert_not_called()
     mock_log_line.assert_not_called()
@@ -165,7 +165,7 @@ def test_output_line_no_error_log(mock_log_error, mock_log_line, mock_print):
         "debug": 2,
     }
 
-    output.output_line(msg)
+    output.output_line_to_cli_and_logfiles(msg)
 
     mock_print.assert_called_with(msg["from"], msg["txt"], end="\n")
     mock_log_line.assert_called_with(msg)
@@ -189,13 +189,15 @@ def test_update(msg, expected_output_line_calls):
     """Test that the update method handles
     different cases correctly."""
     output = ModuleFactory().create_output_obj()
-    output.output_line = MagicMock()
+    output.output_line_to_cli_and_logfiles = MagicMock()
 
     output.update(msg)
 
-    assert output.output_line.call_count == len(expected_output_line_calls)
+    assert output.output_line_to_cli_and_logfiles.call_count == len(
+        expected_output_line_calls
+    )
     for call in expected_output_line_calls:
-        output.output_line.assert_any_call(call)
+        output.output_line_to_cli_and_logfiles.assert_any_call(call)
 
 
 def test_update_log_to_logfiles_only():
