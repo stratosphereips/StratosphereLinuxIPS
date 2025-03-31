@@ -12,7 +12,7 @@ class RAMUsageTracker:
         self.slips_start_time = time.time()
         self.log_file_path = os.path.join(output_dir, "ram_usage.csv")
         with open(self.log_file_path, "w") as logger:
-            logger.write("'Time Elapsed (minutes)', 'RAM Usage (MB)'")
+            logger.write("Time Elapsed (minutes), RAM Usage/USS (MB)\n")
 
         # to get the ram stats for slips only
         self.slips_main_proc = psutil.Process(slips_pid)
@@ -23,11 +23,13 @@ class RAMUsageTracker:
 
     def get_ram_usage_with_children(self) -> float:
         """
-        returns the ram usage of the main slips proc
+        returns the ram usage (USS) of the main slips proc
          and all of its children in MB
         """
         # get the parent process ram usage
-        ram_usage = self.slips_main_proc.memory_info().rss
+        # this https://gmpy.dev/blog/2016/real-process-memory-and-environ-in-python
+        # explains why we're using USS instead of RSS
+        ram_usage = self.slips_main_proc.memory_full_info().uss
 
         slips_main_children = self.slips_main_proc.children(recursive=True)
 
@@ -37,7 +39,7 @@ class RAMUsageTracker:
 
         for child in slips_main_children:
             try:
-                ram_usage += child.memory_info().rss
+                ram_usage += child.memory_full_info().uss
             except psutil.NoSuchProcess:
                 # some module may have terminated
                 pass
