@@ -128,8 +128,7 @@ class Output(IObserver):
 
         sender, msg = msg["from"], msg["txt"]
 
-        date_time = datetime.now()
-        date_time = utils.convert_format(date_time, utils.alerts_format)
+        date_time = utils.get_human_readable_datetime()
 
         self.slips_logfile_lock.acquire()
         with open(self.slips_logfile, "a") as slips_logfile:
@@ -158,8 +157,7 @@ class Output(IObserver):
         """
         Log error line to errors.log
         """
-        date_time = datetime.now()
-        date_time = utils.convert_format(date_time, utils.alerts_format)
+        date_time = utils.get_human_readable_datetime()
 
         self.errors_logfile_lock.acquire()
         with open(self.errors_logfile, "a") as errors_logfile:
@@ -178,7 +176,7 @@ class Output(IObserver):
         """
         return 0 < debug <= 3 and debug <= self.debug
 
-    def output_line(self, msg: dict):
+    def output_line_to_cli_and_logfiles(self, msg: dict):
         """
         Prints to terminal and logfiles depending on the debug and verbose
         levels
@@ -186,7 +184,7 @@ class Output(IObserver):
         verbose = msg.get("verbose", self.verbose)
         debug = msg.get("debug", self.debug)
         end = msg.get("end", "\n")
-        sender, txt = msg["from"], msg["txt"]
+        sender, txt = msg["from"], str(msg["txt"])
 
         # if debug level is 3 make it red
         if debug == 3:
@@ -227,5 +225,4 @@ class Output(IObserver):
         if msg.get("log_to_logfiles_only", False):
             self.log_line(msg)
         else:
-            # output to terminal
-            self.output_line(msg)
+            self.output_line_to_cli_and_logfiles(msg)

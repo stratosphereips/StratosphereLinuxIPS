@@ -80,6 +80,9 @@ def test_young_domain(
         query=domain,
         qclass_name="",
         qtype_name="",
+        dport="",
+        sport="",
+        proto="",
         rcode_name="NXDOMAIN",
         answers=answers,
         TTLs="",
@@ -183,7 +186,7 @@ def test_multiple_ssh_versions(
             Direction.SRC,
             Direction.DST,
             ThreatLevel.LOW,
-            "A connection from a private IP (192.168.0.1) "
+            "A connection from a private IP (192.168.0.1) on port 80/udp "
             "outside of the used local network 192.168.0.0/16."
             " To IP: 10.0.0.1 ",
         ),
@@ -196,9 +199,9 @@ def test_multiple_ssh_versions(
             Direction.DST,
             Direction.SRC,
             ThreatLevel.HIGH,
-            "A connection to a private IP "
-            "(192.168.1.1) outside of the used local network 192.168.0.0/16. "
-            "From IP: 192.168.0.1 using ARP",
+            "A connection to a private IP (192.168.1.1) on port 0/arp "
+            "outside of the used "
+            "local network 192.168.0.0/16. From IP: 192.168.0.1 using ARP",
         ),
         # Testcase 3: dst IP outside localnet, using port
         (
@@ -209,7 +212,7 @@ def test_multiple_ssh_versions(
             Direction.DST,
             Direction.SRC,
             ThreatLevel.HIGH,
-            "A connection to a private IP (192.168.1.2)"
+            "A connection to a private IP (192.168.1.2) on port 443/tcp"
             " outside of the used local network 192.168.0.0/16."
             " From IP: 192.168.0.1 on destination port: 443/TCP",
         ),
@@ -442,6 +445,9 @@ def test_dga(nxdomains, expected_confidence):
         daddr="1.1.1.1",
         query="google.com",
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers=["1.1.11.1"],
@@ -559,6 +565,9 @@ def test_dns_without_conn(
         starttime="1726568479.5997488",
         uid="1234",
         saddr=expected_attacker,
+        dport="",
+        sport="",
+        proto="",
         daddr=expected_victim,
         query=domain,
         qclass_name="",
@@ -590,6 +599,9 @@ def test_dns_arpa_scan():
         uid="1234",
         saddr="192.168.0.1",
         daddr="192.168.5.70",
+        dport="",
+        sport="",
+        proto="",
         query="",
         qclass_name="",
         qtype_name="",
@@ -660,35 +672,43 @@ def test_conn_without_dns(time_difference_hours, expected_confidence):
 
 
 @pytest.mark.parametrize(
-    "daddr, dport, proto, expected_description",
+    "state, daddr, dport, proto, expected_threat_level, expected_description",
     [
         # Testcase 1: Standard TCP connection to an unknown port
         (
+            "Established",
             "10.0.0.1",
             12345,
             "tcp",
+            ThreatLevel.HIGH,
             "Connection to unknown destination port 12345/TCP "
             "destination IP 10.0.0.1.",
         ),
         # Testcase 2: UDP connection to an unknown port
         (
+            "Established",
             "192.168.1.100",
             56789,
             "udp",
+            ThreatLevel.HIGH,
             "Connection to unknown destination port 56789/UDP "
             "destination IP 192.168.1.100.",
         ),
         # Testcase 3:  Edge case with port 0
         (
+            "not Established",
             "10.0.0.1",
             0,
             "tcp",
+            ThreatLevel.MEDIUM,
             "Connection to unknown destination port 0/TCP "
             "destination IP 10.0.0.1.",
         ),
     ],
 )
-def test_unknown_port(daddr, dport, proto, expected_description):
+def test_unknown_port(
+    state, daddr, dport, proto, expected_threat_level, expected_description
+):
     """Testing the unknown_port method."""
     set_ev = ModuleFactory().create_set_evidence_helper()
     set_ev.db.get_ip_identification.return_value = ""
@@ -708,9 +728,10 @@ def test_unknown_port(daddr, dport, proto, expected_description):
         dbytes=0,
         smac="",
         dmac="",
-        state="Established",
+        state=state,
         history="",
     )
+    flow.interpreted_state = flow.state
     set_ev.unknown_port("timewindow1", flow)
     assert set_ev.db.set_evidence.call_count == 1
     args, _ = set_ev.db.set_evidence.call_args
@@ -718,7 +739,7 @@ def test_unknown_port(daddr, dport, proto, expected_description):
     assert evidence.evidence_type == EvidenceType.UNKNOWN_PORT
     assert evidence.attacker.value == flow.saddr
     assert evidence.victim.value == daddr
-    assert evidence.threat_level == ThreatLevel.HIGH
+    assert evidence.threat_level == expected_threat_level
     assert evidence.profile.ip == flow.saddr
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]
@@ -879,7 +900,7 @@ def test_gre_tunnel():
     assert evidence.evidence_type == EvidenceType.GRE_TUNNEL
     assert evidence.attacker.value == flow.saddr
     assert evidence.victim.value == "10.0.0.1"
-    assert evidence.threat_level == ThreatLevel.INFO
+    assert evidence.threat_level == ThreatLevel.LOW
     assert evidence.profile.ip == flow.saddr
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]
@@ -1222,6 +1243,9 @@ def test_suspicious_dns_answer(
         daddr=daddr,
         query=query,
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers=answer,
@@ -1287,6 +1311,9 @@ def test_invalid_dns_answer(query, answer, expected_description):
         query=query,
         qclass_name="",
         qtype_name="",
+        dport="",
+        sport="",
+        proto="",
         rcode_name="",
         answers=answer,
         TTLs="",
@@ -1519,7 +1546,7 @@ def test_malicious_ja3(attacker_ip, threat_level, description, tags, ja3):
     assert evidence.uid == [flow.uid]
     expected_description = (
         f"Malicious JA3: {ja3} "
-        f"from source address {attacker_ip}. "
+        f"from source address {attacker_ip} to {flow.daddr}. "
         f"description: {description}."
     )
     if tags:
@@ -1810,7 +1837,8 @@ def test_doh(attacker_ip, victim_ip, profile_ip):
 
 def test_non_http_port_80_conn():
     """Testing the non_http_port_80_conn method."""
-    set_ev = ModuleFactory().create_set_evidence_helper()
+    http_analyzer = ModuleFactory().create_http_analyzer_obj()
+    set_evidence = http_analyzer.set_evidence
     flow = Conn(
         starttime="1726249372.312124",
         uid="123",
@@ -1830,10 +1858,10 @@ def test_non_http_port_80_conn():
         state="Established",
         history="",
     )
-    set_ev.non_http_port_80_conn(twid="timewindow2", flow=flow)
+    set_evidence.non_http_port_80_conn(twid="timewindow2", flow=flow)
 
-    assert set_ev.db.set_evidence.call_count == 2
-    args, _ = set_ev.db.set_evidence.call_args_list[0]
+    assert set_evidence.db.set_evidence.call_count == 2
+    args, _ = set_evidence.db.set_evidence.call_args_list[0]
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.NON_HTTP_PORT_80_CONNECTION
     assert evidence.attacker.value == flow.saddr
@@ -1843,7 +1871,7 @@ def test_non_http_port_80_conn():
     assert evidence.timewindow.number == 2
     assert evidence.uid == [flow.uid]
 
-    args, _ = set_ev.db.set_evidence.call_args_list[1]
+    args, _ = set_evidence.db.set_evidence.call_args_list[1]
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.NON_HTTP_PORT_80_CONNECTION
     assert evidence.attacker.value == "10.0.0.1"

@@ -170,13 +170,14 @@ class ASN:
 
         return asn
 
-    def update_ip_info(self, ip, cached_ip_info, asn):
+    def update_ip_info(self, ip, cached_ip_info, asn: dict):
         """
         if an asn is found using this module, we update the IP's
         info in the db in 'IPsinfo' key with
         the ASN info we found
         asn is a dict with 2 keys 'number' and 'org'
-        cached_ip_info: info from 'IPsInfo' key passed from ip_info.py module
+        :param asn: new asn to add to the db. found by this module.
+        :param cached_ip_info: old info from 'IPsInfo' key in the db
         """
         asn.update({"timestamp": time.time()})
         cached_ip_info.update(asn)
@@ -185,7 +186,8 @@ class ASN:
 
     def get_asn(self, ip, cached_ip_info):
         """
-        Gets ASN info about IP, either cached, from our offline mmdb or from ip-api.com
+        Gets ASN info about IP, either cached, from our offline mmdb or
+        from ip-api.com
         """
         # do we have asn cached for this range?
         if cached_asn := self.get_cached_asn(ip):
@@ -197,7 +199,8 @@ class ASN:
             # either way we need to cache the asn of this ip's range so we don't search for ips in the same range
             # cache this range in our redis db
             if asn := self.cache_ip_range(ip):
-                # range is cached and we managed to get the number and org of the given ip using whois
+                # range is cached and we managed to get the number and org of
+                # the given ip using whois
                 # no need to search online or offline
                 self.update_ip_info(ip, cached_ip_info, asn)
                 return

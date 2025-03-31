@@ -1,0 +1,12 @@
+Identity:
+  GenerateNewKey: true
+Server:
+  port: 9010
+  Host: 127.0.0.1
+  DhtServerMode: true
+Redis:
+  Host: 127.0.0.1
+  Port: 6644
+  Tl2NlChannel: iris_internal
+PeerDiscovery:
+  DisableBootstrappingNodes: true

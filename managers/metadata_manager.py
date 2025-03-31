@@ -7,7 +7,6 @@ import sys
 import os
 import shutil
 import json
-from datetime import datetime
 from typing import (
     Tuple,
     Set,
@@ -48,11 +47,10 @@ class MetadataManager:
         shutil.copy(config_file, metadata_dir)
 
         # Add a copy of whitelist.conf
-        whitelist = self.main.conf.whitelist_path()
+        whitelist = self.main.conf.local_whitelist_path()
         shutil.copy(whitelist, metadata_dir)
 
-        now = datetime.now()
-        now = utils.convert_format(now, utils.alerts_format)
+        now = utils.get_human_readable_datetime()
 
         self.info_path = os.path.join(metadata_dir, "info.txt")
         cmd = " ".join(sys.argv)
@@ -106,7 +104,7 @@ class MetadataManager:
         """
         save info about name, size, analysis start date in the db
         """
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
+        now = utils.get_human_readable_datetime()
         to_ignore: dict = self.main.conf.get_disabled_modules(
             self.main.input_type
         )

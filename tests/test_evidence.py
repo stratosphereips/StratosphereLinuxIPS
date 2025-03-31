@@ -72,10 +72,10 @@ def test_evidence_post_init(
     confidence,
 ):
     attacker = ModuleFactory().create_attacker_obj(
-        value=attacker_value, direction=Direction.SRC, attacker_type=IoCType.IP
+        value=attacker_value, direction=Direction.SRC, ioc_type=IoCType.IP
     )
     victim = ModuleFactory().create_victim_obj(
-        direction=Direction.DST, victim_type=IoCType.IP, value=victim_value
+        direction=Direction.DST, ioc_type=IoCType.IP, value=victim_value
     )
     profile = ModuleFactory().create_profileid_obj(ip=profile_ip)
     timewindow = ModuleFactory().create_timewindow_obj(
@@ -119,7 +119,7 @@ def test_evidence_post_init_invalid_uid():
             description="ARP scan detected",
             attacker=ModuleFactory().create_attacker_obj(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value="192.168.1.1",
             ),
             threat_level=ThreatLevel.LOW,
@@ -129,7 +129,7 @@ def test_evidence_post_init_invalid_uid():
             timestamp="2023/10/26 10:10:10.000000+0000",
             victim=ModuleFactory().create_victim_obj(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value="192.168.1.3",
             ),
             proto=Proto.TCP,
@@ -211,10 +211,10 @@ def test_evidence_to_dict(
     confidence,
 ):
     attacker = ModuleFactory().create_attacker_obj(
-        value=attacker_value, direction=Direction.SRC, attacker_type=IoCType.IP
+        value=attacker_value, direction=Direction.SRC, ioc_type=IoCType.IP
     )
     victim = ModuleFactory().create_victim_obj(
-        direction=Direction.DST, victim_type=IoCType.IP, value=victim_value
+        direction=Direction.DST, ioc_type=IoCType.IP, value=victim_value
     )
     profile = ModuleFactory().create_profileid_obj(ip=profile_ip)
     timewindow = ModuleFactory().create_timewindow_obj(
@@ -244,11 +244,11 @@ def test_evidence_to_dict(
     assert evidence_dict["evidence_type"] == evidence_type.name
     assert evidence_dict["description"] == description
     assert evidence_dict["attacker"]["direction"] == Direction.SRC.name
-    assert evidence_dict["attacker"]["attacker_type"] == IoCType.IP.name
+    assert evidence_dict["attacker"]["ioc_type"] == IoCType.IP.name
     assert evidence_dict["attacker"]["value"] == attacker_value
     assert evidence_dict["threat_level"] == threat_level.name
     assert evidence_dict["victim"]["direction"] == Direction.DST.name
-    assert evidence_dict["victim"]["victim_type"] == IoCType.IP.name
+    assert evidence_dict["victim"]["ioc_type"] == IoCType.IP.name
     assert evidence_dict["victim"]["value"] == victim_value
     assert evidence_dict["profile"]["ip"] == profile_ip
     assert evidence_dict["timewindow"]["number"] == timewindow_number

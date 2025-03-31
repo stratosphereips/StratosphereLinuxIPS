@@ -18,8 +18,10 @@ from slips_files.core.structures.evidence import (
     Direction,
 )
 
+ESTAB = "Established"
 
-class SetEvidnceHelper:
+
+class SetEvidenceHelper:
     def __init__(self, db):
         self.db = db
 
@@ -41,12 +43,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.CN_URL_MISMATCH,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.DOMAIN,
+                ioc_type=IoCType.DOMAIN,
                 value=flow.server_name,
             ),
             threat_level=ThreatLevel.LOW,
@@ -67,12 +69,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.CN_URL_MISMATCH,
             attacker=Attacker(
                 direction=Direction.DST,
-                attacker_type=IoCType.DOMAIN,
+                ioc_type=IoCType.DOMAIN,
                 value=flow.server_name,
             ),
             victim=Victim(
                 direction=Direction.SRC,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
@@ -95,14 +97,14 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DIFFERENT_LOCALNET,
             attacker=Attacker(
                 direction=Direction.DST,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=ThreatLevel.INFO,
             description=description,
             victim=Victim(
                 direction=Direction.SRC,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             profile=ProfileID(ip=flow.daddr),
@@ -134,7 +136,7 @@ class SetEvidnceHelper:
                 evidence_type=EvidenceType.YOUNG_DOMAIN,
                 attacker=Attacker(
                     direction=Direction.DST,
-                    attacker_type=IoCType.IP,
+                    ioc_type=IoCType.IP,
                     value=attacker,
                 ),
                 threat_level=ThreatLevel.LOW,
@@ -157,7 +159,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.YOUNG_DOMAIN,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
@@ -195,7 +197,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MULTIPLE_SSH_VERSIONS,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
@@ -218,34 +220,36 @@ class SetEvidnceHelper:
         if ip_outside_localnet == "srcip":
             attacker = Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             )
             victim = Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             )
             threat_level = ThreatLevel.LOW
             description = (
-                f"A connection from a private IP ({flow.saddr}) "
+                f"A connection from a private IP ({flow.saddr}) on port "
+                f"{flow.dport}/{flow.proto} "
                 f"outside of the used local network "
                 f"{self.db.get_local_network()}. To IP: {flow.daddr} "
             )
         else:
             attacker = Attacker(
                 direction=Direction.DST,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             )
             victim = Victim(
                 direction=Direction.SRC,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             )
             threat_level = ThreatLevel.HIGH
             description = (
-                f"A connection to a private IP ({flow.daddr}) "
+                f"A connection to a private IP ({flow.daddr}) on port"
+                f" {flow.dport}/{flow.proto} "
                 f"outside of the used local network "
                 f"{self.db.get_local_network()}. "
                 f"From IP: {flow.saddr} "
@@ -290,7 +294,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DEVICE_CHANGING_IP,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=threat_level,
@@ -301,69 +305,6 @@ class SetEvidnceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
-        )
-
-        self.db.set_evidence(evidence)
-
-    def non_http_port_80_conn(self, twid, flow) -> None:
-        description: str = (
-            f"non-HTTP established connection to port 80. "
-            f"destination IP: {flow.daddr}"
-        )
-
-        twid_number: int = int(twid.replace("timewindow", ""))
-        # to add a correlation between the 2 evidence in alerts.json
-        evidence_id_of_dstip_as_the_attacker = str(uuid4())
-        evidence_id_of_srcip_as_the_attacker = str(uuid4())
-        evidence: Evidence = Evidence(
-            id=evidence_id_of_srcip_as_the_attacker,
-            rel_id=[evidence_id_of_dstip_as_the_attacker],
-            evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
-            attacker=Attacker(
-                direction=Direction.SRC,
-                attacker_type=IoCType.IP,
-                value=flow.saddr,
-            ),
-            victim=Victim(
-                direction=Direction.DST,
-                victim_type=IoCType.IP,
-                value=flow.daddr,
-            ),
-            threat_level=ThreatLevel.LOW,
-            description=description,
-            profile=ProfileID(ip=flow.saddr),
-            timewindow=TimeWindow(number=twid_number),
-            uid=[flow.uid],
-            timestamp=flow.starttime,
-            confidence=0.8,
-            src_port=flow.sport,
-            dst_port=flow.dport,
-        )
-        self.db.set_evidence(evidence)
-
-        evidence: Evidence = Evidence(
-            id=evidence_id_of_dstip_as_the_attacker,
-            rel_id=[evidence_id_of_srcip_as_the_attacker],
-            evidence_type=EvidenceType.NON_HTTP_PORT_80_CONNECTION,
-            attacker=Attacker(
-                direction=Direction.DST,
-                attacker_type=IoCType.IP,
-                value=flow.daddr,
-            ),
-            victim=Victim(
-                direction=Direction.SRC,
-                victim_type=IoCType.IP,
-                value=flow.saddr,
-            ),
-            threat_level=ThreatLevel.MEDIUM,
-            description=description,
-            profile=ProfileID(ip=flow.daddr),
-            timewindow=TimeWindow(number=twid_number),
-            uid=[flow.uid],
-            timestamp=flow.starttime,
-            confidence=0.8,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
 
         self.db.set_evidence(evidence)
@@ -381,12 +322,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.NON_SSL_PORT_443_CONNECTION,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
@@ -415,12 +356,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.INCOMPATIBLE_CN,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
@@ -451,7 +392,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DGA_NXDOMAINS,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.HIGH,
@@ -484,12 +425,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.DNS_WITHOUT_CONNECTION,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.DOMAIN,
+                ioc_type=IoCType.DOMAIN,
                 value=flow.query,
             ),
             threat_level=ThreatLevel.INFO,
@@ -518,7 +459,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.PASTEBIN_DOWNLOAD,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
@@ -540,7 +481,7 @@ class SetEvidnceHelper:
         threat_level: ThreatLevel = ThreatLevel.INFO
 
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=flow.saddr
         )
 
         # The first 5 hours the confidence of connection w/o DNS
@@ -591,7 +532,7 @@ class SetEvidnceHelper:
             description=description,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=threat_level,
@@ -614,20 +555,24 @@ class SetEvidnceHelper:
             f"Connection to unknown destination port {flow.dport}/"
             f"{flow.proto.upper()} destination IP {flow.daddr}."
         )
+        if flow.interpreted_state == ESTAB:
+            threat_level = ThreatLevel.HIGH
+        else:
+            threat_level = ThreatLevel.MEDIUM
 
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.UNKNOWN_PORT,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
-            threat_level=ThreatLevel.HIGH,
+            threat_level=threat_level,
             description=description,
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
@@ -655,7 +600,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.PASSWORD_GUESSING,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=scanning_ip,
             ),
             threat_level=ThreatLevel.HIGH,
@@ -679,7 +624,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.PASSWORD_GUESSING,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.HIGH,
@@ -703,7 +648,7 @@ class SetEvidnceHelper:
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.HIGH,
             description=description,
@@ -732,7 +677,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.CONNECTION_TO_PRIVATE_IP,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
@@ -744,7 +689,7 @@ class SetEvidnceHelper:
             confidence=confidence,
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             src_port=flow.sport,
@@ -755,7 +700,7 @@ class SetEvidnceHelper:
 
     def gre_tunnel(self, twid, flow) -> None:
         confidence: float = 1.0
-        threat_level: ThreatLevel = ThreatLevel.INFO
+        threat_level: ThreatLevel = ThreatLevel.LOW
         twid_number: int = int(twid.replace("timewindow", ""))
 
         description: str = (
@@ -767,12 +712,45 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.GRE_TUNNEL,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
+                value=flow.daddr,
+            ),
+            threat_level=threat_level,
+            description=description,
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=confidence,
+        )
+
+        self.db.set_evidence(evidence)
+
+    def gre_scan(self, twid, flow) -> None:
+        confidence: float = 1.0
+        threat_level: ThreatLevel = ThreatLevel.LOW
+        twid_number: int = int(twid.replace("timewindow", ""))
+
+        description: str = (
+            f"GRE scan from {flow.saddr} "
+            f"to {flow.daddr} tunnel action: {flow.action}"
+        )
+
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.GRE_SCAN,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            victim=Victim(
+                direction=Direction.DST,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=threat_level,
@@ -797,12 +775,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.scanning_ip,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.msg.split("ports of host ")[-1].split(" in")[0],
             ),
             threat_level=ThreatLevel.HIGH,
@@ -839,12 +817,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.SSH_SUCCESSFUL,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=daddr,
             ),
             threat_level=threat_level,
@@ -883,7 +861,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.LONG_CONNECTION,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,
@@ -895,7 +873,7 @@ class SetEvidnceHelper:
             timestamp=flow.starttime,
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             src_port=flow.sport,
@@ -911,7 +889,7 @@ class SetEvidnceHelper:
         confidence: float = 0.5
         twid: int = int(twid.replace("timewindow", ""))
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=flow.saddr
         )
 
         description = f"Self-signed certificate. Destination IP: {flow.daddr}."
@@ -941,7 +919,7 @@ class SetEvidnceHelper:
         self.db.set_evidence(evidence)
 
         attacker: Attacker = Attacker(
-            direction=Direction.DST, attacker_type=IoCType.IP, value=flow.daddr
+            direction=Direction.DST, ioc_type=IoCType.IP, value=flow.daddr
         )
         evidence: Evidence = Evidence(
             id=evidence_id_of_dstip_as_the_attacker,
@@ -980,12 +958,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=threat_level,
@@ -1019,12 +997,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=threat_level,
@@ -1070,12 +1048,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.CONNECTION_TO_MULTIPLE_PORTS,
             attacker=Attacker(
                 direction=attacker_direction,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=attacker,
             ),
             victim=Victim(
                 direction=victim_direction,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=victim,
             ),
             threat_level=ThreatLevel.INFO,
@@ -1109,7 +1087,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.HIGH_ENTROPY_DNS_ANSWER,
             attacker=Attacker(
                 direction=Direction.DST,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=ThreatLevel.MEDIUM,
@@ -1129,7 +1107,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.HIGH_ENTROPY_DNS_ANSWER,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,
@@ -1155,12 +1133,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.INVALID_DNS_RESOLUTION,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.DOMAIN,
+                ioc_type=IoCType.DOMAIN,
                 value=flow.query,
             ),
             threat_level=ThreatLevel.INFO,
@@ -1197,12 +1175,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.PORT_0_CONNECTION,
             attacker=Attacker(
                 direction=attacker_direction,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=attacker,
             ),
             victim=Victim(
                 direction=victim_direction,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=victim,
             ),
             threat_level=threat_level,
@@ -1247,7 +1225,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MALICIOUS_JA3S,
             attacker=Attacker(
                 direction=Direction.DST,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=threat_level,
@@ -1268,7 +1246,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MALICIOUS_JA3S,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,
@@ -1293,7 +1271,8 @@ class SetEvidnceHelper:
         ja3_description: str = ja3_info["description"]
 
         description = (
-            f"Malicious JA3: {flow.ja3} from source address {flow.saddr}."
+            f"Malicious JA3: {flow.ja3} from source address {flow.saddr} "
+            f"to {flow.daddr}."
         )
         if ja3_description != "None":
             description += f" description: {ja3_description}."
@@ -1304,12 +1283,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MALICIOUS_JA3,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=threat_level,
@@ -1346,7 +1325,7 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_dstip_as_the_attacker],
             evidence_type=EvidenceType.DATA_UPLOAD,
             attacker=Attacker(
-                direction=Direction.SRC, attacker_type=IoCType.IP, value=saddr
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.INFO,
             confidence=0.6,
@@ -1364,7 +1343,7 @@ class SetEvidnceHelper:
             rel_id=[evidence_id_of_srcip_as_the_attacker],
             evidence_type=EvidenceType.DATA_UPLOAD,
             attacker=Attacker(
-                direction=Direction.DST, attacker_type=IoCType.IP, value=daddr
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
             ),
             threat_level=ThreatLevel.HIGH,
             confidence=0.6,
@@ -1387,12 +1366,12 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.BAD_SMTP_LOGIN,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=threat_level,
@@ -1421,10 +1400,10 @@ class SetEvidnceHelper:
             f"{smtp_bruteforce_threshold} logins in 10 seconds. "
         )
         attacker: Attacker = Attacker(
-            direction=Direction.SRC, attacker_type=IoCType.IP, value=flow.saddr
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=flow.saddr
         )
         victim = Victim(
-            direction=Direction.DST, victim_type=IoCType.IP, value=flow.daddr
+            direction=Direction.DST, ioc_type=IoCType.IP, value=flow.daddr
         )
 
         evidence: Evidence = Evidence(
@@ -1466,7 +1445,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MALICIOUS_SSL_CERT,
             attacker=Attacker(
                 direction=Direction.DST,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
             threat_level=threat_level,
@@ -1486,7 +1465,7 @@ class SetEvidnceHelper:
             evidence_type=EvidenceType.MALICIOUS_SSL_CERT,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.LOW,

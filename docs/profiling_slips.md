@@ -85,7 +85,7 @@ Use WASD to zoom in and move left/right.
 ### CPU Profiler Live Mode
 #### Step 1
 Go to slips.yaml and make sure the settings are set correctly.
-```cpu_profiler_enable = yes```
+```cpu_profiler_enable = True```
 ```cpu_profiler_mode = live```
 
 You can also set maximum output lines (live mode only)  to adjust profiler behavior.
@@ -112,7 +112,7 @@ If we print out the data getting sent to the “cpu_profile” redis channel, it
 
 The memory profiler settings are much simpler.
 in slips.yaml, first, enable memory profiling
-```memory_profiler_enable = yes```
+```memory_profiler_enable = True```
 
 
 and set profiling mode:
@@ -120,7 +120,7 @@ and set profiling mode:
 ```memory_profiler_mode = dev```
 
 now, profile all subprocesses
-```memory_profiler_multiprocess = yes```
+```memory_profiler_multiprocess = True```
 
 #### Step 2
 
@@ -158,9 +158,9 @@ Under the table directory, the files are much simpler. They just show a table of
 Go to ```slips.yaml``` and use the following settings
 
 ```
-memory_profiler_enable = yes
-memory_profiler_mode = yes
-memory_profiler_multiprocess = yes
+memory_profiler_enable = True
+memory_profiler_mode = True
+memory_profiler_multiprocess = True
 ```
 
 ### Step 2

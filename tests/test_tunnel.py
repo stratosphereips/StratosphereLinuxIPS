@@ -30,7 +30,7 @@ def test_check_gre_tunnel(mocker, tunnel_type, expected_call_count):
     """
     tunnel = ModuleFactory().create_tunnel_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidnceHelper.gre_tunnel"
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.gre_tunnel"
     )
     flow = Tunnel(
         starttime="1726655400.0",
@@ -43,6 +43,37 @@ def test_check_gre_tunnel(mocker, tunnel_type, expected_call_count):
         action="TUNNEL",
     )
     tunnel.check_gre_tunnel("timewindow1", flow)
+    assert mock_set_evidence.call_count == expected_call_count
+
+
+@pytest.mark.parametrize(
+    "tunnel_type, expected_call_count",
+    [
+        # testcase 1: Check if GRE tunnel is detected
+        # and evidence is set
+        ("Tunnel::GRE", 1),
+        # testcase 2: Check if non-GRE tunnel is ignored
+        ("Tunnel::IP", 0),
+        # testcase 3: Check if invalid tunnel type is ignored
+        ("Invalid", 0),
+    ],
+)
+def test_check_gre_scan(mocker, tunnel_type, expected_call_count):
+    tunnel = ModuleFactory().create_tunnel_analyzer_obj()
+    mock_set_evidence = mocker.patch(
+        "modules.flowalerts.set_evidence.SetEvidenceHelper.gre_scan"
+    )
+    flow = Tunnel(
+        starttime="1726655400.0",
+        uid="1234",
+        saddr="192.168.0.1",
+        daddr="10.0.0.1",
+        sport="",
+        dport="",
+        tunnel_type=tunnel_type,
+        action="Tunnel::DISCOVER",
+    )
+    tunnel.check_gre_scan("timewindow1", flow)
     assert mock_set_evidence.call_count == expected_call_count
 
 
@@ -62,12 +93,13 @@ def test_analyze_with_message(mocker):
         "channel": "new_tunnel",
         "data": json.dumps({"twid": "timewindow1", "flow": asdict(flow)}),
     }
-    expected_check_gre_call_count = 1
     tunnel = ModuleFactory().create_tunnel_analyzer_obj()
     tunnel.flowalerts.get_msg = Mock(return_value=msg)
     tunnel.check_gre_tunnel = Mock()
+    tunnel.check_gre_scan = Mock()
     tunnel.analyze(msg)
-    assert tunnel.check_gre_tunnel.call_count == expected_check_gre_call_count
+    assert tunnel.check_gre_tunnel.call_count == 1
+    assert tunnel.check_gre_scan.call_count == 1
 
 
 def test_analyze_without_message(

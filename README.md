@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.1.6
+Slips v1.1.7
 </h1>
 
 
@@ -23,6 +23,7 @@ Slips v1.1.6
 [![License](https://img.shields.io/badge/Blog-Stratosphere-cyan)](https://www.stratosphereips.org/blog/tag/slips)
 [![Discord](https://img.shields.io/discord/761894295376494603?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/zu5HwMFy5C)
 ![Twitter Follow](https://img.shields.io/twitter/follow/StratosphereIPS?style=social)
+
 <hr>
 
 
@@ -53,6 +54,7 @@ Slips is a powerful endpoint behavioral intrusion prevention and detection syste
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" width="850px" title="Slips in action.">
 
+---
 
 
 # Introduction
@@ -64,6 +66,7 @@ Slips is supported on Linux, MacOS, and windows dockers only. The blocking featu
 Slips is Python-based and relies on [Zeek network analysis framework](https://zeek.org/get-zeek/) for capturing live traffic and analyzing PCAPs. and relies on
 Redis >= 7.0.4 for interprocess communication.
 
+---
 
 # Usage
 
@@ -102,6 +105,7 @@ cat output_dir/alerts.log
 
 [For a detailed explanation of Slips parameters](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-parameters)
 
+---
 
 
 # Graphical User Interface
@@ -136,6 +140,7 @@ For more info about the Kalipso interface, check the docs: https://stratospherel
 
 Slips requires Python 3.10.12 and at least 4 GBs of RAM to run smoothly.
 
+---
 
 # Installation
 
@@ -169,6 +174,8 @@ Slips has a [config/slips.yaml](https://github.com/stratosphereips/StratosphereL
 
 [More details about the config file options here]( https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#modifying-the-configuration-file)
 
+---
+
 # Features
 Slips key features are:
 
@@ -184,6 +191,7 @@ Slips key features are:
 * **Detailed Documentation**: Slips provides detailed documentation guiding users through usage instructions for efficient utilization of its features.
 * **Federated learning** Using the feel_project submodule. for more information [check the docs](https://github.com/stratosphereips/feel_project/blob/main/docs/Federated_Learning.md)
 
+---
 
 # Contributing
 
@@ -203,20 +211,30 @@ Check [Slips in GSoC2023](https://github.com/stratosphereips/Google-Summer-of-Co
 You can [join our conversations in Discord](https://discord.gg/zu5HwMFy5C) for questions and discussions.
 We appreciate your contributions and thank you for helping to improve Slips!
 
+---
 
 # Documentation
 [User documentation](https://stratospherelinuxips.readthedocs.io/en/develop/)
 
 [Code docs](https://stratospherelinuxips.readthedocs.io/en/develop/code_documentation.html )
 
+---
+
 # Troubleshooting
 
-If you can't listen to an interface without sudo,
-you can run the following command to let any user use Zeek to listen to an interface not just root.
+If you can't listen to an interface without sudo, foe example when zeek is throwing the following error:
+```bash
+fatal error: problem with interface wlan0 (pcap_error: socket: Operation not permitted (pcap_activate))
+```
+
+you can adjust zeek capabilities using the following command
 
 ```
 sudo setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
 ```
+
+
+---
 
 You can [join our conversations in Discord](https://discord.gg/zu5HwMFy5C) for questions and discussions.
 
@@ -225,9 +243,14 @@ Or email us at
 * eldraco@gmail.com,
 * alyaggomaa@gmail.com
 
+---
+
 # License
 
  [GNU General Public License](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/master/LICENCE)
+
+---
+
 
 # Credits
 
@@ -248,10 +271,15 @@ Contributors:
 * [Lukas Forst](https://github.com/LukasForst)
 * [Daniel Yang](https://github.com/danieltherealyang)
 
+---
+
+
 # Changelog
 
 https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/CHANGELOG.md
 
+
+---
 
 # Demos
 The following videos contain demos of Slips in action in various events:
@@ -265,6 +293,7 @@ The following videos contain demos of Slips in action in various events:
 - 2019 OpenAlt, Fantastic Attacks and How Kalipso can Find Them [[video](https://www.youtube.com/watch?v=p2FL2sECpS0&t=1s)]
 - 2016 Ekoparty, Stratosphere IPS. The free machine learning malware detection [[video](https://www.youtube.com/watch?v=IazEdK8R4YI)]
 
+---
 
 # Funding
 We are grateful for the generous support and funding provided by the following organizations:

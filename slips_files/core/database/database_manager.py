@@ -222,9 +222,6 @@ class DBManager:
     def mark_srcip_as_seen_in_connlog(self, *args, **kwargs):
         return self.rdb.mark_srcip_as_seen_in_connlog(*args, **kwargs)
 
-    def is_gw_mac(self, *args, **kwargs):
-        return self.rdb.is_gw_mac(*args, **kwargs)
-
     def get_ip_of_mac(self, *args, **kwargs):
         return self.rdb.get_ip_of_mac(*args, **kwargs)
 
@@ -314,6 +311,12 @@ class DBManager:
 
     def get_host_ip(self, *args, **kwargs):
         return self.rdb.get_host_ip(*args, **kwargs)
+
+    def set_new_incoming_flows(self, *args, **kwargs):
+        return self.rdb.set_new_incoming_flows(*args, **kwargs)
+
+    def will_slips_have_new_incoming_flows(self, *args, **kwargs):
+        return self.rdb.will_slips_have_new_incoming_flows(*args, **kwargs)
 
     def set_host_ip(self, *args, **kwargs):
         return self.rdb.set_host_ip(*args, **kwargs)
@@ -952,3 +955,34 @@ class DBManager:
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
+
+    def get_fides_ti(self, target: str):
+        return self.rdb.get_fides_ti(target)
+
+    def save_fides_ti(self, target: str, STI: str):
+        self.rdb.save_fides_ti(target, STI)
+
+    def store_connected_peers(self, peers: List[str]):
+        self.rdb.store_connected_peers(peers)
+
+    def get_connected_peers(self):
+        return self.rdb.get_connected_peers()  # no data -> []
+
+    def store_peer_trust_data(self, id: str, td: str):
+        self.rdb.update_peer_td(id, td)
+
+    def get_peer_trust_data(self, id: str):
+        return self.rdb.get_peer_td(id)
+
+    def get_all_peers_trust_data(self):
+        return self.rdb.get_all_peers_td()
+
+    def cache_network_opinion(self, target: str, opinion: dict, time: float):
+        self.rdb.cache_network_opinion(target, opinion, time)
+
+    def get_cached_network_opinion(
+        self, target: str, cache_valid_seconds: int, current_time: float
+    ):
+        return self.rdb.get_cached_network_opinion(
+            target, cache_valid_seconds, current_time
+        )

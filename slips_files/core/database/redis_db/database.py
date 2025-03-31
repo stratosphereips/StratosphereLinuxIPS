@@ -10,6 +10,7 @@ from slips_files.core.database.redis_db.constants import (
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
+from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 
 import os
 import signal
@@ -30,7 +31,7 @@ from typing import (
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
-class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
+class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
     _obj = None
@@ -82,6 +83,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         "control_channel",
         "new_module_flow" "cpu_profile",
         "memory_profile",
+        "fides2network",
+        "network2fides",
+        "fides2slips",
+        "slips2fides",
+        "iris_internal",
     }
     separator = "_"
     normal_label = "benign"
@@ -112,7 +118,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         cls, logger, redis_port, start_redis_server=True, flush_db=True
     ):
         """
-        treat the db as a singelton per port
+        treat the db as a singleton per port
         meaning every port will have exactly 1 single obj of this db
         at any given time
         """
@@ -140,13 +146,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             cls.set_slips_internal_time(0)
             if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
+
             # useful for debugging using 'CLIENT LIST' redis cmd
             cls.r.client_setname("Slips-DB")
 
         return cls._instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
-        pass
+        self.set_new_incoming_flows(True)
 
     @classmethod
     def _set_redis_options(cls):
@@ -722,7 +729,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             self.constants.P2P_REPORTS, ip, json.dumps(report_data)
         )
 
-    def get_dns_resolution(self, ip):
+    def get_dns_resolution(self, ip: str):
         """
         IF this IP was resolved by slips
         returns a dict with {ts: .. ,
@@ -853,7 +860,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
                 # we'll be appending the current answer
                 # to these cached domains
                 domains = ip_info_from_db.get("domains", [])
-
             # if the domain(query) we have isn't already in
             # DNSresolution in the db, add it
             if query not in domains:
@@ -872,8 +878,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             # we store ALL dns resolutions seen since starting slips
             # store with the IP as the key
             self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
+            self.set_ip_info(answer, {"DNS_resolution": domains})
             # these ips will be associated with the query in our db
-            ips_to_add.append(answer)
+            if not utils.is_ignored_ip(answer):
+                ips_to_add.append(answer)
 
         # For each CNAME in the answer
         # store it in DomainsInfo in the cache db (used for kalipso)
@@ -888,7 +896,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             except NameError:
                 # no CNAME came with this query
                 pass
-
             self.set_info_for_domains(query, domaindata, mode="add")
             self.set_domain_resolution(query, ips_to_add)
 
@@ -971,7 +978,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         """
         self.r.sadd(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
 
-    def is_gw_mac(self, mac_addr: str, ip: str) -> bool:
+    def _is_gw_mac(self, mac_addr: str) -> bool:
         """
         Detects the MAC of the gateway if 1 mac is seen
         assigned to 1 public destination IP
@@ -985,18 +992,26 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             # gateway MAC already set using this function
             return self.get_gateway_mac() == mac_addr
 
+    def _determine_gw_mac(self, ip, mac):
+        """
+        sets the gw mac if the given ip is public and is assigned a mc
+        """
+        if self._gateway_MAC_found:
+            return False
         # since we don't have a mac gw in the db, see if
         # this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
         if not utils.is_private_ip(ip_obj):
-            # now we're given a public ip and a MAC that's supposedly belongs to it
+            # now we're given a public ip and a MAC that's supposedly
+            # belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db
-            self.set_default_gateway(self.constants.MAC, mac_addr)
+            self.set_default_gateway(self.constants.MAC, mac)
 
             # mark the gw mac as found so we don't look for it again
             self._gateway_MAC_found = True
             return True
+        return False
 
     def get_ip_of_mac(self, MAC):
         """
@@ -1068,7 +1083,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         sni = sni[0] if isinstance(sni, list) else sni
         return sni.get("server_name")
 
-    def get_ip_identification(self, ip: str, get_ti_data=True) -> str:
+    def get_ip_identification(
+        self, ip: str, get_ti_data=True
+    ) -> Dict[str, str]:
         """
         Return the identification of this IP based
         on the AS, rDNS, and SNI of the IP.
@@ -1078,27 +1095,31 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
-        ip_info = self.get_ip_info(ip)
-        id = ""
-        if not ip_info:
+        cached_info: Optional[Dict[str, str]] = self.get_ip_info(ip)
+        id = {}
+        if not cached_info:
             return id
 
-        if asn := self.get_asn_info(ip):
-            asn_org = asn.get("org", "")
-            asn_number = asn.get("number", "")
-            id += f" AS: {asn_org} {asn_number}"
+        sni = cached_info.get("SNI")
+        if sni:
+            sni = sni[0] if isinstance(sni, list) else sni
+            sni = sni.get("server_name")
 
-        if sni := self.get_sni_info(ip):
-            id += f" SNI: {sni}, "
+        id = {
+            "AS": cached_info.get("asn"),
+            "rDNS": cached_info.get("reverse_dns"),
+            "SNI": sni,
+        }
 
-        if rdns := self.get_rdns_info(ip):
-            id += f" rDNS: {rdns}, "
+        if get_ti_data:
+            id.update(
+                {"TI": cached_info.get("threatintelligence", {}).get("source")}
+            )
 
-        threat_intel = ip_info.get("threatintelligence", "")
-        if threat_intel and get_ti_data:
-            id += f" appears in blacklist: {threat_intel['source']}."
+        if domains := cached_info.get("DNS_resolution", []):
+            domains: List[str]
+            id.update({"queries": domains})
 
-        id = id.rstrip(", ")
         return id
 
     def get_multiaddr(self):

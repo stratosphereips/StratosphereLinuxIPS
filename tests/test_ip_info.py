@@ -291,7 +291,7 @@ def test_set_evidence_malicious_jarm_hash(mocker):
     assert isinstance(dst_evidence, Evidence)
     assert dst_evidence.evidence_type == EvidenceType.MALICIOUS_JARM
     assert dst_evidence.attacker.direction == Direction.DST
-    assert dst_evidence.attacker.attacker_type == IoCType.IP
+    assert dst_evidence.attacker.ioc_type == IoCType.IP
     assert dst_evidence.attacker.value == "192.168.1.100"
     assert dst_evidence.threat_level == ThreatLevel.MEDIUM
     assert dst_evidence.confidence == 0.7
@@ -306,7 +306,7 @@ def test_set_evidence_malicious_jarm_hash(mocker):
     assert isinstance(src_evidence, Evidence)
     assert src_evidence.evidence_type == EvidenceType.MALICIOUS_JARM
     assert src_evidence.attacker.direction == Direction.SRC
-    assert src_evidence.attacker.attacker_type == IoCType.IP
+    assert src_evidence.attacker.ioc_type == IoCType.IP
     assert src_evidence.attacker.value == "192.168.1.10"
     assert src_evidence.threat_level == ThreatLevel.LOW
     assert src_evidence.confidence == 0.7

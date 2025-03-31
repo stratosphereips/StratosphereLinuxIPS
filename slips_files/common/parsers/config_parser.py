@@ -122,9 +122,7 @@ class ConfigParser(object):
         return self.read_configuration("parameters", "pcapfilter", False)
 
     def online_whitelist(self):
-        return self.read_configuration(
-            "threatintelligence", "online_whitelist", False
-        )
+        return self.read_configuration("whitelists", "online_whitelist", False)
 
     def tcp_inactivity_timeout(self):
         timeout = self.read_configuration(
@@ -138,7 +136,7 @@ class ConfigParser(object):
 
     def online_whitelist_update_period(self):
         update_period = self.read_configuration(
-            "threatintelligence", "online_whitelist_update_period", 604800
+            "whitelists", "online_whitelist_update_period", 604800
         )
         try:
             update_period = int(update_period)
@@ -172,9 +170,19 @@ class ConfigParser(object):
             "parameters", "store_a_copy_of_zeek_files", False
         )
 
-    def whitelist_path(self):
+    def local_whitelist_path(self):
         return self.read_configuration(
-            "parameters", "whitelist_path", "config/whitelist.conf"
+            "whitelists", "local_whitelist_path", "config/whitelist.conf"
+        )
+
+    def enable_online_whitelist(self):
+        return self.read_configuration(
+            "whitelists", "enable_online_whitelist", True
+        )
+
+    def enable_local_whitelist(self):
+        return self.read_configuration(
+            "whitelists", "enable_local_whitelist", True
         )
 
     def logsfile(self):
@@ -187,7 +195,9 @@ class ConfigParser(object):
         return self.read_configuration("modes", "stderr", "errors.log")
 
     def create_p2p_logfile(self):
-        return self.read_configuration("P2P", "create_p2p_logfile", False)
+        return self.read_configuration(
+            "local_p2p", "create_p2p_logfile", False
+        )
 
     def ts_format(self):
         return self.read_configuration("timestamp", "format", None)
@@ -249,8 +259,11 @@ class ConfigParser(object):
     def enable_metadata(self):
         return self.read_configuration("parameters", "metadata_dir", False)
 
-    def use_p2p(self):
-        return self.read_configuration("P2P", "use_p2p", False)
+    def use_local_p2p(self):
+        return self.read_configuration("local_p2p", "use_p2p", False)
+
+    def use_global_p2p(self):
+        return self.read_configuration("global_p2p", "use_global_p2p", False)
 
     def cesnet_conf_file(self):
         return self.read_configuration("CESNET", "configuration_file", False)
@@ -488,7 +501,7 @@ class ConfigParser(object):
 
     def riskiq_update_period(self):
         update_period = self.read_configuration(
-            "threatintelligence", "update_period", 604800
+            "threatintelligence", "riskiq_update_period", 604800
         )
         try:
             update_period = float(update_period)
@@ -626,9 +639,14 @@ class ConfigParser(object):
         if "stix" not in export_to and "slack" not in export_to:
             to_ignore.append("exporting_alerts")
 
-        use_p2p = self.use_p2p()
-        if not use_p2p or "-i" not in sys.argv:
+        use_p2p = self.use_local_p2p()
+        if not (use_p2p and "-i" in sys.argv):
             to_ignore.append("p2ptrust")
+
+        use_global_p2p = self.use_global_p2p()
+        if not (use_global_p2p and ("-i" in sys.argv or "-g" in sys.argv)):
+            to_ignore.append("fidesModule")
+            to_ignore.append("irisModule")
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.yaml
@@ -698,4 +716,9 @@ class ConfigParser(object):
     def get_memory_profiler_multiprocess(self):
         return self.read_configuration(
             "Profiling", "memory_profiler_multiprocess", True
+        )
+
+    def get_iris_config_location(self) -> str:
+        return self.read_configuration(
+            "global_p2p", "iris_conf", "config/iris_config.yaml"
         )

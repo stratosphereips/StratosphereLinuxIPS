@@ -58,6 +58,9 @@ class DNS(IFlowalertsAnalyzer):
         # meaning, only flowalerts.py is allowed to do a get_msg because it
         # manages all the analyzers the msg should be passed to
         self.dns_msgs = Queue()
+        self.priv_ips_doing_dns_outside_of_localnet = {}
+        self.is_dns_detected = False
+        self.detected_dns_ip = "-"
 
     def name(self) -> str:
         return "DNS_analyzer"
@@ -85,6 +88,7 @@ class DNS(IFlowalertsAnalyzer):
         if (
             "arpa" in flow.query
             or ".local" in flow.query
+            or flow.qtype_name not in ["AAAA", "A"]
             or "*" in flow.query
             or ".cymru.com" in flow.query[-10:]
             or len(flow.query.split(".")) == 1
@@ -457,7 +461,15 @@ class DNS(IFlowalertsAnalyzer):
             return
 
         for answer in flow.answers:
-            if utils.is_private_ip(answer) and flow.query != "localhost":
+            if (
+                utils.is_private_ip(answer)
+                and flow.query != "localhost"
+                # mDNS
+                and not flow.query.endswith(".local")
+                # arpa queries are rDNS of ipv6 queries. they may return
+                # private IPs in Dual-Stack (IPv4 + IPv6) Networks
+                and not flow.query.endswith(".arpa")
+            ):
                 self.set_evidence.invalid_dns_answer(twid, flow, answer)
                 # delete answer from redis cache to prevent
                 # associating this dns answer with this domain/query and
@@ -566,6 +578,112 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_arpa_queries.pop(profileid)
         return True
 
+    def _is_dns(self, flow) -> bool:
+        return str(flow.dport) == "53" and flow.proto.lower() == "udp"
+
+    def is_possible_dns_misconfiguration(self, ip_to_check, flow) -> bool:
+        """
+        to avoid fps that happen when a DNS is configured using a private
+        IP that's outside of localnet,
+        we detect the dns ip as follows:
+         - if 5 conns with dns answers on port 53/udp.
+        once detected and we dont alert "conn to priv ip outside of
+        localnetwork" to that ip+port+proto
+        this is not very common but it happens when the dns is misconfigured
+
+        When this returns True, the "conn to priv ip outside of
+        local network" evidence is discarded.
+        """
+        if ip_to_check != flow.daddr:
+            # we need 5 conns to the possible dns server to be able to
+            # officialy ignore evidence to it. we dont need to check src
+            # addresses
+            return False
+
+        if self.is_dns_detected:
+            # we already detected the dns using this function.
+            # disable this function, we'll be using the detected dns in
+            # _is_ok_to_connect_to_ip()
+            return False
+
+        if not flow.answers:
+            # dns ips should only be detected using dns flows with answers
+            return False
+
+        try:
+            self.priv_ips_doing_dns_outside_of_localnet[flow.daddr] += 1
+            if self.priv_ips_doing_dns_outside_of_localnet[flow.daddr] == 5:
+                # this ip probably a dns server
+                self.is_dns_detected = True
+                self.detected_dns_ip = flow.daddr
+                del self.priv_ips_doing_dns_outside_of_localnet
+            # if we have less than 5 dns connections with answers,
+            # wait more.
+            # but do not alert bc it will probably be a fp.
+            # wait until we get 5 conns with dns answers to that ip
+
+            return True
+
+        except KeyError:
+            self.priv_ips_doing_dns_outside_of_localnet[flow.daddr] = 1
+            return True
+
+    def check_different_localnet_usage(
+        self,
+        twid,
+        flow,
+        what_to_check="",
+    ):
+        """
+        alerts when a connection to a private ip that
+        doesn't belong to our local network is found
+        for example:
+        If we are on 192.168.1.0/24 then detect anything
+        coming from/to 10.0.0.0/8
+        :param what_to_check: can be 'srcip' or 'dstip'
+
+        only checks connections to dst port 53/UDP. the rest are checked in conn.log
+        """
+        # if the ip is the dns server that slips detected, it's ok to
+        # connect to it
+        if (
+            flow.saddr == self.detected_dns_ip
+            or flow.daddr == self.detected_dns_ip
+        ):
+            return
+
+        if not self._is_dns(flow):
+            # the non dns flows are checked in conn.py
+            return
+
+        ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
+
+        ip_obj = ipaddress.ip_address(ip_to_check)
+        if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
+            return
+
+        if self.is_possible_dns_misconfiguration(ip_to_check, flow):
+            # dns misconfiguration detected, dns is possibly the private ip
+            # outside of localnet
+            return
+
+        own_local_network = self.db.get_local_network()
+        if not own_local_network:
+            # the current local network wasn't set in the db yet
+            # it's impossible to get here becaus ethe localnet is set before
+            # any msg is published in the new_flow channel
+            return
+
+        # if it's a private ipv4 addr, it should belong to our local network
+        if ip_obj in ipaddress.IPv4Network(own_local_network):
+            return
+
+        self.set_evidence.different_localnet_usage(
+            twid,
+            flow,
+            ip_outside_localnet=what_to_check,
+        )
+
     def shutdown_gracefully(self):
         self.check_dns_without_connection_of_all_pending_flows()
         self.dns_without_connection_timeout_checker_thread.join()
@@ -608,6 +726,8 @@ class DNS(IFlowalertsAnalyzer):
         self.check_high_entropy_dns_answers(twid, flow)
         self.check_invalid_dns_answers(twid, flow)
         self.detect_dga(profileid, twid, flow)
+        self.check_different_localnet_usage(twid, flow, "srcip")
+        self.check_different_localnet_usage(twid, flow, "dstip")
         # TODO: not sure how to make sure IP_info is
         #  done adding domain age to the db or not
         self.detect_young_domains(twid, flow)

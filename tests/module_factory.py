@@ -12,6 +12,7 @@ from multiprocessing import Queue
 
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
+from managers.profilers_manager import ProfilersManager
 from modules.flowalerts.conn import Conn
 from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
@@ -43,7 +44,7 @@ from slips_files.core.output import Output
 from modules.threat_intelligence.threat_intelligence import ThreatIntel
 from modules.threat_intelligence.urlhaus import URLhaus
 from modules.flowalerts.flowalerts import FlowAlerts
-from modules.flowalerts.set_evidence import SetEvidnceHelper
+from modules.flowalerts.set_evidence import SetEvidenceHelper
 from slips_files.core.input import Input
 from modules.blocking.blocking import Blocking
 from modules.http_analyzer.http_analyzer import HTTPAnalyzer
@@ -78,6 +79,8 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
     Victim,
 )
+from modules.fidesModule.fidesModule import FidesModule
+from slips_files.core.text_formatters.evidence import EvidenceFormatter
 
 
 def read_configuration():
@@ -161,6 +164,19 @@ class ModuleFactory:
         # override the self.print function to avoid broken pipes
         http_analyzer.print = Mock()
         return http_analyzer
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_fidesModule_obj(self, mock_db):
+        fm = FidesModule(
+            self.logger,
+            "dummy_output_dir",
+            6379,
+            Mock(),
+        )
+
+        # override the self.print function
+        fm.print = Mock()
+        return fm
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_virustotal_obj(self, mock_db):
@@ -338,7 +354,7 @@ class ModuleFactory:
         )
         # override the self.print function to avoid broken pipes
         profiler.print = Mock()
-        profiler.whitelist_path = "tests/test_whitelist.conf"
+        profiler.local_whitelist_path = "tests/test_whitelist.conf"
         profiler.db = mock_db
         return profiler
 
@@ -348,6 +364,13 @@ class ModuleFactory:
         main.db = mock_db
         main.args = Mock()
         return RedisManager(main)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_profilers_manager_obj(self, mock_db):
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.args = Mock()
+        return ProfilersManager(main)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_host_ip_manager_obj(self, mock_db):
@@ -428,7 +451,7 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_set_evidence_helper(self, mock_db):
         """Create an instance of SetEvidenceHelper."""
-        set_evidence_helper = SetEvidnceHelper(mock_db)
+        set_evidence_helper = SetEvidenceHelper(mock_db)
         return set_evidence_helper
 
     def create_output_obj(self):
@@ -438,21 +461,17 @@ class ModuleFactory:
         self,
         value="192.168.1.1",
         direction=Direction.SRC,
-        attacker_type=IoCType.IP,
+        ioc_type=IoCType.IP,
     ):
-        return Attacker(
-            direction=direction, attacker_type=attacker_type, value=value
-        )
+        return Attacker(direction=direction, ioc_type=ioc_type, value=value)
 
     def create_victim_obj(
         self,
         value="192.168.1.2",
         direction=Direction.DST,
-        victim_type=IoCType.IP,
+        ioc_type=IoCType.IP,
     ):
-        return Victim(
-            direction=direction, victim_type=victim_type, value=value
-        )
+        return Victim(direction=direction, ioc_type=ioc_type, value=value)
 
     def create_profileid_obj(self, ip="192.168.1.3"):
         return ProfileID(ip=ip)
@@ -609,6 +628,10 @@ class ModuleFactory:
         )
         handler.db = mock_db
         return handler
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_evidence_formatter_obj(self, mock_db):
+        return EvidenceFormatter(mock_db)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_symbol_handler_obj(self, mock_db):

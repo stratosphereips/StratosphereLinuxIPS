@@ -1,3 +1,20 @@
+# Build Iris
+FROM golang:1.17 AS build
+
+# Set Go modules to "on" to avoid issues with GOPATH
+ENV GO111MODULE=on
+ENV GOPATH=""
+
+COPY iris/go.mod ./
+COPY iris/go.sum ./
+
+RUN go mod download
+
+COPY iris/cmd ./cmd
+COPY iris/pkg ./pkg
+
+RUN go build -o /iris/iris cmd/peercli.go
+
 FROM ubuntu:22.04
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
@@ -13,7 +30,6 @@ ENV NVM_DIR=/root/.nvm
 SHELL ["/bin/bash", "-c"]
 
 
-# Install wget and add Zeek and redis repositories to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
     ca-certificates \
@@ -55,20 +71,17 @@ RUN apt update && apt install -y --no-install-recommends \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash - \
     && export NVM_DIR="$HOME/.nvm" \
     && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  \
-    && nvm install 22 \
+    && nvm install 22
 
 
 RUN pip3 install --no-cache-dir --upgrade pip
 
-RUN git clone https://github.com/IDMEFv2/python-idmefv2  \
-    && cd python-idmefv2 \
-    && git submodule update --init --recursive \
-    && python3 setup.py install \
-    && cd ..
-
-
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}
+
+# Retrieve Iris
+#COPY iris/config.yaml ./modules/irisModule
+COPY --from=build /iris/iris ./modules/irisModule
 
 COPY . $SLIPS_DIR
 
@@ -83,7 +96,9 @@ RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
 # build the pigeon and add pigeon to path
 RUN cd p2p4slips \
     && go build \
-    && export PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/";
+    && export PATH="{$PATH}:/StratosphereLinuxIPS/p2p4slips/";
+
+
 
 WORKDIR ${SLIPS_DIR}
 

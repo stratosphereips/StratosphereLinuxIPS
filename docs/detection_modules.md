@@ -650,6 +650,10 @@ Available detection are:
 - Multiple user agents
 - Pastebin downloads
 - Unencrypted HTTP traffic
+- Non-HTTP connections on port 80.
+
+
+
 
 ### Multiple empty connections
 
@@ -657,6 +661,9 @@ Due to the usage of empty connections to popular site by malware to check for in
 We consider this type of behaviour suspicious activity that shouldn't happen
 
 We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com' , 'duckduckgo.com' etc.
+
+If Google is whitelisted in `whitelist.conf`, this detection will be suppressed.
+
 
 ### Suspicious user agents
 
@@ -714,6 +721,19 @@ When found, slips alerts pastebin download with threat level low because not all
 
 When slip sees an HTTP unencrypted traffic in zeek's http.log it generates
 an evidence with threat_level low
+
+
+### Non-HTTP connections on port 80
+
+Slips detects established connections on port 80 that are not using HTTP
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 80 and the 'service' field
+in conn.log isn't set to 'http', if means zeek didnt recognize that flow as http.
+Slips makes sure no matching flows were detected as HTTP by zeek
+within 5 mins before or after the given flow. if not, slips sets an evidence saying
+"non http established conn on port 80"
+
 
 ## Leak Detector Module
 

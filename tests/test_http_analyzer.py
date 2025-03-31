@@ -5,20 +5,21 @@
 import json
 from dataclasses import asdict
 import pytest
+from unittest.mock import (
+    patch,
+    MagicMock,
+    Mock,
+)
+import requests
 
 from slips_files.core.flows.zeek import (
     HTTP,
     Weird,
     Conn,
 )
+from tests.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
-from unittest.mock import (
-    patch,
-    MagicMock,
-    Mock,
-)
 from modules.http_analyzer.http_analyzer import utils
-import requests
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -321,7 +322,7 @@ def test_set_evidence_http_traffic(mocker):
         resp_mime_types="",
         resp_fuids="",
     )
-    http_analyzer.set_evidence_http_traffic(twid, flow)
+    http_analyzer.set_evidence.http_traffic(twid, flow)
 
     http_analyzer.db.set_evidence.assert_called_once()
 
@@ -359,7 +360,7 @@ def test_set_evidence_weird_http_method(mocker):
         state="Established",
         history="",
     )
-    http_analyzer.set_evidence_weird_http_method(
+    http_analyzer.set_evidence.weird_http_method(
         twid, weird_flow, asdict(conn_flow)
     )
     http_analyzer.db.set_evidence.assert_called_once()
@@ -385,7 +386,7 @@ def test_set_evidence_executable_mime_type(mocker):
         resp_fuids="",
     )
     mocker.spy(http_analyzer.db, "set_evidence")
-    http_analyzer.set_evidence_executable_mime_type(twid, flow)
+    http_analyzer.set_evidence.executable_mime_type(twid, flow)
 
     assert http_analyzer.db.set_evidence.call_count == 2
 
@@ -420,8 +421,8 @@ def test_read_configuration_valid(mocker, config_value):
 )
 async def test_check_weird_http_method(mocker, flow_name, evidence_expected):
     http_analyzer = ModuleFactory().create_http_analyzer_obj()
-    http_analyzer.set_evidence_weird_http_method = Mock()
-    mocker.spy(http_analyzer, "set_evidence_weird_http_method")
+    http_analyzer.set_evidence.weird_http_method = Mock()
+    mocker.spy(http_analyzer.set_evidence, "weird_http_method")
 
     msg = {
         "flow": asdict(
@@ -444,9 +445,9 @@ async def test_check_weird_http_method(mocker, flow_name, evidence_expected):
         await http_analyzer.check_weird_http_method(msg)
 
     if evidence_expected:
-        http_analyzer.set_evidence_weird_http_method.assert_called_once()
+        http_analyzer.set_evidence.weird_http_method.assert_called_once()
     else:
-        http_analyzer.set_evidence_weird_http_method.assert_not_called()
+        http_analyzer.set_evidence.weird_http_method.assert_not_called()
 
 
 def test_pre_main(mocker):
@@ -544,11 +545,11 @@ def test_check_pastebin_downloads(
         resp_fuids="",
     )
     if host != "pastebin.com":
-        http_analyzer.db.get_ip_identification.return_value = (
-            "Not a Pastebin domain"
-        )
+        http_analyzer.db.get_ip_identification.return_value = {}
     else:
-        http_analyzer.db.get_ip_identification.return_value = "pastebin.com"
+        http_analyzer.db.get_ip_identification.return_value = {
+            "SNI": "pastebin.com"
+        }
         http_analyzer.pastebin_downloads_threshold = 1024
     result = http_analyzer.check_pastebin_downloads(twid, flow)
     assert result == expected_result
@@ -567,3 +568,202 @@ def test_get_ua_info_online_error_cases(mock_response):
     http_analyzer = ModuleFactory().create_http_analyzer_obj()
     with patch("requests.get", return_value=mock_response):
         assert http_analyzer.get_ua_info_online(SAFARI_UA) is False
+
+
+####################################################
+
+
+# tests for check_non_http_port_80_conns
+async def test_check_non_http_port_80_conns_not_interested():
+    # mock a flow that we're not interested in (e.g. not an established tcp
+    # connection on port 80 with non-zero bytes)
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.is_tcp_established_port_80_non_empty_flow = Mock(
+        return_value=False
+    )
+    result = await analyzer.check_non_http_port_80_conns(None, None)
+    assert result is False
+
+
+async def test_check_non_http_port_80_conns_is_http():
+    # when the flow is a recognized http flow, we keep track of it
+    # and return false
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.is_tcp_established_port_80_non_empty_flow = Mock(
+        return_value=True
+    )
+    analyzer.is_http_proto_recognized_by_zeek = Mock(return_value=True)
+    analyzer.keep_track_of_http_flow = Mock()
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await analyzer.check_non_http_port_80_conns(None, flow)
+    assert result is False
+    analyzer.keep_track_of_http_flow.assert_called_once_with(
+        flow, (flow.saddr, flow.daddr)
+    )
+
+
+async def test_check_non_http_port_80_conns_matching_http_past():
+    # simulate a matching http flow in the past (within 5 minutes before the
+    # flow's starttime)
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.is_tcp_established_port_80_non_empty_flow = Mock(
+        return_value=True
+    )
+    analyzer.is_http_proto_recognized_by_zeek = Mock(return_value=False)
+    analyzer.search_http_recognized_flows_for_ts_range = Mock(
+        return_value=[1.0]
+    )
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await analyzer.check_non_http_port_80_conns(None, flow)
+    assert result is False
+
+
+async def test_check_non_http_port_80_conns_matching_http_future():
+    # simulate a matching http flow in the future (within 5 minutes after the
+    # flow's starttime)
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.is_tcp_established_port_80_non_empty_flow = Mock(
+        return_value=True
+    )
+    analyzer.is_http_proto_recognized_by_zeek = Mock(return_value=False)
+    analyzer.search_http_recognized_flows_for_ts_range = Mock(
+        return_value=[1.0]
+    )
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await analyzer.check_non_http_port_80_conns(
+        None, flow, timeout_reached=True
+    )
+    assert result is False
+
+
+async def test_check_non_http_port_80_conns_no_matching_http_timeout():
+    # simulate no matching http flows when timeout has been reached
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.is_tcp_established_port_80_non_empty_flow = Mock(
+        return_value=True
+    )
+    analyzer.is_http_proto_recognized_by_zeek = Mock(return_value=False)
+    analyzer.search_http_recognized_flows_for_ts_range = Mock(return_value=[])
+    analyzer.set_evidence.non_http_port_80_conn = MagicMock()
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await analyzer.check_non_http_port_80_conns(
+        None, flow, timeout_reached=True
+    )
+    assert result is True
+    analyzer.set_evidence.non_http_port_80_conn.assert_called_once_with(
+        None, flow
+    )
+
+
+async def test_check_non_http_port_80_conns_no_matching_http_no_timeout():
+    # simulate no matching http flows when timeout has not been reached yet.
+    # the function should sleep for 5 mins (patched to return immediately),
+    # then recursively call itself with timeout_reached true
+    # (which sets evidence)
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.is_tcp_established_port_80_non_empty_flow = Mock(
+        return_value=True
+    )
+    analyzer.is_http_proto_recognized_by_zeek = Mock(return_value=False)
+    analyzer.search_http_recognized_flows_for_ts_range = Mock(return_value=[])
+    analyzer.set_evidence.non_http_port_80_conn = MagicMock()
+    # patch asyncio.sleep so that we do not really wait
+    analyzer.wait_for_new_flows_or_timeout = get_mock_coro(True)
+
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await analyzer.check_non_http_port_80_conns(None, flow)
+    # even though the recursive call returns true (after setting evidence),
+    # the original call always returns false
+    assert result is False
+    analyzer.wait_for_new_flows_or_timeout.assert_called_once()
+    analyzer.set_evidence.non_http_port_80_conn.assert_called_once_with(
+        None, flow
+    )
+
+
+# parameterized tests for helper functions
+
+
+@pytest.mark.parametrize(
+    "dport, proto, sbytes, dbytes, final_state, expected",
+    [
+        # case: established tcp connection on port 80 with non-zero
+        # bytes should be considered valid
+        ("80", "tcp", 100, 200, "Established", True),
+        # case: connection with zero bytes is not interesting
+        ("80", "tcp", 0, 0, "Established", False),
+        # case: non-tcp protocol should not be considered
+        ("80", "udp", 100, 200, "Established", False),
+        # case: not in an established state should not be considered
+        ("80", "tcp", 100, 200, "NotEstablished", False),
+    ],
+)
+def test_is_tcp_established_port_80_non_empty_flow(
+    dport, proto, sbytes, dbytes, final_state, expected
+):
+    # create a mock flow with the given parameters and check
+    # the function's output
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    flow = Mock(
+        dport=dport,
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        pkts=80,
+        proto=proto,
+        sbytes=sbytes,
+        dbytes=dbytes,
+    )
+    analyzer.db.get_final_state_from_flags.return_value = final_state
+    result = analyzer.is_tcp_established_port_80_non_empty_flow(flow)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "http_recognized_flows, flow_info, start, end, expected",
+    [
+        # case: matching timestamps within the range
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0, 4.0, 5.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            2.0,
+            4.0,
+            [2.0, 3.0, 4.0],
+        ),
+        # case: no matching timestamps (empty result)
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            4.0,
+            5.0,
+            [],
+        ),
+        # case: flow does not exist in http_recognized_flows
+        (
+            {("192.168.1.2", "10.0.0.2"): [1.0, 2.0, 3.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            1.0,
+            3.0,
+            [],
+        ),
+        # case: start and end cover all timestamps
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0, 4.0, 5.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            1.0,
+            5.0,
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+        ),
+    ],
+)
+def test_search_http_recognized_flows_for_ts_range(
+    http_recognized_flows, flow_info, start, end, expected
+):
+    # set up the http_recognized_flows and verify the search function
+    # returns the correct timestamps
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.http_recognized_flows = http_recognized_flows
+    flow = Mock(saddr=flow_info["saddr"], daddr=flow_info["daddr"])
+    result = analyzer.search_http_recognized_flows_for_ts_range(
+        flow, start, end
+    )
+    assert result == expected

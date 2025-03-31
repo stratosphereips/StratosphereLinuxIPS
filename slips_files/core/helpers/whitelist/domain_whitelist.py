@@ -4,6 +4,7 @@ from typing import List, Dict
 import tldextract
 
 from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Direction,
@@ -18,6 +19,12 @@ class DomainAnalyzer(IWhitelistAnalyzer):
 
     def init(self):
         self.ip_analyzer = IPAnalyzer(self.db)
+        self.read_configuration()
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.enable_online_whitelist: bool = conf.enable_online_whitelist()
+        self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
     def get_domains_of_ip(self, ip: str) -> List[str]:
         """
@@ -77,9 +84,6 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         if not parent_domain:
             return False
 
-        whitelisted_domains: Dict[str, Dict[str, str]]
-        whitelisted_domains = self.db.get_whitelist("domains")
-
         # is the parent domain in any of slips whitelists?? like tranco or
         # whitelist.conf?
         # if so we need to get extra info about that domain based on the
@@ -89,21 +93,32 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         # but domains taken from whitelist.conf have their own direction
         # and type
         if self.is_domain_in_tranco_list(parent_domain):
+            if not self.enable_online_whitelist:
+                # domain is in the tranco whitelist, but the it's whitelist
+                # not enabled
+                return False
             whitelist_should_ignore = "alerts"
             dir_from_whitelist = "dst"
-        elif parent_domain in whitelisted_domains:
-            # did the user say slips should ignore flows or alerts in the
-            # config file?
-            whitelist_should_ignore = whitelisted_domains[parent_domain][
-                "what_to_ignore"
-            ]
-            # did the user say slips should ignore flows/alerts  TO or from
-            # that domain in the config file?
-            dir_from_whitelist: str = whitelisted_domains[parent_domain][
-                "from"
-            ]
         else:
-            return False
+            if not self.enable_local_whitelist:
+                # domain is in the local whitelist, but the local whitelist
+                # not enabled
+                return False
+            whitelisted_domains: Dict[str, Dict[str, str]]
+            whitelisted_domains = self.db.get_whitelist("domains")
+            if parent_domain in whitelisted_domains:
+                # did the user say slips should ignore flows or alerts in the
+                # config file?
+                whitelist_should_ignore = whitelisted_domains[parent_domain][
+                    "what_to_ignore"
+                ]
+                # did the user say slips should ignore flows/alerts  TO or from
+                # that domain in the config file?
+                dir_from_whitelist: str = whitelisted_domains[parent_domain][
+                    "from"
+                ]
+            else:
+                return False
 
         # match the direction and whitelist_Type of the given domain to the
         # ones we have from the whitelist.

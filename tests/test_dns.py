@@ -44,9 +44,12 @@ def test_should_detect_dns_without_conn(domain, rcode_name, expected_result):
         uid="1234",
         saddr="",
         daddr="",
+        dport="",
+        sport="",
+        proto="",
         query=domain,
         qclass_name="",
-        qtype_name="",
+        qtype_name="AAAA",
         rcode_name=rcode_name,
         answers="",
         TTLs="",
@@ -114,6 +117,9 @@ def test_detect_young_domains(
         saddr="192.168.1.5",
         daddr="1.1.1.1",
         query=domain,
+        dport="",
+        sport="",
+        proto="",
         qclass_name="",
         qtype_name="",
         rcode_name="",
@@ -146,6 +152,9 @@ def test_detect_young_domains_other_cases(
         saddr="192.168.1.5",
         daddr="1.1.1.1",
         query=domain,
+        dport="",
+        sport="",
+        proto="",
         qclass_name="",
         qtype_name="",
         rcode_name="",
@@ -236,6 +245,9 @@ def test_check_invalid_dns_answers_call_counts(
         saddr="1.1.1.1",
         daddr="192.168.1.5",
         query=domain,
+        dport="",
+        sport="",
+        proto="",
         qclass_name="",
         qtype_name="",
         rcode_name="",
@@ -261,6 +273,9 @@ def test_check_invalid_dns_answers_with_invalid_answer():
         daddr="192.168.1.5",
         query="example.com",
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers=["127.0.0.1"],
@@ -310,6 +325,9 @@ def test_check_dns_arpa_scan(domains, timestamps, expected_result):
             saddr="1.1.1.1",
             daddr="192.168.1.5",
             query=domain,
+            dport="",
+            sport="",
+            proto="",
             qclass_name="",
             qtype_name="",
             rcode_name="",
@@ -347,6 +365,9 @@ def test_check_high_entropy_dns_answers_with_call():
         qclass_name="",
         qtype_name="",
         rcode_name="",
+        dport="",
+        sport="",
+        proto="",
         answers=["A 1.2.3.4", "TXT abcdefghijklmnopqrstuvwxyz1234567890"],
         TTLs="",
     )
@@ -411,6 +432,9 @@ def test_check_high_entropy_dns_answers_no_call(
         daddr="192.168.1.5",
         query="example.com",
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers=["A 1.2.3.4", "TXT abcdefghijklmnopqrstuvwxyz1234567890"],
@@ -440,6 +464,9 @@ def test_check_high_entropy_dns_answers_no_call(
                                 saddr="1.1.1.1",
                                 daddr="192.168.1.5",
                                 query="example.com",
+                                dport="",
+                                sport="",
+                                proto="",
                                 qclass_name="",
                                 qtype_name="",
                                 rcode_name="NOERROR",
@@ -570,6 +597,9 @@ def test_detect_dga_no_alert(
         qclass_name="",
         qtype_name="",
         rcode_name=rcode_name,
+        dport="",
+        sport="",
+        proto="",
         answers=["127.0.0.1"],
         TTLs="",
     )
@@ -616,6 +646,9 @@ def test_detect_dga_alert():
         saddr="1.1.1.1",
         daddr="192.168.1.5",
         query="example10.com",
+        dport="",
+        sport="",
+        proto="",
         qclass_name="",
         qtype_name="",
         rcode_name="NXDOMAIN",
@@ -647,6 +680,9 @@ def test_detect_dga_whitelisted():
         daddr="192.168.1.5",
         query="example.com",
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="NXDOMAIN",
         answers=["127.0.0.1"],
@@ -684,6 +720,9 @@ def test_detect_dga_special_domains(query, expected_result):
         uid=uid,
         saddr="1.1.1.1",
         daddr="192.168.1.5",
+        dport="",
+        sport="",
+        proto="",
         query=query,
         qclass_name="",
         qtype_name="",
@@ -715,7 +754,9 @@ async def test_check_dns_without_connection_shouldnt_detect():
     dns = get_dns_obj()
     # Test when should_detect_dns_without_conn returns False
     dns.should_detect_dns_without_conn.return_value = False
-    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    result = await dns.check_dns_without_connection(
+        "profileid", "twid", "flow"
+    )
     assert result is False
 
 
@@ -724,7 +765,9 @@ async def test_check_dns_without_connection_interface_timeout_not_reached():
     # Test when is_interface_timeout_reached returns False
     dns.should_detect_dns_without_conn.return_value = True
     dns.is_interface_timeout_reached.return_value = False
-    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    result = await dns.check_dns_without_connection(
+        "profileid", "twid", "flow"
+    )
     assert result is False
 
 
@@ -734,7 +777,9 @@ async def test_check_dns_without_connection_flow_answer_contacted_true():
     dns.should_detect_dns_without_conn.return_value = True
     dns.is_interface_timeout_reached.return_value = True
     dns.is_any_flow_answer_contacted.return_value = True
-    result = dns.check_dns_without_connection("profileid", "twid", "flow")
+    result = await dns.check_dns_without_connection(
+        "profileid", "twid", "flow"
+    )
     assert result is False
 
 
@@ -744,7 +789,7 @@ async def test_check_dns_without_connection_waited_for_the_conn_false():
     dns.should_detect_dns_without_conn.return_value = True
     dns.is_interface_timeout_reached.return_value = True
     dns.is_any_flow_answer_contacted.return_value = False
-    result = dns.check_dns_without_connection(
+    result = await dns.check_dns_without_connection(
         "profileid", "twid", "flow", waited_for_the_conn=False
     )
     assert result is False
@@ -759,7 +804,7 @@ async def test_check_dns_without_connection_waited_for_the_conn_true():
     dns.should_detect_dns_without_conn.return_value = True
     dns.is_interface_timeout_reached.return_value = True
     dns.is_any_flow_answer_contacted.return_value = False
-    result = dns.check_dns_without_connection(
+    result = await dns.check_dns_without_connection(
         "profileid", "twid", "flow", waited_for_the_conn=True
     )
     assert result is True
@@ -790,6 +835,9 @@ def test_check_dns_without_connection_timeout_flow_processing():
         query="",
         qclass_name="",
         qtype_name="",
+        dport="",
+        sport="",
+        proto="",
         rcode_name="",
         answers="",
         TTLs="",
@@ -801,6 +849,9 @@ def test_check_dns_without_connection_timeout_flow_processing():
         daddr="",
         query="",
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers="",
@@ -846,6 +897,9 @@ def test_check_pending_flows_timeout():
         daddr="",
         query="",
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers="",
@@ -860,6 +914,9 @@ def test_check_pending_flows_timeout():
         daddr="",
         query="",
         qclass_name="",
+        dport="",
+        sport="",
+        proto="",
         qtype_name="",
         rcode_name="",
         answers="",

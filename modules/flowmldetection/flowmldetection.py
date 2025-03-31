@@ -8,7 +8,6 @@ from sklearn.preprocessing import StandardScaler
 import pickle
 import pandas as pd
 import json
-import datetime
 import traceback
 import warnings
 
@@ -378,25 +377,21 @@ class FlowMLDetection(IModule):
     def set_evidence_malicious_flow(self, flow: dict, twid: str):
         confidence: float = 0.1
         description = (
-            f"Malicious flow by ML. Src IP"
+            f"Flow with malicious characteristics by ML. Src IP"
             f" {flow['saddr']}:{flow['sport']} to "
             f"{flow['daddr']}:{flow['dport']}"
-        )
-
-        timestamp = utils.convert_format(
-            datetime.datetime.now(), utils.alerts_format
         )
         twid_number = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MALICIOUS_FLOW,
             attacker=Attacker(
                 direction=Direction.SRC,
-                attacker_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow["saddr"],
             ),
             victim=Victim(
                 direction=Direction.DST,
-                victim_type=IoCType.IP,
+                ioc_type=IoCType.IP,
                 value=flow["daddr"],
             ),
             threat_level=ThreatLevel.LOW,
@@ -405,7 +400,7 @@ class FlowMLDetection(IModule):
             profile=ProfileID(ip=flow["saddr"]),
             timewindow=TimeWindow(twid_number),
             uid=[flow["uid"]],
-            timestamp=timestamp,
+            timestamp=flow["starttime"],
             method=Method.AI,
             src_port=flow["sport"],
             dst_port=flow["dport"],
