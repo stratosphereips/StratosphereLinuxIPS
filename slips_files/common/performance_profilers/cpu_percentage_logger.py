@@ -40,13 +40,7 @@ class CPUUsageTracker:
         cpu_usage = self.slips_main_proc.cpu_percent(
             interval=self.cpu_accum_interval
         )
-        # this line doesnt recognize ALL the grandchilds:D
-        # so we'll be looping through the grandchildren later
         slips_main_children = self.slips_main_proc.children(recursive=True)
-
-        # print(f"@@@@@@@@@@@@@@@@ slips children :")
-        # pprint.pp(slips_main_children)
-        # print()
 
         for child in slips_main_children:
             try:
