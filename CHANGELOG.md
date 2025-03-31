@@ -1,3 +1,9 @@
+1.1.8 (Mar 31st, 2025)
+- Fix SQLite database errors.
+- Fix CPU and RAM profilers.
+- Fix issue with AsyncModules not shutting down gracefully.
+
+
 1.1.7 (Feb 28th, 2025)
 - Add global P2P support. Thanks to @d-strat
 - Add new "GRE tunnel scan" detections.
