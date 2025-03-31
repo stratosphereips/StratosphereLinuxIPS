@@ -176,7 +176,7 @@ class Output(IObserver):
         """
         return 0 < debug <= 3 and debug <= self.debug
 
-    def output_line(self, msg: dict):
+    def output_line_to_cli_and_logfiles(self, msg: dict):
         """
         Prints to terminal and logfiles depending on the debug and verbose
         levels
@@ -225,5 +225,4 @@ class Output(IObserver):
         if msg.get("log_to_logfiles_only", False):
             self.log_line(msg)
         else:
-            # output to terminal
-            self.output_line(msg)
+            self.output_line_to_cli_and_logfiles(msg)

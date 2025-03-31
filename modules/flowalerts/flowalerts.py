@@ -61,7 +61,6 @@ class FlowAlerts(AsyncModule):
 
     async def shutdown_gracefully(self):
         self.dns.shutdown_gracefully()
-        await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def pre_main(self):
         utils.drop_root_privs()

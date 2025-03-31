@@ -35,7 +35,7 @@ class AsyncModule(IModule):
         # Allow the event loop to run the scheduled task
         # await asyncio.sleep(0)
 
-        # to wait for these functions before flowalerts shuts down
+        # to wait for these functions before this module shuts down
         self.tasks.append(task)
         return task
 
@@ -58,8 +58,15 @@ class AsyncModule(IModule):
     async def main(self): ...
 
     async def shutdown_gracefully(self):
-        """Implement the async shutdown logic here"""
+        """
+        Implement the async shutdown logic here
+        """
         pass
+
+    async def gather_tasks_and_shutdown_gracefully(self):
+        """Implement the async shutdown logic here"""
+        await asyncio.gather(*self.tasks, return_exceptions=True)
+        await self.shutdown_gracefully()
 
     def run_async_function(self, func: Callable):
         """
@@ -78,14 +85,18 @@ class AsyncModule(IModule):
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():
-                self.run_async_function(self.shutdown_gracefully)
+                self.run_async_function(
+                    self.gather_tasks_and_shutdown_gracefully
+                )
                 return
         except KeyboardInterrupt:
-            self.run_async_function(self.shutdown_gracefully)
+            self.run_async_function(self.gather_tasks_and_shutdown_gracefully)
             return
         except RuntimeError as e:
             if "Event loop stopped before Future completed" in str(e):
-                self.run_async_function(self.shutdown_gracefully)
+                self.run_async_function(
+                    self.gather_tasks_and_shutdown_gracefully
+                )
                 return
         except Exception:
             self.print_traceback()
@@ -94,14 +105,18 @@ class AsyncModule(IModule):
         while True:
             try:
                 if self.should_stop():
-                    self.run_async_function(self.shutdown_gracefully)
+                    self.run_async_function(
+                        self.gather_tasks_and_shutdown_gracefully
+                    )
                     return
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
                 error: bool = self.run_async_function(self.main)
                 if error:
-                    self.run_async_function(self.shutdown_gracefully)
+                    self.run_async_function(
+                        self.gather_tasks_and_shutdown_gracefully
+                    )
                     return
 
             except KeyboardInterrupt:
@@ -114,7 +129,9 @@ class AsyncModule(IModule):
                 continue
             except RuntimeError as e:
                 if "Event loop stopped before Future completed" in str(e):
-                    self.run_async_function(self.shutdown_gracefully)
+                    self.run_async_function(
+                        self.gather_tasks_and_shutdown_gracefully
+                    )
                     return
             except Exception:
                 self.print_traceback()
