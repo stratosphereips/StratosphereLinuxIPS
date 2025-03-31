@@ -222,7 +222,7 @@ class ProcessManager:
             .replace("-", "")
             .lower()
         )
-        for bootstrap_module in self.boootstrapping_modules:
+        for bootstrap_module in self.bootstrapping_modules:
             m2 = (
                 bootstrap_module.replace(" ", "")
                 .replace("_", "")
