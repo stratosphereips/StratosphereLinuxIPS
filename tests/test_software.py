@@ -130,7 +130,7 @@ def test_check_multiple_ssh_versions(
         # Testcase1: Client version change detected
         (
             {
-                "sw_flow": {
+                "flow": {
                     "starttime": 1632302619.444328,
                     "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
                     "saddr": "192.168.1.247",
@@ -147,7 +147,7 @@ def test_check_multiple_ssh_versions(
         # Testcase2: Server version change detected
         (
             {
-                "sw_flow": {
+                "flow": {
                     "starttime": 1632302619.444328,
                     "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
                     "saddr": "192.168.1.247",

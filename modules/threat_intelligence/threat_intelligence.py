@@ -980,7 +980,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         data = self.db.get_ti_feed_info(filename)
         old_hash = data.get("hash", False)
 
-        new_hash = utils.get_sha256_hash(path_to_local_ti_file)
+        new_hash = utils.get_sha256_hash_of_file_contents(
+            path_to_local_ti_file
+        )
 
         if not new_hash:
             self.print(

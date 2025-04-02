@@ -16,7 +16,7 @@ def test_get_sha256_hash():
     utils = ModuleFactory().create_utils_obj()
     # a file that we know doesn't change
     assert (
-        utils.get_sha256_hash("modules/template/__init__.py")
+        utils.get_sha256_hash_of_file_contents("modules/template/__init__.py")
         == "683de4e72614dd4947e5f3b5889e12fa15bf6d5b4c5978683bad78f3c6ad5695"
     )
 
@@ -24,14 +24,14 @@ def test_get_sha256_hash():
 def test_get_sha256_hash_from_nonexistent_file():
     utils = ModuleFactory().create_utils_obj()
     with pytest.raises(FileNotFoundError):
-        utils.get_sha256_hash("nonexistent_file.txt")
+        utils.get_sha256_hash_of_file_contents("nonexistent_file.txt")
 
 
 def test_get_sha256_hash_permission_error():
     utils = ModuleFactory().create_utils_obj()
     with patch("builtins.open", side_effect=PermissionError):
         with pytest.raises(PermissionError):
-            utils.get_sha256_hash("restricted_file.txt")
+            utils.get_sha256_hash_of_file_contents("restricted_file.txt")
 
 
 @pytest.mark.parametrize(

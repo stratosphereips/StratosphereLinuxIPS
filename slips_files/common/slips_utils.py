@@ -469,7 +469,10 @@ class Utils(object):
             or ip_obj.is_reserved
         )
 
-    def get_sha256_hash(self, filename: str):
+    def get_md5_hash(self, data: Any) -> str:
+        return hashlib.md5(str(data).encode()).hexdigest()
+
+    def get_sha256_hash_of_file_contents(self, filename: str):
         """
         Compute the sha256 hash of a file
         """
