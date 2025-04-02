@@ -394,12 +394,14 @@ class Main:
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
+        flow_per_min = self.db.get_flows_analyzed_per_minute()
         stats = (
             f"\r[{now}] Analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
             f"Last ({self.twid_width}) number of IPs:"
             f" {green(modified_ips_in_the_last_tw)}. "
+            f"Analyzed {flow_per_min} flows/min."
         )
         self.print(stats)
         sys.stdout.flush()  # Make sure the output is displayed immediately
