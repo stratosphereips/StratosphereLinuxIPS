@@ -452,7 +452,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def _cleanup_old_keys_from_flow_tracker(self):
         """
         Deletes flows older than 1 hour from the
-        FLOWS_ANALYZED_BY_ALL_MODULES hash.
+        self.constants.SUBS_WHO_PROCESSED_MSG hash.
         Does this cleanup every 1h
         """
         one_hr = 3600
@@ -485,13 +485,38 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         if keys_to_delete:
             self.r.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, *keys_to_delete)
-
         self.last_cleanup_time = now
+
+    def _get_current_minute(self) -> str:
+        return time.strftime("%Y%m%d%H%M", time.gmtime(time.time()))
+
+    def _keep_track_of_flows_analyzed_per_min(self, pipe):
+        """
+        Adds the logic of tracking flows per min to the given pipe for
+        excution
+        """
+        current_minute = self._get_current_minute()
+        key = (
+            f"{self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN}:"
+            f"{current_minute}"
+        )
+        pipe.incr(key)
+        # set expiration for 1 hour to avoid long-term storage
+        pipe.expire(key, 3600)
+
+    def get_flows_analyzed_per_minute(self):
+        current_minute = self._get_current_minute()
+        key = (
+            f"{self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN}:"
+            f"{current_minute}"
+        )
+        return self.r.get(key)
 
     def _track_flow_processing_rate(self, msg: dict):
         """
         Every time 1 flow is processed by all the subscribers of the given
-        channel, this function increases the FLOWS_ANALYZED_BY_ALL_MODULES
+        channel, this function increases the
+        FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN
         constant in the db. the goal of this is to keep track of the flow
         processing rate.
         - Only keep track of flows sent in specific channels(
@@ -537,11 +562,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         )
 
         if subscribers_who_processed_this_msg == expected_subscribers:
+
             pipe = self.r.pipeline()
             pipe.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
-            # each time this one is incremented, it means a flow was analyzed
-            # by all the modules it should be analyzed by
-            pipe.incr(self.constants.FLOWS_ANALYZED_BY_ALL_MODULES)
+            self._keep_track_of_flows_analyzed_per_min(pipe)
             pipe.execute()
             return
 
