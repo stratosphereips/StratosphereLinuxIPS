@@ -130,6 +130,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # to keep track of connection retries. once it reaches max_retries,
     # slips will terminate
     connection_retry = 0
+    # used to cleanup flow trackers
+    last_cleanup_time = time.time()
 
     def __new__(
         cls, logger, redis_port, start_redis_server=True, flush_db=True
@@ -447,6 +449,45 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         return True
 
+    def _cleanup_old_keys_from_flow_tracker(self):
+        """
+        Deletes flows older than 1 hour from the
+        FLOWS_ANALYZED_BY_ALL_MODULES hash.
+        Does this cleanup every 1h
+        """
+        one_hr = 3600
+        now = time.time()
+
+        if now - self.last_cleanup_time < one_hr:
+            # Cleanup was done less than an hour ago
+            return
+
+        one_hour_ago = int(now) - one_hr
+        keys_to_delete = []
+
+        cursor = 0
+        while True:
+            cursor, key_values = self.r.hscan(
+                self.constants.SUBS_WHO_PROCESSED_MSG, cursor
+            )
+            for msg_id in key_values.keys():
+                try:
+                    # Extract timestamp from msg_id
+                    ts = int(msg_id.rsplit("_", 1)[-1])
+
+                    if ts < one_hour_ago:
+                        keys_to_delete.append(msg_id)
+                except ValueError:
+                    continue  # Skip keys that don't match expected format
+
+            if cursor == 0:
+                break  # Exit when full scan is done
+
+        if keys_to_delete:
+            self.r.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, *keys_to_delete)
+
+        self.last_cleanup_time = now
+
     def _track_flow_processing_rate(self, msg: dict):
         """
         Every time 1 flow is processed by all the subscribers of the given
@@ -459,9 +500,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         channel subscribers that access it. once the number of msg accessed
         reaches the number of channel subscribers, we count that as 1 flow
         analyzed.
+        - if a flow is kept in memory for 1h without being accessed by all
+        of its subscribers, its removed, to avoid dead entries.
         """
         if not self._should_track_msg(msg):
             return
+
+        self._cleanup_old_keys_from_flow_tracker()
 
         # we only say that a flow is done being analyzed if it was accessed
         # X times where x is the number of the channel subscribers
@@ -480,7 +525,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # channel name is used here because some flow may be present in
         # conn.log and ssl.log with the same uid, so uid only is not enough
         # as an identifier.
-        msg_id = f"{channel_name}_{flow_identifier}"
+        # we're storing the ts here to be able to delete the 1h old msgs
+        # from redis.
+        timestamp = int(time.time())
+        msg_id = f"{channel_name}_{flow_identifier}_{timestamp}"
 
         expected_subscribers: int = self.r.pubsub_numsub(channel_name)[0][1]
 
