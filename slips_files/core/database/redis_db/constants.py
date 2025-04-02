@@ -66,6 +66,10 @@ class Constants:
     NUMBER_OF_ALERTS = "number_of_alerts"
     KNOWN_FPS = "known_fps"
     WILL_SLIPS_HAVE_MORE_FLOWS = "will_slips_have_more_flows"
+    SUBS_WHO_PROCESSED_MSG = "number_of_subscribers_who_processed_this_msg"
+    # each time this one is incremented, it means a flow was processed by
+    # all the modules it should be processed by
+    FLOWS_ANALYZED_BY_ALL_MODULES = "flows_analyzed_by_all_modules"
 
 
 class Channels:

@@ -46,14 +46,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "new_ip",
         "new_flow",
         "new_dns",
-        "new_dns_flow",
         "new_http",
         "new_ssl",
         "new_profile",
         "give_threat_intelligence",
         "new_letters",
         "ip_info_change",
-        "dns_info_change",
         "dns_info_change",
         "tw_closed",
         "core_messages",
@@ -88,6 +86,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "fides2slips",
         "slips2fides",
         "iris_internal",
+    }
+    # channels that recv actual flows, not msgs that we need to pass between
+    # modules.
+    subscribers_of_channels_that_recv_flows = {
+        "new_flow": 0,
+        "new_dns": 0,
+        "new_http": 0,
+        "new_ssl": 0,
+        "new_ssh": 0,
+        "new_notice": 0,
+        "new_url": 0,
+        "new_downloaded_file": 0,
+        "new_service": 0,
+        "new_arp": 0,
+        "new_smtp": 0,
+        "new_dhcp": 0,
+        "new_weird": 0,
+        "new_software": 0,
+        "new_tunnel": 0,
     }
     separator = "_"
     normal_label = "benign"
@@ -410,15 +427,99 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         self.print("Sending the stop signal to all listeners", 0, 3)
         self.r.publish("control_channel", "stop_slips")
 
-    def get_message(self, channel, timeout=0.0000001):
+    def _should_track_msg(self, msg: dict) -> bool:
+        """
+        Check if the msg is a flow msg that we should track. used for
+        tracking flow processing rate
+        """
+        if not msg or msg["type"] != "message":
+            # ignore subscribe msgs
+            return False
+
+        try:
+            channel_name = msg["channel"]
+        except KeyError:
+            return False
+
+        if channel_name not in self.subscribers_of_channels_that_recv_flows:
+            # the msg doesnt contain a flow, we're not interested in it
+            return False
+
+        return True
+
+    def _track_flow_processing_rate(self, msg: dict):
+        """
+        Every time 1 flow is processed by all the subscribers of the given
+        channel, this function increases the FLOWS_ANALYZED_BY_ALL_MODULES
+        constant in the db. the goal of this is to keep track of the flow
+        processing rate.
+        - Only keep track of flows sent in specific channels(
+        self.channels_that_recv_flows)
+        - Works by keeping track of all uids and counting th eumber of
+        channel subscribers that access it. once the number of msg accessed
+        reaches the number of channel subscribers, we count that as 1 flow
+        analyzed.
+        """
+        if not self._should_track_msg(msg):
+            return
+
+        # we only say that a flow is done being analyzed if it was accessed
+        # X times where x is the number of the channel subscribers
+        # this way we make sure that all intended receivers did receive the
+        # flow
+        channel_name = msg["channel"]
+        try:
+            flow = json.loads(msg["data"])["flow"]
+            flow_identifier = flow["uid"]
+            if not flow_identifier:
+                # some flows have no uid, like weird.log
+                flow_identifier = utils.get_md5_hash(flow)
+        except KeyError:
+            flow_identifier = utils.get_md5_hash(flow)
+        # channel name is used here because some flow may be present in
+        # conn.log and ssl.log with the same uid, so uid only is not enough
+        # as an identifier.
+        msg_id = f"{channel_name}_{flow_identifier}"
+
+        try:
+            subscribers_who_processed_this_msg = int(
+                self.r.hget(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
+            )
+        except TypeError:
+            subscribers_who_processed_this_msg = 0
+
+        subscribers_who_should_process_this_msg: int = (
+            self.r.pubsub_numsub(channel_name)
+        )[0][1]
+
+        if (
+            subscribers_who_processed_this_msg
+            == subscribers_who_should_process_this_msg
+        ):
+            self.r.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
+            # each time this one is incremented, it means a flow was analyzed
+            # by all the modules it should be analyzed by
+            self.r.incrby(self.constants.FLOWS_ANALYZED_BY_ALL_MODULES, 1)
+            return
+
+        self.r.hset(
+            self.constants.SUBS_WHO_PROCESSED_MSG,
+            msg_id,
+            str(subscribers_who_processed_this_msg + 1),
+        )
+
+    def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
         """
         Wrapper for redis' get_message() to be able to handle
         redis.exceptions.ConnectionError
         notice: there has to be a timeout or the channel will wait forever
         and never receive a new msg
+        :param channel_obj: PubSub obj of the channel
         """
         try:
-            return channel.get_message(timeout=timeout)
+            msg = channel_obj.get_message(timeout=timeout)
+            self._track_flow_processing_rate(msg)
+            return msg
         except redis.exceptions.ConnectionError as ex:
             # make sure we log the error only once
             if not self.is_connection_error_logged():
@@ -446,7 +547,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 time.sleep(self.backoff)
                 self.backoff = self.backoff * 2
                 self.connection_retry += 1
-                self.get_message(channel, timeout)
+                self.get_message(channel_obj, timeout)
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -1592,9 +1693,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return self.r.get(self.constants.ZEEK_PATH)
 
     def increment_processed_flows(self):
+        """processed by the profiler only"""
         return self.r.incr(self.constants.PROCESSED_FLOWS, 1)
 
     def get_processed_flows_so_far(self) -> int:
+        """processed by the profiler only"""
         processed_flows = self.r.get(self.constants.PROCESSED_FLOWS)
         if not processed_flows:
             return 0
