@@ -476,37 +476,26 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 flow_identifier = utils.get_md5_hash(flow)
         except KeyError:
             flow_identifier = utils.get_md5_hash(flow)
+
         # channel name is used here because some flow may be present in
         # conn.log and ssl.log with the same uid, so uid only is not enough
         # as an identifier.
         msg_id = f"{channel_name}_{flow_identifier}"
 
-        try:
-            subscribers_who_processed_this_msg = int(
-                self.r.hget(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
-            )
-        except TypeError:
-            subscribers_who_processed_this_msg = 0
+        expected_subscribers: int = self.r.pubsub_numsub(channel_name)[0][1]
 
-        subscribers_who_should_process_this_msg: int = (
-            self.r.pubsub_numsub(channel_name)
-        )[0][1]
+        subscribers_who_processed_this_msg = self.r.hincrby(
+            self.constants.SUBS_WHO_PROCESSED_MSG, msg_id, 1
+        )
 
-        if (
-            subscribers_who_processed_this_msg
-            == subscribers_who_should_process_this_msg
-        ):
-            self.r.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
+        if subscribers_who_processed_this_msg == expected_subscribers:
+            pipe = self.r.pipeline()
+            pipe.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
             # each time this one is incremented, it means a flow was analyzed
             # by all the modules it should be analyzed by
-            self.r.incrby(self.constants.FLOWS_ANALYZED_BY_ALL_MODULES, 1)
+            pipe.incr(self.constants.FLOWS_ANALYZED_BY_ALL_MODULES)
+            pipe.execute()
             return
-
-        self.r.hset(
-            self.constants.SUBS_WHO_PROCESSED_MSG,
-            msg_id,
-            str(subscribers_who_processed_this_msg + 1),
-        )
 
     def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
         """
