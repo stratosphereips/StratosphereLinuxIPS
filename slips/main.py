@@ -30,7 +30,9 @@ from slips_files.common.performance_profilers.flow_rate_logger import (
 )
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
-
+from slips_files.common.performance_profilers.ram_usage_tracker import (
+    RAMUsageTracker,
+)
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -73,6 +75,9 @@ class Main:
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
+                self.ram_usage_tracker = RAMUsageTracker(
+                    self.args.output, os.getpid()
+                )
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
@@ -453,6 +458,7 @@ class Main:
     def start(self):
         """Main Slips Function"""
         try:
+            self.ram_usage_tracker.get_ram_usage()
             self.print_version()
             print("https://stratosphereips.org")
             print("-" * 27)
@@ -617,6 +623,7 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                self.ram_usage_tracker.run()
                 self.flow_rate_logger.run()
 
                 # if you remove the below logic anywhere before the
