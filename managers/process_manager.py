@@ -753,6 +753,7 @@ class ProcessManager:
                     log_to_logfiles_only=True,
                 )
             self.main.ram_usage_tracker.get_ram_usage()
+            self.main.cpu_usage_tracker.get_cpu_percentage()
 
         except KeyboardInterrupt:
             return False

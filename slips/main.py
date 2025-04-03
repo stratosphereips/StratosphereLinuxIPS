@@ -22,6 +22,9 @@ from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.performance_profilers.cpu_percentage_logger import (
+    CPUUsageTracker,
+)
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
@@ -75,6 +78,9 @@ class Main:
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
+                self.cpu_usage_tracker = CPUUsageTracker(
+                    output_dir=self.args.output, slips_pid=os.getpid()
+                )
                 self.ram_usage_tracker = RAMUsageTracker(
                     self.args.output, os.getpid()
                 )
@@ -458,6 +464,7 @@ class Main:
     def start(self):
         """Main Slips Function"""
         try:
+            self.cpu_usage_tracker.get_cpu_percentage()
             self.ram_usage_tracker.get_ram_usage()
             self.print_version()
             print("https://stratosphereips.org")
@@ -623,6 +630,7 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                self.cpu_usage_tracker.run()
                 self.ram_usage_tracker.run()
                 self.flow_rate_logger.run()
 
