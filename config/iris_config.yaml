@@ -1,9 +1,9 @@
 Identity:
   GenerateNewKey: true
 Server:
-  port: 9010
-  Host: 127.0.0.1
-  DhtServerMode: true
+  Port: 9010
+  Host: null
+  DhtServerMode: 'true'
 Redis:
   Host: 127.0.0.1
   Port: 6644

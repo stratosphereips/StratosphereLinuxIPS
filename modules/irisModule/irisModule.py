@@ -60,6 +60,16 @@ class IrisModule(IModule):
                     "Port": redis_port,
                     "Tl2NlChannel": "iris_internal",
                 }
+            if "Server" in config:
+                #config["Server"]["Port"] = 9010
+                config["Server"]["Host"] = self.db.get_host_ip()
+                config["Server"]["DhtServerMode"] = "true"
+            else:
+                config["Redis"] = {
+                    "Port": 6644,
+                    "Host": self.db.get_host_ip(),
+                    "DhtServerMode": "true",
+                }
 
             # Write the updated configuration back to the file
             with open(config_path, "w") as file:
@@ -79,7 +89,7 @@ class IrisModule(IModule):
             # Catch any other unexpected errors
             self.print(f"An unexpected error occurred: {e}")
             return None
-        return config["Server"]["port"]
+        return config["Server"]["Port"]
 
     def pre_main(self):
         """
