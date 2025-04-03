@@ -79,6 +79,9 @@ class DBManager:
     def is_running_non_stop(self, *args, **kwargs):
         return self.rdb.is_running_non_stop(*args, **kwargs)
 
+    def get_flows_analyzed_per_minute(self, *args, **kwargs):
+        return self.rdb.get_flows_analyzed_per_minute(*args, **kwargs)
+
     def get_ip_info(self, *args, **kwargs):
         return self.rdb.get_ip_info(*args, **kwargs)
 
