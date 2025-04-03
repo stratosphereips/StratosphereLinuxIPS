@@ -25,6 +25,9 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
+from slips_files.common.performance_profilers.flow_rate_logger import (
+    FlowRateLogger,
+)
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
 
@@ -477,6 +480,8 @@ class Main:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
 
+            self.flow_rate_logger = FlowRateLogger(self.args.output, self.db)
+
             self.db.set_input_metadata(
                 {
                     "output_dir": self.args.output,
@@ -612,6 +617,7 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                self.flow_rate_logger.run()
 
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return
