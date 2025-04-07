@@ -2,11 +2,13 @@ Identity:
   GenerateNewKey: true
 Server:
   Port: 9010
-  Host: null
+  Host: 192.168.1.220
   DhtServerMode: 'true'
 Redis:
   Host: 127.0.0.1
-  Port: 6644
+  Port: 6379
   Tl2NlChannel: iris_internal
 PeerDiscovery:
-  DisableBootstrappingNodes: true
+  DisableBootstrappingNodes: false
+  ListOfMultiAddresses:
+  - /dns/kilimanjaro.felk.cvut.cz/udp/6437/quic 12D3KooWJJa9PpMFVP7s3TQs2sedypJXxtMVkphRhgkjGH9EYMfM
