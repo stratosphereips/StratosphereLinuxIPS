@@ -11,4 +11,4 @@ Redis:
 PeerDiscovery:
   DisableBootstrappingNodes: false
   ListOfMultiAddresses:
-  - /dns/kilimanjaro.felk.cvut.cz/udp/6437/quic 12D3KooWJJa9PpMFVP7s3TQs2sedypJXxtMVkphRhgkjGH9EYMfM
+  - /dns/melchior.slips.stratosphere.fel.cvut.cz/udp/6437/quic 12D3KooWJJa9PpMFVP7s3TQs2sedypJXxtMVkphRhgkjGH9EYMfM
