@@ -271,9 +271,11 @@ class Input(ICore):
         if not file_handle:
             return False
 
-        # Only read the next line if the previous line from this file was sent to profiler
+        # Only read the next line if the previous line from this file was sent
+        # to profiler
         if filename in self.cache_lines:
-            # We have still something to send, do not read the next line from this file
+            # We have still something to send, do not read the next line from
+            # this file
             return False
 
         # We don't have any waiting line for this file, so proceed
@@ -286,14 +288,21 @@ class Input(ICore):
             return False
 
         # Did the file end?
-        if not zeek_line or zeek_line.startswith("#"):
+        if not zeek_line or zeek_line.startswith("#close"):
             # We reached the end of one of the files that we were reading.
             # Wait for more lines to come from another file
             return False
 
-        timestamp, nline = self.get_ts_from_line(zeek_line)
-        if not timestamp:
-            return False
+        if zeek_line.startswith("#fields"):
+            # this line contains the zeek fields, we want to cache it and
+            # send it to the profiler normally
+            nline = zeek_line
+            # to send the line as early as possible
+            timestamp = -1
+        else:
+            timestamp, nline = self.get_ts_from_line(zeek_line)
+            if not timestamp:
+                return False
 
         self.file_time[filename] = timestamp
         # Store the line in the cache

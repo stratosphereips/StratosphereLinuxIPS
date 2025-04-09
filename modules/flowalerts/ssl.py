@@ -220,6 +220,8 @@ class SSL(IFlowalertsAnalyzer):
             self.keep_track_of_ssl_flow(flow, key)
             return False
 
+        flow.starttime = float(flow.starttime)
+
         # in seconds
         five_mins = 5 * 60
 

@@ -267,20 +267,63 @@ class ZeekJSON(IInputType):
 
 class ZeekTabs(IInputType):
     separator = "\t"
+    zeek_fields_to_slips_fields_map = {
+        "ts": "starttime",
+        "uid": "uid",
+        "id.orig_h": "saddr",
+        "id.orig_p": "sport",
+        "id.resp_h": "daddr",
+        "id.resp_p": "dport",
+        "proto": "proto",
+        "service": "appproto",
+        "duration": "dur",
+        "orig_bytes": "sbytes",
+        "resp_bytes": "dbytes",
+        "conn_state": "state",
+        "local_orig": "",  # not used in slips
+        "local_resp": "",  # not used in slips
+        "missed_bytes": "",  # not used in slips
+        "history": "history",
+        "orig_pkts": "spkts",
+        "orig_ip_bytes": "",  # not used in slips
+        "resp_pkts": "dpkts",
+        "resp_ip_bytes": "",  # not used in slips
+        "tunnel_parents": "",  # not used in slips
+        "label": "ground_truth_label",
+        "detailedlabel": "detailed_ground_truth_label",
+    }
+    slips_fields_idx_map = {}
 
-    def __init__(self):
-        pass
+    def __init__(self, fields_line: dict):
+        fields_line = fields_line["data"].replace("#fields", "")
+        fields_list = self.split(fields_line)[1:]
+        # [1:] to remove the empty "" that was between the #fields and ts
+        for idx, zeek_field in enumerate(fields_list):
+            # get the slips name of this zeek field
+            slips_field = self.zeek_fields_to_slips_fields_map[zeek_field]
+            self.slips_fields_idx_map[idx] = slips_field
+
+    def split(self, line: str):
+        """
+        the data is either \t separated or space separated
+        zeek files that are space separated are either separated by 2 or 3
+        spaces so we can't use python's split()
+        using regex split, split line when you encounter more
+        than 2 spaces in a row
+        """
+        line = line.rstrip("\n")
+        return line.split("\t") if "\t" in line else split(r"\s{2,}", line)
 
     def process_line(self, new_line: dict):
         """
         Process the tab line from zeek.
         """
         line = new_line["data"]
-        line = line.rstrip("\n")
-        # the data is either \t separated or space separated
-        # zeek files that are space separated are either separated by 2 or 3 spaces so we can't use python's split()
-        # using regex split, split line when you encounter more than 2 spaces in a row
-        line = line.split("\t") if "\t" in line else split(r"\s{2,}", line)
+
+        if line.startswith("#fields"):
+            return False
+
+        line = self.split(line)
 
         if ts := line[0]:
             starttime = utils.convert_to_datetime(ts)
@@ -294,30 +337,28 @@ class ZeekTabs(IInputType):
             except IndexError:
                 return default_
 
-        # uid = get_value_at(1)
-        # saddr = get_value_at(2, '')
-        # saddr = get_value_at(3, '')
-
         if "conn.log" in new_line["type"]:
-            self.flow: Conn = Conn(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(2),
-                get_value_at(4),
-                float(get_value_at(8, 0)),
-                get_value_at(6, False),
-                get_value_at(7),
-                int(get_value_at(3)),
-                int(get_value_at(5)),
-                int(get_value_at(16, 0)),
-                int(get_value_at(18, 0)),
-                int(get_value_at(9, 0)),
-                int(get_value_at(10, 0)),
-                get_value_at(21),
-                get_value_at(22),
-                get_value_at(11),
-                get_value_at(15),
+            conn_values = {}
+            # this dict is like {0: 'starttime', 1: 'uid', 2: 'saddr' etc...
+            for idx, field in self.slips_fields_idx_map.items():
+                if field:
+                    conn_values[field] = get_value_at(idx, "")
+
+            # convert types for known fields if needed
+            conn_values["dur"] = float(conn_values.get("dur", 0) or 0)
+
+            slips_fields_to_convert_to_int = (
+                "sbytes",
+                "dbytes",
+                "spkts",
+                "dpkts",
+                "sport",
+                "dport",
             )
+            for field in slips_fields_to_convert_to_int:
+                conn_values[field] = int(conn_values.get(field, 0) or 0)
+
+            self.flow: Conn = Conn(**conn_values)
 
         elif "dns.log" in new_line["type"]:
             self.flow: DNS = DNS(
