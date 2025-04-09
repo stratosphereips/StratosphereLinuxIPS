@@ -232,6 +232,7 @@ class ProcessManager:
 
             if m1.__contains__(m2):
                 return True
+        self.modules_to_ignore.append(module_name.split(".")[-1])
         return False
 
     def is_abstract_module(self, obj) -> bool:
