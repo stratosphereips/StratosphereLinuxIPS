@@ -734,4 +734,4 @@ class ConfigParser(object):
             and ("-i" in sys.argv or "-g" in sys.argv)
 
     def get_bootstrapping_modules(self) -> list:
-        return ["fidesModule", "irisModule"]
+        return self.read_configuration("global_p2p", "bootstrapping_modules", ["fidesModule", "irisModule"])
