@@ -338,7 +338,7 @@ class ZeekTabs(IInputType):
                 return default_
 
         if "conn.log" in new_line["type"]:
-            conn_values = {}
+            conn_values = {"starttime": starttime}
             # this dict is like {0: 'starttime', 1: 'uid', 2: 'saddr' etc...
             for idx, field in self.slips_fields_idx_map.items():
                 if field:

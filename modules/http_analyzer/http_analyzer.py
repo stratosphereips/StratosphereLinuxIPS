@@ -500,6 +500,7 @@ class HTTPAnalyzer(AsyncModule):
             self.keep_track_of_http_flow(flow, key)
             return False
 
+        flow.starttime = float(flow.starttime)
         # in seconds
         five_mins = 5 * 60
 
