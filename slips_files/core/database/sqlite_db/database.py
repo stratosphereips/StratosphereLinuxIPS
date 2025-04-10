@@ -428,7 +428,6 @@ class SQLiteDB:
                         f"Query discarded.",
                         0,
                         1,
-                        log_to_logfiles_only=True,
                     )
                     return
 
