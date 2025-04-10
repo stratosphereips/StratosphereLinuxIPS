@@ -316,6 +316,8 @@ class FlowMLDetection(IModule):
                 "endtime",
                 "bytes",
                 "flow_source",
+                "ground_truth_label",  # todo now we can use them
+                "detailed_ground_truth_label",
             ]
             for field in fields_to_drop:
                 try:

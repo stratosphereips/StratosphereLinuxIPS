@@ -249,8 +249,7 @@ class Profiler(ICore, IObservable):
     def add_flow_to_profile(self, flow):
         """
         This is the main function that takes the columns of a flow
-        and does all the magic to convert it into a working data in our
-        system.
+        and does all the magic to convert it into a working data in slips.
         It includes checking if the profile exists and how to put
         the flow correctly.
         """
@@ -596,7 +595,15 @@ class Profiler(ICore, IObservable):
         # only create the input_handler_obj once,
         # the rest of the flows will use the same input handler
         if not hasattr(self, "input_handler_obj"):
-            self.input_handler_obj = SUPPORTED_INPUT_TYPES[self.input_type]()
+            if self.input_type == "zeek-tabs":
+                # the ZeekTabs class needs the fields line
+                self.input_handler_obj = SUPPORTED_INPUT_TYPES[
+                    self.input_type
+                ](line)
+            else:
+                self.input_handler_obj = SUPPORTED_INPUT_TYPES[
+                    self.input_type
+                ]()
 
     def stop_profiler_thread(self) -> bool:
         # cant use while self.flows_to_process_q.qsize() != 0 only here
