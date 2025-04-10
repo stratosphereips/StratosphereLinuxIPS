@@ -501,6 +501,7 @@ global_p2p:
    use_global_p2p: False
    iris_conf: config/iris_config.yaml
    bootstrapping_node: False
+   bootstrapping_modules: ["fidesModule", "irisModule"]
 
 #############################
 local_p2p:
