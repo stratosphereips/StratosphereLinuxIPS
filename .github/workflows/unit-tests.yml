@@ -86,6 +86,8 @@ jobs:
           - test_idea_format.py
           - test_fides_sqlite_db.py
           - test_fides_module.py
+          - test_fides_queues.py
+          - test_fides_bridge.py
 
     steps:
     - uses: actions/checkout@v4
