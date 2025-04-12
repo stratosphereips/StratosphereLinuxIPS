@@ -392,7 +392,7 @@ class SQLiteDB:
         Each call to this function results in 1 sqlite transaction
         """
         trial = 0
-        max_trials = 3
+        max_trials = 5
         while trial < max_trials:
             try:
                 # note that self.conn.in_transaction is not reliable
@@ -428,7 +428,6 @@ class SQLiteDB:
                         f"Query discarded.",
                         0,
                         1,
-                        log_to_logfiles_only=True,
                     )
                     return
 

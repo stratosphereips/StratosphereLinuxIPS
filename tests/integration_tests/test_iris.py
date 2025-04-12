@@ -225,6 +225,7 @@ def test_messaging(
                     "PeerDiscovery": {
                         "ListOfMultiAddresses": [original_conn_string]
                     },
+                    "Identity": {"KeyFile": "second.priv"}
                 },
             )
             # generate a second command for the second peer
@@ -294,3 +295,15 @@ def test_messaging(
     print("Deleting the output directories")
     shutil.rmtree(output_dir)
     shutil.rmtree(output_dir_peer)
+    os.remove("modules/irisModule/second.priv")
+    modify_yaml_config(
+        input_path="config/iris_config.yaml",
+        output_dir=os.path.dirname(iris_peer_config_file),
+        output_filename=os.path.basename(iris_peer_config_file),
+        changes={
+            "Redis": {"Port": 6644},
+            "Server": {"Port": 9010},
+            "PeerDiscovery": {},
+            "Identity": {"KeyFile": "private.key"}
+        },
+    )
