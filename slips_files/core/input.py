@@ -132,6 +132,7 @@ class Input(ICore):
         self.profiler_queue.put("stop")
         self.print("Waiting for Profiler to stop.", log_to_logfiles_only=True)
         self.is_profiler_done_event.wait()
+        # reaching here means the wait() is over and profiler did stop.
         self.print("Input is done processing.", log_to_logfiles_only=True)
         self.done_processing.release()
 
