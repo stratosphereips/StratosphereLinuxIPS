@@ -29,7 +29,6 @@ from exclusiveprocess import (
 )
 import multiprocessing
 
-from scipy.stats import bootstrap
 
 import modules
 from modules.update_manager.update_manager import UpdateManager
@@ -79,9 +78,9 @@ class ProcessManager:
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
             self.main.input_type
         )
-        self.bootstrap_p2p =  self.main.conf.is_bootstrapping_node()
+        self.bootstrap_p2p = self.main.conf.is_bootstrapping_node()
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
-        #self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
+        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
@@ -266,11 +265,15 @@ class ProcessManager:
             if dir_name != file_name:
                 continue
 
-            if self.bootstrap_p2p:   # if bootstrapping the p2p network
-                if not self.is_bootstrapping_module(module_name): # keep only the bootstrapping-necessary modules
+            if self.bootstrap_p2p:  # if bootstrapping the p2p network
+                if not self.is_bootstrapping_module(
+                    module_name
+                ):  # keep only the bootstrapping-necessary modules
                     continue
-            else: # if not bootstrappig mode
-                if self.is_ignored_module(module_name): # ignore blacklisted modules
+            else:  # if not bootstrappig mode
+                if self.is_ignored_module(
+                    module_name
+                ):  # ignore blacklisted modules
                     continue
 
             # Try to import the module, otherwise skip.
@@ -769,7 +772,7 @@ class ProcessManager:
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
 
-            self.main.db.close()
+            self.main.db.close_redis_and_sqlite()
             if graceful_shutdown:
                 print(
                     "[Process Manager] Slips shutdown gracefully\n",
