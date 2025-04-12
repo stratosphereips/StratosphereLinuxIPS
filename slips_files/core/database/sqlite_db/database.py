@@ -48,7 +48,9 @@ class SQLiteDB:
         self.conn = sqlite3.connect(
             self._flows_db, check_same_thread=False, timeout=20
         )
-
+        # enable write-ahead logging for concurrent reads and writes to
+        # avoid the "DB is locked" error
+        self.conn.execute("PRAGMA journal_mode=WAL;")
         self.cursor = self.conn.cursor()
         if db_newly_created:
             # only init tables if the db is newly created
