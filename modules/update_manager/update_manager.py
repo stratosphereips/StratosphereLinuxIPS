@@ -474,7 +474,7 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Problem on update_TI_file() line {exception_line}", 0, 1
+                f"Problem on should_update() line {exception_line}", 0, 1
             )
             self.print(traceback.format_exc(), 0, 1)
         return False
@@ -696,7 +696,7 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Problem on update_TI_file() line {exception_line}", 0, 1
+                f"Problem on update_ti_file() line {exception_line}", 0, 1
             )
             self.print(traceback.format_exc(), 0, 1)
             return False
@@ -1435,6 +1435,9 @@ class UpdateManager(IModule):
             }
 
             ti_file_name: str = ti_file_path.split("/")[-1]
+            if data_type not in handlers:
+                # maybe it's a url, urls as iocs are not supported.
+                continue
             handlers[data_type](ioc, ti_file_name, feed_link, description)
 
         self.db.add_ips_to_ioc(self.malicious_ips_dict)
