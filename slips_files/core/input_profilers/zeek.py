@@ -333,6 +333,30 @@ class ZeekTabs(IInputType):
         line = line.rstrip("\n")
         return line.split("\t") if "\t" in line else split(r"\s{2,}", line)
 
+    def get_slips_fields_idx_map(
+        self, fields_line: dict, zeek_to_slips_field_map: dict
+    ) -> Dict[int, str]:
+        """
+        returns a dict that has slips fields as values and the index of
+        each field as keys
+        e.g {0: 'starttime', 1: 'uid', 2: 'saddr' etc...
+        :param fields_line: a line that starts with #fields as read from
+        the given zeek.log file
+        :param zeek_to_slips_field_map: a dict that maps zeek fields to slips
+        the returned dict may contain None if a zeek field in the given
+        line doesnt have a slips equivalent (not used in slips)
+        """
+        fields_line = fields_line["data"].replace("#fields", "")
+        # [1:] to remove the empty "" that was between the #fields and ts
+        zeek_fields_list = self.split(fields_line)[1:]
+
+        slips_fields_idx_map = {}
+        for idx, zeek_field in enumerate(zeek_fields_list):
+            # map field to slips name if possible
+            slips_field = zeek_to_slips_field_map.get(zeek_field)
+            slips_fields_idx_map[idx] = slips_field
+        return slips_fields_idx_map
+
     @staticmethod
     def remove_subsuffix(file_name: str) -> str:
         """
@@ -466,10 +490,6 @@ class ZeekTabs(IInputType):
 
             # Conn, SSH, Notice, etc.
             slips_class = LINE_TYPE_TO_SLIPS_CLASS[log_type]
-
-            flow_values = self.fill_empty_class_fields(
-                flow_values, slips_class
-            )
 
             # create the corresponding object using the mapped class
             # todo the type_ isnot set correctly
