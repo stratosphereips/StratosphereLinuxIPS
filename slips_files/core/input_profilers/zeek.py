@@ -449,6 +449,10 @@ class ZeekTabs(IInputType):
         for field in missing_fields:
             flow_values[field] = ""
 
+        # always use the type_ field of the slips class, this is not gonna
+        # be given to slips by zeek:D
+        flow_values["type_"] = getattr(slips_class, "type_")
+
         return flow_values
 
     def process_line(self, new_line: dict):
@@ -524,7 +528,6 @@ class ZeekTabs(IInputType):
             )
 
             # create the corresponding object using the mapped class
-            # todo the type_ isnot set correctly
             self.flow = slips_class(**flow_values)
             return self.flow
 
