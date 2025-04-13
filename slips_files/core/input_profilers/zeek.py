@@ -423,6 +423,34 @@ class ZeekTabs(IInputType):
         except IndexError:
             return default_
 
+    def fill_empty_class_fields(self, flow_values: dict, slips_class):
+        """
+        The given slips class is Conn, SSH, Weird etc.
+        Suppose SSH requires an "issuer" field and the given zeek log line
+        doesn'thave one, this function fills the issuer field (or any
+        missing field) with "".
+
+        Returns a ready-to-use flow_values dict that has all the fields of
+        the given slips_class
+
+        :param flow_values: a dict with the values of the given zeek log line
+        :param slips_class: the class that corresponds to the given zeek log
+        line
+        """
+        # get all fields of the slips_class
+        slips_class_fields = set(slips_class.__init__.__code__.co_varnames)
+        # remove 'self' from the fields
+        slips_class_fields.discard("self")
+
+        # identify fields in slips_class that are not in flow_values
+        missing_fields = slips_class_fields - set(flow_values.keys())
+
+        # set the missing fields in flow_values to ""
+        for field in missing_fields:
+            flow_values[field] = ""
+
+        return flow_values
+
     def process_line(self, new_line: dict):
         """
         Process the tab line from zeek.
@@ -490,6 +518,10 @@ class ZeekTabs(IInputType):
 
             # Conn, SSH, Notice, etc.
             slips_class = LINE_TYPE_TO_SLIPS_CLASS[log_type]
+
+            flow_values = self.fill_empty_class_fields(
+                flow_values, slips_class
+            )
 
             # create the corresponding object using the mapped class
             # todo the type_ isnot set correctly
