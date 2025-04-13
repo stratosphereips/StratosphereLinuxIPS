@@ -595,15 +595,7 @@ class Profiler(ICore, IObservable):
         # only create the input_handler_obj once,
         # the rest of the flows will use the same input handler
         if not hasattr(self, "input_handler_obj"):
-            if self.input_type == "zeek-tabs":
-                # the ZeekTabs class needs the fields line
-                self.input_handler_obj = SUPPORTED_INPUT_TYPES[
-                    self.input_type
-                ](line)
-            else:
-                self.input_handler_obj = SUPPORTED_INPUT_TYPES[
-                    self.input_type
-                ]()
+            self.input_handler_obj = SUPPORTED_INPUT_TYPES[self.input_type]()
 
     def stop_profiler_thread(self) -> bool:
         # cant use while self.flows_to_process_q.qsize() != 0 only here
