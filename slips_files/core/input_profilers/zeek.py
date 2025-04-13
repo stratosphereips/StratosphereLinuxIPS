@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from datetime import datetime
 from re import split
-
+from typing import Dict
 from slips_files.common.abstracts.input_type import IInputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import (
@@ -21,6 +21,55 @@ from slips_files.core.flows.zeek import (
     Software,
     Weird,
 )
+
+from slips_files.core.input_profilers.zeek_to_slips_maps import (
+    conn_fields_to_slips_fields_map,
+    dns_fields_to_slips_fields_map,
+    http_fields_to_slips_fields_map,
+    ssl_fields_to_slips_fields_map,
+    ssh_fields_to_slips_fields_map,
+    dhcp_fields_to_slips_fields_map,
+    ftp_fields_to_slips_fields_map,
+    smtp_fields_to_slips_fields_map,
+    tunnel_fields_to_slips_fields_map,
+    notice_fields_to_slips_fields_map,
+    files_fields_to_slips_fields_map,
+    arp_fields_to_slips_fields_map,
+    software_fields_to_slips_fields_map,
+    weird_fields_to_slips_fields_map,
+)
+
+LOG_MAP = {
+    "conn.log": conn_fields_to_slips_fields_map,
+    "dns.log": dns_fields_to_slips_fields_map,
+    "http.log": http_fields_to_slips_fields_map,
+    "ssl.log": ssl_fields_to_slips_fields_map,
+    "ssh.log": ssh_fields_to_slips_fields_map,
+    "dhcp.log": dhcp_fields_to_slips_fields_map,
+    "ftp.log": ftp_fields_to_slips_fields_map,
+    "smtp.log": smtp_fields_to_slips_fields_map,
+    "tunnel.log": tunnel_fields_to_slips_fields_map,
+    "notice.log": notice_fields_to_slips_fields_map,
+    "files.log": files_fields_to_slips_fields_map,
+    "arp.log": arp_fields_to_slips_fields_map,
+    "software.log": software_fields_to_slips_fields_map,
+    "weird.log": weird_fields_to_slips_fields_map,
+}
+
+# define a mapping of log types to their corresponding classes
+LINE_TYPE_TO_SLIPS_CLASS = {
+    "conn.log": Conn,
+    "dns.log": DNS,
+    "http.log": HTTP,
+    "ssl.log": SSL,
+    "ssh.log": SSH,
+    "dhcp.log": DHCP,
+    "smtp.log": SMTP,
+    "tunnel.log": Tunnel,
+    "notice.log": Notice,
+    "files.log": Files,
+    "weird.log": Weird,
+}
 
 
 class ZeekJSON(IInputType):
@@ -267,43 +316,13 @@ class ZeekJSON(IInputType):
 
 class ZeekTabs(IInputType):
     separator = "\t"
-    zeek_fields_to_slips_fields_map = {
-        "ts": "starttime",
-        "uid": "uid",
-        "id.orig_h": "saddr",
-        "id.orig_p": "sport",
-        "id.resp_h": "daddr",
-        "id.resp_p": "dport",
-        "proto": "proto",
-        "service": "appproto",
-        "duration": "dur",
-        "orig_bytes": "sbytes",
-        "resp_bytes": "dbytes",
-        "conn_state": "state",
-        "local_orig": "",  # not used in slips
-        "local_resp": "",  # not used in slips
-        "missed_bytes": "",  # not used in slips
-        "history": "history",
-        "orig_pkts": "spkts",
-        "orig_ip_bytes": "",  # not used in slips
-        "resp_pkts": "dpkts",
-        "resp_ip_bytes": "",  # not used in slips
-        "tunnel_parents": "",  # not used in slips
-        "label": "ground_truth_label",
-        "detailedlabel": "detailed_ground_truth_label",
-    }
-    slips_fields_idx_map = {}
+    line_processor_cache = {}
 
-    def __init__(self, fields_line: dict):
-        fields_line = fields_line["data"].replace("#fields", "")
-        fields_list = self.split(fields_line)[1:]
-        # [1:] to remove the empty "" that was between the #fields and ts
-        for idx, zeek_field in enumerate(fields_list):
-            # get the slips name of this zeek field
-            slips_field = self.zeek_fields_to_slips_fields_map[zeek_field]
-            self.slips_fields_idx_map[idx] = slips_field
+    def __init__(self):
+        pass
 
-    def split(self, line: str):
+    @staticmethod
+    def split(line: str) -> list:
         """
         the data is either \t separated or space separated
         zeek files that are space separated are either separated by 2 or 3
@@ -314,238 +333,161 @@ class ZeekTabs(IInputType):
         line = line.rstrip("\n")
         return line.split("\t") if "\t" in line else split(r"\s{2,}", line)
 
+    @staticmethod
+    def remove_subsuffix(file_name: str) -> str:
+        """
+        turns any x.log.y to x.log only
+        """
+        if ".log" in file_name:
+            return file_name.split(".log")[0] + ".log"
+        return file_name
+
+    def get_file_type(self, new_line: dict) -> str:
+        """
+        returnx x.log. always. no atter whats the name given to slips
+        """
+        file_type = new_line["type"]
+        # all zeek lines received from stdin should be of type conn
+        if (
+            file_type in ("stdin", "external_module")
+            and new_line.get("line_type", False) == "zeek"
+        ):
+            return "conn.log"
+
+        # if the zeek dir given to slips has 'conn' in it's name,
+        # slips thinks it's reading a conn file
+        # because we use the file path as the file 'type'
+        # to fix this, only use the file name as file 'type'
+        return self.remove_subsuffix(file_type.split("/")[-1])
+
+    def get_line_processor(self, new_line: dict) -> Dict[str, str]:
+        """ """
+        file_type: str = self.get_file_type(new_line)
+        return LOG_MAP[file_type]
+
+    def update_line_processor_cache(self, fields_line: dict) -> None:
+        """
+        We need to get the index of each field in the given fields_line
+        this function retrieves the dict that has those indices,
+        and caches them for later use.
+
+        caching is done to avoid doing this step for each given log line.
+        we only do it once for each #field line read
+
+        :param fields_line: dict with "data": a line that starts with
+        #fields as read from the given zeek.log file
+        and "type": the type of the zeek log file
+        """
+        zeek_to_slips_field_map: Dict[str, str] = self.get_line_processor(
+            fields_line
+        )
+
+        indices_of_each_slips_field: Dict[int, str]
+        indices_of_each_slips_field = self.get_slips_fields_idx_map(
+            fields_line, zeek_to_slips_field_map
+        )
+
+        file_type: str = self.get_file_type(fields_line)
+        self.line_processor_cache.update(
+            {file_type: indices_of_each_slips_field}
+        )
+
+    def get_value_at(self, line: list, index: int, default_=""):
+        try:
+            val = line[index]
+            return default_ if val == "-" else val
+        except IndexError:
+            return default_
+
     def process_line(self, new_line: dict):
         """
         Process the tab line from zeek.
+        :param new_line: a dict with "type" and "data" keys
         """
-        line = new_line["data"]
+        line: str = new_line["data"]
 
         if line.startswith("#fields"):
-            return False
+            # depending on the given fields, we need to map the zeek fields
+            # to some slips obj (SSL, Con, SSH, etc...)
+            # cache the mapping for later use
+            self.update_line_processor_cache(new_line)
+            return
 
-        line = self.split(line)
+        file_type: str = self.get_file_type(new_line)
+        # this dict is the name of each slips field and the index of it
+        # in the given zeek line
+        line_processor: Dict[int, str]
+        line_processor = self.line_processor_cache.get(file_type)
+
+        if not line_processor:
+            self.print(
+                f"Slips is unable to handle the given zeek log line! "
+                f"{new_line}",
+                0,
+                1,
+            )
+            return
+
+        line: list = self.split(line)
 
         if ts := line[0]:
             starttime = utils.convert_to_datetime(ts)
         else:
             starttime = ""
 
-        def get_value_at(index: int, default_=""):
-            try:
-                val = line[index]
-                return default_ if val == "-" else val
-            except IndexError:
-                return default_
+        flow_values = {"starttime": starttime}
 
-        if "conn.log" in new_line["type"]:
-            conn_values = {"starttime": starttime}
-            # this dict is like {0: 'starttime', 1: 'uid', 2: 'saddr' etc...
-            for idx, field in self.slips_fields_idx_map.items():
-                if field:
-                    conn_values[field] = get_value_at(idx, "")
+        # this line_processor dict is like {0: 'starttime', 1: 'uid',
+        # 2: 'saddr' etc...
+        for idx, field in line_processor.items():
+            # a field may be None if its present in zeek but not used in
+            # slips.
+            if not field:
+                continue
 
+            flow_values[field] = self.get_value_at(line, idx, "")
+
+        log_type: str = self.get_file_type(new_line)
+        if log_type in LINE_TYPE_TO_SLIPS_CLASS:
             # convert types for known fields if needed
-            conn_values["dur"] = float(conn_values.get("dur", 0) or 0)
+            if log_type == "conn.log":
+                flow_values["dur"] = float(flow_values.get("dur", 0) or 0)
 
-            slips_fields_to_convert_to_int = (
-                "sbytes",
-                "dbytes",
-                "spkts",
-                "dpkts",
-                "sport",
-                "dport",
-            )
-            for field in slips_fields_to_convert_to_int:
-                conn_values[field] = int(conn_values.get(field, 0) or 0)
-
-            self.flow: Conn = Conn(**conn_values)
-
-        elif "dns.log" in new_line["type"]:
-            self.flow: DNS = DNS(
-                starttime=starttime,
-                uid=get_value_at(1, False),
-                saddr=get_value_at(2),
-                sport=get_value_at(3),
-                daddr=get_value_at(4),
-                dport=get_value_at(5),
-                proto=get_value_at(6),
-                query=get_value_at(9),
-                qclass_name=get_value_at(11),
-                qtype_name=get_value_at(13),
-                rcode_name=get_value_at(15),
-                answers=get_value_at(21),
-                TTLs=get_value_at(22),
-            )
-
-        elif "http.log" in new_line["type"]:
-            self.flow: HTTP = HTTP(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(2),
-                get_value_at(4),
-                get_value_at(7),
-                get_value_at(8),
-                get_value_at(9),
-                get_value_at(11),
-                get_value_at(12),
-                int(get_value_at(13, 0)),
-                int(get_value_at(14, 0)),
-                get_value_at(15),
-                get_value_at(16),
-                get_value_at(28),
-                get_value_at(26),
-            )
-
-        elif "ssl.log" in new_line["type"]:
-            self.flow: SSL = SSL(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(2),
-                get_value_at(4),
-                get_value_at(6),
-                get_value_at(3),
-                get_value_at(5),
-                get_value_at(7),
-                get_value_at(10),
-                get_value_at(13),
-                get_value_at(14),
-                get_value_at(15),
-                get_value_at(16),
-                get_value_at(17),
-                get_value_at(20),
-                get_value_at(8),
-                get_value_at(9),
-                get_value_at(21),
-                get_value_at(22),
-                get_value_at(23),
-            )
-
-        elif "ssh.log" in new_line["type"]:
-            # Zeek can put in column 7 the auth success if it has one
-            # or the auth attempts only. However if the auth
-            # success is there, the auth attempts are too.
-            auth_success = get_value_at(7)
-            if "T" in auth_success:
-                self.flow: SSH = SSH(
-                    starttime,
-                    get_value_at(1, False),
-                    get_value_at(2),
-                    get_value_at(4),
-                    get_value_at(6),
-                    get_value_at(7),
-                    get_value_at(8),
-                    get_value_at(10),
-                    get_value_at(11),
-                    get_value_at(12),
-                    get_value_at(13),
-                    get_value_at(14),
-                    get_value_at(15),
-                    get_value_at(16),
-                    get_value_at(17),
+                conn_fields_to_convert_to_int = (
+                    "sbytes",
+                    "dbytes",
+                    "spkts",
+                    "dpkts",
+                    "sport",
+                    "dport",
                 )
-            else:
-                self.flow: SSH = SSH(
-                    starttime,
-                    get_value_at(1, False),
-                    get_value_at(2),
-                    get_value_at(4),
-                    get_value_at(6),
-                    "",
-                    get_value_at(7),
-                    get_value_at(9),
-                    get_value_at(10),
-                    get_value_at(11),
-                    get_value_at(12),
-                    get_value_at(13),
-                    get_value_at(14),
-                    get_value_at(15),
-                    get_value_at(16),
-                )
-        elif "dhcp.log" in new_line["type"]:
-            self.flow: DHCP = DHCP(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(2),
-                get_value_at(
-                    3
-                ),  #  daddr in dhcp.log is the server_addr at index 3 not 4 like most log files
-                get_value_at(2),  # client_addr is the same as saddr
-                get_value_at(3),
-                get_value_at(5),
-                get_value_at(4),
-                get_value_at(8),
+                for field in conn_fields_to_convert_to_int:
+                    flow_values[field] = int(flow_values.get(field, 0) or 0)
+
+            # Conn, SSH, Notice, etc.
+            slips_class = LINE_TYPE_TO_SLIPS_CLASS[log_type]
+
+            flow_values = self.fill_empty_class_fields(
+                flow_values, slips_class
             )
-        elif "smtp.log" in new_line["type"]:
-            self.flow: SMTP = SMTP(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(2),
-                get_value_at(4),
-                get_value_at(20),
-            )
-        elif "tunnel.log" in new_line["type"]:
-            self.flow: Tunnel = Tunnel(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(2),
-                get_value_at(4),
-                get_value_at(3),
-                get_value_at(5),
-                get_value_at(6),
-                get_value_at(7),
-            )
-        elif "notice.log" in new_line["type"]:
-            # portscan notices don't have id.orig_h or id.resp_h fields,
-            # instead they have src and dst
-            self.flow: Notice = Notice(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(13, "-"),  #  src field
-                get_value_at(4),
-                get_value_at(3),
-                get_value_at(5, ""),
-                get_value_at(10),  # note
-                get_value_at(11),  # msg
-                get_value_at(15),  # scanned_port
-                get_value_at(13, "-"),  # scanning_ip
-                get_value_at(14),  # dst
-            )
-        elif "files.log" in new_line["type"]:
-            self.flow: Files = Files(
-                starttime,
-                get_value_at(4, False),
-                get_value_at(2),
-                get_value_at(3),
-                get_value_at(13),
-                get_value_at(19),
-                get_value_at(5),
-                get_value_at(7),
-                get_value_at(19),
-                get_value_at(2),
-                get_value_at(3),
-            )
-        elif "arp.log" in new_line["type"]:
+
+            # create the corresponding object using the mapped class
+            # todo the type_ isnot set correctly
+            self.flow = slips_class(**flow_values)
+            return self.flow
+
+        if log_type == "arp.log":
             self.flow: ARP = ARP(
                 starttime,
-                get_value_at(1, False),
-                get_value_at(4),
-                get_value_at(5),
-                get_value_at(2),
-                get_value_at(3),
-                get_value_at(6),
-                get_value_at(7),
-                get_value_at(1),
+                self.get_value_at(line, 1, False),
+                self.get_value_at(line, 4),
+                self.get_value_at(line, 5),
+                self.get_value_at(line, 2),
+                self.get_value_at(line, 3),
+                self.get_value_at(line, 6),
+                self.get_value_at(line, 7),
+                self.get_value_at(line, 1),
             )
+            return self.flow
 
-        elif "weird" in new_line["type"]:
-            self.flow: Weird = Weird(
-                starttime,
-                get_value_at(1, False),
-                get_value_at(2),
-                get_value_at(4),
-                get_value_at(6),
-                get_value_at(7),
-            )
-        else:
-            return False
-        return self.flow
+        return False
