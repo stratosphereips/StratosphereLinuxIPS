@@ -69,31 +69,80 @@ LINE_TYPE_TO_SLIPS_CLASS = {
 }
 
 
-class ZeekJSON(IInputType):
+class Zeek:
+    """class that contains functions needed by the zeek-tabs and zeekjson
+    classes"""
+
     def __init__(self):
-        self.line_processor_cache = {}
+        pass
+
+    def remove_subsuffix(self, file_name: str) -> str:
+        """
+        turns any x.log.y to x.log only
+        """
+        if ".log" in file_name:
+            return file_name.split(".log")[0] + ".log"
+        return file_name
 
     def get_file_type(self, new_line: dict) -> str:
+        """
+        returnx x.log. always. no atter whats the name given to slips
+        """
         file_type = new_line["type"]
+        # all zeek lines received from stdin should be of type conn
         if (
             file_type in ("stdin", "external_module")
             and new_line.get("line_type", False) == "zeek"
         ):
             return "conn.log"
-        return file_type.split("/")[-1].split(".log")[0] + ".log"
+
+        # if the zeek dir given to slips has 'conn' in it's name,
+        # slips thinks it's reading a conn file
+        # because we use the file path as the file 'type'
+        # to fix this, only use the file name as file 'type'
+        return self.remove_subsuffix(file_type.split("/")[-1])
 
     def get_line_processor(self, new_line: dict) -> Dict[str, str]:
-        file_type = self.get_file_type(new_line)
+        """ """
+        file_type: str = self.get_file_type(new_line)
         return LOG_MAP[file_type]
 
     def fill_empty_class_fields(self, flow_values: dict, slips_class):
+        """
+        The given slips class is Conn, SSH, Weird etc.
+        Suppose SSH requires an "issuer" field and the given zeek log line
+        doesn'thave one, this function fills the issuer field (or any
+        missing field) with "".
+
+        Returns a ready-to-use flow_values dict that has all the fields of
+        the given slips_class
+
+        :param flow_values: a dict with the values of the given zeek log line
+        :param slips_class: the class that corresponds to the given zeek log
+        line
+        """
+        # get all fields of the slips_class
         slips_class_fields = set(slips_class.__init__.__code__.co_varnames)
+        # remove 'self' from the fields
         slips_class_fields.discard("self")
+
+        # identify fields in slips_class that are not in flow_values
         missing_fields = slips_class_fields - set(flow_values.keys())
+
+        # set the missing fields in flow_values to ""
         for field in missing_fields:
             flow_values[field] = ""
+
+        # always use the type_ field of the slips class, this is not gonna
+        # be given to slips by zeek:D
         flow_values["type_"] = getattr(slips_class, "type_")
+
         return flow_values
+
+
+class ZeekJSON(IInputType, Zeek):
+    def __init__(self):
+        self.line_processor_cache = {}
 
     def process_line(self, new_line: dict):
         line = new_line["data"]
@@ -145,7 +194,7 @@ class ZeekJSON(IInputType):
         return False
 
 
-class ZeekTabs(IInputType):
+class ZeekTabs(IInputType, Zeek):
     separator = "\t"
     line_processor_cache = {}
 
@@ -188,38 +237,6 @@ class ZeekTabs(IInputType):
             slips_fields_idx_map[idx] = slips_field
         return slips_fields_idx_map
 
-    @staticmethod
-    def remove_subsuffix(file_name: str) -> str:
-        """
-        turns any x.log.y to x.log only
-        """
-        if ".log" in file_name:
-            return file_name.split(".log")[0] + ".log"
-        return file_name
-
-    def get_file_type(self, new_line: dict) -> str:
-        """
-        returnx x.log. always. no atter whats the name given to slips
-        """
-        file_type = new_line["type"]
-        # all zeek lines received from stdin should be of type conn
-        if (
-            file_type in ("stdin", "external_module")
-            and new_line.get("line_type", False) == "zeek"
-        ):
-            return "conn.log"
-
-        # if the zeek dir given to slips has 'conn' in it's name,
-        # slips thinks it's reading a conn file
-        # because we use the file path as the file 'type'
-        # to fix this, only use the file name as file 'type'
-        return self.remove_subsuffix(file_type.split("/")[-1])
-
-    def get_line_processor(self, new_line: dict) -> Dict[str, str]:
-        """ """
-        file_type: str = self.get_file_type(new_line)
-        return LOG_MAP[file_type]
-
     def update_line_processor_cache(self, fields_line: dict) -> None:
         """
         We need to get the index of each field in the given fields_line
@@ -253,38 +270,6 @@ class ZeekTabs(IInputType):
             return default_ if val == "-" else val
         except IndexError:
             return default_
-
-    def fill_empty_class_fields(self, flow_values: dict, slips_class):
-        """
-        The given slips class is Conn, SSH, Weird etc.
-        Suppose SSH requires an "issuer" field and the given zeek log line
-        doesn'thave one, this function fills the issuer field (or any
-        missing field) with "".
-
-        Returns a ready-to-use flow_values dict that has all the fields of
-        the given slips_class
-
-        :param flow_values: a dict with the values of the given zeek log line
-        :param slips_class: the class that corresponds to the given zeek log
-        line
-        """
-        # get all fields of the slips_class
-        slips_class_fields = set(slips_class.__init__.__code__.co_varnames)
-        # remove 'self' from the fields
-        slips_class_fields.discard("self")
-
-        # identify fields in slips_class that are not in flow_values
-        missing_fields = slips_class_fields - set(flow_values.keys())
-
-        # set the missing fields in flow_values to ""
-        for field in missing_fields:
-            flow_values[field] = ""
-
-        # always use the type_ field of the slips class, this is not gonna
-        # be given to slips by zeek:D
-        flow_values["type_"] = getattr(slips_class, "type_")
-
-        return flow_values
 
     def process_line(self, new_line: dict):
         """
