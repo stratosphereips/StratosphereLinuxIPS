@@ -40,9 +40,10 @@ http_fields_to_slips_fields_map = {
     "ts": "starttime",
     "uid": "uid",
     "id.orig_h": "saddr",
-    "id.orig_p": "sport",
+    # slips is not using them
+    # "id.orig_p": "sport",
+    # "id.resp_p": "dport",
     "id.resp_h": "daddr",
-    "id.resp_p": "dport",
     "method": "method",
     "host": "host",
     "uri": "uri",

@@ -171,14 +171,14 @@ def get_zeek_flow(file, flow_type):
 
 
 @pytest.mark.parametrize(
-    "file,flow_type",
+    "file, flow_type",
     [
-        ("dataset/test9-mixed-zeek-dir/dns.log", "dns"),
-        ("dataset/test9-mixed-zeek-dir/conn.log", "conn"),
-        ("dataset/test9-mixed-zeek-dir/http.log", "http"),
-        ("dataset/test9-mixed-zeek-dir/ssl.log", "ssl"),
-        ("dataset/test9-mixed-zeek-dir/notice.log", "notice"),
-        # ('dataset/test9-mixed-zeek-dir/files.log', 'files.log'),
+        ("dataset/test9-mixed-zeek-dir/dns.log", "dns.log"),
+        ("dataset/test9-mixed-zeek-dir/conn.log", "conn.log"),
+        ("dataset/test9-mixed-zeek-dir/http.log", "http.log"),
+        ("dataset/test9-mixed-zeek-dir/ssl.log", "ssl.log"),
+        ("dataset/test9-mixed-zeek-dir/notice.log", "notice.log"),
+        ("dataset/test9-mixed-zeek-dir/files.log", "files.log"),
     ],
 )
 def test_process_line(
@@ -187,12 +187,13 @@ def test_process_line(
 ):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.symbol = Mock()
+    profiler.db.get_timewindow = Mock(return_value="timewindow1")
     # we're testing another functionality here
     profiler.whitelist.is_whitelisted_flow = do_nothing
     profiler.input_type = "zeek"
     # get the class that handles the zeek input
     profiler.input_handler = SUPPORTED_INPUT_TYPES[profiler.input_type]()
-    # set  the zeek json separator
+    # set the zeek json separator
     profiler.separator = SEPARATORS[profiler.input_type]
 
     sample_flow = get_zeek_flow(file, flow_type)

@@ -146,13 +146,13 @@ class ZeekJSON(IInputType, Zeek):
 
     def process_line(self, new_line: dict):
         line = new_line["data"]
-        file_type = self.get_file_type(new_line)
 
         if not isinstance(line, dict):
             return False
 
-        line_processor = LOG_MAP.get(file_type)
-        if not line_processor:
+        file_type = self.get_file_type(new_line)
+        line_map = LOG_MAP.get(file_type)
+        if not line_map:
             return False
 
         if ts := line.get("ts", False):
@@ -162,7 +162,7 @@ class ZeekJSON(IInputType, Zeek):
 
         flow_values = {"starttime": starttime}
 
-        for zeek_field, slips_field in line_processor.items():
+        for zeek_field, slips_field in line_map.items():
             if not slips_field:
                 continue
             val = line.get(zeek_field, "")
