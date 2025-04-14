@@ -235,7 +235,7 @@ class IPInfo(AsyncModule):
         Returns the vendor info of a MAC address and stores it in slips db
         either from an offline or an online database
         """
-        if utils.is_ignored_ip(profileid.split("_")[-1]):
+        if not utils.is_ignored_ip(profileid.split("_")[-1]):
             # dont try to get the MAC vendor of private profiles, the MAC
             # here is irrelevant (might be the gateway's)
             return False
