@@ -42,6 +42,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    :maxdepth: 2
    :hidden:
    :caption: Slips
+   :glob:
 
    self
    installation
