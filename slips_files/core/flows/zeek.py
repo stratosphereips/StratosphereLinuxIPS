@@ -192,9 +192,6 @@ class SSH:
 class DHCP:
     starttime: float
     uids: List[str]
-    saddr: str
-    daddr: str
-
     client_addr: str
     server_addr: str
     host_name: str
@@ -211,6 +208,9 @@ class DHCP:
         # Some zeek flow don't have saddr or daddr,
         # seen in dhcp.log and notice.log use the mac
         # address instead
+        self.saddr = self.client_addr
+        self.daddr = self.server_addr
+        # if the client_addr is empty, use the mac address
         if not self.saddr and not self.daddr:
             self.saddr = self.smac
 
