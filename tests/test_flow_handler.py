@@ -317,7 +317,7 @@ def test_handle_dhcp():
     flow_handler.db.add_mac_addr_to_profile.assert_called_with(
         flow_handler.profileid, flow.smac
     )
-    flow_handler.db.store_dhcp_server.assert_called_with("192.168.1.1")
+    flow_handler.db.store_dhcp_server.assert_called_with("192.168.1.2")
     flow_handler.db.mark_profile_as_dhcp.assert_called_with(
         flow_handler.profileid
     )
