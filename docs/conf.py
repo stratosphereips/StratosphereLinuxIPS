@@ -16,7 +16,6 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-from recommonmark.transform import AutoStructify
 import requests
 
 
@@ -38,7 +37,7 @@ if response.status_code == 200:
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ["recommonmark", "myst_parser"]
+extensions = ["myst_parser"]
 
 
 # Add any paths that contain templates here, relative to this directory.
@@ -69,21 +68,12 @@ source_suffix = {
     ".md": "markdown",
     ".html": "html",
 }
+myst_enable_extensions = [
+    "colon_fence",  # for ::: blocks
+    "deflist",  # for definition lists
+    "linkify",  # auto-detect links
+    "substitution",
+    "tasklist",
+]
 
 master_doc = "index"
-
-
-# app setup hook
-def setup(app):
-    app.add_config_value(
-        "recommonmark_config",
-        {
-            #'url_resolver': lambda url: github_doc_root + url,
-            "auto_toc_tree_section": "Slips",
-            "enable_math": False,
-            "enable_inline_math": False,
-            "enable_eval_rst": True,
-        },
-        True,
-    )
-    app.add_transform(AutoStructify)
