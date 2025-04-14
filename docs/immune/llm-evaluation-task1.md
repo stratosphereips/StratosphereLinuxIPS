@@ -1,8 +1,8 @@
-# SLIPS IMMUNE: LLM Evalution Report
+# Report for LLM-B1 Research and Selection 
 
 ## **Summary**
 
-This report presents an analysis of the most suitable Large Language Models (LLMs) capable of running efficiently with small computer resources, with a focus on models with **at most  4 billion parameters**. The evaluation emphasized **licensing terms**, **tool usage capabilities**, and **compatibility with fine-tuning and inference frameworks**.
+This report is part of the SLIPS Immune I project and  presents an analysis of the most suitable Large Language Models (LLMs) capable of running efficiently with small computer resources, with a focus on models with **at most  4 billion parameters**. The evaluation emphasized **licensing terms**, **tool usage capabilities**, and **compatibility with fine-tuning and inference frameworks**.
 
 The model selection was based on data obtained from [LLM Explorer](https://llm.extractum.io/), with filters applied to include only models:
 
@@ -23,11 +23,14 @@ Models were assessed using the following criteria:
 * **Fine-tuning support**: Compatibility with popular frameworks such as **TRL** and **Unsloth**.  
   **Inference support**: Compatibility with inference engines like **Ollama** and **Transformers**..
 
-**Figure 1**: Overview of the initial set of selected models with the evaluation criteria.
+![image](https://github.com/user-attachments/assets/8867e2cc-b979-4cfd-a839-45b1453aaba3)
+
+
+**Figure 1**: Overview of the initial set of selected models with the evaluation criteria. Complete list of evaluated model can be found [here](https://docs.google.com/spreadsheets/d/1hiqAtiL7GatHnMShCuJlXR2_rbMbl89mszzBshsWdeE/edit?gid=1569959296#gid=1569959296)
 
 After an initial screening, a subset of ten language models was selected for further evaluation (see Figure 1). To support this process, a dedicated evaluation framework was built using the [**Promptfoo**](https://www.promptfoo.dev/) toolset—an open-source framework designed for systematically testing and comparing language model outputs. 
 
-As part of this effort, eight targeted unit tests were developed to evaluate the key capabilities required for integration into the SLIPS immune architecture. The complete list of tests and their descriptions is provided below:
+As part of this effort, nine targeted unit tests were developed to evaluate the key capabilities required for integration into the SLIPS immune architecture. The complete list of tests and their descriptions is provided below:
 
 ---
 
@@ -41,24 +44,27 @@ As part of this effort, eight targeted unit tests were developed to evaluate the
 
 **Test 5: Interpret Zeek Log Entries:** Tests model understanding of Zeek logs by requiring summarization of key data points such as IP addresses and network protocols, ensuring the information is correctly identified and communicated.
 
-**Test 6: Generate Valid Zeek Log Line”**Validates the ability of models to generate realistic Zeek log entries in JSON format for specific services, source/destination IPs, and protocols, ensuring output adheres to logging structure.
+**Test 6: Generate Valid Zeek Log Line** Validates the ability of models to generate realistic Zeek log entries in JSON format for specific services, source/destination IPs, and protocols, ensuring output adheres to logging structure.
 
-**Test 7: Summarize Zeek Logs and Make Classifications**Evaluates if a model can analyze Zeek logs to extract high-level insights—like listing user agents or classifying IPs as suspicious or normal—based on behavioral patterns.
+**Test 7: Summarize Zeek Logs and Make Classifications** Evaluates if a model can analyze Zeek logs to extract high-level insights—like listing user agents or classifying IPs as suspicious or normal—based on behavioral patterns.
 
-**Test 8: Generate Function Call from Prompt”**Tests whether the model can generate a correctly formatted function call, using the appropriate function name and JSON arguments, based on a prompt requesting data (e.g., weather for a location).
+**Test 8: Generate Function Call from Prompt** Tests whether the model can generate a correctly formatted function call, using the appropriate function name and JSON arguments, based on a prompt requesting data (e.g., weather for a location).
 
-**Test 9: Generate Structured Networking JSON:** Similar to test 3\. But using OPENAI API compatibility model in Ollama.for parsing and checking valid JSON. We realized that most of the model were actually generating some valid JSON but between backticks or some other differences, so by using the `response format` in the call to API, the results were much better. 
+**Test 9: Generate Structured Networking JSON (API):** Similar to test 3\. But using [OPENAI API compatibility](https://www.ollama.com/blog/openai-compatibility)  in Ollama for parsing and checking valid JSON. We realized that most of the model were actually generating some valid JSON but between backticks or some other differences, so by using the `response format` in the call to API, the results were much better. 
 
 ---
 
-The results of the test can be summarized in the visualization from Figure 2\.
+The results of the tests can be summarized in the heatmap visualization from Figure 2\.
 
+![image](https://raw.githubusercontent.com/stratosphereips/Slips-tools/refs/heads/main/llm-unittest/results/models_heatmap.png)
+**Figure 2**:Performance comparison of various language models on **Promptfoo** test suite for different tasks. Each cell represents the pass rate (%) of a model on a specific test, with color coding from red (0%) to green (100%).
 
-**Figure 2**:Performance comparison of various language models on **Promptfoo** test suite for networking-related tasks. Each cell represents the pass rate (%) of a model on a specific test, with color coding from red (0%) to green (100%).
+By using `promptfoo` tests, recent models can be easily added to the list and evaluated. The complete procedure for running the tests is described [here](https://github.com/stratosphereips/Slips-tools/blob/main/llm-unittest/README.md).
+
 
 ## Key Findings
 
-The heatmap shows that no single model excels across all **Promptfoo** tests, highlighting the need for task-specific model selection. Models like **ollama:qwen2.5:3b** and **ollama:llama3.2:3b** perform consistently well across multiple tasks, making them strong general-purpose candidates. **ollama:smollm:2:1.7b** also performs well, particularly on structured tasks like field extraction and function generation.
+The heatmap shows that no single model excels across all **Promptfoo** tests, highlighting the need for task-specific model selection. Models like **qwen2.5:3b** and **llama3.2:3b** perform consistently well across multiple tasks, making them strong general-purpose candidates. **smollm:2:1.7b** also performs well, particularly on structured tasks like field extraction and function generation.
 
 Some tasks, such as “Field Extraction from Networking JSON,” are well-handled by most models. In contrast, more complex tasks like “Summarize Zeek Logs and Make Classifications” show poor performance across the board, indicating these are more challenging.
 
