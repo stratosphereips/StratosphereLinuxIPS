@@ -485,8 +485,8 @@ class HTTPAnalyzer(AsyncModule):
         we discard the evidence. if not found, we check for future 5 mins
         of matching zeek flows that were detected as http by zeek.
          if found, we dont set an evidence, if not found, we set an evidence
-        :kwarg timeout_reached: did we wait 5 mins in future and in the
-        past for the http of the given flow to arrive or not?
+        :kwarg timeout_reached: did we wait 5 mins in future AND in the
+        past for the http of the given flow to arrive?
         """
         if not self.is_tcp_established_port_80_non_empty_flow(flow):
             # we're not interested in that flow
@@ -523,7 +523,6 @@ class HTTPAnalyzer(AsyncModule):
 
         if matching_http_flows:
             # awesome! discard evidence. FP dodged.
-            # clear these timestamps as we dont need them anymore?
             return False
 
         # reaching here means we looked in the past 5 mins and
@@ -539,8 +538,8 @@ class HTTPAnalyzer(AsyncModule):
         # within that time?
         await self.wait_for_new_flows_or_timeout(five_mins)
         # we can safely await here without blocking the main thread because
-        # once the above await returns, this function will never sleep
-        # again, it'll either set the evidence or discard it
+        # once we run this func with timeout_reached=True, this function will
+        # never sleep again, it'll either set the evidence or discard it
         await self.check_non_http_port_80_conns(
             twid, flow, timeout_reached=True
         )
@@ -549,7 +548,9 @@ class HTTPAnalyzer(AsyncModule):
     async def wait_for_new_flows_or_timeout(self, timeout: float):
         """
         waits for new incoming flows, but interrupts the wait if profiler
-        stop sending new flows within within the timeout period.
+        stop sending new flows within the timeout period.
+        because that means no more flows are coming during the wait period,
+        no need to wait.
 
         :param timeout: the maximum time to wait before resuming execution.
         """
@@ -569,6 +570,7 @@ class HTTPAnalyzer(AsyncModule):
             await asyncio.wait_for(
                 will_slips_have_new_incoming_flows(), timeout
             )
+
         except asyncio.TimeoutError:
             pass  # timeout reached
 
@@ -670,3 +672,5 @@ class HTTPAnalyzer(AsyncModule):
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             self.create_task(self.check_non_http_port_80_conns, twid, flow)
+
+        self.remove_old_entries_from_http_recognized_flows()
