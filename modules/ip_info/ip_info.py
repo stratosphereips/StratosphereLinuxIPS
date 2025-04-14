@@ -303,8 +303,7 @@ class IPInfo(AsyncModule):
                     return_type="days",
                 )
                 self.db.set_info_for_domains(domain, {"Age": age})
-
-            if res.registrant:
+            if hasattr(res, "registrant") and res.registrant:
                 self.db.set_info_for_domains(domain, {"Org": res.registrant})
                 return
 
@@ -312,7 +311,7 @@ class IPInfo(AsyncModule):
         # but microsoft.com does
         sld = utils.extract_hostname(domain)
         sld_res = self.query_whois(sld)
-        if sld_res and sld_res.registrant:
+        if sld_res and hasattr(res, "registrant") and sld_res.registrant:
             self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
     async def shutdown_gracefully(self):

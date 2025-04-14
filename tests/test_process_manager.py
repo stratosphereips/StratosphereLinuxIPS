@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 from managers.process_manager import ProcessManager
 from tests.module_factory import ModuleFactory
 from slips_files.common.slips_utils import utils
@@ -286,7 +286,9 @@ def test_is_stop_msg_received(
     ],
 )
 def test_is_debugger_active(mock_return_value, expected_result):
-    process_manager = ProcessManager(Mock())
+    mock_conf = Mock()
+    mock_conf.get_bootstrapping_setting.return_value = (False, [])
+    process_manager = ProcessManager(mock_conf)  # This line should now work
     with patch("sys.gettrace", return_value=mock_return_value):
         assert process_manager.is_debugger_active() == expected_result
 

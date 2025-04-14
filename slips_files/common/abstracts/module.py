@@ -183,3 +183,8 @@ class IModule(ABC, Process):
             except Exception:
                 self.print_traceback()
                 return
+
+    def __del__(self):
+        # each module has its own sqlite db connection. once this module is
+        # done the connection should be closed
+        self.db.close_sqlite()

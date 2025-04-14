@@ -952,12 +952,15 @@ class DBManager:
     def get_tw_limits(self, *args, **kwargs):
         return self.rdb.get_tw_limits(*args, **kwargs)
 
-    def close(self, *args, **kwargs):
-        self.rdb.r.close()
-        self.rdb.rcache.close()
+    def close_sqlite(self, *args, **kwargs):
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
+
+    def close_redis_and_sqlite(self, *args, **kwargs):
+        self.rdb.r.close()
+        self.rdb.rcache.close()
+        self.close_sqlite()
 
     def get_fides_ti(self, target: str):
         return self.rdb.get_fides_ti(target)
