@@ -60,3 +60,4 @@ This documentation gives an overview how Slips works, how to use it and how to h
    code_documentation
    datasets
    fides_module
+   immune/*
