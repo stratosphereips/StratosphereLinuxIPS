@@ -304,10 +304,8 @@ def test_handle_dhcp():
         starttime=1234567890,
         uids=["uid1", "uid2", "uid3"],
         smac="aa:bb:cc:dd:ee:ff",
-        saddr="192.168.1.1",
-        server_addr="192.168.1.1",
-        daddr="192.168.1.2",
-        client_addr="192.168.1.3",
+        server_addr="192.168.1.2",
+        client_addr="192.168.1.1",
         host_name="test-host",
         requested_addr="192.168.1.4",
     )
