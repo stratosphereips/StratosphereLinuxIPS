@@ -106,7 +106,7 @@
 
 - Thermal Throttling
 
-![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXesTnXCT35mL5jTD3MqwF3oL5rdIkkoJyZPkBvxsowhMFvZR_pWQ71DVR_PqUgG4X22LKyhTgDiG8OZAMNW9TH_uyGDVy_fAPGQZ21_iiELskyP41Ua-J7BbIDWDG2br19eP9QgPw?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/rpi_thermal_throttling.jpg)
 
 _Processor temperature in °C against time in seconds. At time T=T₀ stress testing was started._
 
@@ -253,7 +253,7 @@ stratosphereips/slips:latest /bin/bash
 * CPU usage of Slips is captured every 5 minutes in this graph.
 
 
-#### ![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXffYnHq5-2aAXTvE6PCLuBkWN6_iIKFkACkGWej7Z47HexLVVqSA06atkaJC15ZYkWkKSXh9qBVL5mfvGzott60Fa8Ve09hN8ZVGHuRRDc5e7soI2DtaNg7ir3zZlwXNVOomC_JgQ?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/cpu_usage_in_normal_computer.png)
 
 #### **Key Takeaways:**
 
@@ -274,7 +274,7 @@ stratosphereips/slips:latest /bin/bash
 - RAM usage is captured every 5 minutes in the following graph.
 
 
-### ![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXfofRSfZwgs2Wm4pF8_zPqJvJGC-VOMGPYhat1iJx-n5m3xcHhE9s6uLThOnxS971KjMQF3J_QB8_xZ8-sTXeoUSQUrfKf8-GFa-_qqHjkZPFSQdBQGOW7y6i0KB7IW5K0uVOkziQ?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/ram_usage_in_normal_computer.png)
 
 |               PCAP               |  Size  | Type of traffic | Average RAM |
 | :------------------------------: | :----: | :-------------: | :----------: |
@@ -344,7 +344,7 @@ Note: The used RPI 5 has 8 GBs of RAM, we’re not limiting them in the docker c
 
 #### CPU Usage
 
-#### ![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXesVo97V1DqzZjjRKPS05knhx77jMQQVnSx29fu7XXOJX-og9lmwuvRF2za1JvCkulONdwflsdc4u2bLxz4NBFc6bkh9PGC_Xc-MYU4Du6ij8YbCOYuYfnKtvQWvmqfs40Yo7JK-A?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/cpu_usage_in_rpi.jpg)
 
 **Key Takeaways**
 
@@ -357,7 +357,7 @@ Note: The used RPI 5 has 8 GBs of RAM, we’re not limiting them in the docker c
 
 #### RAM Usage
 
-![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXcjIev22LxN21nBQo5w7Ul1ywD8bGUvj_hPxCaKsjlE5KtzUIubJ0OMDdE3SIsD0e8D49XlPrLQjmUqC68Vj9LlypXrJceAAry2LeMtA7FvqZQDeXv4qXXOC354q9sDlVp65UpHvA?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/ram_usage_in_rpi.jpg)
 
 
 
@@ -415,7 +415,7 @@ Note: The used RPI 5 has 8 GBs of RAM, we’re not limiting them in the docker c
 
 #### RAM Usage Comparison
 
-![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXdGBU7pr_9Mb1u8DEH9nXIVkvLKvqpP_O4S5uteDVjrMUBMU_Q4JDRtoz0ukPtyuqw0ybgnwAqHZrYAMkMAFMk0qth0Zgfl8pMIQ2KFx2CwUunE4OlN8YlIxGlXmui8AKLxQExSJA?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/ram_usage_comparison.jpg)
 
 **Key Takeaways**
 
@@ -428,7 +428,7 @@ Note: The used RPI 5 has 8 GBs of RAM, we’re not limiting them in the docker c
 
 #### CPU Usage Comparison
 
-![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXdXT0_S2T6su-O9mqZlUc6LCWhofk1OJ16ebY4EuNjrpUBj8qAi2DOlpB7O5IUW6it5nK2wuMyJc5geJKVeKEmpq0F0XQm70CQ-16GetBuPvNbT962rV9hR9iS7_X538eVLqFx3?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/cpu_usage_comparison.jpg)
 
 - The RPI frequently shows usage above 300% (i.e., using about 3 or all 4 cores intensely), especially for the malware datasets. This indicates that the RPI is being pushed close to its maximum capacity for a substantial portion of the analysis.
 
