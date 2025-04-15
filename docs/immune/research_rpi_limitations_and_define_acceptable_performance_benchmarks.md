@@ -207,12 +207,12 @@ Since this is a very powerful server, we decided to limit some of the resources 
 
 **Docker command used in the experiments:**
 
-- docker run -dit --rm \\
---net=host \\
---cpus=6 \\
---memory=8g \\
---memory-swap=8g \\
---shm-size=512m \\
+- docker run -dit --rm
+--net=host
+--cpus=6
+--memory=8g
+--memory-swap=8g
+--shm-size=512m
 stratosphereips/slips:latest /bin/bash
 
 **Python Version**
@@ -328,12 +328,12 @@ stratosphereips/slips:latest /bin/bash
 
 **Docker command used in the experiments:**
 
-docker run -dit --rm \\
---memory=8g \\
---memory-swap=8g \\
---shm-size=512m \\
---net=host \\
---name slips \\
+docker run -dit --rm
+--memory=8g
+--memory-swap=8g
+--shm-size=512m
+--net=host
+--name slips
 stratosphereips/slips:latest /bin/bash
 
 Note: The used RPI 5 has 8 GBs of RAM, we’re not limiting them in the docker container.
