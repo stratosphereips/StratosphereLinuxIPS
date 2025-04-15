@@ -265,7 +265,7 @@ stratosphereips/slips:latest /bin/bash
 
 #### **Key Takeaways:**
 
-- The average RAM usage across the four experiments wasaround 2 GBs, an acceptable number considering the typical RAM capacity of modern computers. It’s also reasonable given that Slips simultaneously runs two machine learning models and twelve detection/threat intelligence models in Python.
+- The average RAM usage across the four experiments was around 2 GBs, an acceptable number considering the typical RAM capacity of modern computers. It’s also reasonable given that Slips simultaneously runs two machine learning models and twelve detection/threat intelligence models in Python.
 
 
 #### Disk usage
