@@ -1,3 +1,30 @@
+# Table Of Contents
+- [RPI Hardware](#--rpi-hardware--)
+  * [Used Hardware](#used-hardware)
+  * [Hardware Limitations That May Affect Performance](#hardware-limitations-that-may-affect-performance)
+- [RPI Software](#--rpi-software--)
+  * [Used Software](#used-software)
+  * [Software Limitations That May Affect Performance](#software-limitations-that-may-affect-performance)
+- [Acceptable performance benchmarks](#acceptable-performance-benchmarks)
+  * [Current Benchmarks](#current-benchmarks---7-3-2025-)
+    + [CPU, RAM, and disk usage under normal conditions](#cpu--ram--and-disk-usage-under-normal-conditions)
+      - [CPU usage](#cpu-usage)
+      - [RAM Usage](#ram-usage)
+      - [Disk usage](#disk-usage)
+      - [Analysis Time](#analysis-time)
+  * [Slips on RPI Benchmarks](#slips-on-rpi-benchmarks)
+    + [CPU, RAM, and disk usage](#cpu--ram--and-disk-usage)
+      - [CPU Usage](#cpu-usage)
+      - [RAM Usage](#ram-usage-1)
+      - [Disk Usage](#disk-usage)
+      - [Analysis Time](#analysis-time-1)
+  * [Compare Benchmarks on RPI and on normal computers and define limitations](#compare-benchmarks-on-rpi-and-on-normal-computers-and-define-limitations)
+      - [RAM Usage Comparison](#ram-usage-comparison)
+      - [CPU Usage Comparison](#cpu-usage-comparison)
+      - [Disk Usage Comparison](#disk-usage-comparison)
+      - [Analysis Time Comparison](#analysis-time-comparison)
+
+
 # **RPI Hardware**
 
 ## Used Hardware
@@ -182,17 +209,11 @@ Since this is a very powerful server, we decided to limit some of the resources 
 **Docker command used in the experiments:**
 
 - docker run -dit --rm \\
-
 --net=host \\
-
 --cpus=6 \\
-
 --memory=8g \\
-
 --memory-swap=8g \\
-
 --shm-size=512m \\
-
 stratosphereips/slips:latest /bin/bash
 
 **Python Version**
@@ -309,17 +330,11 @@ stratosphereips/slips:latest /bin/bash
 **Docker command used in the experiments:**
 
 docker run -dit --rm \\
-
 --memory=8g \\
-
 --memory-swap=8g \\
-
 --shm-size=512m \\
-
 --net=host \\
-
 --name slips \\
-
 stratosphereips/slips:latest /bin/bash
 
 Note: The used RPI 5 has 8 GBs of RAM, we’re not limiting them in the docker container.
