@@ -42,7 +42,6 @@ This documentation gives an overview how Slips works, how to use it and how to h
    :maxdepth: 2
    :hidden:
    :caption: Slips
-   :glob:
 
    self
    installation
@@ -61,4 +60,4 @@ This documentation gives an overview how Slips works, how to use it and how to h
    code_documentation
    datasets
    fides_module
-   immune/*
+   immune/Immune.md
