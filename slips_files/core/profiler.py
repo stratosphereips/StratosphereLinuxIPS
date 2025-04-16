@@ -264,7 +264,7 @@ class Profiler(ICore, IObservable):
         try:
             ipaddress.ip_address(flow.saddr)
             ipaddress.ip_address(flow.daddr)
-        except (ipaddress.AddressValueError, ValueError):
+        except (ipaddress.AddressValueError, ValueError, AttributeError):
             # Its a mac
             if flow.type_ not in ("software", "weird"):
                 # software and weird.log flows are allowed to not have a daddr
@@ -296,7 +296,6 @@ class Profiler(ICore, IObservable):
             # print the added flow as a form of debugging feedback for
             # the user to know that slips is working
             self.print(pprint.pp(asdict(flow)))
-
         return True
 
     def store_features_going_out(self, flow, flow_parser: FlowHandler):

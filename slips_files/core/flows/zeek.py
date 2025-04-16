@@ -387,14 +387,15 @@ class Software:
     starttime: str
     uid: str
     saddr: str
-    daddr: str
+    sport: str
 
     software: str
 
     unparsed_version: str
     version_major: str
     version_minor: str
-
+    # software log lines dont have daddr
+    daddr: str = ""
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
