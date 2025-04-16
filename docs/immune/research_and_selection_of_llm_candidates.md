@@ -5,6 +5,7 @@
 - [Initial Evaluation Criteria](#initial-evaluation-criteria)
 - [Setup for Evaluating the LLM Performance](#setup-for-evaluating-the-llm-performance)
   - [Evaluation Tests Overview](#evaluation-tests-overview)
+- [Model Performance Results](#model-performance-results)
 - [Key Findings](#key-findings)
 - [Conclusions](#conclusions)
 - [References](#references)
@@ -53,27 +54,31 @@ As part of this effort, nine targeted unit tests were developed to evaluate the 
 
 The evaluation tests were grouped into three main categories to assess distinct capabilities of the language models. **Information Extraction** tests focus on the model's ability to retrieve specific fields or data points from structured inputs like JSON or logs. **Summarization & Decision making** tests evaluate how well models can convert technical data into clear, human-readable insights and take a simple decision such as a classification. **Data Generation**, including API-compatible formatting, assesses whether models can produce well-structured outputs such as JSON objects, log entries, or function calls that align with defined schemas or interfaces. 
 
+### Evaluation Tests Overview
+
+A list of the implemented test as well as a brief description is described as follows:
+
+
+1. **Field Extraction from Networking JSON:** Tests if language models can accurately extract specific values (like IPs or services) from structured JSON logs of networking actions based on natural language questions.
+
+2. **Summarize Networking Actions from JSON:** Evaluates if models can translate JSON-based representations of network actions into simple, human-readable summaries, maintaining accuracy of details like hosts, protocols, and services.
+
+3. **Generate Structured Networking JSON:** Assesses whether models can generate correctly structured JSON objects representing specific networking actions, ensuring field names, formats, and values align with schema constraints.
+
+4. **Generate Structured Networking JSON:** Similar to test 3\. But the name and length of the parameters are not tested. It is a simpler version of test 3\.
+
+5. **Interpret Zeek Log Entries:** Tests model understanding of Zeek logs by requiring summarization of key data points such as IP addresses and network protocols, ensuring the information is correctly identified and communicated.
+
+6. **Generate Valid Zeek Log Line** Validates the ability of models to generate realistic Zeek log entries in JSON format for specific services, source/destination IPs, and protocols, ensuring output adheres to logging structure.
+
+7. **Summarize Zeek Logs and Make Classifications** Evaluates if a model can analyze Zeek logs to extract high-level insights—like listing user agents or classifying IPs as suspicious or normal—based on behavioral patterns.
+
+8. **Generate Function Call from Prompt** Tests whether the model can generate a correctly formatted function call, using the appropriate function name and JSON arguments, based on a prompt requesting data (e.g., weather for a location).
+
+9. **Generate Structured Networking JSON (API):** Similar to test 3\. But using [OPENAI API compatibility](https://www.ollama.com/blog/openai-compatibility)  in Ollama for parsing and checking valid JSON. We realized that most of the model were actually generating some valid JSON but between backticks or some other differences, so by using the `response format` in the call to API, the results were much better. 
+
 ---
-
-**Test 1: Field Extraction from Networking JSON:** Tests if language models can accurately extract specific values (like IPs or services) from structured JSON logs of networking actions based on natural language questions.
-
-**Test 2: Summarize Networking Actions from JSON:** Evaluates if models can translate JSON-based representations of network actions into simple, human-readable summaries, maintaining accuracy of details like hosts, protocols, and services.
-
-**Test 3: Generate Structured Networking JSON:** Assesses whether models can generate correctly structured JSON objects representing specific networking actions, ensuring field names, formats, and values align with schema constraints.
-
-**Test 4: Generate Structured Networking JSON:** Similar to test 3\. But the name and length of the parameters are not tested. It is a simpler version of test 3\.
-
-**Test 5: Interpret Zeek Log Entries:** Tests model understanding of Zeek logs by requiring summarization of key data points such as IP addresses and network protocols, ensuring the information is correctly identified and communicated.
-
-**Test 6: Generate Valid Zeek Log Line** Validates the ability of models to generate realistic Zeek log entries in JSON format for specific services, source/destination IPs, and protocols, ensuring output adheres to logging structure.
-
-**Test 7: Summarize Zeek Logs and Make Classifications** Evaluates if a model can analyze Zeek logs to extract high-level insights—like listing user agents or classifying IPs as suspicious or normal—based on behavioral patterns.
-
-**Test 8: Generate Function Call from Prompt** Tests whether the model can generate a correctly formatted function call, using the appropriate function name and JSON arguments, based on a prompt requesting data (e.g., weather for a location).
-
-**Test 9: Generate Structured Networking JSON (API):** Similar to test 3\. But using [OPENAI API compatibility](https://www.ollama.com/blog/openai-compatibility)  in Ollama for parsing and checking valid JSON. We realized that most of the model were actually generating some valid JSON but between backticks or some other differences, so by using the `response format` in the call to API, the results were much better. 
-
----
+## Model Performance Results
 
 The results of the tests can be summarized in the heatmap visualization from Figure 1\.
 
@@ -81,7 +86,9 @@ The results of the tests can be summarized in the heatmap visualization from Fig
 
 **Figure 1**:Performance comparison of various language models on **Promptfoo** test suite for different tasks. Each cell represents the pass rate (%) of a model on a specific test, with color coding from red (0%) to green (100%).
 
-By using `promptfoo` tests, recent models can be easily added to the list and evaluated. A special repository for storing the tests and other utilities used for evaluating SLIPS IMMUNE is available [here](https://github.com/stratosphereips/Slips-tools/). The complete procedure for running the tests is described [here](https://github.com/stratosphereips/Slips-tools/blob/main/llm-unittest/README.md).
+By using `promptfoo` tests, recent models can be easily added to the list and evaluated. 
+
+A special repository for storing the tests and other utilities used for evaluating SLIPS IMMUNE is available [here](https://github.com/stratosphereips/Slips-tools/). The complete procedure for running the tests is described [here](https://github.com/stratosphereips/Slips-tools/blob/main/llm-unittest/README.md).
 
 
 ## Key Findings
