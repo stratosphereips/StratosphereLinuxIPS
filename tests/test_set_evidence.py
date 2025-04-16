@@ -140,7 +140,7 @@ def test_multiple_ssh_versions(
         starttime="2023-05-06T12:00:00Z",
         uid="",
         saddr="192.168.0.1",
-        daddr="",
+        sport=22,
         software="",
         unparsed_version="",
         version_major=current_versions.split(".")[0],
