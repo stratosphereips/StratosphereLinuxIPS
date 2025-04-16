@@ -1,6 +1,16 @@
 # Research and Selection of LLM for small-device viability
 
-## **Summary**
+# Table of Contents
+
+- [Initial Evaluation Criteria](#initial-evaluation-criteria)
+- [Setup for Evaluating the LLM Performance](#setup-for-evaluating-the-llm-performance)
+  - [Evaluation Tests Overview](#evaluation-tests-overview)
+- [Key Findings](#key-findings)
+- [Conclusions](#conclusions)
+- [References](#references)
+
+
+## Initial evaluation Criteria
 
 As part of the  SLIPS Immune I project and  presents an analysis of the most suitable Large Language Models (LLMs) capable of running efficiently with small computer resources, with a focus on models with **at most  4 billion parameters**. The evaluation emphasized **licensing terms**, **tool usage capabilities**, and **compatibility with fine-tuning and inference frameworks**.
 
@@ -10,13 +20,9 @@ The model selection was based on data obtained from [LLM Explorer](https://llm.e
 * With a model size **under 4GB**  
 * That provide metadata such as **VRAM usage**, **context length**, and **license type**
 
-## Initial evaluation Criteria
-
-An initial evaluation of the models was conducted using information provided by LLM explorer, models cards, papers and some other sources available on the internet.
-
 An initial screening of models considering the above criteria produced a list of 20 model candidates. 
 
-Models were assessed using the following criteria:
+The the initial models were orderede using the following criteria:
 
 * **LLM explorer Score:** The LLM Explorer Rank (Score) is a comprehensive metric for dynamic evaluation of language models. More info about the score can be found [here](https://llm.extractum.io/static/blog/?id=the-llm_explorer-rank)  
 * **License**: Priority was given to open or permissive licenses.  
@@ -26,9 +32,9 @@ Models were assessed using the following criteria:
 | Model Name                    | Score | Size | License    | Finetuning toolset | Inference tools       |
 |------------------------------|-------|------|------------|--------------------|------------------------|
 | Phi 4 Mini Instruct          | 0.58  | 4B   | mit        | unsloth, TRL       | transformers, ollama   |
-| DeepSeek R1 Distill Qwen 1.5B| 0.55  | 2B   | mit        | TRL                | transformers, ollama   |
 | SmolLM2 1.78 Instruct        | 0.52  | 2B   | apache-2.0 | TRL                | transformers, ollama   |
-| Gemma 3 1B It                | 0.51  | 1B   | gemma      | unsloth, TRL       | transformers, ollama   |
+| Gemma 3 1B Instruct          | 0.51  | 1B   | gemma      | unsloth, TRL       | transformers, ollama   |
+| Gemma 3 4B Instruct          | 0.51  | 4B   | gemma      | unsloth, TRL       | transformers, ollama   |
 | Llama 3.2 3B Instruct        | 0.51  | 3B   | llama3.2   | unsloth, TRL       | transformers, ollama   |
 | Granite 3.1 2B Instruct      | 0.48  | 2B   | apache-2.0 | unsloth, TRL       | transformers, ollama   |
 | Llama 3.2 1B Instruct        | 0.47  | 1B   | llama3.2   | unsloth, TRL       | transformers, ollama   |
@@ -39,9 +45,13 @@ Models were assessed using the following criteria:
 
 **Table1**: Overview of the initial set of selected models with the evaluation criteria. Complete list of evaluated model can be found [here](https://docs.google.com/spreadsheets/d/1hiqAtiL7GatHnMShCuJlXR2_rbMbl89mszzBshsWdeE/edit?gid=1569959296#gid=1569959296)
 
-After an initial screening, a subset of ten language models was selected for further evaluation (see Table 1). To support this process, a dedicated evaluation framework was built using the [**Promptfoo**](https://www.promptfoo.dev/) toolset—an open-source framework designed for systematically testing and comparing language model outputs. 
+## Setup for evaluating the LLM performance
 
-As part of this effort, nine targeted unit tests were developed to evaluate the key capabilities required for integration into the SLIPS immune architecture. The complete list of tests and their descriptions is provided below:
+After an initial screening, a subset of ten language models was selected for further evaluation (see Table 1). To support this process, a dedicated evaluation framework was built using the [**Promptfoo**](https://www.promptfoo.dev/) toolset—an open-source framework designed for systematically testing and comparing language model outputs.
+
+As part of this effort, nine targeted unit tests were developed to evaluate the key capabilities required for integration into the SLIPS immune architecture. All evaluations were conducted on a computer based on the x64 architecture. Evaluation on Raspberry Pi (RPI) hardware will be carried out in future tasks, and the results will be contrasted accordingly. 
+
+The evaluation tests were grouped into three main categories to assess distinct capabilities of the language models. **Information Extraction** tests focus on the model's ability to retrieve specific fields or data points from structured inputs like JSON or logs. **Summarization & Decision making** tests evaluate how well models can convert technical data into clear, human-readable insights and take a simple decision such as a classification. **Data Generation**, including API-compatible formatting, assesses whether models can produce well-structured outputs such as JSON objects, log entries, or function calls that align with defined schemas or interfaces. 
 
 ---
 
@@ -71,7 +81,7 @@ The results of the tests can be summarized in the heatmap visualization from Fig
 
 **Figure 1**:Performance comparison of various language models on **Promptfoo** test suite for different tasks. Each cell represents the pass rate (%) of a model on a specific test, with color coding from red (0%) to green (100%).
 
-By using `promptfoo` tests, recent models can be easily added to the list and evaluated. The complete procedure for running the tests is described [here](https://github.com/stratosphereips/Slips-tools/blob/main/llm-unittest/README.md).
+By using `promptfoo` tests, recent models can be easily added to the list and evaluated. A special repository for storing the tests and other utilities used for evaluating SLIPS IMMUNE is available [here](https://github.com/stratosphereips/Slips-tools/). The complete procedure for running the tests is described [here](https://github.com/stratosphereips/Slips-tools/blob/main/llm-unittest/README.md).
 
 
 ## Key Findings
