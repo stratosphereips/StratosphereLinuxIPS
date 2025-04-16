@@ -17,6 +17,8 @@ from slips_files.core.flows.zeek import (
     Files,
     ARP,
     Weird,
+    Software,
+    FTP,
 )
 
 from slips_files.core.input_profilers.zeek_to_slips_maps import (
@@ -57,16 +59,18 @@ LOG_MAP = {
 LINE_TYPE_TO_SLIPS_CLASS = {
     "conn.log": Conn,
     "dns.log": DNS,
-    "arp.log": ARP,
     "http.log": HTTP,
     "ssl.log": SSL,
     "ssh.log": SSH,
     "dhcp.log": DHCP,
+    "ftp.log": FTP,
+    "arp.log": ARP,
     "smtp.log": SMTP,
     "tunnel.log": Tunnel,
     "notice.log": Notice,
     "files.log": Files,
     "weird.log": Weird,
+    "software.log": Software,
 }
 
 
@@ -192,7 +196,7 @@ class ZeekJSON(IInputType, Zeek):
             self.flow = slips_class(**flow_values)
             return self.flow
 
-        self.print(f"[Profiler] Invalid file_type: {file_type}, line: {line}")
+        print(f"[Profiler] Invalid file_type: {file_type}, line: {line}")
         return False
 
 
@@ -294,7 +298,7 @@ class ZeekTabs(IInputType, Zeek):
         line_processor = self.line_processor_cache.get(file_type)
 
         if not line_processor:
-            self.print(
+            print(
                 f"Slips is unable to handle the given zeek log line! "
                 f"{new_line}",
                 0,
