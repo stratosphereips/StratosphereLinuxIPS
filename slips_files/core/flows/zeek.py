@@ -387,7 +387,7 @@ class Software:
     starttime: str
     uid: str
     saddr: str
-    sport: str
+    sport: int
 
     software: str
 
