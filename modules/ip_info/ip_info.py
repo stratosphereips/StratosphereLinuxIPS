@@ -232,9 +232,13 @@ class IPInfo(AsyncModule):
 
     def get_vendor(self, mac_addr: str, profileid: str) -> dict:
         """
-        Returns the vendor info  of a MAC address and stores it in slips db
+        Returns the vendor info of a MAC address and stores it in slips db
         either from an offline or an online database
         """
+        if not utils.is_ignored_ip(profileid.split("_")[-1]):
+            # dont try to get the MAC vendor of private profiles, the MAC
+            # here is irrelevant (might be the gateway's)
+            return False
 
         if (
             "ff:ff:ff:ff:ff:ff" in mac_addr.lower()

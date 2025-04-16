@@ -310,8 +310,8 @@ class Utils(object):
             return datetime_obj.astimezone(tz=self.local_tz).isoformat()
         elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
-        else:
-            return datetime_obj.strftime(required_format)
+
+        return datetime_obj.strftime(required_format)
 
     def get_local_timezone(self):
         """

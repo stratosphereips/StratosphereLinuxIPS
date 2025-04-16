@@ -249,8 +249,7 @@ class Profiler(ICore, IObservable):
     def add_flow_to_profile(self, flow):
         """
         This is the main function that takes the columns of a flow
-        and does all the magic to convert it into a working data in our
-        system.
+        and does all the magic to convert it into a working data in slips.
         It includes checking if the profile exists and how to put
         the flow correctly.
         """
@@ -265,7 +264,7 @@ class Profiler(ICore, IObservable):
         try:
             ipaddress.ip_address(flow.saddr)
             ipaddress.ip_address(flow.daddr)
-        except (ipaddress.AddressValueError, ValueError):
+        except (ipaddress.AddressValueError, ValueError, AttributeError):
             # Its a mac
             if flow.type_ not in ("software", "weird"):
                 # software and weird.log flows are allowed to not have a daddr
@@ -297,7 +296,6 @@ class Profiler(ICore, IObservable):
             # print the added flow as a form of debugging feedback for
             # the user to know that slips is working
             self.print(pprint.pp(asdict(flow)))
-
         return True
 
     def store_features_going_out(self, flow, flow_parser: FlowHandler):
