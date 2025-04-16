@@ -1,8 +1,8 @@
-# Report for LLM-B1 Research and Selection 
+# Research and Selection of LLM for small-device viability
 
 ## **Summary**
 
-This report is part of the SLIPS Immune I project and  presents an analysis of the most suitable Large Language Models (LLMs) capable of running efficiently with small computer resources, with a focus on models with **at most  4 billion parameters**. The evaluation emphasized **licensing terms**, **tool usage capabilities**, and **compatibility with fine-tuning and inference frameworks**.
+As part of the  SLIPS Immune I project and  presents an analysis of the most suitable Large Language Models (LLMs) capable of running efficiently with small computer resources, with a focus on models with **at most  4 billion parameters**. The evaluation emphasized **licensing terms**, **tool usage capabilities**, and **compatibility with fine-tuning and inference frameworks**.
 
 The model selection was based on data obtained from [LLM Explorer](https://llm.extractum.io/), with filters applied to include only models:
 
@@ -23,12 +23,23 @@ Models were assessed using the following criteria:
 * **Fine-tuning support**: Compatibility with popular frameworks such as **TRL** and **Unsloth**.  
   **Inference support**: Compatibility with inference engines like **Ollama** and **Transformers**..
 
-![image](https://github.com/user-attachments/assets/8867e2cc-b979-4cfd-a839-45b1453aaba3)
+| Model Name                    | Score | Size | License    | Finetuning toolset | Inference tools       |
+|------------------------------|-------|------|------------|--------------------|------------------------|
+| Phi 4 Mini Instruct          | 0.58  | 4B   | mit        | unsloth, TRL       | transformers, ollama   |
+| DeepSeek R1 Distill Qwen 1.5B| 0.55  | 2B   | mit        | TRL                | transformers, ollama   |
+| SmolLM2 1.78 Instruct        | 0.52  | 2B   | apache-2.0 | TRL                | transformers, ollama   |
+| Gemma 3 1B It                | 0.51  | 1B   | gemma      | unsloth, TRL       | transformers, ollama   |
+| Llama 3.2 3B Instruct        | 0.51  | 3B   | llama3.2   | unsloth, TRL       | transformers, ollama   |
+| Granite 3.1 2B Instruct      | 0.48  | 2B   | apache-2.0 | unsloth, TRL       | transformers, ollama   |
+| Llama 3.2 1B Instruct        | 0.47  | 1B   | llama3.2   | unsloth, TRL       | transformers, ollama   |
+| Qwen2.5 1.5B Instruct        | 0.44  | 2B   | apache-2.0 | unsloth, TRL       | transformers, ollama   |
+| Qwen2.5 3B Instruct          | 0.44  | 3B   | apache-2.0 | unsloth, TRL       | transformers, ollama   |
+| SmolLM2 135M Instruct        | 0.37  | 135M | apache-2.0 | unsloth, TRL       | transformers, ollama   |
 
 
-**Figure 1**: Overview of the initial set of selected models with the evaluation criteria. Complete list of evaluated model can be found [here](https://docs.google.com/spreadsheets/d/1hiqAtiL7GatHnMShCuJlXR2_rbMbl89mszzBshsWdeE/edit?gid=1569959296#gid=1569959296)
+**Table1**: Overview of the initial set of selected models with the evaluation criteria. Complete list of evaluated model can be found [here](https://docs.google.com/spreadsheets/d/1hiqAtiL7GatHnMShCuJlXR2_rbMbl89mszzBshsWdeE/edit?gid=1569959296#gid=1569959296)
 
-After an initial screening, a subset of ten language models was selected for further evaluation (see Figure 1). To support this process, a dedicated evaluation framework was built using the [**Promptfoo**](https://www.promptfoo.dev/) toolset—an open-source framework designed for systematically testing and comparing language model outputs. 
+After an initial screening, a subset of ten language models was selected for further evaluation (see Table 1). To support this process, a dedicated evaluation framework was built using the [**Promptfoo**](https://www.promptfoo.dev/) toolset—an open-source framework designed for systematically testing and comparing language model outputs. 
 
 As part of this effort, nine targeted unit tests were developed to evaluate the key capabilities required for integration into the SLIPS immune architecture. The complete list of tests and their descriptions is provided below:
 
@@ -54,10 +65,11 @@ As part of this effort, nine targeted unit tests were developed to evaluate the 
 
 ---
 
-The results of the tests can be summarized in the heatmap visualization from Figure 2\.
+The results of the tests can be summarized in the heatmap visualization from Figure 1\.
 
-![image](https://raw.githubusercontent.com/stratosphereips/Slips-tools/refs/heads/main/llm-unittest/results/models_heatmap.png)
-**Figure 2**:Performance comparison of various language models on **Promptfoo** test suite for different tasks. Each cell represents the pass rate (%) of a model on a specific test, with color coding from red (0%) to green (100%).
+![](../images/immune/models_heatmap.png)
+
+**Figure 1**:Performance comparison of various language models on **Promptfoo** test suite for different tasks. Each cell represents the pass rate (%) of a model on a specific test, with color coding from red (0%) to green (100%).
 
 By using `promptfoo` tests, recent models can be easily added to the list and evaluated. The complete procedure for running the tests is described [here](https://github.com/stratosphereips/Slips-tools/blob/main/llm-unittest/README.md).
 
