@@ -57,6 +57,7 @@ LOG_MAP = {
 LINE_TYPE_TO_SLIPS_CLASS = {
     "conn.log": Conn,
     "dns.log": DNS,
+    "arp.log": ARP,
     "http.log": HTTP,
     "ssl.log": SSL,
     "ssh.log": SSH,
@@ -191,6 +192,7 @@ class ZeekJSON(IInputType, Zeek):
             self.flow = slips_class(**flow_values)
             return self.flow
 
+        self.print(f"[Profiler] Invalid file_type: {file_type}, line: {line}")
         return False
 
 
@@ -347,18 +349,5 @@ class ZeekTabs(IInputType, Zeek):
             self.flow = slips_class(**flow_values)
             return self.flow
 
-        if log_type == "arp.log":
-            self.flow: ARP = ARP(
-                starttime,
-                self.get_value_at(line, 1, False),
-                self.get_value_at(line, 4),
-                self.get_value_at(line, 5),
-                self.get_value_at(line, 2),
-                self.get_value_at(line, 3),
-                self.get_value_at(line, 6),
-                self.get_value_at(line, 7),
-                self.get_value_at(line, 1),
-            )
-            return self.flow
-
+        print(f"[Profiler] Invalid file_type: {log_type}, line: {line}")
         return False
