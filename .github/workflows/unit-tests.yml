@@ -26,7 +26,7 @@ jobs:
     strategy:
       matrix:
         test_file:
-          - test_inputProc.py
+          - test_input.py
           - test_main.py
           - test_conn.py
           - test_downloaded_file.py
