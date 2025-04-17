@@ -571,24 +571,13 @@ class Input(ICore):
         except json.decoder.JSONDecodeError:
             return True
 
-    def validate_zeek_log_file(self, filepath: str) -> bool:
-        """
-        returns true if the given path is a zeek log file of a zeek labeled log file
-        :param filepath: full log file path with the .log extension
-        """
-        # check if the file has a supported extension
-        # and if it is not ignored
-        return (
-            filepath.endswith(".log") or filepath.endswith(".log.labeled")
-        ) and not self.is_ignored_file(filepath)
-
     def handle_zeek_log_file(self):
         """
         Handles conn.log files given to slips directly,
          and conn.log flows given to slips through CYST unix socket.
         """
         if (
-            not self.validate_zeek_log_file(self.given_path)
+            utils.is_ignored_zeek_log_file(self.given_path)
             and "cyst" not in self.given_path.lower()
         ):
             # unsupported file
