@@ -28,7 +28,7 @@ exclusiveprocess==0.9.4
 pytest-dependency==0.6.0
 whois==1.20240129.2
 flask
-tldextract==5.2.0
+tldextract==5.3.0
 termcolor==3.0.1
 yappi==1.6.10
 pytest-sugar==1.0.0
