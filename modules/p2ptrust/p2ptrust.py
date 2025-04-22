@@ -117,7 +117,9 @@ class Trust(IModule):
             self.print(f"Storing p2p.log in {self.pigeon_logfile}")
             # create the thread that rotates the p2p.log every 1d
             self.rotator_thread = threading.Thread(
-                target=self.rotate_p2p_logfile, daemon=True
+                target=self.rotate_p2p_logfile,
+                daemon=True,
+                name="p2p_rotator_thread",
             )
 
         self.storage_name = "IPsInfo"
@@ -648,7 +650,7 @@ class Trust(IModule):
         # create_p2p_logfile is taken from slips.yaml
         if self.create_p2p_logfile:
             # rotates p2p.log file every 1 day
-            self.rotator_thread.start()
+            utils.start_thread(self.rotator_thread, self.db)
 
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)

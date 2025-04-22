@@ -5,7 +5,7 @@ import binascii
 import hashlib
 from datetime import datetime, timedelta
 from re import findall
-
+from threading import Thread
 from uuid import UUID
 import tldextract
 import validators
@@ -27,6 +27,7 @@ from typing import (
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
+
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -288,6 +289,16 @@ class Utils(object):
         os.setresgid(sudo_gid, sudo_gid, -1)
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
+
+    def start_thread(self, thread: Thread, db):
+        """
+        A wrapper for threading.Thread().start()
+        starts the given thread and keeps track of its TID/PID in the db
+        :param thread: the thread to start
+        :param db: a DBManager obj to store the thread PID
+        """
+        thread.start()
+        db.store_pid(thread.name, int(thread._native_id))
 
     def convert_format(self, ts, required_format: str):
         """

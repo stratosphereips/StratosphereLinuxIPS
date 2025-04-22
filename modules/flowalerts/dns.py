@@ -48,8 +48,8 @@ class DNS(IFlowalertsAnalyzer):
         self.dns_without_connection_timeout_checker_thread = Thread(
             target=self.check_dns_without_connection_timeout,
             daemon=True,
+            name="dns_without_connection_timeout_checker_thread",
         )
-
         # used to pass the msgs this analyzer reciecved, to the
         # dns_without_connection_timeout_checker_thread.
         # the reason why we can just use .get_msg() there is because once
@@ -725,7 +725,9 @@ class DNS(IFlowalertsAnalyzer):
         flowalerts' pre_main"""
         # we didnt put this in __init__ because it uses self.flowalerts
         # attributes that are not initialized yet in __init__
-        self.dns_without_connection_timeout_checker_thread.start()
+        utils.start_thread(
+            self.dns_without_connection_timeout_checker_thread, self.db
+        )
 
     async def analyze(self, msg):
         """

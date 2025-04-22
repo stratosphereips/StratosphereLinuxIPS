@@ -131,9 +131,11 @@ class CESNET(IModule):
         # and don't stop this module until the thread is done
         q = queue.Queue()
         self.sender_thread = threading.Thread(
-            target=self.wclient.sendEvents, args=[[evidence_in_idea], q]
+            target=self.wclient.sendEvents,
+            args=[[evidence_in_idea], q],
+            name="cesnet_sender_thread",
         )
-        self.sender_thread.start()
+        utils.start_thread(self.sender_thread, self.db)
         self.sender_thread.join()
         result = q.get()
 
