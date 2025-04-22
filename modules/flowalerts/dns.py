@@ -222,7 +222,6 @@ class DNS(IFlowalertsAnalyzer):
         if flow.answers == ["-"]:
             # If no IPs are in the answer, we can not expect
             # the computer to connect to anything
-            # self.print(f'No ips in the answer, so ignoring')
             return True
 
         contacted_ips = self.db.get_all_contacted_ips_in_profileid_twid(
@@ -233,7 +232,6 @@ class DNS(IFlowalertsAnalyzer):
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
         for ip in self.extract_ips_from_dns_answers(flow.answers):
-            # self.print(f'Checking if we have a connection to ip {ip}')
             if (
                 ip in contacted_ips
                 or self.is_connection_made_by_different_version(
@@ -688,14 +686,16 @@ class DNS(IFlowalertsAnalyzer):
         )
 
     def shutdown_gracefully(self):
-        self.print(
+        self.flowalerts.print(
             "calling " "check_dns_without_connection_of_all_pending_flows()"
         )
         self.check_dns_without_connection_of_all_pending_flows()
-        self.print("joining dns_without_connection_timeout_checker_thread")
+        self.flowalerts.print(
+            "joining dns_without_connection_timeout_checker_thread"
+        )
         self.dns_without_connection_timeout_checker_thread.join(30)
         if self.dns_without_connection_timeout_checker_thread.is_alive():
-            self.print(
+            self.flowalerts.print(
                 f"Problem shutting down "
                 f"dns_without_connection_timeout_checker_thread."
                 f"Flowalerts should_stop(): "
@@ -706,15 +706,17 @@ class DNS(IFlowalertsAnalyzer):
         # without this, queues are left in memory and flowalerts keeps
         # waiting for them forever
         # to exit the process quickly without blocking on the queue's cleanup
-        self.print("cancel_join_thread of dns_msgs queue")
+        self.flowalerts.print("cancel_join_thread of dns_msgs queue")
         self.dns_msgs.cancel_join_thread()
-        self.print("closing dns_msgs queue")
+        self.flowalerts.print("closing dns_msgs queue")
 
         self.dns_msgs.close()
 
-        self.print("cancel_join_thread of pending_dns_without_conn queue")
+        self.flowalerts.print(
+            "cancel_join_thread of " "pending_dns_without_conn " "queue"
+        )
         self.pending_dns_without_conn.cancel_join_thread()
-        self.print("closing pending_dns_without_conn queue")
+        self.flowalerts.print("closing pending_dns_without_conn queue")
 
         self.pending_dns_without_conn.close()
 
