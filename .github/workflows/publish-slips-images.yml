@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - 'master'
-      - 'alya/immune/make_dockerfile_compatible_with_rpi'
       - '!develop'
 
 jobs:
@@ -63,7 +62,7 @@ jobs:
       # By default it checks out only one commit
       - uses: actions/checkout@v4
         with:
-          ref: 'alya/immune/make_dockerfile_compatible_with_rpi'
+          ref: 'master'
           # Fetch all history for all tags and branches
           fetch-depth: 0
           # submodules are needed for local and global p2p
@@ -83,5 +82,6 @@ jobs:
           file: ${{ matrix.image_type.dockerfile }}
           platforms: linux/amd64,linux/arm64
           tags: |
-            stratosphereips/${{ matrix.image_type.name }}:testing_${{ needs.setup.outputs.slips_version }}
+            stratosphereips/${{ matrix.image_type.name }}:latest
+            stratosphereips/${{ matrix.image_type.name }}:${{ needs.setup.outputs.slips_version }}
           push: true
