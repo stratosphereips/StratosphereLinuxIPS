@@ -56,14 +56,14 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-dev \
     python3-tzlocal \
     python3-pip \
+    nano \
+    tree \
+    tmux \
     && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' |  tee /etc/apt/sources.list.d/security:zeek.list \
     && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
-    && curl -fsSL https://packages.redis.io/gpg |  gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list \
     && apt update \
     && apt install -y --no-install-recommends --fix-missing \
     zeek \
-    redis \
     npm \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
     && apt clean \
@@ -73,8 +73,15 @@ RUN apt update && apt install -y --no-install-recommends \
     && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  \
     && nvm install 22
 
-
-RUN pip3 install --no-cache-dir --upgrade pip
+# why are we compiling redis instead od just using apt?
+# to support running slips on the rpi (arm64). the rpi uses jemmalloc by default, which expects a different page size
+# than the default on x86_64
+RUN pip3 install --no-cache-dir --upgrade pip \
+    && git clone https://github.com/redis/redis \
+    && cd redis \
+    && make distclean \
+    && make MALLOC=libc \
+    && export PATH="/redis/src:$PATH"
 
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}
@@ -97,7 +104,6 @@ RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
 RUN cd p2p4slips \
     && go build \
     && export PATH="{$PATH}:/StratosphereLinuxIPS/p2p4slips/";
-
 
 
 WORKDIR ${SLIPS_DIR}
