@@ -60,8 +60,8 @@ jobs:
         context: ./
         file: ./docker/Dockerfile
         tags: |
-          stratosphereips/for_testingg_slips:latest
-          stratosphereips/for_testingg_slips:${{ needs.setup.outputs.slips_version }}
+#          stratosphereips/slips:latest
+          stratosphereips/slips:testing_${{ needs.setup.outputs.slips_version }}
         push: true
 
   publish_light_image:
@@ -81,6 +81,6 @@ jobs:
         context: ./
         file: ./docker/light/Dockerfile
         tags: |
-          stratosphereips/for_testingg_slips_light:latest
-          stratosphereips/for_testingg_slips_light:${{ needs.setup.outputs.slips_version }}
+#          stratosphereips/slips_light:latest
+          stratosphereips/slips_light:testing_${{ needs.setup.outputs.slips_version }}
         push: true
