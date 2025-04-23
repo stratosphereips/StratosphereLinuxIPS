@@ -32,8 +32,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           install: true
-          driver-opts: network=host
-          use: true
+          driver: docker-container  #  allows multi-platform builds
+          #  allows you to enable special permissions for the build environment that are normally considered insecure,
+          # such as:network.host
+          buildkitd-flags: --allow-insecure-entitlement network.host
 
   publish_images:
     needs: setup
