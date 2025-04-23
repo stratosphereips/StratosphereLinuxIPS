@@ -11,7 +11,7 @@ jobs:
   setup:
     runs-on: ubuntu-22.04
     # 2 hours timeout
-    timeout-minutes: 7200
+    timeout-minutes: 120
     outputs:
       slips_version: ${{ steps.get_version.outputs.slips_version }}
 
@@ -25,7 +25,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: 'master'
-        fetch-depth: ''
+        fetch-depth: 0
         submodules: true
 
     - name: Login to DockerHub
@@ -49,7 +49,7 @@ jobs:
       with:
         ref: 'master'
         # Fetch all history for all tags and branches
-        fetch-depth: ''
+        fetch-depth: 0
         # submodules are needed for local and global p2p
         submodules: true
 
@@ -60,7 +60,6 @@ jobs:
         context: ./
         file: ./docker/Dockerfile
         tags: |
-#          stratosphereips/slips:latest
           stratosphereips/slips:testing_${{ needs.setup.outputs.slips_version }}
         push: true
 
@@ -71,7 +70,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: 'master'
-        fetch-depth: ''
+        fetch-depth: 0
         submodules: true
 
     - name: Build and push the light Slips image
@@ -81,6 +80,5 @@ jobs:
         context: ./
         file: ./docker/light/Dockerfile
         tags: |
-#          stratosphereips/slips_light:latest
           stratosphereips/slips_light:testing_${{ needs.setup.outputs.slips_version }}
         push: true
