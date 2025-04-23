@@ -81,7 +81,7 @@ RUN pip3 install --no-cache-dir --upgrade pip \
     && cd redis \
     && make distclean \
     && make MALLOC=libc \
-    && export PATH="/redis/src:$PATH"
+    && export PATH="{$PATH}:/redis/src"
 
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}
