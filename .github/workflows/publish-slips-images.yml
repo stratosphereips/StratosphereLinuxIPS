@@ -22,11 +22,18 @@ jobs:
           ver=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
           echo "slips_version=$ver" >> $GITHUB_OUTPUT
 
+      # should come beforre buildx action
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       # Set up Docker Buildx with docker-container driver is required
       # at the moment to be able to use a subdirectory with Git context
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
+        with:
+          install: true
+          driver-opts: network=host
+          use: true
 
   publish_images:
     needs: setup
@@ -44,7 +51,7 @@ jobs:
       # By default it checks out only one commit
       - uses: actions/checkout@v4
         with:
-          ref: 'master'
+          ref: 'alya/immune/make_dockerfile_compatible_with_rpi'
           # Fetch all history for all tags and branches
           fetch-depth: 0
           # submodules are needed for local and global p2p
@@ -62,6 +69,7 @@ jobs:
           allow: network.host
           context: ./
           file: ${{ matrix.image_type.dockerfile }}
+          platforms: linux/amd64,linux/arm64
           tags: |
             stratosphereips/${{ matrix.image_type.name }}:testing_${{ needs.setup.outputs.slips_version }}
           push: true
