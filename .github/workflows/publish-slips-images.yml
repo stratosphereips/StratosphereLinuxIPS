@@ -16,69 +16,56 @@ jobs:
       slips_version: ${{ steps.get_version.outputs.slips_version }}
 
     steps:
-    - name: Get slips version
-      id: get_version
-      run: |
-        VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-        echo "slips_version=$VER" >> $GITHUB_OUTPUT
+      - name: Get slips version
+        id: get_version
+        run: |
+          ver=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+          echo "slips_version=$ver" >> $GITHUB_OUTPUT
 
-    - uses: actions/checkout@v4
-      with:
-        ref: 'master'
-        fetch-depth: 0
-        submodules: true
+      - uses: actions/checkout@v4
+        with:
+          ref: 'master'
+          fetch-depth: 0
+          submodules: true
 
-    - name: Login to DockerHub
-      uses: docker/login-action@v3
-      with:
-        username: stratosphereips
-        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: stratosphereips
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      # Set up Docker Buildx with docker-container driver is required
+      # at the moment to be able to use a subdirectory with Git context
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    # Set up Docker Buildx with docker-container driver is required
-    # at the moment to be able to use a subdirectory with Git context
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-  publish_main_image:
+  publish_images:
     needs: setup
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        image_type:
+          - name: slips
+            dockerfile: ./docker/Dockerfile
+          - name: slips_light
+            dockerfile: ./docker/light/Dockerfile
+
     steps:
-    # clone slips and checkout branch
-    # By default it checks out only one commit
-    - uses: actions/checkout@v4
-      with:
-        ref: 'master'
-        # Fetch all history for all tags and branches
-        fetch-depth: 0
-        # submodules are needed for local and global p2p
-        submodules: true
+      # clone slips and checkout branch
+      # By default it checks out only one commit
+      - uses: actions/checkout@v4
+        with:
+          ref: 'master'
+          # Fetch all history for all tags and branches
+          fetch-depth: 0
+          # submodules are needed for local and global p2p
+          submodules: true
 
-    - name: Build and push the main Slips image
-      uses: docker/build-push-action@v6
-      with:
-        allow: network.host
-        context: ./
-        file: ./docker/Dockerfile
-        tags: |
-          stratosphereips/slips:testing_${{ needs.setup.outputs.slips_version }}
-        push: true
-
-  publish_light_image:
-    needs: setup
-    runs-on: ubuntu-22.04
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: 'master'
-        fetch-depth: 0
-        submodules: true
-
-    - name: Build and push the light Slips image
-      uses: docker/build-push-action@v6
-      with:
-        allow: network.host
-        context: ./
-        file: ./docker/light/Dockerfile
-        tags: |
-          stratosphereips/slips_light:testing_${{ needs.setup.outputs.slips_version }}
-        push: true
+      - name: Build and push ${{ matrix.image_type.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          allow: network.host
+          context: ./
+          file: ${{ matrix.image_type.dockerfile }}
+          tags: |
+            stratosphereips/${{ matrix.image_type.name }}:testing_${{ needs.setup.outputs.slips_version }}
+          push: true
