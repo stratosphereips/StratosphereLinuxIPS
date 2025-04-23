@@ -9,7 +9,7 @@ on:
 
 jobs:
   setup:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     # 2 hours timeout
     timeout-minutes: 7200
     outputs:
@@ -41,7 +41,7 @@ jobs:
 
   publish_main_image:
     needs: setup
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     # clone slips and checkout branch
     # By default it checks out only one commit
@@ -66,7 +66,7 @@ jobs:
 
   publish_light_image:
     needs: setup
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
       with:
