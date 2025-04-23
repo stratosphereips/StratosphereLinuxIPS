@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'master'
+      - 'alya/immune/make_dockerfile_compatible_with_rpi'
       - '!develop'
 
 jobs:
@@ -59,8 +60,8 @@ jobs:
         context: ./
         file: ./docker/Dockerfile
         tags: |
-          stratosphereips/slips:latest
-          stratosphereips/slips:${{ needs.setup.outputs.slips_version }}
+          stratosphereips/for_testingg_slips:latest
+          stratosphereips/for_testingg_slips:${{ needs.setup.outputs.slips_version }}
         push: true
 
   publish_light_image:
@@ -80,6 +81,6 @@ jobs:
         context: ./
         file: ./docker/light/Dockerfile
         tags: |
-          stratosphereips/slips_light:latest
-          stratosphereips/slips_light:${{ needs.setup.outputs.slips_version }}
+          stratosphereips/for_testingg_slips_light:latest
+          stratosphereips/for_testingg_slips_light:${{ needs.setup.outputs.slips_version }}
         push: true
