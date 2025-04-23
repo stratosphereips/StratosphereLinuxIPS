@@ -14,6 +14,7 @@ jobs:
     timeout-minutes: 120
     outputs:
       slips_version: ${{ steps.get_version.outputs.slips_version }}
+      builder_name: ${{ steps.create_builder.outputs.name }}
 
     steps:
       - name: Get slips version
@@ -22,20 +23,22 @@ jobs:
           ver=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
           echo "slips_version=$ver" >> $GITHUB_OUTPUT
 
-      # should come beforre buildx action
+      # should come before buildx action
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
       # Set up Docker Buildx with docker-container driver is required
       # at the moment to be able to use a subdirectory with Git context
-      - name: Set up Docker Buildx
+      - name: Create and use Buildx builder
+        id: create_builder
         uses: docker/setup-buildx-action@v3
         with:
-          install: true
           driver: docker-container  #  allows multi-platform builds
           #  allows you to enable special permissions for the build environment that are normally considered insecure,
           # such as:network.host
           buildkitd-flags: --allow-insecure-entitlement network.host
+          name: slips_multi_arch_builder
+          use: true
 
   publish_images:
     needs: setup
@@ -49,6 +52,13 @@ jobs:
             dockerfile: ./docker/light/Dockerfile
 
     steps:
+      - name: Use existing Buildx builder
+        uses: docker/setup-buildx-action@v3
+        with:
+          name: slips_multi_arch_builder
+          install: true
+          use: true
+
       # clone slips and checkout branch
       # By default it checks out only one commit
       - uses: actions/checkout@v4
