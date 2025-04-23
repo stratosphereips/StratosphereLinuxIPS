@@ -3,32 +3,29 @@ name: CI-production-publishing-slips-images
 on:
   push:
     branches:
-    - 'master'
-    - '!develop'
+      - 'master'
+      - '!develop'
 
 jobs:
-  publish_slips_docker_image:
-    # runs the tests in a docker(built by this job) on stop of a GH VM
+  setup:
     runs-on: ubuntu-20.04
     # 2 hours timeout
     timeout-minutes: 7200
+    outputs:
+      slips_version: ${{ steps.get_version.outputs.slips_version }}
 
     steps:
     - name: Get slips version
+      id: get_version
       run: |
-        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-        echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+        VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+        echo "slips_version=$VER" >> $GITHUB_OUTPUT
 
-    # clone slips and checkout branch
-    # By default it checks out only one commit
     - uses: actions/checkout@v4
       with:
         ref: 'master'
-        # Fetch all history for all tags and branches
         fetch-depth: ''
-        # submodules are needed for local and global p2p
         submodules: true
-
 
     - name: Login to DockerHub
       uses: docker/login-action@v3
@@ -41,8 +38,21 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+  publish_main_image:
+    needs: setup
+    runs-on: ubuntu-20.04
+    steps:
+    # clone slips and checkout branch
+    # By default it checks out only one commit
+    - uses: actions/checkout@v4
+      with:
+        ref: 'master'
+        # Fetch all history for all tags and branches
+        fetch-depth: ''
+        # submodules are needed for local and global p2p
+        submodules: true
+
     - name: Build and push the main Slips image
-      id: docker_build_slips
       uses: docker/build-push-action@v6
       with:
         allow: network.host
@@ -50,11 +60,20 @@ jobs:
         file: ./docker/Dockerfile
         tags: |
           stratosphereips/slips:latest
-          stratosphereips/slips:${{ env.SLIPS_VERSION }}
+          stratosphereips/slips:${{ needs.setup.outputs.slips_version }}
         push: true
 
+  publish_light_image:
+    needs: setup
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: 'master'
+        fetch-depth: ''
+        submodules: true
+
     - name: Build and push the light Slips image
-      id: docker_build_light_slips
       uses: docker/build-push-action@v6
       with:
         allow: network.host
@@ -62,5 +81,5 @@ jobs:
         file: ./docker/light/Dockerfile
         tags: |
           stratosphereips/slips_light:latest
-          stratosphereips/slips_light:${{ env.SLIPS_VERSION }}
+          stratosphereips/slips_light:${{ needs.setup.outputs.slips_version }}
         push: true
