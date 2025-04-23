@@ -81,7 +81,8 @@ RUN pip3 install --no-cache-dir --upgrade pip \
     && cd redis \
     && make distclean \
     && make MALLOC=libc \
-    && export PATH="{$PATH}:/redis/src"
+    && ENV PATH="$PATH:/redis/src"
+
 
 # Switch to Slips installation dir on login.
 WORKDIR ${SLIPS_DIR}
@@ -103,7 +104,7 @@ RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
 # build the pigeon and add pigeon to path
 RUN cd p2p4slips \
     && go build \
-    && export PATH="{$PATH}:/StratosphereLinuxIPS/p2p4slips/";
+    && ENV PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/"
 
 
 WORKDIR ${SLIPS_DIR}
