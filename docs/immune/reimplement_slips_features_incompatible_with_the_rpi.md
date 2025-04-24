@@ -1,11 +1,12 @@
-# Slips Features Re-implemented for the RPI
+
+# Table Of Contents
 
 - [Challenges](#challenges)
   * [Adding ARM Support for Slips Docker Image](#adding-arm-support-for-slips-docker-image)
   * [RPI 5 uses 16K Page Size](#rpi-5-uses-16k-page-size)
   * [Slips docker uses the host’s Redis when docker is started with –net=host](#slips-docker-uses-the-host-s-redis-when-docker-is-started-with--net-host)
-  * [Features working as expected in the RPI](#features-working-as-expected-in-the-rpi)
-  * [Features re-implemented for the RPI](#features-re-implemented-for-the-rpi)
+- [Features working as expected in the RPI](#features-working-as-expected-in-the-rpi)
+- [Features re-implemented for the RPI](#features-re-implemented-for-the-rpi)
 
 
 Note:
@@ -67,7 +68,7 @@ The issue arises when the host has redis improperly installed. Leading to the je
 
 There’s nothing that we can do to prevent this other than inform users that in order to run the P2P in the RPI in docker, make sure to not have a redis server improperly installed on the host or else slips will try to connect to it and fail.
 
-![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXczu2WIRF5IoxGaq_T195Vb43EeLF0lupCCmCEXyGWKg-ATBOusM_u_ZNQW-k_tRzd6RxVcuLr6yfx6xv8DgRA0lh5F5eDqBPzrU_CoOemD8IDc9oRYzbAzdPvBhD41WDaBnZ3SiA?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/redis_issue_in_rpi.jpeg)
 
 ***
 
@@ -80,7 +81,7 @@ There’s nothing that we can do to prevent this other than inform users that in
 
 - The RPI is able to act as an access point while connected to the router through ethernet.
 
-![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXe0ykIQ0TfFkQgM4lcsb9VUS0jRVzNA1sfqZ3fvu8SuIeqOEcaT7KzmcIcyYNFEvi79QmxtJhmbpTXwgEzy6WOmTxqUek2csL9iYPNMwQdrVX_yGLCGmALzOx_qyIsRFjeYf9BnBA?key=Nopfal0y76Khp78d42tUE1N6)
+![](../images/immune/rpi_as_an_acces_point.jpeg)
 
 - Slips is able to analyze the traffic captured from the AP.
 
