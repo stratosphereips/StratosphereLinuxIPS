@@ -309,18 +309,15 @@ then choosing 1.
 
 ## Installing Slips on a Raspberry PI
 
-Slips on RPI is currently in beta and is actively under development.
-While it is functional, please be aware that there may be occasional bugs or changes in functionality as we work to
-improve and refine this feature. Your feedback and contributions are highly valuable during this stage!
+The recommended way to install Slips on the RPI is using docker.
 
+If you're using the 64-bit (arm64) version of the RPI,
+follow the official docker [installation instructions for Debian](https://docs.docker.com/engine/install/debian/).
 
-Instead of compiling zeek, you can grab the zeek binaries for your OS
+Slips now supports a native linux/arm64 docker image, you can pull it using
 
-Packages for Raspbian 11:
+    docker pull stratosphereips/slips:latest
 
-[https://download.opensuse.org/repositories/security:/zeek/Raspbian_11/armhf/zeek_4.2.1-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_11/armhf/zeek_4.2.1-0_armhf.deb)
-
-
-Packages for Raspbian 10:
-
-[https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.1-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.1-0_armhf.deb)
+To enable P2P, make sure of the following:
+* You run Slips docker with --net=host
+* You don't have redis running on the host and occupying Redis' default IP/Port 127.0.0.1:6379.
