@@ -5,6 +5,7 @@ import ipaddress
 import json
 import math
 import queue
+import time
 from datetime import datetime
 from typing import (
     List,
@@ -13,7 +14,7 @@ from typing import (
 )
 import validators
 from multiprocessing import Queue
-from threading import Thread
+from threading import Thread, Event
 
 from slips_files.common.abstracts.flowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -50,6 +51,7 @@ class DNS(IFlowalertsAnalyzer):
             daemon=True,
             name="dns_without_connection_timeout_checker_thread",
         )
+        self.stop_event = Event()
         # used to pass the msgs this analyzer reciecved, to the
         # dns_without_connection_timeout_checker_thread.
         # the reason why we can just use .get_msg() there is because once
@@ -340,10 +342,10 @@ class DNS(IFlowalertsAnalyzer):
         Does so by receiving every dns msg this analyzer receives. then we
         compare the ts of it to the ts of the flow we're waiting the 30
         mins for.
-        once we know the diff between them is >=30 mins we check for the
+        once we know that >=30 mins passed between them we check for the
         dns without connection evidence.
         The whole point is to give the connection 30 mins in zeek time to
-        arrive before alerting "dns wihtout conn".
+        arrive before setting "dns wihtout conn" evidence.
 
         - To avoid having thousands of flows in memory for 30 mins. we check
         every 10 mins for the connections, if not found we put it back to
@@ -352,9 +354,13 @@ class DNS(IFlowalertsAnalyzer):
         This function runs in its own thread
         """
         try:
-            while not self.flowalerts.should_stop():
-                if self.pending_dns_without_conn.empty():
-                    continue
+            while (
+                not self.flowalerts.should_stop()
+                and not self.stop_event.is_set()
+            ):
+                # if self.pending_dns_without_conn.empty():
+                #     time.sleep(1)
+                #     continue
 
                 # we just use it to know the zeek current ts to check if 30
                 # mins zeek time passed or not. we are not going to
@@ -362,6 +368,7 @@ class DNS(IFlowalertsAnalyzer):
                 reference_flow = self.get_dns_flow_from_queue()
                 if not reference_flow:
                     # ok wait for more dns flows to be read by slips
+                    time.sleep(1)
                     continue
 
                 # back_to_queue will be used to store the flows we're
@@ -380,7 +387,11 @@ class DNS(IFlowalertsAnalyzer):
         except KeyboardInterrupt:
             # the rest will be handled in shutdown_gracefully
             return
-        except Exception:
+        except Exception as e:
+            self.print(
+                f"@@@@@@@@@@ exception in "
+                f"dns_without_connection_timeout {e}"
+            )
             self.print_traceback()
 
     async def check_dns_without_connection(
@@ -693,6 +704,7 @@ class DNS(IFlowalertsAnalyzer):
         self.flowalerts.print(
             "joining dns_without_connection_timeout_checker_thread"
         )
+        self.stop_event.set()
         self.dns_without_connection_timeout_checker_thread.join(30)
         if self.dns_without_connection_timeout_checker_thread.is_alive():
             self.flowalerts.print(
