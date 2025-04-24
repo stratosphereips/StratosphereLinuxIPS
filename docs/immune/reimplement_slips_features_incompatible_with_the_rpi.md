@@ -11,7 +11,7 @@
 
 Note:
 
-- This report is more technical because our goal is to publish it to the community in Slips docs to save the research time of future developers.
+- This documentation is a bit technical to save the research time of future RPI/Redis/Slips developers. :)
 
 ***
 
