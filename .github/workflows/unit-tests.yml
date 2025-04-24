@@ -6,7 +6,6 @@ on:
       - 'master'
       - 'develop'
 
-
 jobs:
   # uses the common workflow that builds slips
   install-dependencies-using-reusable-workflow:
@@ -14,11 +13,9 @@ jobs:
 
   unit-tests:
     runs-on: ubuntu-22.04
-    timeout-minutes: 1800
-    # make this job depend on the first job
+    timeout-minutes: 120
     needs: install-dependencies-using-reusable-workflow
 
-    # suppress tensorflow warnings
     env:
       TF_CPP_MIN_LOG_LEVEL: 3
       TF_ENABLE_ONEDNN_OPTS: 0
@@ -93,8 +90,12 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ github.ref }}
-        fetch-depth: ''
+        fetch-depth: 0
 
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.10.12
 
     - name: Restore APT cache
       id: apt-cache
@@ -106,20 +107,29 @@ jobs:
         key: apt-cache
 
     - if: ${{ steps.apt-cache.outputs.cache-hit == 'true' }}
-      name: Echo restored from cache
+      name: Echo restored APT cache
       continue-on-error: true
       run: echo "Restored APT dependencies from cache successfully"
 
-    - name: Install Python dependencies (from cache if possible)
-      run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install -r install/requirements.txt
-
-    - name: Install apt dependencies (from cache if possible)
+    - name: Install apt dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y $(cat install/apt_dependencies.txt)
 
+    - name: Restore Python dependencies
+      id: python-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('install/requirements.txt') }}
+
+    - if: ${{ steps.python-cache.outputs.cache-hit == 'true' }}
+      name: Echo restored Python cache
+      continue-on-error: true
+      run: echo "Restored Python dependencies from cache successfully"
+
+    - name: Install Python dependencies
+      run: python3 -m pip install -r install/requirements.txt
 
     - name: Start redis server
       run: redis-server --daemonize yes
