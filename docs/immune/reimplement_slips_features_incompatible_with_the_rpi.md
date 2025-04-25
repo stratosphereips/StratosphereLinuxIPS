@@ -77,7 +77,7 @@ The issue arises when the host has redis improperly installed. Leading to the je
 
 There’s nothing that we can do to prevent this other than inform users that in order to run the P2P in the RPI in docker, make sure to not have a redis server improperly installed on the host or else slips will try to connect to it and fail.
 
-![](../images/immune/redis_issue_in_rpi.jpeg)
+![](../images/immune/redis_issue_in_rpi.jpg)
 
 ***
 
