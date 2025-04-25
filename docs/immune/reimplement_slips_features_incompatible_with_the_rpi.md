@@ -45,6 +45,15 @@ That’s why one multi-arch image is better than an ARM specific image (Dockerfi
 
 Page size is usually determined by the processor architecture. The Raspberry Pi 5 uses a kernel with a default page size of 16KB, which is an increase from the traditional 4KB page size used in earlier models. This change aims to improve performance but it comes at the cost of software support. Some software, like Redis, only supports 4k pages.
 
+
+When trying to connect Slips to a Redis instance downloaded with apt in the RPI, we encountered the following error due to the page size incompatibility:
+
+```bash
+<jemalloc>: Unsupported system page size
+<jemalloc>: Unsupported system page size
+Segmentation fault (core dumped)
+```
+
 Using a 4K Page Size Kernel on the Raspberry Pi is doable but requires changing kernel configurations of the RPI, which is suboptimal and goes against the simplicity we planned for Slips installation.
 
 After some trials we decided to manually compile redis with malloc instead of jemalloc in the default slips docker image instead of using apt to install it. The cost of this is that now redis has active defragmentation disabled and cannot be enabled.
@@ -116,5 +125,3 @@ There’s nothing that we can do to prevent this other than inform users that in
 
 
 ***
-
-TODO Add link to slips rpi installation instructions in immune task
