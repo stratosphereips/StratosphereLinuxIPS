@@ -2,7 +2,7 @@ maxminddb==2.6.3
 numpy==1.26.4
 watchdog==5.0.0
 redis==5.2.1
-urllib3==2.3.0
+urllib3==2.4.0
 pandas==2.2.3
 tzlocal==5.3.1
 cabby==0.1.23
@@ -13,7 +13,6 @@ Keras
 validators==0.34.0
 ipwhois==1.2.0
 matplotlib==3.10.1
-recommonmark==0.7.1
 scikit_learn
 slackclient==2.9.4
 psutil==7.0.0
@@ -29,13 +28,13 @@ exclusiveprocess==0.9.4
 pytest-dependency==0.6.0
 whois==1.20240129.2
 flask
-tldextract==5.2.0
+tldextract==5.3.0
 termcolor==3.0.1
 yappi==1.6.10
 pytest-sugar==1.0.0
 aid_hash
 black==24.10.0
-ruff==0.11.2
+ruff==0.11.6
 pre-commit==4.0.1
 coverage==7.8.0
 pyyaml

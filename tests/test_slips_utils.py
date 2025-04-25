@@ -27,6 +27,37 @@ def test_get_sha256_hash_from_nonexistent_file():
         utils.get_sha256_hash_of_file_contents("nonexistent_file.txt")
 
 
+@pytest.mark.parametrize(
+    "filepath, expected_result",
+    [  # Testcase 1: Supported file
+        ("path/to/conn.log", False),
+        ("path/to/dns.log", False),
+        ("path/to/http.log", False),
+        ("path/to/ssl.log", False),
+        ("path/to/ssh.log", False),
+        ("path/to/dhcp.log", False),
+        ("path/to/ftp.log", False),
+        ("path/to/smtp.log", False),
+        ("path/to/tunnel.log", False),
+        ("path/to/notice.log", False),
+        ("path/to/files.log", False),
+        ("path/to/arp.log", False),
+        ("path/to/software.log", False),
+        ("path/to/software.log.labeled", False),
+        ("path/to/weird.log", False),
+        ("path/to/software.log.labeled.something", True),
+        ("path/to/unsupported.log", True),
+    ],
+)
+def test_is_ignored_zeek_log_file(filepath, expected_result):
+    """
+    Test that the is_ignored_file method correctly
+    identifies ignored Zeek log files.
+    """
+    utils = ModuleFactory().create_utils_obj()
+    assert utils.is_ignored_zeek_log_file(filepath) == expected_result
+
+
 def test_get_sha256_hash_permission_error():
     utils = ModuleFactory().create_utils_obj()
     with patch("builtins.open", side_effect=PermissionError):

@@ -34,11 +34,17 @@ class Conn:
     sbytes: int
     dbytes: int
 
-    smac: str
-    dmac: str
-
     state: str
     history: str
+
+    smac: str = ""
+    dmac: str = ""
+
+    # this is for when you give flows labeled by the netflow labeler
+    # https://github.com/stratosphereips/netflowlabeler
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     type_: str = "conn"
     dir_: str = "->"
 
@@ -74,6 +80,8 @@ class DNS:
 
     answers: List[str]
     TTLs: str
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
 
     type_: str = "dns"
 
@@ -107,6 +115,9 @@ class HTTP:
 
     resp_mime_types: str
     resp_fuids: str
+
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
 
     type_: str = "http"
 
@@ -143,6 +154,9 @@ class SSL:
     ja3s: str
     is_DoH: str
 
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     type_: str = "ssl"
 
 
@@ -168,6 +182,9 @@ class SSH:
     host_key_alg: str
     host_key: str
 
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     type_: str = "ssh"
 
 
@@ -175,9 +192,6 @@ class SSH:
 class DHCP:
     starttime: float
     uids: List[str]
-    saddr: str
-    daddr: str
-
     client_addr: str
     server_addr: str
     host_name: str
@@ -185,12 +199,18 @@ class DHCP:
     smac: str  # this is the client mac
     requested_addr: str
 
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     type_: str = "dhcp"
 
     def __post_init__(self) -> None:
         # Some zeek flow don't have saddr or daddr,
         # seen in dhcp.log and notice.log use the mac
         # address instead
+        self.saddr = self.client_addr
+        self.daddr = self.server_addr
+        # if the client_addr is empty, use the mac address
         if not self.saddr and not self.daddr:
             self.saddr = self.smac
 
@@ -203,6 +223,10 @@ class FTP:
     daddr: str
 
     used_port: int
+
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     type_: str = "ftp"
 
 
@@ -214,6 +238,10 @@ class SMTP:
     daddr: str
 
     last_reply: str
+
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     type_: str = "smtp"
 
 
@@ -229,6 +257,9 @@ class Tunnel:
 
     tunnel_type: str
     action: str
+
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
 
     type_: str = "tunnel"
 
@@ -250,6 +281,10 @@ class Notice:
 
     # TODO srsly what is this?
     dst: str
+
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     # every evidence needs a uid, notice.log flows dont have one by
     # default, slips adds one to them to be able to deal with it.
     type_: str = "notice"
@@ -292,6 +327,9 @@ class Files:
 
     tx_hosts: List[str]
     rx_hosts: List[str]
+
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
 
     type_: str = "files"
 
@@ -338,6 +376,9 @@ class ARP:
     dpkts: str = ""
     appproto: str = ""
 
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     type_: str = "arp"
 
 
@@ -346,13 +387,18 @@ class Software:
     starttime: str
     uid: str
     saddr: str
-    daddr: str
+    sport: int
 
     software: str
 
     unparsed_version: str
     version_major: str
     version_minor: str
+    # software log lines dont have daddr
+    daddr: str = ""
+    ground_truth_label: str = ""
+    detailed_ground_truth_label: str = ""
+
     type_: str = "software"
 
     def __post_init__(self) -> None:

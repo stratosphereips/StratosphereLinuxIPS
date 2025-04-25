@@ -171,14 +171,14 @@ def get_zeek_flow(file, flow_type):
 
 
 @pytest.mark.parametrize(
-    "file,flow_type",
+    "file, flow_type",
     [
-        ("dataset/test9-mixed-zeek-dir/dns.log", "dns"),
-        ("dataset/test9-mixed-zeek-dir/conn.log", "conn"),
-        ("dataset/test9-mixed-zeek-dir/http.log", "http"),
-        ("dataset/test9-mixed-zeek-dir/ssl.log", "ssl"),
-        ("dataset/test9-mixed-zeek-dir/notice.log", "notice"),
-        # ('dataset/test9-mixed-zeek-dir/files.log', 'files.log'),
+        ("dataset/test9-mixed-zeek-dir/dns.log", "dns.log"),
+        ("dataset/test9-mixed-zeek-dir/conn.log", "conn.log"),
+        ("dataset/test9-mixed-zeek-dir/http.log", "http.log"),
+        ("dataset/test9-mixed-zeek-dir/ssl.log", "ssl.log"),
+        ("dataset/test9-mixed-zeek-dir/notice.log", "notice.log"),
+        ("dataset/test9-mixed-zeek-dir/files.log", "files.log"),
     ],
 )
 def test_process_line(
@@ -187,12 +187,13 @@ def test_process_line(
 ):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.symbol = Mock()
+    profiler.db.get_timewindow = Mock(return_value="timewindow1")
     # we're testing another functionality here
     profiler.whitelist.is_whitelisted_flow = do_nothing
     profiler.input_type = "zeek"
     # get the class that handles the zeek input
     profiler.input_handler = SUPPORTED_INPUT_TYPES[profiler.input_type]()
-    # set  the zeek json separator
+    # set the zeek json separator
     profiler.separator = SEPARATORS[profiler.input_type]
 
     sample_flow = get_zeek_flow(file, flow_type)
@@ -218,25 +219,26 @@ def test_process_line(
 
 def test_get_rev_profile():
     profiler = ModuleFactory().create_profiler_obj()
-    flow = Conn(
-        "1.0",
-        "1234",
-        "192.168.1.1",
-        "8.8.8.8",
-        5,
-        "TCP",
-        "dhcp",
-        80,
-        88,
-        20,
-        20,
-        20,
-        20,
-        "",
-        "",
-        "Established",
-        "",
+    flow: Conn = Conn(
+        starttime="1.0",
+        uid="1234",
+        saddr="192.168.1.1",
+        daddr="8.8.8.8",
+        dur=5,
+        proto="TCP",
+        appproto="dhcp",
+        sport=80,
+        dport=88,
+        spkts=20,
+        dpkts=20,
+        sbytes=20,
+        dbytes=20,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
     )
+
     profiler.db.get_profileid_from_ip.return_value = None
     profiler.db.get_timewindow.return_value = "timewindow1"
     assert profiler.get_rev_profile(flow) == ("profile_8.8.8.8", "timewindow1")
@@ -252,25 +254,26 @@ def test_get_rev_profile_no_daddr(
 
 def test_get_rev_profile_existing_profileid():
     profiler = ModuleFactory().create_profiler_obj()
-    flow = Conn(
-        "1.0",
-        "1234",
-        "192.168.1.1",
-        "8.8.8.8",
-        5,
-        "TCP",
-        "dhcp",
-        80,
-        88,
-        20,
-        20,
-        20,
-        20,
-        "",
-        "",
-        "Established",
-        "",
+    flow: Conn = Conn(
+        starttime="1.0",
+        uid="1234",
+        saddr="192.168.1.1",
+        daddr="8.8.8.8",
+        dur=5,
+        proto="TCP",
+        appproto="dhcp",
+        sport=80,
+        dport=88,
+        spkts=20,
+        dpkts=20,
+        sbytes=20,
+        dbytes=20,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
     )
+
     profiler.db.get_profileid_from_ip.return_value = "existing_profile"
     profiler.db.get_timewindow.return_value = "existing_timewindow"
     assert profiler.get_rev_profile(flow) == (
@@ -281,25 +284,26 @@ def test_get_rev_profile_existing_profileid():
 
 def test_get_rev_profile_no_timewindow():
     profiler = ModuleFactory().create_profiler_obj()
-    flow = Conn(
-        "1.0",
-        "1234",
-        "192.168.1.1",
-        "8.8.8.8",
-        5,
-        "TCP",
-        "dhcp",
-        80,
-        88,
-        20,
-        20,
-        20,
-        20,
-        "",
-        "",
-        "Established",
-        "",
+    flow: Conn = Conn(
+        starttime="1.0",
+        uid="1234",
+        saddr="192.168.1.1",
+        daddr="8.8.8.8",
+        dur=5,
+        proto="TCP",
+        appproto="dhcp",
+        sport=80,
+        dport=88,
+        spkts=20,
+        dpkts=20,
+        sbytes=20,
+        dbytes=20,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
     )
+
     profiler.db.get_profileid_from_ip.return_value = "profile_8.8.8.8"
     profiler.db.get_timewindow.return_value = None
 
@@ -672,25 +676,26 @@ def test_get_gateway_info_sets_mac_and_ip(
     mock_is_ignored_ip.return_value = False
     profiler.get_gw_ip_using_gw_mac = Mock()
     profiler.get_gw_ip_using_gw_mac.return_value = "8.8.8.1"
-    flow = Conn(
-        "1.0",
-        "1234",
-        "192.168.1.1",
-        "8.8.8.8",
-        5,
-        "TCP",
-        "dhcp",
-        80,
-        88,
-        20,
-        20,
-        20,
-        20,
-        "",
-        "00:11:22:33:44:55",
-        "Established",
-        "",
+    flow: Conn = Conn(
+        starttime="1.0",
+        uid="1234",
+        saddr="192.168.1.1",
+        daddr="8.8.8.8",
+        dur=5,
+        proto="TCP",
+        appproto="dhcp",
+        sport=80,
+        dport=88,
+        spkts=20,
+        dpkts=20,
+        sbytes=20,
+        dbytes=20,
+        smac="",
+        dmac="00:11:22:33:44:55",
+        state="Established",
+        history="",
     )
+
     profiler.get_gateway_info(flow)
 
     profiler.db.set_default_gateway.assert_any_call("MAC", flow.dmac)
@@ -705,24 +710,24 @@ def test_get_gateway_info_no_mac_detected(mock_is_private_ip):
     profiler.is_gw_info_detected = Mock()
     profiler.is_gw_info_detected.side_effect = [False, False]
     mock_is_private_ip.return_value = False
-    flow = Conn(
-        "1.0",
-        "1234",
-        "192.168.1.1",
-        "8.8.8.8",
-        5,
-        "TCP",
-        "dhcp",
-        80,
-        88,
-        20,
-        20,
-        20,
-        20,
-        "",
-        "00:11:22:33:44:55",
-        "Established",
-        "",
+    flow: Conn = Conn(
+        starttime="1.0",
+        uid="1234",
+        saddr="192.168.1.1",
+        daddr="8.8.8.8",
+        dur=5,
+        proto="TCP",
+        appproto="dhcp",
+        sport=80,
+        dport=88,
+        spkts=20,
+        dpkts=20,
+        sbytes=20,
+        dbytes=20,
+        smac="",
+        dmac="00:11:22:33:44:55",
+        state="Established",
+        history="",
     )
     profiler.get_gateway_info(flow)
 

@@ -1,10 +1,7 @@
 name: Install Slips Dependencies
 
 on:
-  # workflow_call make this workflow re-usable
   workflow_call:
-    # these are like variables to make the workflow more clean
-    # we can pass these variable from another workflows if we want
     inputs:
       zeek-repo-url:
         description: 'Zeek repository URL'
@@ -25,6 +22,8 @@ on:
 jobs:
   install-dependencies:
     runs-on: ubuntu-22.04
+    outputs:
+      dependencies_installed: ${{ steps.mark_installed.outputs.installed }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -62,3 +61,7 @@ jobs:
         curl -fsSL ${{ inputs.zeek-key-url }} | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/security_zeek.gpg
         sudo apt update && sudo apt install -y --no-install-recommends zeek
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
+    - name: Mark dependencies as installed
+      id: mark_installed
+      run: echo "installed=true" >> $GITHUB_OUTPUT
