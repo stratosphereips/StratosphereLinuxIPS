@@ -1,4 +1,4 @@
-# Exporting
+# Exporting Slips Alerts
 
 Slips supports exporting alerts to other systems using different modules (ExportingAlerts, CESNET sharing etc.)
 

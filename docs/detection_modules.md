@@ -255,9 +255,16 @@ You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` a
 
 ## Blocking Module
 
-To enable blocking in slips, start slips with the ```-p``` flag.
+Blocking in Slips is done for any IP that results in an alert. If an IP is detected as malicious and is blocked,
+it stays blocked forever, unless it is unblocked manually.
 
-This feature is only supported in linux using iptables.
+The feature of unblocking IPs after a while is not supported yet.
+
+The blocking is done using iptables, and the blocked IPs are stored in the database for future reference.
+
+Blocking is disabled by default. To enable blocking in slips, start slips with the ```-p``` flag.
+
+This feature is only supported in linux using iptables when running on an interface.
 
 ## Exporting Alerts Module
 
@@ -850,7 +857,7 @@ abuse.ch -> Used by urlhaus for getting info about contacted domains and downloa
 If you want to contribute: improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
 
 
-## Zeek Scripts
+# Zeek Scripts
 
 Slips is shipped with it's own custom zeek scripts to be able to extend zeek functionality and
 customize the detections

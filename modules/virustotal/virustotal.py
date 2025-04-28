@@ -49,7 +49,9 @@ class VT(IModule):
         )
         # create the queue thread
         self.api_calls_thread = threading.Thread(
-            target=self.api_calls_thread, daemon=True
+            target=self.api_calls_queue_handler,
+            daemon=True,
+            name="vt_api_calls_thread",
         )
         # this will be true when there's a problem with the
         # API key, then the module will exit
@@ -189,13 +191,12 @@ class VT(IModule):
             data["asn"] = {"number": f"AS{as_owner}"}
         self.db.set_info_for_domains(domain, data)
 
-    def api_calls_thread(self):
+    def api_calls_queue_handler(self):
         """
         This thread starts if there's an API calls queue,
         it operates every minute, and executes 4 api calls
         from the queue then sleeps again.
         """
-
         while True:
             # do not attempt to make more api calls if we already
             # know that the api key is incorrect
@@ -547,7 +548,7 @@ class VT(IModule):
         if not self.read_api_key() or self.key in ("", None):
             # We don't have a virustotal key
             return 1
-        self.api_calls_thread.start()
+        utils.start_thread(self.api_calls_thread, self.db)
 
     def main(self):
         if self.incorrect_API_key:

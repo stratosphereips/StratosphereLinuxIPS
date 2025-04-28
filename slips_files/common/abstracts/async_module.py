@@ -64,7 +64,6 @@ class AsyncModule(IModule):
         pass
 
     async def gather_tasks_and_shutdown_gracefully(self):
-        """Implement the async shutdown logic here"""
         await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.shutdown_gracefully()
 

@@ -54,6 +54,9 @@ class ProcessManager:
         # to pass flows to the profiler
         self.profiler_queue = Queue()
         self.termination_event: Event = Event()
+        # to make sure we only warn the user once about
+        # the pending modules
+        self.warning_printed_once = False
         # this one has its own termination event because we want it to
         # shutdown at the very end of all other slips modules.
         self.evidence_handler_termination_event: Event = Event()
@@ -468,17 +471,18 @@ class ProcessManager:
             pid for pid in pids_to_kill_last if pid is not None
         ]
 
+        # now get the process obj of each pid
         to_kill_first: List[Process] = []
         to_kill_last: List[Process] = []
         for process in self.processes:
             if process.pid in pids_to_kill_last:
                 to_kill_last.append(process)
-            else:
+            elif isinstance(process, multiprocessing.context.ForkProcess):
                 # skips the context manager of output.py, will close
                 # it manually later
                 # once all processes are closed
-                if isinstance(process, multiprocessing.context.ForkProcess):
-                    continue
+                continue
+            else:
                 to_kill_first.append(process)
 
         return to_kill_first, to_kill_last
@@ -677,12 +681,14 @@ class ProcessManager:
                 print("\n" + "-" * 27)
             print("Stopping Slips")
 
-            # by default, 15 mins from this time, all modules should be killed
+            # by default, max 15 mins (taken from wait_for_modules_to_finish)
+            # from this time, all modules should be killed
             method_start_time = time.time()
 
             # how long to wait for modules to finish in minutes
             timeout: float = self.main.conf.wait_for_modules_to_finish()
-            timeout_seconds: float = timeout * 60
+            # convert to seconds
+            timeout *= 60
 
             # close all tws
             self.main.db.check_tw_to_close(close_all=True)
@@ -701,20 +707,15 @@ class ProcessManager:
                     log_to_logfiles_only=True,
                 )
 
-                hitlist: Tuple[List[Process], List[Process]]
-                hitlist = self.get_hitlist_in_order()
-                to_kill_first: List[Process] = hitlist[0]
-                to_kill_last: List[Process] = hitlist[1]
+                to_kill_first: List[Process]
+                to_kill_last: List[Process]
+                to_kill_first, to_kill_last = self.get_hitlist_in_order()
 
                 self.termination_event.set()
 
-                # to make sure we only warn the user once about
-                # the pending modules
-                self.warning_printed_once = False
-
                 try:
                     # Wait timeout_seconds for all the processes to finish
-                    while time.time() - method_start_time < timeout_seconds:
+                    while time.time() - method_start_time < timeout:
                         (
                             to_kill_first,
                             to_kill_last,
@@ -733,7 +734,7 @@ class ProcessManager:
                     reason = "User pressed ctr+c or Slips was killed by the OS"
                     graceful_shutdown = False
 
-                if time.time() - method_start_time >= timeout_seconds:
+                if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
