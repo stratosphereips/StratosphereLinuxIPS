@@ -352,3 +352,5 @@ block all traffic to and from the malicious device when slips sets an alert.
 ```bash
 ./slips.py -i wlan0 -p
 ```
+
+Now connect your devices to the rpi_wifi with "mysecurepassword" as the password, and enjoy the protection of Slips.
