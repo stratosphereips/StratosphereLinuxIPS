@@ -336,7 +336,7 @@ Meaning it wil kick out the malicious device from the AP.
 1. Connect your RPI to your router using an ethernet cable
 2. Run your RPI as an access point using [create_ap](https://github.com/oblique/create_ap)
 
-`sudo create_ap wlan0 eth0 alyas_rpi mysecurepassword`
+`sudo create_ap wlan0 eth0 rpi_wifi mysecurepassword`
 
 where `wlan0` is the wifi interface of your RPI and `eth0` is the ethernet interface.
 
