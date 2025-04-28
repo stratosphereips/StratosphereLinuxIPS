@@ -387,11 +387,7 @@ class DNS(IFlowalertsAnalyzer):
         except KeyboardInterrupt:
             # the rest will be handled in shutdown_gracefully
             return
-        except Exception as e:
-            self.print(
-                f"@@@@@@@@@@ exception in "
-                f"dns_without_connection_timeout {e}"
-            )
+        except Exception:
             self.print_traceback()
 
     async def check_dns_without_connection(
@@ -697,13 +693,7 @@ class DNS(IFlowalertsAnalyzer):
         )
 
     def shutdown_gracefully(self):
-        self.flowalerts.print(
-            "calling " "check_dns_without_connection_of_all_pending_flows()"
-        )
         self.check_dns_without_connection_of_all_pending_flows()
-        self.flowalerts.print(
-            "joining dns_without_connection_timeout_checker_thread"
-        )
         self.stop_event.set()
         self.dns_without_connection_timeout_checker_thread.join(30)
         if self.dns_without_connection_timeout_checker_thread.is_alive():
@@ -718,17 +708,10 @@ class DNS(IFlowalertsAnalyzer):
         # without this, queues are left in memory and flowalerts keeps
         # waiting for them forever
         # to exit the process quickly without blocking on the queue's cleanup
-        self.flowalerts.print("cancel_join_thread of dns_msgs queue")
         self.dns_msgs.cancel_join_thread()
-        self.flowalerts.print("closing dns_msgs queue")
-
         self.dns_msgs.close()
 
-        self.flowalerts.print(
-            "cancel_join_thread of " "pending_dns_without_conn " "queue"
-        )
         self.pending_dns_without_conn.cancel_join_thread()
-        self.flowalerts.print("closing pending_dns_without_conn queue")
 
         self.pending_dns_without_conn.close()
 

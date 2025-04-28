@@ -663,30 +663,14 @@ class Profiler(ICore, IObservable):
         return False
 
     def shutdown_gracefully(self):
-        self.print(
-            "Stopping Profiler Threads.",
-            log_to_logfiles_only=True,
-        )
         self.stop_profiler_threads.set()
         # wait for all flows to be processed by the profiler threads.
         self.join_profiler_threads()
-
-        self.print(
-            "Closing queues.",
-            log_to_logfiles_only=True,
-        )
         # close the queues to avoid deadlocks.
         # this step SHOULD NEVER be done before closing the threads
         self.flows_to_process_q.close()
-        self.print(
-            "Done closing flows_to_process_q.",
-            log_to_logfiles_only=True,
-        )
         self.profiler_queue.close()
-        self.print(
-            "Done closing profiler_queue.",
-            log_to_logfiles_only=True,
-        )
+
         self.db.set_new_incoming_flows(False)
         self.print(
             f"Stopping. Total lines read: {self.rec_lines}",

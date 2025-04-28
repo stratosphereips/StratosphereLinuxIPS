@@ -110,9 +110,6 @@ class IModule(ABC, Process):
             # don't stop
             return False
 
-        if self.name == "Flow Alerts":
-            self.print("@@@@@@@@@@@@@@ Flowalerts now should_stop() True")
-
         return True
 
     def shutdown_gracefully(self):
