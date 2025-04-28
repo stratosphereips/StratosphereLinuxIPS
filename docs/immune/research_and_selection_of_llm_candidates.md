@@ -52,7 +52,11 @@ After an initial screening, a subset of ten language models was selected for fur
 
 As part of this effort, nine targeted unit tests were developed to evaluate the key capabilities required for integration into the SLIPS immune architecture. All evaluations were conducted on a computer based on the x64 architecture. Evaluation on Raspberry Pi (RPI) hardware will be carried out in future tasks, and the results will be contrasted accordingly. 
 
+All the models were deployed on an [**Ollama**](https://ollama.com/) server, and all versions were quantized to Q4_K_M. This could be considered a limitation, as the performance is not equivalent to that of models using full precision. As a result, the reported performance provides only an initial indication of the models' true capabilities. 
+
 The evaluation tests were grouped into three main categories to assess distinct capabilities of the language models. **Information Extraction** tests focus on the model's ability to retrieve specific fields or data points from structured inputs like JSON or logs. **Summarization & Decision making** tests evaluate how well models can convert technical data into clear, human-readable insights and take a simple decision such as a classification. **Data Generation**, including API-compatible formatting, assesses whether models can produce well-structured outputs such as JSON objects, log entries, or function calls that align with defined schemas or interfaces. 
+
+
 
 ### Evaluation Tests Overview
 

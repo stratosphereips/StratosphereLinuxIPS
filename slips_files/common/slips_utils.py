@@ -6,6 +6,7 @@ import hashlib
 from datetime import datetime, timedelta
 from re import findall
 from threading import Thread
+
 from uuid import UUID
 import tldextract
 import validators
@@ -28,6 +29,7 @@ from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
+from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -289,6 +291,23 @@ class Utils(object):
         os.setresgid(sudo_gid, sudo_gid, -1)
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
+
+    def is_ignored_zeek_log_file(self, filepath: str) -> bool:
+        """
+        Returns true if the given file ends with .log or .log.labeled and
+        is in SUPPORTED_LOGFILES list
+        :param filepath: a zeek log file
+        """
+        if not (
+            filepath.endswith(".log") or filepath.endswith(".log.labeled")
+        ):
+            return True
+
+        filename = os.path.basename(filepath)
+        # remove all extensions from filename
+        while "." in filename:
+            filename = filename.rsplit(".", 1)[0]
+        return filename not in SUPPORTED_LOGFILES
 
     def start_thread(self, thread: Thread, db):
         """
