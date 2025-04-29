@@ -322,7 +322,6 @@ To enable P2P, make sure of the following:
 * You run Slips docker with --net=host
 * You don't have redis running on the host and occupying Redis' default IP/Port 127.0.0.1:6379.
 
-
 ### Protect your local network with Slips on the RPI
 
 By installing Slips on your RPI and using it as an access point,
@@ -337,9 +336,13 @@ Meaning it wil kick out the malicious device from the AP.
 1. Connect your RPI to your router using an ethernet cable
 2. Run your RPI as an access point using [create_ap](https://github.com/oblique/create_ap)
 
-`sudo create_ap wlan0 eth0 alyas_rpi mysecurepassword`
+`sudo create_ap wlan0 eth0 rpi_wifi mysecurepassword -c 40`
 
-where `wlan0` is the wifi interface of your RPI and `eth0` is the ethernet interface.
+where `wlan0` is the wifi interface of your RPI, `eth0` is the ethernet interface and `-c 40` is the channel of the access point.
+
+We chose channel 40 because it is a 5GHz channel, which is faster and less crowded than the 2.4GHz channels.
+
+Note: Please make sure your RPI model supports 5GHz channels. If not, you can use `-c 1` for 2.4GHz.
 
 3. Run Slips in the RPI using the command below to listen to the traffic from the access point.
 
@@ -353,3 +356,5 @@ block all traffic to and from the malicious device when slips sets an alert.
 ```bash
 ./slips.py -i wlan0 -p
 ```
+
+Now connect your devices to the rpi_wifi with "mysecurepassword" as the password, and enjoy the protection of Slips.

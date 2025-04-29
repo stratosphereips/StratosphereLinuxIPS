@@ -510,7 +510,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             f"{self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN}:"
             f"{current_minute}"
         )
-        return self.r.get(key)
+        return self.r.get(key) or 0
 
     def _track_flow_processing_rate(self, msg: dict):
         """

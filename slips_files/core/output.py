@@ -191,7 +191,7 @@ class Output(IObserver):
             txt = red(txt)
         if "Warning" in txt:
             txt = yellow(txt)
-        if "Analyzed IPs" in txt:
+        if "analyzed IPs" in txt:
             self.print("", txt, end="\r")
             return
 

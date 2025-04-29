@@ -406,10 +406,10 @@ class Main:
         evidence_number = self.db.get_evidence_number() or 0
         flow_per_min = self.db.get_flows_analyzed_per_minute()
         stats = (
-            f"\r[{now}] Analyzed IPs: {green(profiles_len)}. "
+            f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
-            f"Last ({self.twid_width}) number of IPs:"
+            f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
             f"Analyzed {flow_per_min} flows/min."
         )

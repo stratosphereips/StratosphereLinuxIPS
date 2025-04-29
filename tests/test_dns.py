@@ -814,12 +814,14 @@ async def test_check_dns_without_connection_waited_for_the_conn_true():
 def test_check_dns_without_connection_timeout_empty_queue():
     """Test that the method does nothing when the queue is empty."""
     dns = ModuleFactory().create_dns_analyzer_obj()
-    dns.flowalerts.should_stop = Mock(side_effect=[False, True])  # to loop
-    # once
+    # to loop once only
+    dns.flowalerts.should_stop = Mock(side_effect=[False, True])
+    dns.stop_event.is_set = Mock(side_effect=[False, True])
+
     dns.pending_dns_without_conn.empty = Mock(return_value=True)
-    dns.get_dns_flow_from_queue = Mock()
+    dns.check_pending_flows_timeout = Mock()
     dns.check_dns_without_connection_timeout()
-    dns.get_dns_flow_from_queue.assert_not_called()
+    dns.check_pending_flows_timeout.assert_not_called()
 
 
 def test_check_dns_without_connection_timeout_flow_processing():

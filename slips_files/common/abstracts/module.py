@@ -109,6 +109,7 @@ class IModule(ABC, Process):
             # this module is still receiving msgs,
             # don't stop
             return False
+
         return True
 
     def shutdown_gracefully(self):

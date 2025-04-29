@@ -55,7 +55,9 @@ class ARP(IModule):
             # thats one hour in seconds
             self.period_before_deleting = 3600
         self.timer_thread_arp_scan = threading.Thread(
-            target=self.wait_for_arp_scans, daemon=True
+            target=self.wait_for_arp_scans,
+            daemon=True,
+            name="timer_thread_arp_scan",
         )
         self.pending_arp_scan_evidence = Queue()
         self.alerted_once_arp_scan = False
@@ -88,7 +90,7 @@ class ARP(IModule):
         """
         # this evidence is the one that triggered this thread
         scans_ctr = 0
-        while True:
+        while not self.should_stop():
             try:
                 evidence: dict = self.pending_arp_scan_evidence.get(
                     timeout=0.5
@@ -515,7 +517,7 @@ class ARP(IModule):
     def pre_main(self):
         """runs once before the main() is executed in a loop"""
         utils.drop_root_privs()
-        self.timer_thread_arp_scan.start()
+        utils.start_thread(self.timer_thread_arp_scan, self.db)
 
     def main(self):
         self.clear_arp_logfile()
