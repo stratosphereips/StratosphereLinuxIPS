@@ -21,7 +21,7 @@ you can extend its protection to your other connected devices.
 Once Slips detects a malicious device, it will block all traffic to and from it using iptables.
 Meaning it wil kick out the malicious device from the AP.
 
-![](images/immune/rpi_as_an_acces_point.jpeg)
+![](../images/immune/rpi_as_an_acces_point.jpeg)
 
 
 1. Connect your RPI to your router using an ethernet cable
@@ -59,9 +59,8 @@ Now connect your devices to the rpi_wifi with "mysecurepassword" as the password
 
 ## Debugging common AP errors
 
-Common errors:
 
-`ERROR: Your adapter can not be a station (i.e. be connected) and an AP at the same time`
+#### ERROR: Your adapter can not be a station (i.e. be connected) and an AP at the same time
 
 If you get this error while connected to the router with an ethernet, This means that your rpi is still using wifi
 for internet and not you ethernet
@@ -69,14 +68,14 @@ for internet and not you ethernet
 ---
 
 
-`dnsmasq: failed to bind DHCP server socket: Address already in use`
+#### dnsmasq: failed to bind DHCP server socket: Address already in use
 
 Ensure no other DHCP server is running: Check for other services that may be using DHCP (like dnsmasq) and stop them:
 `sudo systemctl stop dnsmasq`
 
 ---
 
-`RTNETLINK answers: Operation not possible due to RF-kill`
+#### RTNETLINK answers: Operation not possible due to RF-kill
 
 This error indicates that the wireless interface is blocked by a hardware or software kill switch.
 Check the blocked interface using `sudo rfkill list` then unblock it using `sudo rfkill unblock <number>`
