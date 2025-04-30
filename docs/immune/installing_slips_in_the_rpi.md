@@ -1,3 +1,11 @@
+# Table Of Contents
+- [Installing Slips On The Raspberry PI](#installing-slips-on-the-raspberry-pi)
+- [Protect your local network with Slips on the RPI](#protect-your-local-network-with-slips-on-the-rpi)
+- [Debugging common AP errors](#debugging-common-ap-errors)
+  - [ERROR: Your adapter can not be a station (i.e. be connected) and an AP at the same time](#error--your-adapter-can-not-be-a-station--ie-be-connected--and-an-ap-at-the-same-time)
+  - [dnsmasq: failed to bind DHCP server socket: Address already in use](#dnsmasq--failed-to-bind-dhcp-server-socket--address-already-in-use)
+  - [RTNETLINK answers: Operation not possible due to RF-kill](#rtnetlink-answers--operation-not-possible-due-to-rf-kill)
+
 # Installing Slips On The Raspberry PI
 
 The recommended way to install Slips on the RPI is using docker.
