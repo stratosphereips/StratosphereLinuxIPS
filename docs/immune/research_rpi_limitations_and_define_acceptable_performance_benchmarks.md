@@ -107,7 +107,7 @@
 
 ![](../images/immune/rpi_thermal_throttling.jpg)
 
-_Processor temperature in °C against time in seconds. At time T=T₀ stress testing was started._
+_[Processor temperature in °C against time in seconds. At time T=T₀ stress testing was started.](https://www.raspberrypi.com/news/heating-and-cooling-raspberry-pi-5/)_
 
 - When the core temperature is between 80°C and 85°C, the ARM cores will be throttled back. And the GPU will be throttled back when it exceeds 85°C
 
