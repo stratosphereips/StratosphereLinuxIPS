@@ -72,7 +72,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.spamhaus = Spamhaus(self.db)
         self.pending_queries = multiprocessing.Queue()
         self.pending_circllu_calls_thread = threading.Thread(
-            target=self.handle_pending_queries, daemon=True
+            target=self.handle_pending_queries,
+            daemon=True,
+            name="ti_pending_circllu_calls_thread",
         )
         self.circllu = Circllu(self.db, self.pending_queries)
 
@@ -980,7 +982,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         data = self.db.get_ti_feed_info(filename)
         old_hash = data.get("hash", False)
 
-        new_hash = utils.get_sha256_hash(path_to_local_ti_file)
+        new_hash = utils.get_sha256_hash_of_file_contents(
+            path_to_local_ti_file
+        )
 
         if not new_hash:
             self.print(
@@ -1767,7 +1771,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             removing processed items.
         """
         max_queries = 10
-        while True:
+        while not self.should_stop():
             time.sleep(120)
             try:
                 flow_info = self.pending_queries.get(timeout=0.5)
@@ -1805,7 +1809,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         for local_file in local_files:
             self.update_local_file(local_file)
 
-        self.pending_circllu_calls_thread.start()
+        utils.start_thread(self.pending_circllu_calls_thread, self.db)
 
     def main(self):
         # The channel can receive an IP address or a domain name

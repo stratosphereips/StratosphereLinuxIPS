@@ -121,8 +121,6 @@ def test_check_icmp_sweep_unsupported_scan():
                 "flow": DHCP(
                     starttime="1726676568.14378",
                     uids=["1234"],
-                    saddr="",
-                    daddr="",
                     client_addr="",
                     server_addr="",
                     host_name="",
@@ -142,9 +140,7 @@ def test_check_icmp_sweep_unsupported_scan():
                 "flow": DHCP(
                     starttime="1726676568.14378",
                     uids=["1234"],
-                    saddr="192.168.1.2",
-                    daddr="",
-                    client_addr="",
+                    client_addr="192.168.1.2",
                     server_addr="",
                     host_name="",
                     smac="",
@@ -201,9 +197,7 @@ def test_check_dhcp_scan_with_evidence():
     flow = DHCP(
         starttime="1726676568.14378",
         uids=["1234"],
-        saddr="192.168.1.2",
-        daddr="",
-        client_addr="",
+        client_addr="192.168.1.2",
         server_addr="",
         host_name="",
         smac="",
@@ -404,9 +398,7 @@ def test_set_evidence_dhcp_scan(
     flow = DHCP(
         starttime=timestamp,
         uids=uids,
-        saddr=saddr,
-        daddr="",
-        client_addr="",
+        client_addr=saddr,
         server_addr="",
         host_name="",
         smac="",

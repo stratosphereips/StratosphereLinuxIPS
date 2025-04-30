@@ -286,22 +286,18 @@ class Main:
         elif "CSV" in cmd_result and os.path.isfile(given_path):
             input_type = "binetflow"
         elif "directory" in cmd_result and os.path.isdir(given_path):
-            from slips_files.core.input import SUPPORTED_LOGFILES
-
             for log_file in os.listdir(given_path):
                 # if there is at least 1 supported log file inside the
                 # given directory, start slips normally
                 # otherwise, stop slips
-                if log_file.replace(".log", "") in SUPPORTED_LOGFILES:
+                if not utils.is_ignored_zeek_log_file(log_file):
                     input_type = "zeek_folder"
                     break
             else:
-                # zeek dir filled with unsupported logs
-                # or .labeled logs that slips can't read.
                 print(
                     f"Log files in {given_path} are not supported \n"
                     f"Make sure all log files inside the given "
-                    f"directory end with .log .. Stopping."
+                    f"directory end with .log or .log.labeled .. Stopping."
                 )
                 sys.exit(-1)
         else:
@@ -394,12 +390,14 @@ class Main:
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
+        flow_per_min = self.db.get_flows_analyzed_per_minute()
         stats = (
-            f"\r[{now}] Analyzed IPs: {green(profiles_len)}. "
+            f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
-            f"Last ({self.twid_width}) number of IPs:"
+            f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
+            f"Analyzed {flow_per_min} flows/min."
         )
         self.print(stats)
         sys.stdout.flush()  # Make sure the output is displayed immediately

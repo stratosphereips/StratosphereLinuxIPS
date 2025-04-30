@@ -55,7 +55,7 @@ class Publisher:
         Send the whole flow to new_software channel
         """
         to_send = {
-            "sw_flow": asdict(flow),
+            "flow": asdict(flow),
             "twid": self.db.get_timewindow(flow.starttime, profileid),
         }
         self.db.publish("new_software", json.dumps(to_send))
@@ -240,7 +240,9 @@ class FlowHandler:
         # files slips sees can be of 2 types: suricata or zeek
         to_send = {
             "flow": asdict(self.flow),
-            "type": "suricata" if type(self.flow) == SuricataFile else "zeek",
+            "type": (
+                "suricata" if isinstance(self.flow, SuricataFile) else "zeek"
+            ),
             "profileid": self.profileid,
             "twid": self.twid,
         }

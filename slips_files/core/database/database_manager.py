@@ -79,6 +79,9 @@ class DBManager:
     def is_running_non_stop(self, *args, **kwargs):
         return self.rdb.is_running_non_stop(*args, **kwargs)
 
+    def get_flows_analyzed_per_minute(self, *args, **kwargs):
+        return self.rdb.get_flows_analyzed_per_minute(*args, **kwargs)
+
     def get_ip_info(self, *args, **kwargs):
         return self.rdb.get_ip_info(*args, **kwargs)
 
@@ -949,12 +952,15 @@ class DBManager:
     def get_tw_limits(self, *args, **kwargs):
         return self.rdb.get_tw_limits(*args, **kwargs)
 
-    def close(self, *args, **kwargs):
-        self.rdb.r.close()
-        self.rdb.rcache.close()
+    def close_sqlite(self, *args, **kwargs):
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
+
+    def close_redis_and_sqlite(self, *args, **kwargs):
+        self.rdb.r.close()
+        self.rdb.rcache.close()
+        self.close_sqlite()
 
     def get_fides_ti(self, target: str):
         return self.rdb.get_fides_ti(target)

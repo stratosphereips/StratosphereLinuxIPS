@@ -475,7 +475,8 @@ class EvidenceHandler(ICore):
         if time.time() - self.last_msg_received_time < 60:
             # one minute didnt pass yet
             return False
-        # 1 min passed since the last evidence
+
+        # 1 min passed since the last evidence with no new msgs. stop.
         return True
 
     def pre_main(self):

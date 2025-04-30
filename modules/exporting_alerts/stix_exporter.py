@@ -28,14 +28,16 @@ class StixExporter(IExporter):
             # To avoid duplicates in STIX_data.json
             self.added_ips = set()
             self.export_to_taxii_thread = threading.Thread(
-                target=self.schedule_sending_to_taxii_server, daemon=True
+                target=self.schedule_sending_to_taxii_server,
+                daemon=True,
+                name="stix_exporter_to_taxii_thread",
             )
 
     def start_exporting_thread(self):
         # This thread is responsible for waiting n seconds before
         # each push to the stix server
         # it starts the timer when the first alert happens
-        self.export_to_taxii_thread.start()
+        utils.start_thread(self.export_to_taxii_thread, self.db)
 
     @property
     def name(self):

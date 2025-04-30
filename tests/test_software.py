@@ -20,6 +20,7 @@ import pytest
                 uid="1234",
                 saddr="192.168.1.247",
                 daddr="192.168.1.50",
+                sport=22,
                 software="SSH::CLIENT",
                 unparsed_version="OpenSSH_9.1",
                 version_major="9",
@@ -41,6 +42,7 @@ import pytest
                 uid="1234",
                 saddr="192.168.1.247",
                 daddr="192.168.1.50",
+                sport=22,
                 software="SSH::CLIENT",
                 unparsed_version="OpenSSH_8.1",
                 version_major="8",
@@ -62,6 +64,7 @@ import pytest
                 uid="1234",
                 saddr="192.168.1.247",
                 daddr="192.168.1.50",
+                sport=22,
                 software="SSH::CLIENT",
                 unparsed_version="OpenSSH_9.1",
                 version_major="9",
@@ -83,6 +86,7 @@ import pytest
                 uid="1234",
                 saddr="192.168.1.247",
                 daddr="192.168.1.50",
+                sport=22,
                 software="SSH::CLIENT",
                 unparsed_version="OpenSSH_9.1",
                 version_major="9",
@@ -104,6 +108,7 @@ import pytest
                 uid="1234",
                 saddr="192.168.1.247",
                 daddr="192.168.1.50",
+                sport=22,
                 software="SSH::CLIENT",
                 unparsed_version="OpenSSH_8.2",
                 version_major="8",
@@ -130,11 +135,12 @@ def test_check_multiple_ssh_versions(
         # Testcase1: Client version change detected
         (
             {
-                "sw_flow": {
+                "flow": {
                     "starttime": 1632302619.444328,
                     "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
                     "saddr": "192.168.1.247",
                     "daddr": "192.168.1.50",
+                    "sport": 22,
                     "software": "SSH::CLIENT",
                     "unparsed_version": "OpenSSH_9.1",
                     "version_major": 9,
@@ -147,11 +153,12 @@ def test_check_multiple_ssh_versions(
         # Testcase2: Server version change detected
         (
             {
-                "sw_flow": {
+                "flow": {
                     "starttime": 1632302619.444328,
                     "uid": "M2VhNTA3ZmZiYjU3OGMxMzJk",
                     "saddr": "192.168.1.247",
                     "daddr": "192.168.1.50",
+                    "sport": 22,
                     "software": "SSH::SERVER",
                     "unparsed_version": "OpenSSH_9.1",
                     "version_major": 9,

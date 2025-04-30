@@ -5,6 +5,7 @@ import binascii
 import hashlib
 from datetime import datetime, timedelta
 from re import findall
+from threading import Thread
 
 from uuid import UUID
 import tldextract
@@ -27,6 +28,8 @@ from typing import (
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
+
+from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -289,6 +292,33 @@ class Utils(object):
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
 
+    def is_ignored_zeek_log_file(self, filepath: str) -> bool:
+        """
+        Returns true if the given file ends with .log or .log.labeled and
+        is in SUPPORTED_LOGFILES list
+        :param filepath: a zeek log file
+        """
+        if not (
+            filepath.endswith(".log") or filepath.endswith(".log.labeled")
+        ):
+            return True
+
+        filename = os.path.basename(filepath)
+        # remove all extensions from filename
+        while "." in filename:
+            filename = filename.rsplit(".", 1)[0]
+        return filename not in SUPPORTED_LOGFILES
+
+    def start_thread(self, thread: Thread, db):
+        """
+        A wrapper for threading.Thread().start()
+        starts the given thread and keeps track of its TID/PID in the db
+        :param thread: the thread to start
+        :param db: a DBManager obj to store the thread PID
+        """
+        thread.start()
+        db.store_pid(thread.name, int(thread._native_id))
+
     def convert_format(self, ts, required_format: str):
         """
         Detects and converts the given ts to the given format
@@ -310,8 +340,8 @@ class Utils(object):
             return datetime_obj.astimezone(tz=self.local_tz).isoformat()
         elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
-        else:
-            return datetime_obj.strftime(required_format)
+
+        return datetime_obj.strftime(required_format)
 
     def get_local_timezone(self):
         """
@@ -469,7 +499,10 @@ class Utils(object):
             or ip_obj.is_reserved
         )
 
-    def get_sha256_hash(self, filename: str):
+    def get_md5_hash(self, data: Any) -> str:
+        return hashlib.md5(str(data).encode()).hexdigest()
+
+    def get_sha256_hash_of_file_contents(self, filename: str):
         """
         Compute the sha256 hash of a file
         """

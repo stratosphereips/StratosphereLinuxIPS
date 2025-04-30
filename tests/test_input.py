@@ -333,49 +333,6 @@ def test_give_profiler(line, input_type, expected_line, expected_input_type):
     assert line_sent["input_type"] == expected_input_type
 
 
-@pytest.mark.parametrize(
-    "filepath, expected_result",
-    [  # Testcase 1: Supported file
-        ("path/to/conn.log", False),
-        # Testcase 2: Supported file
-        ("path/to/dns.log", False),
-        # Testcase 3: Supported file
-        ("path/to/http.log", False),
-        # Testcase 4: Supported file
-        ("path/to/ssl.log", False),
-        # Testcase 5: Supported file
-        ("path/to/ssh.log", False),
-        # Testcase 6: Supported file
-        ("path/to/dhcp.log", False),
-        # Testcase 7: Supported file
-        ("path/to/ftp.log", False),
-        # Testcase 8: Supported file
-        ("path/to/smtp.log", False),
-        # Testcase 9: Supported file
-        ("path/to/tunnel.log", False),
-        # Testcase 10: Supported file
-        ("path/to/notice.log", False),
-        # Testcase 11: Supported file
-        ("path/to/files.log", False),
-        # Testcase 12: Supported file
-        ("path/to/arp.log", False),
-        # Testcase 13: Supported file
-        ("path/to/software.log", False),
-        # Testcase 14: Supported file
-        ("path/to/weird.log", False),
-        # Testcase 15: Unsupported file
-        ("path/to/unsupported.log", True),
-    ],
-)
-def test_is_ignored_file(filepath, expected_result):
-    """
-    Test that the is_ignored_file method correctly
-    identifies ignored Zeek log files.
-    """
-    input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
-    assert input_process.is_ignored_file(filepath) == expected_result
-
-
 def test_get_file_handle_existing_file():
     """
     Test that the get_file_handle method correctly

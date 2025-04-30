@@ -92,7 +92,7 @@ def test_check_local_ti_files_for_update(
     )
 
     mock_hash = mocker.patch(
-        "slips_files.common.slips_utils.Utils.get_sha256_hash"
+        "slips_files.common.slips_utils.Utils.get_sha256_hash_of_file_contents"
     )
 
     mock_hash.return_value = current_hash
@@ -332,7 +332,8 @@ def test_set_evidence_malicious_ip(
     expected_call_count,
 ):
     """
-    Test `set_evidence_malicious_ip` for recording evidence of traffic with malicious IPs.
+    Test `set_evidence_malicious_ip` for recording evidence of traffic
+     with malicious IPs.
     """
     threatintel = ModuleFactory().create_threatintel_obj()
     threatintel.db.get_ip_identification.return_value = (
@@ -601,7 +602,7 @@ def test_should_update_local_ti_file(
         threatintel.path_to_local_ti_files, "own_malicious_iocs.csv"
     )
     mock_hash = mocker.patch(
-        "slips_files.common.slips_utils.Utils.get_sha256_hash"
+        "slips_files.common.slips_utils.Utils.get_sha256_hash_of_file_contents"
     )
     mock_hash.return_value = current_hash
     threatintel.db.get_ti_feed_info.return_value = {"hash": old_hash}

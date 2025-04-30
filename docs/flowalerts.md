@@ -1,4 +1,4 @@
-# Flow Alerts
+# Flow Alerts Module
 
 The module of flow alerts has several behavioral techniques to detect attacks by analyzing the content of each flow alone.
 

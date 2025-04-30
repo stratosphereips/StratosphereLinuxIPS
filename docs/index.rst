@@ -42,6 +42,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    :maxdepth: 2
    :hidden:
    :caption: Slips
+   :glob:
 
    self
    installation
@@ -53,10 +54,11 @@ This documentation gives an overview how Slips works, how to use it and how to h
    training
    exporting
    P2P
-   slips_in_action
-   contributing
-   create_new_module
-   FAQ
-   code_documentation
-   datasets
    fides_module
+   create_new_module
+   datasets
+   immune/Immune
+   slips_in_action
+   FAQ
+   contributing
+   code_documentation

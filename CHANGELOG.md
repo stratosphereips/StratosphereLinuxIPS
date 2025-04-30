@@ -1,3 +1,15 @@
+1.1.9 (April 30, 2025)
+- Add bootstrapping node mode for the global P2P. Thanks to @d-strat
+- Add support for ARM64 architecture in Docker images.
+- Fix issues getting domain registrants.
+- Fix the "Database is locked" SQLite error.
+- Fix the issue of Slips hanging when shutting down.
+- Ignore URLs when found in threat intelligence feeds.
+- Improve handling of Zeek tab-separated log files. Logs from Zeek old versions are now read correctly.
+- Optimize IP Info module.
+- Print flows processed per minute in the stats printed to the CLI.
+- Support reading labeled Zeek logs and using their labels in Slips modules.
+
 1.1.8 (Mar 31st, 2025)
 - Fix SQLite database errors.
 - Fix CPU and RAM profilers.

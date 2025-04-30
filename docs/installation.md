@@ -309,18 +309,52 @@ then choosing 1.
 
 ## Installing Slips on a Raspberry PI
 
-Slips on RPI is currently in beta and is actively under development.
-While it is functional, please be aware that there may be occasional bugs or changes in functionality as we work to
-improve and refine this feature. Your feedback and contributions are highly valuable during this stage!
+The recommended way to install Slips on the RPI is using docker.
+
+If you're using the 64-bit (arm64) version of the RPI,
+follow the official docker [installation instructions for Debian](https://docs.docker.com/engine/install/debian/).
+
+Slips now supports a native linux/arm64 docker image, you can pull it using
+
+    docker pull stratosphereips/slips:latest
+
+To enable P2P, make sure of the following:
+* You run Slips docker with --net=host
+* You don't have redis running on the host and occupying Redis' default IP/Port 127.0.0.1:6379.
+
+### Protect your local network with Slips on the RPI
+
+By installing Slips on your RPI and using it as an access point,
+you can extend its protection to your other connected devices.
+
+Once Slips detects a malicious device, it will block all traffic to and from it using iptables.
+Meaning it wil kick out the malicious device from the AP.
+
+![](images/immune/rpi_as_an_acces_point.jpeg)
 
 
-Instead of compiling zeek, you can grab the zeek binaries for your OS
+1. Connect your RPI to your router using an ethernet cable
+2. Run your RPI as an access point using [create_ap](https://github.com/oblique/create_ap)
 
-Packages for Raspbian 11:
+`sudo create_ap wlan0 eth0 rpi_wifi mysecurepassword -c 40`
 
-[https://download.opensuse.org/repositories/security:/zeek/Raspbian_11/armhf/zeek_4.2.1-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_11/armhf/zeek_4.2.1-0_armhf.deb)
+where `wlan0` is the wifi interface of your RPI, `eth0` is the ethernet interface and `-c 40` is the channel of the access point.
 
+We chose channel 40 because it is a 5GHz channel, which is faster and less crowded than the 2.4GHz channels.
 
-Packages for Raspbian 10:
+Note: Please make sure your RPI model supports 5GHz channels. If not, you can use `-c 1` for 2.4GHz.
 
-[https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.1-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.1-0_armhf.deb)
+3. Run Slips in the RPI using the command below to listen to the traffic from the access point.
+
+```bash
+./slips.py -i wlan0
+```
+
+4. (Optional) If you want to block malicious devices, run Slips with the `-p` parameter. Using this parameter will
+block all traffic to and from the malicious device when slips sets an alert.
+
+```bash
+./slips.py -i wlan0 -p
+```
+
+Now connect your devices to the rpi_wifi with "mysecurepassword" as the password, and enjoy the protection of Slips.

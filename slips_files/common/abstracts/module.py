@@ -109,6 +109,7 @@ class IModule(ABC, Process):
             # this module is still receiving msgs,
             # don't stop
             return False
+
         return True
 
     def shutdown_gracefully(self):
@@ -183,3 +184,8 @@ class IModule(ABC, Process):
             except Exception:
                 self.print_traceback()
                 return
+
+    def __del__(self):
+        # each module has its own sqlite db connection. once this module is
+        # done the connection should be closed
+        self.db.close_sqlite()

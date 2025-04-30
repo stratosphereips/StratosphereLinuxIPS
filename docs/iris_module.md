@@ -109,6 +109,15 @@ dispatched to peers, without regard to trust level accumulated on them.
 
 <!--### Answering and receiving requests form global P2P network
 -->
+
+
+### Bootstrapping node
+The Slips configuration file now has an option of bootstrapping-node mode.
+The bootstrapping functionality for the global P2P network under Iris is facilitated.
+This mode triggers only if Slips is run on an interface or growing zeek log directory mode AND the bootstrapping is set to True in the Slips configurations file AND GlobalP2P mode is allowed.
+When the bootstrapping mode is used, Slips runs with a subset of nodes that are selected by names (currently Fides and Iris).
+
+
 ## Testing
 
 ### Unit Tests

@@ -772,11 +772,11 @@ the update manager if they were changed on disk.
 
 ### IP Info Module
 
-The IP info module has several ways of getting information about an IP address, it includes:
+The IP info module has several ways of getting information about IP and MAC address, it includes:
 
 - ASN
 - Country by Geolocation
-- Given a MAC, its Vendor
+- MAC Vendors
 - Reverse DNS
 
 #### ASN

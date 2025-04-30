@@ -67,6 +67,6 @@ class Software(IFlowalertsAnalyzer):
 
         msg = json.loads(msg["data"])
         twid = msg["twid"]
-        flow = self.classifier.convert_to_flow_obj(msg["sw_flow"])
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
         self.check_multiple_ssh_versions(flow, twid, role="SSH::CLIENT")
         self.check_multiple_ssh_versions(flow, twid, role="SSH::SERVER")

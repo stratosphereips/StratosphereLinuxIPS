@@ -293,7 +293,7 @@ class UpdateManager(IModule):
         """
 
         # compute file sha256 hash
-        new_hash = utils.get_sha256_hash(file_path)
+        new_hash = utils.get_sha256_hash_of_file_contents(file_path)
 
         # Get last hash of the file stored in the database
         file_info = self.db.get_ti_feed_info(file_path)
@@ -474,7 +474,7 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Problem on update_TI_file() line {exception_line}", 0, 1
+                f"Problem on should_update() line {exception_line}", 0, 1
             )
             self.print(traceback.format_exc(), 0, 1)
         return False
@@ -696,7 +696,7 @@ class UpdateManager(IModule):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Problem on update_TI_file() line {exception_line}", 0, 1
+                f"Problem on update_ti_file() line {exception_line}", 0, 1
             )
             self.print(traceback.format_exc(), 0, 1)
             return False
@@ -1435,6 +1435,9 @@ class UpdateManager(IModule):
             }
 
             ti_file_name: str = ti_file_path.split("/")[-1]
+            if data_type not in handlers:
+                # maybe it's a url, urls as iocs are not supported.
+                continue
             handlers[data_type](ioc, ti_file_name, feed_link, description)
 
         self.db.add_ips_to_ioc(self.malicious_ips_dict)
@@ -1458,7 +1461,7 @@ class UpdateManager(IModule):
         """checks if we should update organizations' info
         based on the hash of thegiven file"""
         cached_hash = self.db.get_ti_feed_info(file).get("hash", "")
-        if utils.get_sha256_hash(file) != cached_hash:
+        if utils.get_sha256_hash_of_file_contents(file) != cached_hash:
             return True
 
     def get_whitelisted_orgs(self) -> list:
@@ -1491,7 +1494,7 @@ class UpdateManager(IModule):
 
             for file in (org_ips, org_domains, org_asn):
                 info = {
-                    "hash": utils.get_sha256_hash(file),
+                    "hash": utils.get_sha256_hash_of_file_contents(file),
                 }
                 self.mark_feed_as_updated(file, info)
 
