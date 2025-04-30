@@ -4,6 +4,8 @@
 
 import asyncio
 
+import netifaces
+
 from tests.module_factory import ModuleFactory
 import maxminddb
 import pytest
@@ -405,27 +407,28 @@ async def test_shutdown_gracefully(
 
 
 @pytest.mark.parametrize(
-    "platform_system, subprocess_output, expected_ip",
+    "is_running_non_stop, netifaces_ret, expected_return_value",
     [
-        # Testcase 1: MacOS (Darwin) with valid output
-        ("Darwin", b"gateway: 192.168.1.1", "192.168.1.1"),
-        # Testcase 2: Linux with valid output
-        ("Linux", b"default via 10.0.0.1 dev eth0", "10.0.0.1"),
-        # Testcase 3: MacOS with invalid output
-        ("Darwin", b"No default gateway", False),
-        # Testcase 4: Unsupported OS
-        ("Windows", b"", False),
+        (
+            True,
+            {"default": {netifaces.AF_INET: ["192.168.1.1"]}},
+            "192.168.1.1",
+        ),
+        (True, {}, False),
+        (True, {"default": {}}, False),
+        (True, {"default": {netifaces.AF_INET: []}}, False),
+        (False, "192.168.1.1", False),
     ],
 )
 def test_get_gateway_ip(
-    mocker, platform_system, subprocess_output, expected_ip
+    mocker, is_running_non_stop, netifaces_ret, expected_return_value
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    mocker.patch("platform.system", return_value=platform_system)
-    mocker.patch("subprocess.check_output", return_value=subprocess_output)
-    mocker.patch("sys.argv", ["-i", "eth0"])
+    ip_info.is_running_non_stop = is_running_non_stop
+    mocker.patch("netifaces.gateways", return_value=netifaces_ret)
+
     result = ip_info.get_gateway_ip_if_interface()
-    assert result == expected_ip
+    assert result == expected_return_value
 
 
 @pytest.mark.parametrize(
