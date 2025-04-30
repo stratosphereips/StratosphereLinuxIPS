@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import platform
 from asyncio import Task
 from typing import (
     Union,
@@ -16,7 +15,7 @@ import requests
 import json
 from contextlib import redirect_stdout, redirect_stderr
 import subprocess
-import re
+import netifaces
 import time
 import asyncio
 import multiprocessing
@@ -338,26 +337,12 @@ class IPInfo(AsyncModule):
             # only works if running on an interface
             return False
 
-        gw_ip = False
-        if platform.system() == "Darwin":
-            route_default_result = subprocess.check_output(
-                ["route", "get", "default"]
-            ).decode()
-            try:
-                gw_ip = re.search(
-                    r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}",
-                    route_default_result,
-                ).group(0)
-            except AttributeError:
-                pass
-
-        elif platform.system() == "Linux":
-            route_default_result = re.findall(
-                r"([\w.][\w.]*'?\w?)",
-                subprocess.check_output(["ip", "route"]).decode(),
-            )
-            gw_ip = route_default_result[2]
-        return gw_ip
+        gws = netifaces.gateways()
+        try:
+            return gws["default"][netifaces.AF_INET][0]
+        except (KeyError, IndexError):
+            # no default gateway found
+            return False
 
     def get_gateway_mac(self, gw_ip: str) -> Optional[str]:
         """

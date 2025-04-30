@@ -115,7 +115,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # flag to know if we found the gateway MAC using the most seen MAC method
     _gateway_MAC_found = False
     _conf_file = "config/redis.conf"
-    our_ips = utils.get_own_ips()
+    our_ips: List[str] = utils.get_own_ips(ret=List)
     # flag to know which flow is the start of the pcap/file
     first_flow = True
     # to make sure we only detect and store the user's localnet once
