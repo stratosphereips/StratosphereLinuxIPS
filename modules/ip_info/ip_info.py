@@ -337,15 +337,12 @@ class IPInfo(AsyncModule):
             # only works if running on an interface
             return False
 
-        gw_ip = False
         gws = netifaces.gateways()
         try:
-            gw_ip = gws["default"][netifaces.AF_INET][0]
-        except KeyError:
+            return gws["default"][netifaces.AF_INET][0]
+        except (KeyError, IndexError):
             # no default gateway found
             return False
-
-        return gw_ip
 
     def get_gateway_mac(self, gw_ip: str) -> Optional[str]:
         """
