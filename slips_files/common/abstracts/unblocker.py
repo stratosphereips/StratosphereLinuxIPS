@@ -56,7 +56,7 @@ class IUnblocker(ABC):
         ...
 
     def _calc_unblock_time(
-        self, ip: str, cur_tw: TimeWindow, how_many_tws_to_block
+        self, ip: str, cur_tw: int, how_many_tws_to_block: int
     ) -> TimeWindow:
         """
         Calculates the timestamp to unblock.
@@ -64,7 +64,7 @@ class IUnblocker(ABC):
         returns the resulting timewindow
         """
         # we unblock at the end of this tw
-        tw_to_unblock: int = cur_tw.number + how_many_tws_to_block
+        tw_to_unblock: int = cur_tw + how_many_tws_to_block
         tw_start, tw_end = self.db.get_tw_limits(
             f"profile_{ip}", f"timewindow{tw_to_unblock}"
         )
