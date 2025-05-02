@@ -9,6 +9,8 @@ import json
 import subprocess
 import time
 
+from .exec_iptables_cmd import exec_iptables_command
+
 
 class Blocking(IModule):
     """Data should be passed to this module as a json encoded python dict,
@@ -169,31 +171,6 @@ class Blocking(IModule):
             os.system(f"{self.sudo}nft add table inet slipsBlocking")
             # TODO: HANDLE NFT TABLE
 
-    def exec_iptables_command(self, action, ip_to_block, flag, options):
-        """
-        Constructs the iptables rule/command based on the options sent in the message
-        flag options:
-          -s : to block traffic from source ip
-          -d : to block to destination ip
-        action options:
-          insert : to insert a new rule at the top of slipsBlocking list
-          delete : to delete an existing rule
-        """
-
-        command = (
-            f"{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} "
-            f'-m comment --comment "Slips rule" >/dev/null 2>&1'
-        )
-        # Add the options constructed in block_ip or unblock_ip to the iptables command
-        for key in options.keys():
-            command += options[key]
-        command += " -j DROP"
-        # Execute
-        exit_status = os.system(command)
-
-        # 0 is the success value
-        return exit_status == 0
-
     def is_ip_blocked(self, ip) -> bool:
         """Checks if ip is already blocked or not"""
 
@@ -240,7 +217,8 @@ class Blocking(IModule):
 
             if from_:
                 # Add rule to block traffic from source ip_to_block (-s)
-                blocked = self.exec_iptables_command(
+                blocked = exec_iptables_command(
+                    self.sudo,
                     action="insert",
                     ip_to_block=ip_to_block,
                     flag="-s",
@@ -251,7 +229,8 @@ class Blocking(IModule):
 
             if to:
                 # Add rule to block traffic to ip_to_block (-d)
-                blocked = self.exec_iptables_command(
+                blocked = exec_iptables_command(
+                    self.sudo,
                     action="insert",
                     ip_to_block=ip_to_block,
                     flag="-d",
@@ -283,53 +262,6 @@ class Blocking(IModule):
                 # Successfully blocked an ip
                 return True
 
-        return False
-
-    def unblock_ip(
-        self,
-        ip_to_unblock,
-        from_=None,
-        to=None,
-        dport=None,
-        sport=None,
-        protocol=None,
-    ):
-        """Unblocks an ip based on the flags passed in the message"""
-        # This dictionary will be used to construct the rule
-        options = {
-            "protocol": f" -p {protocol}" if protocol else "",
-            "dport": f" --dport {dport}" if dport else "",
-            "sport": f" --sport {sport}" if sport else "",
-        }
-        # Set the default behaviour to unblock all traffic from and to an ip
-        if from_ is None and to is None:
-            from_, to = True, True
-        # Set the appropriate iptables flag to use in the command
-        # The module sending the message HAS TO specify either 'from_' or 'to' or both
-        # so that this function knows which rule to delete
-        # if both or none were specified we'll be executing 2 commands/deleting 2 rules
-
-        # Block traffic from source ip
-        if from_:
-            unblocked = self.exec_iptables_command(
-                action="delete",
-                ip_to_block=ip_to_unblock,
-                flag="-s",
-                options=options,
-            )
-        # Block traffic from distination ip
-        if to:
-            unblocked = self.exec_iptables_command(
-                action="delete",
-                ip_to_block=ip_to_unblock,
-                flag="-d",
-                options=options,
-            )
-
-        if unblocked:
-            # Successfully blocked an ip
-            self.print(f"Unblocked: {ip_to_unblock}")
-            return True
         return False
 
     def check_for_ips_to_unblock(self):
