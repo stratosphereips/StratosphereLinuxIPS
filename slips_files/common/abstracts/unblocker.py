@@ -1,14 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from abc import ABC, abstractmethod
-import time
-from datetime import datetime
 from threading import Thread
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.structures.evidence import TimeWindow
 
 
-class Unblocker(ABC):
+class IUnblocker(ABC):
     """
     For every blocking method in slips, there should be an unblocker
     implemented
@@ -52,26 +50,10 @@ class Unblocker(ABC):
         to do the actual unblocking
         """
 
+    @abstractmethod
     def _check_if_time_to_unblock(self):
-        """
-        This method should be called in a thread that checks the timestamps
-        in self.requests regularly.
-        Each time a ts is reached, it should call _unblock()
-        """
-        while True:
-            requests_to_del = []
-
-            now = datetime.now().replace(microsecond=0)
-            for ip, request in self.requests.items():
-                ts = self.request["ts_to_unblock"]
-                if ts >= now:
-                    if self._unblock(ip):
-                        requests_to_del.append(ip)
-
-            for ip in requests_to_del:
-                self._del_req(ip)
-
-            time.sleep(1)  # sleep 1 second between checks
+        """a bg thread that unblocks ips once their ts is reached"""
+        ...
 
     def _calc_unblock_time(
         self, ip: str, cur_tw: TimeWindow, how_many_tws_to_block
