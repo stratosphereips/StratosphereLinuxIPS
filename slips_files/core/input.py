@@ -83,7 +83,9 @@ class Input(ICore):
 
         # create the remover thread
         self.remover_thread = threading.Thread(
-            target=self.remove_old_zeek_files, daemon=True
+            target=self.remove_old_zeek_files,
+            daemon=True,
+            name="input_remover_thread",
         )
         self.open_file_handlers = {}
         self.c1 = self.db.subscribe("remove_old_files")
@@ -91,7 +93,9 @@ class Input(ICore):
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []
-        self.zeek_thread = threading.Thread(target=self.run_zeek, daemon=True)
+        self.zeek_thread = threading.Thread(
+            target=self.run_zeek, daemon=True, name="run_zeek_thread"
+        )
         # used to give the profiler the total amount of flows to
         # read with the first flow only
         self.is_first_flow = True
