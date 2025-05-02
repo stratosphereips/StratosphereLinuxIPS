@@ -47,6 +47,7 @@ from slips_files.core.structures.evidence import (
     Evidence,
     Victim,
     EvidenceType,
+    TimeWindow,
 )
 from slips_files.core.structures.alerts import (
     Alert,
@@ -389,14 +390,18 @@ class EvidenceHandler(ICore):
         if self.popup_alerts:
             self.show_popup(alert)
 
-        is_blocked: bool = self.decide_blocking(alert.profile.ip)
+        is_blocked: bool = self.decide_blocking(
+            alert.profile.ip, alert.timewindow
+        )
         if is_blocked:
             self.db.mark_profile_and_timewindow_as_blocked(
                 str(alert.profile), str(alert.timewindow)
             )
         self.log_alert(alert, blocked=is_blocked)
 
-    def decide_blocking(self, ip_to_block: str) -> bool:
+    def decide_blocking(
+        self, ip_to_block: str, timewindow: TimeWindow
+    ) -> bool:
         """
         Decide whether to block or not and send to the blocking module
          returns True if the given IP was blocked by Slips blocking module
@@ -419,6 +424,7 @@ class EvidenceHandler(ICore):
         blocking_data = {
             "ip": ip_to_block,
             "block": True,
+            "tw": timewindow.number,
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
