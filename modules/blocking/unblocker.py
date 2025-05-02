@@ -1,4 +1,5 @@
 from threading import Lock
+import time
 from typing import Dict
 from slips_files.common.abstracts.unblocker import IUnblocker
 from slips_files.core.structures.evidence import TimeWindow
@@ -35,7 +36,22 @@ class Unblocker(IUnblocker):
         in self.requests regularly.
         Each time a ts is reached, it should call _unblock()
         """
-        ...
+        while True:
+            now = time.time()
+            requests_to_del = []
+
+            for ip, request in self.requests.items():
+                ts: float = self.request["tw_to_unblock"].end_time
+                flags: Dict[str, str] = self.request["flags"]
+
+                if ts >= now:
+                    if self._unblock(ip, flags):
+                        requests_to_del.append(ip)
+
+            for ip in requests_to_del:
+                self._del_req(ip)
+
+            time.sleep(5)
 
     def _add_req(
         self, ip: str, tw_to_unblock_at: TimeWindow, flags: Dict[str, str]
@@ -63,4 +79,49 @@ class Unblocker(IUnblocker):
     ):
         """Unblocks an ip based on the given flags"""
 
-        ...
+        from_ = flags.get("from_")
+        to = flags.get("to")
+        dport = flags.get("dport")
+        sport = flags.get("sport")
+        protocol = flags.get("protocol")
+
+        # This dictionary will be used to construct the rule
+        options = {
+            "protocol": f" -p {protocol}" if protocol else "",
+            "dport": f" --dport {dport}" if dport else "",
+            "sport": f" --sport {sport}" if sport else "",
+        }
+        # Set the default behaviour to unblock all traffic from and to an ip
+        if from_ is None and to is None:
+            from_, to = True, True
+
+        # Set the appropriate iptables flag to use in the command
+        # The module sending the message HAS TO specify either
+        # 'from_' or 'to' or both
+        # so that this function knows which rule to delete
+        # if both or none were specified we'll be unblocking all traffic from
+        # and to the given ip
+        unblocked = False
+        # Block traffic from source ip
+        if from_:
+            unblocked = self.exec_iptables_command(
+                action="delete",
+                ip_to_block=ip_to_unblock,
+                flag="-s",
+                options=options,
+            )
+
+        # Block traffic to distination ip
+        if to:
+            unblocked = self.exec_iptables_command(
+                action="delete",
+                ip_to_block=ip_to_unblock,
+                flag="-d",
+                options=options,
+            )
+
+        if unblocked:
+            self.print(f"Unblocked: {ip_to_unblock}")
+            return True
+
+        return False
