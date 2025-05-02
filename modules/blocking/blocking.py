@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from slips_files.common.abstracts.module import IModule
 import platform
 import sys
 import os
@@ -9,7 +8,9 @@ import json
 import subprocess
 import time
 
+from slips_files.common.abstracts.module import IModule
 from .exec_iptables_cmd import exec_iptables_command
+from modules.blocking.unblocker import Unblocker
 
 
 class Blocking(IModule):
@@ -26,21 +27,19 @@ class Blocking(IModule):
         self.channels = {
             "new_blocking": self.c1,
         }
-        self.os = platform.system()
-        if self.os == "Darwin":
+        if platform.system() == "Darwin":
             self.print("Mac OS blocking is not supported yet.")
             sys.exit()
+
         self.firewall = self.determine_linux_firewall()
         self.set_sudo_according_to_env()
         self.initialize_chains_in_firewall()
-        # this will keep track of ips that are blocked only for a specific time
-        # format {ip: (block_for(seconds), time_of_blocking(epoch))}
-        self.unblock_ips = {}
-
+        self.unblocker = Unblocker(self.db)
         # self.test()
 
     def test(self):
-        """For debugging purposes, once we're done with the module we'll delete it"""
+        """For debugging purposes, once we're done with the module we'll
+        delete it"""
 
         if not self.is_ip_blocked("2.2.0.0"):
             blocking_data = {
@@ -62,7 +61,8 @@ class Blocking(IModule):
         # self.unblock_ip("2.2.0.0",True,True)
 
     def set_sudo_according_to_env(self):
-        """Check if running in host or in docker and sets sudo string accordingly.
+        """
+        Check if running in host or in docker and sets sudo string accordingly.
         There's no sudo in docker so we need to execute all commands without it
         """
         # This env variable is defined in the Dockerfile
@@ -72,13 +72,12 @@ class Blocking(IModule):
         self.sudo = "" if self.running_in_docker else "sudo "
 
     def determine_linux_firewall(self):
-        """Returns the currently installed firewall and installs iptables if none was found"""
+        """Returns the currently installed firewall and installs iptables if
+        none was found"""
 
         if shutil.which("iptables"):
             # comes pre installed in docker
             return "iptables"
-        elif shutil.which("nftables"):
-            return "nftables"
         else:
             # no firewall installed
             # user doesn't have a firewall
@@ -87,9 +86,10 @@ class Blocking(IModule):
             )
             sys.exit()
 
-    def delete_slipsBlocking_chain(self):
+    def delete_slips_blocking_chain(self):
         """Flushes and deletes everything in slipsBlocking chain"""
-        # check if slipsBlocking chain exists before flushing it and suppress stderr and stdout while checking
+        # check if slipsBlocking chain exists before flushing it and suppress
+        # stderr and stdout while checking
         # 0 means it exists
         chain_exists = (
             os.system(
@@ -98,82 +98,78 @@ class Blocking(IModule):
             == 0
         )
         if self.firewall == "iptables" and chain_exists:
-            # Delete all references to slipsBlocking inserted in INPUT OUTPUT and FORWARD before deleting the chain
-            cmd = f"{self.sudo}iptables -D INPUT -j slipsBlocking >/dev/null 2>&1 ; {self.sudo}iptables -D OUTPUT -j slipsBlocking >/dev/null 2>&1 ; {self.sudo}iptables -D FORWARD -j slipsBlocking >/dev/null 2>&1"
+            # Delete all references to slipsBlocking inserted in INPUT OUTPUT
+            # and FORWARD before deleting the chain
+            cmd = (
+                f"{self.sudo}iptables -D INPUT -j slipsBlocking "
+                f">/dev/null 2>&1 ; {self.sudo}iptables -D OUTPUT "
+                f"-j slipsBlocking >/dev/null 2>&1 ; "
+                f"{self.sudo}iptables -D FORWARD -j "
+                f"slipsBlocking >/dev/null 2>&1"
+            )
             os.system(cmd)
             # flush and delete all the rules in slipsBlocking
-            cmd = f"{self.sudo}iptables -F slipsBlocking >/dev/null 2>&1 ; {self.sudo} iptables -X slipsBlocking >/dev/null 2>&1"
+            cmd = (
+                f"{self.sudo}iptables -F slipsBlocking >/dev/null 2>&1 ; "
+                f"{self.sudo} iptables -X slipsBlocking >/dev/null 2>&1"
+            )
             os.system(cmd)
             print("Successfully deleted slipsBlocking chain.")
             return True
-        elif self.firewall == "nftables":
-            # TODO: handle the creation of the slipsBlocking chain in nftables
-            # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
-            os.system(f"{self.sudo}nft flush chain inet slipsBlocking")
-            # Delete slipsBlocking chain from nftables
-            os.system(f"{self.sudo}nft delete chain inet slipsBlocking")
-            return True
+
         return False
 
     def get_cmd_output(self, command):
         """Executes a command and returns the output"""
-
-        # Execute command
         result = subprocess.run(command.split(), stdout=subprocess.PIPE)
-        # Get command output
         return result.stdout.decode("utf-8")
 
     def initialize_chains_in_firewall(self):
         """For linux: Adds a chain to iptables or a table to nftables called
         slipsBlocking where all the rules will reside"""
 
-        if self.firewall == "iptables":
-            # delete any pre existing slipsBlocking rules that may conflict before adding a new one
-            # self.delete_iptables_chain()
-            self.print('Executing "sudo iptables -N slipsBlocking"', 6, 0)
-            # Add a new chain to iptables
-            os.system(f"{self.sudo}iptables -N slipsBlocking >/dev/null 2>&1")
+        if self.firewall != "iptables":
+            return
 
-            # Check if we're already redirecting to slipsBlocking chain
-            INPUT_chain_rules = self.get_cmd_output(
-                f"{self.sudo} iptables -nvL INPUT"
-            )
-            OUTPUT_chain_rules = self.get_cmd_output(
-                f"{self.sudo} iptables -nvL OUTPUT"
-            )
-            FORWARD_chain_rules = self.get_cmd_output(
-                f"{self.sudo} iptables -nvL FORWARD"
-            )
-            # Redirect the traffic from all other chains to slipsBlocking so rules
-            # in any pre-existing chains dont override it
-            # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
-            if "slipsBlocking" not in INPUT_chain_rules:
-                os.system(
-                    self.sudo
-                    + "iptables -I INPUT -j slipsBlocking >/dev/null 2>&1"
-                )
-            if "slipsBlocking" not in OUTPUT_chain_rules:
-                os.system(
-                    self.sudo
-                    + "iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1"
-                )
-            if "slipsBlocking" not in FORWARD_chain_rules:
-                os.system(
-                    self.sudo
-                    + "iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1"
-                )
+        # delete any pre existing slipsBlocking rules that may conflict before
+        # adding a new one
+        # self.delete_iptables_chain()
+        self.print('Executing "sudo iptables -N slipsBlocking"', 6, 0)
+        # Add a new chain to iptables
+        os.system(f"{self.sudo}iptables -N slipsBlocking >/dev/null 2>&1")
 
-        elif self.firewall == "nftables":
-            self.print(
-                'Executing "sudo nft add table inet slipsBlocking"', 6, 0
+        # Check if we're already redirecting to slipsBlocking chain
+        input_chain_rules = self.get_cmd_output(
+            f"{self.sudo} iptables -nvL INPUT"
+        )
+        output_chain_rules = self.get_cmd_output(
+            f"{self.sudo} iptables -nvL OUTPUT"
+        )
+        forward_chain_rules = self.get_cmd_output(
+            f"{self.sudo} iptables -nvL FORWARD"
+        )
+        # Redirect the traffic from all other chains to slipsBlocking so rules
+        # in any pre-existing chains dont override it
+        # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and
+        # FORWARD chains
+        if "slipsBlocking" not in input_chain_rules:
+            os.system(
+                self.sudo
+                + "iptables -I INPUT -j slipsBlocking >/dev/null 2>&1"
             )
-            # Add a new nft table that uses the inet family (ipv4,ipv6)
-            os.system(f"{self.sudo}nft add table inet slipsBlocking")
-            # TODO: HANDLE NFT TABLE
+        if "slipsBlocking" not in output_chain_rules:
+            os.system(
+                self.sudo
+                + "iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1"
+            )
+        if "slipsBlocking" not in forward_chain_rules:
+            os.system(
+                self.sudo
+                + "iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1"
+            )
 
     def is_ip_blocked(self, ip) -> bool:
         """Checks if ip is already blocked or not"""
-
         command = f"{self.sudo}iptables -L slipsBlocking -v -n"
         # Execute command
         result = subprocess.run(command.split(), stdout=subprocess.PIPE)
@@ -214,7 +210,7 @@ class Blocking(IModule):
                 "dport": f" --dport {str(dport)}" if dport is not None else "",
                 "sport": f" --sport {str(sport)}" if sport is not None else "",
             }
-
+            blocked = False
             if from_:
                 # Add rule to block traffic from source ip_to_block (-s)
                 blocked = exec_iptables_command(
@@ -264,35 +260,6 @@ class Blocking(IModule):
 
         return False
 
-    def check_for_ips_to_unblock(self):
-        unblocked_ips = set()
-        # check if any ip needs to be unblocked
-        for ip, info in self.unblock_ips.items():
-            # info is a dict with:
-            # 'block_for': block_for,
-            #   'time_of_blocking': time_of_blocking,
-            #   'blocking_details': {
-            #       "from"     : from_ ,
-            #       "to"       : to,
-            #       "dport"    : dport,
-            #       "sport"    : sport,
-            #       "protocol" : protocol}}}
-            if time.time() >= info["time_of_blocking"] + info["block_for"]:
-                blocking_details = info["blocking_details"]
-                self.unblock_ip(
-                    ip,
-                    blocking_details["from"],
-                    blocking_details["to"],
-                    blocking_details["dport"],
-                    blocking_details["sport"],
-                    blocking_details["protocol"],
-                )
-                # make a list of unblocked IPs to remove from dict
-                unblocked_ips.add(ip)
-
-        for ip in unblocked_ips:
-            self.unblock_ips.pop(ip)
-
     def main(self):
         # There's an IP that needs to be blocked
         if msg := self.get_msg("new_blocking"):
@@ -302,6 +269,7 @@ class Blocking(IModule):
             # (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
             #   blocking_data = {
             #       "ip"       : "0.0.0.0"
+            #       "tw"       : 1
             #       "block"    : True to block  - False to unblock
             #       "from"     : True to block traffic from ip (default) - False does nothing
             #       "to"       : True to block traffic to ip  (default)  - False does nothing
@@ -318,6 +286,7 @@ class Blocking(IModule):
             data = json.loads(msg["data"])
             # Parse the data dictionary
             ip = data.get("ip")
+            tw: int = data.get("tw")
             block = data.get("block")
             from_ = data.get("from")
             to = data.get("to")
@@ -325,8 +294,18 @@ class Blocking(IModule):
             sport = data.get("sport")
             protocol = data.get("protocol")
             block_for = data.get("block_for")
+
             if block:
                 self.block_ip(ip, from_, to, dport, sport, protocol, block_for)
             else:
-                self.unblock_ip(ip, from_, to, dport, sport, protocol)
-        self.check_for_ips_to_unblock()
+                how_many_tws_to_block = 1
+                flags = {
+                    "from_": from_,
+                    "to": to,
+                    "dport": dport,
+                    "sport": sport,
+                    "protocol": protocol,
+                }
+                self.unblocker.unblock_request(
+                    ip, how_many_tws_to_block, tw, flags
+                )
