@@ -106,6 +106,12 @@ class FlowMLDetection(IModule):
             # Normalize this batch of data so far. This can get progressivle slow
             X_flow = self.scaler.fit_transform(X_flow)
 
+            # Count the number of labels of each type in this epoc
+            epoch_label_counts = {
+                "Background": (y_flow == "Background").sum(),
+                "Malicious": (y_flow == "Malicious").sum(),
+                "Benign": (y_flow == "Benign").sum(),
+            }
 
             # Train
             try:
