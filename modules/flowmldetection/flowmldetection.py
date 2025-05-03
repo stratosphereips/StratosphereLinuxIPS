@@ -247,28 +247,28 @@ class FlowMLDetection(IModule):
             self.print("Error in process_features()")
             self.print(traceback.format_exc(), 0, 1)
 
-    def process_training_flows(self):
+    def process_training_flows(self, last_number_of_flows_when_trained):
         """
-        Process all the flows in the DB
+        Process only the new flows in the DB since the last training.
         Store the pandas df in self.flows
         """
         try:
+            # Ensure the index is an integer
+            if last_number_of_flows_when_trained is None:
+                last_number_of_flows_when_trained = 0
+            else:
+                last_number_of_flows_when_trained = int(last_number_of_flows_when_trained)
+
             # We get all the flows so far
-            # because this retraining happens in batches
             flows = self.db.get_all_flows()
-            # Check how many different labels are in the DB
-            # We need both normal and malware
+            # Only process new flows since last training
+            new_flows = flows[last_number_of_flows_when_trained:]
+
+            # Check how many **different** labels are in the DB
             labels = self.db.get_labels()
             if len(labels) == 1:
-                # Only 1 label has flows
-                # There are not enough different labels, so insert two flows
-                # that are fake but representative of a normal and malware flow
-                # they are only for the training process
-                # At least 1 flow of each label is required
-
-                # These flows should be in the same format as the ones in the DB.
-                # Which means the satate is still SF, S0, etc.
-                flows.append(
+                # Insert fake flows for both classes if needed
+                new_flows.append(
                     {
                         "starttime": 1594417039.029793,
                         "dur": "1.9424750804901123",
@@ -358,6 +358,8 @@ class FlowMLDetection(IModule):
                 "dir_",
                 "endtime",
                 "flow_source",
+                "ground_truth_label",  # todo now we can use them
+                "detailed_ground_truth_label",
             ]
             # For argus binetflows this fails because ther is a field calle bytes that was not in other flows. It should be called allbytes.
             # Error
@@ -502,11 +504,11 @@ class FlowMLDetection(IModule):
                 labels = self.db.get_labels()
                 sum_labeled_flows = sum(i[1] for i in labels)
 
-                # The min labels to retrain is the min number of flows
+                # The min labels to retrain is the min number of flows 
                 # we should have seen so far in this capture to start training
                 # This is so we dont _start_ training with only 1 flow
 
-                # Once we are over the start minimum, the second condition is
+                # Once we are over the start minimum, the second condition is 
                 # to force to retrain every a minimum_labels_to_retrain number
                 # of flows. So we dont retrain every 1 flow.
                 if (
