@@ -137,9 +137,13 @@ class FlowMLDetection(IModule):
             # Store the models on disk
             self.store_model()
 
+            # Log training information
+            self.write_to_training_log(f"Training completed. Background: {epoch_label_counts['Background']}. Benign: {epoch_label_counts['Benign']}. Malicious: {epoch_label_counts['Malicious']}. Total labels: {sum_labeled_flows}. Score: {score}")
+            #self.write_to_training_log(f"Model parameters: {self.clf.coef_}")
         except Exception:
             self.print("Error in train().", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
+            self.write_to_training_log("Error occurred during training.")
 
     def process_features(self, dataset):
         """
