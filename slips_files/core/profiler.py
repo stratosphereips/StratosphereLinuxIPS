@@ -119,7 +119,7 @@ class Profiler(ICore, IObservable):
         self.local_whitelist_path = conf.local_whitelist_path()
         self.timeformat = conf.ts_format()
         self.analysis_direction = conf.analysis_direction()
-        self.label = conf.label()
+        self.configuration_label = conf.label()
         self.width = conf.get_tw_width_as_float()
         self.client_ips: List[
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
