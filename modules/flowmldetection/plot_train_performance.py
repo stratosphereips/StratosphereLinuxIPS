@@ -5,7 +5,7 @@ import sys
 import argparse
 import os
 
-def plot_log_data(file_path):
+def plot_log_data(file_path, experiment_number):
     # Read the log data from the file
     with open(file_path, 'r') as file:
         log_data = file.read()
@@ -28,7 +28,8 @@ def plot_log_data(file_path):
 
     # Get the directory of the log file to store the plot in the same folder
     dir_name = os.path.dirname(file_path)
-    plot_file = os.path.join(dir_name, 'performance_metrics_training.png')
+    # Append experiment number to the filename
+    plot_file = os.path.join(dir_name, f'performance_metrics_training_{experiment_number}.png')
 
     # Plotting the values
     fig, ax1 = plt.subplots(figsize=(10, 6))
@@ -55,18 +56,18 @@ def plot_log_data(file_path):
     for i, value in enumerate(df["Total labels"]):
         ax1.text(i, value, f'{value:.1f}', color='tab:gray', fontsize=8, ha='center', va='bottom')
 
-    # Adding title and legend
-    plt.title('Training performance')
+    # Adding title and legend with experiment number in title
+    plt.title(f'Training performance - Experiment {experiment_number}')
     fig.tight_layout()
 
     # Move both legends further to the right
-    ax1.legend(loc='upper right', bbox_to_anchor=(1.26, 1), fontsize='small', ncol=1)
-    ax2.legend(loc='upper right', bbox_to_anchor=(1.4, 0.95), fontsize='small', ncol=1)
+    ax1.legend(loc='upper right', bbox_to_anchor=(1.3, 1), fontsize='small', ncol=1)
+    ax2.legend(loc='upper right', bbox_to_anchor=(1.3, 0.85), fontsize='small', ncol=1)
 
     # Increase right margin for better readability of legend
-    plt.subplots_adjust(right=0.7)
+    plt.subplots_adjust(right=0.75)
 
-    # Save plot to the same folder as the log file
+    # Save plot to the same folder as the log file with experiment number in filename
     plt.savefig(plot_file)
 
     # Display the plot
@@ -75,13 +76,14 @@ def plot_log_data(file_path):
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Process a log file and plot the data with two y-axes.")
-    parser.add_argument('log_file', metavar='log_file', type=str, help="Path to the log file")
+    parser.add_argument('-f', '--file', metavar='log_file', type=str, required=True, help="Path to the log file")
+    parser.add_argument('-e', '--experiment', metavar='experiment_number', type=str, required=True, help="Experiment number to add to the filename")
     
     # Handle -h / --help
     args = parser.parse_args()
 
     # Call the function to process the log file
-    plot_log_data(args.log_file)
+    plot_log_data(args.file, args.experiment)
 
 if __name__ == "__main__":
     main()
