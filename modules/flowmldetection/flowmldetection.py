@@ -356,7 +356,7 @@ class FlowMLDetection(IModule):
                 "dir_",
                 "endtime",
                 "flow_source",
-                "ground_truth_label",  # todo now we can use them
+                "ground_truth_label",
                 "detailed_ground_truth_label",
             ]
             # For argus binetflows this fails because ther is a field calle bytes that was not in other flows. It should be called allbytes.
