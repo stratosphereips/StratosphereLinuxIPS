@@ -521,9 +521,9 @@ class FlowMLDetection(IModule):
                         )
                         # Process all flows in the DB and make them ready
                         # for pandas
-                        self.process_training_flows()
+                        self.process_training_flows(self.last_number_of_flows_when_trained)
                         # Train an algorithm
-                        self.train()
+                        self.train(sum_labeled_flows)
                         self.last_number_of_flows_when_trained = sum_labeled_flows
 
             elif self.mode == "test":
