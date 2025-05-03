@@ -10,7 +10,16 @@ import pandas as pd
 import json
 import traceback
 import warnings
-import os
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import (
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    accuracy_score,
+    matthews_corrcoef,
+    recall_score,
+)
+
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -86,21 +95,21 @@ class FlowMLDetection(IModule):
         except Exception as e:
             self.print(f"Error writing to training log: {e}", 0, 1)
 
-    def train(self, sum_labeled_flows):
+    def train(self, sum_labeled_flows, last_number_of_flows_when_trained):
         """
         Train a model based on the flows we receive and the labels
         """
         try:
+            # Create y_flow with the label
+            y_flow = numpy.full(self.flows.shape[0], self.flows.ground_truth_label)
             # Create X_flow with the current flows minus the label
             X_flow = self.flows.drop("ground_truth_label", axis=1)
             # Drop the detailed labels
             X_flow = X_flow.drop("detailed_ground_truth_label", axis=1)
             # Drop the module_labels
             X_flow = X_flow.drop("module_labels", axis=1)
-            # Create y_flow with the label
-            y_flow = numpy.full(X_flow.shape[0], self.flows.ground_truth_label)
 
-            # Normalize this batch of data so far. This can get progressivle slow
+            # Normalize this batch of data so far. This can get progressively slow
             X_flow = self.scaler.fit_transform(X_flow)
 
             # Count the number of labels of each type in this epoc
@@ -120,18 +129,43 @@ class FlowMLDetection(IModule):
                 self.print("Error while calling clf.train()")
                 self.print(traceback.format_exc(), 0, 1)
 
-            # See score so far in training
-            score = self.clf.score(X_flow, y_flow)
+            # Predict on the training data
+            y_pred = self.clf.predict(X_flow)
 
-            #self.print(f"	Training Score: {score}", 1, 0)
-            #self.print(f'    Model Parameters: {self.clf.coef_}', 1, 0)
+            # For metrics, let's focus on Malicious vs Benign (ignore Background)
+            mask = (y_flow == "Malicious") | (y_flow == "Benign")
+            y_true_bin = y_flow[mask]
+            y_pred_bin = y_pred[mask]
+
+            # Map to binary: Malicious=1, Benign=0
+            y_true_bin = numpy.where(y_true_bin == "Malicious", 1, 0)
+            y_pred_bin = numpy.where(y_pred_bin == "Malicious", 1, 0)
+
+            # Compute confusion matrix: tn, fp, fn, tp
+            tn, fp, fn, tp = confusion_matrix(y_true_bin, y_pred_bin, labels=[0,1]).ravel() if len(set(y_true_bin)) > 1 else (0,0,0,0)
+
+            # Compute metrics
+            FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
+            TNR = tn / (tn + fp) if (tn + fp) > 0 else 0
+            TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
+            FNR = fn / (fn + tp) if (fn + tp) > 0 else 0
+            F1 = f1_score(y_true_bin, y_pred_bin, zero_division=0)
+            PREC = precision_score(y_true_bin, y_pred_bin, zero_division=0)
+            ACCU = accuracy_score(y_true_bin, y_pred_bin)
+            MCC = matthews_corrcoef(y_true_bin, y_pred_bin) if len(set(y_true_bin)) > 1 else 0
+            RECALL = recall_score(y_true_bin, y_pred_bin, zero_division=0)
 
             # Store the models on disk
             self.store_model()
 
             # Log training information
-            self.write_to_training_log(f"Training completed. Background: {epoch_label_counts['Background']}. Benign: {epoch_label_counts['Benign']}. Malicious: {epoch_label_counts['Malicious']}. Total labels: {sum_labeled_flows}. Score: {score}")
-            #self.write_to_training_log(f"Model parameters: {self.clf.coef_}")
+            self.write_to_training_log(
+                f"Total labels: {sum_labeled_flows}, "
+                f"Background: {epoch_label_counts['Background']}. "
+                f"Benign: {epoch_label_counts['Benign']}. Malicious: {epoch_label_counts['Malicious']}. "
+                f"Metrics: FPR={FPR:.4f}, TNR={TNR:.4f}, TPR={TPR:.4f}, FNR={FNR:.4f}, "
+                f"F1={F1:.4f}, Precision={PREC:.4f}, Accuracy={ACCU:.4f}, MCC={MCC:.4f}, Recall={RECALL:.4f}."
+            )
         except Exception:
             self.print("Error in train().", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
@@ -520,7 +554,7 @@ class FlowMLDetection(IModule):
                         # for pandas
                         self.process_training_flows(self.last_number_of_flows_when_trained)
                         # Train an algorithm
-                        self.train(sum_labeled_flows)
+                        self.train(sum_labeled_flows, self.last_number_of_flows_when_trained)
                         self.last_number_of_flows_when_trained = sum_labeled_flows
 
             elif self.mode == "test":
