@@ -42,10 +42,10 @@ def plot_log_data(file_path):
 
     # Create the second y-axis for the Background, Benign, Malicious
     ax2 = ax1.twinx()
-    ax2.plot(df.index, df["Background"], label="Background", color='tab:green', linestyle='--')
-    ax2.plot(df.index, df["Benign"], label="Benign", color='tab:orange', linestyle='--')
-    ax2.plot(df.index, df["Malicious"], label="Malicious", color='tab:pink', linestyle='--')
-    ax2.set_ylabel('Background, Benign, Malicious', color='tab:red')
+    ax2.plot(df.index, df["Background"], label="Background Labels", color='tab:green', linestyle='--')
+    ax2.plot(df.index, df["Benign"], label="Benign Labels", color='tab:orange', linestyle='--')
+    ax2.plot(df.index, df["Malicious"], label="Malicious Labels", color='tab:pink', linestyle='--')
+    ax2.set_ylabel('Background, Benign, Malicious Labels', color='tab:red')
     
     # Set appropriate scale for right y-axis based on the data
     ax2.set_ylim(0, df[["Background", "Benign", "Malicious"]].max().max())
@@ -56,7 +56,7 @@ def plot_log_data(file_path):
         ax1.text(i, value, f'{value:.1f}', color='tab:gray', fontsize=8, ha='center', va='bottom')
 
     # Adding title and legend
-    plt.title('Log Data Visualization')
+    plt.title('Training performance')
     fig.tight_layout()
 
     # Adding the legend with increased space for readability
