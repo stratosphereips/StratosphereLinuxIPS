@@ -526,36 +526,21 @@ class FlowMLDetection(IModule):
             elif self.mode == "test":
                 # We are testing, which means using the model to detect
                 processed_flow = self.process_flow(self.flow)
-
                 # After processing the flow, it may happen that we
                 # delete icmp/arp/etc so the dataframe can be empty
                 if processed_flow is not None and not processed_flow.empty:
+                    original_label = processed_flow["ground_truth_label"].iloc[0]
                     # Predict
                     pred: numpy.ndarray = self.detect(processed_flow)
                     if not pred:
                         # an error occurred
                         return
 
-                    label = self.flow["label"]
-                    if label and label != "unknown" and label != pred[0]:
-                        # If the user specified a label in test mode,
-                        # and the label is diff from the prediction,
-                        # print in debug mode
-                        self.print(
-                            f"Predicted {pred[0]} for ground-truth label"
-                            f' {label}. Flow {self.flow["saddr"]}:'
-                            f'{self.flow["sport"]} ->'
-                            f' {self.flow["daddr"]}:'
-                            f'{self.flow["dport"]}/'
-                            f'{self.flow["proto"]}',
-                            0,
-                            3,
-                        )
                     if pred[0] == "Malicious":
                         # Generate an alert
                         self.set_evidence_malicious_flow(self.flow, self.twid)
                         self.print(
-                            f"Prediction {pred[0]} for label {label}"
+                            f"Prediction {pred[0]} for label {original_label}"
                             f' flow {self.flow["saddr"]}:'
                             f'{self.flow["sport"]} -> '
                             f'{self.flow["daddr"]}:'
@@ -564,3 +549,42 @@ class FlowMLDetection(IModule):
                             0,
                             2,
                         )
+
+                    # So you can disable this code easily. Since it is used only for evaluating a testing
+                    log_testing_data = True
+                    if log_testing_data:
+                        # Initialize counters if not already done
+                        if not hasattr(self, 'tp'):
+                            self.tp = 0
+                        if not hasattr(self, 'tn'):
+                            self.tn = 0
+                        if not hasattr(self, 'fp'):
+                            self.fp = 0
+                        if not hasattr(self, 'fn'):
+                            self.fn = 0
+
+
+                        # Update counters based on predictions and labels
+                        if pred[0] == "Malicious" and original_label == "Malicious":
+                            self.tp += 1
+                        elif pred[0] == "Benign" and original_label == "Benign":
+                            self.tn += 1
+                        elif pred[0] == "Malicious" and original_label == "Benign":
+                            self.fp += 1
+                        elif pred[0] == "Benign" and original_label == "Malicious":
+                            self.fn += 1
+
+                        testing_log_path = "./modules/flowmldetection/testing_performance.log"
+                        try:
+                            with open(testing_log_path, "a") as log_file:
+                                log_file.write("Testing Performance Log Initialized\n")
+                                # Log the testing performance metrics
+                                log_file.write(f"TP: {self.tp}, TN: {self.tn}, FP: {self.fp}, FN: {self.fn}\n")
+
+                                # Log the original flow for false positives and false negatives
+                                if pred[0] == "Malicious" and original_label == "Benign":
+                                    log_file.write(f"False Positive Flow: {self.flow}\n")
+                                elif pred[0] == "Benign" and original_label == "Malicious":
+                                    log_file.write(f"False Negative Flow: {self.flow}\n")
+                        except Exception as e:
+                            self.print(f"Error initializing testing performance log: {e}", 0, 1)
