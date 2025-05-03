@@ -28,10 +28,6 @@ from slips_files.core.structures.evidence import (
     Method,
 )
 
-# Only for debbuging
-# from matplotlib import pyplot as plt
-
-
 # This horrible hack is only to stop sklearn from printing those warnings
 def warn(*args, **kwargs):
     pass
