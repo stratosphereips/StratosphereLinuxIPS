@@ -377,7 +377,7 @@ class Profiler(ICore, IObservable):
             flow,
             profileid=profileid,
             twid=twid,
-            label=self.label,
+            label=self.configuration_label,
         )
         self.db.mark_profile_tw_as_modified(profileid, twid, "")
 
