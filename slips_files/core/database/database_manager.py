@@ -888,7 +888,10 @@ class DBManager:
         """returns the raw flow as read from the log file"""
         return self.sqlite.get_flow(*args, **kwargs)
 
-    def add_flow(self, flow, profileid: str, twid: str, label="benign"):
+    def add_flow(self, flow, profileid: str, twid: str, label="Benign"):
+        """
+        Just in case, by default if there are no labels in the flow, we consider it Benign
+        """
         # stores it in the db
         self.sqlite.add_flow(flow, profileid, twid, label=label)
         # handles the channels and labels etc.
