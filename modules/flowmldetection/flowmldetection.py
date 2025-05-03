@@ -126,15 +126,8 @@ class FlowMLDetection(IModule):
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
 
-            # To debug the training score
-            # self.scores.append(score)
-
-            self.print(f"	Training Score: {score}", 0, 1)
-            # self.print(f'    Model Parameters: {self.clf.coef_}')
-
-            # Debug code to store a plot in a png of the scores
-            # plt.plot(self.scores)
-            # plt.savefig('train-scores.png')
+            #self.print(f"	Training Score: {score}", 1, 0)
+            #self.print(f'    Model Parameters: {self.clf.coef_}', 1, 0)
 
             # Store the models on disk
             self.store_model()
