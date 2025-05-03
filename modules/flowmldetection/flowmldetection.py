@@ -68,12 +68,29 @@ class FlowMLDetection(IModule):
         self.model_path = "./modules/flowmldetection/model.bin"
         self.scaler_path = "./modules/flowmldetection/scaler.bin"
 
+        # Initialize the training log file
+        self.training_log_path = "./modules/flowmldetection/training.log"
+        with open(self.training_log_path, "w") as log_file:
+            log_file.write("Training Log Initialized\n")
+
     def read_configuration(self):
         conf = ConfigParser()
         self.mode = conf.get_ml_mode()
+        # This is the global label in the configuration,
+        # in case the flows do not have a label themselves
         self.label = conf.label()
 
-    def train(self):
+    def write_to_training_log(self, message: str):
+        """
+        Write a message to the training log file.
+        """
+        try:
+            with open(self.training_log_path, "a") as log_file:
+                log_file.write(message + "\n")
+        except Exception as e:
+            self.print(f"Error writing to training log: {e}", 0, 1)
+
+    def train(self, sum_labeled_flows):
         """
         Train a model based on the flows we receive and the labels
         """
