@@ -71,11 +71,11 @@ def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accu
         close_to_1['MCC'].append(MCC_values[i])
         close_to_1['recall'].append(recall_values[i])
 
-    # Plot metrics for values close to 0
+    # Plot metrics for values close to 0 (linear scale)
     plot_single_group(close_to_0, 'metrics_plot_close_to_0.png', is_close_to_0=True)
     
-    # Plot metrics for values close to 1
-    plot_single_group(close_to_1, 'metrics_plot_close_to_1.png')
+    # Plot metrics for values close to 1 (log scale)
+    plot_single_group(close_to_1, 'metrics_plot_close_to_1.png', is_close_to_0=False)
 
     # Print the final values
     print("\nFinal Metric Values:")
@@ -112,14 +112,21 @@ def plot_single_group(metrics_dict, output_filename, is_close_to_0=False):
     if 'recall' in metrics_dict:
         plt.plot(metrics_dict['recall'], label='Recall (TPR)', marker='o')
 
-    # Apply log scale by default
-    plt.yscale('log')
+    # If the plot is close to 1, apply log scale
+    if not is_close_to_0:
+        plt.yscale('log')
 
-    # If the plot is close to 0, set custom ticks
+    # If the plot is close to 0, set dynamic Y-ticks based on the min/max values of the series
     if is_close_to_0:
-        # Manually set more Y-ticks for better visibility
-        plt.ylim(0.0001, 1)  # Set Y-axis limits between 0.0001 and 1
-        plt.yticks([0.0001, 0.001, 0.01, 0.1, 1], ['0.0001', '0.001', '0.01', '0.1', '1'])  # Adjust Y-ticks
+        min_val = min(min(metrics_dict['FPR']), min(metrics_dict['FNR']))
+        max_val = max(max(metrics_dict['FPR']), max(metrics_dict['FNR']))
+        
+        # Avoid log(0), so set the minimum limit a little higher than zero
+        if min_val == 0:
+            min_val = 1e-4  # Avoid zero values on the logarithmic scale
+
+        plt.ylim(min_val, max_val)  # Set Y-axis limits based on the data range
+        plt.yticks(np.logspace(np.log10(min_val), np.log10(max_val), num=6))  # Set ticks logarithmically
 
     plt.xlabel('Index')
     plt.ylabel('Metric Value')
