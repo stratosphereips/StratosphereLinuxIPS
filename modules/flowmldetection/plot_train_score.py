@@ -40,17 +40,20 @@ def plot_log_data(file_path):
     ax1.set_ylim(0, 1)  # Set y-axis for Score from 0 to 1
     ax1.tick_params(axis='y', labelcolor='tab:blue')
 
-    # Create the second y-axis for the Background, Benign, Malicious, Total labels
+    # Create the second y-axis for the Background, Benign, Malicious
     ax2 = ax1.twinx()
     ax2.plot(df.index, df["Background"], label="Background", color='tab:green', linestyle='--')
     ax2.plot(df.index, df["Benign"], label="Benign", color='tab:orange', linestyle='--')
     ax2.plot(df.index, df["Malicious"], label="Malicious", color='tab:pink', linestyle='--')
-    ax2.plot(df.index, df["Total labels"], label="Total labels", color='tab:red')
-    ax2.set_ylabel('Background, Benign, Malicious, Total labels', color='tab:red')
+    ax2.set_ylabel('Background, Benign, Malicious', color='tab:red')
     
     # Set appropriate scale for right y-axis based on the data
-    ax2.set_ylim(0, df[["Background", "Benign", "Malicious", "Total labels"]].max().max())
+    ax2.set_ylim(0, df[["Background", "Benign", "Malicious"]].max().max())
     ax2.tick_params(axis='y', labelcolor='tab:red')
+
+    # Annotating Total labels as text on the plot
+    for i, value in enumerate(df["Total labels"]):
+        ax1.text(i, value, f'{value:.1f}', color='tab:gray', fontsize=8, ha='center', va='bottom')
 
     # Adding title and legend
     plt.title('Log Data Visualization')
