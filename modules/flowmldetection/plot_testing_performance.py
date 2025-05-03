@@ -64,16 +64,19 @@ def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accu
     plt.plot(MCC_values, label='Matthews Correlation Coefficient (MCC)', marker='o')
     plt.plot(recall_values, label='Recall (TPR)', marker='o')
     
+    # Set logarithmic scale on the y-axis
+    plt.yscale('log')
+    
     # Add labels and title
     plt.xlabel('Index')
-    plt.ylabel('Metric Value')
-    plt.title('Evaluation Metrics Over Time')
+    plt.ylabel('Metric Value (Log Scale)')
+    plt.title('Evaluation Metrics Over Time (Log Scale)')
     
     # Add a legend
     plt.legend()
     
     # Save the plot as a PNG file
-    plt.savefig('metrics_plot.png')
+    plt.savefig('metrics_plot_log_scale.png')
     plt.close()
 
 def main():
