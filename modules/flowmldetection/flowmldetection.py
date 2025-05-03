@@ -94,22 +94,18 @@ class FlowMLDetection(IModule):
         Train a model based on the flows we receive and the labels
         """
         try:
-            # Get the flows from the DB
-            # self.flows = self.db.get_all_flows_in_profileid_twid(self.profileid, self.twid)
-            # Convert to pandas df
-            # self.flows = pd.DataFrame(self.flows)
-            # Process the features
-            # X_flow = self.process_features(self.flows)
-
             # Create X_flow with the current flows minus the label
-            X_flow = self.flows.drop("label", axis=1)
-            # Create y_flow with the label
-            y_flow = numpy.full(X_flow.shape[0], self.label)
+            X_flow = self.flows.drop("ground_truth_label", axis=1)
+            # Drop the detailed labels
+            X_flow = X_flow.drop("detailed_ground_truth_label", axis=1)
             # Drop the module_labels
             X_flow = X_flow.drop("module_labels", axis=1)
+            # Create y_flow with the label
+            y_flow = numpy.full(X_flow.shape[0], self.flows.ground_truth_label)
 
             # Normalize this batch of data so far. This can get progressivle slow
             X_flow = self.scaler.fit_transform(X_flow)
+
 
             # Train
             try:
