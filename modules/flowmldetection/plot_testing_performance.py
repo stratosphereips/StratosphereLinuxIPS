@@ -123,10 +123,10 @@ def plot_single_group(metrics_dict, output_filename, is_close_to_0=False):
         
         # Avoid log(0), so set the minimum limit a little higher than zero
         if min_val == 0:
-            min_val = 1e-4  # Avoid zero values on the logarithmic scale
+            min_val = 1e-8  # Avoid zero values on the logarithmic scale
 
         plt.ylim(min_val, max_val)  # Set Y-axis limits based on the data range
-        plt.yticks(np.logspace(np.log10(min_val), np.log10(max_val), num=6))  # Set ticks logarithmically
+        plt.yticks(np.logspace(np.log10(min_val), np.log10(max_val), num=60))  # Set ticks logarithmically
 
     plt.xlabel('Index')
     plt.ylabel('Metric Value')
