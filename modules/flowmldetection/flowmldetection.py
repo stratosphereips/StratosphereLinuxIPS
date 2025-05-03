@@ -310,10 +310,9 @@ class FlowMLDetection(IModule):
                         },
                     }
                 )
-                # If there are enough flows, we dont insert them anymore
 
             # Convert to pandas df
-            df_flows = pd.DataFrame(flows)
+            df_flows = pd.DataFrame(new_flows)
 
             # Process features
             df_flows = self.process_features(df_flows)
@@ -321,7 +320,6 @@ class FlowMLDetection(IModule):
             # Update the flow to the processed version
             self.flows = df_flows
         except Exception:
-            # Stop the timer
             self.print("Error in process_flows()")
             self.print(traceback.format_exc(), 0, 1)
 
