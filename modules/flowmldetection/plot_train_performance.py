@@ -28,7 +28,7 @@ def plot_log_data(file_path):
 
     # Get the directory of the log file to store the plot in the same folder
     dir_name = os.path.dirname(file_path)
-    plot_file = os.path.join(dir_name, 'log_data_plot_with_two_scales.png')
+    plot_file = os.path.join(dir_name, 'performance_metrics_training.png')
 
     # Plotting the values
     fig, ax1 = plt.subplots(figsize=(10, 6))
