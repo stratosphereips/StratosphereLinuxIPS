@@ -59,12 +59,12 @@ def plot_log_data(file_path):
     plt.title('Training performance')
     fig.tight_layout()
 
-    # Adding the legend with increased space for readability
-    ax1.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize='small')
-    ax2.legend(loc='upper left', bbox_to_anchor=(1, 0.7), fontsize='small')
+    # Move both legends further to the right
+    ax1.legend(loc='upper right', bbox_to_anchor=(1.26, 1), fontsize='small', ncol=1)
+    ax2.legend(loc='upper right', bbox_to_anchor=(1.4, 0.95), fontsize='small', ncol=1)
 
     # Increase right margin for better readability of legend
-    plt.subplots_adjust(right=0.75)
+    plt.subplots_adjust(right=0.7)
 
     # Save plot to the same folder as the log file
     plt.savefig(plot_file)
