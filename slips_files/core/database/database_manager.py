@@ -661,7 +661,8 @@ class DBManager:
         return self.rdb.add_software_to_profile(*args, **kwargs)
 
     def get_total_flows(self, *args, **kwargs):
-        return int(self.rdb.get_total_flows(*args, **kwargs))
+        total_flows = self.rdb.get_total_flows(*args, **kwargs)
+        return int(total_flows) if total_flows is not None else 0
 
     def increment_processed_flows(self, *args, **kwargs):
         return self.rdb.increment_processed_flows(*args, **kwargs)
