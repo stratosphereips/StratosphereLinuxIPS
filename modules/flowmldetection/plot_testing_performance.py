@@ -72,12 +72,24 @@ def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accu
         close_to_1['recall'].append(recall_values[i])
 
     # Plot metrics for values close to 0
-    plot_single_group(close_to_0, 'metrics_plot_close_to_0.png')
+    plot_single_group(close_to_0, 'metrics_plot_close_to_0.png', is_close_to_0=True)
     
     # Plot metrics for values close to 1
     plot_single_group(close_to_1, 'metrics_plot_close_to_1.png')
 
-def plot_single_group(metrics_dict, output_filename):
+    # Print the final values
+    print("\nFinal Metric Values:")
+    print(f"Final FPR: {FPR_values[-1]:.4f}")
+    print(f"Final FNR: {FNR_values[-1]:.4f}")
+    print(f"Final TNR: {TNR_values[-1]:.4f}")
+    print(f"Final TPR: {TPR_values[-1]:.4f}")
+    print(f"Final F1 Score: {F1_values[-1]:.4f}")
+    print(f"Final Accuracy: {accuracy_values[-1]:.4f}")
+    print(f"Final Precision: {precision_values[-1]:.4f}")
+    print(f"Final MCC: {MCC_values[-1]:.4f}")
+    print(f"Final Recall: {recall_values[-1]:.4f}")
+
+def plot_single_group(metrics_dict, output_filename, is_close_to_0=False):
     plt.figure(figsize=(12, 8))
     
     # Only plot the metrics that exist in the dictionary
@@ -102,6 +114,12 @@ def plot_single_group(metrics_dict, output_filename):
 
     # Apply log scale by default
     plt.yscale('log')
+
+    # If the plot is close to 0, set custom ticks
+    if is_close_to_0:
+        # Manually set more Y-ticks for better visibility
+        plt.ylim(0.0001, 1)  # Set Y-axis limits between 0.0001 and 1
+        plt.yticks([0.0001, 0.001, 0.01, 0.1, 1], ['0.0001', '0.001', '0.01', '0.1', '1'])  # Adjust Y-ticks
 
     plt.xlabel('Index')
     plt.ylabel('Metric Value')
