@@ -59,10 +59,9 @@ class FlowMLDetection(IModule):
         self.minimum_labels_to_start_train = 50
         # Minum amount of new labels needed to retrain
         self.minimum_labels_to_retrain = 50
-        # The number of flows when last trained
+        # The number of flows when last trained. Used internally only to know
+        # when to retrain
         self.last_number_of_flows_when_trained = 0
-        # To plot the scores of training
-        # self.scores = []
         # The scaler trained during training and to use during testing
         self.scaler = StandardScaler()
         self.model_path = "./modules/flowmldetection/model.bin"
