@@ -304,7 +304,7 @@ class FlowMLDetection(IModule):
                         "sbytes": 100,
                         "dbytes": 67596,
                         "appproto": "http",
-                        "label": "Benign",
+                        "ground_truth_label": "Benign",
                         "module_labels": {
                             "flowalerts-long-connection": "Benign"
                         },
