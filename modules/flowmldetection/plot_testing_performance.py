@@ -50,33 +50,66 @@ def process_file(file_path):
     return FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values
 
 def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values):
-    # Create the plot
+    # Separate the values into two groups based on their proximity to 0 or 1
+    close_to_0 = {
+        'FPR': [], 'FNR': []
+    }
+    close_to_1 = {
+        'TNR': [], 'TPR': [], 'F1': [], 'accuracy': [], 'precision': [], 'MCC': [], 'recall': []
+    }
+    
+    # Categorize the metrics into two groups
+    for i in range(len(FPR_values)):
+        close_to_0['FPR'].append(FPR_values[i])
+        close_to_0['FNR'].append(FNR_values[i])
+        
+        close_to_1['TNR'].append(TNR_values[i])
+        close_to_1['TPR'].append(TPR_values[i])
+        close_to_1['F1'].append(F1_values[i])
+        close_to_1['accuracy'].append(accuracy_values[i])
+        close_to_1['precision'].append(precision_values[i])
+        close_to_1['MCC'].append(MCC_values[i])
+        close_to_1['recall'].append(recall_values[i])
+
+    # Plot metrics for values close to 0
+    plot_single_group(close_to_0, 'metrics_plot_close_to_0.png')
+    
+    # Plot metrics for values close to 1
+    plot_single_group(close_to_1, 'metrics_plot_close_to_1.png')
+
+def plot_single_group(metrics_dict, output_filename):
     plt.figure(figsize=(12, 8))
     
-    # Plot each metric
-    plt.plot(FPR_values, label='False Positive Rate (FPR)', marker='o')
-    plt.plot(FNR_values, label='False Negative Rate (FNR)', marker='o')
-    plt.plot(TNR_values, label='True Negative Rate (TNR)', marker='o')
-    plt.plot(TPR_values, label='True Positive Rate (TPR)', marker='o')
-    plt.plot(F1_values, label='F1 Score', marker='o')
-    plt.plot(accuracy_values, label='Accuracy', marker='o')
-    plt.plot(precision_values, label='Precision', marker='o')
-    plt.plot(MCC_values, label='Matthews Correlation Coefficient (MCC)', marker='o')
-    plt.plot(recall_values, label='Recall (TPR)', marker='o')
-    
-    # Set logarithmic scale on the y-axis
+    # Only plot the metrics that exist in the dictionary
+    if 'FPR' in metrics_dict:
+        plt.plot(metrics_dict['FPR'], label='False Positive Rate (FPR)', marker='o')
+    if 'FNR' in metrics_dict:
+        plt.plot(metrics_dict['FNR'], label='False Negative Rate (FNR)', marker='o')
+    if 'TNR' in metrics_dict:
+        plt.plot(metrics_dict['TNR'], label='True Negative Rate (TNR)', marker='o')
+    if 'TPR' in metrics_dict:
+        plt.plot(metrics_dict['TPR'], label='True Positive Rate (TPR)', marker='o')
+    if 'F1' in metrics_dict:
+        plt.plot(metrics_dict['F1'], label='F1 Score', marker='o')
+    if 'accuracy' in metrics_dict:
+        plt.plot(metrics_dict['accuracy'], label='Accuracy', marker='o')
+    if 'precision' in metrics_dict:
+        plt.plot(metrics_dict['precision'], label='Precision', marker='o')
+    if 'MCC' in metrics_dict:
+        plt.plot(metrics_dict['MCC'], label='Matthews Correlation Coefficient (MCC)', marker='o')
+    if 'recall' in metrics_dict:
+        plt.plot(metrics_dict['recall'], label='Recall (TPR)', marker='o')
+
+    # Apply log scale by default
     plt.yscale('log')
-    
-    # Add labels and title
+
     plt.xlabel('Index')
-    plt.ylabel('Metric Value (Log Scale)')
-    plt.title('Evaluation Metrics Over Time (Log Scale)')
-    
-    # Add a legend
+    plt.ylabel('Metric Value')
+    plt.title(f'Evaluation Metrics Over Time ({output_filename.split("_")[2].replace(".png", "")})')
     plt.legend()
     
-    # Save the plot as a PNG file
-    plt.savefig('metrics_plot_log_scale.png')
+    # Save the plot
+    plt.savefig(output_filename)
     plt.close()
 
 def main():
@@ -85,6 +118,7 @@ def main():
         sys.exit(1)
     
     file_path = sys.argv[1]
+    
     FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values = process_file(file_path)
     plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values)
 
