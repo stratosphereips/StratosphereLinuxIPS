@@ -109,8 +109,9 @@ class FlowMLDetection(IModule):
 
             # Train
             try:
+                # Online incremental learning
                 self.clf.partial_fit(
-                    X_flow, y_flow, classes=["Malicious", "Benign"]
+                    X_flow, y_flow, classes=["Background", "Malicious", "Benign"]
                 )
             except Exception:
                 self.print("Error while calling clf.train()")
