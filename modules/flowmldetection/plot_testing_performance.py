@@ -72,10 +72,10 @@ def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accu
         close_to_1['recall'].append(recall_values[i])
 
     # Plot metrics for values close to 0 (linear scale)
-    plot_single_group(close_to_0, 'metrics_plot_close_to_0.png', is_close_to_0=True)
+    plot_single_group(close_to_0, 'performance_metrics_testing_close_to_0.png', is_close_to_0=True)
     
     # Plot metrics for values close to 1 (log scale)
-    plot_single_group(close_to_1, 'metrics_plot_close_to_1.png', is_close_to_0=False)
+    plot_single_group(close_to_1, 'performnace_metrics_teting_close_to_1.png', is_close_to_0=False)
 
     # Print the final values
     print("\nFinal Metric Values:")
