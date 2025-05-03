@@ -283,13 +283,13 @@ class FlowMLDetection(IModule):
                         "sbytes": 25517,
                         "dbytes": 17247,
                         "appproto": "ssl",
-                        "label": "Malicious",
+                        "ground_truth_label": "Malicious",
                         "module_labels": {
                             "flowalerts-long-connection": "Malicious"
                         },
                     }
                 )
-                flows.append(
+                new_flows.append(
                     {
                         "starttime": 1382355032.706468,
                         "dur": "10.896695",
