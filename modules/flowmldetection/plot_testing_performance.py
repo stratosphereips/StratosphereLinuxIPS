@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import sys
 import numpy as np
+import argparse
 
 def process_file(file_path):
     # Initialize the counters for the values
@@ -49,7 +50,7 @@ def process_file(file_path):
     
     return FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values
 
-def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values):
+def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values, experiment_number):
     # Separate the values into two groups based on their proximity to 0 or 1
     close_to_0 = {
         'FPR': [], 'FNR': []
@@ -72,13 +73,13 @@ def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accu
         close_to_1['recall'].append(recall_values[i])
 
     # Plot metrics for values close to 0 (linear scale)
-    plot_single_group(close_to_0, 'performance_metrics_testing_close_to_0.png', is_close_to_0=True)
+    plot_single_group(close_to_0, f'performance_metrics_testing_close_to_0_experiment_{experiment_number}.png', experiment_number, is_close_to_0=True)
     
     # Plot metrics for values close to 1 (log scale)
-    plot_single_group(close_to_1, 'performance_metrics_testing_close_to_1.png', is_close_to_0=False)
+    plot_single_group(close_to_1, f'performance_metrics_testing_close_to_1_experiment_{experiment_number}.png', experiment_number, is_close_to_0=False)
 
     # Print the final values
-    print("\nFinal Metric Values:")
+    print("\nFinal Metric Values for Experiment", experiment_number)
     print(f"Final FPR: {FPR_values[-1]:.4f}")
     print(f"Final FNR: {FNR_values[-1]:.4f}")
     print(f"Final TNR: {TNR_values[-1]:.4f}")
@@ -89,7 +90,7 @@ def plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accu
     print(f"Final MCC: {MCC_values[-1]:.4f}")
     print(f"Final Recall: {recall_values[-1]:.4f}")
 
-def plot_single_group(metrics_dict, output_filename, is_close_to_0=False):
+def plot_single_group(metrics_dict, output_filename, experiment_number, is_close_to_0=False):
     plt.figure(figsize=(12, 8))
     
     # Only plot the metrics that exist in the dictionary
@@ -126,11 +127,12 @@ def plot_single_group(metrics_dict, output_filename, is_close_to_0=False):
             min_val = 1e-4  # Avoid zero values on the logarithmic scale
 
         plt.ylim(min_val, max_val)  # Set Y-axis limits based on the data range
-        plt.yticks(np.logspace(np.log10(min_val), np.log10(max_val), num=6))  # Set ticks logarithmically
+        plt.yticks(np.logspace(np.log10(min_val), np.log10(max_val), num=60))  # Set ticks logarithmically
 
+    # Add the experiment number to the plot title
     plt.xlabel('Index')
     plt.ylabel('Metric Value')
-    plt.title(f'Evaluation Metrics Over Time ({output_filename.split("_")[2].replace(".png", "")})')
+    plt.title(f'Experiment {experiment_number} - Evaluation Metrics Over Time')
     plt.legend()
     
     # Save the plot
@@ -138,14 +140,18 @@ def plot_single_group(metrics_dict, output_filename, is_close_to_0=False):
     plt.close()
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python script.py <file_path>")
-        sys.exit(1)
+    # Set up argument parsing
+    parser = argparse.ArgumentParser(description='Plot testing performance metrics.')
+    parser.add_argument('-f', '--file', type=str, required=True, help='Path to the testing performance log file')
+    parser.add_argument('-e', '--experiment', type=str, required=True, help='Experiment number')
+
+    args = parser.parse_args()
     
-    file_path = sys.argv[1]
+    file_path = args.file
+    experiment_number = args.experiment
     
     FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values = process_file(file_path)
-    plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values)
+    plot_metrics(FPR_values, FNR_values, TNR_values, TPR_values, F1_values, accuracy_values, precision_values, MCC_values, recall_values, experiment_number)
 
 if __name__ == "__main__":
     main()
