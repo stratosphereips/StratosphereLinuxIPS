@@ -52,12 +52,12 @@ def plot_log_data(file_path, experiment_number):
     ax1.plot(df.index, df["Malicious"], label="Malicious", color='magenta')
     ax1.set_xlabel('Index')
     ax1.set_ylabel('Label Counts')
-    # No log scale here
     ax1.set_title(f'Label Counts - Experiment {experiment_number}')
     ax1.legend()
     ax1.yaxis.set_major_locator(ticker.MaxNLocator(70))
+    ax1.xaxis.set_major_locator(ticker.MaxNLocator(50))
     plt.tight_layout()
-    plt.savefig(os.path.join(dir_name, f'performance_metrics_training_0_labels.png'))
+    plt.savefig(os.path.join(dir_name, f'performance_metrics_training_{experiment_number}_labels.png'))
 
     # --- Plot 2: FNR and FPR (log scale) ---
     fig2, ax2 = plt.subplots(figsize=(10, 6))
@@ -69,8 +69,9 @@ def plot_log_data(file_path, experiment_number):
     ax2.set_title(f'FNR and FPR - Experiment {experiment_number}')
     ax2.legend()
     ax2.yaxis.set_major_locator(ticker.MaxNLocator(100))
+    ax2.xaxis.set_major_locator(ticker.MaxNLocator(50))
     plt.tight_layout()
-    plt.savefig(os.path.join(dir_name, f'performance_metrics_training_0_fnr_fpr.png'))
+    plt.savefig(os.path.join(dir_name, f'performance_metrics_training_{experiment_number}_fnr_fpr.png'))
 
     # --- Plot 3: Other metrics (log scale) ---
     fig3, ax3 = plt.subplots(figsize=(12, 7))
@@ -87,8 +88,9 @@ def plot_log_data(file_path, experiment_number):
     ax3.set_title(f'Performance Metrics (except FNR/FPR) - Experiment {experiment_number}')
     ax3.legend()
     ax3.yaxis.set_major_locator(ticker.MaxNLocator(50))
+    ax3.xaxis.set_major_locator(ticker.MaxNLocator(50))
     plt.tight_layout()
-    plt.savefig(os.path.join(dir_name, f'performance_metrics_training_0_other_metrics.png'))
+    plt.savefig(os.path.join(dir_name, f'performance_metrics_training_{experiment_number}_other_metrics.png'))
 
     plt.show()
 
