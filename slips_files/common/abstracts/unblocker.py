@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from abc import ABC, abstractmethod
 from threading import Thread
+
+from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.structures.evidence import TimeWindow
 
@@ -68,6 +70,10 @@ class IUnblocker(ABC):
         tw_start, tw_end = self.db.get_tw_limits(
             f"profile_{ip}", f"timewindow{tw_to_unblock}"
         )
+
+        tw_start: str = utils.convert_format(tw_start, "iso")
+        tw_end: str = utils.convert_format(tw_end, "iso")
+
         return TimeWindow(
             number=tw_to_unblock, start_time=tw_start, end_time=tw_end
         )

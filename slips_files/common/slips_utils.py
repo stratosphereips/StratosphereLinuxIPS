@@ -90,7 +90,7 @@ class Utils(object):
         try:
             datetime.fromisoformat(date_time)
             return True
-        except ValueError:
+        except (ValueError, TypeError):
             return False
 
     def extract_hostname(self, url: str) -> str:
