@@ -47,7 +47,7 @@ has_net_admin_cap = pytest.mark.skipif(
 @has_net_admin_cap
 def is_slipschain_initialized() -> bool:
     blocking = ModuleFactory().create_blocking_obj()
-    output = blocking.get_cmd_output(f"{blocking.sudo} iptables -S")
+    output = blocking._get_cmd_output(f"{blocking.sudo} iptables -S")
     rules = [
         "-A INPUT -j slipsBlocking",
         "-A FORWARD -j slipsBlocking",
@@ -63,7 +63,7 @@ def test_initialize_chains_in_firewall():
     blocking = ModuleFactory().create_blocking_obj()
     # manually set the firewall
     blocking.firewall = "iptables"
-    blocking.initialize_chains_in_firewall()
+    blocking._init_chains_in_firewall()
     assert is_slipschain_initialized() is True
 
 
@@ -82,12 +82,12 @@ def test_initialize_chains_in_firewall():
 @has_net_admin_cap
 def test_block_ip():
     blocking = ModuleFactory().create_blocking_obj()
-    blocking.initialize_chains_in_firewall()
-    if not blocking.is_ip_blocked("2.2.0.0"):
+    blocking._init_chains_in_firewall()
+    if not blocking._is_ip_blocked("2.2.0.0"):
         ip = "2.2.0.0"
         from_ = True
         to = True
-        assert blocking.block_ip(ip, from_, to) is True
+        assert blocking._block_ip(ip, from_, to) is True
 
 
 @linuxOS
@@ -99,6 +99,6 @@ def test_unblock_ip():
     from_ = True
     to = True
     # first make sure that it's blocked
-    if not blocking.is_ip_blocked("2.2.0.0"):
-        assert blocking.block_ip(ip, from_, to) is True
+    if not blocking._is_ip_blocked("2.2.0.0"):
+        assert blocking._block_ip(ip, from_, to) is True
     assert blocking.unblock_ip(ip, from_, to) is True

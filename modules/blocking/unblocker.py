@@ -25,8 +25,12 @@ class Unblocker(IUnblocker):
         current_tw: int,
         flags: Dict[str, str],
     ):
+        print(f"@@@@@@@@@@@@@@@@ unblock_request for ip {ip}")
         tw_to_unblock_at: TimeWindow = self._calc_unblock_time(
             ip, current_tw, how_many_tws_to_block
+        )
+        print(
+            f"@@@@@@@@@@@@@@@@ unblocking {ip} at the end of {tw_to_unblock_at}"
         )
         self._add_req(ip, tw_to_unblock_at, flags)
 
@@ -43,14 +47,26 @@ class Unblocker(IUnblocker):
             for ip, request in self.requests.items():
                 ts: float = self.request["tw_to_unblock"].end_time
                 flags: Dict[str, str] = self.request["flags"]
-
+                print(
+                    f"@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock]"
+                    f" checking if time to unvblock {ip} {request}"
+                )
                 if ts >= now:
+                    print(
+                        f"@@@@@@@@@@@@@@@@ time to unblock {ip} in the "
+                        f"fw {request}"
+                    )
                     if self._unblock(ip, flags):
                         requests_to_del.append(ip)
 
             for ip in requests_to_del:
-                self._del_req(ip)
+                print(
+                    f"@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock] "
+                    f"seleting request for {ip}"
+                )
 
+                self._del_req(ip)
+            print("@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock] sleeping 5")
             time.sleep(5)
 
     def _add_req(
@@ -65,6 +81,10 @@ class Unblocker(IUnblocker):
                 "tw_to_unblock": tw_to_unblock_at,
                 "flags": flags,
             }
+        print(f"@@@@@@@@@@@@@@@@ added req for {ip} ")
+        from pprint import pp
+
+        pp(self.requests)
 
     def _del_request(self, ip):
         """Delete an unblocking request from self.requests"""
@@ -78,7 +98,6 @@ class Unblocker(IUnblocker):
         flags: Dict[str, str],
     ):
         """Unblocks an ip based on the given flags"""
-
         from_ = flags.get("from_")
         to = flags.get("to")
         dport = flags.get("dport")
@@ -122,6 +141,7 @@ class Unblocker(IUnblocker):
 
         if unblocked:
             self.print(f"Unblocked: {ip_to_unblock}")
+            print(f"@@@@@@@@@@@@@@@@ unblocked {ip_to_unblock} in the fw")
             return True
 
         return False

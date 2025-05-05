@@ -182,7 +182,7 @@ detection:
   # - 0.43: Use this threshold If you want Slips to be insensitive.
   #        Using this means Slips will need so many evidence to trigger an alert
   #        May lead to false negatives
-  evidence_detection_threshold: 0.25
+  evidence_detection_threshold: 0.08
 
   # Make Slips pop up alerts? Both Linux and Macos
   popup_alerts: false

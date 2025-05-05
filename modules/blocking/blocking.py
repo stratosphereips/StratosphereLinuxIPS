@@ -6,7 +6,7 @@ import os
 import shutil
 import json
 import subprocess
-import time
+from typing import Dict
 
 from slips_files.common.abstracts.module import IModule
 from .exec_iptables_cmd import exec_iptables_command
@@ -31,9 +31,9 @@ class Blocking(IModule):
             self.print("Mac OS blocking is not supported yet.")
             sys.exit()
 
-        self.firewall = self.determine_linux_firewall()
-        self.set_sudo_according_to_env()
-        self.initialize_chains_in_firewall()
+        self.firewall = self._determine_linux_firewall()
+        self._set_sudo_according_to_env()
+        self._init_chains_in_firewall()
         self.unblocker = Unblocker(self.db)
         # self.test()
 
@@ -41,7 +41,7 @@ class Blocking(IModule):
         """For debugging purposes, once we're done with the module we'll
         delete it"""
 
-        if not self.is_ip_blocked("2.2.0.0"):
+        if not self._is_ip_blocked("2.2.0.0"):
             blocking_data = {
                 "ip": "2.2.0.0",
                 "block": True,
@@ -60,7 +60,7 @@ class Blocking(IModule):
             self.print("[test] IP is already blocked")
         # self.unblock_ip("2.2.0.0",True,True)
 
-    def set_sudo_according_to_env(self):
+    def _set_sudo_according_to_env(self):
         """
         Check if running in host or in docker and sets sudo string accordingly.
         There's no sudo in docker so we need to execute all commands without it
@@ -71,7 +71,7 @@ class Blocking(IModule):
         )
         self.sudo = "" if self.running_in_docker else "sudo "
 
-    def determine_linux_firewall(self):
+    def _determine_linux_firewall(self):
         """Returns the currently installed firewall and installs iptables if
         none was found"""
 
@@ -86,7 +86,7 @@ class Blocking(IModule):
             )
             sys.exit()
 
-    def delete_slips_blocking_chain(self):
+    def _del_slips_blocking_chain(self):
         """Flushes and deletes everything in slipsBlocking chain"""
         # check if slipsBlocking chain exists before flushing it and suppress
         # stderr and stdout while checking
@@ -119,12 +119,12 @@ class Blocking(IModule):
 
         return False
 
-    def get_cmd_output(self, command):
+    def _get_cmd_output(self, command):
         """Executes a command and returns the output"""
         result = subprocess.run(command.split(), stdout=subprocess.PIPE)
         return result.stdout.decode("utf-8")
 
-    def initialize_chains_in_firewall(self):
+    def _init_chains_in_firewall(self):
         """For linux: Adds a chain to iptables or a table to nftables called
         slipsBlocking where all the rules will reside"""
 
@@ -139,13 +139,13 @@ class Blocking(IModule):
         os.system(f"{self.sudo}iptables -N slipsBlocking >/dev/null 2>&1")
 
         # Check if we're already redirecting to slipsBlocking chain
-        input_chain_rules = self.get_cmd_output(
+        input_chain_rules = self._get_cmd_output(
             f"{self.sudo} iptables -nvL INPUT"
         )
-        output_chain_rules = self.get_cmd_output(
+        output_chain_rules = self._get_cmd_output(
             f"{self.sudo} iptables -nvL OUTPUT"
         )
-        forward_chain_rules = self.get_cmd_output(
+        forward_chain_rules = self._get_cmd_output(
             f"{self.sudo} iptables -nvL FORWARD"
         )
         # Redirect the traffic from all other chains to slipsBlocking so rules
@@ -168,7 +168,7 @@ class Blocking(IModule):
                 + "iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1"
             )
 
-    def is_ip_blocked(self, ip) -> bool:
+    def _is_ip_blocked(self, ip) -> bool:
         """Checks if ip is already blocked or not"""
         command = f"{self.sudo}iptables -L slipsBlocking -v -n"
         # Execute command
@@ -176,97 +176,72 @@ class Blocking(IModule):
         result = result.stdout.decode("utf-8")
         return ip in result
 
-    def block_ip(
-        self,
-        ip_to_block=None,
-        from_=True,
-        to=True,
-        dport=None,
-        sport=None,
-        protocol=None,
-        block_for=False,
-    ):
+    def _block_ip(self, ip_to_block: str, flags: Dict[str, str]) -> bool:
         """
         This function determines the user's platform and firewall and calls
         the appropriate function to add the rules to the used firewall.
         By default this function blocks all traffic from and to the given ip.
+        return strue if the ip is successfully blocked
         """
+
+        if self.firewall != "iptables":
+            return
 
         if not isinstance(ip_to_block, str):
             return False
 
         # Make sure ip isn't already blocked before blocking
-        if self.is_ip_blocked(ip_to_block):
+        if self._is_ip_blocked(ip_to_block):
             return False
 
-        if self.firewall == "iptables":
-            # Blocking in iptables
-            # Set the default behaviour to block all traffic from and to an ip
-            if from_ is None and to is None:
-                from_, to = True, True
-            # This dictionary will be used to construct the rule
-            options = {
-                "protocol": f" -p {protocol}" if protocol is not None else "",
-                "dport": f" --dport {str(dport)}" if dport is not None else "",
-                "sport": f" --sport {str(sport)}" if sport is not None else "",
-            }
-            blocked = False
-            if from_:
-                # Add rule to block traffic from source ip_to_block (-s)
-                blocked = exec_iptables_command(
-                    self.sudo,
-                    action="insert",
-                    ip_to_block=ip_to_block,
-                    flag="-s",
-                    options=options,
-                )
-                if blocked:
-                    self.print(f"Blocked all traffic from: {ip_to_block}")
-
-            if to:
-                # Add rule to block traffic to ip_to_block (-d)
-                blocked = exec_iptables_command(
-                    self.sudo,
-                    action="insert",
-                    ip_to_block=ip_to_block,
-                    flag="-d",
-                    options=options,
-                )
-                if blocked:
-                    self.print(f"Blocked all traffic to: {ip_to_block}")
-
-            if block_for:
-                time_of_blocking = time.time()
-                #  unblock ip after block_for period passes
-                self.unblock_ips.update(
-                    {
-                        ip_to_block: {
-                            "block_for": block_for,
-                            "time_of_blocking": time_of_blocking,
-                            "blocking_details": {
-                                "from": from_,
-                                "to": to,
-                                "dport": dport,
-                                "sport": sport,
-                                "protocol": protocol,
-                            },
-                        }
-                    }
-                )
-
+        from_ = flags.get("from_")
+        to = flags.get("to")
+        dport = flags.get("dport")
+        sport = flags.get("sport")
+        protocol = flags.get("protocol")
+        # Set the default behaviour to block all traffic from and to an ip
+        if from_ is None and to is None:
+            from_, to = True, True
+        # This dictionary will be used to construct the rule
+        options = {
+            "protocol": f" -p {protocol}" if protocol is not None else "",
+            "dport": f" --dport {str(dport)}" if dport is not None else "",
+            "sport": f" --sport {str(sport)}" if sport is not None else "",
+        }
+        blocked = False
+        if from_:
+            # Add rule to block traffic from source ip_to_block (-s)
+            blocked = exec_iptables_command(
+                self.sudo,
+                action="insert",
+                ip_to_block=ip_to_block,
+                flag="-s",
+                options=options,
+            )
             if blocked:
-                # Successfully blocked an ip
-                return True
+                self.print(f"Blocked all traffic from: {ip_to_block}")
 
-        return False
+        if to:
+            # Add rule to block traffic to ip_to_block (-d)
+            blocked = exec_iptables_command(
+                self.sudo,
+                action="insert",
+                ip_to_block=ip_to_block,
+                flag="-d",
+                options=options,
+            )
+            if blocked:
+                self.print(f"Blocked all traffic to: {ip_to_block}")
+
+        return blocked
 
     def main(self):
-        # There's an IP that needs to be blocked
         if msg := self.get_msg("new_blocking"):
             # message['data'] in the new_blocking channel is a dictionary that contains
             # the ip and the blocking options
             # Example of the data dictionary to block or unblock an ip:
-            # (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
+            # (notice you have to specify from,to,dport,sport,protocol or at
+            # least 2 of them when unblocking)
             #   blocking_data = {
             #       "ip"       : "0.0.0.0"
             #       "tw"       : 1
@@ -288,24 +263,31 @@ class Blocking(IModule):
             ip = data.get("ip")
             tw: int = data.get("tw")
             block = data.get("block")
-            from_ = data.get("from")
-            to = data.get("to")
-            dport = data.get("dport")
-            sport = data.get("sport")
-            protocol = data.get("protocol")
-            block_for = data.get("block_for")
+            # number of tws to block for
+            # blocking should last until the end of the next
+            # timewindow by default. we'll be blocking in the cur
+            # timewindow anyways, this number is "how many tws AFTER the
+            # cur tw to keep this ip blocked in"
+            how_many_tws_to_block = data.get("block_for", 1)
+
+            flags = {
+                "from_": data.get("from"),
+                "to": data.get("to"),
+                "dport": data.get("dport"),
+                "sport": data.get("sport"),
+                "protocol": data.get("protocol"),
+            }
 
             if block:
-                self.block_ip(ip, from_, to, dport, sport, protocol, block_for)
+                # blocking request
+                blocked = self._block_ip(ip, flags)
+                if blocked:
+                    print(f"@@@@@@@@@@@@@@@@ all good {ip} is blocked")
+                    self.unblocker.unblock_request(
+                        ip, how_many_tws_to_block, tw, flags
+                    )
             else:
-                how_many_tws_to_block = 1
-                flags = {
-                    "from_": from_,
-                    "to": to,
-                    "dport": dport,
-                    "sport": sport,
-                    "protocol": protocol,
-                }
+                # unblocking request
                 self.unblocker.unblock_request(
                     ip, how_many_tws_to_block, tw, flags
                 )

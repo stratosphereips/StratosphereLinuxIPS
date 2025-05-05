@@ -408,6 +408,10 @@ class EvidenceHandler(ICore):
         """
         # send ip to the blocking module
         if not self.is_blocking_module_supported():
+            print(
+                "@@@@@@@@@@@@@@@@ decide_blocking blocking module "
+                "unsupported"
+            )
             return False
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)
@@ -415,6 +419,9 @@ class EvidenceHandler(ICore):
 
         # First, Make sure we don't block our own IP
         if ip_to_block in self.our_ips:
+            print(
+                f"@@@@@@@@@@@@@@@@ decide_blocking thats own ip! {ip_to_block}"
+            )
             return False
 
         #  TODO: edit the options here. by default it'll block
@@ -428,6 +435,7 @@ class EvidenceHandler(ICore):
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
+        print("@@@@@@@@@@@@@@@@ published st in new_blocking")
         return True
 
     def increment_attack_counter(

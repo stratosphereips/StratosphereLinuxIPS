@@ -183,7 +183,7 @@ class Checker:
 
         blocking = Blocking(Queue())
         blocking.start()
-        blocking.delete_slips_blocking_chain()
+        blocking._del_slips_blocking_chain()
         # kill the blocking module manually because we can't
         # run shutdown_gracefully here (not all modules has started)
         for child in active_children():
