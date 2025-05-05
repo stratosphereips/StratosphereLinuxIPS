@@ -96,9 +96,6 @@ class Input(ICore):
         self.zeek_thread = threading.Thread(
             target=self.run_zeek, daemon=True, name="run_zeek_thread"
         )
-        # used to give the profiler the total amount of flows to
-        # read with the first flow only
-        self.is_first_flow = True
         # is set by the profiler to tell this proc that we it is done processing
         # the input process and shut down and close the profiler queue no issue
         self.is_profiler_done_event = is_profiler_done_event

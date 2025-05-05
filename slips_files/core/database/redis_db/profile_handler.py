@@ -81,6 +81,18 @@ class ProfileHandler:
                 json.dumps(flow),
             )
 
+    def get_first_flow_time(self) -> Optional[float]:
+        """
+        Get the starttime of the first timewindow
+        aka ts of the first flow
+        first tw is always timewindow1
+        """
+        starttime_of_first_tw: str = self.r.hget(
+            self.constants.ANALYSIS, "file_start"
+        )
+        if starttime_of_first_tw:
+            return float(starttime_of_first_tw)
+
     def get_timewindow(self, flowtime, profileid):
         """
         This function returns the TW in the database where the flow belongs.
@@ -111,11 +123,8 @@ class ProfileHandler:
             tw_start = float(flowtime - (31536000 * 100))
             tw_number: int = 1
         else:
-            starttime_of_first_tw: str = self.r.hget(
-                self.constants.ANALYSIS, "file_start"
-            )
+            starttime_of_first_tw: float = self.get_first_flow_time()
             if starttime_of_first_tw:
-                starttime_of_first_tw = float(starttime_of_first_tw)
                 tw_number: int = (
                     floor((flowtime - starttime_of_first_tw) / self.width) + 1
                 )
@@ -1150,7 +1159,6 @@ class ProfileHandler:
 
     def get_tw_start_time(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
-        # Get all the TW for this profile
         # We need to encode it to 'search' because the data in the
         # sorted set is encoded
         return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
@@ -1450,9 +1458,6 @@ class ProfileHandler:
         # check if it's already marked as dhcp
         if not is_dhcp_set:
             self.r.hset(profileid, "dhcp", "true")
-
-    def get_first_flow_time(self) -> Optional[str]:
-        return self.r.hget(self.constants.ANALYSIS, "file_start")
 
     def add_profile(self, profileid, starttime):
         """

@@ -141,8 +141,33 @@ class AlertHandler:
         return ""
 
     def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
-        """returns the timewindow start and endtime"""
+        """
+        returns the timewindow start and endtime
+        """
         twid_start_time: float = self.get_tw_start_time(profileid, twid)
+        if not twid_start_time:
+            # the given tw is in the future
+            # calc the start time of the twid manually based on the first
+            # twid
+            first_twid_start_time: float = self.get_first_flow_time()
+            print(
+                f"@@@@@@@@@@@@@@@@ first_twid_start_time {first_twid_start_time}"
+            )
+            given_twid: int = int(twid.replace("timewindow", ""))
+            print(f"@@@@@@@@@@@@@@@@ given_twid {twid}  -> {given_twid}")
+            # tws in slips start from 1.
+            #     tw1   tw2   tw3   tw4
+            # 0 ──────┬─────┬──────┬──────
+            #         │     │      │
+            #         2     4      6
+            twid_start_time = first_twid_start_time + (
+                self.width * (given_twid - 1)
+            )
+            print(
+                f"@@@@@@@@@@@@@@@@ given twid  ({twid}) start time"
+                f" {twid_start_time}"
+            )
+
         twid_end_time: float = twid_start_time + self.width
         return twid_start_time, twid_end_time
 
