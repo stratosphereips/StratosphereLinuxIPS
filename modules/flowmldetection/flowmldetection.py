@@ -72,11 +72,19 @@ class FlowMLDetection(IModule):
         self.scaler = StandardScaler()
         self.model_path = "./modules/flowmldetection/model.bin"
         self.scaler_path = "./modules/flowmldetection/scaler.bin"
-
-        # Initialize the training log file
-        self.training_log_path = "./modules/flowmldetection/training.log"
-        with open(self.training_log_path, "w") as log_file:
-            log_file.write("Training Log Initialized\n")
+        self.init_log_file()
+    
+    def init_log_file(self):
+        """
+        Init the log file for training or testing
+        """
+        if self.mode == "train":
+            # Initialize the training log file
+            self.log_path = "./modules/flowmldetection/training.log"
+        elif self.mode == "test":
+            # Initialize the testing log file
+            self.log_path = "./modules/flowmldetection/testing.log"
+        self.log_file = open(self.log_path, "w")
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -85,15 +93,14 @@ class FlowMLDetection(IModule):
         # in case the flows do not have a label themselves
         self.label = conf.label()
 
-    def write_to_training_log(self, message: str):
+    def write_to_log(self, message: str):
         """
-        Write a message to the training log file.
+        Write a message to the local log file.
         """
         try:
-            with open(self.training_log_path, "w") as log_file:
-                log_file.write(message + "\n")
+            self.log_file.write(message + "\n")
         except Exception as e:
-            self.print(f"Error writing to training log: {e}", 0, 1)
+            self.print(f"Error writing to log: {e}", 0, 1)
 
     def train(self, sum_labeled_flows, last_number_of_flows_when_trained):
         """
@@ -159,7 +166,7 @@ class FlowMLDetection(IModule):
             self.store_model()
 
             # Log training information
-            self.write_to_training_log(
+            self.write_to_log(
                 f"Total labels: {sum_labeled_flows}, "
                 f"Background: {epoch_label_counts['Background']}. "
                 f"Benign: {epoch_label_counts['Benign']}. Malicious: {epoch_label_counts['Malicious']}. "
@@ -169,7 +176,7 @@ class FlowMLDetection(IModule):
         except Exception:
             self.print("Error in train().", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
-            self.write_to_training_log("Error occurred during training.")
+            self.write_to_log("Error occurred during training.")
 
     def process_features(self, dataset):
         """
@@ -597,7 +604,6 @@ class FlowMLDetection(IModule):
                         if not hasattr(self, 'fn'):
                             self.fn = 0
 
-
                         # Update counters based on predictions and labels
                         if pred[0] == "Malicious" and original_label == "Malicious":
                             self.tp += 1
@@ -605,19 +611,10 @@ class FlowMLDetection(IModule):
                             self.tn += 1
                         elif pred[0] == "Malicious" and original_label == "Benign":
                             self.fp += 1
+                            self.write_to_log(f"False Positive Flow: {self.flow}")
                         elif pred[0] == "Benign" and original_label == "Malicious":
                             self.fn += 1
+                            self.write_to_log(f"False Negative Flow: {self.flow}")
 
-                        testing_log_path = "./modules/flowmldetection/testing_performance.log"
-                        try:
-                            with open(testing_log_path, "w") as log_file:
-                                # Log the testing performance metrics
-                                log_file.write(f"TP: {self.tp}, TN: {self.tn}, FP: {self.fp}, FN: {self.fn}\n")
-
-                                # Log the original flow for false positives and false negatives
-                                if pred[0] == "Malicious" and original_label == "Benign":
-                                    log_file.write(f"False Positive Flow: {self.flow}\n")
-                                elif pred[0] == "Benign" and original_label == "Malicious":
-                                    log_file.write(f"False Negative Flow: {self.flow}\n")
-                        except Exception as e:
-                            self.print(f"Error initializing testing performance log: {e}", 0, 1)
+                        # Log the testing performance metrics
+                        self.write_to_log(f"TP: {self.tp}, TN: {self.tn}, FP: {self.fp}, FN: {self.fn}")
