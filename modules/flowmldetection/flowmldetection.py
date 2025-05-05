@@ -90,7 +90,7 @@ class FlowMLDetection(IModule):
         Write a message to the training log file.
         """
         try:
-            with open(self.training_log_path, "a") as log_file:
+            with open(self.training_log_path, "w") as log_file:
                 log_file.write(message + "\n")
         except Exception as e:
             self.print(f"Error writing to training log: {e}", 0, 1)
@@ -610,8 +610,7 @@ class FlowMLDetection(IModule):
 
                         testing_log_path = "./modules/flowmldetection/testing_performance.log"
                         try:
-                            with open(testing_log_path, "a") as log_file:
-                                log_file.write("Testing Performance Log Initialized\n")
+                            with open(testing_log_path, "w") as log_file:
                                 # Log the testing performance metrics
                                 log_file.write(f"TP: {self.tp}, TN: {self.tn}, FP: {self.fp}, FN: {self.fn}\n")
 
