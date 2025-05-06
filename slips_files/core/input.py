@@ -903,7 +903,6 @@ class Input(ICore):
         self.profiler_queue.put(to_send)
 
     def main(self):
-        utils.drop_root_privs()
         if self.is_running_non_stop:
             # this thread should be started from run() to get the PID of inputprocess and have shared variables
             # if it started from __init__() it will have the PID of slips.py therefore,
