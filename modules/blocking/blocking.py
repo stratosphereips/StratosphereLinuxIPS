@@ -9,6 +9,7 @@ import subprocess
 from typing import Dict
 
 from slips_files.common.abstracts.module import IModule
+from slips_files.common.slips_utils import utils
 from .exec_iptables_cmd import exec_iptables_command
 from modules.blocking.unblocker import Unblocker
 
@@ -32,15 +33,14 @@ class Blocking(IModule):
             sys.exit()
 
         self.firewall = self._determine_linux_firewall()
-        self._set_sudo_according_to_env()
+        self.sudo = utils.get_sudo_according_to_env()
         self._init_chains_in_firewall()
-        self.unblocker = Unblocker(self.db)
+        self.unblocker = Unblocker(self.db, self.sudo)
         # self.test()
 
     def test(self):
         """For debugging purposes, once we're done with the module we'll
         delete it"""
-
         if not self._is_ip_blocked("2.2.0.0"):
             blocking_data = {
                 "ip": "2.2.0.0",
@@ -60,17 +60,6 @@ class Blocking(IModule):
             self.print("[test] IP is already blocked")
         # self.unblock_ip("2.2.0.0",True,True)
 
-    def _set_sudo_according_to_env(self):
-        """
-        Check if running in host or in docker and sets sudo string accordingly.
-        There's no sudo in docker so we need to execute all commands without it
-        """
-        # This env variable is defined in the Dockerfile
-        self.running_in_docker = os.environ.get(
-            "IS_IN_A_DOCKER_CONTAINER", False
-        )
-        self.sudo = "" if self.running_in_docker else "sudo "
-
     def _determine_linux_firewall(self):
         """Returns the currently installed firewall and installs iptables if
         none was found"""
@@ -85,39 +74,6 @@ class Blocking(IModule):
                 "iptables is not installed. Blocking module is quitting."
             )
             sys.exit()
-
-    def _del_slips_blocking_chain(self):
-        """Flushes and deletes everything in slipsBlocking chain"""
-        # check if slipsBlocking chain exists before flushing it and suppress
-        # stderr and stdout while checking
-        # 0 means it exists
-        chain_exists = (
-            os.system(
-                f"{self.sudo}iptables -nvL slipsBlocking >/dev/null 2>&1"
-            )
-            == 0
-        )
-        if self.firewall == "iptables" and chain_exists:
-            # Delete all references to slipsBlocking inserted in INPUT OUTPUT
-            # and FORWARD before deleting the chain
-            cmd = (
-                f"{self.sudo}iptables -D INPUT -j slipsBlocking "
-                f">/dev/null 2>&1 ; {self.sudo}iptables -D OUTPUT "
-                f"-j slipsBlocking >/dev/null 2>&1 ; "
-                f"{self.sudo}iptables -D FORWARD -j "
-                f"slipsBlocking >/dev/null 2>&1"
-            )
-            os.system(cmd)
-            # flush and delete all the rules in slipsBlocking
-            cmd = (
-                f"{self.sudo}iptables -F slipsBlocking >/dev/null 2>&1 ; "
-                f"{self.sudo} iptables -X slipsBlocking >/dev/null 2>&1"
-            )
-            os.system(cmd)
-            print("Successfully deleted slipsBlocking chain.")
-            return True
-
-        return False
 
     def _get_cmd_output(self, command):
         """Executes a command and returns the output"""
