@@ -538,6 +538,15 @@ class Utils(object):
 
         return file_hash.hexdigest()
 
+    def get_sudo_according_to_env(self) -> str:
+        """
+        Check if running in host or in docker and sets sudo string accordingly.
+        There's no sudo in docker so we need to execute all commands without it
+        """
+        # This env variable is defined in the Dockerfile
+        running_in_docker = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+        return "" if running_in_docker else "sudo "
+
     def is_msg_intended_for(self, message, channel):
         """
         Function to check
