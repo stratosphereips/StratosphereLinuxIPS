@@ -13,8 +13,9 @@ class Unblocker(IUnblocker):
 
     name = "iptables_unblocker"
 
-    def __init__(self, db):
+    def __init__(self, db, sudo):
         IUnblocker.__init__(self, db)
+        self.sudo = sudo
         self.requests_lock = Lock()
         self.requests = {}
 
