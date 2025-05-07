@@ -51,13 +51,31 @@ class Unblocker(IUnblocker):
         current_tw: int,
         flags: Dict[str, str],
     ):
-        print(f"@@@@@@@@@@@@@@@@ unblock_request for ip {ip}")
-        tw_to_unblock_at: TimeWindow = self._calc_unblock_time(
-            ip, current_tw, how_many_tws_to_block
-        )
-        print(
-            f"@@@@@@@@@@@@@@@@ unblocking {ip} at the end of {tw_to_unblock_at}"
-        )
+        # if this ip was blocked, and is still setting alerts, how many tws
+        # to extend its blocking?
+        extend_blocking_for = 1
+        # first check if there's already an unblocking request, if so,
+        # we extend the blocking 1 more timewindow.
+        try:
+            tw_to_unblock_at: TimeWindow = self.requests[ip]["tw_to_unblock"]
+            tw_to_unblock_at: TimeWindow = self._calc_unblock_time(
+                ip,
+                tw_to_unblock_at.number + extend_blocking_for,
+                how_many_tws_to_block,
+            )
+            self.log(
+                f"Extending the blocking period for {ip} for"
+                f" {extend_blocking_for} extra timewindow."
+            )
+        except KeyError:
+            print(f"@@@@@@@@@@@@@@@@ unblock_request for ip {ip}")
+            tw_to_unblock_at: TimeWindow = self._calc_unblock_time(
+                ip, current_tw, how_many_tws_to_block
+            )
+            print(
+                f"@@@@@@@@@@@@@@@@ unblocking {ip} at the end of {tw_to_unblock_at}"
+            )
+
         self._add_req(ip, tw_to_unblock_at, flags)
 
     def _check_if_time_to_unblock(self):
@@ -101,7 +119,10 @@ class Unblocker(IUnblocker):
     def _log_successful_unblock(self, ip):
         blocking_ts: float = self.db.get_blocking_timestamp(ip)
         now = time.time()
+
         blocking_hrs: int = utils.get_time_diff(blocking_ts, now, "hours")
+        blocking_hrs = round(blocking_hrs, 1)
+
         blocking_tws: int = self.db.get_equivalent_tws(blocking_hrs)
         printable_blocking_ts = utils.convert_ts_format(
             blocking_ts, utils.alerts_format

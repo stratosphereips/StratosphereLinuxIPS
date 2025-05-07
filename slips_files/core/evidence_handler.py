@@ -379,6 +379,20 @@ class EvidenceHandler(ICore):
         """
         saves alert details in the db and informs exporting modules about it
         """
+        # like in the firewall
+        profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
+            str(alert.profile), str(alert.timewindow)
+        )
+
+        if profile_already_blocked:
+            print(
+                f"@@@@@@@@@@@@@@@@ [handle_new_alert] profiler already "
+                f"blocked and is setting another alert!!! {alert}"
+            )
+            # send another blocking request to extend the blocking period
+            self.decide_blocking(alert.profile.ip, alert.timewindow)
+            return
+
         self.db.set_alert(alert, evidence_causing_the_alert)
         self.send_to_exporting_module(evidence_causing_the_alert)
         alert_to_print: str = self.formatter.format_evidence_for_printing(
@@ -397,6 +411,7 @@ class EvidenceHandler(ICore):
             self.db.mark_profile_and_timewindow_as_blocked(
                 str(alert.profile), str(alert.timewindow)
             )
+
         self.log_alert(alert, blocked=is_blocked)
 
     def decide_blocking(
@@ -432,6 +447,8 @@ class EvidenceHandler(ICore):
             "ip": ip_to_block,
             "block": True,
             "tw": timewindow.number,
+            # block until the end of the next 1 timewindow
+            "block_for": 1,
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
@@ -569,11 +586,6 @@ class EvidenceHandler(ICore):
                 evidence_dict: dict = utils.to_dict(evidence)
                 self.db.publish("report_to_peers", json.dumps(evidence_dict))
 
-                # if the profile was already blocked in
-                # this twid, we shouldn't alert
-                profile_already_blocked = self.db.is_blocked_profile_and_tw(
-                    profileid, twid
-                )
                 # This is the part to detect if the accumulated
                 # evidence was enough for generating a detection
                 # The detection should be done in attacks per minute.
@@ -584,7 +596,6 @@ class EvidenceHandler(ICore):
                 if (
                     accumulated_threat_level
                     >= self.detection_threshold_in_this_width
-                    and not profile_already_blocked
                 ):
                     tw_evidence: Dict[str, Evidence]
                     tw_evidence = self.get_evidence_for_tw(profileid, twid)
