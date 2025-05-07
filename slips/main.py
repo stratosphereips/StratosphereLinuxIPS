@@ -397,7 +397,7 @@ class Main:
             f"Evidence: {green(evidence_number)}. "
             f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
-            f"Analyzed {flow_per_min} flows/min."
+            f"Analyzed {green(flow_per_min)} flows/min."
         )
         self.print(stats)
         sys.stdout.flush()  # Make sure the output is displayed immediately

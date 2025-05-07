@@ -715,3 +715,4 @@ class Profiler(ICore, IObservable):
             self.pending_flows_queue_lock.acquire()
             self.flows_to_process_q.put(msg)
             self.pending_flows_queue_lock.release()
+        return None
