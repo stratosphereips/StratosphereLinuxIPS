@@ -140,6 +140,12 @@ class AlertHandler:
         # the victim is the whole network
         return ""
 
+    def get_tw_start_time(self, profileid, twid):
+        """Return the time when this TW in this profile was created"""
+        # We need to encode it to 'search' because the data in the
+        # sorted set is encoded
+        return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
+
     def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
         """
         returns the timewindow start and endtime

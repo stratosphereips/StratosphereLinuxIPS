@@ -1157,12 +1157,6 @@ class ProfileHandler:
             self.print("Error in addNewTW", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
 
-    def get_tw_start_time(self, profileid, twid):
-        """Return the time when this TW in this profile was created"""
-        # We need to encode it to 'search' because the data in the
-        # sorted set is encoded
-        return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
-
     def get_number_of_tws(self, profileid):
         """Return the number of tws for this profile id"""
         return self.r.zcard(f"tws{profileid}") if profileid else False

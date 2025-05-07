@@ -235,11 +235,7 @@ class TimeWindow:
             )
 
     def __repr__(self):
-        return (
-            f"timewindow{self.number}, "
-            f"start_time: {self.start_time}, "
-            f"end_time: {self.end_time}"
-        )
+        return f"timewindow{self.number}"
 
 
 class Method(Enum):
