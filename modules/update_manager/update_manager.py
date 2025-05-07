@@ -1765,7 +1765,6 @@ class UpdateManager(IModule):
 
     def pre_main(self):
         """this method runs only once"""
-        utils.drop_root_privs()
         try:
             # only one instance of slips should be able to update TI files at a time
             # so this function will only be allowed to run from 1 slips instance.
