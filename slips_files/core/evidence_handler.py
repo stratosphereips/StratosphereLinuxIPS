@@ -526,7 +526,7 @@ class EvidenceHandler(ICore):
                     timestamp: datetime = utils.convert_to_local_timezone(
                         timestamp
                     )
-                flow_datetime = utils.convert_format(timestamp, "iso")
+                flow_datetime = utils.convert_ts_format(timestamp, "iso")
 
                 evidence: Evidence = (
                     self.formatter.add_threat_level_to_evidence_description(

@@ -128,7 +128,7 @@ class Profiler(ICore, IObservable):
 
     def convert_starttime_to_epoch(self, starttime) -> str:
         try:
-            return utils.convert_format(starttime, "unixtimestamp")
+            return utils.convert_ts_format(starttime, "unixtimestamp")
         except ValueError:
             self.print(
                 f"We can not recognize time format of "

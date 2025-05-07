@@ -77,7 +77,7 @@ class MetadataManager:
         if not self.enable_metadata:
             return
 
-        end_date = utils.convert_format(end_date, utils.alerts_format)
+        end_date = utils.convert_ts_format(end_date, utils.alerts_format)
         self.main.db.set_input_metadata({"analysis_end": end_date})
 
         # add slips end date in the metadata dir

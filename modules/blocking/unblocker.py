@@ -61,8 +61,8 @@ class Unblocker(IUnblocker):
             requests_to_del = []
 
             for ip, request in self.requests.items():
-                ts: float = self.request["tw_to_unblock"].end_time
-                flags: Dict[str, str] = self.request["flags"]
+                ts: str = self.request["tw_to_unblock"].end_time
+                ts: float = utils.convert_ts_format(ts, "unixtimestamp")
                 print(
                     f"@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock]"
                     f" checking if time to unvblock {ip} {request}"
@@ -72,6 +72,7 @@ class Unblocker(IUnblocker):
                         f"@@@@@@@@@@@@@@@@ time to unblock {ip} in the "
                         f"fw {request}"
                     )
+                    flags: Dict[str, str] = self.request["flags"]
                     if self._unblock(ip, flags):
                         requests_to_del.append(ip)
 
@@ -93,6 +94,13 @@ class Unblocker(IUnblocker):
         :param ts_to_unblock: unix ts to unblock the given ip at
         """
         with self.requests_lock:
+            ts = utils.convert_ts_format(time.time() + 30, "iso")
+            tw_to_unblock_at.end_time = ts  # @@@@@@@@@@@@@
+            # del this
+
+            print(
+                f"@@@@@@@@@@@@@@@@ tw_to_unblock_at.end_time {tw_to_unblock_at.end_time}"
+            )
             self.requests[ip] = {
                 "tw_to_unblock": tw_to_unblock_at,
                 "flags": flags,

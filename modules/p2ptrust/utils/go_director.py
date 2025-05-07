@@ -91,7 +91,7 @@ class GoDirector:
         Writes the log text to p2p_reports.log
         """
         now = time.time()
-        human_readable_datetime = utils.convert_format(
+        human_readable_datetime = utils.convert_ts_format(
             now, utils.alerts_format
         )
         self.reports_logfile.write(f"{human_readable_datetime} - {text}\n")
@@ -453,7 +453,7 @@ class GoDirector:
         # convert ts to human readable format
         report_info = {
             "reporter": reporter,
-            "report_time": utils.convert_format(
+            "report_time": utils.convert_ts_format(
                 report_time, utils.alerts_format
             ),
         }
@@ -512,7 +512,7 @@ class GoDirector:
             # report time to add this evidence to
             twid = self.db.get_timewindow(timestamp, profileid_of_attacker)
 
-        timestamp = utils.convert_format(timestamp, utils.alerts_format)
+        timestamp = utils.convert_ts_format(timestamp, utils.alerts_format)
         evidence = Evidence(
             evidence_type=EvidenceType.P2P_REPORT,
             attacker=Attacker(

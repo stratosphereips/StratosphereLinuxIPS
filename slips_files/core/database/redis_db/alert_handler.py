@@ -450,7 +450,7 @@ class AlertHandler:
         if the past threat level and confidence
         are the same as the ones we wanna store, we replace the timestamp only
         """
-        now = utils.convert_format(time.time(), utils.alerts_format)
+        now = utils.convert_ts_format(time.time(), utils.alerts_format)
         confidence = f"confidence: {confidence}"
         # this is what we'll be storing in the db, tl, ts, and confidence
         threat_level_data = (threat_level, now, confidence)

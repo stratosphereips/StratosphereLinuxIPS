@@ -169,7 +169,7 @@ class Input(ICore):
             return False
 
         now = float(
-            utils.convert_format(datetime.datetime.now(), "unixtimestamp")
+            utils.convert_ts_format(datetime.datetime.now(), "unixtimestamp")
         )
         time_to_delete = now >= self.time_rotated + self.keep_rotated_files_for
         if time_to_delete:
@@ -740,7 +740,7 @@ class Input(ICore):
                 # delete the old log file (the one with the ts)
                 self.to_be_deleted.append(old_log_file)
                 self.time_rotated = float(
-                    utils.convert_format(
+                    utils.convert_ts_format(
                         datetime.datetime.now(), "unixtimestamp"
                     )
                 )

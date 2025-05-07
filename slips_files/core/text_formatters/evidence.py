@@ -65,10 +65,10 @@ class EvidenceFormatter:
         aka the start and end time of the timewindow causing the alert
         """
         time_format = "%Y/%m/%d %H:%M:%S"
-        twid_start_time: str = utils.convert_format(
+        twid_start_time: str = utils.convert_ts_format(
             alert.timewindow.start_time, time_format
         )
-        tw_stop_time: str = utils.convert_format(
+        tw_stop_time: str = utils.convert_ts_format(
             alert.timewindow.end_time, time_format
         )
 
@@ -114,7 +114,7 @@ class EvidenceFormatter:
         # Add the timestamp to the alert.
         # this datetime, the one that is printed, will be of the last
         # evidence only
-        readable_datetime: str = utils.convert_format(
+        readable_datetime: str = utils.convert_ts_format(
             alert.last_evidence.timestamp, utils.alerts_format
         )
         alert_to_print: str = red(f"{readable_datetime} ") + alert_to_print

@@ -543,7 +543,7 @@ class ProcessManager:
         returns analysis_time in minutes and slips end_time as a date
         """
         start_time = self.main.db.get_slips_start_time()
-        end_time = utils.convert_format(datetime.now(), "unixtimestamp")
+        end_time = utils.convert_ts_format(datetime.now(), "unixtimestamp")
         return (
             utils.get_time_diff(start_time, end_time, return_type="minutes"),
             end_time,

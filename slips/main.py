@@ -205,7 +205,7 @@ class Main:
             ),  # get pcap name from path
         )
         # add timestamp to avoid conflicts wlp3s0_2022-03-1_03:55
-        ts = utils.convert_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
+        ts = utils.convert_ts_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
         self.args.output += f"_{ts}/"
 
         os.makedirs(self.args.output)
@@ -386,7 +386,7 @@ class Main:
             return
 
         self.last_updated_stats_time = now
-        now = utils.convert_format(now, "%Y/%m/%d %H:%M:%S")
+        now = utils.convert_ts_format(now, "%Y/%m/%d %H:%M:%S")
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0

@@ -71,8 +71,8 @@ class IUnblocker(ABC):
             f"profile_{ip}", f"timewindow{tw_to_unblock}"
         )
 
-        tw_start: str = utils.convert_format(tw_start, "iso")
-        tw_end: str = utils.convert_format(tw_end, "iso")
+        tw_start: str = utils.convert_ts_format(tw_start, "iso")
+        tw_end: str = utils.convert_ts_format(tw_end, "iso")
 
         return TimeWindow(
             number=tw_to_unblock, start_time=tw_start, end_time=tw_end

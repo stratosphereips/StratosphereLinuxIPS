@@ -315,7 +315,7 @@ class Utils(object):
         thread.start()
         db.store_pid(thread.name, int(thread._native_id))
 
-    def convert_format(self, ts, required_format: str):
+    def convert_ts_format(self, ts, required_format: str):
         """
         Detects and converts the given ts to the given format
         PS: it sets iso format datetime in the local timezone
@@ -399,7 +399,7 @@ class Utils(object):
         return timedelta(seconds=int(time_in_seconds))
 
     def get_human_readable_datetime(self) -> str:
-        return utils.convert_format(datetime.now(), self.alerts_format)
+        return utils.convert_ts_format(datetime.now(), self.alerts_format)
 
     def get_own_ips(self, ret=Dict) -> Union[Dict[str, List[str]], List[str]]:
         """
@@ -677,7 +677,7 @@ class Utils(object):
         :param ts: unix ts
         :return: ts
         """
-        ts = self.convert_format(ts, "unixtimestamp")
+        ts = self.convert_ts_format(ts, "unixtimestamp")
 
         ts = str(ts)
         # pattern of unix ts with microseconds
@@ -698,7 +698,7 @@ class Utils(object):
         proto = flow.proto.lower()
 
         # aid_hash lib only accepts unix ts
-        ts = utils.convert_format(flow.starttime, "unixtimestamp")
+        ts = utils.convert_ts_format(flow.starttime, "unixtimestamp")
         ts: str = self.assert_microseconds(ts)
 
         cases = {
