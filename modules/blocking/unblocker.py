@@ -17,15 +17,18 @@ class Unblocker(IUnblocker):
 
     name = "iptables_unblocker"
 
-    def __init__(self, db, sudo, should_stop: Callable, logger):
+    def __init__(self, db, sudo, should_stop: Callable, logger, log: Callable):
         IUnblocker.__init__(self, db)
         # this is the blocking module's should_stop method
         # the goal is to stop the threads started by this module when the
         # blocking module's should_stop returns True
         self.should_stop = should_stop
+        # this logger's main purpose is to start the printer
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.sudo = sudo
+        # this log method is used to log unblocking requests to blocking.log
+        self.log = log
         self.requests_lock = Lock()
         self.requests = {}
         self._start_checker_thread()
@@ -81,6 +84,8 @@ class Unblocker(IUnblocker):
                     )
                     flags: Dict[str, str] = request["flags"]
                     if self._unblock(ip, flags):
+                        self._log_successful_unblock(ip)
+                        self.db.del_blocked_ip(ip)
                         requests_to_del.append(ip)
 
             for ip in requests_to_del:
@@ -93,6 +98,22 @@ class Unblocker(IUnblocker):
             print("@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock] sleeping 10")
             time.sleep(10)
 
+    def _log_successful_unblock(self, ip):
+        blocking_ts: float = self.db.get_blocking_timestamp(ip)
+        now = time.time()
+        blocking_hrs: int = utils.get_time_diff(blocking_ts, now, "hours")
+        blocking_tws: int = self.db.get_equivalent_tws(blocking_hrs)
+        printable_blocking_ts = utils.convert_ts_format(
+            blocking_ts, utils.alerts_format
+        )
+        printable_now = utils.convert_ts_format(now, utils.alerts_format)
+        txt = (
+            f"The blocking of {ip} lasted {blocking_tws} timewindows. "
+            f"({blocking_hrs}hrs - "
+            f"From {printable_blocking_ts} to {printable_now})"
+        )
+        self.log(txt)
+
     def _add_req(
         self, ip: str, tw_to_unblock_at: TimeWindow, flags: Dict[str, str]
     ):
@@ -104,7 +125,6 @@ class Unblocker(IUnblocker):
             ts = utils.convert_ts_format(time.time() + 30, "iso")
             tw_to_unblock_at.end_time = ts  # @@@@@@@@@@@@@
             # del this
-
             print(
                 f"@@@@@@@@@@@@@@@@ tw_to_unblock_at.end_time {tw_to_unblock_at.end_time}"
             )
@@ -112,6 +132,13 @@ class Unblocker(IUnblocker):
                 "tw_to_unblock": tw_to_unblock_at,
                 "flags": flags,
             }
+
+        self.log(
+            f"Registered unblocking request to unblock {ip} at the end "
+            f"of the next timewindow. "
+            f"Timewindow to unblock: {tw_to_unblock_at} "
+            f"Timestamp to unblock: {tw_to_unblock_at.end_time}) "
+        )
         print(f"@@@@@@@@@@@@@@@@ added req for {ip} ")
         from pprint import pp
 
@@ -173,8 +200,17 @@ class Unblocker(IUnblocker):
             )
 
         if unblocked:
-            self.print(f"Unblocked: {ip_to_unblock}")
+            cur_timewindow = self.db.get_timewindow(
+                time.time(), f"profile_{ip_to_unblock}"
+            )
+            txt = f"IP {ip_to_unblock} is unblocked in {cur_timewindow}."
+            self.print(txt)
+            self.log(txt)
             print(f"@@@@@@@@@@@@@@@@ unblocked {ip_to_unblock} in the fw")
             return True
+        else:
+            txt = f"An errror occured. Unable to unblock {ip_to_unblock}"
+            self.print(txt)
+            self.log(txt)
 
         return False

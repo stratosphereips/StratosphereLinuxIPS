@@ -140,6 +140,19 @@ class AlertHandler:
         # the victim is the whole network
         return ""
 
+    def set_blocked_ip(self, ip: str):
+        self.r.zadd("blocked_ips", {ip: time.time()})
+
+    def is_ip_blocked(self, ip: str) -> Optional[float]:
+        ts = self.r.zscore("blocked_ips", ip)
+        if ts is not None:
+            return ts
+        return None
+
+    def del_blocked_ip(self, ip: str):
+        # remove ip from the blocked_ips sorted set
+        self.r.zrem("blocked_ips", ip)
+
     def get_tw_start_time(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
         # We need to encode it to 'search' because the data in the

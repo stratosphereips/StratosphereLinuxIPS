@@ -7,6 +7,8 @@ import shutil
 import json
 import subprocess
 from typing import Dict
+import time
+from threading import Lock
 
 from slips_files.common.abstracts.module import IModule
 from slips_files.common.slips_utils import utils
@@ -35,30 +37,20 @@ class Blocking(IModule):
         self.firewall = self._determine_linux_firewall()
         self.sudo = utils.get_sudo_according_to_env()
         self._init_chains_in_firewall()
+        self.blocking_log_path = os.path.join(self.output_dir, "blocking.log")
+        self.blocking_logfile_lock = Lock()
+        # clear it
+        open(self.blocking_log_path, "w").close()
 
-        # self.test()
-
-    def test(self):
-        """For debugging purposes, once we're done with the module we'll
-        delete it"""
-        if not self._is_ip_blocked("2.2.0.0"):
-            blocking_data = {
-                "ip": "2.2.0.0",
-                "block": True,
-                "from": True,
-                "to": True,
-                "block_for": 5,
-                # "dport"    : Optional destination port number
-                # "sport"    : Optional source port number
-                # "protocol" : Optional protocol
-            }
-            # Example of passing blocking_data to this module:
-            blocking_data = json.dumps(blocking_data)
-            self.db.publish("new_blocking", blocking_data)
-            self.print("[test] Blocked ip.")
-        else:
-            self.print("[test] IP is already blocked")
-        # self.unblock_ip("2.2.0.0",True,True)
+    def log(self, text: str):
+        """Logs the given text to the blocking log file"""
+        with self.blocking_logfile_lock:
+            with open(self.blocking_log_path, "a") as f:
+                now = time.time()
+                human_readable_datetime = utils.convert_ts_format(
+                    now, utils.alerts_format
+                )
+                f.write(f"{human_readable_datetime} - {text}\n")
 
     def _determine_linux_firewall(self):
         """Returns the currently installed firewall and installs iptables if
@@ -175,7 +167,9 @@ class Blocking(IModule):
                 options=options,
             )
             if blocked:
-                self.print(f"Blocked all traffic from: {ip_to_block}")
+                txt = f"Blocked all traffic from: {ip_to_block}"
+                self.print(txt)
+                self.log(txt)
 
         if to:
             # Add rule to block traffic to ip_to_block (-d)
@@ -187,7 +181,10 @@ class Blocking(IModule):
                 options=options,
             )
             if blocked:
-                self.print(f"Blocked all traffic to: {ip_to_block}")
+                txt = f"Blocked all traffic to: {ip_to_block}"
+                self.print(txt)
+                self.log(f"Blocked all traffic to: {ip_to_block}")
+                self.db.set_blocked_ip(ip_to_block)
 
         return blocked
 
@@ -198,7 +195,7 @@ class Blocking(IModule):
 
     def pre_main(self):
         self.unblocker = Unblocker(
-            self.db, self.sudo, self.should_stop, self.logger
+            self.db, self.sudo, self.should_stop, self.logger, self.log
         )
 
     def main(self):
