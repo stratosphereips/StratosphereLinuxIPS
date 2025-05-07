@@ -3,8 +3,10 @@ import time
 import threading
 from typing import Dict, Callable
 from slips_files.common.abstracts.unblocker import IUnblocker
+from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import TimeWindow
+from modules.blocking.exec_iptables_cmd import exec_iptables_command
 
 
 class Unblocker(IUnblocker):
@@ -15,16 +17,21 @@ class Unblocker(IUnblocker):
 
     name = "iptables_unblocker"
 
-    def __init__(self, db, sudo, should_stop: Callable):
+    def __init__(self, db, sudo, should_stop: Callable, logger):
         IUnblocker.__init__(self, db)
         # this is the blocking module's should_stop method
         # the goal is to stop the threads started by this module when the
         # blocking module's should_stop returns True
         self.should_stop = should_stop
+        self.logger = logger
+        self.printer = Printer(self.logger, self.name)
         self.sudo = sudo
         self.requests_lock = Lock()
         self.requests = {}
         self._start_checker_thread()
+
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def _start_checker_thread(self):
         self.unblocker_thread = threading.Thread(
@@ -61,7 +68,7 @@ class Unblocker(IUnblocker):
             requests_to_del = []
 
             for ip, request in self.requests.items():
-                ts: str = self.request["tw_to_unblock"].end_time
+                ts: str = request["tw_to_unblock"].end_time
                 ts: float = utils.convert_ts_format(ts, "unixtimestamp")
                 print(
                     f"@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock]"
@@ -72,7 +79,7 @@ class Unblocker(IUnblocker):
                         f"@@@@@@@@@@@@@@@@ time to unblock {ip} in the "
                         f"fw {request}"
                     )
-                    flags: Dict[str, str] = self.request["flags"]
+                    flags: Dict[str, str] = request["flags"]
                     if self._unblock(ip, flags):
                         requests_to_del.append(ip)
 
@@ -82,7 +89,7 @@ class Unblocker(IUnblocker):
                     f"seleting request for {ip}"
                 )
 
-                self._del_req(ip)
+                self._del_request(ip)
             print("@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock] sleeping 10")
             time.sleep(10)
 
@@ -91,7 +98,7 @@ class Unblocker(IUnblocker):
     ):
         """
         Add an unblocking request to self.requests
-        :param ts_to_unblock: unix ts to unblock the given ip at
+        :param tw_to_unblock_at: unix ts to unblock the given ip at
         """
         with self.requests_lock:
             ts = utils.convert_ts_format(time.time() + 30, "iso")
@@ -147,7 +154,8 @@ class Unblocker(IUnblocker):
         unblocked = False
         # Block traffic from source ip
         if from_:
-            unblocked = self.exec_iptables_command(
+            unblocked = exec_iptables_command(
+                self.sudo,
                 action="delete",
                 ip_to_block=ip_to_unblock,
                 flag="-s",
@@ -156,7 +164,8 @@ class Unblocker(IUnblocker):
 
         # Block traffic to distination ip
         if to:
-            unblocked = self.exec_iptables_command(
+            unblocked = exec_iptables_command(
+                self.sudo,
                 action="delete",
                 ip_to_block=ip_to_unblock,
                 flag="-d",

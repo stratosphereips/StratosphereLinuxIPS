@@ -197,7 +197,9 @@ class Blocking(IModule):
             self.print("Problem shutting down unblocker thread.")
 
     def pre_main(self):
-        self.unblocker = Unblocker(self.db, self.sudo, self.should_stop)
+        self.unblocker = Unblocker(
+            self.db, self.sudo, self.should_stop, self.logger
+        )
 
     def main(self):
         if msg := self.get_msg("new_blocking"):

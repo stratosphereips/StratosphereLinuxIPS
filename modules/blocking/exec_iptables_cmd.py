@@ -17,6 +17,7 @@ def exec_iptables_command(sudo: str, action, ip_to_block, flag, options):
         f"{sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} "
         f'-m comment --comment "Slips rule" >/dev/null 2>&1'
     )
+    print(f"@@@@@@@@@@@@@@@@ executing {command}")
     # Add the options constructed in block_ip or unblock_ip to the
     # iptables command
     for key in options.keys():
