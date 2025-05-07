@@ -35,7 +35,7 @@ class Blocking(IModule):
         self.firewall = self._determine_linux_firewall()
         self.sudo = utils.get_sudo_according_to_env()
         self._init_chains_in_firewall()
-        self.unblocker = Unblocker(self.db, self.sudo)
+
         # self.test()
 
     def test(self):
@@ -190,6 +190,14 @@ class Blocking(IModule):
                 self.print(f"Blocked all traffic to: {ip_to_block}")
 
         return blocked
+
+    def shutdown_gracefully(self):
+        self.unblocker.unblocker_thread.join(30)
+        if self.unblocker.unblocker_thread.is_alive():
+            self.print("Problem shutting down unblocker thread.")
+
+    def pre_main(self):
+        self.unblocker = Unblocker(self.db, self.sudo, self.should_stop)
 
     def main(self):
         if msg := self.get_msg("new_blocking"):

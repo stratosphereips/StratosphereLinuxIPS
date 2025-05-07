@@ -1,7 +1,9 @@
 from threading import Lock
 import time
-from typing import Dict
+import threading
+from typing import Dict, Callable
 from slips_files.common.abstracts.unblocker import IUnblocker
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import TimeWindow
 
 
@@ -13,11 +15,24 @@ class Unblocker(IUnblocker):
 
     name = "iptables_unblocker"
 
-    def __init__(self, db, sudo):
+    def __init__(self, db, sudo, should_stop: Callable):
         IUnblocker.__init__(self, db)
+        # this is the blocking module's should_stop method
+        # the goal is to stop the threads started by this module when the
+        # blocking module's should_stop returns True
+        self.should_stop = should_stop
         self.sudo = sudo
         self.requests_lock = Lock()
         self.requests = {}
+        self._start_checker_thread()
+
+    def _start_checker_thread(self):
+        self.unblocker_thread = threading.Thread(
+            target=self._check_if_time_to_unblock,
+            daemon=True,
+            name="iptables_unblocker_thread",
+        )
+        utils.start_thread(self.unblocker_thread, self.db)
 
     def unblock_request(
         self,
@@ -41,7 +56,7 @@ class Unblocker(IUnblocker):
         in self.requests regularly.
         Each time a ts is reached, it should call _unblock()
         """
-        while True:
+        while not self.should_stop():
             now = time.time()
             requests_to_del = []
 
@@ -67,8 +82,8 @@ class Unblocker(IUnblocker):
                 )
 
                 self._del_req(ip)
-            print("@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock] sleeping 5")
-            time.sleep(5)
+            print("@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock] sleeping 10")
+            time.sleep(10)
 
     def _add_req(
         self, ip: str, tw_to_unblock_at: TimeWindow, flags: Dict[str, str]
