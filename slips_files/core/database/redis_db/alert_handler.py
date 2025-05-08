@@ -178,10 +178,6 @@ class AlertHandler:
             twid_start_time = first_twid_start_time + (
                 self.width * (given_twid - 1)
             )
-            print(
-                f"@@@@@@@@@@@@@@@@ given twid  ({twid}) start time"
-                f" {twid_start_time}"
-            )
 
         twid_end_time: float = twid_start_time + self.width
         return twid_start_time, twid_end_time
