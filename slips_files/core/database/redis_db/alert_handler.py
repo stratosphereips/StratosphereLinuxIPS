@@ -59,7 +59,6 @@ class AlertHandler:
         """
         When we have a bunch of evidence causing an alert,
         we associate all evidence IDs with the alert ID in our database
-        this function stores evidence in 'alerts_profile_twid' key only
         """
         old_profileid_twid_alerts: Dict[str, List[str]]
 
@@ -368,7 +367,7 @@ class AlertHandler:
     ) -> Dict[str, List[str]]:
         """
         The format for the returned dict is
-            {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
+            {<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
         alerts: str = self.r.hget(f"{profileid}_{twid}", "alerts")
         if not alerts:

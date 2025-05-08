@@ -246,12 +246,13 @@ class EvidenceHandler(ICore):
         given timewindow
         """
         past_alerts: dict = self.db.get_profileid_twid_alerts(profileid, twid)
-        try:
-            past_evidence_ids = list(past_alerts.values())[0]
-            past_evidence_ids: List[str] = json.loads(past_evidence_ids)
-        except IndexError:
-            # no past evidence
-            past_evidence_ids = []
+
+        past_evidence_ids = []
+        if past_alerts:
+            for evidence_id_list in list(past_alerts.values()):
+                evidence_id_list: List[str] = json.loads(evidence_id_list)
+                past_evidence_ids += evidence_id_list
+
         return past_evidence_ids
 
     def is_evidence_done_by_others(self, evidence: Evidence) -> bool:
