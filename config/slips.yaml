@@ -27,7 +27,7 @@ parameters:
   # time_window_width : 300
   # For 1 hour
   # time_window_width : 3600
-  time_window_width: 3600
+  time_window_width: 30
   # For 1 day
   # time_window_width = 86400
   # Make Slips use only one time window (also like if no TW is used)

@@ -379,22 +379,28 @@ class EvidenceHandler(ICore):
     ):
         """
         saves alert details in the db and informs exporting modules about it
+
+        if a profile already generated an alert in this tw, we send a
+        blocking request (to extend its blocking period), and log the alert
+        in the db only, without printing it to cli.
         """
+
+        self.db.set_alert(alert, evidence_causing_the_alert)
+        self.decide_blocking(alert.profile.ip, alert.timewindow)
         # like in the firewall
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
             str(alert.profile), str(alert.timewindow)
         )
-
         if profile_already_blocked:
             print(
                 f"@@@@@@@@@@@@@@@@ [handle_new_alert] profiler already "
                 f"blocked and is setting another alert!!! {alert.profile}"
             )
-            # send another blocking request to extend the blocking period
-            self.decide_blocking(alert.profile.ip, alert.timewindow)
+
+            # that's it, dont keep logging new alerts if 1 alerts is logged
+            # in this tw.
             return
 
-        self.db.set_alert(alert, evidence_causing_the_alert)
         self.send_to_exporting_module(evidence_causing_the_alert)
         alert_to_print: str = self.formatter.format_evidence_for_printing(
             alert, evidence_causing_the_alert
