@@ -169,11 +169,7 @@ class AlertHandler:
             # calc the start time of the twid manually based on the first
             # twid
             first_twid_start_time: float = self.get_first_flow_time()
-            print(
-                f"@@@@@@@@@@@@@@@@ first_twid_start_time {first_twid_start_time}"
-            )
             given_twid: int = int(twid.replace("timewindow", ""))
-            print(f"@@@@@@@@@@@@@@@@ given_twid {twid}  -> {given_twid}")
             # tws in slips start from 1.
             #     tw1   tw2   tw3   tw4
             # 0 ──────┬─────┬──────┬──────

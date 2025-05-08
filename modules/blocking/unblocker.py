@@ -51,6 +51,10 @@ class Unblocker(IUnblocker):
         current_tw: int,
         flags: Dict[str, str],
     ):
+        """
+        schedules unblocking for th egiven ip for the next timewindow.
+        and extends the blocking by 1 tw if the given ip is already blocked
+        """
         # if this ip was blocked, and is still setting alerts, how many tws
         # to extend its blocking?
         extend_blocking_for = 1

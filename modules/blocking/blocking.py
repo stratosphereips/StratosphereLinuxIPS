@@ -117,7 +117,7 @@ class Blocking(IModule):
             )
 
     def _is_ip_blocked(self, ip) -> bool:
-        """Checks if ip is already blocked or not"""
+        """Checks if ip is already blocked or not using iptables"""
         command = f"{self.sudo}iptables -L slipsBlocking -v -n"
         # Execute command
         result = subprocess.run(command.split(), stdout=subprocess.PIPE)
@@ -244,11 +244,15 @@ class Blocking(IModule):
             if block:
                 # blocking request
                 blocked = self._block_ip(ip, flags)
-                if blocked:
-                    print(f"@@@@@@@@@@@@@@@@ all good {ip} is blocked")
+                if blocked or self._is_ip_blocked(ip):
+                    print(
+                        f"@@@@@@@@@@@@@@@@ calling unblocker for ip {ip} "
+                        f".. whether extend the blocking OR block."
+                    )
                     self.unblocker.unblock_request(
                         ip, how_many_tws_to_block, tw, flags
                     )
+
             else:
                 # unblocking request
                 self.unblocker.unblock_request(
