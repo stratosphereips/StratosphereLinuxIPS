@@ -99,7 +99,7 @@ class Unblocker(IUnblocker):
                     f"@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock]"
                     f" checking if time to unvblock {ip} {request}"
                 )
-                if ts >= now:
+                if now >= ts:
                     print(
                         f"@@@@@@@@@@@@@@@@ time to unblock {ip} in the "
                         f"fw {request}"
@@ -113,7 +113,7 @@ class Unblocker(IUnblocker):
             for ip in requests_to_del:
                 print(
                     f"@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock] "
-                    f"seleting request for {ip}"
+                    f"deleting request for {ip}"
                 )
 
                 self._del_request(ip)
