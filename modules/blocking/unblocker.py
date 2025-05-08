@@ -53,25 +53,13 @@ class Unblocker(IUnblocker):
         """
         schedules unblocking for the given ip for the next timewindow.
         """
-        print(
-            f"@@@@@@@@@@@@@@@@ [unblock_request] recvd an unblock request for {ip} in"
-            f" {current_tw}"
-        )
         if ip in self.requests:
             # ip is already blocked, extend the blocking by 1 tw
             tws = self.requests[ip]["block_this_ip_for"]
             block_this_ip_for = tws + 1
-            print(
-                f"@@@@@@@@@@@@@@@@ [unblock_request] extended the "
-                f"blocking for ip {ip}"
-            )
         else:
             # measured in tws
             block_this_ip_for = 1
-            print(
-                f"@@@@@@@@@@@@@@@@ [unblock_request] first time blocking "
-                f"for ip {ip}"
-            )
 
         tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
             ip, current_tw, block_this_ip_for
@@ -92,11 +80,6 @@ class Unblocker(IUnblocker):
                 ts: str = request["tw_to_unblock"].end_time
                 ts: float = utils.convert_ts_format(ts, "unixtimestamp")
                 if now >= ts:
-                    print(
-                        f"@@@@@@@@@@@@@@@@ [ringringringringggg] time to "
-                        f"unblock {ip} in the "
-                        f"fw {request}"
-                    )
                     flags: Dict[str, str] = request["flags"]
                     if self._unblock(ip, flags):
                         self._log_successful_unblock(ip)
@@ -141,7 +124,6 @@ class Unblocker(IUnblocker):
                 new_req["block_this_ip_for"] = req["block_this_ip_for"] - 1
                 new_requests[ip] = new_req
             self.requests = new_requests
-        print("@@@@@@@@@@@@@@@@ tw closed!! requests updatedd!!")
         from pprint import pp
 
         pp(self.requests)
@@ -173,7 +155,6 @@ class Unblocker(IUnblocker):
             f"blocked for {interval} timewindows. "
             f"Timestamp to unblock: {tw_to_unblock_at.end_time}) "
         )
-        print(f"@@@@@@@@@@@@@@@@ [_add_req] DONEE. added req for {ip} ... ")
         from pprint import pp
 
         pp(self.requests)
@@ -240,7 +221,6 @@ class Unblocker(IUnblocker):
             txt = f"IP {ip_to_unblock} is unblocked in {cur_timewindow}."
             self.print(txt)
             self.log(txt)
-            print(f"@@@@@@@@@@@@@@@@ unblocked {ip_to_unblock} in the fw")
             return True
         else:
             txt = f"An errror occured. Unable to unblock {ip_to_unblock}"

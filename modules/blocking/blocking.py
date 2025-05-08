@@ -239,10 +239,6 @@ class Blocking(IModule):
                 self._block_ip(ip, flags)
             # whether this ip is blocked now, or was already blocked, make an unblocking request to either extend its
             # blocking period, or block it until the next timewindow is over.
-            print(
-                f"@@@@@@@@@@@@@@@@ calling unblocker for ip {ip} "
-                f".. whether extend the blocking OR block."
-            )
             self.unblocker.unblock_request(ip, tw, flags)
 
         if msg := self.get_msg("tw_closed"):
