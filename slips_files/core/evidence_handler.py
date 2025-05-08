@@ -388,7 +388,7 @@ class EvidenceHandler(ICore):
         if profile_already_blocked:
             print(
                 f"@@@@@@@@@@@@@@@@ [handle_new_alert] profiler already "
-                f"blocked and is setting another alert!!! {alert}"
+                f"blocked and is setting another alert!!! {alert.profile}"
             )
             # send another blocking request to extend the blocking period
             self.decide_blocking(alert.profile.ip, alert.timewindow)
