@@ -57,11 +57,11 @@ class Unblocker(IUnblocker):
         # first check if there's already an unblocking request, if so,
         # we extend the blocking 1 more timewindow.
         try:
+            tw_to_unblock_at: TimeWindow = self.requests[ip]["tw_to_unblock"]
             print(
                 f"@@@@@@@@@@@@@@@@ !!!!!!!!!!!!!!!!!!!!!!!! Extending "
                 f"the blockinnnnggg for {ip}"
             )
-            tw_to_unblock_at: TimeWindow = self.requests[ip]["tw_to_unblock"]
             tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
                 ip,
                 tw_to_unblock_at.number + extend_blocking_for,
@@ -117,7 +117,6 @@ class Unblocker(IUnblocker):
                 )
 
                 self._del_request(ip)
-            print("@@@@@@@@@@@@@@@@ [_check_if_time_to_unblock] sleeping 10")
             time.sleep(10)
 
     def _log_successful_unblock(self, ip):
@@ -158,7 +157,7 @@ class Unblocker(IUnblocker):
             f"Timewindow to unblock: {tw_to_unblock_at} "
             f"Timestamp to unblock: {tw_to_unblock_at.end_time}) "
         )
-        print(f"@@@@@@@@@@@@@@@@ added req for {ip} ")
+        print(f"@@@@@@@@@@@@@@@@ [_add_req] DONEE. added req for {ip}  to ")
         from pprint import pp
 
         pp(self.requests)
